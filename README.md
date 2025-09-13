@@ -21,28 +21,143 @@
   <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
   [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
+# Cloutsy - Brand and Influencer Collaboration Platform
+
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+Cloutsy is a comprehensive platform built with [NestJS](https://nestjs.com/) that connects brands with influencers for meaningful collaborations. The platform provides secure authentication, profile management, and campaign coordination features for both brands and influencers.
 
-## Project setup
+## Features
 
-```bash
-$ npm install
+### 🔐 Authentication System
+- **Dual User Types**: Separate authentication flows for Brands and Influencers
+- **OTP Verification**: Phone number verification using SMS OTP
+- **JWT Tokens**: Secure access and refresh token system with Redis session management
+- **Profile Completion**: Multi-step onboarding process for both user types
+
+### 👥 User Management
+- **Influencer Profiles**: Complete profile creation with demographics, bio, and niche selection
+- **Brand Profiles**: Comprehensive business profiles with company details, POC information, and legal documentation
+- **Niche Categories**: Organized content categories (Fashion, Beauty, Food, Tech, etc.)
+
+### 🗄️ Data Management
+- **PostgreSQL Database**: Robust relational database with proper associations
+- **Redis Caching**: Session management and rate limiting
+- **File Upload Support**: Profile images and document storage
+- **Data Validation**: Comprehensive input validation using class-validator
+
+### 🛡️ Security Features
+- **Rate Limiting**: OTP request throttling and brute-force protection
+- **Session Management**: Secure user session handling with Redis
+- **Global Error Handling**: Centralized error management
+- **Input Sanitization**: Protection against common web vulnerabilities
+
+## Tech Stack
+
+- **Framework**: NestJS with TypeScript
+- **Database**: PostgreSQL with Sequelize ORM
+- **Caching**: Redis
+- **Authentication**: JWT with refresh tokens
+- **SMS Service**: Integrated SMS OTP verification
+- **Validation**: class-validator and class-transformer
+- **API Documentation**: Swagger/OpenAPI
+
+## Architecture
+
+```
+src/
+├── auth/                 # Authentication module
+│   ├── dto/             # Data Transfer Objects
+│   ├── model/           # Database models
+│   └── guards/          # Authentication guards
+├── database/            # Database configuration
+├── redis/              # Redis configuration
+├── shared/             # Shared utilities and services
+└── main.ts            # Application bootstrap
 ```
 
-## Compile and run the project
+## Environment Setup
+
+### Prerequisites
+- Node.js (v18+)
+- PostgreSQL (v13+)
+- Redis (v6+)
+- npm or yarn
+
+### Environment Variables
+Create a `.env` file in the root directory:
+
+```env
+# Database Configuration
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=your_password
+POSTGRES_DB=cloutsy_db
+
+# Redis Configuration
+REDIS_HOST=localhost
+REDIS_PORT=6379
+
+# JWT Configuration
+JWT_SECRET=your_super_secure_jwt_secret
+JWT_REFRESH_SECRET=your_super_secure_refresh_secret
+
+# SMS Configuration (for OTP)
+SMS_API_KEY=your_sms_provider_api_key
+SMS_SENDER_ID=CLOUTSY
+
+# Application
+NODE_ENV=development
+PORT=3000
+```
+
+## Installation
 
 ```bash
-# development
-$ npm run start
+# Install dependencies
+$ npm install
 
-# watch mode
+# Setup database
+$ npm run db:create
+$ npm run db:migrate
+$ npm run db:seed
+```
+
+## Running the Application
+
+```bash
+# Development mode with auto-reload
 $ npm run start:dev
 
-# production mode
+# Production mode
 $ npm run start:prod
+
+# Debug mode
+$ npm run start:debug
 ```
+
+## API Documentation
+
+Once the application is running, visit:
+- **Swagger UI**: http://localhost:3000/api
+- **API JSON**: http://localhost:3000/api-json
+
+## API Endpoints
+
+### Authentication - Influencer
+- `POST /auth/influencer/request-otp` - Request OTP for phone verification
+- `POST /auth/influencer/verify-otp` - Verify OTP and login/signup
+- `POST /auth/influencer/signup` - Complete influencer registration
+
+### Authentication - Brand
+- `POST /auth/brand/request-otp` - Request OTP for phone verification
+- `POST /auth/brand/verify-otp` - Verify OTP and login/signup
+- `POST /auth/brand/signup` - Complete brand registration
+- `POST /auth/brand/login` - Email/password login for brands
+
+### General
+- `GET /auth/niches` - Get all available content niches
 
 ## Run tests
 
