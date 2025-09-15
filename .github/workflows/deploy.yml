@@ -1,15 +1,42 @@
-name: Deploy Incollab
+name: Deploy
 
 on:
-  push:
-    branches:
-      - main
+  workflow_call:
+    inputs:
+      service:
+        description: 'Service name (api-gateway, quickpick, product-service, incollab)'
+        required: true
+        type: string
+      environment:
+        description: 'Deployment environment (dev, staging, production)'
+        required: false
+        type: string
+        default: 'production'
+      docker_compose_path:
+        description: 'Path to docker-compose repo on server'
+        required: false
+        type: string
+        default: '/home/ubuntu/Incollabe-BE'
+      image_tag:
+        description: 'Docker image tag (latest, dev, etc.)'
+        required: false
+        type: string
+        default: 'latest'
+    secrets:
+      EC2_HOST:
+        required: true
+      EC2_USER:
+        required: true
+      EC2_SSH_KEY:
+        required: true
+      DOCKERHUB_USERNAME:
+        required: true
 
 jobs:
   deploy:
-    name: Deploy Incollab to production
+    name: Deploy ${{ inputs.service }} to ${{ inputs.environment }}
     runs-on: ubuntu-latest
-    environment: production
+    environment: ${{ inputs.environment }}
     steps:
       - name: Checkout repo (not used directly, but required by Actions)
         uses: actions/checkout@v4
@@ -22,8 +49,8 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           timeout: 300s
           script: |
-            echo "🚀 Starting deployment of Incollab to production..."
-            cd /home/ubuntu/Incollabe-BE
+            echo "🚀 Starting deployment of ${{ inputs.service }} to ${{ inputs.environment }}..."
+            cd ${{ inputs.docker_compose_path }}
 
             # Ensure deploy.sh is executable
             chmod +x deploy.sh
@@ -33,7 +60,7 @@ jobs:
               echo "Creating .env file..."
               cat > .env << EOF
             DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
-            IMAGE_TAG=latest
+            IMAGE_TAG=${{ inputs.image_tag }}
             EOF
             else
               # Update DOCKERHUB_USERNAME
@@ -45,9 +72,9 @@ jobs:
 
               # Update IMAGE_TAG
               if grep -q "IMAGE_TAG" .env; then
-                sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=latest/" .env
+                sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${{ inputs.image_tag }}/" .env
               else
-                echo "IMAGE_TAG=latest" >> .env
+                echo "IMAGE_TAG=${{ inputs.image_tag }}" >> .env
               fi
             fi
 
@@ -61,7 +88,20 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd /home/ubuntu/Incollabe-BE
-            echo "🔍 Performing health check for Incollab..."
+            cd ${{ inputs.docker_compose_path }}
+            echo "🔍 Performing health check for ${{ inputs.service }}..."
 
-            timeout 30 bash -c 'until curl -f http://localhost/api; do sleep 2; done' || echo "❌ Health check failed"
+            case "${{ inputs.service }}" in
+              "incollab")
+                timeout 30 bash -c 'until curl -f http://localhost/api; do sleep 2; done' || echo "Health check failed"
+                ;;
+              *)
+                echo "No specific health check configured for ${{ inputs.service }}."
+                if docker-compose ps ${{ inputs.service }} | grep -q "Up"; then
+                  echo "✅ Container is running successfully"
+                else
+                  echo "❌ Container check failed"
+                  exit 1
+                fi
+                ;;
+            esac
