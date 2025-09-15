@@ -22,7 +22,7 @@ import { BrandNiche } from "../auth/model/brand-niche.model";
         port: Number(config.get<string>("POSTGRES_PORT")) || 5432,
         username: config.get<string>("POSTGRES_USER") || "postgres",
         password: config.get<string>("POSTGRES_PASSWORD") || "root",
-        database: config.get<string>("POSTGRES_DB") || "cloutsy_db",
+        database: config.get<string>("POSTGRES_DB") || "incollab_db",
         models: [
           Influencer,
           Brand,

@@ -1,6 +1,6 @@
 # Authentication Module
 
-The Authentication module handles user authentication and authorization for both **Influencers** and **Brands** in the Cloutsy platform.
+The Authentication module handles user authentication and authorization for both **Influencers** and **Brands** in the Incollab platform.
 
 ## Overview
 

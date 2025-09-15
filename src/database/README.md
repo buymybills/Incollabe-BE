@@ -1,6 +1,6 @@
 # Database Module
 
-The Database module manages PostgreSQL database connections, model definitions, and data relationships for the Cloutsy platform.
+The Database module manages PostgreSQL database connections, model definitions, and data relationships for the Incollab platform.
 
 ## Overview
 
@@ -143,7 +143,7 @@ POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=your_password
-POSTGRES_DB=cloutsy_db
+POSTGRES_DB=incollab_db
 
 # Application Environment
 NODE_ENV=development|staging|production
@@ -161,7 +161,7 @@ SequelizeModule.forRootAsync({
     port: Number(config.get<string>("POSTGRES_PORT")) || 5432,
     username: config.get<string>("POSTGRES_USER") || "postgres",
     password: config.get<string>("POSTGRES_PASSWORD") || "root",
-    database: config.get<string>("POSTGRES_DB") || "cloutsy_db",
+    database: config.get<string>("POSTGRES_DB") || "incollab_db",
     models: [Influencer, Brand, Niche, Otp, InfluencerNiche, BrandNiche],
     autoLoadModels: true,
     synchronize: process.env.NODE_ENV !== 'production',
@@ -377,10 +377,10 @@ try {
 ### Recovery Procedures
 ```bash
 # Create backup
-pg_dump -h localhost -U postgres cloutsy_db > backup.sql
+pg_dump -h localhost -U postgres incollab_db > backup.sql
 
 # Restore from backup
-psql -h localhost -U postgres -d cloutsy_db < backup.sql
+psql -h localhost -U postgres -d incollab_db < backup.sql
 ```
 
 ## Development Guidelines

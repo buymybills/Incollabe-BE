@@ -10,11 +10,16 @@ COPY conf.d/ /etc/nginx/conf.d/
 # Create directories for SSL certificates and logs
 RUN mkdir -p /etc/nginx/ssl /var/log/nginx
 
-# Create a self-signed certificate for initial setup (will be replaced by Let's Encrypt)
+# Create self-signed certificates for initial setup (will be replaced by Let's Encrypt)
 RUN openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
     -keyout /etc/nginx/ssl/stag.buymybills.in.key \
     -out /etc/nginx/ssl/stag.buymybills.in.crt \
     -subj "/C=IN/ST=State/L=City/O=Organization/CN=stag.buymybills.in"
+
+RUN openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout /etc/nginx/ssl/incollab.buymybills.in.key \
+    -out /etc/nginx/ssl/incollab.buymybills.in.crt \
+    -subj "/C=IN/ST=State/L=City/O=Organization/CN=incollab.buymybills.in"
 
 # Create a script for SSL certificate renewal
 RUN echo '#!/bin/sh' > /usr/local/bin/renew-ssl.sh && \
@@ -24,7 +29,9 @@ RUN echo '#!/bin/sh' > /usr/local/bin/renew-ssl.sh && \
 
 # Set proper permissions
 RUN chmod 644 /etc/nginx/ssl/stag.buymybills.in.crt && \
-    chmod 600 /etc/nginx/ssl/stag.buymybills.in.key
+    chmod 600 /etc/nginx/ssl/stag.buymybills.in.key && \
+    chmod 644 /etc/nginx/ssl/incollab.buymybills.in.crt && \
+    chmod 600 /etc/nginx/ssl/incollab.buymybills.in.key
 
 # Expose ports
 EXPOSE 80 443

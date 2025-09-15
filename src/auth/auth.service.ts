@@ -20,13 +20,31 @@ import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { InfluencerSignupDto } from './dto/influencer-signup.dto';
 import { BrandSignupDto } from './dto/brand-signup.dto';
 import { BrandLoginDto } from './dto/brand-login.dto';
+import { BrandVerifyOtpDto } from './dto/brand-verify-otp.dto';
 import { CheckUsernameDto } from './dto/check-username.dto';
+import { LogoutDto } from './dto/logout.dto';
+import { LogoutResponseDto } from './dto/logout-response.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { RefreshTokenResponseDto } from './dto/refresh-token-response.dto';
 import { SmsService } from '../shared/sms.service';
+import { EmailService } from '../shared/email.service';
+import { S3Service } from '../shared/s3.service';
 import { RedisService } from '../redis/redis.service';
 import { Brand, BrandCreationAttributes } from './model/brand.model';
 import { BrandNiche } from './model/brand-niche.model';
 import { Op } from 'sequelize';
 import * as bcrypt from 'bcrypt';
+
+// Interfaces for token payload
+interface DecodedRefresh {
+  id: number;
+  jti: string;
+  exp: number;
+}
+
+interface RequestWithUser {
+  user: { id: number };
+}
 
 @Injectable()
 export class AuthService {
@@ -50,10 +68,12 @@ export class AuthService {
     private readonly brandNicheModel: typeof BrandNiche,
     private readonly configService: ConfigService,
     private readonly smsService: SmsService,
+    private readonly emailService: EmailService,
+    private readonly s3Service: S3Service,
     private readonly jwtService: JwtService,
     private readonly sequelize: Sequelize,
     private readonly redisService: RedisService,
-  ) {}
+  ) { }
 
   // Redis key helpers
   private cooldownKey(phone: string): string {
@@ -74,6 +94,27 @@ export class AuthService {
 
   private verificationKey(phone: string): string {
     return `otp:verified:${phone}`;
+  }
+
+  private blacklistKey(jti: string): string {
+    return `blacklist:${jti}`;
+  }
+
+  private brandOtpKey(email: string): string {
+    return `brand:otp:${email}`;
+  }
+
+  private brandOtpAttemptsKey(email: string): string {
+    return `brand:otp:attempts:${email}`;
+  }
+
+  private async uploadFileToS3(file: Express.Multer.File, folder: string, prefix: string): Promise<string> {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const fileExtension = file.originalname.split('.').pop();
+    const s3Key = `${folder}/${prefix}-${uniqueSuffix}.${fileExtension}`;
+
+    await this.s3Service.uploadFile(file, s3Key);
+    return this.s3Service.getFileUrl(s3Key);
   }
 
   async requestOtp(requestOtpDto: RequestOtpDto): Promise<string> {
@@ -192,7 +233,7 @@ export class AuthService {
     }
 
     // 🔹 Step 6: Handle returning users → issue tokens
-    const profileCompleted = Boolean(user.name && user.username);
+    const profileCompleted = Boolean(user.dataValues.name && user.dataValues.username);
 
     if (profileCompleted) {
       const { accessToken, refreshToken, jti } = await this.generateTokens(
@@ -211,7 +252,7 @@ export class AuthService {
 
       await this.redisService.getClient()
         .multi()
-        .set(sessionKey, sessionPayload, 'EX', this.REFRESH_TTL)
+        .set(sessionKey, sessionPayload) // No expiry - session persists until logout
         .sadd(sessionsSetKey, jti)
         .exec();
 
@@ -234,7 +275,7 @@ export class AuthService {
     };
   }
 
-  async influencerSignup(signupDto: InfluencerSignupDto) {
+  async influencerSignup(signupDto: InfluencerSignupDto, profileImage?: Express.Multer.File) {
     const { phone, username, nicheIds, ...influencerData } = signupDto;
     const formattedPhone = `+91${phone}`; // Add Indian country code
 
@@ -256,21 +297,33 @@ export class AuthService {
       throw new BadRequestException('One or more invalid niche IDs provided');
     }
 
-    // Create influencer
-    const influencer = await this.influencerModel.create({
-      ...influencerData,
-      phone: formattedPhone,
-      username,
-      isPhoneVerified: true,
+    // Upload profile image to S3 if provided
+    let profileImageUrl: string | undefined;
+    if (profileImage) {
+      profileImageUrl = await this.uploadFileToS3(profileImage, 'profiles/influencers', 'influencer');
+    }
+
+    // Create influencer and associate niches in a transaction
+    const influencer = await this.sequelize.transaction(async (transaction) => {
+      // Create influencer
+      const createdInfluencer = await this.influencerModel.create({
+        ...influencerData,
+        phone: formattedPhone,
+        username,
+        profileImage: profileImageUrl,
+        isPhoneVerified: true,
+      }, { transaction });
+
+      // Associate niches
+      const nicheAssociations = nicheIds.map(nicheId => ({
+        influencerId: createdInfluencer.id,
+        nicheId,
+      }));
+
+      await this.influencerNicheModel.bulkCreate(nicheAssociations, { transaction });
+
+      return createdInfluencer;
     });
-
-    // Associate niches
-    const nicheAssociations = nicheIds.map(nicheId => ({
-      influencerId: influencer.id,
-      nicheId,
-    }));
-
-    await this.influencerNicheModel.bulkCreate(nicheAssociations);
 
     // Fetch complete influencer data with niches
     const completeInfluencer = await this.influencerModel.findByPk(
@@ -279,7 +332,6 @@ export class AuthService {
         include: [
           {
             model: Niche,
-            through: { attributes: [] },
           },
         ],
       },
@@ -379,10 +431,10 @@ export class AuthService {
 
     // Filter out suggestions that are also taken
     const availableSuggestions: string[] = [];
-    
+
     for (const suggestion of suggestions) {
       if (availableSuggestions.length >= maxSuggestions) break;
-      
+
       const [influencerExists, brandExists] = await Promise.all([
         this.influencerModel.findOne({ where: { username: suggestion } }),
         this.brandModel.findOne({ where: { username: suggestion } })
@@ -397,7 +449,7 @@ export class AuthService {
     let counter = 1;
     while (availableSuggestions.length < maxSuggestions && counter <= 20) {
       const suggestion = `${baseUsername}_${counter}`;
-      
+
       const [influencerExists, brandExists] = await Promise.all([
         this.influencerModel.findOne({ where: { username: suggestion } }),
         this.brandModel.findOne({ where: { username: suggestion } })
@@ -429,14 +481,14 @@ export class AuthService {
     // 2. Create long-lived refresh token
     // - Has its own unique JTI (this one is stored in Redis for session tracking)
     // - Signed with a separate secret
-    // - Expiration defined by REFRESH_TTL (e.g., 7 days)
+    // - No expiration - persists until explicit logout
     const jti = randomUUID();
     const refreshToken = this.jwtService.sign(
       { id: userId }, // keep payload minimal
       {
         jwtid: jti,
         secret: this.configService.get<string>("JWT_REFRESH_SECRET"),
-        expiresIn: this.REFRESH_TTL,
+        // No expiresIn - token never expires unless explicitly revoked
       },
     );
 
@@ -446,7 +498,17 @@ export class AuthService {
   }
 
   // Brand Authentication Methods
-  async brandSignup(signupDto: BrandSignupDto) {
+  async brandSignup(
+    signupDto: BrandSignupDto,
+    files?: {
+      profileImage?: Express.Multer.File[],
+      incorporationDocument?: Express.Multer.File[],
+      gstDocument?: Express.Multer.File[],
+      panDocument?: Express.Multer.File[]
+    },
+    deviceId?: string,
+    userAgent?: string
+  ) {
     const { phone, email, password, ...brandData } = signupDto;
     const formattedPhone = `+91${phone}`; // Add Indian country code
 
@@ -472,33 +534,30 @@ export class AuthService {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create brand
-    const brandCreateData: BrandCreationAttributes = {
-      email,
-      phone: formattedPhone,
-      password: hashedPassword,
-      isPhoneVerified: true,
-      brandName: brandData.brandName,
-      username: brandData.username,
-      legalEntityName: brandData.legalEntityName,
-      companyType: brandData.companyType,
-      brandEmailId: brandData.brandEmailId,
-      pocName: brandData.pocName,
-      pocDesignation: brandData.pocDesignation,
-      pocEmailId: brandData.pocEmailId,
-      pocContactNumber: brandData.pocContactNumber,
-      brandBio: brandData.brandBio,
-      profileImage: brandData.profileImage,
-      incorporationDocument: brandData.incorporationDocument,
-      gstDocument: brandData.gstDocument,
-      panDocument: brandData.panDocument,
-    };
+    // Upload files to S3 if provided
+    let profileImageUrl: string | undefined;
+    let incorporationDocumentUrl: string | undefined;
+    let gstDocumentUrl: string | undefined;
+    let panDocumentUrl: string | undefined;
 
-    const brand = await this.brandModel.create(brandCreateData);
+    if (files?.profileImage?.[0]) {
+      profileImageUrl = await this.uploadFileToS3(files.profileImage[0], 'profiles/brands', 'brand');
+    }
 
-    // Associate niches if provided
+    if (files?.incorporationDocument?.[0]) {
+      incorporationDocumentUrl = await this.uploadFileToS3(files.incorporationDocument[0], 'documents/brands', 'incorporation');
+    }
+
+    if (files?.gstDocument?.[0]) {
+      gstDocumentUrl = await this.uploadFileToS3(files.gstDocument[0], 'documents/brands', 'gst');
+    }
+
+    if (files?.panDocument?.[0]) {
+      panDocumentUrl = await this.uploadFileToS3(files.panDocument[0], 'documents/brands', 'pan');
+    }
+
+    // Validate niche IDs before transaction if provided
     if (brandData.nicheIds && brandData.nicheIds.length > 0) {
-      // Validate niche IDs
       const validNiches = await this.nicheModel.findAll({
         where: { id: brandData.nicheIds, isActive: true },
       });
@@ -506,15 +565,46 @@ export class AuthService {
       if (validNiches.length !== brandData.nicheIds.length) {
         throw new BadRequestException('One or more invalid niche IDs provided');
       }
-
-      // Create brand-niche associations
-      const brandNicheAssociations = brandData.nicheIds.map(nicheId => ({
-        brandId: brand.id,
-        nicheId,
-      }));
-
-      await this.brandNicheModel.bulkCreate(brandNicheAssociations);
     }
+
+    // Use transaction for brand creation and niche associations
+    const brand = await this.sequelize.transaction(async (transaction) => {
+      // Create brand
+      const brandCreateData: BrandCreationAttributes = {
+        email,
+        phone: formattedPhone,
+        password: hashedPassword,
+        isPhoneVerified: true,
+        brandName: brandData.brandName,
+        username: brandData.username,
+        legalEntityName: brandData.legalEntityName,
+        companyType: brandData.companyType,
+        brandEmailId: brandData.brandEmailId,
+        pocName: brandData.pocName,
+        pocDesignation: brandData.pocDesignation,
+        pocEmailId: brandData.pocEmailId,
+        pocContactNumber: brandData.pocContactNumber,
+        brandBio: brandData.brandBio,
+        profileImage: profileImageUrl || brandData.profileImage,
+        incorporationDocument: incorporationDocumentUrl || brandData.incorporationDocument,
+        gstDocument: gstDocumentUrl || brandData.gstDocument,
+        panDocument: panDocumentUrl || brandData.panDocument,
+      };
+
+      const createdBrand = await this.brandModel.create(brandCreateData, { transaction });
+
+      // Associate niches if provided
+      if (brandData.nicheIds && brandData.nicheIds.length > 0) {
+        const brandNicheAssociations = brandData.nicheIds.map(nicheId => ({
+          brandId: createdBrand.id,
+          nicheId,
+        }));
+
+        await this.brandNicheModel.bulkCreate(brandNicheAssociations, { transaction });
+      }
+
+      return createdBrand;
+    });
 
     // Fetch complete brand data with niches
     const completeBrand = await this.brandModel.findByPk(brand.id, {
@@ -526,9 +616,18 @@ export class AuthService {
       ],
     });
 
+    // Send welcome email
+    await this.emailService.sendWelcomeEmail(email, brandData.brandName || 'Brand Partner');
+
+    // Automatically initiate login flow after successful signup
+    const loginResult = await this.brandLogin({ email, password }, deviceId, userAgent);
+
     return {
-      message: 'Brand registered successfully',
-      brand: completeBrand,
+      message: 'Brand registered successfully. Please check your email for OTP to complete login.',
+      signup: {
+        brand: completeBrand,
+      },
+      login: loginResult,
     };
   }
 
@@ -545,31 +644,121 @@ export class AuthService {
     }
 
     // Verify password
+    if (!password || !brand.password) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
     const isValidPassword = await bcrypt.compare(password, brand.password);
 
     if (!isValidPassword) {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    // Generate tokens
-    const { accessToken, refreshToken, jti } = await this.generateTokens(brand.id);
+    // Generate and send email OTP
+    const otp = randomInt(100000, 999999).toString();
+    const otpKey = this.brandOtpKey(email);
 
-    // Store session in Redis for multi-device support
-    const sessionKey = this.sessionKey(brand.id, jti);
-    const sessionsSetKey = this.sessionsSetKey(brand.id);
+    // Store OTP in Redis with 10 minutes expiry
+    await this.redisService.getClient().set(otpKey, otp, 'EX', 600);
 
-    const sessionPayload = JSON.stringify({
+    // Store temporary session data for after OTP verification
+    const tempSessionKey = `temp:brand:${email}`;
+    const tempSessionData = JSON.stringify({
+      brandId: brand.id,
       deviceId: deviceId ?? null,
       userAgent: userAgent ?? null,
+      createdAt: new Date().toISOString(),
+    });
+    await this.redisService.getClient().set(tempSessionKey, tempSessionData, 'EX', 600);
+
+    // Send OTP email
+    await this.emailService.sendBrandOtp(email, otp);
+
+    return {
+      message: 'OTP sent to your email address. Please verify to complete login.',
+      requiresOtp: true,
+      email: email,
+    };
+  }
+
+  async verifyBrandOtp(verifyOtpDto: BrandVerifyOtpDto, deviceId?: string, userAgent?: string) {
+    const { email, otp } = verifyOtpDto;
+
+    // Get stored OTP from Redis
+    const otpKey = this.brandOtpKey(email);
+    const storedOtp = await this.redisService.getClient().get(otpKey);
+
+    if (!storedOtp) {
+      throw new UnauthorizedException('OTP has expired or is invalid');
+    }
+
+    if (storedOtp !== otp) {
+      // Increment failed attempts
+      const attemptsKey = this.brandOtpAttemptsKey(email);
+      const attempts = await this.redisService.getClient().incr(attemptsKey);
+
+      if (attempts === 1) {
+        await this.redisService.getClient().expire(attemptsKey, 600); // 10 minutes
+      }
+
+      if (attempts >= 5) {
+        // Too many failed attempts, invalidate OTP
+        await this.redisService.getClient().del(otpKey);
+        throw new UnauthorizedException('Too many failed attempts. Please request a new OTP.');
+      }
+
+      throw new UnauthorizedException('Invalid OTP');
+    }
+
+    // Get temporary session data
+    const tempSessionKey = `temp:brand:${email}`;
+    const tempSessionData = await this.redisService.getClient().get(tempSessionKey);
+
+    if (!tempSessionData) {
+      throw new UnauthorizedException('Session expired. Please login again.');
+    }
+
+    const sessionInfo = JSON.parse(tempSessionData);
+    const brandId = sessionInfo.brandId;
+
+    // Generate tokens
+    const { accessToken, refreshToken, jti } = await this.generateTokens(brandId);
+
+    // Store session in Redis for multi-device support
+    const sessionKey = this.sessionKey(brandId, jti);
+    const sessionsSetKey = this.sessionsSetKey(brandId);
+
+    const sessionPayload = JSON.stringify({
+      deviceId: deviceId ?? sessionInfo.deviceId,
+      userAgent: userAgent ?? sessionInfo.userAgent,
       createdAt: new Date().toISOString(),
       userType: 'brand',
     });
 
+    // Clean up temporary data and store final session
     await this.redisService.getClient()
       .multi()
-      .set(sessionKey, sessionPayload, 'EX', this.REFRESH_TTL)
+      .del(otpKey) // Remove used OTP
+      .del(tempSessionKey) // Remove temporary session
+      .del(this.brandOtpAttemptsKey(email)) // Remove failed attempts
+      .set(sessionKey, sessionPayload) // No expiry - session persists until logout
       .sadd(sessionsSetKey, jti)
       .exec();
+
+    // Get brand details for response
+    const brand = await this.brandModel.findByPk(brandId, {
+      include: [
+        {
+          model: this.nicheModel,
+          as: 'niches',
+          through: { attributes: [] },
+        },
+      ],
+    });
+
+    if (!brand) {
+      throw new UnauthorizedException('Brand not found');
+    }
 
     return {
       message: 'Login successful',
@@ -581,8 +770,175 @@ export class AuthService {
         phone: brand.phone,
         brandName: brand.brandName,
         username: brand.username,
+        legalEntityName: brand.legalEntityName,
+        companyType: brand.companyType,
+        brandEmailId: brand.brandEmailId,
+        pocName: brand.pocName,
+        pocDesignation: brand.pocDesignation,
+        pocEmailId: brand.pocEmailId,
+        pocContactNumber: brand.pocContactNumber,
+        brandBio: brand.brandBio,
+        profileImage: brand.profileImage,
+        incorporationDocument: brand.incorporationDocument,
+        gstDocument: brand.gstDocument,
+        panDocument: brand.panDocument,
+        isProfileCompleted: brand.isProfileCompleted,
+        isActive: brand.isActive,
+        niches: brand.niches || [],
       },
     };
+  }
+
+  async logout({ refreshToken }: LogoutDto): Promise<LogoutResponseDto> {
+    let decoded: DecodedRefresh;
+
+
+    // Step 1: Verify token signature & decode payload
+    decoded = this.jwtService.verify<DecodedRefresh>(refreshToken, {
+      secret: this.configService.get<string>("JWT_REFRESH_SECRET"),
+    });
+
+
+    const userId = decoded.id;
+    const jti = decoded.jti;
+
+    // Safety check → if token doesn't contain expected fields, just return success
+    if (!userId || !jti) return { message: "Logged out" };
+
+    // Step 2: Prepare Redis keys for this session
+    const key = this.sessionKey(userId, jti); // key for this session
+    const setKey = this.sessionsSetKey(userId); // set of all active sessions
+
+    // Step 3: Calculate TTL = seconds left until token expiry
+    const ttl = decoded.exp - Math.floor(Date.now() / 1000);
+    const expTtl = ttl > 0 ? ttl : 60; // fallback: 1 min minimum
+
+    // Step 4: Redis transaction to clean up session + blacklist token
+    await this.redisService.getClient()
+      .multi()
+      .set(this.blacklistKey(jti), "1", "EX", expTtl) // mark JTI as blacklisted
+      .del(key) // delete session for this device
+      .srem(setKey, jti) // remove JTI from user's active set
+      .exec();
+
+    // Step 5: Return confirmation
+    return { message: "Logged out" };
+  }
+
+  /**
+   * Logs out a user from all devices by invalidating every active session.
+   */
+  async logoutAll(userId: number): Promise<LogoutResponseDto> {
+    // Step 1: Find all session JTIs linked to this user
+    const setKey = this.sessionsSetKey(userId);
+    const jtis = await this.redisService.getClient().smembers(setKey);
+
+    if (jtis.length) {
+      const multi = this.redisService.getClient().multi();
+
+      // Step 2: Iterate over all active JTIs and invalidate them
+      for (const jti of jtis) {
+        // Delete device-specific session key
+        multi.del(this.sessionKey(userId, jti));
+
+        // Blacklist token for a long period (1 year) since tokens don't naturally expire
+        multi.set(this.blacklistKey(jti), "1", "EX", 365 * 24 * 60 * 60);
+      }
+
+      // Step 3: Remove the user's session set itself
+      multi.del(setKey);
+
+      // Execute all Redis operations atomically
+      await multi.exec();
+    }
+
+    // Step 4: Return confirmation
+    return { message: "Logged out from all devices" };
+  }
+
+  async refreshToken({ refreshToken }: RefreshTokenDto): Promise<RefreshTokenResponseDto> {
+    let decoded: DecodedRefresh;
+
+    try {
+      // Step 1: Decode & validate the refresh token
+      decoded = this.jwtService.verify<DecodedRefresh>(refreshToken, {
+        secret: this.configService.get<string>("JWT_REFRESH_SECRET"),
+      });
+    } catch (error) {
+      throw new UnauthorizedException("Invalid refresh token");
+    }
+
+    const userId = decoded.id;
+    const jti = decoded.jti;
+
+    // Sanity check → must have userId and JTI
+    if (!userId || !jti) throw new UnauthorizedException("Malformed refresh token");
+
+    // Step 2: Check blacklist and active session in Redis
+    const [isBlacklisted, exists] = await Promise.all([
+      this.redisService.getClient().get(this.blacklistKey(jti)), // was revoked?
+      this.redisService.getClient().get(this.sessionKey(userId, jti)), // still active?
+    ]);
+
+    if (isBlacklisted) throw new ForbiddenException("Refresh token revoked");
+    if (!exists) throw new UnauthorizedException("Session expired or revoked");
+
+    // Step 3: Rotate refresh token (security best practice)
+    const {
+      accessToken,
+      refreshToken: newRefresh,
+      jti: newJti,
+    } = await this.generateTokens(userId);
+
+    await this.rotateSession(userId, jti, newJti, {
+      // carry forward device info, userAgent, etc. if needed
+    });
+
+    // Step 4: Return the new tokens
+    return { accessToken, refreshToken: newRefresh };
+  }
+
+  /**
+   * Rotates a user's refresh session in Redis.
+   */
+  private async rotateSession(
+    userId: number,
+    oldJti: string,
+    newJti: string,
+    extra?: Record<string, any>,
+  ) {
+    const oldKey = this.sessionKey(userId, oldJti);
+    const newKey = this.sessionKey(userId, newJti);
+    const setKey = this.sessionsSetKey(userId);
+
+    // Get remaining TTL from old session to apply to new (prevents extending lifetime)
+    const ttl = await this.redisService.getClient().ttl(oldKey);
+
+    // Fetch old session payload (if missing, default to empty object)
+    const oldPayload = (await this.redisService.getClient().get(oldKey)) || "{}";
+
+    // Merge old payload with new data & add rotation timestamp
+    const merged = JSON.stringify({
+      ...JSON.parse(oldPayload),
+      ...extra,
+      rotatedAt: new Date().toISOString(),
+    });
+
+    // Atomic operations to rotate session in Redis
+    const multi = this.redisService.getClient()
+      .multi()
+      .del(oldKey) // delete old session key
+      .srem(setKey, oldJti) // remove old JTI from user's session set
+      .set(newKey, merged); // store new session payload
+
+    // No expiry - sessions persist until explicit logout
+
+    // Add new JTI to user's session set
+    multi.sadd(setKey, newJti);
+    await multi.exec();
+
+    // Blacklist the old JTI for a long period (1 year) since tokens don't naturally expire
+    await this.redisService.getClient().set(this.blacklistKey(oldJti), "1", "EX", 365 * 24 * 60 * 60);
   }
 
 }

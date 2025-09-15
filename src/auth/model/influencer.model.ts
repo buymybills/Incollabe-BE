@@ -13,6 +13,8 @@ import {
 } from 'sequelize-typescript';
 import { Niche } from './niche.model';
 import { InfluencerNiche } from './influencer-niche.model';
+import { GENDER_OPTIONS, OTHERS_GENDER_OPTIONS } from '../types/gender.enum';
+import type { GenderType, OthersGenderType } from '../types/gender.enum';
 
 @Table({
   tableName: 'influencers',
@@ -51,8 +53,12 @@ export class Influencer extends Model {
   dateOfBirth: Date;
 
   @AllowNull(true)
-  @Column(DataType.ENUM('Male', 'Female', 'Others'))
-  gender: 'Male' | 'Female' | 'Others';
+  @Column(DataType.ENUM(...GENDER_OPTIONS))
+  gender: GenderType;
+
+  @AllowNull(true)
+  @Column(DataType.ENUM(...OTHERS_GENDER_OPTIONS))
+  othersGender: OthersGenderType;
 
   @AllowNull(true)
   @Column(DataType.TEXT)

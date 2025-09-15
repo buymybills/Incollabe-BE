@@ -1,6 +1,6 @@
 # Redis Module
 
-The Redis module provides caching, session management, and rate limiting capabilities for the Cloutsy platform using Redis as the in-memory data store.
+The Redis module provides caching, session management, and rate limiting capabilities for the Incollab platform using Redis as the in-memory data store.
 
 ## Overview
 

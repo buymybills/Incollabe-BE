@@ -21,11 +21,11 @@
   <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
   [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
-# Cloutsy - Brand and Influencer Collaboration Platform
+# Incollab - Brand and Influencer Collaboration Platform
 
 ## Description
 
-Cloutsy is a comprehensive platform built with [NestJS](https://nestjs.com/) that connects brands with influencers for meaningful collaborations. The platform provides secure authentication, profile management, and campaign coordination features for both brands and influencers.
+Incollab is a comprehensive platform built with [NestJS](https://nestjs.com/) that connects brands with influencers for meaningful collaborations. The platform provides secure authentication, profile management, and campaign coordination features for both brands and influencers.
 
 ## Features
 
@@ -93,7 +93,7 @@ POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=your_password
-POSTGRES_DB=cloutsy_db
+POSTGRES_DB=incollab_db
 
 # Redis Configuration
 REDIS_HOST=localhost
@@ -105,7 +105,7 @@ JWT_REFRESH_SECRET=your_super_secure_refresh_secret
 
 # SMS Configuration (for OTP)
 SMS_API_KEY=your_sms_provider_api_key
-SMS_SENDER_ID=CLOUTSY
+SMS_SENDER_ID=INCOLLAB
 
 # Application
 NODE_ENV=development

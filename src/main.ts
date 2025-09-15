@@ -9,6 +9,11 @@ import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix("api");
+  
+  // Increase payload size limit for file uploads
+  const express = require('express');
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ limit: '10mb', extended: true }));
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
@@ -23,14 +28,18 @@ async function bootstrap() {
   });
 
   const config = new DocumentBuilder()
-    .setTitle("Cloutsy Application Backend")
-    .setDescription("API documentation for the Cloutsy application")
+    .setTitle("Incollab Application Backend")
+    .setDescription("API documentation for the Incollab application")
     .setVersion("1.0")
     .addBearerAuth()
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup("api/docs", app, document);
+  SwaggerModule.setup("api/docs", app, document, {
+    swaggerOptions: {
+      persistAuthorization: true,
+    },
+  });
 
   app.useGlobalInterceptors(new ResponseInterceptor());
   app.useGlobalFilters(new GlobalExceptionFilter());
@@ -38,6 +47,6 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.get("PORT") || 3002;
   await app.listen(port);
-  console.log(`Cloutsy is running on: http://localhost:${port}/api`);
+  console.log(`Incollab is running on: http://localhost:${port}/api`);
 }
 bootstrap();
