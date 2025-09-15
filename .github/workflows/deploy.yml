@@ -92,8 +92,9 @@ jobs:
             echo "🔍 Performing health check for ${{ inputs.service }}..."
 
             case "${{ inputs.service }}" in
+
               "incollab")
-                timeout 30 bash -c 'until curl -f http://localhost/api; do sleep 2; done' || echo "Health check failed"
+                timeout 30 bash -c 'until curl -f http://localhost:3002/api; do sleep 2; done' || echo "Health check failed"
                 ;;
               *)
                 echo "No specific health check configured for ${{ inputs.service }}."

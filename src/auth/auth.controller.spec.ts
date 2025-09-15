@@ -10,6 +10,7 @@ import { BrandSignupDto } from './dto/brand-signup.dto';
 import { BrandLoginDto } from './dto/brand-login.dto';
 import { BrandVerifyOtpDto } from './dto/brand-verify-otp.dto';
 import { CheckUsernameDto } from './dto/check-username.dto';
+import { Request } from 'express';
 
 const mockAuthService = {
   requestOtp: jest.fn(),
@@ -81,7 +82,7 @@ describe('AuthController', () => {
       const verifyOtpDto: VerifyOtpDto = { phone: '9467289789', otp: '123456' };
       const deviceId = 'device-123';
       const userAgent = 'Mozilla/5.0 (test browser)';
-      const mockReq = { headers: { 'user-agent': userAgent } } as any;
+      const mockReq = { headers: { 'user-agent': userAgent } } as Request;
       const expectedResult = {
         message: 'OTP verified successfully',
         phone: '+919467289789',
@@ -90,9 +91,17 @@ describe('AuthController', () => {
 
       mockAuthService.verifyOtp.mockResolvedValue(expectedResult);
 
-      const result = await controller.verifyInfluencerOtp(verifyOtpDto, deviceId, mockReq);
+      const result = await controller.verifyInfluencerOtp(
+        verifyOtpDto,
+        deviceId,
+        mockReq,
+      );
 
-      expect(authService.verifyOtp).toHaveBeenCalledWith(verifyOtpDto, deviceId, userAgent);
+      expect(authService.verifyOtp).toHaveBeenCalledWith(
+        verifyOtpDto,
+        deviceId,
+        userAgent,
+      );
       expect(result).toEqual(expectedResult);
     });
 
@@ -108,7 +117,11 @@ describe('AuthController', () => {
 
       const result = await controller.verifyInfluencerOtp(verifyOtpDto);
 
-      expect(authService.verifyOtp).toHaveBeenCalledWith(verifyOtpDto, undefined, undefined);
+      expect(authService.verifyOtp).toHaveBeenCalledWith(
+        verifyOtpDto,
+        undefined,
+        undefined,
+      );
       expect(result).toEqual(expectedResult);
     });
   });
@@ -140,15 +153,24 @@ describe('AuthController', () => {
           username: 'test_user',
           phone: '+919467289789',
           isPhoneVerified: true,
-          niches: [{ id: 1, name: 'Fashion' }, { id: 2, name: 'Beauty' }],
+          niches: [
+            { id: 1, name: 'Fashion' },
+            { id: 2, name: 'Beauty' },
+          ],
         },
       };
 
       mockAuthService.influencerSignup.mockResolvedValue(expectedResult);
 
-      const result = await controller.influencerSignup(signupDto, mockProfileImage);
+      const result = await controller.influencerSignup(
+        signupDto,
+        mockProfileImage,
+      );
 
-      expect(authService.influencerSignup).toHaveBeenCalledWith(signupDto, mockProfileImage);
+      expect(authService.influencerSignup).toHaveBeenCalledWith(
+        signupDto,
+        mockProfileImage,
+      );
       expect(result).toEqual(expectedResult);
     });
   });
@@ -181,11 +203,15 @@ describe('AuthController', () => {
         message: 'Username is unique and available to use',
       };
 
-      mockAuthService.checkUsernameAvailability.mockResolvedValue(expectedResult);
+      mockAuthService.checkUsernameAvailability.mockResolvedValue(
+        expectedResult,
+      );
 
       const result = await controller.checkUsername(checkUsernameDto);
 
-      expect(authService.checkUsernameAvailability).toHaveBeenCalledWith(checkUsernameDto);
+      expect(authService.checkUsernameAvailability).toHaveBeenCalledWith(
+        checkUsernameDto,
+      );
       expect(result).toEqual(expectedResult);
     });
 
@@ -195,14 +221,24 @@ describe('AuthController', () => {
         available: false,
         username: 'taken_user',
         message: 'Username is already taken',
-        suggestions: ['taken_user_1', 'taken_user_official', 'taken_user_2025', 'taken_user_user', 'taken_user_pro'],
+        suggestions: [
+          'taken_user_1',
+          'taken_user_official',
+          'taken_user_2025',
+          'taken_user_user',
+          'taken_user_pro',
+        ],
       };
 
-      mockAuthService.checkUsernameAvailability.mockResolvedValue(expectedResult);
+      mockAuthService.checkUsernameAvailability.mockResolvedValue(
+        expectedResult,
+      );
 
       const result = await controller.checkUsername(checkUsernameDto);
 
-      expect(authService.checkUsernameAvailability).toHaveBeenCalledWith(checkUsernameDto);
+      expect(authService.checkUsernameAvailability).toHaveBeenCalledWith(
+        checkUsernameDto,
+      );
       expect(result).toEqual(expectedResult);
     });
   });
@@ -227,10 +263,13 @@ describe('AuthController', () => {
 
   describe('verifyBrandOtp', () => {
     it('should verify OTP for brand', async () => {
-      const verifyOtpDto: BrandVerifyOtpDto = { email: 'test@brand.com', otp: '123456' };
+      const verifyOtpDto: BrandVerifyOtpDto = {
+        email: 'test@brand.com',
+        otp: '123456',
+      };
       const deviceId = 'device-123';
       const userAgent = 'Mozilla/5.0 (test browser)';
-      const mockReq = { headers: { 'user-agent': userAgent } } as any;
+      const mockReq = { headers: { 'user-agent': userAgent } } as Request;
       const expectedResult = {
         message: 'Login successful',
         accessToken: 'mock-access-token',
@@ -244,9 +283,17 @@ describe('AuthController', () => {
 
       mockAuthService.verifyBrandOtp.mockResolvedValue(expectedResult);
 
-      const result = await controller.verifyBrandOtp(verifyOtpDto, deviceId, mockReq);
+      const result = await controller.verifyBrandOtp(
+        verifyOtpDto,
+        deviceId,
+        mockReq,
+      );
 
-      expect(authService.verifyBrandOtp).toHaveBeenCalledWith(verifyOtpDto, deviceId, userAgent);
+      expect(authService.verifyBrandOtp).toHaveBeenCalledWith(
+        verifyOtpDto,
+        deviceId,
+        userAgent,
+      );
       expect(result).toEqual(expectedResult);
     });
   });
@@ -261,18 +308,20 @@ describe('AuthController', () => {
         username: 'test_brand',
       };
       const mockFiles = {
-        profileImage: [{
-          fieldname: 'profileImage',
-          originalname: 'profile.jpg',
-          encoding: '7bit',
-          mimetype: 'image/jpeg',
-          size: 1000,
-          buffer: Buffer.from('test'),
-        } as Express.Multer.File],
+        profileImage: [
+          {
+            fieldname: 'profileImage',
+            originalname: 'profile.jpg',
+            encoding: '7bit',
+            mimetype: 'image/jpeg',
+            size: 1000,
+            buffer: Buffer.from('test'),
+          } as Express.Multer.File,
+        ],
       };
       const deviceId = 'device-123';
       const userAgent = 'Mozilla/5.0 (test browser)';
-      const mockReq = { headers: { 'user-agent': userAgent } } as any;
+      const mockReq = { headers: { 'user-agent': userAgent } } as Request;
       const expectedResult = {
         message: 'Brand registered successfully',
         brand: {
@@ -286,9 +335,19 @@ describe('AuthController', () => {
 
       mockAuthService.brandSignup.mockResolvedValue(expectedResult);
 
-      const result = await controller.brandSignup(signupDto, mockFiles, deviceId, mockReq);
+      const result = await controller.brandSignup(
+        signupDto,
+        mockFiles,
+        deviceId,
+        mockReq,
+      );
 
-      expect(authService.brandSignup).toHaveBeenCalledWith(signupDto, mockFiles, deviceId, userAgent);
+      expect(authService.brandSignup).toHaveBeenCalledWith(
+        signupDto,
+        mockFiles,
+        deviceId,
+        userAgent,
+      );
       expect(result).toEqual(expectedResult);
     });
   });
@@ -301,7 +360,7 @@ describe('AuthController', () => {
       };
       const deviceId = 'device-123';
       const userAgent = 'Mozilla/5.0 (test browser)';
-      const mockReq = { headers: { 'user-agent': userAgent } } as any;
+      const mockReq = { headers: { 'user-agent': userAgent } } as Request;
       const expectedResult = {
         message: 'Login successful',
         accessToken: 'mock-access-token',
@@ -319,7 +378,11 @@ describe('AuthController', () => {
 
       const result = await controller.brandLogin(loginDto, deviceId, mockReq);
 
-      expect(authService.brandLogin).toHaveBeenCalledWith(loginDto, deviceId, userAgent);
+      expect(authService.brandLogin).toHaveBeenCalledWith(
+        loginDto,
+        deviceId,
+        userAgent,
+      );
       expect(result).toEqual(expectedResult);
     });
 
@@ -343,7 +406,11 @@ describe('AuthController', () => {
 
       const result = await controller.brandLogin(loginDto);
 
-      expect(authService.brandLogin).toHaveBeenCalledWith(loginDto, undefined, undefined);
+      expect(authService.brandLogin).toHaveBeenCalledWith(
+        loginDto,
+        undefined,
+        undefined,
+      );
       expect(result).toEqual(expectedResult);
     });
   });

@@ -27,7 +27,10 @@ import { InfluencerSignupDto } from './dto/influencer-signup.dto';
 import { InfluencerSignupMultipartDto } from './dto/influencer-signup-multipart.dto';
 import { BrandSignupDto } from './dto/brand-signup.dto';
 import { BrandSignupMultipartDto } from './dto/brand-signup-multipart.dto';
-import { FileInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
+import {
+  FileInterceptor,
+  FileFieldsInterceptor,
+} from '@nestjs/platform-express';
 import { ApiFileFields } from './decorators/api-file.decorator';
 import { BrandLoginDto } from './dto/brand-login.dto';
 import { BrandVerifyOtpDto } from './dto/brand-verify-otp.dto';
@@ -36,17 +39,17 @@ import { LogoutDto } from './dto/logout.dto';
 import { LogoutResponseDto } from './dto/logout-response.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RefreshTokenResponseDto } from './dto/refresh-token-response.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthGuard } from './guards/auth.guard';
-import Request from 'express';
+import  Request from 'express';
 import { UploadedFiles } from '@nestjs/common';
-import { GENDER_OPTIONS, OTHERS_GENDER_OPTIONS } from './types/gender.enum'
+import { GENDER_OPTIONS, OTHERS_GENDER_OPTIONS } from './types/gender.enum';
 
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
-  constructor(
-    private readonly authService: AuthService,
-  ) {}
+  constructor(private readonly authService: AuthService) {}
 
   @Post('influencer/request-otp')
   @HttpCode(HttpStatus.OK)
@@ -112,7 +115,7 @@ export class AuthController {
   async verifyInfluencerOtp(
     @Body() verifyOtpDto: VerifyOtpDto,
     @Headers('device-id') deviceId?: string,
-    @Req() req?: Request
+    @Req() req?: Request,
   ) {
     const userAgent = req?.headers['user-agent'];
     return this.authService.verifyOtp(verifyOtpDto, deviceId, userAgent);
@@ -120,32 +123,80 @@ export class AuthController {
 
   @Post('influencer/signup')
   @HttpCode(HttpStatus.CREATED)
-  @UseInterceptors(FileInterceptor('profileImage', {
-    fileFilter: (req, file, callback) => {
-      if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
-        return callback(new Error('Only image files are allowed!'), false);
-      }
-      callback(null, true);
-    },
-    limits: {
-      fileSize: 5 * 1024 * 1024, // 5MB
-    },
-  }))
+  @UseInterceptors(
+    FileInterceptor('profileImage', {
+      fileFilter: (req, file, callback) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
+          return callback(new Error('Only image files are allowed!'), false);
+        }
+        callback(null, true);
+      },
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB
+      },
+    }),
+  )
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Sign up influencer with file upload',
-    description: 'Create a new influencer account with optional profile image upload. Bio is optional.',
+    description:
+      'Create a new influencer account with optional profile image upload. Bio is optional.',
   })
   @ApiFileFields(['profileImage'], {
-    name: { type: 'string', description: 'Full name of the influencer', example: 'Dhruv Bhatia', required: true },
-    username: { type: 'string', description: 'Unique username for the influencer', example: 'dhruv_1109', required: true },
-    phone: { type: 'string', description: 'Indian mobile number (10 digits)', example: '9467289789', required: true },
-    dateOfBirth: { type: 'string', description: 'Date of birth in YYYY-MM-DD format', example: '1995-01-15', required: true },
-    gender: { type: 'string', enum: ['Male', 'Female', 'Others'], description: 'Gender of the influencer', required: true },
-    othersGender: { type: 'string', enum: ['Abinary', 'Trans-Women', 'Gay', 'Binary', 'Trans-Feminine'], description: 'Specific gender option when "Others" is selected', required: false },
-    bio: { type: 'string', description: 'Bio or description about the influencer (optional)', example: '', required: false },
-    nicheIds: { type: 'string', description: 'Array of niche IDs. Accepts JSON array "[1,4,12]" or comma-separated "1,4,12"', example: '[1,4,12]', required: true },
-    deviceToken: { type: 'string', description: 'Device token for push notifications', required: false }
+    name: {
+      type: 'string',
+      description: 'Full name of the influencer',
+      example: 'Dhruv Bhatia',
+      required: true,
+    },
+    username: {
+      type: 'string',
+      description: 'Unique username for the influencer',
+      example: 'dhruv_1109',
+      required: true,
+    },
+    phone: {
+      type: 'string',
+      description: 'Indian mobile number (10 digits)',
+      example: '9467289789',
+      required: true,
+    },
+    dateOfBirth: {
+      type: 'string',
+      description: 'Date of birth in YYYY-MM-DD format',
+      example: '1995-01-15',
+      required: true,
+    },
+    gender: {
+      type: 'string',
+      enum: ['Male', 'Female', 'Others'],
+      description: 'Gender of the influencer',
+      required: true,
+    },
+    othersGender: {
+      type: 'string',
+      enum: ['Abinary', 'Trans-Women', 'Gay', 'Binary', 'Trans-Feminine'],
+      description: 'Specific gender option when "Others" is selected',
+      required: false,
+    },
+    bio: {
+      type: 'string',
+      description: 'Bio or description about the influencer (optional)',
+      example: '',
+      required: false,
+    },
+    nicheIds: {
+      type: 'string',
+      description:
+        'Array of niche IDs. Accepts JSON array "[1,4,12]" or comma-separated "1,4,12"',
+      example: '[1,4,12]',
+      required: true,
+    },
+    deviceToken: {
+      type: 'string',
+      description: 'Device token for push notifications',
+      required: false,
+    },
   })
   @ApiResponse({
     status: 201,
@@ -161,7 +212,8 @@ export class AuthController {
           dateOfBirth: '1995-01-15',
           gender: 'Male',
           bio: 'Fashion and lifestyle influencer', // optional
-          profileImage: 'https://your-bucket.s3.region.amazonaws.com/profiles/influencer-123456789.jpg', // optional
+          profileImage:
+            'https://your-bucket.s3.region.amazonaws.com/profiles/influencer-123456789.jpg', // optional
           isPhoneVerified: true,
           niches: [
             { id: 1, name: 'Fashion', icon: '👗' },
@@ -195,7 +247,10 @@ export class AuthController {
     @Body() signupDto: InfluencerSignupMultipartDto,
     @UploadedFile() profileImage?: Express.Multer.File,
   ) {
-    return this.authService.influencerSignup(signupDto as InfluencerSignupDto, profileImage);
+    return this.authService.influencerSignup(
+      signupDto as InfluencerSignupDto,
+      profileImage,
+    );
   }
 
   @Get('niches')
@@ -246,7 +301,13 @@ export class AuthController {
       example: {
         message: 'Gender options fetched successfully',
         genderOptions: ['Male', 'Female', 'Others'],
-        othersGenderOptions: ['Abinary', 'Trans-Women', 'Gay', 'Binary', 'Trans-Feminine'],
+        othersGenderOptions: [
+          'Abinary',
+          'Trans-Women',
+          'Gay',
+          'Binary',
+          'Trans-Feminine',
+        ],
       },
     },
   })
@@ -276,7 +337,10 @@ export class AuthController {
           properties: {
             available: { type: 'boolean', example: true },
             username: { type: 'string', example: 'dhruv_1109' },
-            message: { type: 'string', example: 'Username is unique and available to use' },
+            message: {
+              type: 'string',
+              example: 'Username is unique and available to use',
+            },
           },
         },
         {
@@ -289,7 +353,13 @@ export class AuthController {
             suggestions: {
               type: 'array',
               items: { type: 'string' },
-              example: ['john_doe_1', 'john_doe_official', 'john_doe_2025', 'john_doe_user', 'john_doe_pro'],
+              example: [
+                'john_doe_1',
+                'john_doe_official',
+                'john_doe_2025',
+                'john_doe_user',
+                'john_doe_pro',
+              ],
             },
           },
         },
@@ -323,64 +393,162 @@ export class AuthController {
       },
     },
   })
-  async requestBrandOtp(@Body() requestOtpDto: RequestOtpDto): Promise<any> {
+  async requestBrandOtp(@Body() requestOtpDto: RequestOtpDto) {
     return this.authService.requestOtp(requestOtpDto);
   }
 
   @Post('brand/signup')
   @HttpCode(HttpStatus.CREATED)
-  @UseInterceptors(FileFieldsInterceptor([
-    { name: 'profileImage', maxCount: 1 },
-    { name: 'incorporationDocument', maxCount: 1 },
-    { name: 'gstDocument', maxCount: 1 },
-    { name: 'panDocument', maxCount: 1 },
-  ], {
-    fileFilter: (req, file, callback) => {
-      // Allow images for profileImage
-      if (file.fieldname === 'profileImage') {
-        if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
-          return callback(new Error('Profile image must be jpg, jpeg, png, or webp'), false);
-        }
-      }
-      // Allow PDF and images for documents
-      else if (['incorporationDocument', 'gstDocument', 'panDocument'].includes(file.fieldname)) {
-        if (!file.mimetype.match(/\/(pdf|jpg|jpeg|png|webp)$/)) {
-          return callback(new Error('Documents must be PDF, jpg, jpeg, png, or webp'), false);
-        }
-      }
-      callback(null, true);
-    },
-    limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB for documents
-    },
-  }))
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'profileImage', maxCount: 1 },
+        { name: 'incorporationDocument', maxCount: 1 },
+        { name: 'gstDocument', maxCount: 1 },
+        { name: 'panDocument', maxCount: 1 },
+      ],
+      {
+        fileFilter: (req, file, callback) => {
+          // Allow images for profileImage
+          if (file.fieldname === 'profileImage') {
+            if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
+              return callback(
+                new Error('Profile image must be jpg, jpeg, png, or webp'),
+                false,
+              );
+            }
+          }
+          // Allow PDF and images for documents
+          else if (
+            ['incorporationDocument', 'gstDocument', 'panDocument'].includes(
+              file.fieldname,
+            )
+          ) {
+            if (!file.mimetype.match(/\/(pdf|jpg|jpeg|png|webp)$/)) {
+              return callback(
+                new Error('Documents must be PDF, jpg, jpeg, png, or webp'),
+                false,
+              );
+            }
+          }
+          callback(null, true);
+        },
+        limits: {
+          fileSize: 10 * 1024 * 1024, // 10MB for documents
+        },
+      },
+    ),
+  )
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Sign up brand with file uploads',
-    description: 'Create a new brand account with optional profile image and document uploads',
+    description:
+      'Create a new brand account with optional profile image and document uploads',
   })
-  @ApiFileFields(['profileImage', 'incorporationDocument', 'gstDocument', 'panDocument'], {
-    phone: { type: 'string', description: 'Indian mobile number (10 digits)', example: '9467289789', required: true },
-    email: { type: 'string', description: 'Brand email address for login', example: 'brand@example.com', required: true },
-    password: { type: 'string', description: 'Password for brand account', example: 'SecurePassword123!', required: true },
-    brandName: { type: 'string', description: 'Brand name', example: 'Example Brand Inc.', required: true },
-    username: { type: 'string', description: 'Unique username for the brand', example: 'example_brand', required: true },
-    legalEntityName: { type: 'string', description: 'Legal entity name as registered', example: 'Example Brand Private Limited', required: true },
-    companyType: { type: 'string', enum: ['Private Limited Company (Pvt. Ltd.)', 'Public Limited Company (PLC)', 'One-Person Company (OPC)', 'Limited Liability Partnership (LLP)', 'Partnership Firm'], description: 'Type of company registration', required: true },
-    brandEmailId: { type: 'string', description: 'Brand official email address', example: 'info@examplebrand.com', required: true },
-    pocName: { type: 'string', description: 'Point of contact name', example: 'John Smith', required: true },
-    pocDesignation: { type: 'string', description: 'Point of contact designation', example: 'Marketing Manager', required: true },
-    pocEmailId: { type: 'string', description: 'Point of contact email address', example: 'john.smith@examplebrand.com', required: true },
-    pocContactNumber: { type: 'string', description: 'Point of contact phone number', example: '+919876543210', required: true },
-    brandBio: { type: 'string', description: 'Brand bio or description (can be empty)', example: 'We are a leading fashion brand focused on sustainable clothing.', required: false },
-    nicheIds: { type: 'string', description: 'Array of niche IDs. Accepts JSON array "[1,4,12]" or comma-separated "1,4,12"', example: '[1,4,12]', required: true }
-  })
+  @ApiFileFields(
+    ['profileImage', 'incorporationDocument', 'gstDocument', 'panDocument'],
+    {
+      phone: {
+        type: 'string',
+        description: 'Indian mobile number (10 digits)',
+        example: '9467289789',
+        required: true,
+      },
+      email: {
+        type: 'string',
+        description: 'Brand email address for login',
+        example: 'brand@example.com',
+        required: true,
+      },
+      password: {
+        type: 'string',
+        description: 'Password for brand account',
+        example: 'SecurePassword123!',
+        required: true,
+      },
+      brandName: {
+        type: 'string',
+        description: 'Brand name',
+        example: 'Example Brand Inc.',
+        required: true,
+      },
+      username: {
+        type: 'string',
+        description: 'Unique username for the brand',
+        example: 'example_brand',
+        required: true,
+      },
+      legalEntityName: {
+        type: 'string',
+        description: 'Legal entity name as registered',
+        example: 'Example Brand Private Limited',
+        required: true,
+      },
+      companyType: {
+        type: 'string',
+        enum: [
+          'Private Limited Company (Pvt. Ltd.)',
+          'Public Limited Company (PLC)',
+          'One-Person Company (OPC)',
+          'Limited Liability Partnership (LLP)',
+          'Partnership Firm',
+        ],
+        description: 'Type of company registration',
+        required: true,
+      },
+      brandEmailId: {
+        type: 'string',
+        description: 'Brand official email address',
+        example: 'info@examplebrand.com',
+        required: true,
+      },
+      pocName: {
+        type: 'string',
+        description: 'Point of contact name',
+        example: 'John Smith',
+        required: true,
+      },
+      pocDesignation: {
+        type: 'string',
+        description: 'Point of contact designation',
+        example: 'Marketing Manager',
+        required: true,
+      },
+      pocEmailId: {
+        type: 'string',
+        description: 'Point of contact email address',
+        example: 'john.smith@examplebrand.com',
+        required: true,
+      },
+      pocContactNumber: {
+        type: 'string',
+        description: 'Point of contact phone number',
+        example: '+919876543210',
+        required: true,
+      },
+      brandBio: {
+        type: 'string',
+        description: 'Brand bio or description (can be empty)',
+        example:
+          'We are a leading fashion brand focused on sustainable clothing.',
+        required: false,
+      },
+      nicheIds: {
+        type: 'string',
+        description:
+          'Array of niche IDs. Accepts JSON array "[1,4,12]" or comma-separated "1,4,12"',
+        example: '[1,4,12]',
+        required: true,
+      },
+    },
+  )
   @ApiResponse({
     status: 201,
     description: 'Brand registered successfully and login flow initiated',
     schema: {
       example: {
-        message: 'Brand registered successfully. Please check your email for OTP to complete login.',
+        message:
+          'Brand registered successfully. Please check your email for OTP to complete login.',
         signup: {
           brand: {
             id: 1,
@@ -388,14 +556,19 @@ export class AuthController {
             phone: '+919467289789',
             brandName: 'Example Brand',
             username: 'example_brand',
-            profileImage: 'https://your-bucket.s3.region.amazonaws.com/profiles/brands/brand-123456789.jpg',
-            incorporationDocument: 'https://your-bucket.s3.region.amazonaws.com/documents/brands/incorporation-123456789.pdf',
-            gstDocument: 'https://your-bucket.s3.region.amazonaws.com/documents/brands/gst-123456789.pdf',
-            panDocument: 'https://your-bucket.s3.region.amazonaws.com/documents/brands/pan-123456789.pdf',
+            profileImage:
+              'https://your-bucket.s3.region.amazonaws.com/profiles/brands/brand-123456789.jpg',
+            incorporationDocument:
+              'https://your-bucket.s3.region.amazonaws.com/documents/brands/incorporation-123456789.pdf',
+            gstDocument:
+              'https://your-bucket.s3.region.amazonaws.com/documents/brands/gst-123456789.pdf',
+            panDocument:
+              'https://your-bucket.s3.region.amazonaws.com/documents/brands/pan-123456789.pdf',
           },
         },
         login: {
-          message: 'OTP sent to your email address. Please verify to complete login.',
+          message:
+            'OTP sent to your email address. Please verify to complete login.',
           requiresOtp: true,
           email: 'brand@example.com',
         },
@@ -429,17 +602,23 @@ export class AuthController {
   })
   async brandSignup(
     @Body() signupDto: BrandSignupMultipartDto,
-    @UploadedFiles() files: {
-      profileImage?: Express.Multer.File[],
-      incorporationDocument?: Express.Multer.File[],
-      gstDocument?: Express.Multer.File[],
-      panDocument?: Express.Multer.File[]
+    @UploadedFiles()
+    files: {
+      profileImage?: Express.Multer.File[];
+      incorporationDocument?: Express.Multer.File[];
+      gstDocument?: Express.Multer.File[];
+      panDocument?: Express.Multer.File[];
     },
     @Headers('device-id') deviceId?: string,
-    @Req() req?: Request
+    @Req() req?: Request,
   ) {
     const userAgent = req?.headers['user-agent'];
-    return this.authService.brandSignup(signupDto as BrandSignupDto, files, deviceId, userAgent);
+    return this.authService.brandSignup(
+      signupDto as BrandSignupDto,
+      files,
+      deviceId,
+      userAgent,
+    );
   }
 
   @Post('brand/login')
@@ -475,7 +654,7 @@ export class AuthController {
   async brandLogin(
     @Body() loginDto: BrandLoginDto,
     @Headers('device-id') deviceId?: string,
-    @Req() req?: Request
+    @Req() req?: Request,
   ) {
     const userAgent = req?.headers['user-agent'];
     return this.authService.brandLogin(loginDto, deviceId, userAgent);
@@ -485,7 +664,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Verify brand email OTP',
-    description: 'Verify the OTP sent to brand email address to complete login process.',
+    description:
+      'Verify the OTP sent to brand email address to complete login process.',
   })
   @ApiBody({ type: BrandVerifyOtpDto })
   @ApiHeader({
@@ -530,7 +710,7 @@ export class AuthController {
   async verifyBrandOtp(
     @Body() verifyOtpDto: BrandVerifyOtpDto,
     @Headers('device-id') deviceId?: string,
-    @Req() req?: Request
+    @Req() req?: Request,
   ) {
     const userAgent = req?.headers['user-agent'];
     return this.authService.verifyBrandOtp(verifyOtpDto, deviceId, userAgent);
@@ -587,7 +767,9 @@ export class AuthController {
       },
     },
   })
-  async logoutAll(@Req() req: Request & { user: { id: number } }): Promise<LogoutResponseDto> {
+  async logoutAll(
+    @Req() req: Request & { user: { id: number } },
+  ): Promise<LogoutResponseDto> {
     return this.authService.logoutAll(req.user.id);
   }
 
@@ -595,7 +777,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Refresh access token',
-    description: 'Exchange a valid refresh token for a new access token and refresh token.',
+    description:
+      'Exchange a valid refresh token for a new access token and refresh token.',
   })
   @ApiBody({ type: RefreshTokenDto })
   @ApiResponse({
@@ -625,7 +808,115 @@ export class AuthController {
       },
     },
   })
-  async refreshToken(@Body() refreshTokenDto: RefreshTokenDto): Promise<RefreshTokenResponseDto> {
+  async refreshToken(
+    @Body() refreshTokenDto: RefreshTokenDto,
+  ): Promise<RefreshTokenResponseDto> {
     return this.authService.refreshToken(refreshTokenDto);
+  }
+
+  @Post('brand/forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Request password reset for brand',
+    description:
+      'Send a password reset link to the brand email address. The link contains a secure JWT token that expires in 1 hour.',
+  })
+  @ApiBody({ type: ForgotPasswordDto })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Password reset email sent successfully (or email not found - same response for security)',
+    schema: {
+      example: {
+        message: 'If the email exists, a password reset link has been sent',
+        success: true,
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid email format',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: ['Please provide a valid email address'],
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description:
+      'Internal server error while processing forgot password request',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Failed to process forgot password request',
+        error: 'Internal Server Error',
+      },
+    },
+  })
+  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(forgotPasswordDto);
+  }
+
+  @Post('brand/reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Reset brand password using token',
+    description:
+      'Reset the brand password using the token received via email. This will log out the brand from all devices for security.',
+  })
+  @ApiBody({ type: ResetPasswordDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Password reset successfully',
+    schema: {
+      example: {
+        message:
+          'Password has been reset successfully. Please log in with your new password.',
+        success: true,
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid request data',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: [
+          'Reset token is required',
+          'Password must be at least 8 characters long',
+          'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character',
+        ],
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid, expired, or already used reset token',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Invalid or expired reset token',
+        error: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error while resetting password',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Failed to reset password',
+        error: 'Internal Server Error',
+      },
+    },
+  })
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    return this.authService.resetPassword(resetPasswordDto);
   }
 }
