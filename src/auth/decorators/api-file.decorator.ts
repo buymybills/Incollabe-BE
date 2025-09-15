@@ -18,9 +18,12 @@ export function ApiFile(fileName: string = 'file'): MethodDecorator {
   );
 }
 
-export function ApiFileFields(files: string[], otherFields?: any): MethodDecorator {
+export function ApiFileFields(
+  files: string[],
+  otherFields?: any,
+): MethodDecorator {
   const properties: any = {};
-  
+
   files.forEach((file) => {
     properties[file] = {
       type: 'string',

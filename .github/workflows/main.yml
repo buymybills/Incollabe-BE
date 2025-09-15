@@ -226,7 +226,7 @@ jobs:
 
   incollab-deploy:
     name: Deploy Incollab
-    if: needs.detect-changes.outputs.incollab == 'true' && github.ref == 'refs/heads/dev'
+    if: needs.detect-changes.outputs.incollab == 'true' && github.ref == 'refs/heads/main'
     needs: [detect-changes, incollab-push]
     uses: ./.github/workflows/deploy.yml
     with:
@@ -243,18 +243,6 @@ jobs:
     if: always()
     needs: [
       detect-changes,
-      api-gateway-build,
-      api-gateway-test,
-      api-gateway-push,
-      api-gateway-deploy,
-      quickpick-build,
-      quickpick-test,
-      quickpick-push,
-      quickpick-deploy,
-      product-service-build,
-      product-service-test,
-      product-service-push,
-      product-service-deploy,
       incollab-build,
       incollab-test,
       incollab-push,
