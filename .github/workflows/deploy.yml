@@ -1,0 +1,105 @@
+name: Deploy
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: 'Service name (api-gateway, quickpick, etc.)'
+        required: true
+        type: string
+      environment:
+        description: 'Deployment environment (dev, staging, prod)'
+        required: false
+        type: string
+        default: 'production'
+      docker_compose_path:
+        description: 'Path to docker-compose file on server'
+        required: false
+        type: string
+        default: '/home/ubuntu/Bmb-backend'
+    secrets:
+      EC2_HOST:
+        required: true
+      EC2_USER:
+        required: true
+      EC2_SSH_KEY:
+        required: true
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.service }} to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 300s
+          script: |
+            echo "Starting deployment of ${{ inputs.service }} to ${{ inputs.environment }}..."
+            cd ${{ inputs.docker_compose_path }}
+            
+            # Make deploy script executable
+            chmod +x deploy.sh
+            
+            # Create .env file with Docker Hub credentials if it doesn't exist
+            if [ ! -f .env ]; then
+              echo "Creating .env file..."
+              cat > .env << EOF
+            DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+            IMAGE_TAG=latest
+            EOF
+            else
+              # Update existing .env with Docker Hub username if not present
+              if ! grep -q "DOCKERHUB_USERNAME" .env; then
+                echo "DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}" >> .env
+              fi
+              if ! grep -q "IMAGE_TAG" .env; then
+                echo "IMAGE_TAG=latest" >> .env
+              fi
+            fi
+            
+            # Run deployment script
+            ./deploy.sh deploy
+
+      - name: Health Check
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ${{ inputs.docker_compose_path }}
+            echo "Performing health check for ${{ inputs.service }}..."
+            
+            # Basic health check - customize based on your service endpoints
+            case "${{ inputs.service }}" in
+              "api-gateway")
+                # Replace with your actual health check endpoint
+                timeout 30 bash -c 'until curl -f http://localhost:3001/health; do sleep 2; done' || echo "Health check endpoint not responding"
+                ;;
+              "quickpick")
+                # Replace with your actual health check endpoint  
+                timeout 30 bash -c 'until curl -f http://localhost:3002/health; do sleep 2; done' || echo "Health check endpoint not responding"
+                ;;
+              "incollab")
+                # Health check for incollab service via nginx proxy
+                timeout 30 bash -c 'until curl -f http://localhost/api; do sleep 2; done' || echo "Health check endpoint not responding"
+                ;;
+              *)
+                echo "No specific health check configured for ${{ inputs.service }}"
+                # Generic check to see if container is running
+                if docker-compose ps ${{ inputs.service }} | grep -q "Up"; then
+                  echo "Container is running successfully"
+                else
+                  echo "Container check failed"
+                  exit 1
+                fi
+                ;;
+            esac

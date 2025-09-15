@@ -1,0 +1,41 @@
+name: Build
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: 'Service name (api-gateway, quickpick, etc.)'
+        required: true
+        type: string
+      dockerfile_path:
+        description: 'Path to Dockerfile'
+        required: true
+        type: string
+      context_path:
+        description: 'Build context path'
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build ${{ inputs.service }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          echo "Building ${{ inputs.service }}..."
+          docker build -t ${{ inputs.service }}:latest -f ${{ inputs.dockerfile_path }} ${{ inputs.context_path }}
+
+      - name: Save Docker image as artifact
+        run: |
+          docker save ${{ inputs.service }}:latest | gzip > ${{ inputs.service }}.tar.gz
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.service }}-image
+          path: ${{ inputs.service }}.tar.gz
+          retention-days: 1

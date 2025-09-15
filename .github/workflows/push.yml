@@ -1,0 +1,67 @@
+name: Push
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: 'Service name (api-gateway, quickpick, etc.)'
+        required: true
+        type: string
+      dockerfile_path:
+        description: 'Path to Dockerfile'
+        required: true
+        type: string
+      context_path:
+        description: 'Build context path'
+        required: true
+        type: string
+      image_tag:
+        description: 'Docker image tag (latest, dev, etc.)'
+        required: true
+        type: string
+    secrets:
+      DOCKERHUB_USERNAME:
+        required: true
+      DOCKERHUB_TOKEN:
+        required: true
+
+jobs:
+  push:
+    name: Push ${{ inputs.service }} image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.service }}-image
+
+      - name: Load Docker image
+        run: |
+          docker load < ${{ inputs.service }}.tar.gz
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Tag and push Docker image
+        run: |
+          # Tag the image with the DockerHub repository name
+          docker tag ${{ inputs.service }}:latest ${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.service }}:${{ inputs.image_tag }}
+          
+          # Also tag as latest if this is main branch
+          if [ "${{ inputs.image_tag }}" = "latest" ]; then
+            docker tag ${{ inputs.service }}:latest ${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.service }}:latest
+            docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.service }}:latest
+          fi
+          
+          # Push the specific tag
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.service }}:${{ inputs.image_tag }}
+
+      - name: Clean up
+        run: |
+          rm -f ${{ inputs.service }}.tar.gz

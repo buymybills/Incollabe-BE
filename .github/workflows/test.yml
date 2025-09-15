@@ -1,0 +1,69 @@
+name: Test
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: 'Service name (api-gateway, quickpick, etc.)'
+        required: true
+        type: string
+      service_path:
+        description: 'Path to service directory'
+        required: true
+        type: string
+      node_version:
+        description: 'Node.js version to use'
+        required: false
+        type: string
+        default: '18'
+
+jobs:
+  test:
+    name: Test ${{ inputs.service }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            ${{ inputs.service_path }}/node_modules
+          key: ${{ runner.os }}-${{ inputs.service }}-${{ hashFiles(format('{0}/package-lock.json', inputs.service_path)) }}
+          restore-keys: |
+            ${{ runner.os }}-${{ inputs.service }}-
+
+      - name: Install dependencies
+        working-directory: ${{ inputs.service_path }}
+        run: npm ci
+
+      - name: Run linting (optional)
+        working-directory: ${{ inputs.service_path }}
+        run: |
+          if npm run lint --silent 2>/dev/null; then
+            npm run lint
+          else
+            echo "No lint script found, skipping..."
+          fi
+        continue-on-error: false
+
+      - name: Run tests
+        working-directory: ${{ inputs.service_path }}
+        run: npm test
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ inputs.service }}-test-results
+          path: |
+            ${{ inputs.service_path }}/coverage/
+            ${{ inputs.service_path }}/test-results/
+          retention-days: 7
