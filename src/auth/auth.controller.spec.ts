@@ -1,17 +1,20 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { RequestOtpDto } from './dto/request-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { InfluencerSignupDto } from './dto/influencer-signup.dto';
 import { BrandSignupDto } from './dto/brand-signup.dto';
 import { BrandLoginDto } from './dto/brand-login.dto';
+import { BrandVerifyOtpDto } from './dto/brand-verify-otp.dto';
 import { CheckUsernameDto } from './dto/check-username.dto';
 
 const mockAuthService = {
   requestOtp: jest.fn(),
   verifyOtp: jest.fn(),
-  brandVerifyOtp: jest.fn(),
+  verifyBrandOtp: jest.fn(),
   influencerSignup: jest.fn(),
   brandSignup: jest.fn(),
   brandLogin: jest.fn(),
@@ -30,6 +33,19 @@ describe('AuthController', () => {
         {
           provide: AuthService,
           useValue: mockAuthService,
+        },
+        {
+          provide: JwtService,
+          useValue: {
+            sign: jest.fn(),
+            verify: jest.fn(),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn(),
+          },
         },
       ],
     }).compile();
@@ -108,6 +124,14 @@ describe('AuthController', () => {
         bio: 'Test bio',
         nicheIds: [1, 2],
       };
+      const mockProfileImage = {
+        fieldname: 'profileImage',
+        originalname: 'test.jpg',
+        encoding: '7bit',
+        mimetype: 'image/jpeg',
+        size: 1000,
+        buffer: Buffer.from('test'),
+      } as Express.Multer.File;
       const expectedResult = {
         message: 'Influencer registered successfully',
         influencer: {
@@ -122,9 +146,9 @@ describe('AuthController', () => {
 
       mockAuthService.influencerSignup.mockResolvedValue(expectedResult);
 
-      const result = await controller.influencerSignup(signupDto);
+      const result = await controller.influencerSignup(signupDto, mockProfileImage);
 
-      expect(authService.influencerSignup).toHaveBeenCalledWith(signupDto);
+      expect(authService.influencerSignup).toHaveBeenCalledWith(signupDto, mockProfileImage);
       expect(result).toEqual(expectedResult);
     });
   });
@@ -203,22 +227,26 @@ describe('AuthController', () => {
 
   describe('verifyBrandOtp', () => {
     it('should verify OTP for brand', async () => {
-      const verifyOtpDto: VerifyOtpDto = { phone: '9467289789', otp: '123456' };
+      const verifyOtpDto: BrandVerifyOtpDto = { email: 'test@brand.com', otp: '123456' };
       const deviceId = 'device-123';
       const userAgent = 'Mozilla/5.0 (test browser)';
       const mockReq = { headers: { 'user-agent': userAgent } } as any;
       const expectedResult = {
-        message: 'OTP verified successfully',
-        phone: '+919467289789',
-        verified: true,
-        userType: 'brand',
+        message: 'Login successful',
+        accessToken: 'mock-access-token',
+        refreshToken: 'mock-refresh-token',
+        brand: {
+          id: 1,
+          email: 'test@brand.com',
+          brandName: 'Test Brand',
+        },
       };
 
-      mockAuthService.brandVerifyOtp.mockResolvedValue(expectedResult);
+      mockAuthService.verifyBrandOtp.mockResolvedValue(expectedResult);
 
       const result = await controller.verifyBrandOtp(verifyOtpDto, deviceId, mockReq);
 
-      expect(authService.brandVerifyOtp).toHaveBeenCalledWith(verifyOtpDto, deviceId, userAgent);
+      expect(authService.verifyBrandOtp).toHaveBeenCalledWith(verifyOtpDto, deviceId, userAgent);
       expect(result).toEqual(expectedResult);
     });
   });
@@ -232,6 +260,19 @@ describe('AuthController', () => {
         brandName: 'Test Brand',
         username: 'test_brand',
       };
+      const mockFiles = {
+        profileImage: [{
+          fieldname: 'profileImage',
+          originalname: 'profile.jpg',
+          encoding: '7bit',
+          mimetype: 'image/jpeg',
+          size: 1000,
+          buffer: Buffer.from('test'),
+        } as Express.Multer.File],
+      };
+      const deviceId = 'device-123';
+      const userAgent = 'Mozilla/5.0 (test browser)';
+      const mockReq = { headers: { 'user-agent': userAgent } } as any;
       const expectedResult = {
         message: 'Brand registered successfully',
         brand: {
@@ -245,9 +286,9 @@ describe('AuthController', () => {
 
       mockAuthService.brandSignup.mockResolvedValue(expectedResult);
 
-      const result = await controller.brandSignup(signupDto);
+      const result = await controller.brandSignup(signupDto, mockFiles, deviceId, mockReq);
 
-      expect(authService.brandSignup).toHaveBeenCalledWith(signupDto);
+      expect(authService.brandSignup).toHaveBeenCalledWith(signupDto, mockFiles, deviceId, userAgent);
       expect(result).toEqual(expectedResult);
     });
   });
