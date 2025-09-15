@@ -108,7 +108,7 @@ SMS_API_KEY=your_sms_provider_api_key
 SMS_SENDER_ID=INCOLLAB
 
 # Application
-NODE_ENV=development
+NODE_ENV=staging
 PORT=3000
 ```
 
