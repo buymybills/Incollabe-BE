@@ -1,37 +1,17 @@
-name: Deploy
+name: Deploy Incollab
 
 on:
-  workflow_call:
-    inputs:
-      service:
-        description: 'Service name (api-gateway, quickpick, etc.)'
-        required: true
-        type: string
-      environment:
-        description: 'Deployment environment (dev, staging, prod)'
-        required: false
-        type: string
-        default: 'production'
-      docker_compose_path:
-        description: 'Path to docker-compose file on server'
-        required: false
-        type: string
-        default: '/home/ubuntu/Bmb-backend'
-    secrets:
-      EC2_HOST:
-        required: true
-      EC2_USER:
-        required: true
-      EC2_SSH_KEY:
-        required: true
+  push:
+    branches:
+      - main
 
 jobs:
   deploy:
-    name: Deploy ${{ inputs.service }} to ${{ inputs.environment }}
+    name: Deploy Incollab to production
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    environment: production
     steps:
-      - name: Checkout repo
+      - name: Checkout repo (not used directly, but required by Actions)
         uses: actions/checkout@v4
 
       - name: Deploy to EC2 via SSH
@@ -42,13 +22,13 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           timeout: 300s
           script: |
-            echo "Starting deployment of ${{ inputs.service }} to ${{ inputs.environment }}..."
-            cd ${{ inputs.docker_compose_path }}
-            
-            # Make deploy script executable
+            echo "🚀 Starting deployment of Incollab to production..."
+            cd /home/ubuntu/Incollabe-BE
+
+            # Ensure deploy.sh is executable
             chmod +x deploy.sh
-            
-            # Create .env file with Docker Hub credentials if it doesn't exist
+
+            # Ensure .env file exists and has required values
             if [ ! -f .env ]; then
               echo "Creating .env file..."
               cat > .env << EOF
@@ -56,15 +36,21 @@ jobs:
             IMAGE_TAG=latest
             EOF
             else
-              # Update existing .env with Docker Hub username if not present
-              if ! grep -q "DOCKERHUB_USERNAME" .env; then
+              # Update DOCKERHUB_USERNAME
+              if grep -q "DOCKERHUB_USERNAME" .env; then
+                sed -i "s/^DOCKERHUB_USERNAME=.*/DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}/" .env
+              else
                 echo "DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}" >> .env
               fi
-              if ! grep -q "IMAGE_TAG" .env; then
+
+              # Update IMAGE_TAG
+              if grep -q "IMAGE_TAG" .env; then
+                sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=latest/" .env
+              else
                 echo "IMAGE_TAG=latest" >> .env
               fi
             fi
-            
+
             # Run deployment script
             ./deploy.sh deploy
 
@@ -75,31 +61,7 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd ${{ inputs.docker_compose_path }}
-            echo "Performing health check for ${{ inputs.service }}..."
-            
-            # Basic health check - customize based on your service endpoints
-            case "${{ inputs.service }}" in
-              "api-gateway")
-                # Replace with your actual health check endpoint
-                timeout 30 bash -c 'until curl -f http://localhost:3001/health; do sleep 2; done' || echo "Health check endpoint not responding"
-                ;;
-              "quickpick")
-                # Replace with your actual health check endpoint  
-                timeout 30 bash -c 'until curl -f http://localhost:3002/health; do sleep 2; done' || echo "Health check endpoint not responding"
-                ;;
-              "incollab")
-                # Health check for incollab service via nginx proxy
-                timeout 30 bash -c 'until curl -f http://localhost/api; do sleep 2; done' || echo "Health check endpoint not responding"
-                ;;
-              *)
-                echo "No specific health check configured for ${{ inputs.service }}"
-                # Generic check to see if container is running
-                if docker-compose ps ${{ inputs.service }} | grep -q "Up"; then
-                  echo "Container is running successfully"
-                else
-                  echo "Container check failed"
-                  exit 1
-                fi
-                ;;
-            esac
+            cd /home/ubuntu/Incollabe-BE
+            echo "🔍 Performing health check for Incollab..."
+
+            timeout 30 bash -c 'until curl -f http://localhost/api; do sleep 2; done' || echo "❌ Health check failed"
