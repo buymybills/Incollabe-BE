@@ -4,32 +4,25 @@ on:
   workflow_call:
     inputs:
       service:
-        description: 'Service name (api-gateway, quickpick, product-service, incollab)'
+        description: 'Service name (api-gateway, quickpick, etc.)'
         required: true
         type: string
       environment:
-        description: 'Deployment environment (dev, staging, production)'
+        description: 'Deployment environment (dev, staging, prod)'
         required: false
         type: string
         default: 'production'
       docker_compose_path:
-        description: 'Path to docker-compose repo on server'
+        description: 'Path to docker-compose file on server'
         required: false
         type: string
         default: '/home/ubuntu/Incollabe-BE'
-      image_tag:
-        description: 'Docker image tag (latest, dev, etc.)'
-        required: false
-        type: string
-        default: 'latest'
     secrets:
       EC2_HOST:
         required: true
       EC2_USER:
         required: true
       EC2_SSH_KEY:
-        required: true
-      DOCKERHUB_USERNAME:
         required: true
 
 jobs:
@@ -38,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     steps:
-      - name: Checkout repo (not used directly, but required by Actions)
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Deploy to EC2 via SSH
@@ -49,35 +42,29 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           timeout: 300s
           script: |
-            echo "🚀 Starting deployment of ${{ inputs.service }} to ${{ inputs.environment }}..."
+            echo "Starting deployment of ${{ inputs.service }} to ${{ inputs.environment }}..."
             cd ${{ inputs.docker_compose_path }}
-
-            # Ensure deploy.sh is executable
+            
+            # Make deploy script executable
             chmod +x deploy.sh
-
-            # Ensure .env file exists and has required values
+            
+            # Create .env file with Docker Hub credentials if it doesn't exist
             if [ ! -f .env ]; then
               echo "Creating .env file..."
               cat > .env << EOF
             DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
-            IMAGE_TAG=${{ inputs.image_tag }}
+            IMAGE_TAG=latest
             EOF
             else
-              # Update DOCKERHUB_USERNAME
-              if grep -q "DOCKERHUB_USERNAME" .env; then
-                sed -i "s/^DOCKERHUB_USERNAME=.*/DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}/" .env
-              else
+              # Update existing .env with Docker Hub username if not present
+              if ! grep -q "DOCKERHUB_USERNAME" .env; then
                 echo "DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}" >> .env
               fi
-
-              # Update IMAGE_TAG
-              if grep -q "IMAGE_TAG" .env; then
-                sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${{ inputs.image_tag }}/" .env
-              else
-                echo "IMAGE_TAG=${{ inputs.image_tag }}" >> .env
+              if ! grep -q "IMAGE_TAG" .env; then
+                echo "IMAGE_TAG=latest" >> .env
               fi
             fi
-
+            
             # Run deployment script
             ./deploy.sh deploy
 
@@ -89,19 +76,21 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd ${{ inputs.docker_compose_path }}
-            echo "🔍 Performing health check for ${{ inputs.service }}..."
-
+            echo "Performing health check for ${{ inputs.service }}..."
+            
+            # Basic health check - customize based on your service endpoints
             case "${{ inputs.service }}" in
-
               "incollab")
-                timeout 30 bash -c 'until curl -f http://localhost:3002/api; do sleep 2; done' || echo "Health check failed"
+                # Health check for incollab service via nginx proxy
+                timeout 30 bash -c 'until curl -f http://localhost/api; do sleep 2; done' || echo "Health check endpoint not responding"
                 ;;
               *)
-                echo "No specific health check configured for ${{ inputs.service }}."
+                echo "No specific health check configured for ${{ inputs.service }}"
+                # Generic check to see if container is running
                 if docker-compose ps ${{ inputs.service }} | grep -q "Up"; then
-                  echo "✅ Container is running successfully"
+                  echo "Container is running successfully"
                 else
-                  echo "❌ Container check failed"
+                  echo "Container check failed"
                   exit 1
                 fi
                 ;;

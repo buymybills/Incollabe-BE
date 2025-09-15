@@ -7,12 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { RedisModule } from './redis/redis.module';
 
 @Module({
-  imports: [
-    DatabaseModule,
-    RedisModule,
-    SharedModule,
-    AuthModule,
-  ],
+  imports: [DatabaseModule, RedisModule, SharedModule, AuthModule],
   controllers: [AppController],
   providers: [AppService],
 })
