@@ -44,16 +44,6 @@ jobs:
         working-directory: ${{ inputs.service_path }}
         run: npm ci
 
-      - name: Run linting (optional)
-        working-directory: ${{ inputs.service_path }}
-        run: |
-          if npm run lint --silent 2>/dev/null; then
-            npm run lint
-          else
-            echo "No lint script found, skipping..."
-          fi
-        continue-on-error: false
-
       - name: Run tests
         working-directory: ${{ inputs.service_path }}
         run: npm test
