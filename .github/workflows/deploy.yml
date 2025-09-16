@@ -44,7 +44,7 @@ jobs:
           # Copy the 4 essential files
           scp docker-compose.yml ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/
           scp deploy.sh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/
-          scp .env ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/
+          # scp .env ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/
           scp nginx.conf ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/ || echo "nginx.conf not found, skipping"
 
       - name: Deploy to EC2 via SSH
