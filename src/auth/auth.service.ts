@@ -71,7 +71,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly sequelize: Sequelize,
     private readonly redisService: RedisService,
-  ) { }
+  ) {}
 
   // Redis key helpers
   private cooldownKey(phone: string): string {
@@ -716,7 +716,7 @@ export class AuthService {
       .set(tempSessionKey, tempSessionData, 'EX', 600);
 
     //Send welcome mail
-    await this.emailService.sendWelcomeEmail(email, completeBrand.brandName)
+    await this.emailService.sendWelcomeEmail(email, completeBrand.brandName);
 
     // Send OTP email instead of welcome email
     await this.emailService.sendBrandOtp(email, otp);
@@ -1071,7 +1071,7 @@ export class AuthService {
   async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
     const { email } = forgotPasswordDto;
 
-    // Step 1: Check if brand exists 
+    // Step 1: Check if brand exists
     const brand = await this.brandModel.findOne({
       where: { email: email.toLowerCase() },
       attributes: ['id', 'email', 'brandName'],
