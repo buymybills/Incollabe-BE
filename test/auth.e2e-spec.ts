@@ -17,10 +17,10 @@ describe('Auth (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(new ValidationPipe());
-    
+
     sequelize = moduleFixture.get<Sequelize>(Sequelize);
     redisService = moduleFixture.get<RedisService>(RedisService);
-    
+
     await app.init();
   });
 
@@ -50,7 +50,10 @@ describe('Auth (e2e)', () => {
         .get('/auth/niches')
         .expect(200)
         .expect((res) => {
-          expect(res.body).toHaveProperty('message', 'Niches fetched successfully');
+          expect(res.body).toHaveProperty(
+            'message',
+            'Niches fetched successfully',
+          );
           expect(res.body).toHaveProperty('niches');
           expect(Array.isArray(res.body.niches)).toBe(true);
         });
@@ -68,7 +71,9 @@ describe('Auth (e2e)', () => {
           expect(res.body).toHaveProperty('username', 'test_user_123');
           expect(res.body).toHaveProperty('message');
           if (res.body.available) {
-            expect(res.body.message).toBe('Username is unique and available to use');
+            expect(res.body.message).toBe(
+              'Username is unique and available to use',
+            );
             expect(res.body).not.toHaveProperty('suggestions');
           } else {
             expect(res.body.message).toBe('Username is already taken');
@@ -155,14 +160,17 @@ describe('Auth (e2e)', () => {
 
         // Get OTP from Redis for testing
         const storedOtp = await redisService.get(`otp:+91${testPhone}`);
-        
+
         return request(app.getHttpServer())
           .post('/auth/influencer/verify-otp')
           .send({ phone: testPhone, otp: storedOtp })
           .set('device-id', 'test-device-123')
           .expect(200)
           .expect((res) => {
-            expect(res.body).toHaveProperty('message', 'OTP verified successfully');
+            expect(res.body).toHaveProperty(
+              'message',
+              'OTP verified successfully',
+            );
             expect(res.body).toHaveProperty('phone', `+91${testPhone}`);
             expect(res.body).toHaveProperty('verified', true);
           });
@@ -191,7 +199,7 @@ describe('Auth (e2e)', () => {
           .expect(200);
 
         const storedOtp = await redisService.get(`otp:+91${testPhone}`);
-        
+
         await request(app.getHttpServer())
           .post('/auth/influencer/verify-otp')
           .send({ phone: testPhone, otp: storedOtp })
@@ -202,10 +210,16 @@ describe('Auth (e2e)', () => {
           .send(testInfluencerData)
           .expect(201)
           .expect((res) => {
-            expect(res.body).toHaveProperty('message', 'Influencer registered successfully');
+            expect(res.body).toHaveProperty(
+              'message',
+              'Influencer registered successfully',
+            );
             expect(res.body).toHaveProperty('influencer');
             expect(res.body.influencer).toHaveProperty('id');
-            expect(res.body.influencer).toHaveProperty('phone', `+91${testPhone}`);
+            expect(res.body.influencer).toHaveProperty(
+              'phone',
+              `+91${testPhone}`,
+            );
             expect(res.body.influencer).toHaveProperty('isPhoneVerified', true);
           });
       });
@@ -225,7 +239,7 @@ describe('Auth (e2e)', () => {
           .expect(200);
 
         const storedOtp = await redisService.get(`otp:+91${testPhone}`);
-        
+
         await request(app.getHttpServer())
           .post('/auth/influencer/verify-otp')
           .send({ phone: testPhone, otp: storedOtp })
@@ -271,14 +285,17 @@ describe('Auth (e2e)', () => {
           .expect(200);
 
         const storedOtp = await redisService.get(`otp:+91${testPhone}`);
-        
+
         return request(app.getHttpServer())
           .post('/auth/brand/verify-otp')
           .send({ phone: testPhone, otp: storedOtp })
           .set('device-id', 'test-device-456')
           .expect(200)
           .expect((res) => {
-            expect(res.body).toHaveProperty('message', 'OTP verified successfully');
+            expect(res.body).toHaveProperty(
+              'message',
+              'OTP verified successfully',
+            );
             expect(res.body).toHaveProperty('userType', 'brand');
           });
       });
@@ -292,7 +309,7 @@ describe('Auth (e2e)', () => {
           .expect(200);
 
         const storedOtp = await redisService.get(`otp:+91${testPhone}`);
-        
+
         await request(app.getHttpServer())
           .post('/auth/brand/verify-otp')
           .send({ phone: testPhone, otp: storedOtp })
@@ -303,7 +320,10 @@ describe('Auth (e2e)', () => {
           .send(testBrandData)
           .expect(201)
           .expect((res) => {
-            expect(res.body).toHaveProperty('message', 'Brand registered successfully');
+            expect(res.body).toHaveProperty(
+              'message',
+              'Brand registered successfully',
+            );
             expect(res.body).toHaveProperty('brand');
             expect(res.body.brand).toHaveProperty('id');
             expect(res.body.brand).toHaveProperty('email', testBrandData.email);
@@ -321,7 +341,7 @@ describe('Auth (e2e)', () => {
           .expect(200);
 
         const storedOtp = await redisService.get(`otp:+91${testPhone}`);
-        
+
         await request(app.getHttpServer())
           .post('/auth/brand/verify-otp')
           .send({ phone: testPhone, otp: storedOtp })

@@ -1,5 +1,16 @@
 import { Transform } from 'class-transformer';
-import { IsEmail, IsNotEmpty, IsString, IsOptional, IsArray, IsEnum, MinLength, Length, Matches, Allow } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsString,
+  IsOptional,
+  IsArray,
+  IsEnum,
+  MinLength,
+  Length,
+  Matches,
+  Allow,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class BrandSignupMultipartDto {
@@ -12,7 +23,8 @@ export class BrandSignupMultipartDto {
   @IsNotEmpty()
   @Length(10, 10, { message: 'Phone number must be exactly 10 digits' })
   @Matches(/^[6-9]\d{9}$/, {
-    message: 'Phone number must be a valid Indian mobile number starting with 6, 7, 8, or 9'
+    message:
+      'Phone number must be a valid Indian mobile number starting with 6, 7, 8, or 9',
   })
   phone: string;
 
@@ -72,7 +84,7 @@ export class BrandSignupMultipartDto {
       'Public Limited Company (PLC)',
       'One-Person Company (OPC)',
       'Limited Liability Partnership (LLP)',
-      'Partnership Firm'
+      'Partnership Firm',
     ],
     example: 'Private Limited Company (Pvt. Ltd.)',
     type: 'string',
@@ -83,7 +95,7 @@ export class BrandSignupMultipartDto {
     'Public Limited Company (PLC)',
     'One-Person Company (OPC)',
     'Limited Liability Partnership (LLP)',
-    'Partnership Firm'
+    'Partnership Firm',
   ])
   @IsOptional()
   companyType?: string;
@@ -155,7 +167,8 @@ export class BrandSignupMultipartDto {
   brandBio?: string;
 
   @ApiProperty({
-    description: 'Array of niche IDs the brand is interested in. Accepts JSON array "[1,4,12]" or comma-separated "1,4,12"',
+    description:
+      'Array of niche IDs the brand is interested in. Accepts JSON array "[1,4,12]" or comma-separated "1,4,12"',
     example: '[1,4,12]',
     type: 'string',
     required: false,
@@ -169,12 +182,14 @@ export class BrandSignupMultipartDto {
         return Array.isArray(parsed) ? parsed.map(Number) : [Number(parsed)];
       } catch {
         // If JSON parsing fails, try comma-separated values
-        return value.split(',').map((id: string) => Number(id.trim())).filter(Boolean);
+        return value
+          .split(',')
+          .map((id: string) => Number(id.trim()))
+          .filter(Boolean);
       }
     }
     return Array.isArray(value) ? value.map(Number) : [];
   })
   @IsArray()
   nicheIds?: number[];
-
 }

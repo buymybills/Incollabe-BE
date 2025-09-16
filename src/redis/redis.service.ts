@@ -1,6 +1,6 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import Redis from "ioredis";
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import Redis from 'ioredis';
 
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
@@ -8,31 +8,31 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   constructor(private configService: ConfigService) {}
 
-  async onModuleInit() {
+  onModuleInit() {
     this.redis = new Redis({
-      host: this.configService.get("REDIS_HOST") || "localhost",
-      port: Number(this.configService.get("REDIS_PORT")) || 6379,
+      host: this.configService.get('REDIS_HOST') || 'localhost',
+      port: Number(this.configService.get('REDIS_PORT')) || 6379,
       enableReadyCheck: false,
       maxRetriesPerRequest: null,
     });
 
-    this.redis.on("connect", () => {
-      console.log("Redis connected successfully");
+    this.redis.on('connect', () => {
+      console.log('Redis connected successfully');
     });
 
-    this.redis.on("error", (error) => {
-      console.error("Redis connection error:", error);
+    this.redis.on('error', (error) => {
+      console.error('Redis connection error:', error);
     });
 
-    this.redis.on("ready", () => {
-      console.log("Redis is ready");
+    this.redis.on('ready', () => {
+      console.log('Redis is ready');
     });
   }
 
-  async onModuleDestroy() {
+  onModuleDestroy() {
     if (this.redis) {
-      await this.redis.disconnect();
-      console.log("🔌 Redis disconnected");
+      this.redis.disconnect();
+      console.log('🔌 Redis disconnected');
     }
   }
 
@@ -44,7 +44,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return await this.redis.get(key);
   }
 
-  async set(key: string, value: string, ttl?: number): Promise<"OK"> {
+  async set(key: string, value: string, ttl?: number): Promise<'OK'> {
     if (ttl) {
       return await this.redis.setex(key, ttl, value);
     }

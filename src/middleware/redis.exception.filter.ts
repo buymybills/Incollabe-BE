@@ -1,12 +1,12 @@
 import {
+  CallHandler,
+  ExecutionContext,
   Injectable,
   NestInterceptor,
-  ExecutionContext,
-  CallHandler,
-} from "@nestjs/common";
-import { Observable, from } from "rxjs";
-import { tap, catchError } from "rxjs/operators";
-import Redis from "ioredis";
+} from '@nestjs/common';
+import Redis from 'ioredis';
+import { Observable } from 'rxjs';
+import { catchError, tap } from 'rxjs/operators';
 
 @Injectable()
 export class RedisInterceptor implements NestInterceptor {
@@ -19,8 +19,8 @@ export class RedisInterceptor implements NestInterceptor {
       }),
       catchError((err) => {
         // If the error is Redis-related
-        if (err instanceof Error && err.message.includes("Redis")) {
-          console.error("Redis operation failed:", err.message);
+        if (err instanceof Error && err.message.includes('Redis')) {
+          console.error('Redis operation failed:', err.message);
         }
         throw err; // rethrow for GlobalExceptionFilter
       }),

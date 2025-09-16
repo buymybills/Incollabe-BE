@@ -1,4 +1,15 @@
-import { IsEmail, IsNotEmpty, IsString, IsOptional, IsArray, IsEnum, MinLength, Length, Matches, Allow } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsString,
+  IsOptional,
+  IsArray,
+  IsEnum,
+  MinLength,
+  Length,
+  Matches,
+  Allow,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class BrandSignupDto {
@@ -13,7 +24,8 @@ export class BrandSignupDto {
   @IsNotEmpty()
   @Length(10, 10, { message: 'Phone number must be exactly 10 digits' })
   @Matches(/^[6-9]\d{9}$/, {
-    message: 'Phone number must be a valid Indian mobile number starting with 6, 7, 8, or 9'
+    message:
+      'Phone number must be a valid Indian mobile number starting with 6, 7, 8, or 9',
   })
   phone: string;
 
@@ -70,7 +82,7 @@ export class BrandSignupDto {
       'Public Limited Company (PLC)',
       'One-Person Company (OPC)',
       'Limited Liability Partnership (LLP)',
-      'Partnership Firm'
+      'Partnership Firm',
     ],
     example: 'Private Limited Company (Pvt. Ltd.)',
     required: false,
@@ -80,7 +92,7 @@ export class BrandSignupDto {
     'Public Limited Company (PLC)',
     'One-Person Company (OPC)',
     'Limited Liability Partnership (LLP)',
-    'Partnership Firm'
+    'Partnership Firm',
   ])
   @IsOptional()
   companyType?: string;

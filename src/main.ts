@@ -11,6 +11,7 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   // Increase payload size limit for file uploads
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const express = require('express');
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ limit: '10mb', extended: true }));

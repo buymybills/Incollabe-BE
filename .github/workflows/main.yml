@@ -15,9 +15,6 @@ jobs:
     name: Detect Changed Services
     runs-on: ubuntu-latest
     outputs:
-      api-gateway: ${{ steps.changes.outputs.api-gateway }}
-      quickpick: ${{ steps.changes.outputs.quickpick }}
-      product-service: ${{ steps.changes.outputs.product-service }}
       incollab: ${{ steps.changes.outputs.incollab }}
       # any-service: ${{ steps.changes.outputs.any-service }}
     steps:
@@ -31,12 +28,6 @@ jobs:
         id: changes
         with:
           filters: |
-            api-gateway:
-              - 'api-gateway/**'
-            quickpick:
-              - 'quickpick/**'
-            product-service:
-              - 'product-service/**'
             incollab:
               - 'incollab/**'
               - 'src/**'
@@ -44,150 +35,6 @@ jobs:
               - 'Dockerfile'
               - 'docker-compose.yml'
 
-
-  # API Gateway Pipeline
-  api-gateway-build:
-    name: Build API Gateway
-    if: needs.detect-changes.outputs.api-gateway == 'true'
-    needs: detect-changes
-    uses: ./.github/workflows/build.yml
-    with:
-      service: "api-gateway"
-      dockerfile_path: "./api-gateway/Dockerfile"
-      context_path: "./api-gateway"
-
-  api-gateway-test:
-    name: Test API Gateway
-    if: needs.detect-changes.outputs.api-gateway == 'true'
-    needs: [detect-changes, api-gateway-build]
-    uses: ./.github/workflows/test.yml
-    with:
-      service: "api-gateway"
-      service_path: "./api-gateway"
-      node_version: "18"
-
-  api-gateway-push:
-    name: Push API Gateway
-    if: needs.detect-changes.outputs.api-gateway == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
-    needs: [detect-changes, api-gateway-test]
-    uses: ./.github/workflows/push.yml
-    with:
-      service: "api-gateway"
-      dockerfile_path: "./api-gateway/Dockerfile"
-      context_path: "./api-gateway"
-      image_tag: ${{ github.ref == 'refs/heads/main' && 'latest' || 'dev' }}
-    secrets:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-
-  api-gateway-deploy:
-    name: Deploy API Gateway
-    if: needs.detect-changes.outputs.api-gateway == 'true' && github.ref == 'refs/heads/dev'
-    needs: [detect-changes, api-gateway-push]
-    uses: ./.github/workflows/deploy.yml
-    with:
-      service: "api-gateway"
-      environment: "production"
-    secrets:
-      EC2_HOST: ${{ secrets.EC2_HOST }}
-      EC2_USER: ${{ secrets.EC2_USER }}
-      EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-
-  # QuickPick Pipeline
-  quickpick-build:
-    name: Build QuickPick
-    if: needs.detect-changes.outputs.quickpick == 'true'
-    needs: detect-changes
-    uses: ./.github/workflows/build.yml
-    with:
-      service: "quickpick"
-      dockerfile_path: "./quickpick/Dockerfile"
-      context_path: "./quickpick"
-
-  quickpick-test:
-    name: Test QuickPick
-    if: needs.detect-changes.outputs.quickpick == 'true'
-    needs: [detect-changes, quickpick-build]
-    uses: ./.github/workflows/test.yml
-    with:
-      service: "quickpick"
-      service_path: "./quickpick"
-      node_version: "18"
-
-  quickpick-push:
-    name: Push QuickPick
-    if: needs.detect-changes.outputs.quickpick == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
-    needs: [detect-changes, quickpick-test]
-    uses: ./.github/workflows/push.yml
-    with:
-      service: "quickpick"
-      dockerfile_path: "./quickpick/Dockerfile"
-      context_path: "./quickpick"
-      image_tag: ${{ github.ref == 'refs/heads/main' && 'latest' || 'dev' }}
-    secrets:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-
-  quickpick-deploy:
-    name: Deploy QuickPick
-    if: needs.detect-changes.outputs.quickpick == 'true' && github.ref == 'refs/heads/main'
-    needs: [detect-changes, quickpick-push]
-    uses: ./.github/workflows/deploy.yml
-    with:
-      service: "quickpick"
-      environment: "production"
-    secrets:
-      EC2_HOST: ${{ secrets.EC2_HOST }}
-      EC2_USER: ${{ secrets.EC2_USER }}
-      EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-
-  # Product Service Pipeline
-  product-service-build:
-    name: Build Product Service
-    if: needs.detect-changes.outputs.product-service == 'true'
-    needs: detect-changes
-    uses: ./.github/workflows/build.yml
-    with:
-      service: "product-service"
-      dockerfile_path: "./product-service/Dockerfile"
-      context_path: "./product-service"
-
-  product-service-test:
-    name: Test Product Service
-    if: needs.detect-changes.outputs.product-service == 'true'
-    needs: [detect-changes, product-service-build]
-    uses: ./.github/workflows/test.yml
-    with:
-      service: "product-service"
-      service_path: "./product-service"
-      node_version: "18"
-
-  product-service-push:
-    name: Push Product Service
-    if: needs.detect-changes.outputs.product-service == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
-    needs: [detect-changes, product-service-test]
-    uses: ./.github/workflows/push.yml
-    with:
-      service: "product-service"
-      dockerfile_path: "./product-service/Dockerfile"
-      context_path: "./product-service"
-      image_tag: ${{ github.ref == 'refs/heads/main' && 'latest' || 'dev' }}
-    secrets:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-
-  product-service-deploy:
-    name: Deploy Product Service
-    if: needs.detect-changes.outputs.product-service == 'true' && github.ref == 'refs/heads/dev'
-    needs: [detect-changes, product-service-push]
-    uses: ./.github/workflows/deploy.yml
-    with:
-      service: "product-service"
-      environment: "production"
-    secrets:
-      EC2_HOST: ${{ secrets.EC2_HOST }}
-      EC2_USER: ${{ secrets.EC2_USER }}
-      EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
 
   # Incollab Pipeline
   incollab-build:
@@ -254,15 +101,9 @@ jobs:
         run: |
           echo "# Pipeline Summary" >> $GITHUB_STEP_SUMMARY
           echo "## Changed Services" >> $GITHUB_STEP_SUMMARY
-          echo "- API Gateway: ${{ needs.detect-changes.outputs.api-gateway }}" >> $GITHUB_STEP_SUMMARY
-          echo "- QuickPick: ${{ needs.detect-changes.outputs.quickpick }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Product Service: ${{ needs.detect-changes.outputs.product-service }}" >> $GITHUB_STEP_SUMMARY
           echo "- Incollab: ${{ needs.detect-changes.outputs.incollab }}" >> $GITHUB_STEP_SUMMARY
           
           echo "## Job Status" >> $GITHUB_STEP_SUMMARY
           echo "| Service | Build | Test | Push | Deploy |" >> $GITHUB_STEP_SUMMARY
           echo "|---------|-------|------|------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| API Gateway | ${{ needs.api-gateway-build.result || 'skipped' }} | ${{ needs.api-gateway-test.result || 'skipped' }} | ${{ needs.api-gateway-push.result || 'skipped' }} | ${{ needs.api-gateway-deploy.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| QuickPick | ${{ needs.quickpick-build.result || 'skipped' }} | ${{ needs.quickpick-test.result || 'skipped' }} | ${{ needs.quickpick-push.result || 'skipped' }} | ${{ needs.quickpick-deploy.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Product Service | ${{ needs.product-service-build.result || 'skipped' }} | ${{ needs.product-service-test.result || 'skipped' }} | ${{ needs.product-service-push.result || 'skipped' }} | ${{ needs.product-service-deploy.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Incollab | ${{ needs.incollab-build.result || 'skipped' }} | ${{ needs.incollab-test.result || 'skipped' }} | ${{ needs.incollab-push.result || 'skipped' }} | ${{ needs.incollab-deploy.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY

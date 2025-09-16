@@ -39,10 +39,10 @@ import { LogoutDto } from './dto/logout.dto';
 import { LogoutResponseDto } from './dto/logout-response.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RefreshTokenResponseDto } from './dto/refresh-token-response.dto';
-// import { ForgotPasswordDto } from './dto/forgot-password.dto';
-// import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthGuard } from './guards/auth.guard';
-import  Request from 'express';
+import Request from 'express';
 import { UploadedFiles } from '@nestjs/common';
 import { GENDER_OPTIONS, OTHERS_GENDER_OPTIONS } from './types/gender.enum';
 
@@ -117,7 +117,7 @@ export class AuthController {
     @Headers('device-id') deviceId?: string,
     @Req() req?: Request,
   ) {
-    const userAgent = req?.headers['user-agent'];
+    const userAgent = req?.headers['user-agent'] as string | undefined;
     return this.authService.verifyOtp(verifyOtpDto, deviceId, userAgent);
   }
 
@@ -311,7 +311,7 @@ export class AuthController {
       },
     },
   })
-  async getGenderOptions() {
+  getGenderOptions() {
     return {
       message: 'Gender options fetched successfully',
       genderOptions: GENDER_OPTIONS,
@@ -612,12 +612,12 @@ export class AuthController {
     @Headers('device-id') deviceId?: string,
     @Req() req?: Request,
   ) {
-    const userAgent = req?.headers['user-agent'];
+    const userAgent = req?.headers['user-agent'] as string | undefined;
     return this.authService.brandSignup(
       signupDto as BrandSignupDto,
       files,
       deviceId,
-      userAgent,
+      userAgent as string,
     );
   }
 
@@ -656,8 +656,8 @@ export class AuthController {
     @Headers('device-id') deviceId?: string,
     @Req() req?: Request,
   ) {
-    const userAgent = req?.headers['user-agent'];
-    return this.authService.brandLogin(loginDto, deviceId, userAgent);
+    const userAgent = req?.headers['user-agent'] as string | undefined;
+    return this.authService.brandLogin(loginDto, deviceId, userAgent as string);
   }
 
   @Post('brand/verify-otp')
@@ -712,8 +712,12 @@ export class AuthController {
     @Headers('device-id') deviceId?: string,
     @Req() req?: Request,
   ) {
-    const userAgent = req?.headers['user-agent'];
-    return this.authService.verifyBrandOtp(verifyOtpDto, deviceId, userAgent);
+    const userAgent = req?.headers['user-agent'] as string | undefined;
+    return this.authService.verifyBrandOtp(
+      verifyOtpDto,
+      deviceId,
+      userAgent as string,
+    );
   }
 
   @Post('logout')
@@ -814,109 +818,109 @@ export class AuthController {
     return this.authService.refreshToken(refreshTokenDto);
   }
 
-  // @Post('brand/forgot-password')
-  // @HttpCode(HttpStatus.OK)
-  // @ApiOperation({
-  //   summary: 'Request password reset for brand',
-  //   description:
-  //     'Send a password reset link to the brand email address. The link contains a secure JWT token that expires in 1 hour.',
-  // })
-  // @ApiBody({ type: ForgotPasswordDto })
-  // @ApiResponse({
-  //   status: 200,
-  //   description:
-  //     'Password reset email sent successfully (or email not found - same response for security)',
-  //   schema: {
-  //     example: {
-  //       message: 'If the email exists, a password reset link has been sent',
-  //       success: true,
-  //     },
-  //   },
-  // })
-  // @ApiResponse({
-  //   status: 400,
-  //   description: 'Invalid email format',
-  //   schema: {
-  //     example: {
-  //       statusCode: 400,
-  //       message: ['Please provide a valid email address'],
-  //       error: 'Bad Request',
-  //     },
-  //   },
-  // })
-  // @ApiResponse({
-  //   status: 500,
-  //   description:
-  //     'Internal server error while processing forgot password request',
-  //   schema: {
-  //     example: {
-  //       statusCode: 500,
-  //       message: 'Failed to process forgot password request',
-  //       error: 'Internal Server Error',
-  //     },
-  //   },
-  // })
-  // async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
-  //   return this.authService.forgotPassword(forgotPasswordDto);
-  // }
+  @Post('brand/forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Request password reset for brand',
+    description:
+      'Send a password reset link to the brand email address. The link contains a secure JWT token that expires in 1 hour.',
+  })
+  @ApiBody({ type: ForgotPasswordDto })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Password reset email sent successfully (or email not found - same response for security)',
+    schema: {
+      example: {
+        message: 'If the email exists, a password reset link has been sent',
+        success: true,
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid email format',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: ['Please provide a valid email address'],
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description:
+      'Internal server error while processing forgot password request',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Failed to process forgot password request',
+        error: 'Internal Server Error',
+      },
+    },
+  })
+  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(forgotPasswordDto);
+  }
 
-  // @Post('brand/reset-password')
-  // @HttpCode(HttpStatus.OK)
-  // @ApiOperation({
-  //   summary: 'Reset brand password using token',
-  //   description:
-  //     'Reset the brand password using the token received via email. This will log out the brand from all devices for security.',
-  // })
-  // @ApiBody({ type: ResetPasswordDto })
-  // @ApiResponse({
-  //   status: 200,
-  //   description: 'Password reset successfully',
-  //   schema: {
-  //     example: {
-  //       message:
-  //         'Password has been reset successfully. Please log in with your new password.',
-  //       success: true,
-  //     },
-  //   },
-  // })
-  // @ApiResponse({
-  //   status: 400,
-  //   description: 'Invalid request data',
-  //   schema: {
-  //     example: {
-  //       statusCode: 400,
-  //       message: [
-  //         'Reset token is required',
-  //         'Password must be at least 8 characters long',
-  //         'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character',
-  //       ],
-  //       error: 'Bad Request',
-  //     },
-  //   },
-  // })
-  // @ApiResponse({
-  //   status: 401,
-  //   description: 'Invalid, expired, or already used reset token',
-  //   schema: {
-  //     example: {
-  //       statusCode: 401,
-  //       message: 'Invalid or expired reset token',
-  //       error: 'Unauthorized',
-  //     },
-  //   },
-  // })
-  // @ApiResponse({
-  //   status: 500,
-  //   description: 'Internal server error while resetting password',
-  //   schema: {
-  //     example: {
-  //       statusCode: 500,
-  //       message: 'Failed to reset password',
-  //       error: 'Internal Server Error',
-  //     },
-  //   },
-  // })
-  // async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
-  //   return this.authService.resetPassword(resetPasswordDto);
-  // }
+  @Post('brand/reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Reset brand password using token',
+    description:
+      'Reset the brand password using the token received via email. This will log out the brand from all devices for security.',
+  })
+  @ApiBody({ type: ResetPasswordDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Password reset successfully',
+    schema: {
+      example: {
+        message:
+          'Password has been reset successfully. Please log in with your new password.',
+        success: true,
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid request data',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: [
+          'Reset token is required',
+          'Password must be at least 8 characters long',
+          'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character',
+        ],
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid, expired, or already used reset token',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Invalid or expired reset token',
+        error: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error while resetting password',
+    schema: {
+      example: {
+        statusCode: 500,
+        message: 'Failed to reset password',
+        error: 'Internal Server Error',
+      },
+    },
+  })
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    return this.authService.resetPassword(resetPasswordDto);
+  }
 }

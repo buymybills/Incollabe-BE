@@ -26,6 +26,8 @@ import { LogoutDto } from './dto/logout.dto';
 import { LogoutResponseDto } from './dto/logout-response.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RefreshTokenResponseDto } from './dto/refresh-token-response.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SmsService } from '../shared/sms.service';
 import { EmailService } from '../shared/email.service';
 import { S3Service } from '../shared/s3.service';
@@ -40,10 +42,6 @@ interface DecodedRefresh {
   id: number;
   jti: string;
   exp: number;
-}
-
-interface RequestWithUser {
-  user: { id: number };
 }
 
 @Injectable()
@@ -108,8 +106,16 @@ export class AuthService {
     return `brand:otp:attempts:${email}`;
   }
 
-  private async uploadFileToS3(file: Express.Multer.File, folder: string, prefix: string): Promise<string> {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+  private passwordResetKey(token: string): string {
+    return `password-reset:${token}`;
+  }
+
+  private async uploadFileToS3(
+    file: Express.Multer.File,
+    folder: string,
+    prefix: string,
+  ): Promise<string> {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const fileExtension = file.originalname.split('.').pop();
     const s3Key = `${folder}/${prefix}-${uniqueSuffix}.${fileExtension}`;
 
@@ -127,18 +133,20 @@ export class AuthService {
 
     // If key exists in Redis → user requested OTP recently → enforce cooldown
     if (await this.redisService.get(cooldownKey)) {
-      throw new ForbiddenException("Please wait before requesting another OTP");
+      throw new ForbiddenException('Please wait before requesting another OTP');
     }
 
     // Check total attempts in window (5 requests / 15 mins)
-    const attempts = parseInt((await this.redisService.get(requestAttemptsKey)) || "0");
+    const attempts = parseInt(
+      (await this.redisService.get(requestAttemptsKey)) || '0',
+    );
     if (attempts >= 5) {
-      throw new ForbiddenException("Too many OTP requests. Try again later.");
+      throw new ForbiddenException('Too many OTP requests. Try again later.');
     }
 
     // Generate OTP based on environment
-    const isStaging = this.configService.get<string>("NODE_ENV") === "staging";
-    const code = isStaging ? "123456" : randomInt(100000, 999999).toString();
+    const isStaging = this.configService.get<string>('NODE_ENV') === 'staging';
+    const code = isStaging ? '123456' : randomInt(100000, 999999).toString();
 
     // Set expiry timestamp for OTP (valid for 5 minutes)
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
@@ -157,9 +165,10 @@ export class AuthService {
     console.log(`OTP for ${formattedPhone}: ${code}`);
 
     // Update rate limiting counters
-    await this.redisService.getClient()
+    await this.redisService
+      .getClient()
       .multi()
-      .set(cooldownKey, "1", "EX", 60) // Write cooldown flag (60s)
+      .set(cooldownKey, '1', 'EX', 60) // Write cooldown flag (60s)
       .incr(requestAttemptsKey) // Increment request counter
       .expire(requestAttemptsKey, 15 * 60) // 15 minutes window
       .exec();
@@ -178,9 +187,14 @@ export class AuthService {
     const attemptsKey = this.attemptsKey(phone);
 
     // 🔹 Step 1: Check for brute-force lock
-    const attempts = parseInt((await this.redisService.get(attemptsKey)) ?? '0', 10);
+    const attempts = parseInt(
+      (await this.redisService.get(attemptsKey)) ?? '0',
+      10,
+    );
     if (attempts >= this.MAX_FAILED_ATTEMPTS) {
-      throw new ForbiddenException('Too many failed attempts. Try again later.');
+      throw new ForbiddenException(
+        'Too many failed attempts. Try again later.',
+      );
     }
 
     // 🔹 Step 2: Validate OTP against DB
@@ -195,7 +209,8 @@ export class AuthService {
 
     if (!otpRecord) {
       // Track failed attempt
-      await this.redisService.getClient()
+      await this.redisService
+        .getClient()
         .multi()
         .incr(attemptsKey)
         .expire(attemptsKey, this.ATTEMPT_TTL)
@@ -206,15 +221,19 @@ export class AuthService {
 
     // 🔹 Step 3: Mark OTP as verified (and clear attempts)
     const verificationKey = this.verificationKey(phone);
-    await this.redisService.getClient()
+    await this.redisService
+      .getClient()
       .multi()
       .del(attemptsKey)
       .set(verificationKey, '1', 'EX', this.OTP_VERIFIED_TTL)
       .exec();
 
     // 🔹 Step 4: Transaction → consume OTP + find user
-    const user = await this.sequelize.transaction(async t => {
-      await this.otpModel.destroy({ where: { id: otpRecord.id }, transaction: t });
+    const user = await this.sequelize.transaction(async (t) => {
+      await this.otpModel.destroy({
+        where: { id: otpRecord.id },
+        transaction: t,
+      });
 
       return await this.influencerModel.findOne({
         where: { phone: formattedPhone },
@@ -233,7 +252,9 @@ export class AuthService {
     }
 
     // 🔹 Step 6: Handle returning users → issue tokens
-    const profileCompleted = Boolean(user.dataValues.name && user.dataValues.username);
+    const profileCompleted = Boolean(
+      user.dataValues.name && user.dataValues.username,
+    );
 
     if (profileCompleted) {
       const { accessToken, refreshToken, jti } = await this.generateTokens(
@@ -250,7 +271,8 @@ export class AuthService {
         createdAt: new Date().toISOString(),
       });
 
-      await this.redisService.getClient()
+      await this.redisService
+        .getClient()
         .multi()
         .set(sessionKey, sessionPayload) // No expiry - session persists until logout
         .sadd(sessionsSetKey, jti)
@@ -275,7 +297,10 @@ export class AuthService {
     };
   }
 
-  async influencerSignup(signupDto: InfluencerSignupDto, profileImage?: Express.Multer.File) {
+  async influencerSignup(
+    signupDto: InfluencerSignupDto,
+    profileImage?: Express.Multer.File,
+  ) {
     const { phone, username, nicheIds, ...influencerData } = signupDto;
     const formattedPhone = `+91${phone}`; // Add Indian country code
 
@@ -285,7 +310,9 @@ export class AuthService {
     const isVerified = await this.redisService.get(verificationKey);
 
     if (!isVerified) {
-      throw new UnauthorizedException('Phone number not verified or verification expired');
+      throw new UnauthorizedException(
+        'Phone number not verified or verification expired',
+      );
     }
 
     // Validate niche IDs
@@ -300,27 +327,36 @@ export class AuthService {
     // Upload profile image to S3 if provided
     let profileImageUrl: string | undefined;
     if (profileImage) {
-      profileImageUrl = await this.uploadFileToS3(profileImage, 'profiles/influencers', 'influencer');
+      profileImageUrl = await this.uploadFileToS3(
+        profileImage,
+        'profiles/influencers',
+        'influencer',
+      );
     }
 
     // Create influencer and associate niches in a transaction
     const influencer = await this.sequelize.transaction(async (transaction) => {
       // Create influencer
-      const createdInfluencer = await this.influencerModel.create({
-        ...influencerData,
-        phone: formattedPhone,
-        username,
-        profileImage: profileImageUrl,
-        isPhoneVerified: true,
-      }, { transaction });
+      const createdInfluencer = await this.influencerModel.create(
+        {
+          ...influencerData,
+          phone: formattedPhone,
+          username,
+          profileImage: profileImageUrl,
+          isPhoneVerified: true,
+        },
+        { transaction },
+      );
 
       // Associate niches
-      const nicheAssociations = nicheIds.map(nicheId => ({
+      const nicheAssociations = nicheIds.map((nicheId) => ({
         influencerId: createdInfluencer.id,
         nicheId,
       }));
 
-      await this.influencerNicheModel.bulkCreate(nicheAssociations, { transaction });
+      await this.influencerNicheModel.bulkCreate(nicheAssociations, {
+        transaction,
+      });
 
       return createdInfluencer;
     });
@@ -361,7 +397,7 @@ export class AuthService {
     // Check if username exists in either influencer or brand tables
     const [influencerExists, brandExists] = await Promise.all([
       this.influencerModel.findOne({ where: { username } }),
-      this.brandModel.findOne({ where: { username } })
+      this.brandModel.findOne({ where: { username } }),
     ]);
 
     const isAvailable = !influencerExists && !brandExists;
@@ -375,7 +411,10 @@ export class AuthService {
     }
 
     // Only generate suggestions when username is taken
-    const suggestions = await this.generateUsernameSuggestions(username, isAvailable);
+    const suggestions = await this.generateUsernameSuggestions(
+      username,
+      isAvailable,
+    );
 
     return {
       available: false,
@@ -385,7 +424,10 @@ export class AuthService {
     };
   }
 
-  private async generateUsernameSuggestions(baseUsername: string, originalAvailable: boolean = false): Promise<string[]> {
+  private async generateUsernameSuggestions(
+    baseUsername: string,
+    originalAvailable: boolean = false,
+  ): Promise<string[]> {
     const suggestions: string[] = [];
     const maxSuggestions = 5;
 
@@ -398,7 +440,16 @@ export class AuthService {
     suggestions.push(...randomSuggestions);
 
     // Strategy 2: Add common suffixes
-    const suffixes = ['_official', '_real', '_original', '_pro', '_user', '_123', '_xyz', '_new'];
+    const suffixes = [
+      '_official',
+      '_real',
+      '_original',
+      '_pro',
+      '_user',
+      '_123',
+      '_xyz',
+      '_new',
+    ];
     for (const suffix of suffixes) {
       suggestions.push(`${baseUsername}${suffix}`);
     }
@@ -437,7 +488,7 @@ export class AuthService {
 
       const [influencerExists, brandExists] = await Promise.all([
         this.influencerModel.findOne({ where: { username: suggestion } }),
-        this.brandModel.findOne({ where: { username: suggestion } })
+        this.brandModel.findOne({ where: { username: suggestion } }),
       ]);
 
       if (!influencerExists && !brandExists) {
@@ -452,7 +503,7 @@ export class AuthService {
 
       const [influencerExists, brandExists] = await Promise.all([
         this.influencerModel.findOne({ where: { username: suggestion } }),
-        this.brandModel.findOne({ where: { username: suggestion } })
+        this.brandModel.findOne({ where: { username: suggestion } }),
       ]);
 
       if (!influencerExists && !brandExists) {
@@ -487,7 +538,7 @@ export class AuthService {
       { id: userId }, // keep payload minimal
       {
         jwtid: jti,
-        secret: this.configService.get<string>("JWT_REFRESH_SECRET"),
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
         // No expiresIn - token never expires unless explicitly revoked
       },
     );
@@ -501,34 +552,38 @@ export class AuthService {
   async brandSignup(
     signupDto: BrandSignupDto,
     files?: {
-      profileImage?: Express.Multer.File[],
-      incorporationDocument?: Express.Multer.File[],
-      gstDocument?: Express.Multer.File[],
-      panDocument?: Express.Multer.File[]
+      profileImage?: Express.Multer.File[];
+      incorporationDocument?: Express.Multer.File[];
+      gstDocument?: Express.Multer.File[];
+      panDocument?: Express.Multer.File[];
     },
     deviceId?: string,
-    userAgent?: string
+    userAgent?: string,
   ) {
     const { phone, email, password, ...brandData } = signupDto;
     const formattedPhone = `+91${phone}`; // Add Indian country code
 
     // Check if phone was recently verified
-    const verificationKey = `otp:verified:${phone}`;
-    const isVerified = await this.redisService.get(verificationKey);
+    // const verificationKey = `otp:verified:${phone}`;
+    // const isVerified = await this.redisService.get(verificationKey);
 
-    if (!isVerified) {
-      throw new UnauthorizedException('Phone number not verified or verification expired');
-    }
+    // if (!isVerified) {
+    //   throw new UnauthorizedException(
+    //     'Phone number not verified or verification expired',
+    //   );
+    // }
 
     // Check if brand already exists with email or phone
     const existingBrand = await this.brandModel.findOne({
       where: {
-        [Op.or]: [{ email }, { phone: formattedPhone }]
-      }
+        [Op.or]: [{ email }, { phone: formattedPhone }],
+      },
     });
 
     if (existingBrand) {
-      throw new ConflictException('Brand already exists with this email or phone number');
+      throw new ConflictException(
+        'Brand already exists with this email or phone number',
+      );
     }
 
     // Hash password
@@ -541,19 +596,35 @@ export class AuthService {
     let panDocumentUrl: string | undefined;
 
     if (files?.profileImage?.[0]) {
-      profileImageUrl = await this.uploadFileToS3(files.profileImage[0], 'profiles/brands', 'brand');
+      profileImageUrl = await this.uploadFileToS3(
+        files.profileImage[0],
+        'profiles/brands',
+        'brand',
+      );
     }
 
     if (files?.incorporationDocument?.[0]) {
-      incorporationDocumentUrl = await this.uploadFileToS3(files.incorporationDocument[0], 'documents/brands', 'incorporation');
+      incorporationDocumentUrl = await this.uploadFileToS3(
+        files.incorporationDocument[0],
+        'documents/brands',
+        'incorporation',
+      );
     }
 
     if (files?.gstDocument?.[0]) {
-      gstDocumentUrl = await this.uploadFileToS3(files.gstDocument[0], 'documents/brands', 'gst');
+      gstDocumentUrl = await this.uploadFileToS3(
+        files.gstDocument[0],
+        'documents/brands',
+        'gst',
+      );
     }
 
     if (files?.panDocument?.[0]) {
-      panDocumentUrl = await this.uploadFileToS3(files.panDocument[0], 'documents/brands', 'pan');
+      panDocumentUrl = await this.uploadFileToS3(
+        files.panDocument[0],
+        'documents/brands',
+        'pan',
+      );
     }
 
     // Validate niche IDs before transaction if provided
@@ -586,21 +657,26 @@ export class AuthService {
         pocContactNumber: brandData.pocContactNumber,
         brandBio: brandData.brandBio,
         profileImage: profileImageUrl || brandData.profileImage,
-        incorporationDocument: incorporationDocumentUrl || brandData.incorporationDocument,
+        incorporationDocument:
+          incorporationDocumentUrl || brandData.incorporationDocument,
         gstDocument: gstDocumentUrl || brandData.gstDocument,
         panDocument: panDocumentUrl || brandData.panDocument,
       };
 
-      const createdBrand = await this.brandModel.create(brandCreateData, { transaction });
+      const createdBrand = await this.brandModel.create(brandCreateData, {
+        transaction,
+      });
 
       // Associate niches if provided
       if (brandData.nicheIds && brandData.nicheIds.length > 0) {
-        const brandNicheAssociations = brandData.nicheIds.map(nicheId => ({
+        const brandNicheAssociations = brandData.nicheIds.map((nicheId) => ({
           brandId: createdBrand.id,
           nicheId,
         }));
 
-        await this.brandNicheModel.bulkCreate(brandNicheAssociations, { transaction });
+        await this.brandNicheModel.bulkCreate(brandNicheAssociations, {
+          transaction,
+        });
       }
 
       return createdBrand;
@@ -616,27 +692,58 @@ export class AuthService {
       ],
     });
 
-    // Send welcome email
-    await this.emailService.sendWelcomeEmail(email, brandData.brandName || 'Brand Partner');
+    if (!completeBrand) {
+      throw new InternalServerErrorException('Failed to create brand account');
+    }
 
-    // Automatically initiate login flow after successful signup
-    const loginResult = await this.brandLogin({ email, password }, deviceId, userAgent);
+    // Generate and send email OTP for brand verification
+    const otp = randomInt(100000, 999999).toString();
+    const otpKey = this.brandOtpKey(email);
+
+    // Store OTP in Redis with 10 minutes expiry
+    await this.redisService.getClient().set(otpKey, otp, 'EX', 600);
+
+    // Store temporary session data for after OTP verification
+    const tempSessionKey = `temp:brand:${email}`;
+    const tempSessionData = JSON.stringify({
+      brandId: completeBrand.id,
+      deviceId: deviceId ?? null,
+      userAgent: userAgent ?? null,
+      createdAt: new Date().toISOString(),
+    });
+    await this.redisService
+      .getClient()
+      .set(tempSessionKey, tempSessionData, 'EX', 600);
+
+    //Send welcome mail
+    await this.emailService.sendWelcomeEmail(email, completeBrand.brandName)
+
+    // Send OTP email instead of welcome email
+    await this.emailService.sendBrandOtp(email, otp);
 
     return {
-      message: 'Brand registered successfully. Please check your email for OTP to complete login.',
-      signup: {
-        brand: completeBrand,
+      message:
+        'Brand registered successfully. Please check your email for OTP to complete verification.',
+      requiresOtp: true,
+      email: email,
+      brand: {
+        id: completeBrand.id,
+        brandName: completeBrand.brandName,
+        email: completeBrand.email,
       },
-      login: loginResult,
     };
   }
 
-  async brandLogin(loginDto: BrandLoginDto, deviceId?: string, userAgent?: string) {
+  async brandLogin(
+    loginDto: BrandLoginDto,
+    deviceId?: string,
+    userAgent?: string,
+  ) {
     const { email, password } = loginDto;
 
     // Find brand by email
     const brand = await this.brandModel.findOne({
-      where: { email }
+      where: { email },
     });
 
     if (!brand) {
@@ -669,19 +776,26 @@ export class AuthService {
       userAgent: userAgent ?? null,
       createdAt: new Date().toISOString(),
     });
-    await this.redisService.getClient().set(tempSessionKey, tempSessionData, 'EX', 600);
+    await this.redisService
+      .getClient()
+      .set(tempSessionKey, tempSessionData, 'EX', 600);
 
     // Send OTP email
     await this.emailService.sendBrandOtp(email, otp);
 
     return {
-      message: 'OTP sent to your email address. Please verify to complete login.',
+      message:
+        'OTP sent to your email address. Please verify to complete login.',
       requiresOtp: true,
       email: email,
     };
   }
 
-  async verifyBrandOtp(verifyOtpDto: BrandVerifyOtpDto, deviceId?: string, userAgent?: string) {
+  async verifyBrandOtp(
+    verifyOtpDto: BrandVerifyOtpDto,
+    deviceId?: string,
+    userAgent?: string,
+  ) {
     const { email, otp } = verifyOtpDto;
 
     // Get stored OTP from Redis
@@ -704,7 +818,9 @@ export class AuthService {
       if (attempts >= 5) {
         // Too many failed attempts, invalidate OTP
         await this.redisService.getClient().del(otpKey);
-        throw new UnauthorizedException('Too many failed attempts. Please request a new OTP.');
+        throw new UnauthorizedException(
+          'Too many failed attempts. Please request a new OTP.',
+        );
       }
 
       throw new UnauthorizedException('Invalid OTP');
@@ -712,7 +828,9 @@ export class AuthService {
 
     // Get temporary session data
     const tempSessionKey = `temp:brand:${email}`;
-    const tempSessionData = await this.redisService.getClient().get(tempSessionKey);
+    const tempSessionData = await this.redisService
+      .getClient()
+      .get(tempSessionKey);
 
     if (!tempSessionData) {
       throw new UnauthorizedException('Session expired. Please login again.');
@@ -722,7 +840,8 @@ export class AuthService {
     const brandId = sessionInfo.brandId;
 
     // Generate tokens
-    const { accessToken, refreshToken, jti } = await this.generateTokens(brandId);
+    const { accessToken, refreshToken, jti } =
+      await this.generateTokens(brandId);
 
     // Store session in Redis for multi-device support
     const sessionKey = this.sessionKey(brandId, jti);
@@ -736,7 +855,8 @@ export class AuthService {
     });
 
     // Clean up temporary data and store final session
-    await this.redisService.getClient()
+    await this.redisService
+      .getClient()
       .multi()
       .del(otpKey) // Remove used OTP
       .del(tempSessionKey) // Remove temporary session
@@ -790,20 +910,19 @@ export class AuthService {
   }
 
   async logout({ refreshToken }: LogoutDto): Promise<LogoutResponseDto> {
-    let decoded: DecodedRefresh;
-
-
     // Step 1: Verify token signature & decode payload
-    decoded = this.jwtService.verify<DecodedRefresh>(refreshToken, {
-      secret: this.configService.get<string>("JWT_REFRESH_SECRET"),
-    });
-
+    const decoded: DecodedRefresh = this.jwtService.verify<DecodedRefresh>(
+      refreshToken,
+      {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      },
+    );
 
     const userId = decoded.id;
     const jti = decoded.jti;
 
     // Safety check → if token doesn't contain expected fields, just return success
-    if (!userId || !jti) return { message: "Logged out" };
+    if (!userId || !jti) return { message: 'Logged out' };
 
     // Step 2: Prepare Redis keys for this session
     const key = this.sessionKey(userId, jti); // key for this session
@@ -814,15 +933,16 @@ export class AuthService {
     const expTtl = ttl > 0 ? ttl : 60; // fallback: 1 min minimum
 
     // Step 4: Redis transaction to clean up session + blacklist token
-    await this.redisService.getClient()
+    await this.redisService
+      .getClient()
       .multi()
-      .set(this.blacklistKey(jti), "1", "EX", expTtl) // mark JTI as blacklisted
+      .set(this.blacklistKey(jti), '1', 'EX', expTtl) // mark JTI as blacklisted
       .del(key) // delete session for this device
       .srem(setKey, jti) // remove JTI from user's active set
       .exec();
 
     // Step 5: Return confirmation
-    return { message: "Logged out" };
+    return { message: 'Logged out' };
   }
 
   /**
@@ -842,7 +962,7 @@ export class AuthService {
         multi.del(this.sessionKey(userId, jti));
 
         // Blacklist token for a long period (1 year) since tokens don't naturally expire
-        multi.set(this.blacklistKey(jti), "1", "EX", 365 * 24 * 60 * 60);
+        multi.set(this.blacklistKey(jti), '1', 'EX', 365 * 24 * 60 * 60);
       }
 
       // Step 3: Remove the user's session set itself
@@ -853,26 +973,26 @@ export class AuthService {
     }
 
     // Step 4: Return confirmation
-    return { message: "Logged out from all devices" };
+    return { message: 'Logged out from all devices' };
   }
 
-  async refreshToken({ refreshToken }: RefreshTokenDto): Promise<RefreshTokenResponseDto> {
-    let decoded: DecodedRefresh;
-
-    try {
-      // Step 1: Decode & validate the refresh token
-      decoded = this.jwtService.verify<DecodedRefresh>(refreshToken, {
-        secret: this.configService.get<string>("JWT_REFRESH_SECRET"),
-      });
-    } catch (error) {
-      throw new UnauthorizedException("Invalid refresh token");
-    }
+  async refreshToken({
+    refreshToken,
+  }: RefreshTokenDto): Promise<RefreshTokenResponseDto> {
+    // Step 1: Decode & validate the refresh token
+    const decoded: DecodedRefresh = this.jwtService.verify<DecodedRefresh>(
+      refreshToken,
+      {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      },
+    );
 
     const userId = decoded.id;
     const jti = decoded.jti;
 
     // Sanity check → must have userId and JTI
-    if (!userId || !jti) throw new UnauthorizedException("Malformed refresh token");
+    if (!userId || !jti)
+      throw new UnauthorizedException('Malformed refresh token');
 
     // Step 2: Check blacklist and active session in Redis
     const [isBlacklisted, exists] = await Promise.all([
@@ -880,8 +1000,8 @@ export class AuthService {
       this.redisService.getClient().get(this.sessionKey(userId, jti)), // still active?
     ]);
 
-    if (isBlacklisted) throw new ForbiddenException("Refresh token revoked");
-    if (!exists) throw new UnauthorizedException("Session expired or revoked");
+    if (isBlacklisted) throw new ForbiddenException('Refresh token revoked');
+    if (!exists) throw new UnauthorizedException('Session expired or revoked');
 
     // Step 3: Rotate refresh token (security best practice)
     const {
@@ -915,7 +1035,8 @@ export class AuthService {
     const ttl = await this.redisService.getClient().ttl(oldKey);
 
     // Fetch old session payload (if missing, default to empty object)
-    const oldPayload = (await this.redisService.getClient().get(oldKey)) || "{}";
+    const oldPayload =
+      (await this.redisService.getClient().get(oldKey)) || '{}';
 
     // Merge old payload with new data & add rotation timestamp
     const merged = JSON.stringify({
@@ -925,7 +1046,8 @@ export class AuthService {
     });
 
     // Atomic operations to rotate session in Redis
-    const multi = this.redisService.getClient()
+    const multi = this.redisService
+      .getClient()
       .multi()
       .del(oldKey) // delete old session key
       .srem(setKey, oldJti) // remove old JTI from user's session set
@@ -938,7 +1060,136 @@ export class AuthService {
     await multi.exec();
 
     // Blacklist the old JTI for a long period (1 year) since tokens don't naturally expire
-    await this.redisService.getClient().set(this.blacklistKey(oldJti), "1", "EX", 365 * 24 * 60 * 60);
+    await this.redisService
+      .getClient()
+      .set(this.blacklistKey(oldJti), '1', 'EX', 365 * 24 * 60 * 60);
   }
 
+  /**
+   * Forgot password - Send password reset email with token
+   */
+  async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
+    const { email } = forgotPasswordDto;
+
+    // Step 1: Check if brand exists 
+    const brand = await this.brandModel.findOne({
+      where: { email: email.toLowerCase() },
+      attributes: ['id', 'email', 'brandName'],
+    });
+
+    if (!brand) {
+      // Don't reveal if email exists or not for security
+      return {
+        message: 'If the email exists, a password reset link has been sent',
+        success: true,
+      };
+    }
+
+    // Step 2: Generate password reset token (JWT with brand ID and expiration)
+    const resetPayload = {
+      brandId: brand.id,
+      email: brand.email,
+      type: 'password-reset',
+    };
+
+    const resetToken = this.jwtService.sign(resetPayload, {
+      secret: this.configService.get<string>('JWT_REFRESH_SECRET'), // Use refresh secret for reset tokens
+      expiresIn: '1h', // 1 hour expiry
+    });
+
+    // Step 3: Store token in Redis with 1 hour TTL for additional validation
+    const tokenKey = this.passwordResetKey(resetToken);
+    await this.redisService.set(
+      tokenKey,
+      JSON.stringify({
+        brandId: brand.id,
+        email: brand.email,
+        createdAt: new Date().toISOString(),
+      }),
+      3600,
+    ); // 1 hour
+
+    // Step 4: Generate password reset URL
+    const resetUrl = `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
+
+    // Step 5: Send password reset email
+    await this.emailService.sendPasswordResetEmail(
+      brand.email,
+      brand.brandName,
+      resetUrl,
+      resetToken,
+    );
+
+    return {
+      message: 'If the email exists, a password reset link has been sent',
+      success: true,
+    };
+  }
+
+  /**
+   * Reset password - Verify token and set new password
+   */
+  async resetPassword(resetPasswordDto: ResetPasswordDto) {
+    const { token, newPassword } = resetPasswordDto;
+
+    // Step 1: Verify and decode the reset token
+    let decoded: { brandId: number; email: string; type: string };
+    decoded = this.jwtService.verify<{
+      brandId: number;
+      email: string;
+      type: string;
+    }>(token, {
+      secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+    });
+
+    // Step 2: Validate token payload
+    if (
+      decoded.type !== 'password-reset' ||
+      !decoded.brandId ||
+      !decoded.email
+    ) {
+      throw new UnauthorizedException('Invalid reset token format');
+    }
+
+    // Step 3: Check if token exists in Redis (additional security)
+    const tokenKey = this.passwordResetKey(token);
+    const tokenData = await this.redisService.get(tokenKey);
+
+    if (!tokenData) {
+      throw new UnauthorizedException(
+        'Reset token has expired or already been used',
+      );
+    }
+
+    // Step 4: Find the brand
+    const brand = await this.brandModel.findOne({
+      where: {
+        id: decoded.brandId,
+        email: decoded.email.toLowerCase(),
+      },
+    });
+
+    if (!brand) {
+      throw new UnauthorizedException('Brand not found');
+    }
+
+    // Step 5: Hash new password
+    const saltRounds = 12;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    // Step 6: Update brand password in database
+    await brand.update({ password: hashedPassword });
+
+    // Step 7: Invalidate the reset token (delete from Redis)
+    await this.redisService.del(tokenKey);
+
+    // Step 8: Logout from all devices for security (invalidate all sessions)
+    await this.logoutAll(brand.id);
+
+    return {
+      message:
+        'Password has been reset successfully. Please log in with your new password.',
+      success: true,
+    };
+  }
 }

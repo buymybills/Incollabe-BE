@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       service:
-        description: 'Service name (api-gateway, quickpick, etc.)'
+        description: 'Service name Incollab'
         required: true
         type: string
       environment:
@@ -34,6 +34,19 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Copy deployment files to EC2
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+          # Copy the 4 essential files
+          scp docker-compose.yml ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/
+          scp deploy.sh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/
+          scp .env ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/
+          scp nginx.conf ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/ || echo "nginx.conf not found, skipping"
+
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -44,29 +57,25 @@ jobs:
           script: |
             echo "Starting deployment of ${{ inputs.service }} to ${{ inputs.environment }}..."
             cd ${{ inputs.docker_compose_path }}
-            
+
             # Make deploy script executable
             chmod +x deploy.sh
-            
-            # Create .env file with Docker Hub credentials if it doesn't exist
-            if [ ! -f .env ]; then
-              echo "Creating .env file..."
-              cat > .env << EOF
-            DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
-            IMAGE_TAG=latest
-            EOF
+
+            # Update .env with Docker Hub credentials
+            if grep -q "DOCKERHUB_USERNAME" .env; then
+              sed -i "s/DOCKERHUB_USERNAME=.*/DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}/" .env
             else
-              # Update existing .env with Docker Hub username if not present
-              if ! grep -q "DOCKERHUB_USERNAME" .env; then
-                echo "DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}" >> .env
-              fi
-              if ! grep -q "IMAGE_TAG" .env; then
-                echo "IMAGE_TAG=latest" >> .env
-              fi
+              echo "DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}" >> .env
             fi
-            
-            # Run deployment script
-            ./deploy.sh deploy
+
+            if grep -q "IMAGE_TAG" .env; then
+              sed -i "s/IMAGE_TAG=.*/IMAGE_TAG=latest/" .env
+            else
+              echo "IMAGE_TAG=latest" >> .env
+            fi
+
+            # Run deployment script (app-only by default)
+            ./deploy.sh
 
       - name: Health Check
         uses: appleboy/ssh-action@v1.0.3

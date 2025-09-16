@@ -2,7 +2,6 @@ import { ApiProperty } from '@nestjs/swagger';
 import {
   IsNotEmpty,
   IsString,
-  IsPhoneNumber,
   IsDateString,
   IsEnum,
   IsArray,
@@ -14,7 +13,11 @@ import {
   ValidateIf,
   Allow,
 } from 'class-validator';
-import { Gender, GENDER_OPTIONS, OTHERS_GENDER_OPTIONS } from '../types/gender.enum';
+import {
+  Gender,
+  GENDER_OPTIONS,
+  OTHERS_GENDER_OPTIONS,
+} from '../types/gender.enum';
 import type { GenderType, OthersGenderType } from '../types/gender.enum';
 
 export class InfluencerSignupDto {
@@ -49,8 +52,9 @@ export class InfluencerSignupDto {
   @IsNotEmpty()
   @IsString()
   @Length(10, 10, { message: 'Phone number must be exactly 10 digits' })
-  @Matches(/^[6-9]\d{9}$/, { 
-    message: 'Phone number must be a valid Indian mobile number starting with 6, 7, 8, or 9' 
+  @Matches(/^[6-9]\d{9}$/, {
+    message:
+      'Phone number must be a valid Indian mobile number starting with 6, 7, 8, or 9',
   })
   phone: string;
 
@@ -85,7 +89,8 @@ export class InfluencerSignupDto {
   othersGender?: OthersGenderType;
 
   @ApiProperty({
-    description: 'Bio or description about the influencer (optional, can be empty)',
+    description:
+      'Bio or description about the influencer (optional, can be empty)',
     example: 'Fashion and lifestyle influencer based in Mumbai',
     required: false,
   })

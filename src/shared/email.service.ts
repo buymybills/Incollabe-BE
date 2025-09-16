@@ -159,4 +159,95 @@ export class EmailService {
       // Don't throw error for welcome email as it's not critical
     }
   }
+
+  async sendPasswordResetEmail(
+    email: string,
+    brandName: string,
+    resetUrl: string,
+    resetToken: string,
+  ): Promise<void> {
+    const subject = 'Password Reset Request - Incollab';
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Password Reset Request</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-align: center; padding: 30px; border-radius: 10px 10px 0 0; }
+          .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; }
+          .reset-box { background: white; border: 2px solid #667eea; padding: 25px; text-align: center; margin: 25px 0; border-radius: 8px; }
+          .reset-button { display: inline-block; background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 15px 0; }
+          .reset-button:hover { background: #5a67d8; }
+          .footer { text-align: center; margin-top: 20px; color: #666; font-size: 14px; }
+          .warning { color: #dc3545; font-weight: bold; margin-top: 20px; padding: 15px; background: #f8d7da; border-radius: 5px; }
+          .token-info { background: #e9ecef; padding: 15px; border-radius: 5px; margin: 15px 0; font-size: 12px; color: #6c757d; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🔐 Password Reset Request</h1>
+            <p>Reset your brand account password securely</p>
+          </div>
+          <div class="content">
+            <h2>Hello ${brandName || 'Brand Partner'},</h2>
+            <p>We received a request to reset the password for your Incollab brand account associated with <strong>${email}</strong>.</p>
+
+            <div class="reset-box">
+              <h3>Reset Your Password</h3>
+              <p>Click the button below to set a new password for your account:</p>
+              <a href="${resetUrl}" class="reset-button">Reset Password</a>
+              <p style="margin: 15px 0 5px; color: #666; font-size: 14px;">This link expires in 1 hour</p>
+            </div>
+
+            <p><strong>Security Information:</strong></p>
+            <ul>
+              <li>This reset link is valid for <strong>1 hour only</strong></li>
+              <li>The link can only be used once</li>
+              <li>If you didn't request this reset, please ignore this email</li>
+              <li>For security, you'll be logged out of all devices after resetting</li>
+            </ul>
+
+            <div class="token-info">
+              <strong>For API Integration:</strong><br>
+              If you're using the API directly, use this reset token:<br>
+              <code style="word-break: break-all;">${resetToken}</code>
+            </div>
+
+            <div class="warning">
+              ⚠️ If you didn't request a password reset, please contact our support team immediately at support@incollab.com
+            </div>
+
+            <p>If the button above doesn't work, you can copy and paste this link into your browser:</p>
+            <p style="word-break: break-all; color: #667eea;">${resetUrl}</p>
+          </div>
+          <div class="footer">
+            <p>© 2025 Incollab. All rights reserved.</p>
+            <p>This is an automated security email, please do not reply.</p>
+            <p>Need help? Contact us at <a href="mailto:support@incollab.com">support@incollab.com</a></p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    try {
+      await this.transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: subject,
+        html: html,
+      });
+
+      console.log(`Password reset email sent to: ${email}`);
+    } catch (error) {
+      console.error('Failed to send password reset email:', error);
+      throw new Error(`Failed to send password reset email: ${error.message}`);
+    }
+  }
 }

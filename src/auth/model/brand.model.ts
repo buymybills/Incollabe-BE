@@ -1,4 +1,12 @@
-import { Column, Model, Table, DataType, PrimaryKey, AutoIncrement, BelongsToMany } from 'sequelize-typescript';
+import {
+  Column,
+  Model,
+  Table,
+  DataType,
+  PrimaryKey,
+  AutoIncrement,
+  BelongsToMany,
+} from 'sequelize-typescript';
 import { Niche } from './niche.model';
 import { BrandNiche } from './brand-niche.model';
 
@@ -37,13 +45,13 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
     allowNull: false,
     unique: true,
   })
-  email: string;
+  declare email: string;
 
   @Column({
     type: DataType.STRING,
     allowNull: true,
   })
-  password: string;
+  declare password: string;
 
   @Column({
     type: DataType.STRING,
@@ -56,26 +64,26 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
       },
     },
   })
-  phone: string;
+  declare phone: string;
 
   @Column({
     type: DataType.BOOLEAN,
     defaultValue: false,
   })
-  isPhoneVerified: boolean;
+  declare isPhoneVerified: boolean;
 
   @Column({
     type: DataType.STRING,
     allowNull: true,
   })
-  brandName: string;
+  declare brandName: string;
 
   @Column({
     type: DataType.STRING,
     allowNull: true,
     unique: true,
   })
-  username: string;
+  declare username: string;
 
   @Column({
     type: DataType.STRING,
@@ -90,85 +98,84 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
       'Public Limited Company (PLC)',
       'One-Person Company (OPC)',
       'Limited Liability Partnership (LLP)',
-      'Partnership Firm'
+      'Partnership Firm',
     ],
     allowNull: true,
   })
-  companyType: string;
+  declare companyType: string;
 
   @Column({
     type: DataType.STRING,
     allowNull: true,
   })
-  brandEmailId: string;
+  declare brandEmailId: string;
 
   @Column({
     type: DataType.STRING,
     allowNull: true,
   })
-  pocName: string;
+  declare pocName: string;
 
   @Column({
     type: DataType.STRING,
     allowNull: true,
   })
-  pocDesignation: string;
+  declare pocDesignation: string;
 
   @Column({
     type: DataType.STRING,
     allowNull: true,
   })
-  pocEmailId: string;
+  declare pocEmailId: string;
 
   @Column({
     type: DataType.STRING,
     allowNull: true,
   })
-  pocContactNumber: string;
+  declare pocContactNumber: string;
 
   @Column({
     type: DataType.TEXT,
     allowNull: true,
   })
-  brandBio: string;
+  declare brandBio: string;
 
   @Column({
     type: DataType.STRING,
     allowNull: true,
   })
-  profileImage: string;
-
-
-  @Column({
-    type: DataType.STRING,
-    allowNull: true,
-  })
-  incorporationDocument: string;
+  declare profileImage: string;
 
   @Column({
     type: DataType.STRING,
     allowNull: true,
   })
-  gstDocument: string;
+  declare incorporationDocument: string;
 
   @Column({
     type: DataType.STRING,
     allowNull: true,
   })
-  panDocument: string;
+  declare gstDocument: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare panDocument: string;
 
   @Column({
     type: DataType.BOOLEAN,
     defaultValue: false,
   })
-  isProfileCompleted: boolean;
+  declare isProfileCompleted: boolean;
 
   @Column({
     type: DataType.BOOLEAN,
     defaultValue: true,
   })
-  isActive: boolean;
+  declare isActive: boolean;
 
   @BelongsToMany(() => Niche, () => BrandNiche)
-  niches: Niche[];
+  declare niches: Niche[];
 }

@@ -1,4 +1,12 @@
-import { Column, Model, Table, DataType, ForeignKey, PrimaryKey, AutoIncrement } from 'sequelize-typescript';
+import {
+  Column,
+  Model,
+  Table,
+  DataType,
+  ForeignKey,
+  PrimaryKey,
+  AutoIncrement,
+} from 'sequelize-typescript';
 import { Brand } from './brand.model';
 import { Niche } from './niche.model';
 
@@ -8,7 +16,10 @@ export interface BrandNicheCreationAttributes {
 }
 
 @Table({ tableName: 'brand_niches', timestamps: true })
-export class BrandNiche extends Model<BrandNiche, BrandNicheCreationAttributes> {
+export class BrandNiche extends Model<
+  BrandNiche,
+  BrandNicheCreationAttributes
+> {
   @PrimaryKey
   @AutoIncrement
   @Column(DataType.INTEGER)

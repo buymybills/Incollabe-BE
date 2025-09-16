@@ -13,7 +13,11 @@ import {
   ValidateIf,
   Allow,
 } from 'class-validator';
-import { Gender, GENDER_OPTIONS, OTHERS_GENDER_OPTIONS } from '../types/gender.enum';
+import {
+  Gender,
+  GENDER_OPTIONS,
+  OTHERS_GENDER_OPTIONS,
+} from '../types/gender.enum';
 import type { GenderType, OthersGenderType } from '../types/gender.enum';
 import { Transform } from 'class-transformer';
 
@@ -52,8 +56,9 @@ export class InfluencerSignupMultipartDto {
   @IsNotEmpty()
   @IsString()
   @Length(10, 10, { message: 'Phone number must be exactly 10 digits' })
-  @Matches(/^[6-9]\d{9}$/, { 
-    message: 'Phone number must be a valid Indian mobile number starting with 6, 7, 8, or 9' 
+  @Matches(/^[6-9]\d{9}$/, {
+    message:
+      'Phone number must be a valid Indian mobile number starting with 6, 7, 8, or 9',
   })
   phone: string;
 
@@ -86,7 +91,8 @@ export class InfluencerSignupMultipartDto {
   othersGender?: OthersGenderType;
 
   @ApiProperty({
-    description: 'Bio or description about the influencer (optional, can be empty)',
+    description:
+      'Bio or description about the influencer (optional, can be empty)',
     example: 'Fashion and lifestyle influencer based in Mumbai',
     required: false,
   })
@@ -95,7 +101,8 @@ export class InfluencerSignupMultipartDto {
   bio?: string;
 
   @ApiProperty({
-    description: 'Array of niche IDs that the influencer is interested in. Accepts JSON array string like "[1,4,12]" or comma-separated string like "1,4,12"',
+    description:
+      'Array of niche IDs that the influencer is interested in. Accepts JSON array string like "[1,4,12]" or comma-separated string like "1,4,12"',
     example: '[1,4,12]',
     type: 'string',
   })
@@ -112,7 +119,10 @@ export class InfluencerSignupMultipartDto {
       }
       // Handle comma-separated string
       if (value.includes(',')) {
-        return value.split(',').map(id => Number(id.trim())).filter(id => !isNaN(id));
+        return value
+          .split(',')
+          .map((id) => Number(id.trim()))
+          .filter((id) => !isNaN(id));
       }
       // Handle single number as string
       const singleNumber = Number(value.trim());

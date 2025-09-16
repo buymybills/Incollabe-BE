@@ -4,13 +4,13 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
-} from "@nestjs/common";
-import { Request, Response } from "express";
+} from '@nestjs/common';
+import { Request, Response } from 'express';
 import {
   TokenExpiredError,
   JsonWebTokenError,
   NotBeforeError,
-} from "jsonwebtoken";
+} from 'jsonwebtoken';
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
@@ -20,16 +20,16 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const request = ctx.getRequest<Request>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message = "Internal server error";
+    let message = 'Internal server error';
 
     // Sequelize validation errors
     if (
-      exception.name === "SequelizeValidationError" ||
-      exception.name === "SequelizeUniqueConstraintError" ||
-      exception.name === "SequelizeDatabaseError"
+      exception.name === 'SequelizeValidationError' ||
+      exception.name === 'SequelizeUniqueConstraintError' ||
+      exception.name === 'SequelizeDatabaseError'
     ) {
       status = HttpStatus.BAD_REQUEST;
-      message = "Invalid data provided";
+      message = 'Invalid data provided';
     }
     // JWT errors
     else if (
@@ -38,20 +38,20 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       exception instanceof NotBeforeError
     ) {
       status = HttpStatus.UNAUTHORIZED;
-      message = "Invalid or expired token";
+      message = 'Invalid or expired token';
     }
     // NestJS HttpExceptions
     else if (exception instanceof HttpException) {
       status = exception.getStatus();
       const responseObj = exception.getResponse();
       message =
-        typeof responseObj === "string"
+        typeof responseObj === 'string'
           ? responseObj
-          : (responseObj as any)["message"] || exception.message;
+          : (responseObj as any)['message'] || exception.message;
     }
     // Generic fallback
     else {
-      message = exception.message || "Internal server error";
+      message = exception.message || 'Internal server error';
     }
 
     response.status(status).json({

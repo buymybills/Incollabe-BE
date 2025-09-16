@@ -3,9 +3,9 @@ import {
   NestInterceptor,
   ExecutionContext,
   CallHandler,
-} from "@nestjs/common";
-import { map } from "rxjs/operators";
-import { Observable } from "rxjs";
+} from '@nestjs/common';
+import { map } from 'rxjs/operators';
+import { Observable } from 'rxjs';
 
 @Injectable()
 export class ResponseInterceptor<T> implements NestInterceptor<T, any> {
@@ -14,7 +14,7 @@ export class ResponseInterceptor<T> implements NestInterceptor<T, any> {
       map((data) => ({
         success: true,
         data,
-        message: "Success",
+        message: 'Success',
         timestamp: new Date().toISOString(),
       })),
     );

@@ -12,8 +12,9 @@ export class RequestOtpDto {
   @IsNotEmpty()
   @IsString()
   @Length(10, 10, { message: 'Phone number must be exactly 10 digits' })
-  @Matches(/^[6-9]\d{9}$/, { 
-    message: 'Phone number must be a valid Indian mobile number starting with 6, 7, 8, or 9' 
+  @Matches(/^[6-9]\d{9}$/, {
+    message:
+      'Phone number must be a valid Indian mobile number starting with 6, 7, 8, or 9',
   })
   phone: string;
 }

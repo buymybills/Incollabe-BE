@@ -17,11 +17,11 @@ import { Niche } from './niche.model';
 export class InfluencerNiche extends Model {
   @ForeignKey(() => Influencer)
   @Column(DataType.INTEGER)
-  influencerId: number;
+  declare influencerId: number;
 
   @ForeignKey(() => Niche)
   @Column(DataType.INTEGER)
-  nicheId: number;
+  declare nicheId: number;
 
   @CreatedAt
   @Column(DataType.DATE)

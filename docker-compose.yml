@@ -5,16 +5,10 @@ services:
     image: ${DOCKERHUB_USERNAME:-buymybills}/incollab:${IMAGE_TAG:-latest}
     container_name: incollab-backend
     restart: unless-stopped
-    environment:
-      - NODE_ENV=production
-      - PORT=3002
-      - DATABASE_HOST=postgres
-      - DATABASE_PORT=5432
-      - DATABASE_USER=incollab
-      - DATABASE_PASSWORD=incollab123
-      - DATABASE_NAME=incollab_db
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+    ports:
+      - "3002:3002"
+    env_file:
+      - .env
     depends_on:
       - postgres
       - redis
@@ -28,34 +22,28 @@ services:
       start_period: 40s
 
   nginx:
-    build:
-      context: ./nginx
-      dockerfile: Dockerfile
+    image: nginx:alpine
     container_name: incollab-nginx
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/logs:/var/log/nginx
+      - /etc/letsencrypt/live/incollab.buymybills.in:/etc/ssl/certs:ro
+      - /etc/letsencrypt/archive/incollab.buymybills.in:/etc/ssl/private:ro
     depends_on:
       - incollab-app
     networks:
       - incollab-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/", "||", "exit", "1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   postgres:
     image: postgres:15-alpine
-    container_name: incollab-postgres
+    container_name: postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: incollab_db
-      POSTGRES_USER: incollab
-      POSTGRES_PASSWORD: incollab123
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -71,7 +59,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: incollab-redis
+    container_name: redis
     restart: unless-stopped
     ports:
       - "6379:6379"

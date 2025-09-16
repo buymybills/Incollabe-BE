@@ -35,7 +35,6 @@ export class Otp extends Model {
   @Column(DataType.STRING)
   otp: string;
 
-
   @AllowNull(false)
   @Column(DataType.DATE)
   expiresAt: Date;
