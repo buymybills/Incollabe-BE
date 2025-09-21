@@ -8,6 +8,18 @@ import {
 import { Request, Response } from 'express';
 import { LoggerService } from '../services/logger.service';
 
+// Extend Request interface to include custom properties
+interface ExtendedRequest extends Request {
+  requestId?: string;
+  startTime?: number;
+  user?: {
+    id: number;
+    userType: string;
+    email?: string;
+    username?: string;
+  };
+}
+
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   constructor(private readonly loggerService: LoggerService) {}
@@ -15,7 +27,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest<Request>();
+    const request = ctx.getRequest<ExtendedRequest>();
 
     const status = this.getHttpStatus(exception);
     const message = this.getErrorMessage(exception);
@@ -101,7 +113,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     return undefined;
   }
 
-  private getClientIp(req: Request): string {
+  private getClientIp(req: ExtendedRequest): string {
     return (
       (req.headers['x-forwarded-for'] as string)?.split(',')[0] ||
       req.connection?.remoteAddress ||
