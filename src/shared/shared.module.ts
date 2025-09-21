@@ -1,12 +1,34 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { SequelizeModule } from '@nestjs/sequelize';
 import { SmsService } from './sms.service';
 import { S3Service } from './s3.service';
 import { EmailService } from './email.service';
+import { WhatsAppService } from './whatsapp.service';
+import { OtpService } from './services/otp.service';
+import { OtpRepository } from './repositories/otp.repository';
+import { LoggerService } from './services/logger.service';
+import { Otp } from '../auth/model/otp.model';
 
 @Module({
-  imports: [ConfigModule],
-  providers: [SmsService, S3Service, EmailService],
-  exports: [SmsService, S3Service, EmailService],
+  imports: [ConfigModule, SequelizeModule.forFeature([Otp])],
+  providers: [
+    SmsService,
+    S3Service,
+    EmailService,
+    WhatsAppService,
+    OtpService,
+    OtpRepository,
+    LoggerService,
+  ],
+  exports: [
+    SmsService,
+    S3Service,
+    EmailService,
+    WhatsAppService,
+    OtpService,
+    OtpRepository,
+    LoggerService,
+  ],
 })
 export class SharedModule {}

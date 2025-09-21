@@ -16,7 +16,7 @@ import {
   timestamps: true,
   indexes: [
     {
-      fields: ['phone', 'otp', 'expiresAt'],
+      fields: ['identifier', 'type', 'otp', 'expiresAt'],
     },
   ],
 })
@@ -29,7 +29,12 @@ export class Otp extends Model {
   @AllowNull(false)
   @Index
   @Column(DataType.STRING)
-  phone: string;
+  identifier: string; // Can be phone OR email
+
+  @AllowNull(false)
+  @Index
+  @Column(DataType.ENUM('phone', 'email'))
+  type: 'phone' | 'email'; // Indicates what type of identifier
 
   @AllowNull(false)
   @Column(DataType.STRING)

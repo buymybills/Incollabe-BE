@@ -6,11 +6,11 @@ import { ConfigService } from '@nestjs/config';
 import { RequestOtpDto } from './dto/request-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { InfluencerSignupDto } from './dto/influencer-signup.dto';
+import { InfluencerSignupMultipartDto } from './dto/influencer-signup-multipart.dto';
 import { BrandSignupDto } from './dto/brand-signup.dto';
 import { BrandLoginDto } from './dto/brand-login.dto';
 import { BrandVerifyOtpDto } from './dto/brand-verify-otp.dto';
 import { CheckUsernameDto } from './dto/check-username.dto';
-import { Request } from 'express';
 
 const mockAuthService = {
   requestOtp: jest.fn(),
@@ -82,7 +82,7 @@ describe('AuthController', () => {
       const verifyOtpDto: VerifyOtpDto = { phone: '9467289789', otp: '123456' };
       const deviceId = 'device-123';
       const userAgent = 'Mozilla/5.0 (test browser)';
-      const mockReq = { headers: { 'user-agent': userAgent } } as Request;
+      const mockReq = { headers: { 'user-agent': userAgent } } as any;
       const expectedResult = {
         message: 'OTP verified successfully',
         phone: '+919467289789',
@@ -128,7 +128,7 @@ describe('AuthController', () => {
 
   describe('influencerSignup', () => {
     it('should signup influencer', async () => {
-      const signupDto: InfluencerSignupDto = {
+      const signupDto: InfluencerSignupMultipartDto = {
         name: 'Test User',
         username: 'test_user',
         phone: '9467289789',
@@ -269,7 +269,7 @@ describe('AuthController', () => {
       };
       const deviceId = 'device-123';
       const userAgent = 'Mozilla/5.0 (test browser)';
-      const mockReq = { headers: { 'user-agent': userAgent } } as Request;
+      const mockReq = { headers: { 'user-agent': userAgent } } as any;
       const expectedResult = {
         message: 'Login successful',
         accessToken: 'mock-access-token',
@@ -321,7 +321,7 @@ describe('AuthController', () => {
       };
       const deviceId = 'device-123';
       const userAgent = 'Mozilla/5.0 (test browser)';
-      const mockReq = { headers: { 'user-agent': userAgent } } as Request;
+      const mockReq = { headers: { 'user-agent': userAgent } } as any;
       const expectedResult = {
         message: 'Brand registered successfully',
         brand: {
@@ -360,7 +360,7 @@ describe('AuthController', () => {
       };
       const deviceId = 'device-123';
       const userAgent = 'Mozilla/5.0 (test browser)';
-      const mockReq = { headers: { 'user-agent': userAgent } } as Request;
+      const mockReq = { headers: { 'user-agent': userAgent } } as any;
       const expectedResult = {
         message: 'Login successful',
         accessToken: 'mock-access-token',

@@ -31,9 +31,11 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SmsService } from '../shared/sms.service';
 import { EmailService } from '../shared/email.service';
 import { S3Service } from '../shared/s3.service';
+import { LoggerService } from '../shared/services/logger.service';
 import { RedisService } from '../redis/redis.service';
-import { Brand, BrandCreationAttributes } from './model/brand.model';
-import { BrandNiche } from './model/brand-niche.model';
+import { Brand, BrandCreationAttributes } from '../brand/model/brand.model';
+import { BrandNiche } from '../brand/model/brand-niche.model';
+import { SignupFiles } from '../types/file-upload.types';
 import { Op } from 'sequelize';
 import * as bcrypt from 'bcrypt';
 
@@ -68,6 +70,7 @@ export class AuthService {
     private readonly smsService: SmsService,
     private readonly emailService: EmailService,
     private readonly s3Service: S3Service,
+    private readonly loggerService: LoggerService,
     private readonly jwtService: JwtService,
     private readonly sequelize: Sequelize,
     private readonly redisService: RedisService,
@@ -110,22 +113,15 @@ export class AuthService {
     return `password-reset:${token}`;
   }
 
-  private async uploadFileToS3(
-    file: Express.Multer.File,
-    folder: string,
-    prefix: string,
-  ): Promise<string> {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const fileExtension = file.originalname.split('.').pop();
-    const s3Key = `${folder}/${prefix}-${uniqueSuffix}.${fileExtension}`;
-
-    await this.s3Service.uploadFile(file, s3Key);
-    return this.s3Service.getFileUrl(s3Key);
-  }
-
   async requestOtp(requestOtpDto: RequestOtpDto): Promise<string> {
     const { phone } = requestOtpDto;
     const formattedPhone = `+91${phone}`; // Add Indian country code
+
+    // Log OTP request start
+    this.loggerService.logAuth('OTP_REQUEST_STARTED', {
+      phone: formattedPhone,
+      action: 'requestOtp',
+    });
 
     // Redis key to track OTP request cooldown for this phone
     const cooldownKey = this.cooldownKey(phone);
@@ -133,6 +129,10 @@ export class AuthService {
 
     // If key exists in Redis → user requested OTP recently → enforce cooldown
     if (await this.redisService.get(cooldownKey)) {
+      this.loggerService.logAuth('OTP_REQUEST_RATE_LIMITED', {
+        phone: formattedPhone,
+        reason: 'cooldown_active',
+      });
       throw new ForbiddenException('Please wait before requesting another OTP');
     }
 
@@ -141,6 +141,11 @@ export class AuthService {
       (await this.redisService.get(requestAttemptsKey)) || '0',
     );
     if (attempts >= 5) {
+      this.loggerService.logAuth('OTP_REQUEST_RATE_LIMITED', {
+        phone: formattedPhone,
+        attempts,
+        reason: 'max_attempts_exceeded',
+      });
       throw new ForbiddenException('Too many OTP requests. Try again later.');
     }
 
@@ -151,18 +156,42 @@ export class AuthService {
     // Set expiry timestamp for OTP (valid for 5 minutes)
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
+    // Log OTP generation
+    this.loggerService.logAuth('OTP_GENERATED', {
+      phone: formattedPhone,
+      isStaging,
+      expiresAt: expiresAt.toISOString(),
+    });
+
     // Clear any previously issued OTP for this phone (avoid duplicates/conflicts)
-    await this.otpModel.destroy({ where: { phone } });
+    await this.otpModel.destroy({
+      where: {
+        identifier: phone,
+        type: 'phone',
+      },
+    });
 
     // Save the new OTP in the database
-    await this.otpModel.create({ phone, otp: code, expiresAt });
+    await this.otpModel.create({
+      identifier: phone,
+      type: 'phone',
+      otp: code,
+      expiresAt,
+    });
+
+    this.loggerService.logDatabase('OTP_STORED', {
+      phone: formattedPhone,
+      type: 'phone',
+      expiresAt: expiresAt.toISOString(),
+    });
 
     // Send OTP via SMS only in production environment
     if (!isStaging) {
       await this.smsService.sendOtp(formattedPhone, code);
+      this.loggerService.info(`📱 OTP sent via SMS to ${formattedPhone}`);
+    } else {
+      this.loggerService.info(`🧪 Staging OTP for ${formattedPhone}: ${code}`);
     }
-
-    console.log(`OTP for ${formattedPhone}: ${code}`);
 
     // Update rate limiting counters
     await this.redisService
@@ -172,6 +201,11 @@ export class AuthService {
       .incr(requestAttemptsKey) // Increment request counter
       .expire(requestAttemptsKey, 15 * 60) // 15 minutes window
       .exec();
+
+    this.loggerService.logAuth('OTP_REQUEST_COMPLETED', {
+      phone: formattedPhone,
+      attempts: attempts + 1,
+    });
 
     // Return confirmation message
     return `OTP sent to ${formattedPhone}`;
@@ -200,7 +234,8 @@ export class AuthService {
     // 🔹 Step 2: Validate OTP against DB
     const otpRecord = await this.otpModel.findOne({
       where: {
-        phone,
+        identifier: phone,
+        type: 'phone',
         otp,
         isUsed: false,
         expiresAt: { [Op.gt]: new Date() },
@@ -260,6 +295,7 @@ export class AuthService {
       const { accessToken, refreshToken, jti } = await this.generateTokens(
         user.id,
         profileCompleted,
+        'influencer',
       );
 
       const sessionKey = this.sessionKey(user.id, jti);
@@ -304,6 +340,15 @@ export class AuthService {
     const { phone, username, nicheIds, ...influencerData } = signupDto;
     const formattedPhone = `+91${phone}`; // Add Indian country code
 
+    // Clean up othersGender field - should be undefined if gender is not "Others" or if empty string
+    if (
+      influencerData.gender !== 'Others' ||
+      !influencerData.othersGender ||
+      influencerData.othersGender.trim() === ''
+    ) {
+      delete influencerData.othersGender;
+    }
+
     // Check if phone was recently verified (within last 15 minutes)
     // We'll check Redis for recent OTP verification instead
     const verificationKey = `otp:verified:${phone}`;
@@ -327,7 +372,7 @@ export class AuthService {
     // Upload profile image to S3 if provided
     let profileImageUrl: string | undefined;
     if (profileImage) {
-      profileImageUrl = await this.uploadFileToS3(
+      profileImageUrl = await this.s3Service.uploadFileToS3(
         profileImage,
         'profiles/influencers',
         'influencer',
@@ -518,13 +563,15 @@ export class AuthService {
   private async generateTokens(
     userId: number,
     profileCompleted: boolean = false,
+    userType: 'influencer' | 'brand' = 'influencer',
   ): Promise<{ accessToken: string; refreshToken: string; jti: string }> {
     // 1. Create short-lived access token
-    // Payload contains user ID and profile completion status
+    // Payload contains user ID, profile completion status, and user type
     const accessToken = this.jwtService.sign(
       {
         id: userId,
         profileCompleted: profileCompleted,
+        userType: userType,
       },
       { jwtid: randomUUID() },
     );
@@ -539,7 +586,7 @@ export class AuthService {
       {
         jwtid: jti,
         secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-        // No expiresIn - token never expires unless explicitly revoked
+        // No expiresIn property - token never expires unless explicitly revoked
       },
     );
 
@@ -548,7 +595,6 @@ export class AuthService {
     return { accessToken, refreshToken, jti };
   }
 
-  // Brand Authentication Methods
   async brandSignup(
     signupDto: BrandSignupDto,
     files?: {
@@ -561,177 +607,223 @@ export class AuthService {
     userAgent?: string,
   ) {
     const { phone, email, password, ...brandData } = signupDto;
-    const formattedPhone = `+91${phone}`; // Add Indian country code
+    const formattedPhone = `+91${phone}`;
 
-    // Check if phone was recently verified
-    // const verificationKey = `otp:verified:${phone}`;
-    // const isVerified = await this.redisService.get(verificationKey);
-
-    // if (!isVerified) {
-    //   throw new UnauthorizedException(
-    //     'Phone number not verified or verification expired',
-    //   );
-    // }
-
-    // Check if brand already exists with email or phone
-    const existingBrand = await this.brandModel.findOne({
-      where: {
-        [Op.or]: [{ email }, { phone: formattedPhone }],
-      },
-    });
+    // 1️⃣ Check if brand exists
+    const existingBrand = await this.findExistingBrand(email, formattedPhone);
 
     if (existingBrand) {
-      throw new ConflictException(
-        'Brand already exists with this email or phone number',
-      );
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Upload files to S3 if provided
-    let profileImageUrl: string | undefined;
-    let incorporationDocumentUrl: string | undefined;
-    let gstDocumentUrl: string | undefined;
-    let panDocumentUrl: string | undefined;
-
-    if (files?.profileImage?.[0]) {
-      profileImageUrl = await this.uploadFileToS3(
-        files.profileImage[0],
-        'profiles/brands',
-        'brand',
-      );
-    }
-
-    if (files?.incorporationDocument?.[0]) {
-      incorporationDocumentUrl = await this.uploadFileToS3(
-        files.incorporationDocument[0],
-        'documents/brands',
-        'incorporation',
-      );
-    }
-
-    if (files?.gstDocument?.[0]) {
-      gstDocumentUrl = await this.uploadFileToS3(
-        files.gstDocument[0],
-        'documents/brands',
-        'gst',
-      );
-    }
-
-    if (files?.panDocument?.[0]) {
-      panDocumentUrl = await this.uploadFileToS3(
-        files.panDocument[0],
-        'documents/brands',
-        'pan',
-      );
-    }
-
-    // Validate niche IDs before transaction if provided
-    if (brandData.nicheIds && brandData.nicheIds.length > 0) {
-      const validNiches = await this.nicheModel.findAll({
-        where: { id: brandData.nicheIds, isActive: true },
-      });
-
-      if (validNiches.length !== brandData.nicheIds.length) {
-        throw new BadRequestException('One or more invalid niche IDs provided');
-      }
-    }
-
-    // Use transaction for brand creation and niche associations
-    const brand = await this.sequelize.transaction(async (transaction) => {
-      // Create brand
-      const brandCreateData: BrandCreationAttributes = {
+      return this.handleExistingBrand(
+        existingBrand,
         email,
-        phone: formattedPhone,
-        password: hashedPassword,
-        isPhoneVerified: true,
-        brandName: brandData.brandName,
-        username: brandData.username,
-        legalEntityName: brandData.legalEntityName,
-        companyType: brandData.companyType,
-        brandEmailId: brandData.brandEmailId,
-        pocName: brandData.pocName,
-        pocDesignation: brandData.pocDesignation,
-        pocEmailId: brandData.pocEmailId,
-        pocContactNumber: brandData.pocContactNumber,
-        brandBio: brandData.brandBio,
-        profileImage: profileImageUrl || brandData.profileImage,
-        incorporationDocument:
-          incorporationDocumentUrl || brandData.incorporationDocument,
-        gstDocument: gstDocumentUrl || brandData.gstDocument,
-        panDocument: panDocumentUrl || brandData.panDocument,
-      };
-
-      const createdBrand = await this.brandModel.create(brandCreateData, {
-        transaction,
-      });
-
-      // Associate niches if provided
-      if (brandData.nicheIds && brandData.nicheIds.length > 0) {
-        const brandNicheAssociations = brandData.nicheIds.map((nicheId) => ({
-          brandId: createdBrand.id,
-          nicheId,
-        }));
-
-        await this.brandNicheModel.bulkCreate(brandNicheAssociations, {
-          transaction,
-        });
-      }
-
-      return createdBrand;
-    });
-
-    // Fetch complete brand data with niches
-    const completeBrand = await this.brandModel.findByPk(brand.id, {
-      include: [
-        {
-          model: Niche,
-          through: { attributes: [] },
-        },
-      ],
-    });
-
-    if (!completeBrand) {
-      throw new InternalServerErrorException('Failed to create brand account');
+        deviceId,
+        userAgent,
+      );
     }
 
-    // Generate and send email OTP for brand verification
-    const otp = randomInt(100000, 999999).toString();
-    const otpKey = this.brandOtpKey(email);
+    // 2️⃣ Prepare brand creation data
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const fileUrls = await this.uploadSignupFiles(files);
 
-    // Store OTP in Redis with 10 minutes expiry
-    await this.redisService.getClient().set(otpKey, otp, 'EX', 600);
+    await this.validateNicheIds(brandData.nicheIds);
 
-    // Store temporary session data for after OTP verification
-    const tempSessionKey = `temp:brand:${email}`;
-    const tempSessionData = JSON.stringify({
-      brandId: completeBrand.id,
-      deviceId: deviceId ?? null,
-      userAgent: userAgent ?? null,
-      createdAt: new Date().toISOString(),
-    });
-    await this.redisService
-      .getClient()
-      .set(tempSessionKey, tempSessionData, 'EX', 600);
+    // 3️⃣ Transactional brand creation
+    const brand = await this.createBrandWithNiches(
+      { email, phone: formattedPhone, password: hashedPassword, ...brandData },
+      fileUrls,
+    );
 
-    //Send welcome mail
-    await this.emailService.sendWelcomeEmail(email, completeBrand.brandName);
-
-    // Send OTP email instead of welcome email
-    await this.emailService.sendBrandOtp(email, otp);
+    // 4️⃣ Handle verification
+    await this.initiateEmailVerification(brand, email, deviceId, userAgent);
 
     return {
       message:
         'Brand registered successfully. Please check your email for OTP to complete verification.',
       requiresOtp: true,
       email: email,
-      brand: {
-        id: completeBrand.id,
-        brandName: completeBrand.brandName,
-        email: completeBrand.email,
-      },
+      brand: { id: brand.id, brandName: brand.brandName, email: brand.email },
     };
+  }
+
+  private async findExistingBrand(email: string, phone: string) {
+    return this.brandModel.findOne({
+      where: { [Op.or]: [{ email }, { phone }] },
+    });
+  }
+
+  private async handleExistingBrand(
+    brand: Brand,
+    email: string,
+    deviceId?: string,
+    userAgent?: string,
+  ) {
+    const otp = await this.generateAndStoreOtp(email, {
+      brandId: brand.id,
+      deviceId,
+      userAgent,
+      isExistingAccount: true,
+    });
+
+    await this.emailService.sendBrandOtp(email, otp);
+
+    return {
+      message:
+        'An account with this email already exists. OTP sent to your email to verify ownership.',
+      requiresOtp: true,
+      accountExists: true,
+      email,
+      brand: { id: brand.id, brandName: brand.brandName, email: brand.email },
+    };
+  }
+
+  private async uploadSignupFiles(files?: SignupFiles) {
+    return {
+      profileImage: files?.profileImage?.[0]
+        ? await this.s3Service.uploadFileToS3(
+            files.profileImage[0],
+            'profiles/brands',
+            'brand',
+          )
+        : undefined,
+      profileBanner: files?.profileBanner?.[0]
+        ? await this.s3Service.uploadFileToS3(
+            files.profileBanner[0],
+            'profiles/brands',
+            'banner',
+          )
+        : undefined,
+      incorporationDocument: files?.incorporationDocument?.[0]
+        ? await this.s3Service.uploadFileToS3(
+            files.incorporationDocument[0],
+            'documents/brands',
+            'incorporation',
+          )
+        : undefined,
+      gstDocument: files?.gstDocument?.[0]
+        ? await this.s3Service.uploadFileToS3(
+            files.gstDocument[0],
+            'documents/brands',
+            'gst',
+          )
+        : undefined,
+      panDocument: files?.panDocument?.[0]
+        ? await this.s3Service.uploadFileToS3(
+            files.panDocument[0],
+            'documents/brands',
+            'pan',
+          )
+        : undefined,
+    };
+  }
+
+  private async validateNicheIds(nicheIds?: number[]) {
+    if (!nicheIds?.length) return;
+    const validNiches = await this.nicheModel.findAll({
+      where: { id: nicheIds, isActive: true },
+    });
+
+    if (validNiches.length !== nicheIds.length) {
+      throw new BadRequestException('One or more invalid niche IDs provided');
+    }
+  }
+
+  private async createBrandWithNiches(
+    brandData: BrandCreationAttributes & { nicheIds?: number[] },
+    fileUrls: {
+      profileImage?: string;
+      incorporationDocument?: string;
+      gstDocument?: string;
+      panDocument?: string;
+    },
+  ) {
+    return this.sequelize.transaction(async (transaction) => {
+      const createdBrand = await this.brandModel.create(
+        {
+          ...brandData,
+          profileImage: fileUrls.profileImage ?? brandData.profileImage,
+          incorporationDocument:
+            fileUrls.incorporationDocument ?? brandData.incorporationDocument,
+          gstDocument: fileUrls.gstDocument ?? brandData.gstDocument,
+          panDocument: fileUrls.panDocument ?? brandData.panDocument,
+          isPhoneVerified: false,
+          isEmailVerified: false,
+        },
+        { transaction },
+      );
+
+      if (brandData.nicheIds?.length) {
+        await this.brandNicheModel.bulkCreate(
+          brandData.nicheIds.map((nicheId) => ({
+            brandId: createdBrand.id,
+            nicheId,
+          })),
+          { transaction },
+        );
+      }
+
+      return createdBrand;
+    });
+  }
+
+  private async initiateEmailVerification(
+    brand: Brand,
+    email: string,
+    deviceId?: string,
+    userAgent?: string,
+  ) {
+    const otp = await this.generateAndStoreOtp(email, {
+      brandId: brand.id,
+      deviceId,
+      userAgent,
+    });
+
+    // Send welcome + OTP
+    await this.emailService.sendWelcomeEmail(email, brand.brandName);
+    await this.emailService.sendBrandOtp(email, otp);
+  }
+
+  private async generateAndStoreOtp(
+    email: string,
+    sessionData: {
+      brandId: number;
+      deviceId?: string | null;
+      userAgent?: string | null;
+      isExistingAccount?: boolean;
+    },
+  ) {
+    const isStaging = this.configService.get<string>('NODE_ENV') === 'staging';
+    const otp = isStaging ? '123456' : randomInt(100000, 999999).toString();
+
+    // Set expiry timestamp for OTP (valid for 10 minutes)
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    // Clear any previously issued OTP for this email (avoid duplicates/conflicts)
+    await this.otpModel.destroy({
+      where: {
+        identifier: email,
+        type: 'email',
+      },
+    });
+
+    // Save the new OTP in the database
+    await this.otpModel.create({
+      identifier: email,
+      type: 'email',
+      otp: otp,
+      expiresAt,
+    });
+
+    const tempSessionKey = `temp:brand:${email}`;
+    await this.redisService
+      .getClient()
+      .set(
+        tempSessionKey,
+        JSON.stringify({ ...sessionData, createdAt: new Date().toISOString() }),
+        'EX',
+        600,
+      );
+
+    return otp;
   }
 
   async brandLogin(
@@ -761,24 +853,33 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    // Generate and send email OTP
-    const otp = randomInt(100000, 999999).toString();
-    const otpKey = this.brandOtpKey(email);
+    // Check if email is verified
+    if (!brand.isEmailVerified) {
+      // Use existing private method to generate and store OTP with session data
+      const otp = await this.generateAndStoreOtp(email, {
+        brandId: brand.id,
+        deviceId,
+        userAgent,
+      });
 
-    // Store OTP in Redis with 10 minutes expiry
-    await this.redisService.getClient().set(otpKey, otp, 'EX', 600);
+      // Send OTP email
+      await this.emailService.sendBrandOtp(email, otp);
 
-    // Store temporary session data for after OTP verification
-    const tempSessionKey = `temp:brand:${email}`;
-    const tempSessionData = JSON.stringify({
+      return {
+        message:
+          'Email not verified. OTP sent to your email address. Please verify to complete login.',
+        requiresEmailVerification: true,
+        requiresOtp: true,
+        email: email,
+      };
+    }
+
+    // Generate and send email OTP for verified users (normal login flow)
+    const otp = await this.generateAndStoreOtp(email, {
       brandId: brand.id,
-      deviceId: deviceId ?? null,
-      userAgent: userAgent ?? null,
-      createdAt: new Date().toISOString(),
+      deviceId,
+      userAgent,
     });
-    await this.redisService
-      .getClient()
-      .set(tempSessionKey, tempSessionData, 'EX', 600);
 
     // Send OTP email
     await this.emailService.sendBrandOtp(email, otp);
@@ -798,32 +899,44 @@ export class AuthService {
   ) {
     const { email, otp } = verifyOtpDto;
 
-    // Get stored OTP from Redis
-    const otpKey = this.brandOtpKey(email);
-    const storedOtp = await this.redisService.getClient().get(otpKey);
+    // Get stored OTP from database
+    const otpRecord = await this.otpModel.findOne({
+      where: {
+        identifier: email,
+        type: 'email',
+        otp,
+        isUsed: false,
+        expiresAt: { [Op.gt]: new Date() },
+      },
+    });
 
-    if (!storedOtp) {
+    if (!otpRecord) {
+      // Check if there's an OTP record for tracking attempts
+      const existingRecord = await this.otpModel.findOne({
+        where: {
+          identifier: email,
+          type: 'email',
+          isUsed: false,
+        },
+        order: [['createdAt', 'DESC']],
+      });
+
+      if (existingRecord) {
+        // Increment attempts
+        existingRecord.attempts += 1;
+
+        if (existingRecord.attempts >= 5) {
+          // Too many failed attempts, invalidate OTP
+          await existingRecord.update({ isUsed: true });
+          throw new UnauthorizedException(
+            'Too many failed attempts. Please request a new OTP.',
+          );
+        }
+
+        await existingRecord.save();
+      }
+
       throw new UnauthorizedException('OTP has expired or is invalid');
-    }
-
-    if (storedOtp !== otp) {
-      // Increment failed attempts
-      const attemptsKey = this.brandOtpAttemptsKey(email);
-      const attempts = await this.redisService.getClient().incr(attemptsKey);
-
-      if (attempts === 1) {
-        await this.redisService.getClient().expire(attemptsKey, 600); // 10 minutes
-      }
-
-      if (attempts >= 5) {
-        // Too many failed attempts, invalidate OTP
-        await this.redisService.getClient().del(otpKey);
-        throw new UnauthorizedException(
-          'Too many failed attempts. Please request a new OTP.',
-        );
-      }
-
-      throw new UnauthorizedException('Invalid OTP');
     }
 
     // Get temporary session data
@@ -838,10 +951,14 @@ export class AuthService {
 
     const sessionInfo = JSON.parse(tempSessionData);
     const brandId = sessionInfo.brandId;
+    const isExistingAccount = sessionInfo.isExistingAccount || false;
 
     // Generate tokens
-    const { accessToken, refreshToken, jti } =
-      await this.generateTokens(brandId);
+    const { accessToken, refreshToken, jti } = await this.generateTokens(
+      brandId,
+      true,
+      'brand',
+    );
 
     // Store session in Redis for multi-device support
     const sessionKey = this.sessionKey(brandId, jti);
@@ -854,13 +971,22 @@ export class AuthService {
       userType: 'brand',
     });
 
+    // Mark email as verified in database (only for new accounts)
+    if (!isExistingAccount) {
+      await this.brandModel.update(
+        { isEmailVerified: true },
+        { where: { id: brandId } },
+      );
+    }
+
+    // Mark OTP as used
+    await otpRecord.update({ isUsed: true });
+
     // Clean up temporary data and store final session
     await this.redisService
       .getClient()
       .multi()
-      .del(otpKey) // Remove used OTP
       .del(tempSessionKey) // Remove temporary session
-      .del(this.brandOtpAttemptsKey(email)) // Remove failed attempts
       .set(sessionKey, sessionPayload) // No expiry - session persists until logout
       .sadd(sessionsSetKey, jti)
       .exec();
@@ -881,7 +1007,9 @@ export class AuthService {
     }
 
     return {
-      message: 'Login successful',
+      message: isExistingAccount
+        ? 'Account verified successfully. Login successful'
+        : 'Email verified successfully. Login successful',
       accessToken,
       refreshToken,
       brand: {
@@ -1003,12 +1131,23 @@ export class AuthService {
     if (isBlacklisted) throw new ForbiddenException('Refresh token revoked');
     if (!exists) throw new UnauthorizedException('Session expired or revoked');
 
-    // Step 3: Rotate refresh token (security best practice)
+    // Step 3: Determine user type by checking which table the user belongs to
+    const [influencer, brand] = await Promise.all([
+      this.influencerModel.findByPk(userId),
+      this.brandModel.findByPk(userId),
+    ]);
+
+    const userType = influencer ? 'influencer' : 'brand';
+    const profileCompleted = influencer
+      ? Boolean(influencer.name && influencer.username)
+      : Boolean(brand?.brandName && brand?.email);
+
+    // Step 4: Rotate refresh token (security best practice)
     const {
       accessToken,
       refreshToken: newRefresh,
       jti: newJti,
-    } = await this.generateTokens(userId);
+    } = await this.generateTokens(userId, profileCompleted, userType);
 
     await this.rotateSession(userId, jti, newJti, {
       // carry forward device info, userAgent, etc. if needed

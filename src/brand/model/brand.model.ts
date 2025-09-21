@@ -6,19 +6,25 @@ import {
   PrimaryKey,
   AutoIncrement,
   BelongsToMany,
+  ForeignKey,
+  BelongsTo,
 } from 'sequelize-typescript';
-import { Niche } from './niche.model';
+import { Niche } from '../../auth/model/niche.model';
 import { BrandNiche } from './brand-niche.model';
+import { Country } from '../../shared/models/country.model';
+import { City } from '../../shared/models/city.model';
+import { CompanyType } from '../../shared/models/company-type.model';
 
 export interface BrandCreationAttributes {
   email: string;
   phone: string;
   password?: string;
   isPhoneVerified?: boolean;
+  isEmailVerified?: boolean;
   brandName?: string;
   username?: string;
   legalEntityName?: string;
-  companyType?: string;
+  companyTypeId?: number;
   brandEmailId?: string;
   pocName?: string;
   pocDesignation?: string;
@@ -26,6 +32,18 @@ export interface BrandCreationAttributes {
   pocContactNumber?: string;
   brandBio?: string;
   profileImage?: string;
+  profileBanner?: string;
+  profileHeadline?: string;
+  websiteUrl?: string;
+  foundedYear?: number;
+  headquarterCountryId?: number;
+  headquarterCityId?: number;
+  activeRegions?: string[];
+  facebookUrl?: string;
+  instagramUrl?: string;
+  youtubeUrl?: string;
+  linkedinUrl?: string;
+  twitterUrl?: string;
   incorporationDocument?: string;
   gstDocument?: string;
   panDocument?: string;
@@ -73,6 +91,12 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
   declare isPhoneVerified: boolean;
 
   @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+  })
+  declare isEmailVerified: boolean;
+
+  @Column({
     type: DataType.STRING,
     allowNull: true,
   })
@@ -89,20 +113,17 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
     type: DataType.STRING,
     allowNull: true,
   })
-  legalEntityName: string;
+  declare legalEntityName: string;
 
+  @ForeignKey(() => CompanyType)
   @Column({
-    type: DataType.ENUM,
-    values: [
-      'Private Limited Company (Pvt. Ltd.)',
-      'Public Limited Company (PLC)',
-      'One-Person Company (OPC)',
-      'Limited Liability Partnership (LLP)',
-      'Partnership Firm',
-    ],
+    type: DataType.INTEGER,
     allowNull: true,
   })
-  declare companyType: string;
+  declare companyTypeId: number;
+
+  @BelongsTo(() => CompanyType)
+  companyType: CompanyType;
 
   @Column({
     type: DataType.STRING,
@@ -150,6 +171,80 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
     type: DataType.STRING,
     allowNull: true,
   })
+  declare profileBanner: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare profileHeadline: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare websiteUrl: string;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  declare foundedYear: number;
+
+  @ForeignKey(() => Country)
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  declare headquarterCountryId: number;
+
+  @ForeignKey(() => City)
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  declare headquarterCityId: number;
+
+  @Column({
+    type: DataType.JSON,
+    allowNull: true,
+  })
+  declare activeRegions: string[];
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare facebookUrl: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare instagramUrl: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare youtubeUrl: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare linkedinUrl: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare twitterUrl: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
   declare incorporationDocument: string;
 
   @Column({
@@ -176,6 +271,18 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
   })
   declare isActive: boolean;
 
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+  })
+  declare isVerified: boolean;
+
   @BelongsToMany(() => Niche, () => BrandNiche)
   declare niches: Niche[];
+
+  @BelongsTo(() => Country, 'headquarterCountryId')
+  declare headquarterCountry: Country;
+
+  @BelongsTo(() => City, 'headquarterCityId')
+  declare headquarterCity: City;
 }

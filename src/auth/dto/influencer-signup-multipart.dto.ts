@@ -85,6 +85,7 @@ export class InfluencerSignupMultipartDto {
     enum: OTHERS_GENDER_OPTIONS,
     required: false,
   })
+  @Transform(({ value }) => (value === '' ? null : value))
   @ValidateIf((obj) => obj.gender === Gender.OTHERS)
   @IsNotEmpty({ message: 'othersGender is required when gender is "Others"' })
   @IsEnum(OTHERS_GENDER_OPTIONS)

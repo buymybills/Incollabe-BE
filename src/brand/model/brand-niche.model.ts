@@ -8,7 +8,7 @@ import {
   AutoIncrement,
 } from 'sequelize-typescript';
 import { Brand } from './brand.model';
-import { Niche } from './niche.model';
+import { Niche } from '../../auth/model/niche.model';
 
 export interface BrandNicheCreationAttributes {
   brandId: number;

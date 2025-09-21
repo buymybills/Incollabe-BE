@@ -4,16 +4,30 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { getModelToken } from '@nestjs/sequelize';
 import { Influencer } from './model/influencer.model';
-import { Brand } from './model/brand.model';
+import { Brand } from '../brand/model/brand.model';
 import { Niche } from './model/niche.model';
 import { Otp } from './model/otp.model';
 import { InfluencerNiche } from './model/influencer-niche.model';
-import { BrandNiche } from './model/brand-niche.model';
+import { BrandNiche } from '../brand/model/brand-niche.model';
 import { RedisService } from '../redis/redis.service';
 import { SmsService } from '../shared/sms.service';
 import { EmailService } from '../shared/email.service';
 import { S3Service } from '../shared/s3.service';
+import { LoggerService } from '../shared/services/logger.service';
 import { Sequelize } from 'sequelize-typescript';
+import {
+  BadRequestException,
+  ConflictException,
+  UnauthorizedException,
+  InternalServerErrorException,
+} from '@nestjs/common';
+import { RequestOtpDto } from './dto/request-otp.dto';
+import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { BrandSignupDto } from './dto/brand-signup.dto';
+import { BrandLoginDto } from './dto/brand-login.dto';
+import { CheckUsernameDto } from './dto/check-username.dto';
+import { InfluencerSignupDto } from './dto/influencer-signup.dto';
+import { Gender } from './types/gender.enum';
 
 // Mock bcrypt at module level
 jest.mock('bcrypt', () => ({
@@ -46,8 +60,11 @@ const mockRedisService = {
       exec: jest.fn().mockResolvedValue([['OK'], [1]]),
     })),
     set: jest.fn().mockResolvedValue('OK'),
+    get: jest.fn().mockResolvedValue(null),
     smembers: jest.fn().mockResolvedValue([]),
     srem: jest.fn().mockResolvedValue(1),
+    exists: jest.fn().mockResolvedValue(0),
+    ttl: jest.fn().mockResolvedValue(3600),
   })),
 };
 
@@ -57,11 +74,13 @@ const mockSmsService = {
 
 const mockEmailService = {
   sendBrandOtpEmail: jest.fn(),
+  sendBrandOtp: jest.fn(),
   sendWelcomeEmail: jest.fn(),
+  sendPasswordResetEmail: jest.fn(),
 };
 
 const mockS3Service = {
-  uploadFile: jest.fn(),
+  uploadFileToS3: jest.fn(),
   getFileUrl: jest.fn(),
 };
 
@@ -84,8 +103,32 @@ const mockConfigService = {
   get: jest.fn(),
 };
 
+const mockLoggerService = {
+  log: jest.fn(),
+  error: jest.fn(),
+  warn: jest.fn(),
+  debug: jest.fn(),
+  verbose: jest.fn(),
+  info: jest.fn(),
+  logAuth: jest.fn(),
+  logDatabase: jest.fn(),
+};
+
 describe('AuthService', () => {
   let service: AuthService;
+  let influencerModel: any;
+  let brandModel: any;
+  let nicheModel: any;
+  let otpModel: any;
+  let influencerNicheModel: any;
+  let brandNicheModel: any;
+  let redisService: any;
+  let smsService: any;
+  let emailService: any;
+  let s3Service: any;
+  let jwtService: any;
+  let configService: any;
+  let sequelize: any;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -143,16 +186,39 @@ describe('AuthService', () => {
           provide: ConfigService,
           useValue: mockConfigService,
         },
+        {
+          provide: LoggerService,
+          useValue: mockLoggerService,
+        },
       ],
     }).compile();
 
     service = module.get<AuthService>(AuthService);
+    influencerModel = module.get(getModelToken(Influencer));
+    brandModel = module.get(getModelToken(Brand));
+    nicheModel = module.get(getModelToken(Niche));
+    otpModel = module.get(getModelToken(Otp));
+    influencerNicheModel = module.get(getModelToken(InfluencerNiche));
+    brandNicheModel = module.get(getModelToken(BrandNiche));
+    redisService = module.get(RedisService);
+    smsService = module.get(SmsService);
+    emailService = module.get(EmailService);
+    s3Service = module.get(S3Service);
+    jwtService = module.get(JwtService);
+    configService = module.get(ConfigService);
+    sequelize = module.get(Sequelize);
 
     // Setup default config values
-    mockConfigService.get.mockImplementation((key: string) => {
+    configService.get.mockImplementation((key: string) => {
       switch (key) {
         case 'JWT_REFRESH_SECRET':
           return 'refresh-secret';
+        case 'JWT_ACCESS_SECRET':
+          return 'access-secret';
+        case 'JWT_ACCESS_EXPIRATION':
+          return '15m';
+        case 'JWT_REFRESH_EXPIRATION':
+          return '7d';
         default:
           return 'default-value';
       }
@@ -176,8 +242,7 @@ describe('AuthService', () => {
         { id: 2, name: 'Beauty', icon: '💄', isActive: true },
       ];
 
-      const nicheModel = service['nicheModel'];
-      jest.spyOn(nicheModel, 'findAll').mockResolvedValue(mockNiches as any);
+      nicheModel.findAll.mockResolvedValue(mockNiches);
 
       const result = await service.getNiches();
 
@@ -189,6 +254,481 @@ describe('AuthService', () => {
         where: { isActive: true },
         order: [['name', 'ASC']],
       });
+    });
+  });
+
+  describe('requestOtp', () => {
+    it('should generate and send OTP for phone number', async () => {
+      const requestOtpDto: RequestOtpDto = {
+        phone: '9876543210',
+      };
+
+      // Mock Redis operations
+      redisService.get.mockResolvedValue(null); // No cooldown
+      otpModel.destroy.mockResolvedValue(1);
+      otpModel.create.mockResolvedValue({ otp: '123456' });
+      smsService.sendOtp.mockResolvedValue(true);
+
+      const result = await service.requestOtp(requestOtpDto);
+
+      expect(result).toBe('OTP sent to +919876543210');
+      expect(otpModel.create).toHaveBeenCalled();
+      expect(smsService.sendOtp).toHaveBeenCalled();
+    });
+
+    it('should throw ForbiddenException if cooldown is active', async () => {
+      const requestOtpDto: RequestOtpDto = {
+        phone: '9876543210',
+      };
+
+      redisService.get.mockResolvedValue('1'); // Cooldown active
+
+      await expect(service.requestOtp(requestOtpDto)).rejects.toThrow(
+        'Please wait before requesting another OTP',
+      );
+    });
+  });
+
+  describe('checkUsernameAvailability', () => {
+    it('should return available status for unique username', async () => {
+      const checkUsernameDto: CheckUsernameDto = {
+        username: 'testuser',
+      };
+
+      influencerModel.findOne.mockResolvedValue(null);
+      brandModel.findOne.mockResolvedValue(null);
+
+      const result = await service.checkUsernameAvailability(checkUsernameDto);
+
+      expect(result).toEqual({
+        available: true,
+        username: 'testuser',
+        message: 'Username is unique and available to use',
+      });
+    });
+
+    it('should return unavailable status and suggestions for taken username', async () => {
+      const checkUsernameDto: CheckUsernameDto = {
+        username: 'testuser',
+      };
+
+      influencerModel.findOne.mockResolvedValue({
+        id: 1,
+        username: 'testuser',
+      });
+      brandModel.findOne.mockResolvedValue(null);
+
+      // Mock suggestions check
+      influencerModel.findOne
+        .mockResolvedValueOnce({ id: 1, username: 'testuser' })
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null);
+      brandModel.findOne.mockResolvedValue(null);
+
+      const result = await service.checkUsernameAvailability(checkUsernameDto);
+
+      expect(result.available).toBe(false);
+      expect(result.suggestions).toHaveLength(3);
+    });
+  });
+
+  describe('brandSignup', () => {
+    it('should create a new brand successfully', async () => {
+      const brandSignupDto: BrandSignupDto = {
+        email: 'test@brand.com',
+        phone: '+919876543210',
+        password: 'Test123!',
+        nicheIds: [1, 2],
+      };
+
+      const mockBrand = {
+        id: 1,
+        email: 'test@brand.com',
+        phone: '+919876543210',
+        isEmailVerified: false,
+        isPhoneVerified: false,
+      };
+
+      brandModel.findOne.mockResolvedValue(null);
+      nicheModel.findAll.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+      sequelize.transaction.mockImplementation((callback) => {
+        const transaction = { commit: jest.fn(), rollback: jest.fn() };
+        return callback(transaction);
+      });
+      brandModel.create.mockResolvedValue(mockBrand);
+      brandNicheModel.bulkCreate.mockResolvedValue([]);
+      otpModel.create.mockResolvedValue({ otp: '123456' });
+      emailService.sendBrandOtp.mockResolvedValue(true);
+      emailService.sendWelcomeEmail.mockResolvedValue(true);
+
+      const result = await service.brandSignup(brandSignupDto);
+
+      expect(result.message).toBe(
+        'Brand registered successfully. Please check your email for OTP to complete verification.',
+      );
+      expect(result.brand.email).toBe('test@brand.com');
+      expect(brandModel.create).toHaveBeenCalled();
+      expect(emailService.sendBrandOtp).toHaveBeenCalled();
+    });
+
+    it('should throw ConflictException if email already exists', async () => {
+      const brandSignupDto: BrandSignupDto = {
+        email: 'existing@brand.com',
+        phone: '+919876543210',
+        password: 'Test123!',
+        nicheIds: [1, 2],
+      };
+
+      brandModel.findOne.mockResolvedValue({
+        id: 1,
+        email: 'existing@brand.com',
+      });
+
+      emailService.sendBrandOtp.mockResolvedValue(true);
+
+      const result = await service.brandSignup(brandSignupDto);
+
+      // Type assertion to access accountExists property
+      const resultWithAccountExists = result as any;
+      expect(resultWithAccountExists.accountExists).toBe(true);
+      expect(result.requiresOtp).toBe(true);
+      expect(result.message).toContain(
+        'An account with this email already exists',
+      );
+    });
+  });
+
+  describe('brandLogin', () => {
+    it('should login brand successfully with valid credentials', async () => {
+      const brandLoginDto: BrandLoginDto = {
+        email: 'test@brand.com',
+        password: 'Test123!',
+      };
+
+      const mockBrand = {
+        id: 1,
+        email: 'test@brand.com',
+        password: 'hashedPassword',
+        isEmailVerified: true,
+        isPhoneVerified: true,
+        isActive: true,
+      };
+
+      brandModel.findOne.mockResolvedValue(mockBrand);
+      jwtService.sign.mockReturnValue('mock-jwt-token');
+
+      // Mock Redis client methods
+      const mockRedisClient = {
+        set: jest.fn().mockResolvedValue('OK'),
+        multi: jest.fn(() => ({
+          set: jest.fn().mockReturnThis(),
+          sadd: jest.fn().mockReturnThis(),
+          expire: jest.fn().mockReturnThis(),
+          exec: jest.fn().mockResolvedValue([['OK'], [1]]),
+        })),
+      };
+      redisService.getClient.mockReturnValue(mockRedisClient);
+
+      const result = await service.brandLogin(brandLoginDto);
+
+      expect(result.message).toBe(
+        'OTP sent to your email address. Please verify to complete login.',
+      );
+      expect(result.email).toBe('test@brand.com');
+      expect(result.requiresOtp).toBe(true);
+    });
+
+    it('should throw UnauthorizedException for invalid credentials', async () => {
+      const brandLoginDto: BrandLoginDto = {
+        email: 'test@brand.com',
+        password: 'wrongpassword',
+      };
+
+      brandModel.findOne.mockResolvedValue(null);
+
+      await expect(service.brandLogin(brandLoginDto)).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+  });
+
+  describe('logout', () => {
+    it('should logout user successfully', async () => {
+      const logoutDto = {
+        refreshToken: 'mock-refresh-token',
+      };
+
+      const mockDecodedToken = {
+        id: 1,
+        jti: 'session-id',
+        exp: Date.now() + 1000,
+      };
+
+      jwtService.verify.mockReturnValue(mockDecodedToken);
+
+      // Mock Redis client with proper multi chain
+      const mockRedisClient = {
+        multi: jest.fn(() => ({
+          set: jest.fn().mockReturnThis(),
+          del: jest.fn().mockReturnThis(),
+          srem: jest.fn().mockReturnThis(),
+          exec: jest.fn().mockResolvedValue([1, 1]),
+        })),
+      };
+      redisService.getClient.mockReturnValue(mockRedisClient);
+
+      const result = await service.logout(logoutDto);
+
+      expect(result.message).toBe('Logged out');
+    });
+  });
+
+  describe('influencerSignup', () => {
+    it('should create a new influencer successfully', async () => {
+      const influencerSignupDto: InfluencerSignupDto = {
+        phone: '9876543210',
+        name: 'Test Influencer',
+        username: 'testinfluencer',
+        gender: Gender.FEMALE,
+        nicheIds: [1, 2],
+      };
+
+      const mockInfluencer = {
+        id: 1,
+        phone: '+919876543210',
+        name: 'Test Influencer',
+        username: 'testinfluencer',
+        isPhoneVerified: true,
+      };
+
+      // Mock Redis verification check (phone was recently verified)
+      redisService.get.mockResolvedValue('verified');
+
+      nicheModel.findAll.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+      sequelize.transaction.mockImplementation((callback) => {
+        const transaction = { commit: jest.fn(), rollback: jest.fn() };
+        return callback(transaction);
+      });
+      influencerModel.create.mockResolvedValue(mockInfluencer);
+      influencerNicheModel.bulkCreate.mockResolvedValue([]);
+      jwtService.sign.mockReturnValue('mock-jwt-token');
+
+      // Mock Redis client for JWT operations
+      const mockRedisClient = {
+        multi: jest.fn(() => ({
+          set: jest.fn().mockReturnThis(),
+          sadd: jest.fn().mockReturnThis(),
+          expire: jest.fn().mockReturnThis(),
+          exec: jest.fn().mockResolvedValue([['OK'], [1]]),
+        })),
+      };
+      redisService.getClient.mockReturnValue(mockRedisClient);
+
+      const result = await service.influencerSignup(influencerSignupDto);
+
+      expect(result.message).toBe('Influencer registered successfully');
+      expect(influencerModel.create).toHaveBeenCalled();
+      expect(influencerNicheModel.bulkCreate).toHaveBeenCalled();
+    });
+  });
+
+  describe('verifyOtp', () => {
+    it('should verify OTP successfully', async () => {
+      const verifyOtpDto = {
+        phone: '9876543210',
+        otp: '123456',
+      };
+
+      otpModel.findOne.mockResolvedValue({
+        id: 1,
+        otp: '123456',
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+        isUsed: false,
+        update: jest.fn(),
+      });
+
+      // Mock Redis client for successful verification
+      const mockRedisClient = {
+        multi: jest.fn(() => ({
+          del: jest.fn().mockReturnThis(),
+          set: jest.fn().mockReturnThis(),
+          exec: jest.fn().mockResolvedValue([1, 'OK']),
+        })),
+      };
+      redisService.getClient.mockReturnValue(mockRedisClient);
+
+      const result = await service.verifyOtp(verifyOtpDto);
+
+      expect(result.message).toBe('OTP verified successfully');
+      expect(result.verified).toBe(true);
+    });
+
+    it('should throw BadRequestException for invalid OTP', async () => {
+      const verifyOtpDto = {
+        phone: '9876543210',
+        otp: '999999',
+      };
+
+      otpModel.findOne.mockResolvedValue(null);
+
+      // Mock Redis operations to handle attempt tracking
+      const mockRedisClient = {
+        multi: jest.fn(() => ({
+          incr: jest.fn().mockReturnThis(),
+          expire: jest.fn().mockReturnThis(),
+          exec: jest.fn().mockResolvedValue([1, 1]),
+        })),
+      };
+      redisService.getClient.mockReturnValue(mockRedisClient);
+
+      await expect(service.verifyOtp(verifyOtpDto)).rejects.toThrow(
+        'Invalid or expired OTP',
+      );
+    });
+  });
+
+  describe('forgotPassword', () => {
+    it('should send password reset email for valid brand email', async () => {
+      const forgotPasswordDto = {
+        email: 'test@brand.com',
+      };
+
+      const mockBrand = {
+        id: 1,
+        email: 'test@brand.com',
+        brandName: 'Test Brand',
+        update: jest.fn(),
+      };
+
+      brandModel.findOne.mockResolvedValue(mockBrand);
+      emailService.sendPasswordResetEmail.mockResolvedValue(true);
+
+      const result = await service.forgotPassword(forgotPasswordDto);
+
+      expect(result.message).toBe(
+        'If the email exists, a password reset link has been sent',
+      );
+      expect(emailService.sendPasswordResetEmail).toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundException for non-existent email', async () => {
+      const forgotPasswordDto = {
+        email: 'nonexistent@brand.com',
+      };
+
+      brandModel.findOne.mockResolvedValue(null);
+
+      const result = await service.forgotPassword(forgotPasswordDto);
+
+      expect(result.message).toBe(
+        'If the email exists, a password reset link has been sent',
+      );
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('refreshToken', () => {
+    it('should refresh tokens successfully for influencer', async () => {
+      const refreshTokenDto = {
+        refreshToken: 'valid-refresh-token',
+      };
+
+      const mockDecodedToken = {
+        id: 1,
+        jti: 'session-id',
+        exp: Date.now() + 1000,
+      };
+
+      jwtService.verify.mockReturnValue(mockDecodedToken);
+      jwtService.sign.mockReturnValue('new-access-token');
+
+      // Mock database lookups for user type determination
+      const mockInfluencer = {
+        id: 1,
+        name: 'Test Influencer',
+        username: 'testuser',
+      };
+      influencerModel.findByPk.mockResolvedValue(mockInfluencer);
+      brandModel.findByPk.mockResolvedValue(null);
+
+      // Mock Redis operations for refresh token
+      const mockRedisClient = {
+        get: jest
+          .fn()
+          .mockResolvedValueOnce(null) // blacklist check
+          .mockResolvedValueOnce('{"userId":1,"type":"influencer"}'), // session data
+        set: jest.fn().mockResolvedValue('OK'),
+        multi: jest.fn(() => ({
+          set: jest.fn().mockReturnThis(),
+          sadd: jest.fn().mockReturnThis(),
+          del: jest.fn().mockReturnThis(),
+          srem: jest.fn().mockReturnThis(),
+          expire: jest.fn().mockReturnThis(),
+          exec: jest.fn().mockResolvedValue([['OK'], [1]]),
+        })),
+        exists: jest.fn().mockResolvedValue(1), // session exists
+        ttl: jest.fn().mockResolvedValue(3600),
+      };
+      redisService.getClient.mockReturnValue(mockRedisClient);
+
+      const result = await service.refreshToken(refreshTokenDto);
+
+      expect(result.accessToken).toBe('new-access-token');
+      expect(result.refreshToken).toBe('new-access-token');
+      expect(influencerModel.findByPk).toHaveBeenCalledWith(1);
+      expect(brandModel.findByPk).toHaveBeenCalledWith(1);
+    });
+
+    it('should refresh tokens successfully for brand', async () => {
+      const refreshTokenDto = {
+        refreshToken: 'valid-refresh-token',
+      };
+
+      const mockDecodedToken = {
+        id: 2,
+        jti: 'session-id-2',
+        exp: Date.now() + 1000,
+      };
+
+      jwtService.verify.mockReturnValue(mockDecodedToken);
+      jwtService.sign.mockReturnValue('new-brand-access-token');
+
+      // Mock database lookups for user type determination (brand)
+      const mockBrand = {
+        id: 2,
+        brandName: 'Test Brand',
+        email: 'test@brand.com',
+      };
+      influencerModel.findByPk.mockResolvedValue(null);
+      brandModel.findByPk.mockResolvedValue(mockBrand);
+
+      // Mock Redis operations for refresh token
+      const mockRedisClient = {
+        get: jest
+          .fn()
+          .mockResolvedValueOnce(null) // blacklist check
+          .mockResolvedValueOnce('{"userId":2,"type":"brand"}'), // session data
+        set: jest.fn().mockResolvedValue('OK'),
+        multi: jest.fn(() => ({
+          set: jest.fn().mockReturnThis(),
+          sadd: jest.fn().mockReturnThis(),
+          del: jest.fn().mockReturnThis(),
+          srem: jest.fn().mockReturnThis(),
+          expire: jest.fn().mockReturnThis(),
+          exec: jest.fn().mockResolvedValue([['OK'], [1]]),
+        })),
+        exists: jest.fn().mockResolvedValue(1), // session exists
+        ttl: jest.fn().mockResolvedValue(3600),
+      };
+      redisService.getClient.mockReturnValue(mockRedisClient);
+
+      const result = await service.refreshToken(refreshTokenDto);
+
+      expect(result.accessToken).toBe('new-brand-access-token');
+      expect(result.refreshToken).toBe('new-brand-access-token');
+      expect(influencerModel.findByPk).toHaveBeenCalledWith(2);
+      expect(brandModel.findByPk).toHaveBeenCalledWith(2);
     });
   });
 

@@ -43,4 +43,17 @@ export class S3Service {
   getFileUrl(key: string): string {
     return `https://${this.bucketName}.s3.${this.configService.get('AWS_REGION')}.amazonaws.com/${key}`;
   }
+
+  async uploadFileToS3(
+    file: Express.Multer.File,
+    folder: string,
+    prefix: string,
+  ): Promise<string> {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const fileExtension = file.originalname.split('.').pop();
+    const s3Key = `${folder}/${prefix}-${uniqueSuffix}.${fileExtension}`;
+
+    await this.uploadFile(file, s3Key);
+    return this.getFileUrl(s3Key);
+  }
 }

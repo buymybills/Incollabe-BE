@@ -1,12 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { LoggerService } from './services/logger.service';
 import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class EmailService {
   private transporter: nodemailer.Transporter;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly loggerService: LoggerService,
+  ) {
     this.transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
@@ -73,19 +77,24 @@ export class EmailService {
       </html>
     `;
 
-    try {
-      await this.transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: email,
-        subject: subject,
-        html: html,
-      });
+    this.loggerService.logEmail('BRAND_OTP_EMAIL_SENDING', {
+      to: email,
+      subject,
+      action: 'sendBrandOtp',
+    });
 
-      console.log(`Brand OTP email sent to: ${email}`);
-    } catch (error) {
-      console.error('Failed to send brand OTP email:', error);
-      throw new Error(`Failed to send OTP email: ${error.message}`);
-    }
+    await this.transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: subject,
+      html: html,
+    });
+
+    this.loggerService.logEmail('BRAND_OTP_EMAIL_SENT', {
+      to: email,
+      subject,
+      success: true,
+    });
   }
 
   async sendWelcomeEmail(email: string, brandName: string): Promise<void> {
@@ -248,6 +257,739 @@ export class EmailService {
     } catch (error) {
       console.error('Failed to send password reset email:', error);
       throw new Error(`Failed to send password reset email: ${error.message}`);
+    }
+  }
+
+  async sendProfileVerificationPendingEmail(
+    email: string,
+    brandName: string,
+  ): Promise<void> {
+    const subject = 'Profile Submitted for Verification - Incollab';
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Profile Verification Pending</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-align: center; padding: 30px; border-radius: 10px 10px 0 0; }
+          .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; }
+          .status-box { background: #fff3cd; border: 2px solid #ffc107; padding: 25px; text-align: center; margin: 25px 0; border-radius: 8px; }
+          .status-icon { font-size: 48px; margin-bottom: 15px; }
+          .footer { text-align: center; margin-top: 20px; color: #666; font-size: 14px; }
+          .timeline { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea; }
+          .timeline-item { margin: 15px 0; display: flex; align-items: center; }
+          .timeline-step { width: 30px; height: 30px; border-radius: 50%; background: #667eea; color: white; display: flex; align-items: center; justify-content: center; margin-right: 15px; font-weight: bold; }
+          .timeline-step.completed { background: #28a745; }
+          .timeline-step.current { background: #ffc107; color: #333; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🔍 Profile Verification Pending</h1>
+            <p>Your brand profile has been submitted for review</p>
+          </div>
+          <div class="content">
+            <h2>Hello ${brandName || 'Brand Partner'},</h2>
+            <p>Congratulations! You have successfully completed your brand profile on Incollab. Your profile has been submitted for verification and is now under review by our team.</p>
+
+            <div class="status-box">
+              <div class="status-icon">⏳</div>
+              <h3 style="margin: 0; color: #856404;">Profile Verification in Progress</h3>
+              <p style="margin: 10px 0 0; color: #856404;">Expected completion: 2-3 business days</p>
+            </div>
+
+            <div class="timeline">
+              <h3>Verification Process:</h3>
+              <div class="timeline-item">
+                <div class="timeline-step completed">✓</div>
+                <span><strong>Profile Submitted</strong> - All required information and documents provided</span>
+              </div>
+              <div class="timeline-item">
+                <div class="timeline-step current">2</div>
+                <span><strong>Document Review</strong> - Our team is verifying your business documents</span>
+              </div>
+              <div class="timeline-item">
+                <div class="timeline-step">3</div>
+                <span><strong>Profile Approval</strong> - Account activation and full platform access</span>
+              </div>
+            </div>
+
+            <p><strong>What happens next?</strong></p>
+            <ul>
+              <li>Our verification team will review your business documents</li>
+              <li>We may contact you if additional information is needed</li>
+              <li>You'll receive an email confirmation once verification is complete</li>
+              <li>Full access to create campaigns and collaborate with influencers</li>
+            </ul>
+
+            <p><strong>During verification:</strong></p>
+            <ul>
+              <li>You can still browse influencer profiles</li>
+              <li>Update your profile information if needed</li>
+              <li>Prepare your first campaign strategy</li>
+            </ul>
+
+            <p>Thank you for choosing Incollab! We're excited to help you connect with amazing influencers once your verification is complete.</p>
+          </div>
+          <div class="footer">
+            <p>© 2025 Incollab. All rights reserved.</p>
+            <p>Questions? Contact us at <a href="mailto:support@incollab.com">support@incollab.com</a></p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    try {
+      await this.transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: subject,
+        html: html,
+      });
+
+      console.log(`Profile verification pending email sent to: ${email}`);
+    } catch (error) {
+      console.error(
+        'Failed to send profile verification pending email:',
+        error,
+      );
+      // Don't throw error as this is not critical for the flow
+    }
+  }
+
+  async sendBrandProfileIncompleteEmail(
+    email: string,
+    brandName: string,
+    missingFields: string[],
+    nextSteps: string[],
+  ): Promise<void> {
+    const subject =
+      'Complete Your Brand Profile - Missing Information Required - Incollab';
+
+    const missingFieldsList = missingFields
+      .map((field) => `<li>${field}</li>`)
+      .join('');
+    const nextStepsList = nextSteps.map((step) => `<li>${step}</li>`).join('');
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Complete Your Profile</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); color: white; text-align: center; padding: 30px; border-radius: 10px 10px 0 0; }
+          .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; }
+          .alert-box { background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 20px; margin: 20px 0; }
+          .missing-fields { background: white; border-left: 4px solid #e74c3c; padding: 15px; margin: 15px 0; border-radius: 4px; }
+          .next-steps { background: white; border-left: 4px solid #3498db; padding: 15px; margin: 15px 0; border-radius: 4px; }
+          .cta-button { display: inline-block; background: #e67e22; color: white; text-decoration: none; padding: 15px 30px; border-radius: 5px; font-weight: bold; margin: 20px 0; }
+          .cta-button:hover { background: #d35400; }
+          ul { margin: 10px 0; padding-left: 20px; }
+          li { margin: 8px 0; }
+          .footer { text-align: center; margin-top: 20px; color: #666; font-size: 14px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>📋 Profile Completion Required</h1>
+            <p>Complete your profile to submit for verification</p>
+          </div>
+          <div class="content">
+            <h2>Hello ${brandName || 'Brand Partner'},</h2>
+            <p>Thank you for updating your brand profile! We're excited to have you on Incollab.</p>
+
+            <div class="alert-box">
+              <h3>⚠️ Profile Incomplete</h3>
+              <p>Your profile is almost ready, but we need a few more details before you can submit it for verification.</p>
+            </div>
+
+            <div class="missing-fields">
+              <h3>Missing Required Information:</h3>
+              <ul>
+                ${missingFieldsList}
+              </ul>
+            </div>
+
+            <div class="next-steps">
+              <h3>Next Steps:</h3>
+              <ul>
+                ${nextStepsList}
+              </ul>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.FRONTEND_URL || 'https://incollab.com'}/brand/profile" class="cta-button">
+                Complete Profile →
+              </a>
+            </div>
+
+            <p><strong>Why is profile completion important?</strong></p>
+            <ul>
+              <li>Enables full access to our platform features</li>
+              <li>Builds trust with potential influencer partners</li>
+              <li>Ensures compliance with our verification standards</li>
+              <li>Unlocks campaign creation and collaboration tools</li>
+            </ul>
+
+            <p><strong>Need help?</strong> Our support team is here to assist you with completing your profile.</p>
+          </div>
+          <div class="footer">
+            <p>© 2025 Incollab. All rights reserved.</p>
+            <p>This email was sent because you recently updated your brand profile.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    try {
+      await this.transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: subject,
+        html: html,
+      });
+
+      console.log(`Profile incomplete email sent to: ${email}`);
+    } catch (error) {
+      console.error('Failed to send profile incomplete email:', error);
+      // Don't throw error as this is not critical for the flow
+    }
+  }
+
+  async sendInfluencerProfileVerificationPendingEmail(
+    phone: string,
+    influencerName: string,
+  ): Promise<void> {
+    const subject = 'Profile Submitted for Verification - Incollab Influencer';
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Profile Verification Pending</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-align: center; padding: 30px; border-radius: 10px 10px 0 0; }
+          .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; }
+          .success-box { background: #d4edda; border: 1px solid #c3e6cb; border-radius: 8px; padding: 20px; margin: 20px 0; color: #155724; }
+          .timeline { margin: 20px 0; }
+          .timeline-item { display: flex; align-items: center; margin: 15px 0; }
+          .timeline-step { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; font-weight: bold; }
+          .timeline-step.completed { background: #28a745; color: white; }
+          .timeline-step.current { background: #ffc107; color: #212529; }
+          .timeline-step { background: #e9ecef; color: #6c757d; }
+          .footer { text-align: center; margin-top: 20px; color: #666; font-size: 14px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🎉 Profile Verification in Progress</h1>
+            <p>Your influencer profile has been submitted for verification</p>
+          </div>
+          <div class="content">
+            <h2>Hello ${influencerName},</h2>
+            <p>Congratulations! Your influencer profile has been successfully submitted for verification.</p>
+
+            <div class="success-box">
+              <h3>✅ Profile Submitted Successfully</h3>
+              <p>All required information has been provided and your profile is now under review by our team.</p>
+            </div>
+
+            <h3>Verification Process Timeline:</h3>
+            <div class="timeline">
+              <div class="timeline-item">
+                <div class="timeline-step completed">✓</div>
+                <span><strong>Profile Submitted</strong> - All required information and social media links provided</span>
+              </div>
+              <div class="timeline-item">
+                <div class="timeline-step current">2</div>
+                <span><strong>Profile Review</strong> - Our team is verifying your social media presence and content</span>
+              </div>
+              <div class="timeline-item">
+                <div class="timeline-step">3</div>
+                <span><strong>Account Activation</strong> - Full access to brand collaboration opportunities</span>
+              </div>
+            </div>
+
+            <p><strong>What happens next?</strong></p>
+            <ul>
+              <li>Our team will review your social media profiles and content quality</li>
+              <li>We'll verify your audience engagement and authenticity</li>
+              <li>You'll receive a notification within 48 hours once verification is complete</li>
+              <li>Access to browse and apply for brand collaboration campaigns</li>
+            </ul>
+
+            <p><strong>Expected Timeline:</strong> 24-48 hours</p>
+
+            <p>Thank you for joining Incollab! We're excited to help you connect with amazing brands.</p>
+          </div>
+          <div class="footer">
+            <p>© 2025 Incollab. All rights reserved.</p>
+            <p>This notification was sent to your registered phone number: ${phone}</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    try {
+      // Note: For influencers, we might want to send SMS instead of email
+      // For now, using email but we should implement SMS service
+      await this.transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: `${phone}@sms.gateway.com`, // This would be SMS gateway
+        subject: subject,
+        html: html,
+      });
+
+      console.log(
+        `Influencer profile verification pending notification sent to: ${phone}`,
+      );
+    } catch (error) {
+      console.error(
+        'Failed to send influencer profile verification pending notification:',
+        error,
+      );
+      // Don't throw error as this is not critical for the flow
+    }
+  }
+
+  async sendInfluencerProfileIncompleteEmail(
+    phone: string,
+    influencerName: string,
+    missingFields: string[],
+    nextSteps: string[],
+  ): Promise<void> {
+    const subject =
+      'Complete Your Influencer Profile - Missing Information - Incollab';
+
+    const missingFieldsList = missingFields
+      .map((field) => `<li>${field}</li>`)
+      .join('');
+    const nextStepsList = nextSteps.map((step) => `<li>${step}</li>`).join('');
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Complete Your Influencer Profile</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); color: white; text-align: center; padding: 30px; border-radius: 10px 10px 0 0; }
+          .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; }
+          .alert-box { background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 20px; margin: 20px 0; }
+          .missing-fields { background: white; border-left: 4px solid #e74c3c; padding: 15px; margin: 15px 0; border-radius: 4px; }
+          .next-steps { background: white; border-left: 4px solid #3498db; padding: 15px; margin: 15px 0; border-radius: 4px; }
+          .cta-button { display: inline-block; background: #e67e22; color: white; text-decoration: none; padding: 15px 30px; border-radius: 5px; font-weight: bold; margin: 20px 0; }
+          ul { margin: 10px 0; padding-left: 20px; }
+          li { margin: 8px 0; }
+          .footer { text-align: center; margin-top: 20px; color: #666; font-size: 14px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>📱 Complete Your Influencer Profile</h1>
+            <p>Finish your profile to start collaborating with brands</p>
+          </div>
+          <div class="content">
+            <h2>Hello ${influencerName},</h2>
+            <p>Thank you for updating your influencer profile! You're almost ready to start collaborating with amazing brands.</p>
+
+            <div class="alert-box">
+              <h3>⚠️ Profile Incomplete</h3>
+              <p>We need a few more details to complete your verification and unlock brand collaboration opportunities.</p>
+            </div>
+
+            <div class="missing-fields">
+              <h3>Missing Required Information:</h3>
+              <ul>
+                ${missingFieldsList}
+              </ul>
+            </div>
+
+            <div class="next-steps">
+              <h3>Next Steps:</h3>
+              <ul>
+                ${nextStepsList}
+              </ul>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.FRONTEND_URL || 'https://incollab.com'}/influencer/profile" class="cta-button">
+                Complete Profile →
+              </a>
+            </div>
+
+            <p><strong>Why complete your profile?</strong></p>
+            <ul>
+              <li>Get discovered by top brands looking for influencers like you</li>
+              <li>Set your own collaboration rates and terms</li>
+              <li>Access exclusive campaign opportunities</li>
+              <li>Build long-term partnerships with brands</li>
+            </ul>
+
+            <p><strong>Need help?</strong> Our team is here to guide you through the process!</p>
+          </div>
+          <div class="footer">
+            <p>© 2025 Incollab. All rights reserved.</p>
+            <p>This notification was sent to your registered phone number: ${phone}</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    try {
+      // Note: For influencers, we might want to send SMS instead of email
+      await this.transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: `${phone}@sms.gateway.com`, // This would be SMS gateway
+        subject: subject,
+        html: html,
+      });
+
+      console.log(
+        `Influencer profile incomplete notification sent to: ${phone}`,
+      );
+    } catch (error) {
+      console.error(
+        'Failed to send influencer profile incomplete notification:',
+        error,
+      );
+      // Don't throw error as this is not critical for the flow
+    }
+  }
+
+  async sendBrandProfileApprovedEmail(
+    email: string,
+    name: string,
+  ): Promise<void> {
+    try {
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Profile Verification Approved</title>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: #f8f9fa; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .content { background: #fff; padding: 30px; border: 1px solid #dee2e6; }
+            .footer { background: #f8f9fa; padding: 15px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; color: #6c757d; }
+            .success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 15px; border-radius: 4px; margin: 15px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>🎉 Profile Verification Approved!</h1>
+            </div>
+            <div class="content">
+              <p>Dear ${name},</p>
+              <div class="success">
+                <strong>Congratulations!</strong><br>
+                Your brand profile has been successfully verified and approved.
+              </div>
+              <p>You can now access all features of our platform and start connecting with influencers for collaborations.</p>
+              <p>Welcome to the InCollab community!</p>
+              <p>Best regards,<br>The InCollab Team</p>
+            </div>
+            <div class="footer">
+              <p>This is an automated message. Please do not reply to this email.</p>
+              <p>&copy; 2024 InCollab. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      await this.transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: '🎉 Profile Verification Approved - Welcome to Cloutsy!',
+        html: htmlContent,
+      });
+
+      console.log(`Profile approval email sent to brand: ${email}`);
+    } catch (error) {
+      console.error(`Failed to send profile approval email to ${email}`, error);
+    }
+  }
+
+  async sendBrandProfileRejectedEmail(
+    email: string,
+    name: string,
+    reason: string,
+  ): Promise<void> {
+    try {
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Profile Verification - Action Required</title>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: #f8f9fa; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .content { background: #fff; padding: 30px; border: 1px solid #dee2e6; }
+            .footer { background: #f8f9fa; padding: 15px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; color: #6c757d; }
+            .alert { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 15px; border-radius: 4px; margin: 15px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Profile Verification Update</h1>
+            </div>
+            <div class="content">
+              <p>Dear ${name},</p>
+              <div class="alert">
+                <strong>Profile Verification Rejected</strong><br>
+                Your brand profile verification has been rejected and requires attention.
+              </div>
+              <p><strong>Rejection Reason:</strong></p>
+              <p>${reason}</p>
+              <p>Please review the feedback and update your profile accordingly. Once you've made the necessary changes, you can resubmit your profile for verification.</p>
+              <p>If you have any questions about the rejection reason or need assistance updating your profile, please contact our support team.</p>
+              <p>Best regards,<br>The InCollab Team</p>
+            </div>
+            <div class="footer">
+              <p>This is an automated message. Please do not reply to this email.</p>
+              <p>&copy; 2024 InCollab. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      await this.transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: 'Profile Verification Rejected - Action Required',
+        html: htmlContent,
+      });
+
+      console.log(`Profile rejection email sent to brand: ${email}`);
+    } catch (error) {
+      console.error(
+        `Failed to send profile rejection email to ${email}`,
+        error,
+      );
+    }
+  }
+
+  async sendInfluencerProfileApprovedEmail(
+    phone: string,
+    name: string,
+  ): Promise<void> {
+    try {
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Profile Verification Approved</title>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: #f8f9fa; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .content { background: #fff; padding: 30px; border: 1px solid #dee2e6; }
+            .footer { background: #f8f9fa; padding: 15px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; color: #6c757d; }
+            .success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 15px; border-radius: 4px; margin: 15px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>🎉 Profile Verification Approved!</h1>
+            </div>
+            <div class="content">
+              <p>Dear ${name},</p>
+              <div class="success">
+                <strong>Congratulations!</strong><br>
+                Your influencer profile has been successfully verified and approved.
+              </div>
+              <p>You can now access all features of our platform and start connecting with brands for collaborations.</p>
+              <p>Welcome to the InCollab community!</p>
+              <p>Best regards,<br>The InCollab Team</p>
+            </div>
+            <div class="footer">
+              <p>This is an automated message. Please do not reply to this email.</p>
+              <p>&copy; 2024 InCollab. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      await this.transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: phone, // Using phone as identifier for influencers
+        subject: '🎉 Profile Verification Approved - Welcome to Cloutsy!',
+        html: htmlContent,
+      });
+
+      console.log(`Profile approval email sent to influencer: ${phone}`);
+    } catch (error) {
+      console.error(`Failed to send profile approval email to ${phone}`, error);
+    }
+  }
+
+  async sendInfluencerProfileRejectedEmail(
+    phone: string,
+    name: string,
+    reason: string,
+  ): Promise<void> {
+    try {
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Profile Verification - Action Required</title>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: #f8f9fa; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .content { background: #fff; padding: 30px; border: 1px solid #dee2e6; }
+            .footer { background: #f8f9fa; padding: 15px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; color: #6c757d; }
+            .alert { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 15px; border-radius: 4px; margin: 15px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Profile Verification Update</h1>
+            </div>
+            <div class="content">
+              <p>Dear ${name},</p>
+              <div class="alert">
+                <strong>Profile Verification Rejected</strong><br>
+                Your influencer profile verification has been rejected and requires attention.
+              </div>
+              <p><strong>Rejection Reason:</strong></p>
+              <p>${reason}</p>
+              <p>Please review the feedback and update your profile accordingly. Once you've made the necessary changes, you can resubmit your profile for verification.</p>
+              <p>If you have any questions about the rejection reason or need assistance updating your profile, please contact our support team.</p>
+              <p>Best regards,<br>The InCollab Team</p>
+            </div>
+            <div class="footer">
+              <p>This is an automated message. Please do not reply to this email.</p>
+              <p>&copy; 2024 InCollab. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      await this.transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: phone, // Using phone as identifier for influencers
+        subject: 'Profile Verification Rejected - Action Required',
+        html: htmlContent,
+      });
+
+      console.log(`Profile rejection email sent to influencer: ${phone}`);
+    } catch (error) {
+      console.error(
+        `Failed to send profile rejection email to ${phone}`,
+        error,
+      );
+    }
+  }
+
+  async sendAdminProfilePendingNotification(
+    adminEmail: string,
+    adminName: string,
+    profileType: string,
+    profileName: string,
+    profileIdentifier: string,
+    profileId: number,
+  ): Promise<void> {
+    try {
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>New Profile Pending Verification</title>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: #f8f9fa; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .content { background: #fff; padding: 30px; border: 1px solid #dee2e6; }
+            .footer { background: #f8f9fa; padding: 15px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; color: #6c757d; }
+            .info { background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; padding: 15px; border-radius: 4px; margin: 15px 0; }
+            .btn { display: inline-block; padding: 12px 24px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 10px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>📋 New Profile Pending Verification</h1>
+            </div>
+            <div class="content">
+              <p>Dear ${adminName},</p>
+              <div class="info">
+                <strong>A new ${profileType} profile is pending verification</strong>
+              </div>
+              <p><strong>Profile Details:</strong></p>
+              <ul>
+                <li><strong>Name:</strong> ${profileName}</li>
+                <li><strong>Type:</strong> ${profileType.charAt(0).toUpperCase() + profileType.slice(1)}</li>
+                <li><strong>Identifier:</strong> ${profileIdentifier}</li>
+                <li><strong>Profile ID:</strong> ${profileId}</li>
+              </ul>
+              <p>Please review this profile at your earliest convenience. Log in to the admin panel to view the complete profile details and make a verification decision.</p>
+              <p>Best regards,<br>InCollab Admin System</p>
+            </div>
+            <div class="footer">
+              <p>This is an automated admin notification.</p>
+              <p>&copy; 2024 InCollab. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      await this.transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: adminEmail,
+        subject: `🔔 New ${profileType.charAt(0).toUpperCase() + profileType.slice(1)} Profile Pending Verification`,
+        html: htmlContent,
+      });
+
+      console.log(
+        `Admin notification email sent to: ${adminEmail} for ${profileType} profile ${profileId}`,
+      );
+    } catch (error) {
+      console.error(
+        `Failed to send admin notification email to ${adminEmail}`,
+        error,
+      );
     }
   }
 }

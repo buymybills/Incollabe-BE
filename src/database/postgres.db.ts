@@ -2,11 +2,19 @@ import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Influencer } from '../auth/model/influencer.model';
-import { Brand } from '../auth/model/brand.model';
+import { Brand } from '../brand/model/brand.model';
 import { Niche } from '../auth/model/niche.model';
 import { Otp } from '../auth/model/otp.model';
 import { InfluencerNiche } from '../auth/model/influencer-niche.model';
-import { BrandNiche } from '../auth/model/brand-niche.model';
+import { BrandNiche } from '../brand/model/brand-niche.model';
+import { Country } from '../shared/models/country.model';
+import { City } from '../shared/models/city.model';
+import { CompanyType } from '../shared/models/company-type.model';
+import { Admin } from '../admin/models/admin.model';
+import { ProfileReview } from '../admin/models/profile-review.model';
+import { Post } from '../post/models/post.model';
+import { Like } from '../post/models/like.model';
+import { Follow } from '../post/models/follow.model';
 
 @Module({
   imports: [
@@ -23,9 +31,24 @@ import { BrandNiche } from '../auth/model/brand-niche.model';
         username: config.get<string>('POSTGRES_USER') || 'postgres',
         password: config.get<string>('POSTGRES_PASSWORD') || 'root',
         database: config.get<string>('POSTGRES_DB') || 'incollab_db',
-        models: [Influencer, Brand, Niche, Otp, InfluencerNiche, BrandNiche],
+        models: [
+          Influencer,
+          Brand,
+          Niche,
+          Otp,
+          InfluencerNiche,
+          BrandNiche,
+          Country,
+          City,
+          CompanyType,
+          Admin,
+          ProfileReview,
+          Post,
+          Like,
+          Follow,
+        ],
         autoLoadModels: true,
-        synchronize: true, // Set to false in production
+        synchronize: false, // Disabled to prevent index conflicts with existing database
         logging: false,
       }),
     }),

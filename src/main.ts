@@ -3,11 +3,17 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ResponseInterceptor } from './middleware/response.interceptor';
-import { GlobalExceptionFilter } from './middleware/exception.filter';
+import { GlobalExceptionFilter as OldGlobalExceptionFilter } from './middleware/exception.filter';
+import { GlobalExceptionFilter } from './shared/filters/global-exception.filter';
+import { LoggerService } from './shared/services/logger.service';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Get our custom logger service
+  const loggerService = app.get(LoggerService);
+
   app.setGlobalPrefix('api');
 
   // Increase payload size limit for file uploads
@@ -43,11 +49,22 @@ async function bootstrap() {
   });
 
   app.useGlobalInterceptors(new ResponseInterceptor());
-  app.useGlobalFilters(new GlobalExceptionFilter());
+  app.useGlobalFilters(new GlobalExceptionFilter(loggerService));
 
   const configService = app.get(ConfigService);
   const port = configService.get('PORT') || 3002;
+
   await app.listen(port);
-  console.log(`Incollab is running on: http://localhost:${port}/api`);
+
+  // Use our custom logger for startup message
+  loggerService.info(`Incollab server started successfully`, {
+    port,
+    environment: process.env.NODE_ENV || 'development',
+    apiDocs: `http://localhost:${port}/api/docs`,
+    timestamp: new Date().toISOString(),
+  });
 }
-bootstrap();
+bootstrap().catch((error) => {
+  console.error('Failed to start server:', error);
+  process.exit(1);
+});

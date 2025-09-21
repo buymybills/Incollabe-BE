@@ -13,8 +13,8 @@ import {
 } from 'sequelize-typescript';
 import { Influencer } from './influencer.model';
 import { InfluencerNiche } from './influencer-niche.model';
-import { Brand } from './brand.model';
-import { BrandNiche } from './brand-niche.model';
+import { Brand } from '../../brand/model/brand.model';
+import { BrandNiche } from '../../brand/model/brand-niche.model';
 
 @Table({
   tableName: 'niches',
