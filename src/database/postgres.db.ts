@@ -48,7 +48,7 @@ import { Follow } from '../post/models/follow.model';
           Follow,
         ],
         autoLoadModels: true,
-        synchronize: false, // Disabled to prevent index conflicts with existing database
+        synchronize: true, // Disabled to prevent index conflicts with existing database
         logging: false,
       }),
     }),
