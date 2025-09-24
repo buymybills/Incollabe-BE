@@ -22,6 +22,8 @@ import { InfluencerSignupDto } from './dto/influencer-signup.dto';
 import { BrandSignupDto } from './dto/brand-signup.dto';
 import { BrandLoginDto } from './dto/brand-login.dto';
 import { BrandVerifyOtpDto } from './dto/brand-verify-otp.dto';
+import { BrandInitialSignupDto } from './dto/brand-initial-signup.dto';
+import { BrandProfileCompletionDto } from './dto/brand-profile-completion.dto';
 import { CheckUsernameDto } from './dto/check-username.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { LogoutResponseDto } from './dto/logout-response.dto';
@@ -40,6 +42,7 @@ import { SignupFiles } from '../types/file-upload.types';
 import { Op } from 'sequelize';
 import * as bcrypt from 'bcrypt';
 import { Gender } from './types/gender.enum';
+import { CompanyType } from 'src/shared/models/company-type.model';
 
 // Interfaces for token payload
 interface DecodedRefresh {
@@ -76,6 +79,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly sequelize: Sequelize,
     private readonly redisService: RedisService,
+    private readonly uploadService: S3Service,
   ) {}
 
   // Redis key helpers
@@ -1037,45 +1041,7 @@ export class AuthService {
     const brandId = sessionInfo.brandId;
     const isExistingAccount = sessionInfo.isExistingAccount || false;
 
-    // Generate tokens
-    const { accessToken, refreshToken, jti } = await this.generateTokens(
-      brandId,
-      true,
-      'brand',
-    );
-
-    // Store session in Redis for multi-device support
-    const sessionKey = this.sessionKey(brandId, jti);
-    const sessionsSetKey = this.sessionsSetKey(brandId);
-
-    const sessionPayload = JSON.stringify({
-      deviceId: deviceId ?? sessionInfo.deviceId,
-      userAgent: userAgent ?? sessionInfo.userAgent,
-      createdAt: new Date().toISOString(),
-      userType: 'brand',
-    });
-
-    // Mark email as verified in database (only for new accounts)
-    if (!isExistingAccount) {
-      await this.brandModel.update(
-        { isEmailVerified: true },
-        { where: { id: brandId } },
-      );
-    }
-
-    // Mark OTP as used
-    await otpRecord.update({ isUsed: true });
-
-    // Clean up temporary data and store final session
-    await this.redisService
-      .getClient()
-      .multi()
-      .del(tempSessionKey) // Remove temporary session
-      .set(sessionKey, sessionPayload) // No expiry - session persists until logout
-      .sadd(sessionsSetKey, jti)
-      .exec();
-
-    // Get brand details for response
+    // Get brand details to determine if it's a new signup or existing login
     const brand = await this.brandModel.findByPk(brandId, {
       include: [
         {
@@ -1090,6 +1056,62 @@ export class AuthService {
       throw new UnauthorizedException('Brand not found');
     }
 
+    // Check if this is a new signup (profile not completed yet)
+    const isNewSignup = !brand.isProfileCompleted && !isExistingAccount;
+
+    // Mark email as verified if not already
+    if (!brand.isEmailVerified) {
+      await brand.update({ isEmailVerified: true });
+    }
+
+    // Mark OTP as used
+    await otpRecord.update({ isUsed: true });
+
+    // Generate tokens with appropriate profile status
+    const { accessToken, refreshToken, jti } = await this.generateTokens(
+      brandId,
+      brand.isProfileCompleted,
+      'brand',
+    );
+
+    // Store session in Redis for multi-device support
+    const sessionKey = this.sessionKey(brandId, jti);
+    const sessionsSetKey = this.sessionsSetKey(brandId);
+
+    const sessionPayload = JSON.stringify({
+      deviceId: deviceId ?? sessionInfo.deviceId,
+      userAgent: userAgent ?? sessionInfo.userAgent,
+      createdAt: new Date().toISOString(),
+      userType: 'brand',
+    });
+
+    // Clean up temporary data and store final session
+    await this.redisService
+      .getClient()
+      .multi()
+      .del(tempSessionKey) // Remove temporary session
+      .set(sessionKey, sessionPayload) // No expiry - session persists until logout
+      .sadd(sessionsSetKey, jti)
+      .exec();
+
+    // Return different responses based on context
+    if (isNewSignup) {
+      // New signup flow - minimal brand info, indicate profile completion needed
+      return {
+        message: 'Email verified successfully. Please complete your profile.',
+        accessToken,
+        refreshToken,
+        requiresProfileCompletion: true,
+        brand: {
+          id: brand.id,
+          email: brand.email,
+          isEmailVerified: true,
+          isProfileCompleted: brand.isProfileCompleted,
+        },
+      };
+    }
+
+    // Existing account login flow - full brand details
     return {
       message: isExistingAccount
         ? 'Account verified successfully. Login successful'
@@ -1104,7 +1126,6 @@ export class AuthService {
         username: brand.username,
         legalEntityName: brand.legalEntityName,
         companyType: brand.companyType,
-        brandEmailId: brand.brandEmailId,
         pocName: brand.pocName,
         pocDesignation: brand.pocDesignation,
         pocEmailId: brand.pocEmailId,
@@ -1413,6 +1434,244 @@ export class AuthService {
       message:
         'Password has been reset successfully. Please log in with your new password.',
       success: true,
+    };
+  }
+
+  // Two-step brand signup methods
+
+  /**
+   * Initial brand signup - Create account and send OTP
+   */
+  async brandInitialSignup(
+    signupDto: BrandInitialSignupDto,
+    deviceId?: string,
+    userAgent?: string,
+  ) {
+    const { email, password } = signupDto;
+
+    // Check if brand already exists
+    const existingBrand = await this.brandModel.findOne({
+      where: { email },
+    });
+
+    if (existingBrand) {
+      if (existingBrand.isEmailVerified) {
+        throw new ConflictException('Brand already exists with this email');
+      } else {
+        // Brand exists but email not verified - resend OTP
+        const otp = await this.generateAndStoreOtp(email, {
+          brandId: existingBrand.id,
+          deviceId,
+          userAgent,
+        });
+
+        await this.emailService.sendBrandOtp(email, otp);
+
+        return {
+          message: 'OTP sent to your email for verification.',
+          email: email,
+          requiresOtp: true,
+          brandId: existingBrand.id,
+        };
+      }
+    }
+
+    // Hash password
+    const saltRounds = 12;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    // Create brand with basic info and dummy phone
+    const brand = await this.brandModel.create({
+      email,
+      phone: '0000000000', // Placeholder - will be updated in profile completion
+      password: hashedPassword,
+      isEmailVerified: false,
+      isProfileCompleted: false,
+    });
+
+    // Generate and store OTP
+    const otp = await this.generateAndStoreOtp(email, {
+      brandId: brand.id,
+      deviceId,
+      userAgent,
+    });
+
+    // Send OTP email
+    await this.emailService.sendBrandOtp(email, otp);
+
+    return {
+      message:
+        'Account created successfully. OTP sent to your email for verification.',
+      email: email,
+      requiresOtp: true,
+      brandId: brand.id,
+    };
+  }
+
+
+  /**
+   * Complete brand profile with all required information
+   */
+  async brandCompleteProfile(
+    brandId: number,
+    profileDto: BrandProfileCompletionDto,
+    files?: {
+      profileImage?: Express.Multer.File[];
+      incorporationDocument?: Express.Multer.File[];
+      gstDocument?: Express.Multer.File[];
+      panDocument?: Express.Multer.File[];
+    },
+  ) {
+    const brand = await this.brandModel.findByPk(brandId);
+    if (!brand) {
+      throw new UnauthorizedException('Brand not found');
+    }
+
+    if (!brand.isEmailVerified) {
+      throw new UnauthorizedException('Email must be verified first');
+    }
+
+    // Check for username uniqueness
+    if (profileDto.username) {
+      const existingUsername = await this.brandModel.findOne({
+        where: { username: profileDto.username },
+      });
+
+      if (existingUsername && existingUsername.id !== brandId) {
+        throw new ConflictException('Username already exists');
+      }
+    }
+
+    // Check for phone uniqueness
+    if (profileDto.phone) {
+      const existingPhone = await this.brandModel.findOne({
+        where: { phone: profileDto.phone },
+      });
+
+      if (existingPhone && existingPhone.id !== brandId) {
+        throw new ConflictException('Phone number already exists');
+      }
+    }
+
+    // Validate niche IDs
+    const validNiches = await this.nicheModel.findAll({
+      where: { id: profileDto.nicheIds, isActive: true },
+    });
+
+    if (validNiches.length !== profileDto.nicheIds.length) {
+      throw new BadRequestException('One or more invalid niche IDs provided');
+    }
+
+    let profileImageUrl: string | undefined;
+    let incorporationDocumentUrl: string | undefined;
+    let gstDocumentUrl: string | undefined;
+    let panDocumentUrl: string | undefined;
+
+    // Upload files if provided
+    // if (files) {
+    //   if (files.profileImage?.[0]) {
+    //     profileImageUrl = await this.uploadService.uploadProfileImage(
+    //       files.profileImage[0],
+    //       'brand',
+    //       brandId,
+    //     );
+    //   }
+
+    //   if (files.incorporationDocument?.[0]) {
+    //     incorporationDocumentUrl = await this.uploadService.uploadDocument(
+    //       files.incorporationDocument[0],
+    //       'brand',
+    //       brandId,
+    //       'incorporation',
+    //     );
+    //   }
+
+    //   if (files.gstDocument?.[0]) {
+    //     gstDocumentUrl = await this.uploadService.uploadDocument(
+    //       files.gstDocument[0],
+    //       'brand',
+    //       brandId,
+    //       'gst',
+    //     );
+    //   }
+
+    //   if (files.panDocument?.[0]) {
+    //     panDocumentUrl = await this.uploadService.uploadDocument(
+    //       files.panDocument[0],
+    //       'brand',
+    //       brandId,
+    //       'pan',
+    //     );
+    //   }
+    // }
+
+    const uploadedFiles = await this.uploadSignupFiles(files);
+
+    profileImageUrl = uploadedFiles.profileImage;
+    incorporationDocumentUrl = uploadedFiles.incorporationDocument;
+    gstDocumentUrl = uploadedFiles.gstDocument;
+    panDocumentUrl = uploadedFiles.panDocument;
+
+    // Update brand with profile data
+    const updatedData = {
+      ...profileDto,
+      profileImage: profileImageUrl || brand.profileImage,
+      incorporationDocument:
+        incorporationDocumentUrl || brand.incorporationDocument,
+      gstDocument: gstDocumentUrl || brand.gstDocument,
+      panDocument: panDocumentUrl || brand.panDocument,
+      isProfileCompleted: true,
+      companyType: profileDto.companyType as unknown as CompanyType, // Cast to Sequelize type
+    };
+
+    await brand.update(updatedData);
+
+    // Create brand-niche associations
+    for (const nicheId of profileDto.nicheIds) {
+      await this.brandNicheModel.findOrCreate({
+        where: { brandId: brand.id, nicheId },
+        defaults: { brandId: brand.id, nicheId },
+      });
+    }
+
+    // Remove old associations not in the new list
+    await this.brandNicheModel.destroy({
+      where: {
+        brandId: brand.id,
+        nicheId: {
+          [Op.notIn]: profileDto.nicheIds,
+        },
+      },
+    });
+
+    // Fetch updated brand with niches
+    const updatedBrand = await this.brandModel.findByPk(brandId, {
+      include: [
+        {
+          model: this.nicheModel,
+          as: 'niches',
+          attributes: ['id', 'name', 'icon'],
+        },
+      ],
+    });
+
+    if (!updatedBrand) {
+      throw new NotFoundException('Brand not found after update');
+    }
+
+    return {
+      message: 'Profile completed successfully',
+      brand: {
+        id: updatedBrand.id,
+        email: updatedBrand.email,
+        brandName: updatedBrand.brandName,
+        username: updatedBrand.username,
+        phone: updatedBrand.phone,
+        isEmailVerified: updatedBrand.isEmailVerified,
+        isProfileCompleted: updatedBrand.isProfileCompleted,
+        profileImage: updatedBrand.profileImage,
+        niches: updatedBrand.niches,
+      },
     };
   }
 }

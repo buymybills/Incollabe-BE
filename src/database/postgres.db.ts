@@ -56,11 +56,11 @@ import { CampaignInvitation } from '../campaign/models/campaign-invitation.model
           CampaignInvitation,
         ],
         autoLoadModels: true,
-        synchronize: true, // Disabled to prevent index conflicts with existing database
+        synchronize: false, // Disabled to prevent index conflicts with existing database
         logging: false,
       }),
     }),
   ],
   exports: [SequelizeModule],
 })
-export class DatabaseModule {}
+export class DatabaseModule {} 

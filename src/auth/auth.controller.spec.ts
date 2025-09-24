@@ -17,7 +17,10 @@ const mockAuthService = {
   verifyOtp: jest.fn(),
   verifyBrandOtp: jest.fn(),
   influencerSignup: jest.fn(),
-  brandSignup: jest.fn(),
+  // brandSignup: jest.fn(), // Commented out - replaced with two-step signup
+  brandInitialSignup: jest.fn(),
+  // verifyBrandOtpAndLogin: jest.fn(), // Merged into verifyBrandOtp
+  brandCompleteProfile: jest.fn(),
   brandLogin: jest.fn(),
   getNiches: jest.fn(),
   checkUsernameAvailability: jest.fn(),
@@ -300,59 +303,60 @@ describe('AuthController', () => {
     });
   });
 
-  describe('brandSignup', () => {
-    it('should signup brand', async () => {
-      const signupDto: BrandSignupDto = {
-        email: 'test@brand.com',
-        phone: '9467289789',
-        password: 'password123',
-        brandName: 'Test Brand',
-        username: 'test_brand',
-      };
-      const mockFiles = {
-        profileImage: [
-          {
-            fieldname: 'profileImage',
-            originalname: 'profile.jpg',
-            encoding: '7bit',
-            mimetype: 'image/jpeg',
-            size: 1000,
-            buffer: Buffer.from('test'),
-          } as Express.Multer.File,
-        ],
-      };
-      const deviceId = 'device-123';
-      const userAgent = 'Mozilla/5.0 (test browser)';
-      const mockReq = { headers: { 'user-agent': userAgent } } as any;
-      const expectedResult = {
-        message: 'Brand registered successfully',
-        brand: {
-          id: 1,
-          email: 'test@brand.com',
-          phone: '+919467289789',
-          brandName: 'Test Brand',
-          username: 'test_brand',
-        },
-      };
+  // Legacy brandSignup test - commented out as method was replaced with two-step signup
+  // describe('brandSignup', () => {
+  //   it('should signup brand', async () => {
+  //     const signupDto: BrandSignupDto = {
+  //       email: 'test@brand.com',
+  //       phone: '9467289789',
+  //       password: 'password123',
+  //       brandName: 'Test Brand',
+  //       username: 'test_brand',
+  //     };
+  //     const mockFiles = {
+  //       profileImage: [
+  //         {
+  //           fieldname: 'profileImage',
+  //           originalname: 'profile.jpg',
+  //           encoding: '7bit',
+  //           mimetype: 'image/jpeg',
+  //           size: 1000,
+  //           buffer: Buffer.from('test'),
+  //         } as Express.Multer.File,
+  //       ],
+  //     };
+  //     const deviceId = 'device-123';
+  //     const userAgent = 'Mozilla/5.0 (test browser)';
+  //     const mockReq = { headers: { 'user-agent': userAgent } } as any;
+  //     const expectedResult = {
+  //       message: 'Brand registered successfully',
+  //       brand: {
+  //         id: 1,
+  //         email: 'test@brand.com',
+  //         phone: '+919467289789',
+  //         brandName: 'Test Brand',
+  //         username: 'test_brand',
+  //       },
+  //     };
 
-      mockAuthService.brandSignup.mockResolvedValue(expectedResult);
+  //     mockAuthService.brandSignup.mockResolvedValue(expectedResult);
 
-      const result = await controller.brandSignup(
-        signupDto,
-        mockFiles,
-        deviceId,
-        mockReq,
-      );
+  //     const result = await controller.brandSignup(
+  //       signupDto,
+  //       mockFiles,
+  //       deviceId,
+  //       mockReq,
+  //     );
 
-      expect(authService.brandSignup).toHaveBeenCalledWith(
-        signupDto,
-        mockFiles,
-        deviceId,
-        userAgent,
-      );
-      expect(result).toEqual(expectedResult);
-    });
-  });
+  //     expect(authService.brandSignup).toHaveBeenCalledWith(
+  //       signupDto,
+  //       mockFiles,
+  //       deviceId,
+  //       userAgent,
+  //     );
+  //     expect(result).toEqual(expectedResult);
+  //   });
+  // });
 
   describe('brandLogin', () => {
     it('should login brand', async () => {

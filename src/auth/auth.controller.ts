@@ -27,6 +27,9 @@ import { InfluencerSignupDto } from './dto/influencer-signup.dto';
 import { InfluencerSignupMultipartDto } from './dto/influencer-signup-multipart.dto';
 import { BrandSignupDto } from './dto/brand-signup.dto';
 import { BrandSignupMultipartDto } from './dto/brand-signup-multipart.dto';
+import { BrandInitialSignupDto } from './dto/brand-initial-signup.dto';
+import { BrandProfileCompletionDto } from './dto/brand-profile-completion.dto';
+import { BrandProfileCompletionMultipartDto } from './dto/brand-profile-completion-multipart.dto';
 import {
   FileInterceptor,
   FileFieldsInterceptor,
@@ -395,31 +398,53 @@ export class AuthController {
     return this.authService.checkUsernameAvailability(checkUsernameDto);
   }
 
-  // Brand endpoints
-  @Post('brand/request-otp')
+  // Brand endpoints - Two-step signup
+  @Post('initial-signup')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Request OTP for brand',
-    description: 'Send OTP to brand phone number for verification',
+    summary: 'Initial brand signup - Step 1',
+    description:
+      'Create brand account with email and password, then send OTP for verification',
   })
-  @ApiBody({ type: RequestOtpDto })
+  @ApiBody({ type: BrandInitialSignupDto })
   @ApiResponse({
     status: 200,
-    description: 'OTP sent successfully',
+    description: 'Brand account created and OTP sent successfully',
     schema: {
       example: {
-        message: 'OTP sent successfully',
-        email: 'jhondoe@example.com',
-        expiresIn: 300,
+        message:
+          'Account created successfully. OTP sent to your email for verification.',
+        email: 'brand@example.com',
+        requiresOtp: true,
+        brandId: 1,
       },
     },
   })
-  async requestBrandOtp(@Body() requestOtpDto: RequestOtpDto) {
-    return this.authService.requestOtp(requestOtpDto);
+  @ApiResponse({
+    status: 409,
+    description: 'Brand already exists with this email',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Failed to create brand account',
+  })
+  @ApiHeader({
+    name: 'device-id',
+    description: 'Unique device identifier for session tracking',
+    required: false,
+  })
+  async brandInitialSignup(
+    @Body() signupDto: BrandInitialSignupDto,
+    @Headers('device-id') deviceId?: string,
+    @Req() req?: Request,
+  ) {
+    const userAgent = req?.headers['user-agent'] as string | undefined;
+    return this.authService.brandInitialSignup(signupDto, deviceId, userAgent);
   }
 
-  @Post('brand/signup')
-  @HttpCode(HttpStatus.CREATED)
+
+  @Post('brand/complete-profile')
+  @HttpCode(HttpStatus.OK)
   @UseInterceptors(
     FileFieldsInterceptor(
       [
@@ -461,10 +486,12 @@ export class AuthController {
     ),
   )
   @ApiConsumes('multipart/form-data')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard)
   @ApiOperation({
-    summary: 'Sign up brand with file uploads',
+    summary: 'Complete brand profile - Step 2',
     description:
-      'Create a new brand account with optional profile image and document uploads',
+      'Complete brand profile with all required information and optional file uploads',
   })
   @ApiFileFields(
     ['profileImage', 'incorporationDocument', 'gstDocument', 'panDocument'],
@@ -473,18 +500,6 @@ export class AuthController {
         type: 'string',
         description: 'Indian mobile number (10 digits)',
         example: '9467289789',
-        required: true,
-      },
-      email: {
-        type: 'string',
-        description: 'Brand email address for login',
-        example: 'brand@example.com',
-        required: true,
-      },
-      password: {
-        type: 'string',
-        description: 'Password for brand account',
-        example: 'SecurePassword123!',
         required: true,
       },
       brandName: {
@@ -517,12 +532,6 @@ export class AuthController {
         description: 'Type of company registration',
         required: true,
       },
-      brandEmailId: {
-        type: 'string',
-        description: 'Brand official email address',
-        example: 'info@examplebrand.com',
-        required: true,
-      },
       pocName: {
         type: 'string',
         description: 'Point of contact name',
@@ -549,7 +558,7 @@ export class AuthController {
       },
       brandBio: {
         type: 'string',
-        description: 'Brand bio or description (can be empty)',
+        description: 'Brand bio or description (optional)',
         example:
           'We are a leading fashion brand focused on sustainable clothing.',
         required: false,
@@ -564,65 +573,32 @@ export class AuthController {
     },
   )
   @ApiResponse({
-    status: 201,
-    description: 'Brand registered successfully and login flow initiated',
+    status: 200,
+    description: 'Brand profile completed successfully',
     schema: {
       example: {
-        message:
-          'Brand registered successfully. Please check your email for OTP to complete login.',
-        signup: {
-          brand: {
-            id: 1,
-            email: 'brand@example.com',
-            phone: '+919467289789',
-            brandName: 'Example Brand',
-            username: 'example_brand',
-            profileImage:
-              'https://your-bucket.s3.region.amazonaws.com/profiles/brands/brand-123456789.jpg',
-            incorporationDocument:
-              'https://your-bucket.s3.region.amazonaws.com/documents/brands/incorporation-123456789.pdf',
-            gstDocument:
-              'https://your-bucket.s3.region.amazonaws.com/documents/brands/gst-123456789.pdf',
-            panDocument:
-              'https://your-bucket.s3.region.amazonaws.com/documents/brands/pan-123456789.pdf',
-          },
-        },
-        login: {
-          message:
-            'OTP sent to your email address. Please verify to complete login.',
-          requiresOtp: true,
+        message: 'Profile completed successfully',
+        brand: {
+          id: 1,
           email: 'brand@example.com',
+          brandName: 'Example Brand Inc.',
+          username: 'example_brand',
+          isProfileCompleted: true,
+          profileImage: 'https://s3-url/profile.jpg',
         },
       },
     },
   })
   @ApiResponse({
-    status: 400,
-    description: 'Invalid data provided or unsupported file format',
-  })
-  @ApiResponse({
     status: 401,
-    description: 'Phone number not verified',
+    description: 'Unauthorized - Invalid or expired token',
   })
   @ApiResponse({
     status: 409,
-    description: 'Brand already exists with this email or phone number',
+    description: 'Username or phone number already exists',
   })
-  @ApiResponse({
-    status: 413,
-    description: 'File too large (max 10MB for documents, 5MB for images)',
-  })
-  @ApiResponse({
-    status: 500,
-    description: 'Failed to create brand account',
-  })
-  @ApiHeader({
-    name: 'device-id',
-    description: 'Unique device identifier for session tracking',
-    required: false,
-  })
-  async brandSignup(
-    @Body() signupDto: BrandSignupMultipartDto,
+  async brandCompleteProfile(
+    @Body() profileDto: BrandProfileCompletionMultipartDto,
     @UploadedFiles()
     files: {
       profileImage?: Express.Multer.File[];
@@ -630,17 +606,262 @@ export class AuthController {
       gstDocument?: Express.Multer.File[];
       panDocument?: Express.Multer.File[];
     },
-    @Headers('device-id') deviceId?: string,
-    @Req() req?: Request,
+    @Req() req: Request & { user: { id: number; profileCompleted: boolean } },
   ) {
-    const userAgent = req?.headers['user-agent'] as string | undefined;
-    return this.authService.brandSignup(
-      signupDto as BrandSignupDto,
+    return this.authService.brandCompleteProfile(
+      req.user.id,
+      profileDto as BrandProfileCompletionDto,
       files,
-      deviceId,
-      userAgent as string,
     );
   }
+
+  // Legacy endpoint - keep for backward compatibility
+  @Post('brand/request-otp')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Request OTP for brand (Legacy)',
+    description: 'Send OTP to brand phone number for verification',
+  })
+  @ApiBody({ type: RequestOtpDto })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP sent successfully',
+    schema: {
+      example: {
+        message: 'OTP sent successfully',
+        email: 'jhondoe@example.com',
+        expiresIn: 300,
+      },
+    },
+  })
+  async requestBrandOtp(@Body() requestOtpDto: RequestOtpDto) {
+    return this.authService.requestOtp(requestOtpDto);
+  }
+
+  // Legacy brand signup endpoint - commented out to test new two-step approach
+  // @Post('brand/signup')
+  // @HttpCode(HttpStatus.CREATED)
+  // @UseInterceptors(
+  //   FileFieldsInterceptor(
+  //     [
+  //       { name: 'profileImage', maxCount: 1 },
+  //       { name: 'incorporationDocument', maxCount: 1 },
+  //       { name: 'gstDocument', maxCount: 1 },
+  //       { name: 'panDocument', maxCount: 1 },
+  //     ],
+  //     {
+  //       fileFilter: (req, file, callback) => {
+  //         // Allow images for profileImage
+  //         if (file.fieldname === 'profileImage') {
+  //           if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
+  //             return callback(
+  //               new Error('Profile image must be jpg, jpeg, png, or webp'),
+  //               false,
+  //             );
+  //           }
+  //         }
+  //         // Allow PDF and images for documents
+  //         else if (
+  //           ['incorporationDocument', 'gstDocument', 'panDocument'].includes(
+  //             file.fieldname,
+  //           )
+  //         ) {
+  //           if (!file.mimetype.match(/\/(pdf|jpg|jpeg|png|webp)$/)) {
+  //             return callback(
+  //               new Error('Documents must be PDF, jpg, jpeg, png, or webp'),
+  //               false,
+  //             );
+  //           }
+  //         }
+  //         callback(null, true);
+  //       },
+  //       limits: {
+  //         fileSize: 10 * 1024 * 1024, // 10MB for documents
+  //       },
+  //     },
+  //   ),
+  // )
+  // @ApiConsumes('multipart/form-data')
+  // @ApiOperation({
+  //   summary: 'Sign up brand with file uploads',
+  //   description:
+  //     'Create a new brand account with optional profile image and document uploads',
+  // })
+  // @ApiFileFields(
+  //   ['profileImage', 'incorporationDocument', 'gstDocument', 'panDocument'],
+  //   {
+  //     phone: {
+  //       type: 'string',
+  //       description: 'Indian mobile number (10 digits)',
+  //       example: '9467289789',
+  //       required: true,
+  //     },
+  //     email: {
+  //       type: 'string',
+  //       description: 'Brand email address for login',
+  //       example: 'brand@example.com',
+  //       required: true,
+  //     },
+  //     password: {
+  //       type: 'string',
+  //       description: 'Password for brand account',
+  //       example: 'SecurePassword123!',
+  //       required: true,
+  //     },
+  //     brandName: {
+  //       type: 'string',
+  //       description: 'Brand name',
+  //       example: 'Example Brand Inc.',
+  //       required: true,
+  //     },
+  //     username: {
+  //       type: 'string',
+  //       description: 'Unique username for the brand',
+  //       example: 'example_brand',
+  //       required: true,
+  //     },
+  //     legalEntityName: {
+  //       type: 'string',
+  //       description: 'Legal entity name as registered',
+  //       example: 'Example Brand Private Limited',
+  //       required: true,
+  //     },
+  //     companyType: {
+  //       type: 'string',
+  //       enum: [
+  //         'Private Limited Company (Pvt. Ltd.)',
+  //         'Public Limited Company (PLC)',
+  //         'One-Person Company (OPC)',
+  //         'Limited Liability Partnership (LLP)',
+  //         'Partnership Firm',
+  //       ],
+  //       description: 'Type of company registration',
+  //       required: true,
+  //     },
+  //     brandEmailId: {
+  //       type: 'string',
+  //       description: 'Brand official email address',
+  //       example: 'info@examplebrand.com',
+  //       required: true,
+  //     },
+  //     pocName: {
+  //       type: 'string',
+  //       description: 'Point of contact name',
+  //       example: 'John Smith',
+  //       required: true,
+  //     },
+  //     pocDesignation: {
+  //       type: 'string',
+  //       description: 'Point of contact designation',
+  //       example: 'Marketing Manager',
+  //       required: true,
+  //     },
+  //     pocEmailId: {
+  //       type: 'string',
+  //       description: 'Point of contact email address',
+  //       example: 'john.smith@examplebrand.com',
+  //       required: true,
+  //     },
+  //     pocContactNumber: {
+  //       type: 'string',
+  //       description: 'Point of contact phone number',
+  //       example: '+919876543210',
+  //       required: true,
+  //     },
+  //     brandBio: {
+  //       type: 'string',
+  //       description: 'Brand bio or description (can be empty)',
+  //       example:
+  //         'We are a leading fashion brand focused on sustainable clothing.',
+  //       required: false,
+  //     },
+  //     nicheIds: {
+  //       type: 'string',
+  //       description:
+  //         'Array of niche IDs. Accepts JSON array "[1,4,12]" or comma-separated "1,4,12"',
+  //       example: '[1,4,12]',
+  //       required: true,
+  //     },
+  //   },
+  // )
+  // @ApiResponse({
+  //   status: 201,
+  //   description: 'Brand registered successfully and login flow initiated',
+  //   schema: {
+  //     example: {
+  //       message:
+  //         'Brand registered successfully. Please check your email for OTP to complete login.',
+  //       signup: {
+  //         brand: {
+  //           id: 1,
+  //           email: 'brand@example.com',
+  //           phone: '+919467289789',
+  //           brandName: 'Example Brand',
+  //           username: 'example_brand',
+  //           profileImage:
+  //             'https://your-bucket.s3.region.amazonaws.com/profiles/brands/brand-123456789.jpg',
+  //           incorporationDocument:
+  //             'https://your-bucket.s3.region.amazonaws.com/documents/brands/incorporation-123456789.pdf',
+  //           gstDocument:
+  //             'https://your-bucket.s3.region.amazonaws.com/documents/brands/gst-123456789.pdf',
+  //           panDocument:
+  //             'https://your-bucket.s3.region.amazonaws.com/documents/brands/pan-123456789.pdf',
+  //         },
+  //       },
+  //       login: {
+  //         message:
+  //           'OTP sent to your email address. Please verify to complete login.',
+  //         requiresOtp: true,
+  //         email: 'brand@example.com',
+  //       },
+  //     },
+  //   },
+  // })
+  // @ApiResponse({
+  //   status: 400,
+  //   description: 'Invalid data provided or unsupported file format',
+  // })
+  // @ApiResponse({
+  //   status: 401,
+  //   description: 'Phone number not verified',
+  // })
+  // @ApiResponse({
+  //   status: 409,
+  //   description: 'Brand already exists with this email or phone number',
+  // })
+  // @ApiResponse({
+  //   status: 413,
+  //   description: 'File too large (max 10MB for documents, 5MB for images)',
+  // })
+  // @ApiResponse({
+  //   status: 500,
+  //   description: 'Failed to create brand account',
+  // })
+  // @ApiHeader({
+  //   name: 'device-id',
+  //   description: 'Unique device identifier for session tracking',
+  //   required: false,
+  // })
+  // async brandSignup(
+  //   @Body() signupDto: BrandSignupMultipartDto,
+  //   @UploadedFiles()
+  //   files: {
+  //     profileImage?: Express.Multer.File[];
+  //     incorporationDocument?: Express.Multer.File[];
+  //     gstDocument?: Express.Multer.File[];
+  //     panDocument?: Express.Multer.File[];
+  //   },
+  //   @Headers('device-id') deviceId?: string,
+  //   @Req() req?: Request,
+  // ) {
+  //   const userAgent = req?.headers['user-agent'] as string | undefined;
+  //   return this.authService.brandSignup(
+  //     signupDto as BrandSignupDto,
+  //     files,
+  //     deviceId,
+  //     userAgent as string,
+  //   );
+  // }
 
   @Post('brand/login')
   @HttpCode(HttpStatus.OK)
