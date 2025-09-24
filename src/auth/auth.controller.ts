@@ -137,10 +137,16 @@ export class AuthController {
     }),
   )
   @ApiConsumes('multipart/form-data')
+  @ApiHeader({
+    name: 'x-verification-key',
+    description: 'Verification key received after OTP verification',
+    required: true,
+    example: 'verify_1640995200000_abc123def',
+  })
   @ApiOperation({
     summary: 'Sign up influencer with file upload',
     description:
-      'Create a new influencer account with optional profile image upload. Bio is optional.',
+      'Create a new influencer account with optional profile image upload. Bio is optional. Requires x-verification-key header from OTP verification.',
   })
   @ApiFileFields(['profileImage'], {
     name: {
@@ -155,12 +161,6 @@ export class AuthController {
       example: 'dhruv_1109',
       required: true,
     },
-    phone: {
-      type: 'string',
-      description: 'Indian mobile number (10 digits)',
-      example: '9467289789',
-      required: true,
-    },
     dateOfBirth: {
       type: 'string',
       description: 'Date of birth in YYYY-MM-DD format',
@@ -169,15 +169,18 @@ export class AuthController {
     },
     gender: {
       type: 'string',
-      enum: ['Male', 'Female', 'Others'],
-      description: 'Gender of the influencer',
+      enum: [
+        'Male',
+        'Female',
+        'Abinary',
+        'Trans-Women',
+        'Gay',
+        'Binary',
+        'Trans-Feminine',
+      ],
+      description:
+        'Gender of the influencer - can be Male, Female, or any custom gender option',
       required: true,
-    },
-    othersGender: {
-      type: 'string',
-      enum: ['Abinary', 'Trans-Women', 'Gay', 'Binary', 'Trans-Feminine'],
-      description: 'Specific gender option when "Others" is selected',
-      required: false,
     },
     bio: {
       type: 'string',
@@ -261,10 +264,12 @@ export class AuthController {
   })
   async influencerSignup(
     @Body() signupDto: InfluencerSignupMultipartDto,
+    @Headers('x-verification-key') verificationKey: string,
     @UploadedFile() profileImage?: Express.Multer.File,
   ) {
     return this.authService.influencerSignup(
       signupDto as InfluencerSignupDto,
+      verificationKey,
       profileImage,
     );
   }

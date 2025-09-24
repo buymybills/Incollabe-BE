@@ -39,6 +39,7 @@ import { BrandNiche } from '../brand/model/brand-niche.model';
 import { SignupFiles } from '../types/file-upload.types';
 import { Op } from 'sequelize';
 import * as bcrypt from 'bcrypt';
+import { Gender } from './types/gender.enum';
 
 // Interfaces for token payload
 interface DecodedRefresh {
@@ -112,6 +113,17 @@ export class AuthService {
 
   private passwordResetKey(token: string): string {
     return `password-reset:${token}`;
+  }
+
+  private phoneVerificationKey(verificationId: string): string {
+    return `phone_verification:${verificationId}`;
+  }
+
+  async getVerifiedPhoneNumber(
+    verificationKey: string,
+  ): Promise<string | null> {
+    const phoneVerificationKey = this.phoneVerificationKey(verificationKey);
+    return await this.redisService.get(phoneVerificationKey);
   }
 
   async requestOtp(requestOtpDto: RequestOtpDto): Promise<string> {
@@ -279,9 +291,20 @@ export class AuthService {
 
     // 🔹 Step 5: Handle new users (OTP verified but signup required)
     if (!user) {
+      // Generate unique verification key for Redis
+      const verificationId = `verify_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const phoneVerificationKey = this.phoneVerificationKey(verificationId);
+
+      // Store verified phone number in Redis with 15-minute expiry
+      await this.redisService.set(
+        phoneVerificationKey,
+        formattedPhone,
+        15 * 60,
+      );
+
       return {
         message: 'OTP verified successfully',
-        phone: formattedPhone,
+        verificationKey: verificationId,
         verified: true,
         requiresSignup: true,
       };
@@ -339,29 +362,40 @@ export class AuthService {
 
   async influencerSignup(
     signupDto: InfluencerSignupDto,
+    verificationKey: string,
     profileImage?: Express.Multer.File,
   ) {
-    const { phone, username, nicheIds, ...influencerData } = signupDto;
-    const formattedPhone = `+91${phone}`; // Add Indian country code
-
-    // Clean up othersGender field - should be undefined if gender is not "Others" or if empty string
-    if (
-      influencerData.gender !== 'Others' ||
-      !influencerData.othersGender ||
-      influencerData.othersGender.trim() === ''
-    ) {
-      delete influencerData.othersGender;
+    // Retrieve verified phone number from Redis using verification key
+    const formattedPhone = await this.getVerifiedPhoneNumber(verificationKey);
+    if (!formattedPhone) {
+      throw new UnauthorizedException('Invalid or expired verification key');
     }
 
-    // Check if phone was recently verified (within last 15 minutes)
-    // We'll check Redis for recent OTP verification instead
-    const verificationKey = `otp:verified:${phone}`;
-    const isVerified = await this.redisService.get(verificationKey);
+    const { username, nicheIds, ...influencerData } = signupDto;
 
-    if (!isVerified) {
-      throw new UnauthorizedException(
-        'Phone number not verified or verification expired',
-      );
+    // Handle gender mapping logic
+    let finalGender: string | undefined;
+    let finalOthersGender: string | undefined;
+
+    if (influencerData.gender) {
+      if (
+        influencerData.gender === Gender.MALE ||
+        influencerData.gender === Gender.FEMALE
+      ) {
+        // Standard gender options
+        finalGender = influencerData.gender;
+        finalOthersGender = undefined;
+      } else {
+        // Custom gender option - map to Others
+        finalGender = Gender.OTHERS;
+        finalOthersGender = influencerData.gender;
+      }
+    }
+
+    // Update influencerData with mapped gender values
+    if (finalGender) {
+      influencerData.gender = finalGender as any;
+      (influencerData as any).othersGender = finalOthersGender;
     }
 
     // Validate niche IDs
@@ -462,9 +496,9 @@ export class AuthService {
       .sadd(sessionsSetKey, jti)
       .exec();
 
-    // Clear the OTP verification from Redis since it's no longer needed
-    const signupVerificationKey = `otp:verified:${phone}`;
-    await this.redisService.del(signupVerificationKey);
+    // Clear the phone verification key from Redis since it's no longer needed
+    const phoneVerificationKey = this.phoneVerificationKey(verificationKey);
+    await this.redisService.del(phoneVerificationKey);
 
     return {
       message: 'Influencer registered and logged in successfully',

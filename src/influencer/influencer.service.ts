@@ -32,6 +32,7 @@ import { Brand } from '../brand/model/brand.model';
 import { ApplyCampaignDto } from '../campaign/dto/apply-campaign.dto';
 import { GetOpenCampaignsDto } from '../campaign/dto/get-open-campaigns.dto';
 import { Op, literal } from 'sequelize';
+import { Gender } from '../auth/types/gender.enum';
 
 // Private types for InfluencerService
 type WhatsAppOtpRequest = {
@@ -193,6 +194,21 @@ export class InfluencerService {
     // If we found collaboration costs in form data, add them to processed data
     if (Object.keys(collaborationCosts).length > 0) {
       processedData.collaborationCosts = collaborationCosts;
+    }
+
+    // Handle gender mapping logic
+    if (processedData.gender) {
+      if (
+        processedData.gender === Gender.MALE ||
+        processedData.gender === Gender.FEMALE
+      ) {
+        // Standard gender options - keep as is and clear othersGender
+        processedData.othersGender = null;
+      } else {
+        // Custom gender option - map to Others
+        processedData.othersGender = processedData.gender;
+        processedData.gender = Gender.OTHERS;
+      }
     }
 
     // Update influencer data

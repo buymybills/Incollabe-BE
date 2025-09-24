@@ -131,12 +131,12 @@ describe('AuthController', () => {
       const signupDto: InfluencerSignupMultipartDto = {
         name: 'Test User',
         username: 'test_user',
-        phone: '9467289789',
         dateOfBirth: '1995-01-15',
         gender: 'Male',
         bio: 'Test bio',
         nicheIds: [1, 2],
       };
+      const verificationKey = 'verify_1640995200000_abc123def';
       const mockProfileImage = {
         fieldname: 'profileImage',
         originalname: 'test.jpg',
@@ -164,11 +164,13 @@ describe('AuthController', () => {
 
       const result = await controller.influencerSignup(
         signupDto,
+        verificationKey,
         mockProfileImage,
       );
 
       expect(authService.influencerSignup).toHaveBeenCalledWith(
         signupDto,
+        verificationKey,
         mockProfileImage,
       );
       expect(result).toEqual(expectedResult);

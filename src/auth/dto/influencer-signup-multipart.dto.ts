@@ -18,7 +18,6 @@ import {
   GENDER_OPTIONS,
   OTHERS_GENDER_OPTIONS,
 } from '../types/gender.enum';
-import type { GenderType, OthersGenderType } from '../types/gender.enum';
 import { Transform } from 'class-transformer';
 
 export class InfluencerSignupMultipartDto {
@@ -47,22 +46,6 @@ export class InfluencerSignupMultipartDto {
   username: string;
 
   @ApiProperty({
-    description: 'Indian mobile number (10 digits)',
-    example: '9467289789',
-    pattern: '^[6-9]\\d{9}$',
-    minLength: 10,
-    maxLength: 10,
-  })
-  @IsNotEmpty()
-  @IsString()
-  @Length(10, 10, { message: 'Phone number must be exactly 10 digits' })
-  @Matches(/^[6-9]\d{9}$/, {
-    message:
-      'Phone number must be a valid Indian mobile number starting with 6, 7, 8, or 9',
-  })
-  phone: string;
-
-  @ApiProperty({
     description: 'Date of birth in YYYY-MM-DD format',
     example: '1995-01-15',
   })
@@ -71,25 +54,14 @@ export class InfluencerSignupMultipartDto {
   dateOfBirth: string;
 
   @ApiProperty({
-    description: 'Gender of the influencer',
+    description:
+      'Gender of the influencer - can be Male, Female, or any custom gender option',
     example: Gender.MALE,
-    enum: GENDER_OPTIONS,
+    enum: [Gender.MALE, Gender.FEMALE, ...OTHERS_GENDER_OPTIONS],
   })
   @IsNotEmpty({ message: 'Gender is required' })
-  @IsEnum(GENDER_OPTIONS)
-  gender: GenderType;
-
-  @ApiProperty({
-    description: 'Specific gender option when "Others" is selected',
-    example: 'Abinary',
-    enum: OTHERS_GENDER_OPTIONS,
-    required: false,
-  })
-  @Transform(({ value }) => (value === '' ? null : value))
-  @ValidateIf((obj) => obj.gender === Gender.OTHERS)
-  @IsNotEmpty({ message: 'othersGender is required when gender is "Others"' })
-  @IsEnum(OTHERS_GENDER_OPTIONS)
-  othersGender?: OthersGenderType;
+  @IsString()
+  gender: string;
 
   @ApiProperty({
     description:
