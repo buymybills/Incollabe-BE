@@ -6,23 +6,26 @@ import {
   ValidateNested,
   Min,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 
 export class InstagramCostsDto {
   @ApiProperty({ description: 'Price for Instagram Reel', required: false })
   @IsOptional()
+  @Transform(({ value }) => (value ? parseInt(value) : undefined))
   @IsNumber()
   @Min(0, { message: 'Price must be a positive number' })
   reel?: number;
 
   @ApiProperty({ description: 'Price for Instagram Story', required: false })
   @IsOptional()
+  @Transform(({ value }) => (value ? parseInt(value) : undefined))
   @IsNumber()
   @Min(0, { message: 'Price must be a positive number' })
   story?: number;
 
   @ApiProperty({ description: 'Price for Instagram Post', required: false })
   @IsOptional()
+  @Transform(({ value }) => (value ? parseInt(value) : undefined))
   @IsNumber()
   @Min(0, { message: 'Price must be a positive number' })
   post?: number;
@@ -31,12 +34,14 @@ export class InstagramCostsDto {
 export class YouTubeCostsDto {
   @ApiProperty({ description: 'Price for YouTube Short', required: false })
   @IsOptional()
+  @Transform(({ value }) => (value ? parseInt(value) : undefined))
   @IsNumber()
   @Min(0, { message: 'Price must be a positive number' })
   short?: number;
 
   @ApiProperty({ description: 'Price for YouTube Long Video', required: false })
   @IsOptional()
+  @Transform(({ value }) => (value ? parseInt(value) : undefined))
   @IsNumber()
   @Min(0, { message: 'Price must be a positive number' })
   longVideo?: number;
@@ -45,12 +50,14 @@ export class YouTubeCostsDto {
 export class FacebookCostsDto {
   @ApiProperty({ description: 'Price for Facebook Post', required: false })
   @IsOptional()
+  @Transform(({ value }) => (value ? parseInt(value) : undefined))
   @IsNumber()
   @Min(0, { message: 'Price must be a positive number' })
   post?: number;
 
   @ApiProperty({ description: 'Price for Facebook Story', required: false })
   @IsOptional()
+  @Transform(({ value }) => (value ? parseInt(value) : undefined))
   @IsNumber()
   @Min(0, { message: 'Price must be a positive number' })
   story?: number;
@@ -59,6 +66,7 @@ export class FacebookCostsDto {
 export class LinkedInCostsDto {
   @ApiProperty({ description: 'Price for LinkedIn Post', required: false })
   @IsOptional()
+  @Transform(({ value }) => (value ? parseInt(value) : undefined))
   @IsNumber()
   @Min(0, { message: 'Price must be a positive number' })
   post?: number;
@@ -67,6 +75,7 @@ export class LinkedInCostsDto {
 export class TwitterCostsDto {
   @ApiProperty({ description: 'Price for Twitter/X Post', required: false })
   @IsOptional()
+  @Transform(({ value }) => (value ? parseInt(value) : undefined))
   @IsNumber()
   @Min(0, { message: 'Price must be a positive number' })
   post?: number;

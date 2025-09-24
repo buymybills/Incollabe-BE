@@ -32,12 +32,12 @@ export class Influencer extends Model {
 
   @AllowNull(false)
   @Column(DataType.STRING)
-  name: string;
+  declare name: string;
 
   @AllowNull(false)
   @Unique
   @Column(DataType.STRING)
-  username: string;
+  declare username: string;
 
   @AllowNull(false)
   @Unique
@@ -50,82 +50,82 @@ export class Influencer extends Model {
       },
     },
   })
-  phone: string;
+  declare phone: string;
 
   @AllowNull(true)
   @Column(DataType.DATEONLY)
-  dateOfBirth: Date;
+  declare dateOfBirth: Date;
 
   @AllowNull(true)
   @Column(DataType.ENUM(...GENDER_OPTIONS))
-  gender: GenderType;
+  declare gender: GenderType;
 
   @AllowNull(true)
   @Column(DataType.ENUM(...OTHERS_GENDER_OPTIONS))
-  othersGender: OthersGenderType;
+  declare othersGender: OthersGenderType;
 
   @AllowNull(true)
   @Column(DataType.TEXT)
-  bio: string;
+  declare bio: string;
 
   @AllowNull(true)
   @Column(DataType.STRING)
-  profileImage: string;
+  declare profileImage: string;
 
   @AllowNull(true)
   @Column(DataType.STRING)
-  profileBanner: string;
+  declare profileBanner: string;
 
   @AllowNull(true)
   @Column(DataType.STRING)
-  profileHeadline: string;
+  declare profileHeadline: string;
 
   @ForeignKey(() => Country)
   @AllowNull(true)
   @Column(DataType.INTEGER)
-  countryId: number;
+  declare countryId: number;
 
   @ForeignKey(() => City)
   @AllowNull(true)
   @Column(DataType.INTEGER)
-  cityId: number;
+  declare cityId: number;
 
   @AllowNull(true)
   @Column(DataType.STRING)
-  whatsappNumber: string;
+  declare whatsappNumber: string;
 
   @AllowNull(false)
   @Column({
     type: DataType.BOOLEAN,
     defaultValue: false,
   })
-  isWhatsappVerified: boolean;
+  declare isWhatsappVerified: boolean;
 
   // Social Media Links
   @AllowNull(true)
   @Column(DataType.STRING)
-  instagramUrl: string;
+  declare instagramUrl: string;
 
   @AllowNull(true)
   @Column(DataType.STRING)
-  youtubeUrl: string;
+  declare youtubeUrl: string;
 
   @AllowNull(true)
   @Column(DataType.STRING)
-  facebookUrl: string;
+  declare facebookUrl: string;
 
   @AllowNull(true)
   @Column(DataType.STRING)
-  linkedinUrl: string;
+  declare linkedinUrl: string;
 
   @AllowNull(true)
   @Column(DataType.STRING)
-  twitterUrl: string;
+  declare twitterUrl: string;
 
   // Collaboration Costs (stored as JSON)
   @AllowNull(true)
   @Column(DataType.JSON)
-  collaborationCosts: object;
+  declare collaborationCosts: object;
 
   // Profile Completion Status
   @AllowNull(false)
@@ -133,36 +133,36 @@ export class Influencer extends Model {
     type: DataType.BOOLEAN,
     defaultValue: false,
   })
-  isProfileCompleted: boolean;
+  declare isProfileCompleted: boolean;
 
   @AllowNull(false)
   @Column({
     type: DataType.BOOLEAN,
     defaultValue: false,
   })
-  isPhoneVerified: boolean;
+  declare isPhoneVerified: boolean;
 
   @AllowNull(false)
   @Column({
     type: DataType.BOOLEAN,
     defaultValue: true,
   })
-  isActive: boolean;
+  declare isActive: boolean;
 
   @AllowNull(false)
   @Column({
     type: DataType.BOOLEAN,
     defaultValue: false,
   })
-  isVerified: boolean;
+  declare isVerified: boolean;
 
   @AllowNull(true)
   @Column(DataType.DATE)
-  lastLoginAt: Date;
+  declare lastLoginAt: Date;
 
   @AllowNull(true)
   @Column(DataType.STRING)
-  deviceToken: string;
+  declare deviceToken: string;
 
   @CreatedAt
   @Column(DataType.DATE)
@@ -173,11 +173,11 @@ export class Influencer extends Model {
   declare updatedAt: Date;
 
   @BelongsToMany(() => Niche, () => InfluencerNiche)
-  niches: Niche[];
+  declare niches: Niche[];
 
   @BelongsTo(() => Country)
-  country: Country;
+  declare country: Country;
 
   @BelongsTo(() => City)
-  city: City;
+  declare city: City;
 }

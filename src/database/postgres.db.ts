@@ -15,6 +15,10 @@ import { ProfileReview } from '../admin/models/profile-review.model';
 import { Post } from '../post/models/post.model';
 import { Like } from '../post/models/like.model';
 import { Follow } from '../post/models/follow.model';
+import { Campaign } from '../campaign/models/campaign.model';
+import { CampaignCity } from '../campaign/models/campaign-city.model';
+import { CampaignDeliverable } from '../campaign/models/campaign-deliverable.model';
+import { CampaignInvitation } from '../campaign/models/campaign-invitation.model';
 
 @Module({
   imports: [
@@ -46,9 +50,13 @@ import { Follow } from '../post/models/follow.model';
           Post,
           Like,
           Follow,
+          Campaign,
+          CampaignCity,
+          CampaignDeliverable,
+          CampaignInvitation,
         ],
         autoLoadModels: true,
-        synchronize: false, // Disabled to prevent index conflicts with existing database
+        synchronize: true, // Disabled to prevent index conflicts with existing database
         logging: false,
       }),
     }),

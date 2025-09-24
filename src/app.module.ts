@@ -9,6 +9,7 @@ import { BrandModule } from './brand/brand.module';
 import { InfluencerModule } from './influencer/influencer.module';
 import { AdminModule } from './admin/admin.module';
 import { PostModule } from './post/post.module';
+import { CampaignModule } from './campaign/campaign.module';
 import { RedisModule } from './redis/redis.module';
 import { LoggingMiddleware } from './shared/middleware/logging.middleware';
 
@@ -23,6 +24,7 @@ import { LoggingMiddleware } from './shared/middleware/logging.middleware';
     InfluencerModule,
     AdminModule,
     PostModule,
+    CampaignModule,
   ],
   controllers: [AppController],
   providers: [AppService],

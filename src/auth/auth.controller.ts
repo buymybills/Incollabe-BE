@@ -200,10 +200,12 @@ export class AuthController {
   })
   @ApiResponse({
     status: 201,
-    description: 'Influencer registered successfully',
+    description: 'Influencer registered and logged in successfully',
     schema: {
       example: {
-        message: 'Influencer registered successfully',
+        message: 'Influencer registered and logged in successfully',
+        accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        refreshToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
         influencer: {
           id: 1,
           name: 'Dhruv Bhatia',
@@ -215,11 +217,25 @@ export class AuthController {
           profileImage:
             'https://your-bucket.s3.region.amazonaws.com/profiles/influencer-123456789.jpg', // optional
           isPhoneVerified: true,
+          lastLoginAt: '2024-01-15T10:30:00.000Z',
           niches: [
-            { id: 1, name: 'Fashion', icon: '👗' },
-            { id: 4, name: 'Beauty', icon: '💄' },
+            {
+              id: 1,
+              name: 'Fashion',
+              icon: '👗',
+              description: 'Fashion and style content',
+              isActive: true,
+            },
+            {
+              id: 4,
+              name: 'Beauty',
+              icon: '💄',
+              description: 'Beauty and makeup content',
+              isActive: true,
+            },
           ],
         },
+        profileCompleted: true,
       },
     },
   })

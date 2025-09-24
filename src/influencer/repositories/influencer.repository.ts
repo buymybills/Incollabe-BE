@@ -17,6 +17,7 @@ export class InfluencerRepository {
       include: [
         {
           model: Niche,
+          attributes: ['id', 'name', 'description', 'icon'],
           through: { attributes: [] },
         },
         {

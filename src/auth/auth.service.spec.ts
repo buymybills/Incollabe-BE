@@ -511,6 +511,19 @@ describe('AuthService', () => {
         return callback(transaction);
       });
       influencerModel.create.mockResolvedValue(mockInfluencer);
+      // Mock findByPk for fetching complete influencer data with niches
+      const mockCompleteInfluencer = {
+        ...mockInfluencer,
+        niches: [{ id: 1 }, { id: 2 }],
+        toJSON: jest.fn().mockReturnValue({
+          ...mockInfluencer,
+          niches: [{ id: 1 }, { id: 2 }],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }),
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+      influencerModel.findByPk.mockResolvedValue(mockCompleteInfluencer);
       influencerNicheModel.bulkCreate.mockResolvedValue([]);
       jwtService.sign.mockReturnValue('mock-jwt-token');
 
@@ -527,7 +540,9 @@ describe('AuthService', () => {
 
       const result = await service.influencerSignup(influencerSignupDto);
 
-      expect(result.message).toBe('Influencer registered successfully');
+      expect(result.message).toBe(
+        'Influencer registered and logged in successfully',
+      );
       expect(influencerModel.create).toHaveBeenCalled();
       expect(influencerNicheModel.bulkCreate).toHaveBeenCalled();
     });

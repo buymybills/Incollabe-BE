@@ -56,7 +56,12 @@ export class WhatsAppService {
     parameters: string[],
   ): Promise<void> {
     try {
-      const payload = this.buildTemplatePayload(to, templateName, parameters);
+      const formattedNumber = this.formatPhoneNumber(to);
+      const payload = this.buildTemplatePayload(
+        formattedNumber,
+        templateName,
+        parameters,
+      );
       const response = await this.makeWhatsAppRequest(payload);
 
       this.logger.log(
@@ -111,7 +116,8 @@ export class WhatsAppService {
 
   async sendOTP(to: string, otp: string): Promise<void> {
     try {
-      const payload = this.buildOtpPayload(to, otp);
+      const formattedNumber = this.formatPhoneNumber(to);
+      const payload = this.buildOtpPayload(formattedNumber, otp);
       const response = await this.makeWhatsAppRequest(payload);
 
       this.logger.log(
@@ -195,5 +201,67 @@ export class WhatsAppService {
       APP_CONSTANTS.WHATSAPP.TEMPLATE_NAMES.PROFILE_REJECTED,
       [name, reason],
     );
+  }
+
+  async sendCampaignInvitation(
+    to: string,
+    influencerName: string,
+    campaignName: string,
+    brandName: string,
+    personalMessage?: string,
+  ): Promise<void> {
+    const parameters = [
+      influencerName,
+      brandName,
+      campaignName,
+      personalMessage ||
+        'We would love to collaborate with you on this exciting campaign!',
+    ];
+
+    await this.sendTemplateMessage(
+      to,
+      APP_CONSTANTS.WHATSAPP.TEMPLATE_NAMES.CAMPAIGN_INVITATION ||
+        'campaign_invitation',
+      parameters,
+    );
+  }
+
+  async sendCampaignApplicationConfirmation(
+    to: string,
+    influencerName: string,
+    campaignName: string,
+    brandName: string,
+  ): Promise<void> {
+    const parameters = [influencerName, campaignName, brandName];
+
+    await this.sendTemplateMessage(
+      to,
+      APP_CONSTANTS.WHATSAPP.TEMPLATE_NAMES.CAMPAIGN_APPLICATION_CONFIRMATION ||
+        'campaign_application_confirmation',
+      parameters,
+    );
+  }
+
+  private formatPhoneNumber(phoneNumber: string): string {
+    // Remove any non-digit characters except +
+    const cleaned = phoneNumber.replace(/[^\d+]/g, '');
+
+    // If it already starts with +91, return as is
+    if (cleaned.startsWith('+91')) {
+      return cleaned.substring(1); // Remove + for WhatsApp API
+    }
+
+    // If it starts with 91, return as is
+    if (cleaned.startsWith('91') && cleaned.length === 12) {
+      return cleaned;
+    }
+
+    // If it's a 10-digit Indian number, add 91 prefix
+    if (cleaned.length === 10 && cleaned.match(/^[6-9]/)) {
+      return `91${cleaned}`;
+    }
+
+    // Return as is if we can't determine format
+    return cleaned;
   }
 }

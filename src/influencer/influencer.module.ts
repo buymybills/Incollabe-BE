@@ -8,6 +8,8 @@ import { Niche } from '../auth/model/niche.model';
 import { Country } from '../shared/models/country.model';
 import { City } from '../shared/models/city.model';
 import { ProfileReview } from '../admin/models/profile-review.model';
+import { Campaign } from '../campaign/models/campaign.model';
+import { CampaignApplication } from '../campaign/models/campaign-application.model';
 import { SharedModule } from '../shared/shared.module';
 
 @Module({
@@ -18,6 +20,8 @@ import { SharedModule } from '../shared/shared.module';
       Country,
       City,
       ProfileReview,
+      Campaign,
+      CampaignApplication,
     ]),
     SharedModule,
   ],
@@ -28,6 +32,14 @@ import { SharedModule } from '../shared/shared.module';
     {
       provide: 'PROFILE_REVIEW_MODEL',
       useValue: ProfileReview,
+    },
+    {
+      provide: 'CAMPAIGN_MODEL',
+      useValue: Campaign,
+    },
+    {
+      provide: 'CAMPAIGN_APPLICATION_MODEL',
+      useValue: CampaignApplication,
     },
   ],
   exports: [InfluencerService, InfluencerRepository],

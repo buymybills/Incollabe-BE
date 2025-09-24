@@ -38,13 +38,21 @@ export class BrandSignupMultipartDto {
   email: string;
 
   @ApiProperty({
-    description: 'Password for brand account',
+    description:
+      'Password for brand account (min 10 chars, must include uppercase, lowercase, number, and special character)',
     example: 'SecurePassword123!',
     type: 'string',
   })
   @IsString()
   @IsNotEmpty()
-  @MinLength(6)
+  @MinLength(10, { message: 'Password must be at least 10 characters long' })
+  @Matches(
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&._-])[A-Za-z\d@$!%*?&._-]{10,}$/,
+    {
+      message:
+        'Password must contain at least one lowercase letter, one uppercase letter, one number, and one special character (@$!%*?&._-)',
+    },
+  )
   password: string;
 
   @ApiProperty({

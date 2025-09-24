@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
   InternalServerErrorException,
   ForbiddenException,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { ConfigService } from '@nestjs/config';
@@ -292,6 +293,9 @@ export class AuthService {
     );
 
     if (profileCompleted) {
+      // Update last login timestamp
+      await user.update({ lastLoginAt: new Date() });
+
       const { accessToken, refreshToken, jti } = await this.generateTokens(
         user.id,
         profileCompleted,
@@ -413,14 +417,61 @@ export class AuthService {
         include: [
           {
             model: Niche,
+            attributes: ['id', 'name', 'icon', 'description', 'isActive'], // Exclude timestamps
+            through: { attributes: [] }, // Exclude junction table data
           },
         ],
       },
     );
 
+    if (!completeInfluencer) {
+      throw new NotFoundException(
+        'Influencer data not found after registration',
+      );
+    }
+
+    // Create clean response without timestamps
+    const completeData = completeInfluencer.toJSON();
+    const { createdAt, updatedAt, ...cleanInfluencer } = completeData;
+
+    // Update last login timestamp
+    await completeInfluencer.update({ lastLoginAt: new Date() });
+
+    // Generate JWT tokens for auto-login using the existing token generation method
+    const { accessToken, refreshToken, jti } = await this.generateTokens(
+      completeInfluencer.id,
+      true, // profile is completed
+      'influencer',
+    );
+
+    // Store session in Redis for multi-device support
+    const sessionKey = this.sessionKey(completeInfluencer.id, jti);
+    const sessionsSetKey = this.sessionsSetKey(completeInfluencer.id);
+
+    const sessionPayload = JSON.stringify({
+      deviceId: null, // No device info available during signup
+      userAgent: null,
+      createdAt: new Date().toISOString(),
+      userType: 'influencer',
+    });
+
+    await this.redisService
+      .getClient()
+      .multi()
+      .set(sessionKey, sessionPayload) // No expiry - session persists until logout
+      .sadd(sessionsSetKey, jti)
+      .exec();
+
+    // Clear the OTP verification from Redis since it's no longer needed
+    const signupVerificationKey = `otp:verified:${phone}`;
+    await this.redisService.del(signupVerificationKey);
+
     return {
-      message: 'Influencer registered successfully',
-      influencer: completeInfluencer,
+      message: 'Influencer registered and logged in successfully',
+      accessToken,
+      refreshToken,
+      influencer: cleanInfluencer,
+      profileCompleted: true,
     };
   }
 

@@ -9,7 +9,7 @@ import {
   ValidateNested,
   IsObject,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 import { CollaborationCostsDto } from './collaboration-costs.dto';
 
 export class UpdateInfluencerProfileDto {
@@ -44,11 +44,13 @@ export class UpdateInfluencerProfileDto {
 
   @ApiProperty({ description: 'Country ID', required: false })
   @IsOptional()
+  @Transform(({ value }) => parseInt(value))
   @IsNumber()
   countryId?: number;
 
   @ApiProperty({ description: 'City ID', required: false })
   @IsOptional()
+  @Transform(({ value }) => parseInt(value))
   @IsNumber()
   cityId?: number;
 

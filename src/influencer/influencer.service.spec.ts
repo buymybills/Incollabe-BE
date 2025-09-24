@@ -59,6 +59,20 @@ const mockProfileReview = {
   update: jest.fn(),
 };
 
+const mockCampaignModel = {
+  findOne: jest.fn(),
+  findAndCountAll: jest.fn(),
+  findAll: jest.fn(),
+  count: jest.fn(),
+};
+
+const mockCampaignApplicationModel = {
+  create: jest.fn(),
+  findOne: jest.fn(),
+  findAll: jest.fn(),
+  count: jest.fn(),
+};
+
 describe('InfluencerService', () => {
   let service: InfluencerService;
   let influencerRepository: InfluencerRepository;
@@ -94,6 +108,14 @@ describe('InfluencerService', () => {
         {
           provide: 'PROFILE_REVIEW_MODEL',
           useValue: mockProfileReview,
+        },
+        {
+          provide: 'CAMPAIGN_MODEL',
+          useValue: mockCampaignModel,
+        },
+        {
+          provide: 'CAMPAIGN_APPLICATION_MODEL',
+          useValue: mockCampaignApplicationModel,
         },
       ],
     }).compile();

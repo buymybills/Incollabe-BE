@@ -20,6 +20,18 @@ import {
   ERROR_MESSAGES,
   SUCCESS_MESSAGES,
 } from '../shared/constants/app.constants';
+import { Campaign, CampaignStatus } from '../campaign/models/campaign.model';
+import {
+  CampaignApplication,
+  ApplicationStatus,
+} from '../campaign/models/campaign-application.model';
+import { CampaignDeliverable } from '../campaign/models/campaign-deliverable.model';
+import { CampaignCity } from '../campaign/models/campaign-city.model';
+import { City } from '../shared/models/city.model';
+import { Brand } from '../brand/model/brand.model';
+import { ApplyCampaignDto } from '../campaign/dto/apply-campaign.dto';
+import { GetOpenCampaignsDto } from '../campaign/dto/get-open-campaigns.dto';
+import { Op, literal } from 'sequelize';
 
 // Private types for InfluencerService
 type WhatsAppOtpRequest = {
@@ -56,6 +68,10 @@ export class InfluencerService {
     private readonly whatsAppService: WhatsAppService,
     @Inject('PROFILE_REVIEW_MODEL')
     private readonly profileReviewModel: typeof ProfileReview,
+    @Inject('CAMPAIGN_MODEL')
+    private readonly campaignModel: typeof Campaign,
+    @Inject('CAMPAIGN_APPLICATION_MODEL')
+    private readonly campaignApplicationModel: typeof CampaignApplication,
   ) {}
 
   async getInfluencerProfile(influencerId: number, isPublic: boolean = false) {
@@ -156,6 +172,27 @@ export class InfluencerService {
     const processedData: any = { ...updateData };
     if (processedData.dateOfBirth) {
       processedData.dateOfBirth = new Date(processedData.dateOfBirth);
+    }
+
+    // Parse nested collaboration costs from form data
+    const collaborationCosts: any = {};
+    const rawData = updateData as any;
+
+    // Check for nested form fields with syntax: collaborationCosts[platform][type]
+    for (const [key, value] of Object.entries(rawData)) {
+      const match = key.match(/^collaborationCosts\[([^\]]+)\]\[([^\]]+)\]$/);
+      if (match && value !== undefined && value !== '') {
+        const [, platform, type] = match;
+        if (!collaborationCosts[platform]) {
+          collaborationCosts[platform] = {};
+        }
+        collaborationCosts[platform][type] = parseInt(value as string, 10);
+      }
+    }
+
+    // If we found collaboration costs in form data, add them to processed data
+    if (Object.keys(collaborationCosts).length > 0) {
+      processedData.collaborationCosts = collaborationCosts;
     }
 
     // Update influencer data
@@ -316,11 +353,16 @@ export class InfluencerService {
 
     const nextSteps = this.generateNextSteps(missingFields);
 
+    const isActuallyCompleted =
+      this.checkInfluencerProfileCompletion(influencer);
+
     return {
-      isCompleted: missingFields.length === 0,
+      isCompleted: isActuallyCompleted,
       completionPercentage,
       missingFields,
-      nextSteps,
+      nextSteps: isActuallyCompleted
+        ? ['Your profile is complete and ready for verification!']
+        : nextSteps,
     };
   }
 
@@ -415,10 +457,6 @@ export class InfluencerService {
       );
     }
 
-    if (steps.length === 0) {
-      steps.push('Set up collaboration costs for different platforms');
-    }
-
     return steps;
   }
 
@@ -429,9 +467,12 @@ export class InfluencerService {
       throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
     }
 
-    // Generate and store OTP using OTP service
+    // Generate and store OTP using OTP service (ensure consistent +91 format)
+    const formattedNumber = whatsappNumber.startsWith('+91')
+      ? whatsappNumber
+      : `+91${whatsappNumber}`;
     const otp = await this.otpService.generateAndStoreOtp({
-      identifier: whatsappNumber,
+      identifier: formattedNumber,
       type: 'phone',
     });
 
@@ -457,9 +498,12 @@ export class InfluencerService {
       throw new BadRequestException(ERROR_MESSAGES.WHATSAPP.ALREADY_VERIFIED);
     }
 
-    // Verify OTP using OTP service
+    // Verify OTP using OTP service (ensure consistent +91 format)
+    const formattedNumber = whatsappNumber.startsWith('+91')
+      ? whatsappNumber
+      : `+91${whatsappNumber}`;
     await this.otpService.verifyOtp({
-      identifier: '+91' + whatsappNumber,
+      identifier: formattedNumber,
       type: 'phone',
       otp: otp,
     });
@@ -552,6 +596,298 @@ export class InfluencerService {
             'banner',
           )
         : undefined,
+    };
+  }
+
+  async getOpenCampaigns(
+    getOpenCampaignsDto: GetOpenCampaignsDto,
+    influencerId: number,
+  ): Promise<{
+    campaigns: any[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const {
+      search,
+      cityIds,
+      nicheIds,
+      minBudget,
+      maxBudget,
+      page = 1,
+      limit = 10,
+    } = getOpenCampaignsDto;
+
+    const offset = (page - 1) * limit;
+    const whereCondition: any = {
+      status: CampaignStatus.ACTIVE,
+      isActive: true,
+      endDate: { [Op.gt]: new Date() },
+    };
+
+    // Search by campaign name or brand name
+    if (search) {
+      whereCondition[Op.or] = [
+        { name: { [Op.iLike]: `%${search}%` } },
+        { description: { [Op.iLike]: `%${search}%` } },
+      ];
+    }
+
+    const includeOptions: any[] = [
+      {
+        model: Brand,
+        attributes: ['id', 'brandName', 'profileImage'],
+      },
+      {
+        model: CampaignDeliverable,
+        attributes: ['platform', 'type', 'budget', 'quantity'],
+      },
+      {
+        model: CampaignCity,
+        include: [
+          {
+            model: City,
+            attributes: ['id', 'name', 'tier'],
+          },
+        ],
+      },
+    ];
+
+    // City filter
+    if (cityIds && cityIds.length > 0) {
+      includeOptions.push({
+        model: CampaignCity,
+        where: { cityId: { [Op.in]: cityIds } },
+        required: true,
+      });
+    }
+
+    const { count, rows: campaigns } = await this.campaignModel.findAndCountAll(
+      {
+        where: whereCondition,
+        include: includeOptions,
+        order: [['createdAt', 'DESC']],
+        limit,
+        offset,
+        distinct: true,
+      },
+    );
+
+    // Add application status for each campaign
+    const campaignIds = campaigns.map((campaign) => campaign.id);
+    const existingApplications = await this.campaignApplicationModel.findAll({
+      where: {
+        campaignId: { [Op.in]: campaignIds },
+        influencerId,
+      },
+      attributes: ['campaignId', 'status'],
+    });
+
+    const applicationMap = new Map();
+    existingApplications.forEach((app) => {
+      applicationMap.set(app.campaignId, app.status);
+    });
+
+    // Get total applications count for each campaign
+    const applicationCounts = await this.campaignApplicationModel.findAll({
+      where: { campaignId: { [Op.in]: campaignIds } },
+      attributes: ['campaignId', [literal('COUNT(id)'), 'count']],
+      group: ['campaignId'],
+      raw: true,
+    });
+
+    const countMap = new Map();
+    applicationCounts.forEach((count: any) => {
+      countMap.set(count.campaignId, parseInt(count.count));
+    });
+
+    const enrichedCampaigns = campaigns.map((campaign) => ({
+      ...campaign.toJSON(),
+      hasApplied: applicationMap.has(campaign.id),
+      applicationStatus: applicationMap.get(campaign.id) || null,
+      totalApplications: countMap.get(campaign.id) || 0,
+    }));
+
+    const totalPages = Math.ceil(count / limit);
+
+    return {
+      campaigns: enrichedCampaigns,
+      total: count,
+      page,
+      limit,
+      totalPages,
+    };
+  }
+
+  async applyCampaign(
+    applyCampaignDto: ApplyCampaignDto,
+    influencerId: number,
+  ): Promise<{
+    success: boolean;
+    applicationId: number;
+    message: string;
+    campaign: any;
+  }> {
+    const { campaignId, coverLetter, proposalMessage } = applyCampaignDto;
+
+    // Verify campaign exists and is active
+    const campaign = await this.campaignModel.findOne({
+      where: {
+        id: campaignId,
+        status: CampaignStatus.ACTIVE,
+        isActive: true,
+        endDate: { [Op.gt]: new Date() },
+      },
+      include: [{ model: Brand, attributes: ['brandName'] }],
+    });
+
+    if (!campaign) {
+      throw new NotFoundException(
+        'Campaign not found or no longer accepting applications',
+      );
+    }
+
+    // Check if influencer has already applied
+    const existingApplication = await this.campaignApplicationModel.findOne({
+      where: { campaignId, influencerId },
+    });
+
+    if (existingApplication) {
+      throw new BadRequestException(
+        'You have already applied to this campaign',
+      );
+    }
+
+    // Verify influencer profile is complete and verified
+    const influencer = await this.influencerRepository.findById(influencerId);
+    if (
+      !influencer ||
+      !influencer.isProfileCompleted ||
+      !influencer.isWhatsappVerified
+    ) {
+      throw new BadRequestException(
+        'Your profile must be completed and verified to apply for campaigns',
+      );
+    }
+
+    // Create application
+    const application = await this.campaignApplicationModel.create({
+      campaignId,
+      influencerId,
+      status: ApplicationStatus.APPLIED,
+      coverLetter,
+      proposalMessage,
+    } as any);
+
+    // Send WhatsApp notification to influencer
+    await this.whatsAppService.sendCampaignApplicationConfirmation(
+      influencer.whatsappNumber,
+      influencer.name,
+      campaign.name,
+      campaign.brand?.brandName || 'Brand',
+    );
+
+    return {
+      success: true,
+      applicationId: application.id,
+      message:
+        'Application submitted successfully. You will be notified about the status update.',
+      campaign: {
+        id: campaign.id,
+        name: campaign.name,
+        brand: {
+          brandName: campaign.brand?.brandName,
+        },
+      },
+    };
+  }
+
+  async getMyApplications(influencerId: number): Promise<any[]> {
+    const applications = await this.campaignApplicationModel.findAll({
+      where: { influencerId },
+      include: [
+        {
+          model: Campaign,
+          attributes: ['id', 'name', 'description', 'endDate', 'status'],
+          include: [
+            {
+              model: Brand,
+              attributes: ['id', 'brandName', 'profileImage'],
+            },
+            {
+              model: CampaignDeliverable,
+              attributes: ['platform', 'type', 'budget', 'quantity'],
+            },
+          ],
+        },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+
+    return applications.map((app) => ({
+      id: app.id,
+      status: app.status,
+      coverLetter: app.coverLetter,
+      proposalMessage: app.proposalMessage,
+      createdAt: app.createdAt,
+      reviewedAt: app.reviewedAt,
+      reviewNotes: app.reviewNotes,
+      campaign: app.campaign,
+    }));
+  }
+
+  async getCampaignDetails(
+    campaignId: number,
+    influencerId: number,
+  ): Promise<any> {
+    const campaign = await this.campaignModel.findOne({
+      where: {
+        id: campaignId,
+        status: CampaignStatus.ACTIVE,
+        isActive: true,
+      },
+      include: [
+        {
+          model: Brand,
+          attributes: ['id', 'brandName', 'profileImage', 'websiteUrl'],
+        },
+        {
+          model: CampaignCity,
+          include: [
+            {
+              model: City,
+              attributes: ['id', 'name', 'tier'],
+            },
+          ],
+        },
+        {
+          model: CampaignDeliverable,
+        },
+      ],
+    });
+
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+
+    // Check if influencer has applied
+    const application = await this.campaignApplicationModel.findOne({
+      where: { campaignId, influencerId },
+      attributes: ['status', 'createdAt'],
+    });
+
+    // Get total applications count
+    const totalApplications = await this.campaignApplicationModel.count({
+      where: { campaignId },
+    });
+
+    return {
+      ...campaign.toJSON(),
+      hasApplied: !!application,
+      applicationStatus: application?.status || null,
+      appliedAt: application?.createdAt || null,
+      totalApplications,
     };
   }
 }

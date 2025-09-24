@@ -75,12 +75,6 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
     type: DataType.STRING,
     allowNull: false,
     unique: true,
-    validate: {
-      is: {
-        args: /^\+91[6-9]\d{9}$/,
-        msg: 'Phone number must be in format +91XXXXXXXXXX where X is a valid Indian mobile number',
-      },
-    },
   })
   declare phone: string;
 

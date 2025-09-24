@@ -29,15 +29,15 @@ export class Niche extends Model {
   @AllowNull(false)
   @Unique
   @Column(DataType.STRING)
-  name: string;
+  declare name: string;
 
   @AllowNull(true)
   @Column(DataType.STRING)
-  icon: string;
+  declare icon: string;
 
   @AllowNull(true)
   @Column(DataType.TEXT)
-  description: string;
+  declare description: string;
 
   @AllowNull(false)
   @Column({

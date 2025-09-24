@@ -8,10 +8,12 @@ export const APP_CONSTANTS = {
   WHATSAPP: {
     TEMPLATE_NAMES: {
       OTP: 'otp',
-      PROFILE_VERIFICATION_PENDING: 'profile_verification_pending',
+      PROFILE_VERIFICATION_PENDING: 'profile_verification_inprogress',
       PROFILE_INCOMPLETE: 'profile_incomplete',
       PROFILE_VERIFIED: 'profile_verified',
       PROFILE_REJECTED: 'profile_rejected',
+      CAMPAIGN_INVITATION: 'campaign_invitation',
+      CAMPAIGN_APPLICATION_CONFIRMATION: 'campaign_application_confirmation',
     },
     BUTTON_TEXT: {
       VERIFY: 'verify',

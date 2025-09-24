@@ -14,6 +14,7 @@ export interface CityCreationAttributes {
   name: string;
   state?: string;
   countryId: number;
+  tier?: number;
   isActive?: boolean;
 }
 
@@ -42,6 +43,13 @@ export class City extends Model<City, CityCreationAttributes> {
     allowNull: false,
   })
   declare countryId: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    defaultValue: 3,
+  })
+  declare tier: number;
 
   @Column({
     type: DataType.BOOLEAN,
