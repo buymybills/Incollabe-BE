@@ -12,11 +12,13 @@ import { NicheSeeder } from '../database/seeders/niche.seeder';
 import { CountrySeeder } from '../database/seeders/country.seeder';
 import { CitySeeder } from '../database/seeders/city.seeder';
 import { CompanyTypeSeeder } from '../database/seeders/company-type.seeder';
+import { AdminSeeder } from '../database/seeders/admin.seeder';
 import { SeedController } from '../database/seed.controller';
 import { SharedModule } from '../shared/shared.module';
 import { Country } from '../shared/models/country.model';
 import { City } from '../shared/models/city.model';
 import { CompanyType } from '../shared/models/company-type.model';
+import { Admin } from '../admin/models/admin.model';
 
 @Module({
   imports: [
@@ -30,6 +32,7 @@ import { CompanyType } from '../shared/models/company-type.model';
       Country,
       City,
       CompanyType,
+      Admin,
     ]),
     SharedModule,
   ],
@@ -40,6 +43,7 @@ import { CompanyType } from '../shared/models/company-type.model';
     CountrySeeder,
     CitySeeder,
     CompanyTypeSeeder,
+    AdminSeeder,
   ],
   exports: [
     AuthService,
@@ -47,6 +51,7 @@ import { CompanyType } from '../shared/models/company-type.model';
     CountrySeeder,
     CitySeeder,
     CompanyTypeSeeder,
+    AdminSeeder,
   ],
 })
 export class AuthModule {}

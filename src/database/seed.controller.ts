@@ -4,6 +4,7 @@ import { NicheSeeder } from './seeders/niche.seeder';
 import { CountrySeeder } from './seeders/country.seeder';
 import { CitySeeder } from './seeders/city.seeder';
 import { CompanyTypeSeeder } from './seeders/company-type.seeder';
+import { AdminSeeder } from './seeders/admin.seeder';
 
 @ApiTags('Seeder')
 @Controller('seed')
@@ -13,6 +14,7 @@ export class SeedController {
     private readonly countrySeeder: CountrySeeder,
     private readonly citySeeder: CitySeeder,
     private readonly companyTypeSeeder: CompanyTypeSeeder,
+    private readonly adminSeeder: AdminSeeder,
   ) {}
 
   @Post('countries')
@@ -80,11 +82,27 @@ export class SeedController {
     };
   }
 
+  @Post('admins')
+  @ApiOperation({
+    summary: 'Seed admin data',
+    description: 'Populate the admins table with super-admin data',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Admins seeded successfully',
+  })
+  async seedAdmins() {
+    await this.adminSeeder.seed();
+    return {
+      message: 'Admins seeded successfully',
+    };
+  }
+
   @Post('all')
   @ApiOperation({
     summary: 'Seed all master data',
     description:
-      'Populate all master data tables in the correct order (countries -> cities -> niches -> company-types)',
+      'Populate all master data tables in the correct order (countries -> cities -> niches -> company-types -> admins)',
   })
   @ApiResponse({
     status: 200,
@@ -95,6 +113,7 @@ export class SeedController {
     await this.citySeeder.seed();
     await this.nicheSeeder.seed();
     await this.companyTypeSeeder.seed();
+    await this.adminSeeder.seed();
     return {
       message: 'All master data seeded successfully',
     };

@@ -378,17 +378,16 @@ export class AuthService {
     let finalOthersGender: string | undefined;
 
     if (influencerData.gender) {
-      if (
-        influencerData.gender === Gender.MALE ||
-        influencerData.gender === Gender.FEMALE
-      ) {
+      const genderValue = influencerData.gender;
+      const standardGenders = [Gender.MALE, Gender.FEMALE];
+      if (standardGenders.includes(genderValue as Gender)) {
         // Standard gender options
-        finalGender = influencerData.gender;
+        finalGender = genderValue;
         finalOthersGender = undefined;
       } else {
         // Custom gender option - map to Others
         finalGender = Gender.OTHERS;
-        finalOthersGender = influencerData.gender;
+        finalOthersGender = genderValue;
       }
     }
 

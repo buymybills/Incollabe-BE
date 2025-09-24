@@ -41,7 +41,6 @@ export class InfluencerSignupDto {
   })
   username: string;
 
-
   @ApiProperty({
     description: 'Date of birth in YYYY-MM-DD format',
     example: '1995-01-15',
