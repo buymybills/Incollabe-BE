@@ -93,6 +93,15 @@ export class InfluencerController {
         },
         gender: {
           type: 'string',
+          enum: [
+            'Male',
+            'Female',
+            'Abinary',
+            'Trans-Women',
+            'Gay',
+            'Binary',
+            'Trans-Feminine',
+          ],
           description: 'Gender - can update existing or add if skipped',
         },
 

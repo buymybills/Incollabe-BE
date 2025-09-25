@@ -63,4 +63,4 @@ import { CampaignInvitation } from '../campaign/models/campaign-invitation.model
   ],
   exports: [SequelizeModule],
 })
-export class DatabaseModule {} 
+export class DatabaseModule {}

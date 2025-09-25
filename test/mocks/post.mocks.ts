@@ -163,19 +163,22 @@ export const mockNiches = [
   {
     id: 1,
     name: 'Fashion',
-    icon: '👗',
+    logoNormal: '<svg>Fashion Normal</svg>',
+    logoDark: '<svg>Fashion Dark</svg>',
     isActive: true,
   },
   {
     id: 2,
     name: 'Beauty',
-    icon: '💄',
+    logoNormal: '<svg>Beauty Normal</svg>',
+    logoDark: '<svg>Beauty Dark</svg>',
     isActive: true,
   },
   {
     id: 3,
     name: 'Technology',
-    icon: '💻',
+    logoNormal: '<svg>Tech Normal</svg>',
+    logoDark: '<svg>Tech Dark</svg>',
     isActive: true,
   },
 ];

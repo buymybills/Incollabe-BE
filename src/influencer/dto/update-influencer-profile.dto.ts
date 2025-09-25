@@ -8,9 +8,11 @@ import {
   Matches,
   ValidateNested,
   IsObject,
+  IsEnum,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { CollaborationCostsDto } from './collaboration-costs.dto';
+import { Gender, OTHERS_GENDER_OPTIONS } from '../../auth/types/gender.enum';
 
 export class UpdateInfluencerProfileDto {
   @ApiProperty({ description: 'Full name', required: false })
@@ -92,7 +94,21 @@ export class UpdateInfluencerProfileDto {
   @IsString()
   dateOfBirth?: string;
 
-  @ApiProperty({ description: 'Gender', required: false })
+  @ApiProperty({
+    type: 'string',
+    enum: [
+      'Male',
+      'Female',
+      'Abinary',
+      'Trans-Women',
+      'Gay',
+      'Binary',
+      'Trans-Feminine',
+    ],
+    description:
+      'Gender of the influencer - can be Male, Female, or any custom gender option',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   gender?: string;

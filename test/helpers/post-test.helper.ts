@@ -107,10 +107,10 @@ export class PostTestHelper {
   async createTestInfluencer(
     overrides: Partial<InfluencerSignupDto> = {},
   ): Promise<TestUser> {
+    const phoneNumber = `946728${Math.floor(Math.random() * 10000)
+      .toString()
+      .padStart(4, '0')}`;
     const defaultInfluencerData: InfluencerSignupDto = {
-      phone: `946728${Math.floor(Math.random() * 10000)
-        .toString()
-        .padStart(4, '0')}`,
       name: `Test Influencer ${Date.now()}`,
       username: `test_inf_${Date.now()}`,
       gender: Gender.FEMALE,
@@ -122,27 +122,26 @@ export class PostTestHelper {
       // Request OTP for influencer
       await request(this.app.getHttpServer())
         .post('/auth/influencer/request-otp')
-        .send({ phone: defaultInfluencerData.phone })
+        .send({ phone: phoneNumber })
         .expect(200);
 
       // Get OTP from Redis
-      const otp = await this.redisService.get(
-        `otp:+91${defaultInfluencerData.phone}`,
-      );
+      const otp = await this.redisService.get(`otp:+91${phoneNumber}`);
       if (!otp) {
         throw new Error('Failed to get OTP for influencer verification');
       }
 
       // Verify OTP
-      await request(this.app.getHttpServer())
+      const verifyResponse = await request(this.app.getHttpServer())
         .post('/auth/influencer/verify-otp')
-        .send({ phone: defaultInfluencerData.phone, otp })
+        .send({ phone: phoneNumber, otp })
         .set('device-id', 'test-device')
         .expect(200);
 
-      // Signup influencer
+      // Signup influencer using verification key
       const signupResponse = await request(this.app.getHttpServer())
         .post('/auth/influencer/signup')
+        .set('x-verification-key', verifyResponse.body.verificationKey)
         .send(defaultInfluencerData)
         .expect(201);
 

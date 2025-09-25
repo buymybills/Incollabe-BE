@@ -17,7 +17,7 @@ import { CompanyType } from '../../shared/models/company-type.model';
 
 export interface BrandCreationAttributes {
   email: string;
-  phone: string;
+  phone: string | null;
   password?: string;
   isPhoneVerified?: boolean;
   isEmailVerified?: boolean;
@@ -73,7 +73,7 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
 
   @Column({
     type: DataType.STRING,
-    allowNull: false,
+    allowNull: true,
     unique: true,
   })
   declare phone: string;

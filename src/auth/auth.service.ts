@@ -454,7 +454,14 @@ export class AuthService {
         include: [
           {
             model: Niche,
-            attributes: ['id', 'name', 'icon', 'description', 'isActive'], // Exclude timestamps
+            attributes: [
+              'id',
+              'name',
+              'description',
+              'logoNormal',
+              'logoDark',
+              'isActive',
+            ], // Exclude timestamps
             through: { attributes: [] }, // Exclude junction table data
           },
         ],
@@ -515,6 +522,16 @@ export class AuthService {
   async getNiches() {
     const niches = await this.nicheModel.findAll({
       where: { isActive: true },
+      attributes: [
+        'id',
+        'name',
+        'logoNormal',
+        'logoDark',
+        'description',
+        'isActive',
+        'createdAt',
+        'updatedAt',
+      ],
       order: [['name', 'ASC']],
     });
 
@@ -1480,10 +1497,10 @@ export class AuthService {
     const saltRounds = 12;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    // Create brand with basic info and dummy phone
+    // Create brand with basic info and null phone (will be updated in profile completion)
     const brand = await this.brandModel.create({
       email,
-      phone: '0000000000', // Placeholder - will be updated in profile completion
+      phone: null,
       password: hashedPassword,
       isEmailVerified: false,
       isProfileCompleted: false,
@@ -1507,7 +1524,6 @@ export class AuthService {
       brandId: brand.id,
     };
   }
-
 
   /**
    * Complete brand profile with all required information
@@ -1650,7 +1666,7 @@ export class AuthService {
         {
           model: this.nicheModel,
           as: 'niches',
-          attributes: ['id', 'name', 'icon'],
+          attributes: ['id', 'name'],
         },
       ],
     });

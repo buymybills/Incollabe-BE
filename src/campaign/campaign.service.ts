@@ -419,7 +419,7 @@ export class CampaignService {
     if (nicheIds && nicheIds.length > 0) {
       includeOptions.push({
         model: Niche,
-        attributes: ['id', 'name'],
+        attributes: ['id', 'name', 'logoNormal', 'logoDark'],
         through: { attributes: [] },
         where: { id: { [Op.in]: nicheIds } },
         required: true,
@@ -427,7 +427,7 @@ export class CampaignService {
     } else {
       includeOptions.push({
         model: Niche,
-        attributes: ['id', 'name'],
+        attributes: ['id', 'name', 'logoNormal', 'logoDark'],
         through: { attributes: [] },
         required: false,
       });

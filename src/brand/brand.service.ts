@@ -156,6 +156,8 @@ export class BrandService {
         id: niche.id,
         name: niche.name,
         description: niche.description,
+        logoNormal: niche.logoNormal,
+        logoDark: niche.logoDark,
       })),
 
       createdAt: brand.createdAt.toISOString(),

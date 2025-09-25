@@ -193,11 +193,25 @@ export class BrandProfileResponseDto {
   })
   profileCompletion: ProfileCompletion;
 
-  @ApiProperty({ description: 'Brand niches/categories', type: [Object] })
+  @ApiProperty({
+    description: 'Brand niches/categories',
+    type: [Object],
+    example: [
+      {
+        id: 1,
+        name: 'Fashion',
+        description: 'Fashion, style, and clothing content',
+        logoNormal: '<svg>...</svg>',
+        logoDark: '<svg>...</svg>',
+      },
+    ],
+  })
   niches: Array<{
     id: number;
     name: string;
     description?: string;
+    logoNormal?: string;
+    logoDark?: string;
   }>;
 
   @ApiProperty({ description: 'Profile creation timestamp' })

@@ -33,7 +33,11 @@ export class Niche extends Model {
 
   @AllowNull(true)
   @Column(DataType.STRING)
-  declare icon: string;
+  declare logoNormal: string;
+
+  @AllowNull(true)
+  @Column(DataType.STRING)
+  declare logoDark: string;
 
   @AllowNull(true)
   @Column(DataType.TEXT)

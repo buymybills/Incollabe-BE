@@ -238,8 +238,20 @@ describe('AuthService', () => {
   describe('getNiches', () => {
     it('should return all active niches', async () => {
       const mockNiches = [
-        { id: 1, name: 'Fashion', icon: '👗', isActive: true },
-        { id: 2, name: 'Beauty', icon: '💄', isActive: true },
+        {
+          id: 1,
+          name: 'Fashion',
+          logoNormal: '<svg>Fashion Normal</svg>',
+          logoDark: '<svg>Fashion Dark</svg>',
+          isActive: true,
+        },
+        {
+          id: 2,
+          name: 'Beauty',
+          logoNormal: '<svg>Beauty Normal</svg>',
+          logoDark: '<svg>Beauty Dark</svg>',
+          isActive: true,
+        },
       ];
 
       nicheModel.findAll.mockResolvedValue(mockNiches);
@@ -252,6 +264,16 @@ describe('AuthService', () => {
       });
       expect(nicheModel.findAll).toHaveBeenCalledWith({
         where: { isActive: true },
+        attributes: [
+          'id',
+          'name',
+          'logoNormal',
+          'logoDark',
+          'description',
+          'isActive',
+          'createdAt',
+          'updatedAt',
+        ],
         order: [['name', 'ASC']],
       });
     });
@@ -487,7 +509,6 @@ describe('AuthService', () => {
   describe('influencerSignup', () => {
     it('should create a new influencer successfully', async () => {
       const influencerSignupDto: InfluencerSignupDto = {
-        phone: '9876543210',
         name: 'Test Influencer',
         username: 'testinfluencer',
         gender: Gender.FEMALE,
@@ -504,6 +525,11 @@ describe('AuthService', () => {
 
       // Mock Redis verification check (phone was recently verified)
       redisService.get.mockResolvedValue('verified');
+
+      // Mock getVerifiedPhoneNumber to return a phone number for the verification key
+      jest
+        .spyOn(service as any, 'getVerifiedPhoneNumber')
+        .mockResolvedValue('+919876543210');
 
       nicheModel.findAll.mockResolvedValue([{ id: 1 }, { id: 2 }]);
       sequelize.transaction.mockImplementation((callback) => {
@@ -538,7 +564,10 @@ describe('AuthService', () => {
       };
       redisService.getClient.mockReturnValue(mockRedisClient);
 
-      const result = await service.influencerSignup(influencerSignupDto);
+      const result = await service.influencerSignup(
+        influencerSignupDto,
+        'test-verification-key',
+      );
 
       expect(result.message).toBe(
         'Influencer registered and logged in successfully',

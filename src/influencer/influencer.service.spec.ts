@@ -158,7 +158,14 @@ describe('InfluencerService', () => {
           reel: 1500,
         },
       },
-      niches: [{ id: 1, name: 'Fashion', icon: '👗' }],
+      niches: [
+        {
+          id: 1,
+          name: 'Fashion',
+          logoNormal: '<svg>Fashion Normal</svg>',
+          logoDark: '<svg>Fashion Dark</svg>',
+        },
+      ],
       city: { id: 1, name: 'Mumbai', state: 'Maharashtra' },
       country: { id: 1, name: 'India', code: 'IN' },
       createdAt: new Date('2023-01-01'),

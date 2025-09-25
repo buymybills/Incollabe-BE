@@ -98,7 +98,8 @@ describe('Campaign (e2e)', () => {
     // Create test niche
     testNiche = await Niche.create({
       name: 'Fashion',
-      icon: '👗',
+      logoNormal: '<svg>Fashion Normal</svg>',
+      logoDark: '<svg>Fashion Dark</svg>',
       isActive: true,
     } as any);
   }

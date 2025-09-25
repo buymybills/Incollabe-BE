@@ -74,7 +74,6 @@ export class BrandProfileCompletionMultipartDto {
   @IsNotEmpty()
   companyType: string;
 
-
   @ApiProperty({
     description: 'Point of contact name',
     example: 'John Smith',

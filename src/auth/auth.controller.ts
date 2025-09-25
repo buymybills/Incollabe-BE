@@ -228,14 +228,12 @@ export class AuthController {
             {
               id: 1,
               name: 'Fashion',
-              icon: '👗',
               description: 'Fashion and style content',
               isActive: true,
             },
             {
               id: 4,
               name: 'Beauty',
-              icon: '💄',
               description: 'Beauty and makeup content',
               isActive: true,
             },
@@ -292,13 +290,11 @@ export class AuthController {
           {
             id: 1,
             name: 'Fashion',
-            icon: '👗',
             description: 'Fashion, style, and clothing content',
           },
           {
             id: 2,
             name: 'Food',
-            icon: '🍽️',
             description: 'Food, cooking, and culinary content',
           },
         ],
@@ -441,7 +437,6 @@ export class AuthController {
     const userAgent = req?.headers['user-agent'] as string | undefined;
     return this.authService.brandInitialSignup(signupDto, deviceId, userAgent);
   }
-
 
   @Post('brand/complete-profile')
   @HttpCode(HttpStatus.OK)

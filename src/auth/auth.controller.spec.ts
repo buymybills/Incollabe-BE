@@ -185,8 +185,18 @@ describe('AuthController', () => {
       const expectedResult = {
         message: 'Niches fetched successfully',
         niches: [
-          { id: 1, name: 'Fashion', icon: '👗' },
-          { id: 2, name: 'Beauty', icon: '💄' },
+          {
+            id: 1,
+            name: 'Fashion',
+            logoNormal: '<svg>Fashion Normal</svg>',
+            logoDark: '<svg>Fashion Dark</svg>',
+          },
+          {
+            id: 2,
+            name: 'Beauty',
+            logoNormal: '<svg>Beauty Normal</svg>',
+            logoDark: '<svg>Beauty Dark</svg>',
+          },
         ],
       };
 
