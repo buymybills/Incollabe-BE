@@ -61,6 +61,10 @@ export class BrandProfileCompletionMultipartDto {
       'One-Person Company (OPC)',
       'Limited Liability Partnership (LLP)',
       'Partnership Firm',
+      'Sole Proprietorship',
+      'Joint Venture (JV)',
+      'Section 8 Company',
+      'Foreign Company',
     ],
     example: 'Private Limited Company (Pvt. Ltd.)',
   })
@@ -70,6 +74,10 @@ export class BrandProfileCompletionMultipartDto {
     'One-Person Company (OPC)',
     'Limited Liability Partnership (LLP)',
     'Partnership Firm',
+    'Sole Proprietorship',
+    'Joint Venture (JV)',
+    'Section 8 Company',
+    'Foreign Company',
   ])
   @IsNotEmpty()
   companyType: string;
