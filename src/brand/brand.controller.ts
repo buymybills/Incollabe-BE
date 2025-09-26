@@ -254,6 +254,7 @@ export class BrandController {
   }
 
   @Get('dropdown-data/countries')
+  @Public()
   @ApiOperation({ summary: 'Get list of countries for dropdown' })
   @ApiResponse({
     status: 200,
@@ -280,6 +281,7 @@ export class BrandController {
   }
 
   @Get('dropdown-data/cities/:countryId')
+  @Public()
   @ApiOperation({ summary: 'Get list of cities for a specific country' })
   @ApiResponse({
     status: 200,
@@ -307,6 +309,7 @@ export class BrandController {
   }
 
   @Get('dropdown-data/founded-years')
+  @Public()
   @ApiOperation({ summary: 'Get list of years for founded year dropdown' })
   @ApiResponse({
     status: 200,
