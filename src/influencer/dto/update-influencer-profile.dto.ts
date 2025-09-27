@@ -12,23 +12,8 @@ import {
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { CollaborationCostsDto } from './collaboration-costs.dto';
-import { Gender, OTHERS_GENDER_OPTIONS } from '../../auth/types/gender.enum';
 
 export class UpdateInfluencerProfileDto {
-  @ApiProperty({ description: 'Full name', required: false })
-  @IsOptional()
-  @IsString()
-  @Length(2, 100, { message: 'Name must be between 2 and 100 characters' })
-  name?: string;
-
-  @ApiProperty({ description: 'Username', required: false })
-  @IsOptional()
-  @IsString()
-  @Length(3, 30, { message: 'Username must be between 3 and 30 characters' })
-  @Matches(/^[a-zA-Z0-9._]+$/, {
-    message: 'Username can only contain letters, numbers, dots and underscores',
-  })
-  username?: string;
 
   @ApiProperty({ description: 'Bio/description', required: false })
   @IsOptional()
@@ -89,29 +74,6 @@ export class UpdateInfluencerProfileDto {
   @IsString()
   twitterUrl?: string;
 
-  @ApiProperty({ description: 'Date of birth', required: false })
-  @IsOptional()
-  @IsString()
-  dateOfBirth?: string;
-
-  @ApiProperty({
-    type: 'string',
-    enum: [
-      'Male',
-      'Female',
-      'Abinary',
-      'Trans-Women',
-      'Gay',
-      'Binary',
-      'Trans-Feminine',
-    ],
-    description:
-      'Gender of the influencer - can be Male, Female, or any custom gender option',
-    required: false,
-  })
-  @IsOptional()
-  @IsString()
-  gender?: string;
 
   @ApiProperty({
     description: 'Collaboration costs for different platforms',

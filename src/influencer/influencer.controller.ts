@@ -69,14 +69,6 @@ export class InfluencerController {
       type: 'object',
       properties: {
         // Basic Info (can update existing values)
-        name: {
-          type: 'string',
-          description: 'Full name - can update existing',
-        },
-        username: {
-          type: 'string',
-          description: 'Username - can update existing',
-        },
         bio: {
           type: 'string',
           description:
@@ -86,23 +78,6 @@ export class InfluencerController {
           type: 'string',
           description:
             'Profile headline - can update existing or add if skipped',
-        },
-        dateOfBirth: {
-          type: 'string',
-          description: 'Date of birth - can update existing or add if skipped',
-        },
-        gender: {
-          type: 'string',
-          enum: [
-            'Male',
-            'Female',
-            'Abinary',
-            'Trans-Women',
-            'Gay',
-            'Binary',
-            'Trans-Feminine',
-          ],
-          description: 'Gender - can update existing or add if skipped',
         },
 
         // Location
@@ -201,13 +176,9 @@ export class InfluencerController {
         },
       },
       example: {
-        name: 'Bharti Mishra',
-        username: 'bharti_mishra',
         bio: 'I am a fashion influencer creating amazing content',
         profileHeadline:
           'Fashion influencer creating amazing lifestyle content',
-        dateOfBirth: '1995-01-15',
-        gender: 'Female',
         countryId: '1',
         cityId: '3',
         whatsappNumber: '9870541151',
