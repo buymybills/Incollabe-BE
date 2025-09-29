@@ -16,6 +16,8 @@ import {
 } from '../admin/models/profile-review.model';
 import { Admin } from '../admin/models/admin.model';
 import { Influencer } from '../auth/model/influencer.model';
+import { Niche } from '../auth/model/niche.model';
+import { InfluencerNiche } from '../auth/model/influencer-niche.model';
 import {
   APP_CONSTANTS,
   ERROR_MESSAGES,
@@ -76,6 +78,10 @@ export class InfluencerService {
     private readonly campaignApplicationModel: typeof CampaignApplication,
     @Inject('ADMIN_MODEL')
     private readonly adminModel: typeof Admin,
+    @Inject('NICHE_MODEL')
+    private readonly nicheModel: typeof Niche,
+    @Inject('INFLUENCER_NICHE_MODEL')
+    private readonly influencerNicheModel: typeof InfluencerNiche,
   ) {}
 
   async getInfluencerProfile(influencerId: number, isPublic: boolean = false) {
@@ -212,6 +218,14 @@ export class InfluencerService {
         processedData.othersGender = processedData.gender;
         processedData.gender = Gender.OTHERS;
       }
+    }
+
+    // Handle niche updates if provided
+    if (processedData.nicheIds) {
+      const nicheIds = this.parseNicheIds(processedData.nicheIds);
+      await this.updateInfluencerNiches(influencerId, nicheIds);
+      // Remove nicheIds from processedData as it's handled separately
+      delete processedData.nicheIds;
     }
 
     // Update influencer data
@@ -947,5 +961,60 @@ export class InfluencerService {
       appliedAt: application?.createdAt || null,
       totalApplications,
     };
+  }
+
+  private parseNicheIds(nicheIds: string): number[] {
+    let parsedIds: number[];
+
+    // Check if it's a JSON array format
+    if (nicheIds.startsWith('[') && nicheIds.endsWith(']')) {
+      const parsed = JSON.parse(nicheIds);
+      if (!Array.isArray(parsed)) {
+        throw new BadRequestException('Invalid niche IDs format: must be array');
+      }
+      parsedIds = parsed.map(id => parseInt(id, 10));
+    } else {
+      // Handle comma-separated values
+      parsedIds = nicheIds
+        .split(',')
+        .map(id => parseInt(id.trim(), 10));
+    }
+
+    // Check for any invalid numbers
+    const invalidIds = parsedIds.filter(id => isNaN(id));
+    if (invalidIds.length > 0) {
+      throw new BadRequestException(`Invalid niche IDs: ${invalidIds.join(', ')}`);
+    }
+
+    return parsedIds;
+  }
+
+  private async updateInfluencerNiches(influencerId: number, nicheIds: number[]) {
+    // Validate niche IDs
+    const validNiches = await this.nicheModel.findAll({
+      where: { id: nicheIds, isActive: true },
+    });
+
+    if (validNiches.length !== nicheIds.length) {
+      throw new BadRequestException('One or more invalid niche IDs provided');
+    }
+
+    // Create or update niche associations (like brand profile completion)
+    for (const nicheId of nicheIds) {
+      await this.influencerNicheModel.findOrCreate({
+        where: { influencerId, nicheId },
+        defaults: { influencerId, nicheId },
+      });
+    }
+
+    // Remove old associations not in the new list
+    await this.influencerNicheModel.destroy({
+      where: {
+        influencerId,
+        nicheId: {
+          [Op.notIn]: nicheIds,
+        },
+      },
+    });
   }
 }

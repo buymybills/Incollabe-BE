@@ -100,6 +100,14 @@ export class InfluencerController {
           description: 'WhatsApp number for verification',
         },
 
+        // Niches
+        nicheIds: {
+          type: 'string',
+          description:
+            'Array of niche IDs. Accepts JSON array "[1,4,12]" or comma-separated "1,4,12"',
+          example: '[1,4,12]',
+        },
+
         // Social Media Links (can update existing or add new)
         instagramUrl: { type: 'string', description: 'Instagram profile URL' },
         youtubeUrl: { type: 'string', description: 'YouTube channel URL' },
@@ -182,6 +190,7 @@ export class InfluencerController {
         countryId: '1',
         cityId: '3',
         whatsappNumber: '9870541151',
+        nicheIds: '[1,4,12]',
         instagramUrl: 'https://www.instagram.com/bharti.1',
         youtubeUrl: 'https://www.youtube.com/watch?v=8_qUi4PyrYk',
         facebookUrl: 'https://www.facebook.com/mishra.bharti.1/',

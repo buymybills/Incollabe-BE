@@ -18,31 +18,28 @@ export class FirebaseService implements OnModuleInit {
       // App doesn't exist, initialize it
       let serviceAccount: ServiceAccount;
 
-      // Try to load from environment variables first (production)
+      // Load from environment variables
       const firebasePrivateKey = this.configService.get<string>('FIREBASE_PRIVATE_KEY');
+      const firebaseProjectId = this.configService.get<string>('FIREBASE_PROJECT_ID');
+      const firebaseClientEmail = this.configService.get<string>('FIREBASE_CLIENT_EMAIL');
 
-      if (firebasePrivateKey) {
-        serviceAccount = {
-          type: 'service_account',
-          projectId: this.configService.get<string>('FIREBASE_PROJECT_ID') || 'collabkaroo',
-          privateKeyId: this.configService.get<string>('FIREBASE_PRIVATE_KEY_ID'),
-          privateKey: firebasePrivateKey.replace(/\\n/g, '\n'),
-          clientEmail: this.configService.get<string>('FIREBASE_CLIENT_EMAIL'),
-          clientId: this.configService.get<string>('FIREBASE_CLIENT_ID'),
-          authUri: this.configService.get<string>('FIREBASE_AUTH_URI') || 'https://accounts.google.com/o/oauth2/auth',
-          tokenUri: this.configService.get<string>('FIREBASE_TOKEN_URI') || 'https://oauth2.googleapis.com/token',
-          authProviderX509CertUrl: this.configService.get<string>('FIREBASE_AUTH_PROVIDER_X509_CERT_URL') || 'https://www.googleapis.com/oauth2/v1/certs',
-          clientC509CertUrl: this.configService.get<string>('FIREBASE_CLIENT_CERT_URL'),
-          universeDomain: this.configService.get<string>('FIREBASE_UNIVERSE_DOMAIN') || 'googleapis.com',
-        } as ServiceAccount;
-      } else {
-        // Fallback to JSON file for local development
-        const serviceAccountPath = path.join(
-          process.cwd(),
-          'collabkaroo-firebase-adminsdk.json',
-        );
-        serviceAccount = require(serviceAccountPath) as ServiceAccount;
+      if (!firebasePrivateKey || !firebaseProjectId || !firebaseClientEmail) {
+        throw new Error('Firebase configuration is missing. Please set FIREBASE_PRIVATE_KEY, FIREBASE_PROJECT_ID, and FIREBASE_CLIENT_EMAIL environment variables.');
       }
+
+      serviceAccount = {
+        type: 'service_account',
+        projectId: firebaseProjectId,
+        privateKeyId: this.configService.get<string>('FIREBASE_PRIVATE_KEY_ID'),
+        privateKey: firebasePrivateKey.replace(/\\n/g, '\n'),
+        clientEmail: firebaseClientEmail,
+        clientId: this.configService.get<string>('FIREBASE_CLIENT_ID'),
+        authUri: this.configService.get<string>('FIREBASE_AUTH_URI') || 'https://accounts.google.com/o/oauth2/auth',
+        tokenUri: this.configService.get<string>('FIREBASE_TOKEN_URI') || 'https://oauth2.googleapis.com/token',
+        authProviderX509CertUrl: this.configService.get<string>('FIREBASE_AUTH_PROVIDER_X509_CERT_URL') || 'https://www.googleapis.com/oauth2/v1/certs',
+        clientC509CertUrl: this.configService.get<string>('FIREBASE_CLIENT_CERT_URL'),
+        universeDomain: this.configService.get<string>('FIREBASE_UNIVERSE_DOMAIN') || 'googleapis.com',
+      } as ServiceAccount;
 
       this.app = admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
