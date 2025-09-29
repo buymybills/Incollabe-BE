@@ -90,4 +90,14 @@ export class UpdateInfluencerProfileDto {
   @IsOptional()
   @IsString()
   fcmToken?: string;
+
+  @ApiProperty({
+    description:
+      'Array of niche IDs. Accepts JSON array "[1,4,12]" or comma-separated "1,4,12"',
+    example: '[1,4,12]',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  nicheIds?: string;
 }
