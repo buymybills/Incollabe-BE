@@ -128,6 +128,20 @@ describe('InfluencerService', () => {
           provide: 'ADMIN_MODEL',
           useValue: mockAdminModel,
         },
+        {
+          provide: 'NICHE_MODEL',
+          useValue: {
+            findAll: jest.fn(),
+          },
+        },
+        {
+          provide: 'INFLUENCER_NICHE_MODEL',
+          useValue: {
+            findOrCreate: jest.fn(),
+            destroy: jest.fn(),
+            bulkCreate: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
