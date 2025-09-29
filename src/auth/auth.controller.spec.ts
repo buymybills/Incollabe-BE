@@ -258,24 +258,6 @@ describe('AuthController', () => {
     });
   });
 
-  describe('requestBrandOtp', () => {
-    it('should request OTP for brand', async () => {
-      const requestOtpDto: RequestOtpDto = { phone: '9467289789' };
-      const expectedResult = {
-        message: 'OTP sent successfully',
-        phone: '+919467289789',
-        expiresIn: 300,
-      };
-
-      mockAuthService.requestOtp.mockResolvedValue(expectedResult);
-
-      const result = await controller.requestBrandOtp(requestOtpDto);
-
-      expect(authService.requestOtp).toHaveBeenCalledWith(requestOtpDto);
-      expect(result).toEqual(expectedResult);
-    });
-  });
-
   describe('verifyBrandOtp', () => {
     it('should verify OTP for brand', async () => {
       const verifyOtpDto: BrandVerifyOtpDto = {
@@ -312,61 +294,6 @@ describe('AuthController', () => {
       expect(result).toEqual(expectedResult);
     });
   });
-
-  // Legacy brandSignup test - commented out as method was replaced with two-step signup
-  // describe('brandSignup', () => {
-  //   it('should signup brand', async () => {
-  //     const signupDto: BrandSignupDto = {
-  //       email: 'test@brand.com',
-  //       phone: '9467289789',
-  //       password: 'password123',
-  //       brandName: 'Test Brand',
-  //       username: 'test_brand',
-  //     };
-  //     const mockFiles = {
-  //       profileImage: [
-  //         {
-  //           fieldname: 'profileImage',
-  //           originalname: 'profile.jpg',
-  //           encoding: '7bit',
-  //           mimetype: 'image/jpeg',
-  //           size: 1000,
-  //           buffer: Buffer.from('test'),
-  //         } as Express.Multer.File,
-  //       ],
-  //     };
-  //     const deviceId = 'device-123';
-  //     const userAgent = 'Mozilla/5.0 (test browser)';
-  //     const mockReq = { headers: { 'user-agent': userAgent } } as any;
-  //     const expectedResult = {
-  //       message: 'Brand registered successfully',
-  //       brand: {
-  //         id: 1,
-  //         email: 'test@brand.com',
-  //         phone: '+919467289789',
-  //         brandName: 'Test Brand',
-  //         username: 'test_brand',
-  //       },
-  //     };
-
-  //     mockAuthService.brandSignup.mockResolvedValue(expectedResult);
-
-  //     const result = await controller.brandSignup(
-  //       signupDto,
-  //       mockFiles,
-  //       deviceId,
-  //       mockReq,
-  //     );
-
-  //     expect(authService.brandSignup).toHaveBeenCalledWith(
-  //       signupDto,
-  //       mockFiles,
-  //       deviceId,
-  //       userAgent,
-  //     );
-  //     expect(result).toEqual(expectedResult);
-  //   });
-  // });
 
   describe('brandLogin', () => {
     it('should login brand', async () => {

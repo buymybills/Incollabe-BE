@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cloutsy FCM Token Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .token-display {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: monospace;
+            word-break: break-all;
+            margin: 20px 0;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .copy-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .copy-btn:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔥 Cloutsy FCM Token Generator</h1>
+        <p>This tool generates Firebase Cloud Messaging tokens for testing push notifications in your Cloutsy app.</p>
+
+        <div id="status" class="status warning">
+            Click "Generate Token" to start...
+        </div>
+
+        <button onclick="generateToken()" class="copy-btn">Generate FCM Token</button>
+
+        <h3>Your FCM Token:</h3>
+        <div id="token" class="token-display">Token will appear here...</div>
+
+        <button id="copyBtn" onclick="copyToken()" class="copy-btn" style="display:none;">Copy Token</button>
+
+        <h3>How to use this token:</h3>
+        <ol>
+            <li>Copy the generated FCM token above</li>
+            <li>Add it to your test user in the database:
+                <code>UPDATE influencers SET "fcmToken" = 'YOUR_TOKEN_HERE' WHERE id = 1;</code>
+            </li>
+            <li>Test the follow notification system!</li>
+        </ol>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging.js";
+
+        // Cloutsy Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyADERgvs_2t21fDHTSpwXzwxFdUZCJabic",
+            authDomain: "collabkaroo.firebaseapp.com",
+            projectId: "collabkaroo",
+            storageBucket: "collabkaroo.firebasestorage.app",
+            messagingSenderId: "653234338070",
+            appId: "1:653234338070:web:79580c4c45d021d426f837",
+            measurementId: "G-W1S5SZR4YG"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const messaging = getMessaging(app);
+
+        let generatedToken = '';
+
+        window.generateToken = async function() {
+            const statusDiv = document.getElementById('status');
+            const tokenDiv = document.getElementById('token');
+            const copyBtn = document.getElementById('copyBtn');
+
+            try {
+                statusDiv.innerHTML = '🔄 Checking service worker support...';
+                statusDiv.className = 'status warning';
+
+                // Check if service workers are supported
+                if (!('serviceWorker' in navigator)) {
+                    throw new Error('Service Workers are not supported in this browser');
+                }
+
+                if (!('PushManager' in window)) {
+                    throw new Error('Push messaging is not supported in this browser');
+                }
+
+                statusDiv.innerHTML = '🔄 Registering service worker...';
+
+                // Register service worker and wait for it to be ready
+                let registration;
+                try {
+                    registration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+                    console.log('Service Worker registered successfully', registration);
+
+                    // Wait for the service worker to be ready
+                    await navigator.serviceWorker.ready;
+                    console.log('Service Worker is ready');
+
+                    // Additional wait to ensure service worker is fully active
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                } catch (swError) {
+                    throw new Error(`Service Worker registration failed: ${swError.message}`);
+                }
+
+                statusDiv.innerHTML = '🔄 Requesting notification permission...';
+
+                // Request notification permission
+                const permission = await Notification.requestPermission();
+
+                if (permission !== 'granted') {
+                    statusDiv.innerHTML = '❌ Notification permission denied. Please enable notifications and try again.';
+                    statusDiv.className = 'status error';
+                    return;
+                }
+
+                statusDiv.innerHTML = '🔄 Generating FCM token...';
+
+                // Get FCM token (try without VAPID key first)
+                let token;
+                try {
+                    token = await getToken(messaging, {
+                        serviceWorkerRegistration: registration
+                    });
+                } catch (tokenError) {
+                    console.warn('Failed without VAPID key, trying with VAPID key:', tokenError);
+                    // Try with VAPID key if the first attempt fails
+                    try {
+                        token = await getToken(messaging, {
+                            vapidKey: "BE9gmnuJab765qArY_J8jxh3Bmt8wBo_wL9tzTX9YcKE2rCK16mGkQYmssAvtgBZGQ130qcOgiis-OoYjwe1bxs",
+                            serviceWorkerRegistration: registration
+                        });
+                    } catch (vapidError) {
+                        throw new Error(`FCM token generation failed: ${vapidError.message}`);
+                    }
+                }
+
+                if (token) {
+                    generatedToken = token;
+                    tokenDiv.textContent = token;
+                    copyBtn.style.display = 'inline-block';
+                    statusDiv.innerHTML = '✅ FCM Token generated successfully! You can now copy it and use for testing.';
+                    statusDiv.className = 'status success';
+                    console.log('FCM Token:', token);
+                } else {
+                    statusDiv.innerHTML = '❌ Failed to generate token. No token returned.';
+                    statusDiv.className = 'status error';
+                }
+
+            } catch (error) {
+                console.error('Error generating FCM token:', error);
+                statusDiv.innerHTML = `❌ Error: ${error.message}`;
+                statusDiv.className = 'status error';
+                tokenDiv.textContent = 'Failed to generate token';
+            }
+        };
+
+        window.copyToken = function() {
+            navigator.clipboard.writeText(generatedToken).then(() => {
+                const copyBtn = document.getElementById('copyBtn');
+                const originalText = copyBtn.textContent;
+                copyBtn.textContent = 'Copied! ✅';
+                setTimeout(() => {
+                    copyBtn.textContent = originalText;
+                }, 2000);
+            });
+        };
+    </script>
+</body>
+</html>

@@ -80,6 +80,10 @@ export class Influencer extends Model {
   @Column(DataType.STRING)
   declare profileHeadline: string;
 
+  @AllowNull(true)
+  @Column(DataType.STRING)
+  declare fcmToken: string;
+
   @ForeignKey(() => Country)
   @AllowNull(true)
   @Column(DataType.INTEGER)
@@ -159,10 +163,6 @@ export class Influencer extends Model {
   @AllowNull(true)
   @Column(DataType.DATE)
   declare lastLoginAt: Date;
-
-  @AllowNull(true)
-  @Column(DataType.STRING)
-  declare deviceToken: string;
 
   @CreatedAt
   @Column(DataType.DATE)

@@ -120,10 +120,11 @@ export class InfluencerSignupMultipartDto {
   profileImage?: any;
 
   @ApiProperty({
-    description: 'Device token for push notifications (optional, can be empty)',
+    description: 'FCM token for push notifications (optional, can be empty)',
     required: false,
   })
   @IsOptional()
   @Allow()
-  deviceToken?: string;
+  fcmToken?: string;
+
 }

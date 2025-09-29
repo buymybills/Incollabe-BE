@@ -14,6 +14,7 @@ import {
   ProfileReview,
   ProfileType,
 } from '../admin/models/profile-review.model';
+import { Admin } from '../admin/models/admin.model';
 import { Influencer } from '../auth/model/influencer.model';
 import {
   APP_CONSTANTS,
@@ -73,6 +74,8 @@ export class InfluencerService {
     private readonly campaignModel: typeof Campaign,
     @Inject('CAMPAIGN_APPLICATION_MODEL')
     private readonly campaignApplicationModel: typeof CampaignApplication,
+    @Inject('ADMIN_MODEL')
+    private readonly adminModel: typeof Admin,
   ) {}
 
   async getInfluencerProfile(influencerId: number, isPublic: boolean = false) {
@@ -241,38 +244,43 @@ export class InfluencerService {
       // Profile just became complete - automatically submit for verification
       await this.createProfileReview(influencerId);
 
-      // Send verification pending notifications
-      await Promise.all([
-        this.emailService.sendInfluencerProfileVerificationPendingEmail(
-          influencer.phone, // Using phone as identifier for influencers
+      // Send verification pending notifications (WhatsApp only for influencers)
+      if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
+        await this.whatsAppService.sendProfileVerificationPending(
+          influencer.whatsappNumber,
           influencer.name,
-        ),
-        // Send WhatsApp notification if WhatsApp number is available and verified
-        influencer.whatsappNumber && influencer.isWhatsappVerified
-          ? this.whatsAppService.sendProfileVerificationPending(
-              influencer.whatsappNumber,
-              influencer.name,
-            )
-          : Promise.resolve(),
-      ]);
+        );
+      }
     } else if (!isComplete) {
-      // Profile is incomplete - send missing fields notifications
-      await Promise.all([
-        this.emailService.sendInfluencerProfileIncompleteEmail(
-          influencer.phone,
+      // Profile is incomplete - send missing fields notifications (WhatsApp only for influencers)
+      console.log('Profile incomplete notification check:', {
+        influencerId: influencer.id,
+        name: influencer.name,
+        whatsappNumber: influencer.whatsappNumber,
+        isWhatsappVerified: influencer.isWhatsappVerified,
+        missingFieldsCount: profileCompletion.missingFields.length,
+        missingFields: profileCompletion.missingFields,
+      });
+
+      if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
+        console.log(
+          'Sending profile incomplete WhatsApp notification to:',
+          influencer.whatsappNumber,
+        );
+        await this.whatsAppService.sendProfileIncomplete(
+          influencer.whatsappNumber,
           influencer.name,
-          profileCompletion.missingFields,
-          profileCompletion.nextSteps,
-        ),
-        // Send WhatsApp notification if WhatsApp number is available and verified
-        influencer.whatsappNumber && influencer.isWhatsappVerified
-          ? this.whatsAppService.sendProfileIncomplete(
-              influencer.whatsappNumber,
-              influencer.name,
-              profileCompletion.missingFields.length.toString(),
-            )
-          : Promise.resolve(),
-      ]);
+          profileCompletion.missingFields.length.toString(),
+        );
+      } else {
+        console.log(
+          'Profile incomplete WhatsApp notification not sent. Reason:',
+          {
+            hasWhatsappNumber: !!influencer.whatsappNumber,
+            isWhatsappVerified: influencer.isWhatsappVerified,
+          },
+        );
+      }
     }
 
     // Return updated profile with appropriate message
@@ -571,18 +579,27 @@ export class InfluencerService {
     const influencer = await this.influencerRepository.findById(influencerId);
     if (!influencer) return;
 
-    // For now, we'll send to a default admin email
-    // In production, this should fetch all active admin emails
-    const adminEmail = process.env.ADMIN_EMAIL || 'admin@incollab.com';
+    // Get all active profile reviewer admins
+    const admins = await this.adminModel.findAll({
+      where: {
+        status: 'active',
+        role: ['super_admin', 'profile_reviewer'],
+      },
+    });
 
-    await this.emailService.sendAdminProfilePendingNotification(
-      adminEmail,
-      'Admin',
-      'influencer',
-      influencer.name,
-      influencer.username || influencer.phone,
-      influencerId,
+    // Send notification emails to all admins
+    const emailPromises = admins.map((admin) =>
+      this.emailService.sendAdminProfilePendingNotification(
+        admin.email,
+        admin.name,
+        'influencer',
+        influencer.name,
+        influencer.username || influencer.phone,
+        influencerId,
+      ),
     );
+
+    await Promise.all(emailPromises);
   }
 
   private async uploadInfluencerFiles(files: any) {
@@ -639,15 +656,30 @@ export class InfluencerService {
     const whereCondition: any = {
       status: CampaignStatus.ACTIVE,
       isActive: true,
-      endDate: { [Op.gt]: new Date() },
+      [Op.or]: [
+        { endDate: { [Op.gt]: new Date() } },
+        { endDate: { [Op.is]: null } },
+      ],
     };
 
     // Search by campaign name or brand name
     if (search) {
-      whereCondition[Op.or] = [
-        { name: { [Op.iLike]: `%${search}%` } },
-        { description: { [Op.iLike]: `%${search}%` } },
+      whereCondition[Op.and] = [
+        {
+          [Op.or]: [
+            { endDate: { [Op.gt]: new Date() } },
+            { endDate: { [Op.is]: null } },
+          ],
+        },
+        {
+          [Op.or]: [
+            { name: { [Op.iLike]: `%${search}%` } },
+            { description: { [Op.iLike]: `%${search}%` } },
+          ],
+        },
       ];
+      // Remove the top-level [Op.or] since we're using [Op.and] now
+      delete whereCondition[Op.or];
     }
 
     const includeOptions: any[] = [
@@ -750,13 +782,20 @@ export class InfluencerService {
     // Verify campaign exists and is active
     const campaign = await this.campaignModel.findOne({
       where: {
-        id: campaignId,
-        status: CampaignStatus.ACTIVE,
-        isActive: true,
-        endDate: { [Op.gt]: new Date() },
+        [Op.and]: [
+          { id: campaignId },
+          { status: CampaignStatus.ACTIVE },
+          { isActive: true },
+          {
+            [Op.or]: [
+              { endDate: { [Op.is]: null } },
+              { endDate: { [Op.gt]: new Date() } },
+            ],
+          },
+        ],
       },
       include: [{ model: Brand, attributes: ['brandName'] }],
-    });
+    } as any);
 
     if (!campaign) {
       throw new NotFoundException(
@@ -841,16 +880,19 @@ export class InfluencerService {
       order: [['createdAt', 'DESC']],
     });
 
-    return applications.map((app) => ({
-      id: app.id,
-      status: app.status,
-      coverLetter: app.coverLetter,
-      proposalMessage: app.proposalMessage,
-      createdAt: app.createdAt,
-      reviewedAt: app.reviewedAt,
-      reviewNotes: app.reviewNotes,
-      campaign: app.campaign,
-    }));
+    return applications.map((app) => {
+      const appData = app.toJSON();
+      return {
+        id: appData.id,
+        status: appData.status,
+        coverLetter: appData.coverLetter,
+        proposalMessage: appData.proposalMessage,
+        createdAt: appData.createdAt,
+        reviewedAt: appData.reviewedAt,
+        reviewNotes: appData.reviewNotes,
+        campaign: appData.campaign,
+      };
+    });
   }
 
   async getCampaignDetails(

@@ -14,7 +14,6 @@ import { Type, Transform } from 'class-transformer';
 import { CollaborationCostsDto } from './collaboration-costs.dto';
 
 export class UpdateInfluencerProfileDto {
-
   @ApiProperty({ description: 'Bio/description', required: false })
   @IsOptional()
   @IsString()
@@ -74,7 +73,6 @@ export class UpdateInfluencerProfileDto {
   @IsString()
   twitterUrl?: string;
 
-
   @ApiProperty({
     description: 'Collaboration costs for different platforms',
     required: false,
@@ -84,4 +82,12 @@ export class UpdateInfluencerProfileDto {
   @ValidateNested()
   @Type(() => CollaborationCostsDto)
   collaborationCosts?: CollaborationCostsDto;
+
+  @ApiProperty({
+    description: 'FCM token for push notifications',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  fcmToken?: string;
 }

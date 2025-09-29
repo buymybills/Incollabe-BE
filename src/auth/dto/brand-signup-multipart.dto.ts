@@ -200,4 +200,12 @@ export class BrandSignupMultipartDto {
   })
   @IsArray()
   nicheIds?: number[];
+
+  @ApiProperty({
+    description: 'FCM token for push notifications (optional, can be empty)',
+    required: false,
+  })
+  @IsOptional()
+  @Allow()
+  fcmToken?: string;
 }

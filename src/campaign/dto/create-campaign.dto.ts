@@ -31,8 +31,9 @@ export class CreateCampaignDto {
   @IsString()
   deliverableFormat?: string;
 
+  @IsOptional()
   @IsEnum(CampaignType)
-  type: CampaignType;
+  type?: CampaignType;
 
   @IsOptional()
   @IsDateString()
@@ -61,6 +62,9 @@ export class CreateCampaignDto {
   @Min(13)
   @Max(100)
   maxAge?: number;
+
+  @IsBoolean()
+  isOpenToAllAges: boolean;
 
   @IsOptional()
   @IsArray()

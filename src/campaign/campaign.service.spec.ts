@@ -149,6 +149,16 @@ describe('CampaignService', () => {
         cities: [],
         deliverables: [],
         invitations: [],
+        toJSON: jest.fn().mockReturnValue({
+          id: 1,
+          name: 'Test Campaign',
+          brandId,
+          ...mockCreateCampaignDto,
+          brand: { id: brandId, brandName: 'Test Brand' },
+          cities: [],
+          deliverables: [],
+          invitations: [],
+        }),
       });
 
       const result = await service.createCampaign(
@@ -305,13 +315,28 @@ describe('CampaignService', () => {
         cities: [],
         deliverables: [],
         invitations: [],
+        toJSON: jest.fn().mockReturnValue({
+          id: campaignId,
+          name: 'Test Campaign',
+          brand: { id: 1, brandName: 'Test Brand' },
+          cities: [],
+          deliverables: [],
+          invitations: [],
+        }),
       };
 
       campaignModel.findOne.mockResolvedValue(mockCampaign);
 
       const result = await service.getCampaignById(campaignId);
 
-      expect(result).toEqual(mockCampaign);
+      expect(result).toEqual({
+        id: campaignId,
+        name: 'Test Campaign',
+        brand: { id: 1, brandName: 'Test Brand' },
+        cities: [],
+        deliverables: [],
+        invitations: [],
+      });
       expect(campaignModel.findOne).toHaveBeenCalledWith({
         where: { id: campaignId, isActive: true },
         include: expect.any(Array),
@@ -355,6 +380,15 @@ describe('CampaignService', () => {
           cities: [],
           deliverables: [],
           invitations: [],
+          toJSON: jest.fn().mockReturnValue({
+            id: campaignId,
+            brandId,
+            status: newStatus,
+            brand: { id: brandId, brandName: 'Test Brand' },
+            cities: [],
+            deliverables: [],
+            invitations: [],
+          }),
         });
 
       const result = await service.updateCampaignStatus(
@@ -684,7 +718,9 @@ describe('CampaignService', () => {
 
       expect(result.success).toBe(true);
       expect(result.invitationsSent).toBe(2);
-      expect(result.failedInvitations).toHaveLength(0);
+      expect(result.message).toContain(
+        'Successfully sent 2 campaign invitations',
+      );
       expect(campaignInvitationModel.bulkCreate).toHaveBeenCalled();
       expect(whatsAppService.sendCampaignInvitation).toHaveBeenCalledTimes(2);
     });

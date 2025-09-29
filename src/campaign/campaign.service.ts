@@ -12,6 +12,7 @@ import { CampaignDeliverable } from './models/campaign-deliverable.model';
 import { CampaignInvitation } from './models/campaign-invitation.model';
 import { City } from '../shared/models/city.model';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
+import { CampaignResponseDto } from './dto/campaign-response.dto';
 import { GetCampaignsDto } from './dto/get-campaigns.dto';
 import { SearchInfluencersDto } from './dto/search-influencers.dto';
 import { InviteInfluencersDto } from './dto/invite-influencers.dto';
@@ -44,7 +45,7 @@ export class CampaignService {
   async createCampaign(
     createCampaignDto: CreateCampaignDto,
     brandId: number,
-  ): Promise<Campaign> {
+  ): Promise<CampaignResponseDto> {
     const { deliverables, cityIds, ...campaignData } = createCampaignDto;
 
     // Validate cities if not pan India
@@ -163,7 +164,7 @@ export class CampaignService {
     };
   }
 
-  async getCampaignById(campaignId: number): Promise<Campaign> {
+  async getCampaignById(campaignId: number): Promise<CampaignResponseDto> {
     const campaign = await this.campaignModel.findOne({
       where: { id: campaignId, isActive: true },
       include: [
@@ -199,14 +200,28 @@ export class CampaignService {
       throw new NotFoundException('Campaign not found');
     }
 
-    return campaign;
+    // Transform the response to clean up city structure
+    const campaignData = campaign.toJSON();
+
+    // Transform cities to remove intermediate table data
+    if (campaignData.cities && campaignData.cities.length > 0) {
+      (campaignData as any).cities = campaignData.cities.map(
+        (cityRelation: any) => ({
+          id: cityRelation.city.id,
+          name: cityRelation.city.name,
+          tier: cityRelation.city.tier,
+        }),
+      );
+    }
+
+    return campaignData as unknown as CampaignResponseDto;
   }
 
   async updateCampaignStatus(
     campaignId: number,
     status: CampaignStatus,
     brandId: number,
-  ): Promise<Campaign> {
+  ): Promise<CampaignResponseDto> {
     const campaign = await this.campaignModel.findOne({
       where: { id: campaignId, brandId, isActive: true },
     });
@@ -216,7 +231,58 @@ export class CampaignService {
     }
 
     await campaign.update({ status });
-    return this.getCampaignById(campaignId);
+
+    // Return updated campaign data
+    const updatedCampaign = await this.campaignModel.findOne({
+      where: { id: campaignId, isActive: true },
+      include: [
+        {
+          model: Brand,
+          attributes: ['id', 'brandName', 'profileImage', 'websiteUrl'],
+        },
+        {
+          model: CampaignCity,
+          include: [
+            {
+              model: City,
+              attributes: ['id', 'name', 'tier'],
+            },
+          ],
+        },
+        {
+          model: CampaignDeliverable,
+        },
+        {
+          model: CampaignInvitation,
+          include: [
+            {
+              model: Influencer,
+              attributes: ['id', 'name', 'username', 'profileImage'],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!updatedCampaign) {
+      throw new NotFoundException('Campaign not found after update');
+    }
+
+    // Transform the response to clean up city structure
+    const campaignData = updatedCampaign.toJSON();
+
+    // Transform cities to remove intermediate table data
+    if (campaignData.cities && campaignData.cities.length > 0) {
+      (campaignData as any).cities = campaignData.cities.map(
+        (cityRelation: any) => ({
+          id: cityRelation.city.id,
+          name: cityRelation.city.name,
+          tier: cityRelation.city.tier,
+        }),
+      );
+    }
+
+    return campaignData as unknown as CampaignResponseDto;
   }
 
   async deleteCampaign(campaignId: number, brandId: number): Promise<void> {
@@ -445,13 +511,13 @@ export class CampaignService {
           'profileHeadline',
           'bio',
           'gender',
-          'cityId',
           'collaborationCosts',
           'instagramUrl',
           'youtubeUrl',
           'facebookUrl',
           'linkedinUrl',
           'twitterUrl',
+          'createdAt',
         ],
         order: [['createdAt', 'DESC']],
         limit,
@@ -476,7 +542,6 @@ export class CampaignService {
   ): Promise<{
     success: boolean;
     invitationsSent: number;
-    failedInvitations: any[];
     message: string;
   }> {
     const { campaignId, influencerIds, personalMessage } = inviteDto;
@@ -484,7 +549,13 @@ export class CampaignService {
     // Verify campaign exists and belongs to the brand
     const campaign = await this.campaignModel.findOne({
       where: { id: campaignId, brandId, isActive: true },
-      include: [{ model: Brand, attributes: ['brandName'] }],
+      include: [
+        {
+          model: Brand,
+          attributes: ['id', 'brandName'],
+          required: false,
+        },
+      ],
     });
 
     if (!campaign) {
@@ -556,35 +627,22 @@ export class CampaignService {
     );
 
     // Send WhatsApp notifications
-    const failedNotifications: any[] = [];
-    let successfulNotifications = 0;
-
     for (const influencer of influencers.filter((inf) =>
       newInfluencerIds.includes(inf.id),
     )) {
-      try {
-        await this.whatsAppService.sendCampaignInvitation(
-          influencer.whatsappNumber,
-          influencer.name,
-          campaign.name,
-          campaign.brand?.brandName || 'Brand',
-          personalMessage,
-        );
-        successfulNotifications++;
-      } catch (error) {
-        failedNotifications.push({
-          influencerId: influencer.id,
-          influencerName: influencer.name,
-          error: error.message,
-        });
-      }
+      await this.whatsAppService.sendCampaignInvitation(
+        influencer.whatsappNumber,
+        influencer.name,
+        campaign.name,
+        campaign.brand?.brandName || 'Brand',
+        personalMessage,
+      );
     }
 
     return {
       success: true,
       invitationsSent: newInfluencerIds.length,
-      failedInvitations: failedNotifications,
-      message: `Successfully sent ${newInfluencerIds.length} campaign invitations. ${successfulNotifications} WhatsApp notifications sent successfully.`,
+      message: `Successfully sent ${newInfluencerIds.length} campaign invitations and WhatsApp notifications.`,
     };
   }
 }

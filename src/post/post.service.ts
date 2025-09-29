@@ -16,6 +16,7 @@ import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { InfluencerNiche } from '../auth/model/influencer-niche.model';
 import { BrandNiche } from '../brand/model/brand-niche.model';
+import { NotificationService } from '../shared/notification.service';
 import { Op } from 'sequelize';
 
 @Injectable()
@@ -31,6 +32,7 @@ export class PostService {
     private readonly influencerModel: typeof Influencer,
     @InjectModel(Brand)
     private readonly brandModel: typeof Brand,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async createPost(
@@ -136,6 +138,57 @@ export class PostService {
 
       await this.likeModel.create(likeData);
       await post.increment('likesCount');
+
+      // Send notification to post author when someone likes their post
+      // Get post author details
+      let postAuthor;
+      if (post.userType === UserType.INFLUENCER) {
+        postAuthor = await this.influencerModel.findByPk(post.influencerId);
+      } else {
+        postAuthor = await this.brandModel.findByPk(post.brandId);
+      }
+
+      // Get liker details
+      let liker;
+      if (userType === UserType.INFLUENCER) {
+        liker = await this.influencerModel.findByPk(userId);
+      } else {
+        liker = await this.brandModel.findByPk(userId);
+      }
+
+      // Only send notification if we have both users and post author has FCM token
+      if (postAuthor && liker && postAuthor.fcmToken) {
+        // Don't send notification if user likes their own post
+        const isOwnPost =
+          (post.userType === UserType.INFLUENCER &&
+            post.influencerId === userId &&
+            userType === UserType.INFLUENCER) ||
+          (post.userType === UserType.BRAND &&
+            post.brandId === userId &&
+            userType === UserType.BRAND);
+
+        if (!isOwnPost) {
+          const likerName =
+            userType === UserType.INFLUENCER
+              ? (liker as Influencer).name
+              : (liker as Brand).brandName;
+
+          const postTitle = post.content
+            ? post.content.substring(0, 50) +
+              (post.content.length > 50 ? '...' : '')
+            : 'your post';
+
+          await this.notificationService.sendPostLikeNotification(
+            postAuthor.fcmToken,
+            likerName,
+            postTitle,
+            postId.toString(),
+            liker.username,
+            (liker as Influencer | Brand).profileImage,
+          );
+        }
+      }
+
       return { liked: true };
     }
   }
@@ -193,6 +246,15 @@ export class PostService {
       followData[followingField] = followDto.userId;
 
       await this.followModel.create(followData);
+
+      // Send notification to the user being followed
+      await this.sendFollowerNotification(
+        followDto.userType,
+        followDto.userId,
+        currentUserType,
+        currentUserId,
+      );
+
       return { followed: true };
     }
   }
@@ -460,5 +522,56 @@ export class PostService {
     }
 
     return post;
+  }
+
+  private async sendFollowerNotification(
+    followedUserType: FollowUserType,
+    followedUserId: number,
+    followerUserType: UserType,
+    followerUserId: number,
+  ) {
+    try {
+      // Get the user being followed
+      let followedUser: Influencer | Brand | null = null;
+      let followerUser: Influencer | Brand | null = null;
+
+      if (followedUserType === FollowUserType.INFLUENCER) {
+        followedUser = await this.influencerModel.findByPk(followedUserId, {
+          attributes: ['fcmToken', 'name', 'username'],
+        });
+      } else {
+        followedUser = await this.brandModel.findByPk(followedUserId, {
+          attributes: ['fcmToken', 'brandName', 'username'],
+        });
+      }
+
+      // Get the follower user
+      if (followerUserType === UserType.INFLUENCER) {
+        followerUser = await this.influencerModel.findByPk(followerUserId, {
+          attributes: ['name', 'username', 'profileImage'],
+        });
+      } else {
+        followerUser = await this.brandModel.findByPk(followerUserId, {
+          attributes: ['brandName', 'username', 'profileImage'],
+        });
+      }
+
+      if (followedUser?.fcmToken && followerUser) {
+        const followerName =
+          followerUserType === UserType.INFLUENCER
+            ? (followerUser as Influencer).name
+            : (followerUser as Brand).brandName;
+
+        await this.notificationService.sendNewFollowerNotification(
+          followedUser.fcmToken,
+          followerName,
+          followerUser.username,
+          (followerUser as any).profileImage,
+        );
+      }
+    } catch (error) {
+      console.error('Error sending follower notification:', error);
+      // Don't throw - notification failure shouldn't break the follow action
+    }
   }
 }

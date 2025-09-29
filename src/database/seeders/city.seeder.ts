@@ -13,148 +13,533 @@ export class CitySeeder {
   ) {}
 
   async seed() {
-    // Get country IDs first
-    const india = await this.countryModel.findOne({ where: { code: 'IN' } });
-    const usa = await this.countryModel.findOne({ where: { code: 'US' } });
-    const uk = await this.countryModel.findOne({ where: { code: 'GB' } });
-    const canada = await this.countryModel.findOne({ where: { code: 'CA' } });
-    const australia = await this.countryModel.findOne({
-      where: { code: 'AU' },
+    // Get all countries
+    const countries = await this.countryModel.findAll();
+    const countryMap = new Map();
+
+    countries.forEach(country => {
+      countryMap.set(country.code, country.id);
     });
 
-    if (!india || !usa || !uk || !canada || !australia) {
+    if (countries.length === 0) {
       throw new Error('Countries must be seeded before cities');
     }
 
     const cities = [
-      // Indian Cities
-      { name: 'Mumbai', state: 'Maharashtra', countryId: india.id },
-      { name: 'Delhi', state: 'Delhi', countryId: india.id },
-      { name: 'Bangalore', state: 'Karnataka', countryId: india.id },
-      { name: 'Hyderabad', state: 'Telangana', countryId: india.id },
-      { name: 'Chennai', state: 'Tamil Nadu', countryId: india.id },
-      { name: 'Kolkata', state: 'West Bengal', countryId: india.id },
-      { name: 'Pune', state: 'Maharashtra', countryId: india.id },
-      { name: 'Ahmedabad', state: 'Gujarat', countryId: india.id },
-      { name: 'Jaipur', state: 'Rajasthan', countryId: india.id },
-      { name: 'Surat', state: 'Gujarat', countryId: india.id },
-      { name: 'Lucknow', state: 'Uttar Pradesh', countryId: india.id },
-      { name: 'Kanpur', state: 'Uttar Pradesh', countryId: india.id },
-      { name: 'Nagpur', state: 'Maharashtra', countryId: india.id },
-      { name: 'Indore', state: 'Madhya Pradesh', countryId: india.id },
-      { name: 'Thane', state: 'Maharashtra', countryId: india.id },
-      { name: 'Bhopal', state: 'Madhya Pradesh', countryId: india.id },
-      { name: 'Visakhapatnam', state: 'Andhra Pradesh', countryId: india.id },
-      { name: 'Pimpri-Chinchwad', state: 'Maharashtra', countryId: india.id },
-      { name: 'Patna', state: 'Bihar', countryId: india.id },
-      { name: 'Vadodara', state: 'Gujarat', countryId: india.id },
-      { name: 'Ghaziabad', state: 'Uttar Pradesh', countryId: india.id },
-      { name: 'Ludhiana', state: 'Punjab', countryId: india.id },
-      { name: 'Agra', state: 'Uttar Pradesh', countryId: india.id },
-      { name: 'Nashik', state: 'Maharashtra', countryId: india.id },
-      { name: 'Faridabad', state: 'Haryana', countryId: india.id },
-      { name: 'Meerut', state: 'Uttar Pradesh', countryId: india.id },
-      { name: 'Rajkot', state: 'Gujarat', countryId: india.id },
-      { name: 'Kalyan-Dombivli', state: 'Maharashtra', countryId: india.id },
-      { name: 'Vasai-Virar', state: 'Maharashtra', countryId: india.id },
-      { name: 'Varanasi', state: 'Uttar Pradesh', countryId: india.id },
-      { name: 'Srinagar', state: 'Jammu and Kashmir', countryId: india.id },
-      { name: 'Dhanbad', state: 'Jharkhand', countryId: india.id },
-      { name: 'Jodhpur', state: 'Rajasthan', countryId: india.id },
-      { name: 'Amritsar', state: 'Punjab', countryId: india.id },
-      { name: 'Raipur', state: 'Chhattisgarh', countryId: india.id },
-      { name: 'Allahabad', state: 'Uttar Pradesh', countryId: india.id },
-      { name: 'Coimbatore', state: 'Tamil Nadu', countryId: india.id },
-      { name: 'Jabalpur', state: 'Madhya Pradesh', countryId: india.id },
-      { name: 'Gwalior', state: 'Madhya Pradesh', countryId: india.id },
-      { name: 'Vijayawada', state: 'Andhra Pradesh', countryId: india.id },
-      { name: 'Madurai', state: 'Tamil Nadu', countryId: india.id },
-      { name: 'Gurgaon', state: 'Haryana', countryId: india.id },
-      { name: 'Navi Mumbai', state: 'Maharashtra', countryId: india.id },
-      { name: 'Aurangabad', state: 'Maharashtra', countryId: india.id },
-      { name: 'Solapur', state: 'Maharashtra', countryId: india.id },
-      { name: 'Ranchi', state: 'Jharkhand', countryId: india.id },
-      { name: 'Howrah', state: 'West Bengal', countryId: india.id },
-      { name: 'Jalandhar', state: 'Punjab', countryId: india.id },
-      { name: 'Tiruchirappalli', state: 'Tamil Nadu', countryId: india.id },
-      { name: 'Bhubaneswar', state: 'Odisha', countryId: india.id },
-      { name: 'Salem', state: 'Tamil Nadu', countryId: india.id },
+      // India (IN) - Keep all existing cities
+      { name: 'Mumbai', state: 'Maharashtra', countryId: countryMap.get('IN') },
+      { name: 'Delhi', state: 'Delhi', countryId: countryMap.get('IN') },
+      { name: 'Bangalore', state: 'Karnataka', countryId: countryMap.get('IN') },
+      { name: 'Hyderabad', state: 'Telangana', countryId: countryMap.get('IN') },
+      { name: 'Chennai', state: 'Tamil Nadu', countryId: countryMap.get('IN') },
+      { name: 'Kolkata', state: 'West Bengal', countryId: countryMap.get('IN') },
+      { name: 'Pune', state: 'Maharashtra', countryId: countryMap.get('IN') },
+      { name: 'Ahmedabad', state: 'Gujarat', countryId: countryMap.get('IN') },
+      { name: 'Jaipur', state: 'Rajasthan', countryId: countryMap.get('IN') },
+      { name: 'Surat', state: 'Gujarat', countryId: countryMap.get('IN') },
+      { name: 'Lucknow', state: 'Uttar Pradesh', countryId: countryMap.get('IN') },
+      { name: 'Kanpur', state: 'Uttar Pradesh', countryId: countryMap.get('IN') },
+      { name: 'Nagpur', state: 'Maharashtra', countryId: countryMap.get('IN') },
+      { name: 'Indore', state: 'Madhya Pradesh', countryId: countryMap.get('IN') },
+      { name: 'Thane', state: 'Maharashtra', countryId: countryMap.get('IN') },
+      { name: 'Bhopal', state: 'Madhya Pradesh', countryId: countryMap.get('IN') },
+      { name: 'Visakhapatnam', state: 'Andhra Pradesh', countryId: countryMap.get('IN') },
+      { name: 'Pimpri-Chinchwad', state: 'Maharashtra', countryId: countryMap.get('IN') },
+      { name: 'Patna', state: 'Bihar', countryId: countryMap.get('IN') },
+      { name: 'Vadodara', state: 'Gujarat', countryId: countryMap.get('IN') },
+      { name: 'Ghaziabad', state: 'Uttar Pradesh', countryId: countryMap.get('IN') },
+      { name: 'Ludhiana', state: 'Punjab', countryId: countryMap.get('IN') },
+      { name: 'Agra', state: 'Uttar Pradesh', countryId: countryMap.get('IN') },
+      { name: 'Nashik', state: 'Maharashtra', countryId: countryMap.get('IN') },
+      { name: 'Faridabad', state: 'Haryana', countryId: countryMap.get('IN') },
+      { name: 'Meerut', state: 'Uttar Pradesh', countryId: countryMap.get('IN') },
+      { name: 'Rajkot', state: 'Gujarat', countryId: countryMap.get('IN') },
+      { name: 'Kalyan-Dombivli', state: 'Maharashtra', countryId: countryMap.get('IN') },
+      { name: 'Vasai-Virar', state: 'Maharashtra', countryId: countryMap.get('IN') },
+      { name: 'Varanasi', state: 'Uttar Pradesh', countryId: countryMap.get('IN') },
+      { name: 'Srinagar', state: 'Jammu and Kashmir', countryId: countryMap.get('IN') },
+      { name: 'Dhanbad', state: 'Jharkhand', countryId: countryMap.get('IN') },
+      { name: 'Jodhpur', state: 'Rajasthan', countryId: countryMap.get('IN') },
+      { name: 'Amritsar', state: 'Punjab', countryId: countryMap.get('IN') },
+      { name: 'Raipur', state: 'Chhattisgarh', countryId: countryMap.get('IN') },
+      { name: 'Allahabad', state: 'Uttar Pradesh', countryId: countryMap.get('IN') },
+      { name: 'Coimbatore', state: 'Tamil Nadu', countryId: countryMap.get('IN') },
+      { name: 'Jabalpur', state: 'Madhya Pradesh', countryId: countryMap.get('IN') },
+      { name: 'Gwalior', state: 'Madhya Pradesh', countryId: countryMap.get('IN') },
+      { name: 'Vijayawada', state: 'Andhra Pradesh', countryId: countryMap.get('IN') },
+      { name: 'Madurai', state: 'Tamil Nadu', countryId: countryMap.get('IN') },
+      { name: 'Gurgaon', state: 'Haryana', countryId: countryMap.get('IN') },
+      { name: 'Navi Mumbai', state: 'Maharashtra', countryId: countryMap.get('IN') },
+      { name: 'Aurangabad', state: 'Maharashtra', countryId: countryMap.get('IN') },
+      { name: 'Solapur', state: 'Maharashtra', countryId: countryMap.get('IN') },
+      { name: 'Ranchi', state: 'Jharkhand', countryId: countryMap.get('IN') },
+      { name: 'Howrah', state: 'West Bengal', countryId: countryMap.get('IN') },
+      { name: 'Jalandhar', state: 'Punjab', countryId: countryMap.get('IN') },
+      { name: 'Tiruchirappalli', state: 'Tamil Nadu', countryId: countryMap.get('IN') },
+      { name: 'Bhubaneswar', state: 'Odisha', countryId: countryMap.get('IN') },
+      { name: 'Salem', state: 'Tamil Nadu', countryId: countryMap.get('IN') },
 
-      // US Cities
-      { name: 'New York', state: 'New York', countryId: usa.id },
-      { name: 'Los Angeles', state: 'California', countryId: usa.id },
-      { name: 'Chicago', state: 'Illinois', countryId: usa.id },
-      { name: 'Houston', state: 'Texas', countryId: usa.id },
-      { name: 'Phoenix', state: 'Arizona', countryId: usa.id },
-      { name: 'Philadelphia', state: 'Pennsylvania', countryId: usa.id },
-      { name: 'San Antonio', state: 'Texas', countryId: usa.id },
-      { name: 'San Diego', state: 'California', countryId: usa.id },
-      { name: 'Dallas', state: 'Texas', countryId: usa.id },
-      { name: 'San Jose', state: 'California', countryId: usa.id },
-      { name: 'Austin', state: 'Texas', countryId: usa.id },
-      { name: 'Jacksonville', state: 'Florida', countryId: usa.id },
-      { name: 'Fort Worth', state: 'Texas', countryId: usa.id },
-      { name: 'Columbus', state: 'Ohio', countryId: usa.id },
-      { name: 'Charlotte', state: 'North Carolina', countryId: usa.id },
-      { name: 'San Francisco', state: 'California', countryId: usa.id },
-      { name: 'Indianapolis', state: 'Indiana', countryId: usa.id },
-      { name: 'Seattle', state: 'Washington', countryId: usa.id },
-      { name: 'Denver', state: 'Colorado', countryId: usa.id },
-      {
-        name: 'Washington DC',
-        state: 'District of Columbia',
-        countryId: usa.id,
-      },
+      // United States (US)
+      { name: 'New York', state: 'New York', countryId: countryMap.get('US') },
+      { name: 'Los Angeles', state: 'California', countryId: countryMap.get('US') },
+      { name: 'Chicago', state: 'Illinois', countryId: countryMap.get('US') },
+      { name: 'Houston', state: 'Texas', countryId: countryMap.get('US') },
+      { name: 'Phoenix', state: 'Arizona', countryId: countryMap.get('US') },
+      { name: 'Philadelphia', state: 'Pennsylvania', countryId: countryMap.get('US') },
+      { name: 'San Antonio', state: 'Texas', countryId: countryMap.get('US') },
+      { name: 'San Diego', state: 'California', countryId: countryMap.get('US') },
+      { name: 'Dallas', state: 'Texas', countryId: countryMap.get('US') },
+      { name: 'San Jose', state: 'California', countryId: countryMap.get('US') },
+      { name: 'Austin', state: 'Texas', countryId: countryMap.get('US') },
+      { name: 'Jacksonville', state: 'Florida', countryId: countryMap.get('US') },
+      { name: 'Fort Worth', state: 'Texas', countryId: countryMap.get('US') },
+      { name: 'Columbus', state: 'Ohio', countryId: countryMap.get('US') },
+      { name: 'Charlotte', state: 'North Carolina', countryId: countryMap.get('US') },
+      { name: 'San Francisco', state: 'California', countryId: countryMap.get('US') },
+      { name: 'Indianapolis', state: 'Indiana', countryId: countryMap.get('US') },
+      { name: 'Seattle', state: 'Washington', countryId: countryMap.get('US') },
+      { name: 'Denver', state: 'Colorado', countryId: countryMap.get('US') },
+      { name: 'Washington DC', state: 'District of Columbia', countryId: countryMap.get('US') },
 
-      // UK Cities
-      { name: 'London', state: 'England', countryId: uk.id },
-      { name: 'Birmingham', state: 'England', countryId: uk.id },
-      { name: 'Liverpool', state: 'England', countryId: uk.id },
-      { name: 'Nottingham', state: 'England', countryId: uk.id },
-      { name: 'Sheffield', state: 'England', countryId: uk.id },
-      { name: 'Bristol', state: 'England', countryId: uk.id },
-      { name: 'Glasgow', state: 'Scotland', countryId: uk.id },
-      { name: 'Leicester', state: 'England', countryId: uk.id },
-      { name: 'Edinburgh', state: 'Scotland', countryId: uk.id },
-      { name: 'Leeds', state: 'England', countryId: uk.id },
-      { name: 'Cardiff', state: 'Wales', countryId: uk.id },
-      { name: 'Manchester', state: 'England', countryId: uk.id },
-      { name: 'Stoke-on-Trent', state: 'England', countryId: uk.id },
-      { name: 'Coventry', state: 'England', countryId: uk.id },
-      { name: 'Sunderland', state: 'England', countryId: uk.id },
-      { name: 'Belfast', state: 'Northern Ireland', countryId: uk.id },
-      { name: 'Newcastle upon Tyne', state: 'England', countryId: uk.id },
-      { name: 'Plymouth', state: 'England', countryId: uk.id },
-      { name: 'Southampton', state: 'England', countryId: uk.id },
-      { name: 'Reading', state: 'England', countryId: uk.id },
+      // United Kingdom (GB)
+      { name: 'London', state: 'England', countryId: countryMap.get('GB') },
+      { name: 'Birmingham', state: 'England', countryId: countryMap.get('GB') },
+      { name: 'Liverpool', state: 'England', countryId: countryMap.get('GB') },
+      { name: 'Nottingham', state: 'England', countryId: countryMap.get('GB') },
+      { name: 'Sheffield', state: 'England', countryId: countryMap.get('GB') },
+      { name: 'Bristol', state: 'England', countryId: countryMap.get('GB') },
+      { name: 'Glasgow', state: 'Scotland', countryId: countryMap.get('GB') },
+      { name: 'Leicester', state: 'England', countryId: countryMap.get('GB') },
+      { name: 'Edinburgh', state: 'Scotland', countryId: countryMap.get('GB') },
+      { name: 'Leeds', state: 'England', countryId: countryMap.get('GB') },
+      { name: 'Cardiff', state: 'Wales', countryId: countryMap.get('GB') },
+      { name: 'Manchester', state: 'England', countryId: countryMap.get('GB') },
+      { name: 'Stoke-on-Trent', state: 'England', countryId: countryMap.get('GB') },
+      { name: 'Coventry', state: 'England', countryId: countryMap.get('GB') },
+      { name: 'Sunderland', state: 'England', countryId: countryMap.get('GB') },
+      { name: 'Belfast', state: 'Northern Ireland', countryId: countryMap.get('GB') },
+      { name: 'Newcastle upon Tyne', state: 'England', countryId: countryMap.get('GB') },
+      { name: 'Plymouth', state: 'England', countryId: countryMap.get('GB') },
+      { name: 'Southampton', state: 'England', countryId: countryMap.get('GB') },
+      { name: 'Reading', state: 'England', countryId: countryMap.get('GB') },
 
-      // Canada Cities
-      { name: 'Toronto', state: 'Ontario', countryId: canada.id },
-      { name: 'Montreal', state: 'Quebec', countryId: canada.id },
-      { name: 'Calgary', state: 'Alberta', countryId: canada.id },
-      { name: 'Ottawa', state: 'Ontario', countryId: canada.id },
-      { name: 'Edmonton', state: 'Alberta', countryId: canada.id },
-      { name: 'Mississauga', state: 'Ontario', countryId: canada.id },
-      { name: 'Winnipeg', state: 'Manitoba', countryId: canada.id },
-      { name: 'Vancouver', state: 'British Columbia', countryId: canada.id },
-      { name: 'Brampton', state: 'Ontario', countryId: canada.id },
-      { name: 'Hamilton', state: 'Ontario', countryId: canada.id },
+      // Canada (CA)
+      { name: 'Toronto', state: 'Ontario', countryId: countryMap.get('CA') },
+      { name: 'Montreal', state: 'Quebec', countryId: countryMap.get('CA') },
+      { name: 'Calgary', state: 'Alberta', countryId: countryMap.get('CA') },
+      { name: 'Ottawa', state: 'Ontario', countryId: countryMap.get('CA') },
+      { name: 'Edmonton', state: 'Alberta', countryId: countryMap.get('CA') },
+      { name: 'Mississauga', state: 'Ontario', countryId: countryMap.get('CA') },
+      { name: 'Winnipeg', state: 'Manitoba', countryId: countryMap.get('CA') },
+      { name: 'Vancouver', state: 'British Columbia', countryId: countryMap.get('CA') },
+      { name: 'Brampton', state: 'Ontario', countryId: countryMap.get('CA') },
+      { name: 'Hamilton', state: 'Ontario', countryId: countryMap.get('CA') },
 
-      // Australia Cities
-      { name: 'Sydney', state: 'New South Wales', countryId: australia.id },
-      { name: 'Melbourne', state: 'Victoria', countryId: australia.id },
-      { name: 'Brisbane', state: 'Queensland', countryId: australia.id },
-      { name: 'Perth', state: 'Western Australia', countryId: australia.id },
-      { name: 'Adelaide', state: 'South Australia', countryId: australia.id },
-      { name: 'Gold Coast', state: 'Queensland', countryId: australia.id },
-      { name: 'Newcastle', state: 'New South Wales', countryId: australia.id },
-      {
-        name: 'Canberra',
-        state: 'Australian Capital Territory',
-        countryId: australia.id,
-      },
-      { name: 'Sunshine Coast', state: 'Queensland', countryId: australia.id },
-      { name: 'Wollongong', state: 'New South Wales', countryId: australia.id },
+      // Australia (AU)
+      { name: 'Sydney', state: 'New South Wales', countryId: countryMap.get('AU') },
+      { name: 'Melbourne', state: 'Victoria', countryId: countryMap.get('AU') },
+      { name: 'Brisbane', state: 'Queensland', countryId: countryMap.get('AU') },
+      { name: 'Perth', state: 'Western Australia', countryId: countryMap.get('AU') },
+      { name: 'Adelaide', state: 'South Australia', countryId: countryMap.get('AU') },
+      { name: 'Gold Coast', state: 'Queensland', countryId: countryMap.get('AU') },
+      { name: 'Newcastle', state: 'New South Wales', countryId: countryMap.get('AU') },
+      { name: 'Canberra', state: 'Australian Capital Territory', countryId: countryMap.get('AU') },
+      { name: 'Sunshine Coast', state: 'Queensland', countryId: countryMap.get('AU') },
+      { name: 'Wollongong', state: 'New South Wales', countryId: countryMap.get('AU') },
+
+      // Add cities for remaining countries...
+      // Germany (DE)
+      { name: 'Berlin', state: 'Berlin', countryId: countryMap.get('DE') },
+      { name: 'Hamburg', state: 'Hamburg', countryId: countryMap.get('DE') },
+      { name: 'Munich', state: 'Bavaria', countryId: countryMap.get('DE') },
+      { name: 'Cologne', state: 'North Rhine-Westphalia', countryId: countryMap.get('DE') },
+      { name: 'Frankfurt', state: 'Hesse', countryId: countryMap.get('DE') },
+      { name: 'Stuttgart', state: 'Baden-Württemberg', countryId: countryMap.get('DE') },
+      { name: 'Düsseldorf', state: 'North Rhine-Westphalia', countryId: countryMap.get('DE') },
+      { name: 'Dortmund', state: 'North Rhine-Westphalia', countryId: countryMap.get('DE') },
+      { name: 'Essen', state: 'North Rhine-Westphalia', countryId: countryMap.get('DE') },
+      { name: 'Leipzig', state: 'Saxony', countryId: countryMap.get('DE') },
+
+      // France (FR)
+      { name: 'Paris', state: 'Île-de-France', countryId: countryMap.get('FR') },
+      { name: 'Marseille', state: 'Provence-Alpes-Côte d\'Azur', countryId: countryMap.get('FR') },
+      { name: 'Lyon', state: 'Auvergne-Rhône-Alpes', countryId: countryMap.get('FR') },
+      { name: 'Toulouse', state: 'Occitanie', countryId: countryMap.get('FR') },
+      { name: 'Nice', state: 'Provence-Alpes-Côte d\'Azur', countryId: countryMap.get('FR') },
+      { name: 'Nantes', state: 'Pays de la Loire', countryId: countryMap.get('FR') },
+      { name: 'Strasbourg', state: 'Grand Est', countryId: countryMap.get('FR') },
+      { name: 'Montpellier', state: 'Occitanie', countryId: countryMap.get('FR') },
+      { name: 'Bordeaux', state: 'Nouvelle-Aquitaine', countryId: countryMap.get('FR') },
+      { name: 'Lille', state: 'Hauts-de-France', countryId: countryMap.get('FR') },
+
+      // Singapore (SG)
+      { name: 'Singapore', state: 'Singapore', countryId: countryMap.get('SG') },
+
+      // United Arab Emirates (AE)
+      { name: 'Dubai', state: 'Dubai', countryId: countryMap.get('AE') },
+      { name: 'Abu Dhabi', state: 'Abu Dhabi', countryId: countryMap.get('AE') },
+      { name: 'Sharjah', state: 'Sharjah', countryId: countryMap.get('AE') },
+
+      // Japan (JP)
+      { name: 'Tokyo', state: 'Tokyo', countryId: countryMap.get('JP') },
+      { name: 'Osaka', state: 'Osaka', countryId: countryMap.get('JP') },
+      { name: 'Yokohama', state: 'Kanagawa', countryId: countryMap.get('JP') },
+      { name: 'Nagoya', state: 'Aichi', countryId: countryMap.get('JP') },
+      { name: 'Sapporo', state: 'Hokkaido', countryId: countryMap.get('JP') },
+      { name: 'Fukuoka', state: 'Fukuoka', countryId: countryMap.get('JP') },
+      { name: 'Kobe', state: 'Hyogo', countryId: countryMap.get('JP') },
+      { name: 'Kyoto', state: 'Kyoto', countryId: countryMap.get('JP') },
+      { name: 'Kawasaki', state: 'Kanagawa', countryId: countryMap.get('JP') },
+      { name: 'Saitama', state: 'Saitama', countryId: countryMap.get('JP') },
+
+      // China (CN)
+      { name: 'Beijing', state: 'Beijing', countryId: countryMap.get('CN') },
+      { name: 'Shanghai', state: 'Shanghai', countryId: countryMap.get('CN') },
+      { name: 'Guangzhou', state: 'Guangdong', countryId: countryMap.get('CN') },
+      { name: 'Shenzhen', state: 'Guangdong', countryId: countryMap.get('CN') },
+      { name: 'Chengdu', state: 'Sichuan', countryId: countryMap.get('CN') },
+      { name: 'Hangzhou', state: 'Zhejiang', countryId: countryMap.get('CN') },
+      { name: 'Wuhan', state: 'Hubei', countryId: countryMap.get('CN') },
+      { name: 'Xi\'an', state: 'Shaanxi', countryId: countryMap.get('CN') },
+      { name: 'Nanjing', state: 'Jiangsu', countryId: countryMap.get('CN') },
+      { name: 'Tianjin', state: 'Tianjin', countryId: countryMap.get('CN') },
+
+      // Brazil (BR)
+      { name: 'São Paulo', state: 'São Paulo', countryId: countryMap.get('BR') },
+      { name: 'Rio de Janeiro', state: 'Rio de Janeiro', countryId: countryMap.get('BR') },
+      { name: 'Brasília', state: 'Federal District', countryId: countryMap.get('BR') },
+      { name: 'Salvador', state: 'Bahia', countryId: countryMap.get('BR') },
+      { name: 'Fortaleza', state: 'Ceará', countryId: countryMap.get('BR') },
+      { name: 'Belo Horizonte', state: 'Minas Gerais', countryId: countryMap.get('BR') },
+      { name: 'Manaus', state: 'Amazonas', countryId: countryMap.get('BR') },
+      { name: 'Curitiba', state: 'Paraná', countryId: countryMap.get('BR') },
+      { name: 'Recife', state: 'Pernambuco', countryId: countryMap.get('BR') },
+      { name: 'Porto Alegre', state: 'Rio Grande do Sul', countryId: countryMap.get('BR') },
+      // Mexico (MX)
+      { name: 'Mexico City', state: 'Mexico City', countryId: countryMap.get('MX') },
+      { name: 'Guadalajara', state: 'Jalisco', countryId: countryMap.get('MX') },
+      { name: 'Monterrey', state: 'Nuevo León', countryId: countryMap.get('MX') },
+      { name: 'Puebla', state: 'Puebla', countryId: countryMap.get('MX') },
+      { name: 'Tijuana', state: 'Baja California', countryId: countryMap.get('MX') },
+      { name: 'León', state: 'Guanajuato', countryId: countryMap.get('MX') },
+      { name: 'Juárez', state: 'Chihuahua', countryId: countryMap.get('MX') },
+      { name: 'Zapopan', state: 'Jalisco', countryId: countryMap.get('MX') },
+
+      // Italy (IT)
+      { name: 'Rome', state: 'Lazio', countryId: countryMap.get('IT') },
+      { name: 'Milan', state: 'Lombardy', countryId: countryMap.get('IT') },
+      { name: 'Naples', state: 'Campania', countryId: countryMap.get('IT') },
+      { name: 'Turin', state: 'Piedmont', countryId: countryMap.get('IT') },
+      { name: 'Palermo', state: 'Sicily', countryId: countryMap.get('IT') },
+      { name: 'Genoa', state: 'Liguria', countryId: countryMap.get('IT') },
+      { name: 'Bologna', state: 'Emilia-Romagna', countryId: countryMap.get('IT') },
+      { name: 'Florence', state: 'Tuscany', countryId: countryMap.get('IT') },
+      { name: 'Bari', state: 'Apulia', countryId: countryMap.get('IT') },
+      { name: 'Catania', state: 'Sicily', countryId: countryMap.get('IT') },
+
+      // Spain (ES)
+      { name: 'Madrid', state: 'Madrid', countryId: countryMap.get('ES') },
+      { name: 'Barcelona', state: 'Catalonia', countryId: countryMap.get('ES') },
+      { name: 'Valencia', state: 'Valencia', countryId: countryMap.get('ES') },
+      { name: 'Seville', state: 'Andalusia', countryId: countryMap.get('ES') },
+      { name: 'Zaragoza', state: 'Aragon', countryId: countryMap.get('ES') },
+      { name: 'Málaga', state: 'Andalusia', countryId: countryMap.get('ES') },
+      { name: 'Murcia', state: 'Murcia', countryId: countryMap.get('ES') },
+      { name: 'Palma', state: 'Balearic Islands', countryId: countryMap.get('ES') },
+      { name: 'Las Palmas', state: 'Canary Islands', countryId: countryMap.get('ES') },
+      { name: 'Bilbao', state: 'Basque Country', countryId: countryMap.get('ES') },
+      // Netherlands (NL)
+      { name: 'Amsterdam', state: 'North Holland', countryId: countryMap.get('NL') },
+      { name: 'Rotterdam', state: 'South Holland', countryId: countryMap.get('NL') },
+      { name: 'The Hague', state: 'South Holland', countryId: countryMap.get('NL') },
+      { name: 'Utrecht', state: 'Utrecht', countryId: countryMap.get('NL') },
+      { name: 'Eindhoven', state: 'North Brabant', countryId: countryMap.get('NL') },
+
+      // Sweden (SE)
+      { name: 'Stockholm', state: 'Stockholm', countryId: countryMap.get('SE') },
+      { name: 'Gothenburg', state: 'Västra Götaland', countryId: countryMap.get('SE') },
+      { name: 'Malmö', state: 'Skåne', countryId: countryMap.get('SE') },
+      { name: 'Uppsala', state: 'Uppsala', countryId: countryMap.get('SE') },
+
+      // Norway (NO)
+      { name: 'Oslo', state: 'Oslo', countryId: countryMap.get('NO') },
+      { name: 'Bergen', state: 'Vestland', countryId: countryMap.get('NO') },
+      { name: 'Trondheim', state: 'Trøndelag', countryId: countryMap.get('NO') },
+      { name: 'Stavanger', state: 'Rogaland', countryId: countryMap.get('NO') },
+
+      // Denmark (DK)
+      { name: 'Copenhagen', state: 'Capital Region', countryId: countryMap.get('DK') },
+      { name: 'Aarhus', state: 'Central Denmark', countryId: countryMap.get('DK') },
+      { name: 'Odense', state: 'Southern Denmark', countryId: countryMap.get('DK') },
+      { name: 'Aalborg', state: 'North Denmark', countryId: countryMap.get('DK') },
+
+      // Finland (FI)
+      { name: 'Helsinki', state: 'Uusimaa', countryId: countryMap.get('FI') },
+      { name: 'Espoo', state: 'Uusimaa', countryId: countryMap.get('FI') },
+      { name: 'Tampere', state: 'Pirkanmaa', countryId: countryMap.get('FI') },
+      { name: 'Vantaa', state: 'Uusimaa', countryId: countryMap.get('FI') },
+
+      // Switzerland (CH)
+      { name: 'Zurich', state: 'Zurich', countryId: countryMap.get('CH') },
+      { name: 'Geneva', state: 'Geneva', countryId: countryMap.get('CH') },
+      { name: 'Basel', state: 'Basel-Stadt', countryId: countryMap.get('CH') },
+      { name: 'Bern', state: 'Bern', countryId: countryMap.get('CH') },
+
+      // Austria (AT)
+      { name: 'Vienna', state: 'Vienna', countryId: countryMap.get('AT') },
+      { name: 'Graz', state: 'Styria', countryId: countryMap.get('AT') },
+      { name: 'Linz', state: 'Upper Austria', countryId: countryMap.get('AT') },
+      { name: 'Salzburg', state: 'Salzburg', countryId: countryMap.get('AT') },
+
+      // Belgium (BE)
+      { name: 'Brussels', state: 'Brussels', countryId: countryMap.get('BE') },
+      { name: 'Antwerp', state: 'Flanders', countryId: countryMap.get('BE') },
+      { name: 'Ghent', state: 'Flanders', countryId: countryMap.get('BE') },
+      { name: 'Charleroi', state: 'Wallonia', countryId: countryMap.get('BE') },
+
+      // Ireland (IE)
+      { name: 'Dublin', state: 'Leinster', countryId: countryMap.get('IE') },
+      { name: 'Cork', state: 'Munster', countryId: countryMap.get('IE') },
+      { name: 'Galway', state: 'Connacht', countryId: countryMap.get('IE') },
+      { name: 'Limerick', state: 'Munster', countryId: countryMap.get('IE') },
+
+      // New Zealand (NZ)
+      { name: 'Auckland', state: 'North Island', countryId: countryMap.get('NZ') },
+      { name: 'Christchurch', state: 'South Island', countryId: countryMap.get('NZ') },
+      { name: 'Wellington', state: 'North Island', countryId: countryMap.get('NZ') },
+      { name: 'Hamilton', state: 'North Island', countryId: countryMap.get('NZ') },
+
+      // South Korea (KR)
+      { name: 'Seoul', state: 'Seoul', countryId: countryMap.get('KR') },
+      { name: 'Busan', state: 'Busan', countryId: countryMap.get('KR') },
+      { name: 'Incheon', state: 'Incheon', countryId: countryMap.get('KR') },
+      { name: 'Daegu', state: 'Daegu', countryId: countryMap.get('KR') },
+      { name: 'Daejeon', state: 'Daejeon', countryId: countryMap.get('KR') },
+      { name: 'Gwangju', state: 'Gwangju', countryId: countryMap.get('KR') },
+
+      // Thailand (TH)
+      { name: 'Bangkok', state: 'Bangkok', countryId: countryMap.get('TH') },
+      { name: 'Nonthaburi', state: 'Nonthaburi', countryId: countryMap.get('TH') },
+      { name: 'Nakhon Ratchasima', state: 'Nakhon Ratchasima', countryId: countryMap.get('TH') },
+      { name: 'Chiang Mai', state: 'Chiang Mai', countryId: countryMap.get('TH') },
+      { name: 'Hat Yai', state: 'Songkhla', countryId: countryMap.get('TH') },
+
+      // Malaysia (MY)
+      { name: 'Kuala Lumpur', state: 'Federal Territory', countryId: countryMap.get('MY') },
+      { name: 'George Town', state: 'Penang', countryId: countryMap.get('MY') },
+      { name: 'Ipoh', state: 'Perak', countryId: countryMap.get('MY') },
+      { name: 'Shah Alam', state: 'Selangor', countryId: countryMap.get('MY') },
+      { name: 'Johor Bahru', state: 'Johor', countryId: countryMap.get('MY') },
+
+      // Indonesia (ID)
+      { name: 'Jakarta', state: 'Jakarta', countryId: countryMap.get('ID') },
+      { name: 'Surabaya', state: 'East Java', countryId: countryMap.get('ID') },
+      { name: 'Bandung', state: 'West Java', countryId: countryMap.get('ID') },
+      { name: 'Bekasi', state: 'West Java', countryId: countryMap.get('ID') },
+      { name: 'Medan', state: 'North Sumatra', countryId: countryMap.get('ID') },
+
+      // Philippines (PH)
+      { name: 'Manila', state: 'Metro Manila', countryId: countryMap.get('PH') },
+      { name: 'Quezon City', state: 'Metro Manila', countryId: countryMap.get('PH') },
+      { name: 'Davao City', state: 'Davao Region', countryId: countryMap.get('PH') },
+      { name: 'Caloocan', state: 'Metro Manila', countryId: countryMap.get('PH') },
+      { name: 'Cebu City', state: 'Central Visayas', countryId: countryMap.get('PH') },
+
+      // Vietnam (VN)
+      { name: 'Ho Chi Minh City', state: 'Ho Chi Minh City', countryId: countryMap.get('VN') },
+      { name: 'Hanoi', state: 'Hanoi', countryId: countryMap.get('VN') },
+      { name: 'Da Nang', state: 'Da Nang', countryId: countryMap.get('VN') },
+      { name: 'Can Tho', state: 'Can Tho', countryId: countryMap.get('VN') },
+      // Saudi Arabia (SA)
+      { name: 'Riyadh', state: 'Riyadh', countryId: countryMap.get('SA') },
+      { name: 'Jeddah', state: 'Makkah', countryId: countryMap.get('SA') },
+      { name: 'Mecca', state: 'Makkah', countryId: countryMap.get('SA') },
+      { name: 'Medina', state: 'Al Madinah', countryId: countryMap.get('SA') },
+      { name: 'Dammam', state: 'Eastern Province', countryId: countryMap.get('SA') },
+
+      // Qatar (QA)
+      { name: 'Doha', state: 'Doha', countryId: countryMap.get('QA') },
+      { name: 'Al Rayyan', state: 'Al Rayyan', countryId: countryMap.get('QA') },
+      { name: 'Umm Salal', state: 'Umm Salal', countryId: countryMap.get('QA') },
+
+      // Kuwait (KW)
+      { name: 'Kuwait City', state: 'Kuwait', countryId: countryMap.get('KW') },
+      { name: 'Al Ahmadi', state: 'Al Ahmadi', countryId: countryMap.get('KW') },
+      { name: 'Hawalli', state: 'Hawalli', countryId: countryMap.get('KW') },
+
+      // Bahrain (BH)
+      { name: 'Manama', state: 'Capital', countryId: countryMap.get('BH') },
+      { name: 'Riffa', state: 'Southern', countryId: countryMap.get('BH') },
+      { name: 'Muharraq', state: 'Muharraq', countryId: countryMap.get('BH') },
+
+      // Oman (OM)
+      { name: 'Muscat', state: 'Muscat', countryId: countryMap.get('OM') },
+      { name: 'Salalah', state: 'Dhofar', countryId: countryMap.get('OM') },
+      { name: 'Nizwa', state: 'Ad Dakhiliyah', countryId: countryMap.get('OM') },
+
+      // Jordan (JO)
+      { name: 'Amman', state: 'Amman', countryId: countryMap.get('JO') },
+      { name: 'Zarqa', state: 'Zarqa', countryId: countryMap.get('JO') },
+      { name: 'Irbid', state: 'Irbid', countryId: countryMap.get('JO') },
+
+      // Lebanon (LB)
+      { name: 'Beirut', state: 'Beirut', countryId: countryMap.get('LB') },
+      { name: 'Tripoli', state: 'North', countryId: countryMap.get('LB') },
+      { name: 'Sidon', state: 'South', countryId: countryMap.get('LB') },
+
+      // South Africa (ZA)
+      { name: 'Cape Town', state: 'Western Cape', countryId: countryMap.get('ZA') },
+      { name: 'Johannesburg', state: 'Gauteng', countryId: countryMap.get('ZA') },
+      { name: 'Durban', state: 'KwaZulu-Natal', countryId: countryMap.get('ZA') },
+      { name: 'Pretoria', state: 'Gauteng', countryId: countryMap.get('ZA') },
+      { name: 'Port Elizabeth', state: 'Eastern Cape', countryId: countryMap.get('ZA') },
+
+      // Nigeria (NG)
+      { name: 'Lagos', state: 'Lagos', countryId: countryMap.get('NG') },
+      { name: 'Kano', state: 'Kano', countryId: countryMap.get('NG') },
+      { name: 'Ibadan', state: 'Oyo', countryId: countryMap.get('NG') },
+      { name: 'Abuja', state: 'Federal Capital Territory', countryId: countryMap.get('NG') },
+      { name: 'Port Harcourt', state: 'Rivers', countryId: countryMap.get('NG') },
+
+      // Kenya (KE)
+      { name: 'Nairobi', state: 'Nairobi', countryId: countryMap.get('KE') },
+      { name: 'Mombasa', state: 'Mombasa', countryId: countryMap.get('KE') },
+      { name: 'Kisumu', state: 'Kisumu', countryId: countryMap.get('KE') },
+      { name: 'Nakuru', state: 'Nakuru', countryId: countryMap.get('KE') },
+
+      // Egypt (EG)
+      { name: 'Cairo', state: 'Cairo', countryId: countryMap.get('EG') },
+      { name: 'Alexandria', state: 'Alexandria', countryId: countryMap.get('EG') },
+      { name: 'Giza', state: 'Giza', countryId: countryMap.get('EG') },
+      { name: 'Luxor', state: 'Luxor', countryId: countryMap.get('EG') },
+
+      // Morocco (MA)
+      { name: 'Casablanca', state: 'Casablanca-Settat', countryId: countryMap.get('MA') },
+      { name: 'Rabat', state: 'Rabat-Salé-Kénitra', countryId: countryMap.get('MA') },
+      { name: 'Fez', state: 'Fès-Meknès', countryId: countryMap.get('MA') },
+      { name: 'Marrakech', state: 'Marrakech-Safi', countryId: countryMap.get('MA') },
+
+      // Ghana (GH)
+      { name: 'Accra', state: 'Greater Accra', countryId: countryMap.get('GH') },
+      { name: 'Kumasi', state: 'Ashanti', countryId: countryMap.get('GH') },
+      { name: 'Tamale', state: 'Northern', countryId: countryMap.get('GH') },
+
+      // Argentina (AR)
+      { name: 'Buenos Aires', state: 'Buenos Aires', countryId: countryMap.get('AR') },
+      { name: 'Córdoba', state: 'Córdoba', countryId: countryMap.get('AR') },
+      { name: 'Rosario', state: 'Santa Fe', countryId: countryMap.get('AR') },
+      { name: 'Mendoza', state: 'Mendoza', countryId: countryMap.get('AR') },
+      { name: 'La Plata', state: 'Buenos Aires', countryId: countryMap.get('AR') },
+
+      // Chile (CL)
+      { name: 'Santiago', state: 'Santiago Metropolitan', countryId: countryMap.get('CL') },
+      { name: 'Valparaíso', state: 'Valparaíso', countryId: countryMap.get('CL') },
+      { name: 'Concepción', state: 'Biobío', countryId: countryMap.get('CL') },
+      { name: 'Antofagasta', state: 'Antofagasta', countryId: countryMap.get('CL') },
+
+      // Colombia (CO)
+      { name: 'Bogotá', state: 'Bogotá', countryId: countryMap.get('CO') },
+      { name: 'Medellín', state: 'Antioquia', countryId: countryMap.get('CO') },
+      { name: 'Cali', state: 'Valle del Cauca', countryId: countryMap.get('CO') },
+      { name: 'Barranquilla', state: 'Atlántico', countryId: countryMap.get('CO') },
+      { name: 'Cartagena', state: 'Bolívar', countryId: countryMap.get('CO') },
+
+      // Peru (PE)
+      { name: 'Lima', state: 'Lima', countryId: countryMap.get('PE') },
+      { name: 'Arequipa', state: 'Arequipa', countryId: countryMap.get('PE') },
+      { name: 'Trujillo', state: 'La Libertad', countryId: countryMap.get('PE') },
+      { name: 'Chiclayo', state: 'Lambayeque', countryId: countryMap.get('PE') },
+
+      // Venezuela (VE)
+      { name: 'Caracas', state: 'Capital District', countryId: countryMap.get('VE') },
+      { name: 'Maracaibo', state: 'Zulia', countryId: countryMap.get('VE') },
+      { name: 'Valencia', state: 'Carabobo', countryId: countryMap.get('VE') },
+      { name: 'Barquisimeto', state: 'Lara', countryId: countryMap.get('VE') },
+
+      // Ecuador (EC)
+      { name: 'Quito', state: 'Pichincha', countryId: countryMap.get('EC') },
+      { name: 'Guayaquil', state: 'Guayas', countryId: countryMap.get('EC') },
+      { name: 'Cuenca', state: 'Azuay', countryId: countryMap.get('EC') },
+
+      // Uruguay (UY)
+      { name: 'Montevideo', state: 'Montevideo', countryId: countryMap.get('UY') },
+      { name: 'Salto', state: 'Salto', countryId: countryMap.get('UY') },
+      { name: 'Paysandú', state: 'Paysandú', countryId: countryMap.get('UY') },
+
+      // Add remaining countries with their major cities
+      // Russia (RU)
+      { name: 'Moscow', state: 'Moscow', countryId: countryMap.get('RU') },
+      { name: 'Saint Petersburg', state: 'Saint Petersburg', countryId: countryMap.get('RU') },
+      { name: 'Novosibirsk', state: 'Novosibirsk Oblast', countryId: countryMap.get('RU') },
+      { name: 'Yekaterinburg', state: 'Sverdlovsk Oblast', countryId: countryMap.get('RU') },
+
+      // Turkey (TR)
+      { name: 'Istanbul', state: 'Istanbul', countryId: countryMap.get('TR') },
+      { name: 'Ankara', state: 'Ankara', countryId: countryMap.get('TR') },
+      { name: 'Izmir', state: 'İzmir', countryId: countryMap.get('TR') },
+      { name: 'Bursa', state: 'Bursa', countryId: countryMap.get('TR') },
+
+      // Israel (IL)
+      { name: 'Tel Aviv', state: 'Tel Aviv', countryId: countryMap.get('IL') },
+      { name: 'Jerusalem', state: 'Jerusalem', countryId: countryMap.get('IL') },
+      { name: 'Haifa', state: 'Haifa', countryId: countryMap.get('IL') },
+
+      // Iran (IR)
+      { name: 'Tehran', state: 'Tehran', countryId: countryMap.get('IR') },
+      { name: 'Mashhad', state: 'Razavi Khorasan', countryId: countryMap.get('IR') },
+      { name: 'Isfahan', state: 'Isfahan', countryId: countryMap.get('IR') },
+
+      // Iraq (IQ)
+      { name: 'Baghdad', state: 'Baghdad', countryId: countryMap.get('IQ') },
+      { name: 'Basra', state: 'Basra', countryId: countryMap.get('IQ') },
+      { name: 'Mosul', state: 'Nineveh', countryId: countryMap.get('IQ') },
+
+      // Pakistan (PK)
+      { name: 'Karachi', state: 'Sindh', countryId: countryMap.get('PK') },
+      { name: 'Lahore', state: 'Punjab', countryId: countryMap.get('PK') },
+      { name: 'Faisalabad', state: 'Punjab', countryId: countryMap.get('PK') },
+      { name: 'Rawalpindi', state: 'Punjab', countryId: countryMap.get('PK') },
+      { name: 'Islamabad', state: 'Islamabad Capital Territory', countryId: countryMap.get('PK') },
+
+      // Bangladesh (BD)
+      { name: 'Dhaka', state: 'Dhaka', countryId: countryMap.get('BD') },
+      { name: 'Chittagong', state: 'Chittagong', countryId: countryMap.get('BD') },
+      { name: 'Khulna', state: 'Khulna', countryId: countryMap.get('BD') },
+
+      // Sri Lanka (LK)
+      { name: 'Colombo', state: 'Western Province', countryId: countryMap.get('LK') },
+      { name: 'Kandy', state: 'Central Province', countryId: countryMap.get('LK') },
+      { name: 'Galle', state: 'Southern Province', countryId: countryMap.get('LK') },
+
+      // Poland (PL)
+      { name: 'Warsaw', state: 'Masovian Voivodeship', countryId: countryMap.get('PL') },
+      { name: 'Kraków', state: 'Lesser Poland Voivodeship', countryId: countryMap.get('PL') },
+      { name: 'Gdańsk', state: 'Pomeranian Voivodeship', countryId: countryMap.get('PL') },
+
+      // Czech Republic (CZ)
+      { name: 'Prague', state: 'Prague', countryId: countryMap.get('CZ') },
+      { name: 'Brno', state: 'South Moravian Region', countryId: countryMap.get('CZ') },
+      { name: 'Ostrava', state: 'Moravian-Silesian Region', countryId: countryMap.get('CZ') },
+
+      // Hungary (HU)
+      { name: 'Budapest', state: 'Budapest', countryId: countryMap.get('HU') },
+      { name: 'Debrecen', state: 'Hajdú-Bihar', countryId: countryMap.get('HU') },
+      { name: 'Szeged', state: 'Csongrád-Csanád', countryId: countryMap.get('HU') },
+
+      // Romania (RO)
+      { name: 'Bucharest', state: 'Bucharest', countryId: countryMap.get('RO') },
+      { name: 'Cluj-Napoca', state: 'Cluj', countryId: countryMap.get('RO') },
+      { name: 'Timișoara', state: 'Timiș', countryId: countryMap.get('RO') },
+
+      // Greece (GR)
+      { name: 'Athens', state: 'Attica', countryId: countryMap.get('GR') },
+      { name: 'Thessaloniki', state: 'Central Macedonia', countryId: countryMap.get('GR') },
+      { name: 'Patras', state: 'Western Greece', countryId: countryMap.get('GR') },
+
+      // Portugal (PT)
+      { name: 'Lisbon', state: 'Lisbon', countryId: countryMap.get('PT') },
+      { name: 'Porto', state: 'Porto', countryId: countryMap.get('PT') },
+      { name: 'Braga', state: 'Braga', countryId: countryMap.get('PT') },
     ];
 
     for (const cityData of cities) {

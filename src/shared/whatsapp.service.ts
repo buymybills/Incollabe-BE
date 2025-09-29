@@ -211,11 +211,9 @@ export class WhatsAppService {
     personalMessage?: string,
   ): Promise<void> {
     const parameters = [
-      influencerName,
-      brandName,
-      campaignName,
-      personalMessage ||
-        'We would love to collaborate with you on this exciting campaign!',
+      influencerName, // {{1}} = Influencer name
+      brandName, // {{2}} = Brand name
+      campaignName, // {{3}} = Campaign name
     ];
 
     await this.sendTemplateMessage(

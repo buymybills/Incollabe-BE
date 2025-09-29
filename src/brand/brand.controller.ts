@@ -89,34 +89,6 @@ export class BrandController {
       type: 'object',
       properties: {
         // Text fields from DTO
-        brandName: { type: 'string', description: 'Brand name' },
-        username: { type: 'string', description: 'Username' },
-        legalEntityName: { type: 'string', description: 'Legal entity name' },
-        companyTypeId: {
-          type: 'number',
-          description:
-            'Company type ID (get available types from /brand/company-types endpoint)',
-          example: 1,
-        },
-        brandEmailId: {
-          type: 'string',
-          format: 'email',
-          description: 'Brand email ID',
-        },
-        pocName: { type: 'string', description: 'Point of contact name' },
-        pocDesignation: {
-          type: 'string',
-          description: 'Point of contact designation',
-        },
-        pocEmailId: {
-          type: 'string',
-          format: 'email',
-          description: 'Point of contact email ID',
-        },
-        pocContactNumber: {
-          type: 'string',
-          description: 'Point of contact phone number',
-        },
         brandBio: { type: 'string', description: 'Brand bio/description' },
         profileHeadline: { type: 'string', description: 'Profile headline' },
         websiteUrl: {

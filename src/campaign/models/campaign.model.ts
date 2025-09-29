@@ -49,7 +49,7 @@ export class Campaign extends Model<Campaign> {
     type: DataType.STRING,
     allowNull: false,
   })
-  name: string;
+  declare name: string;
 
   @Column({
     type: DataType.TEXT,
@@ -72,9 +72,9 @@ export class Campaign extends Model<Campaign> {
   @Column({
     type: DataType.ENUM(...Object.values(CampaignStatus)),
     allowNull: false,
-    defaultValue: CampaignStatus.DRAFT,
+    defaultValue: CampaignStatus.ACTIVE,
   })
-  status: CampaignStatus;
+  declare status: CampaignStatus;
 
   @Column({
     type: DataType.ENUM(...Object.values(CampaignType)),
@@ -113,6 +113,13 @@ export class Campaign extends Model<Campaign> {
     allowNull: true,
   })
   maxAge: number;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  isOpenToAllAges: boolean;
 
   @Column({
     type: DataType.JSON,
@@ -160,14 +167,14 @@ export class Campaign extends Model<Campaign> {
 
   // Associations
   @BelongsTo(() => Brand)
-  brand: Brand;
+  declare brand: Brand;
 
   @HasMany(() => CampaignCity)
-  cities: CampaignCity[];
+  declare cities: CampaignCity[];
 
   @HasMany(() => CampaignDeliverable)
-  deliverables: CampaignDeliverable[];
+  declare deliverables: CampaignDeliverable[];
 
   @HasMany(() => CampaignInvitation)
-  invitations: CampaignInvitation[];
+  declare invitations: CampaignInvitation[];
 }

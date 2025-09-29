@@ -8,6 +8,7 @@ import { Niche } from '../auth/model/niche.model';
 import { Country } from '../shared/models/country.model';
 import { City } from '../shared/models/city.model';
 import { ProfileReview } from '../admin/models/profile-review.model';
+import { Admin } from '../admin/models/admin.model';
 import { Campaign } from '../campaign/models/campaign.model';
 import { CampaignApplication } from '../campaign/models/campaign-application.model';
 import { SharedModule } from '../shared/shared.module';
@@ -20,6 +21,7 @@ import { SharedModule } from '../shared/shared.module';
       Country,
       City,
       ProfileReview,
+      Admin,
       Campaign,
       CampaignApplication,
     ]),
@@ -32,6 +34,10 @@ import { SharedModule } from '../shared/shared.module';
     {
       provide: 'PROFILE_REVIEW_MODEL',
       useValue: ProfileReview,
+    },
+    {
+      provide: 'ADMIN_MODEL',
+      useValue: Admin,
     },
     {
       provide: 'CAMPAIGN_MODEL',

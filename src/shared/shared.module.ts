@@ -5,6 +5,8 @@ import { SmsService } from './sms.service';
 import { S3Service } from './s3.service';
 import { EmailService } from './email.service';
 import { WhatsAppService } from './whatsapp.service';
+import { FirebaseService } from './firebase.service';
+import { NotificationService } from './notification.service';
 import { OtpService } from './services/otp.service';
 import { OtpRepository } from './repositories/otp.repository';
 import { LoggerService } from './services/logger.service';
@@ -17,6 +19,8 @@ import { Otp } from '../auth/model/otp.model';
     S3Service,
     EmailService,
     WhatsAppService,
+    FirebaseService,
+    NotificationService,
     OtpService,
     OtpRepository,
     LoggerService,
@@ -26,6 +30,8 @@ import { Otp } from '../auth/model/otp.model';
     S3Service,
     EmailService,
     WhatsAppService,
+    FirebaseService,
+    NotificationService,
     OtpService,
     OtpRepository,
     LoggerService,

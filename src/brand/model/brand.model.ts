@@ -171,6 +171,12 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
     type: DataType.STRING,
     allowNull: true,
   })
+  declare fcmToken: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
   declare profileHeadline: string;
 
   @Column({

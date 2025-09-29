@@ -352,10 +352,28 @@ export class BrandService {
       return !value || value.toString().trim().length === 0;
     });
 
-    const completionPercentage = Math.round(
-      (filledFields.length / allFields.length) * 100,
+    // Check for social media requirement separately
+    const hasSocialMediaLink = Boolean(
+      brand.facebookUrl ||
+        brand.instagramUrl ||
+        brand.youtubeUrl ||
+        brand.linkedinUrl ||
+        brand.twitterUrl,
     );
-    const isCompleted = missingFields.length === 0;
+
+    // For completion calculation, treat social media as one requirement
+    let adjustedFilledFields = filledFields.length;
+    if (hasSocialMediaLink) {
+      adjustedFilledFields += 1; // Count social media requirement as filled
+    }
+
+    const totalRequiredFields = allFields.length + 1; // +1 for social media requirement
+    const completionPercentage = Math.round(
+      (adjustedFilledFields / totalRequiredFields) * 100,
+    );
+
+    // Profile is complete if all regular fields are filled AND has at least one social media link
+    const isCompleted = missingFields.length === 0 && hasSocialMediaLink;
 
     // Generate user-friendly next steps
     const nextSteps: string[] = [];
@@ -395,6 +413,13 @@ export class BrandService {
         }
       }
     });
+
+    // Add social media step if no social media links provided
+    if (!hasSocialMediaLink) {
+      nextSteps.push(
+        'Add at least one social media link (Facebook, Instagram, YouTube, LinkedIn, or Twitter)',
+      );
+    }
 
     return {
       isCompleted,
@@ -483,12 +508,22 @@ export class BrandService {
       return value && value.toString().trim().length > 0;
     });
 
+    // At least one social media link required
+    const hasSocialMediaLink = Boolean(
+      brand.facebookUrl ||
+        brand.instagramUrl ||
+        brand.youtubeUrl ||
+        brand.linkedinUrl ||
+        brand.twitterUrl,
+    );
+
     return (
       allFieldsFilled &&
       allIdFieldsFilled &&
       hasActiveRegions &&
       allDocumentsUploaded &&
-      allImagesUploaded
+      allImagesUploaded &&
+      hasSocialMediaLink
     );
   }
 

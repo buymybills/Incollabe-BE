@@ -8,6 +8,7 @@ import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { InfluencerNiche } from '../auth/model/influencer-niche.model';
 import { BrandNiche } from '../brand/model/brand-niche.model';
+import { NotificationService } from '../shared/notification.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { FollowDto, FollowUserType } from './dto/follow.dto';
@@ -59,6 +60,12 @@ const mockBrandNiche = {
   findAll: jest.fn(),
 };
 
+const mockNotificationService = {
+  sendPostLikeNotification: jest.fn(),
+  sendFollowNotification: jest.fn(),
+  sendMentionNotification: jest.fn(),
+};
+
 describe('PostService', () => {
   let service: PostService;
   let postModel: any;
@@ -98,6 +105,10 @@ describe('PostService', () => {
         {
           provide: 'BrandNicheRepository',
           useValue: mockBrandNiche,
+        },
+        {
+          provide: NotificationService,
+          useValue: mockNotificationService,
         },
       ],
     }).compile();

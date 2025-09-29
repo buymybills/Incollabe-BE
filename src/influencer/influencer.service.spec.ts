@@ -73,6 +73,13 @@ const mockCampaignApplicationModel = {
   count: jest.fn(),
 };
 
+const mockAdminModel = {
+  findOne: jest.fn(),
+  findAll: jest.fn().mockResolvedValue([]), // Default to empty array
+  create: jest.fn(),
+  update: jest.fn(),
+};
+
 describe('InfluencerService', () => {
   let service: InfluencerService;
   let influencerRepository: InfluencerRepository;
@@ -116,6 +123,10 @@ describe('InfluencerService', () => {
         {
           provide: 'CAMPAIGN_APPLICATION_MODEL',
           useValue: mockCampaignApplicationModel,
+        },
+        {
+          provide: 'ADMIN_MODEL',
+          useValue: mockAdminModel,
         },
       ],
     }).compile();
@@ -378,6 +389,11 @@ describe('InfluencerService', () => {
         mockUpdatedProfile,
       );
       mockProfileReview.create.mockResolvedValue({});
+
+      // Mock admin data for notification
+      mockAdminModel.findAll.mockResolvedValue([
+        { id: 1, email: 'admin@test.com', name: 'Test Admin' },
+      ]);
 
       const result = await service.updateInfluencerProfile(
         1,

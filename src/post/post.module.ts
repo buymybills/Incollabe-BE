@@ -10,6 +10,7 @@ import { Brand } from '../brand/model/brand.model';
 import { InfluencerNiche } from '../auth/model/influencer-niche.model';
 import { BrandNiche } from '../brand/model/brand-niche.model';
 import { JwtAuthModule } from '../shared/jwt.module';
+import { SharedModule } from '../shared/shared.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { JwtAuthModule } from '../shared/jwt.module';
       BrandNiche,
     ]),
     JwtAuthModule,
+    SharedModule,
   ],
   controllers: [PostController],
   providers: [PostService],

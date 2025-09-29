@@ -352,6 +352,16 @@ describe('BrandService', () => {
         },
       } as any);
 
+      // Mock both profile completion methods
+      jest.spyOn(service as any, 'calculateProfileCompletion').mockReturnValue({
+        isCompleted: true,
+        missingFields: [],
+        nextSteps: [],
+      });
+      jest
+        .spyOn(service as any, 'checkBrandProfileCompletion')
+        .mockReturnValue(true);
+
       const result = await service.updateBrandProfile(1, updateDto);
 
       expect(profileReviewService.createProfileReview).toHaveBeenCalledWith({

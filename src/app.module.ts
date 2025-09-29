@@ -3,6 +3,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DatabaseModule } from './database/postgres.db';
 import { SharedModule } from './shared/shared.module';
+import { FirebaseModule } from './shared/firebase.module';
 import { JwtAuthModule } from './shared/jwt.module';
 import { AuthModule } from './auth/auth.module';
 import { BrandModule } from './brand/brand.module';
@@ -18,6 +19,7 @@ import { LoggingMiddleware } from './shared/middleware/logging.middleware';
     DatabaseModule,
     RedisModule,
     SharedModule,
+    FirebaseModule,
     JwtAuthModule, // Global JWT module
     AuthModule,
     BrandModule,

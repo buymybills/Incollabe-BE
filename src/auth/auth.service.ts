@@ -1,48 +1,47 @@
 import {
-  Injectable,
   BadRequestException,
   ConflictException,
-  UnauthorizedException,
-  InternalServerErrorException,
   ForbiddenException,
+  Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
-import { InjectModel } from '@nestjs/sequelize';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { Sequelize } from 'sequelize-typescript';
+import { InjectModel } from '@nestjs/sequelize';
+import * as bcrypt from 'bcrypt';
 import { randomInt, randomUUID } from 'crypto';
-import { Influencer } from './model/influencer.model';
-import { Niche } from './model/niche.model';
-import { Otp } from './model/otp.model';
-import { InfluencerNiche } from './model/influencer-niche.model';
-import { RequestOtpDto } from './dto/request-otp.dto';
-import { VerifyOtpDto } from './dto/verify-otp.dto';
-import { InfluencerSignupDto } from './dto/influencer-signup.dto';
-import { BrandSignupDto } from './dto/brand-signup.dto';
-import { BrandLoginDto } from './dto/brand-login.dto';
-import { BrandVerifyOtpDto } from './dto/brand-verify-otp.dto';
-import { BrandInitialSignupDto } from './dto/brand-initial-signup.dto';
-import { BrandProfileCompletionDto } from './dto/brand-profile-completion.dto';
-import { CheckUsernameDto } from './dto/check-username.dto';
-import { LogoutDto } from './dto/logout.dto';
-import { LogoutResponseDto } from './dto/logout-response.dto';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { RefreshTokenResponseDto } from './dto/refresh-token-response.dto';
-import { ForgotPasswordDto } from './dto/forgot-password.dto';
-import { ResetPasswordDto } from './dto/reset-password.dto';
-import { SmsService } from '../shared/sms.service';
+import { Op } from 'sequelize';
+import { Sequelize } from 'sequelize-typescript';
+import { CompanyType } from 'src/shared/models/company-type.model';
+import { BrandNiche } from '../brand/model/brand-niche.model';
+import { Brand, BrandCreationAttributes } from '../brand/model/brand.model';
+import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../shared/email.service';
 import { S3Service } from '../shared/s3.service';
 import { LoggerService } from '../shared/services/logger.service';
-import { RedisService } from '../redis/redis.service';
-import { Brand, BrandCreationAttributes } from '../brand/model/brand.model';
-import { BrandNiche } from '../brand/model/brand-niche.model';
+import { SmsService } from '../shared/sms.service';
 import { SignupFiles } from '../types/file-upload.types';
-import { Op } from 'sequelize';
-import * as bcrypt from 'bcrypt';
+import { BrandInitialSignupDto } from './dto/brand-initial-signup.dto';
+import { BrandLoginDto } from './dto/brand-login.dto';
+import { BrandProfileCompletionDto } from './dto/brand-profile-completion.dto';
+import { BrandSignupDto } from './dto/brand-signup.dto';
+import { BrandVerifyOtpDto } from './dto/brand-verify-otp.dto';
+import { CheckUsernameDto } from './dto/check-username.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { InfluencerSignupDto } from './dto/influencer-signup.dto';
+import { LogoutResponseDto } from './dto/logout-response.dto';
+import { LogoutDto } from './dto/logout.dto';
+import { RefreshTokenResponseDto } from './dto/refresh-token-response.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { RequestOtpDto } from './dto/request-otp.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { InfluencerNiche } from './model/influencer-niche.model';
+import { Influencer } from './model/influencer.model';
+import { Niche } from './model/niche.model';
+import { Otp } from './model/otp.model';
 import { Gender } from './types/gender.enum';
-import { CompanyType } from 'src/shared/models/company-type.model';
 
 // Interfaces for token payload
 interface DecodedRefresh {

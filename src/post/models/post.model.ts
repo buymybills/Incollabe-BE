@@ -33,39 +33,39 @@ export class Post extends Model {
 
   @AllowNull(false)
   @Column(DataType.TEXT)
-  content: string;
+  declare content: string;
 
   @AllowNull(true)
   @Column(DataType.JSON)
-  mediaUrls: string[];
+  declare mediaUrls: string[];
 
   @AllowNull(false)
   @Column(DataType.ENUM(...Object.values(UserType)))
-  userType: UserType;
+  declare userType: UserType;
 
   @AllowNull(true)
   @ForeignKey(() => Influencer)
   @Column(DataType.INTEGER)
-  influencerId: number;
+  declare influencerId: number;
 
   @AllowNull(true)
   @ForeignKey(() => Brand)
   @Column(DataType.INTEGER)
-  brandId: number;
+  declare brandId: number;
 
   @AllowNull(false)
   @Column({
     type: DataType.BOOLEAN,
     defaultValue: true,
   })
-  isActive: boolean;
+  declare isActive: boolean;
 
   @AllowNull(false)
   @Column({
     type: DataType.INTEGER,
     defaultValue: 0,
   })
-  likesCount: number;
+  declare likesCount: number;
 
   @CreatedAt
   @Column(DataType.DATE)

@@ -12,7 +12,7 @@ export const APP_CONSTANTS = {
       PROFILE_INCOMPLETE: 'profile_incomplete',
       PROFILE_VERIFIED: 'profile_verified',
       PROFILE_REJECTED: 'profile_rejected',
-      CAMPAIGN_INVITATION: 'campaign_invitation',
+      CAMPAIGN_INVITATION: 'campaign_invite',
       CAMPAIGN_APPLICATION_CONFIRMATION: 'campaign_application_confirmation',
     },
     BUTTON_TEXT: {

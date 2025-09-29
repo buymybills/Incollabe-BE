@@ -197,16 +197,23 @@ export class ProfileReviewService {
 
       const influencer = await this.influencerModel.findByPk(review.profileId);
       if (influencer) {
-        await this.emailService.sendInfluencerProfileApprovedEmail(
-          influencer.phone,
-          influencer.name,
-        );
+        // For influencers, we only send WhatsApp notifications, not emails
+        // Debug logging for WhatsApp notification
 
         if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
+          console.log(
+            'Sending WhatsApp notification to:',
+            influencer.whatsappNumber,
+          );
           await this.whatsAppService.sendProfileVerified(
             influencer.whatsappNumber,
             influencer.name,
           );
+        } else {
+          console.log('WhatsApp notification not sent. Reason:', {
+            hasWhatsappNumber: !!influencer.whatsappNumber,
+            isWhatsappVerified: influencer.isWhatsappVerified,
+          });
         }
       }
     }
@@ -253,12 +260,7 @@ export class ProfileReviewService {
     } else if (review.profileType === ProfileType.INFLUENCER) {
       const influencer = await this.influencerModel.findByPk(review.profileId);
       if (influencer) {
-        await this.emailService.sendInfluencerProfileRejectedEmail(
-          influencer.phone,
-          influencer.name,
-          reason,
-        );
-
+        // For influencers, we only send WhatsApp notifications, not emails
         if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
           await this.whatsAppService.sendProfileRejected(
             influencer.whatsappNumber,

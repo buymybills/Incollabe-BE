@@ -152,6 +152,11 @@ export class UpdateBrandProfileDto {
 
   @ApiProperty({ description: 'Facebook page URL', required: false })
   @IsOptional()
+  @Transform(({ value }) => {
+    if (!value || value === 'string' || !value.startsWith('http'))
+      return undefined;
+    return value;
+  })
   @IsString()
   @Matches(/^https?:\/\/.+/, {
     message:
@@ -161,6 +166,11 @@ export class UpdateBrandProfileDto {
 
   @ApiProperty({ description: 'Instagram profile URL', required: false })
   @IsOptional()
+  @Transform(({ value }) => {
+    if (!value || value === 'string' || !value.startsWith('http'))
+      return undefined;
+    return value;
+  })
   @IsString()
   @Matches(/^https?:\/\/.+/, {
     message:
@@ -170,6 +180,11 @@ export class UpdateBrandProfileDto {
 
   @ApiProperty({ description: 'YouTube channel URL', required: false })
   @IsOptional()
+  @Transform(({ value }) => {
+    if (!value || value === 'string' || !value.startsWith('http'))
+      return undefined;
+    return value;
+  })
   @IsString()
   @Matches(/^https?:\/\/.+/, {
     message:
@@ -179,6 +194,11 @@ export class UpdateBrandProfileDto {
 
   @ApiProperty({ description: 'LinkedIn company page URL', required: false })
   @IsOptional()
+  @Transform(({ value }) => {
+    if (!value || value === 'string' || !value.startsWith('http'))
+      return undefined;
+    return value;
+  })
   @IsString()
   @Matches(/^https?:\/\/.+/, {
     message:
@@ -188,10 +208,23 @@ export class UpdateBrandProfileDto {
 
   @ApiProperty({ description: 'Twitter/X profile URL', required: false })
   @IsOptional()
+  @Transform(({ value }) => {
+    if (!value || value === 'string' || !value.startsWith('http'))
+      return undefined;
+    return value;
+  })
   @IsString()
   @Matches(/^https?:\/\/.+/, {
     message:
       'Twitter/X URL must be a valid URL starting with http:// or https://',
   })
   twitterUrl?: string;
+
+  @ApiProperty({
+    description: 'FCM token for push notifications',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  fcmToken?: string;
 }
