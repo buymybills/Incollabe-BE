@@ -4,6 +4,7 @@ import { S3Service } from '../shared/s3.service';
 import { EmailService } from '../shared/email.service';
 import { WhatsAppService } from '../shared/whatsapp.service';
 import { OtpService } from '../shared/services/otp.service';
+import { CustomNicheService } from '../shared/services/custom-niche.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import {
   ProfileReview,
@@ -140,6 +141,54 @@ describe('InfluencerService', () => {
             findOrCreate: jest.fn(),
             destroy: jest.fn(),
             bulkCreate: jest.fn(),
+          },
+        },
+        {
+          provide: 'EXPERIENCE_MODEL',
+          useValue: {
+            findAll: jest.fn(),
+            findOne: jest.fn(),
+            create: jest.fn(),
+            update: jest.fn(),
+            destroy: jest.fn(),
+          },
+        },
+        {
+          provide: 'EXPERIENCE_SOCIAL_LINK_MODEL',
+          useValue: {
+            findAll: jest.fn(),
+            create: jest.fn(),
+            destroy: jest.fn(),
+            bulkCreate: jest.fn(),
+          },
+        },
+        {
+          provide: 'FOLLOW_MODEL',
+          useValue: {
+            count: jest.fn().mockResolvedValue(0),
+          },
+        },
+        {
+          provide: 'POST_MODEL',
+          useValue: {
+            count: jest.fn().mockResolvedValue(0),
+          },
+        },
+        {
+          provide: 'CUSTOM_NICHE_MODEL',
+          useValue: {
+            findAll: jest.fn().mockResolvedValue([]),
+            destroy: jest.fn(),
+            bulkCreate: jest.fn(),
+            count: jest.fn().mockResolvedValue(0),
+          },
+        },
+        {
+          provide: CustomNicheService,
+          useValue: {
+            createCustomNiche: jest.fn(),
+            updateCustomNiche: jest.fn(),
+            deleteCustomNiche: jest.fn(),
           },
         },
       ],
@@ -566,9 +615,13 @@ describe('InfluencerService', () => {
         phone: '+91XXXXXXXXXX', // Should not be included
         collaborationCosts: { instagram: { post: 1000 } }, // Should not be included
         niches: [{ id: 1, name: 'Fashion' }],
-        socialLinks: {
-          instagramUrl: 'https://instagram.com/test',
-        },
+        socialLinks: [
+          {
+            platform: 'instagram',
+            contentType: 'post',
+            url: 'https://instagram.com/p/test123',
+          },
+        ],
         isActive: true,
         isVerified: true,
         createdAt: new Date('2023-01-01'),

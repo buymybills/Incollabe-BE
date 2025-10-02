@@ -9,11 +9,14 @@ import { Niche } from './model/niche.model';
 import { Otp } from './model/otp.model';
 import { InfluencerNiche } from './model/influencer-niche.model';
 import { BrandNiche } from '../brand/model/brand-niche.model';
+import { CustomNiche } from './model/custom-niche.model';
+import { CompanyType } from '../shared/models/company-type.model';
 import { RedisService } from '../redis/redis.service';
 import { SmsService } from '../shared/sms.service';
 import { EmailService } from '../shared/email.service';
 import { S3Service } from '../shared/s3.service';
 import { LoggerService } from '../shared/services/logger.service';
+import { EncryptionService } from '../shared/services/encryption.service';
 import { Sequelize } from 'sequelize-typescript';
 import {
   BadRequestException,
@@ -114,6 +117,11 @@ const mockLoggerService = {
   logDatabase: jest.fn(),
 };
 
+const mockEncryptionService = {
+  encrypt: jest.fn((text) => `encrypted_${text}`),
+  decrypt: jest.fn((text) => text.replace('encrypted_', '')),
+};
+
 describe('AuthService', () => {
   let service: AuthService;
   let influencerModel: any;
@@ -159,6 +167,14 @@ describe('AuthService', () => {
           useValue: mockModel(),
         },
         {
+          provide: getModelToken(CustomNiche),
+          useValue: mockModel(),
+        },
+        {
+          provide: getModelToken(CompanyType),
+          useValue: mockModel(),
+        },
+        {
           provide: RedisService,
           useValue: mockRedisService,
         },
@@ -189,6 +205,10 @@ describe('AuthService', () => {
         {
           provide: LoggerService,
           useValue: mockLoggerService,
+        },
+        {
+          provide: EncryptionService,
+          useValue: mockEncryptionService,
         },
       ],
     }).compile();

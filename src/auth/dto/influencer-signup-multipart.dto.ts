@@ -127,4 +127,46 @@ export class InfluencerSignupMultipartDto {
   @Allow()
   fcmToken?: string;
 
+  @ApiProperty({
+    description:
+      'Array of custom niche names. Accepts JSON array string like ["Sustainable Fashion","Tech Reviews"] or comma-separated string like "Sustainable Fashion,Tech Reviews" (optional, max 5 total including regular niches)',
+    example: '["Sustainable Fashion","Tech Reviews"]',
+    type: 'string',
+    required: false,
+  })
+  @Transform(({ value }) => {
+    if (!value) return [];
+    if (typeof value === 'string') {
+      // Try to parse as JSON array first
+      if (value.startsWith('[') && value.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(value);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      }
+      // Handle comma-separated string
+      if (value.includes(',')) {
+        return value
+          .split(',')
+          .map((name) => name.trim())
+          .filter((name) => name.length > 0);
+      }
+      // Handle single string
+      return value.trim() ? [value.trim()] : [];
+    }
+    if (Array.isArray(value)) {
+      return value;
+    }
+    return [];
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true, message: 'Each custom niche must be a string' })
+  @Length(2, 100, {
+    each: true,
+    message: 'Custom niche name must be between 2 and 100 characters',
+  })
+  customNiches?: string[];
 }

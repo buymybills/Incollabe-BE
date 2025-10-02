@@ -12,13 +12,19 @@ import {
   BelongsToMany,
   ForeignKey,
   BelongsTo,
+  HasMany,
+  BeforeCreate,
+  BeforeUpdate,
+  AfterFind,
 } from 'sequelize-typescript';
 import { Niche } from './niche.model';
 import { InfluencerNiche } from './influencer-niche.model';
+import { CustomNiche } from './custom-niche.model';
 import { Country } from '../../shared/models/country.model';
 import { City } from '../../shared/models/city.model';
 import { GENDER_OPTIONS, OTHERS_GENDER_OPTIONS } from '../types/gender.enum';
 import type { GenderType, OthersGenderType } from '../types/gender.enum';
+import { EncryptionService } from '../../shared/services/encryption.service';
 
 @Table({
   tableName: 'influencers',
@@ -42,15 +48,16 @@ export class Influencer extends Model {
   @AllowNull(false)
   @Unique
   @Column({
-    type: DataType.STRING,
-    validate: {
-      is: {
-        args: /^\+91[6-9]\d{9}$/,
-        msg: 'Phone number must be in format +91XXXXXXXXXX where X is a valid Indian mobile number',
-      },
-    },
+    type: DataType.TEXT,
   })
   declare phone: string;
+
+  @AllowNull(true)
+  @Column({
+    type: DataType.STRING,
+    unique: true,
+  })
+  declare phoneHash: string;
 
   @AllowNull(true)
   @Column(DataType.DATEONLY)
@@ -95,8 +102,15 @@ export class Influencer extends Model {
   declare cityId: number;
 
   @AllowNull(true)
-  @Column(DataType.STRING)
+  @Column(DataType.TEXT)
   declare whatsappNumber: string;
+
+  @AllowNull(true)
+  @Column({
+    type: DataType.STRING,
+    unique: true,
+  })
+  declare whatsappHash: string;
 
   @AllowNull(false)
   @Column({
@@ -160,6 +174,13 @@ export class Influencer extends Model {
   })
   declare isVerified: boolean;
 
+  @AllowNull(false)
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+  })
+  declare isTopInfluencer: boolean;
+
   @AllowNull(true)
   @Column(DataType.DATE)
   declare lastLoginAt: Date;
@@ -175,9 +196,78 @@ export class Influencer extends Model {
   @BelongsToMany(() => Niche, () => InfluencerNiche)
   declare niches: Niche[];
 
+  @HasMany(() => CustomNiche, 'influencerId')
+  declare customNiches: CustomNiche[];
+
   @BelongsTo(() => Country)
   declare country: Country;
 
   @BelongsTo(() => City)
   declare city: City;
+
+  // Encryption hooks
+  @BeforeCreate
+  @BeforeUpdate
+  static async encryptSensitiveData(instance: Influencer) {
+    const encryptionService = new EncryptionService({
+      get: (key: string) => process.env[key],
+    } as any);
+
+    // Encrypt phone if it's been modified and not already encrypted
+    if (instance.changed('phone') && instance.phone) {
+      // Check if already encrypted (contains : separator)
+      if (!instance.phone.includes(':')) {
+        const crypto = require('crypto');
+        // Create hash for searching
+        instance.phoneHash = crypto
+          .createHash('sha256')
+          .update(instance.phone)
+          .digest('hex');
+        instance.phone = encryptionService.encrypt(instance.phone);
+      }
+    }
+
+    // Encrypt whatsappNumber if it's been modified and not already encrypted
+    if (instance.changed('whatsappNumber') && instance.whatsappNumber) {
+      if (!instance.whatsappNumber.includes(':')) {
+        const crypto = require('crypto');
+        // Create hash for searching
+        instance.whatsappHash = crypto
+          .createHash('sha256')
+          .update(instance.whatsappNumber)
+          .digest('hex');
+        instance.whatsappNumber = encryptionService.encrypt(
+          instance.whatsappNumber,
+        );
+      }
+    }
+  }
+
+  @AfterFind
+  static async decryptSensitiveData(
+    instances: Influencer[] | Influencer | null,
+  ) {
+    if (!instances) return;
+
+    const encryptionService = new EncryptionService({
+      get: (key: string) => process.env[key],
+    } as any);
+
+    const decrypt = (instance: Influencer) => {
+      if (instance.phone) {
+        instance.phone = encryptionService.decrypt(instance.phone);
+      }
+      if (instance.whatsappNumber) {
+        instance.whatsappNumber = encryptionService.decrypt(
+          instance.whatsappNumber,
+        );
+      }
+    };
+
+    if (Array.isArray(instances)) {
+      instances.forEach(decrypt);
+    } else {
+      decrypt(instances);
+    }
+  }
 }

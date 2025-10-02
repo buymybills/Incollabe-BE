@@ -13,17 +13,26 @@ import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto'
 import {
   ProfileReview,
   ProfileType,
+  ReviewStatus,
 } from '../admin/models/profile-review.model';
 import { Admin } from '../admin/models/admin.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Niche } from '../auth/model/niche.model';
 import { InfluencerNiche } from '../auth/model/influencer-niche.model';
+import { Experience } from './models/experience.model';
+import { Follow, FollowingType } from '../post/models/follow.model';
+import { Post, UserType } from '../post/models/post.model';
+import { CustomNiche } from '../auth/model/custom-niche.model';
 import {
   APP_CONSTANTS,
   ERROR_MESSAGES,
   SUCCESS_MESSAGES,
 } from '../shared/constants/app.constants';
-import { Campaign, CampaignStatus } from '../campaign/models/campaign.model';
+import {
+  Campaign,
+  CampaignStatus,
+  CampaignType,
+} from '../campaign/models/campaign.model';
 import {
   CampaignApplication,
   ApplicationStatus,
@@ -34,8 +43,12 @@ import { City } from '../shared/models/city.model';
 import { Brand } from '../brand/model/brand.model';
 import { ApplyCampaignDto } from '../campaign/dto/apply-campaign.dto';
 import { GetOpenCampaignsDto } from '../campaign/dto/get-open-campaigns.dto';
+import { CreateExperienceDto } from './dto/create-experience.dto';
+import { UpdateExperienceDto } from './dto/update-experience.dto';
 import { Op, literal } from 'sequelize';
 import { Gender } from '../auth/types/gender.enum';
+import { CustomNicheService } from '../shared/services/custom-niche.service';
+import { UserType as CustomNicheUserType } from '../auth/model/custom-niche.model';
 
 // Private types for InfluencerService
 type WhatsAppOtpRequest = {
@@ -82,6 +95,15 @@ export class InfluencerService {
     private readonly nicheModel: typeof Niche,
     @Inject('INFLUENCER_NICHE_MODEL')
     private readonly influencerNicheModel: typeof InfluencerNiche,
+    @Inject('EXPERIENCE_MODEL')
+    private readonly experienceModel: typeof Experience,
+    @Inject('FOLLOW_MODEL')
+    private readonly followModel: typeof Follow,
+    @Inject('POST_MODEL')
+    private readonly postModel: typeof Post,
+    @Inject('CUSTOM_NICHE_MODEL')
+    private readonly customNicheModel: typeof CustomNiche,
+    private readonly customNicheService: CustomNicheService,
   ) {}
 
   async getInfluencerProfile(influencerId: number, isPublic: boolean = false) {
@@ -91,8 +113,13 @@ export class InfluencerService {
       throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
     }
 
-    // Calculate profile completion
-    const profileCompletion = this.calculateProfileCompletion(influencer);
+    // Calculate profile completion, platform metrics, and get verification status
+    const [profileCompletion, platformMetrics, verificationStatus] =
+      await Promise.all([
+        this.calculateProfileCompletion(influencer),
+        this.calculatePlatformMetrics(influencerId),
+        this.getVerificationStatus(influencerId),
+      ]);
 
     const baseProfile = {
       id: influencer.id,
@@ -134,6 +161,19 @@ export class InfluencerService {
         description: niche.description,
       })),
 
+      customNiches: (influencer.customNiches || []).map((customNiche) => ({
+        id: customNiche.id,
+        name: customNiche.name,
+        description: customNiche.description,
+        isActive: customNiche.isActive,
+      })),
+
+      // Platform metrics
+      metrics: platformMetrics,
+
+      // Top influencer status
+      isTopInfluencer: influencer.isTopInfluencer,
+
       createdAt:
         influencer.createdAt?.toISOString() || new Date().toISOString(),
       updatedAt:
@@ -155,6 +195,7 @@ export class InfluencerService {
           isWhatsappVerified: influencer.isWhatsappVerified,
           isProfileCompleted: influencer.isProfileCompleted,
         },
+        verificationStatus,
         profileCompletion,
       };
     }
@@ -228,6 +269,16 @@ export class InfluencerService {
       delete processedData.nicheIds;
     }
 
+    // Handle custom niche bulk replacement if provided
+    if (processedData.customNiches !== undefined) {
+      await this.updateInfluencerCustomNiches(
+        influencerId,
+        processedData.customNiches,
+      );
+      // Remove customNiches from processedData as it's handled separately
+      delete processedData.customNiches;
+    }
+
     // Update influencer data
     const updatedData = {
       ...processedData,
@@ -235,6 +286,9 @@ export class InfluencerService {
     };
 
     await this.influencerRepository.updateInfluencer(influencerId, updatedData);
+
+    // Check if profile has ever been submitted for review
+    const hasBeenSubmitted = await this.hasProfileReview(influencerId);
 
     // Check and update profile completion status
     const wasComplete = influencer.isProfileCompleted;
@@ -253,49 +307,53 @@ export class InfluencerService {
       });
     }
 
-    // Send appropriate email and WhatsApp notification based on completion status
-    if (isComplete && !wasComplete) {
-      // Profile just became complete - automatically submit for verification
-      await this.createProfileReview(influencerId);
+    // Send appropriate WhatsApp notification based on completion status
+    // Only send notifications if profile has never been submitted
+    if (!hasBeenSubmitted) {
+      if (isComplete && !wasComplete) {
+        // Profile just became complete - automatically submit for verification
+        await this.createProfileReview(influencerId);
 
-      // Send verification pending notifications (WhatsApp only for influencers)
-      if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-        await this.whatsAppService.sendProfileVerificationPending(
-          influencer.whatsappNumber,
-          influencer.name,
-        );
-      }
-    } else if (!isComplete) {
-      // Profile is incomplete - send missing fields notifications (WhatsApp only for influencers)
-      console.log('Profile incomplete notification check:', {
-        influencerId: influencer.id,
-        name: influencer.name,
-        whatsappNumber: influencer.whatsappNumber,
-        isWhatsappVerified: influencer.isWhatsappVerified,
-        missingFieldsCount: profileCompletion.missingFields.length,
-        missingFields: profileCompletion.missingFields,
-      });
+        // Send verification pending notifications (WhatsApp only for influencers)
+        if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
+          await this.whatsAppService.sendProfileVerificationPending(
+            influencer.whatsappNumber,
+            influencer.name,
+          );
+        }
+      } else if (!isComplete) {
+        // Profile is incomplete - send missing fields notifications (WhatsApp only for influencers)
+        console.log('Profile incomplete notification check:', {
+          influencerId: influencer.id,
+          name: influencer.name,
+          whatsappNumber: influencer.whatsappNumber,
+          isWhatsappVerified: influencer.isWhatsappVerified,
+          missingFieldsCount: profileCompletion.missingFields.length,
+          missingFields: profileCompletion.missingFields,
+        });
 
-      if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-        console.log(
-          'Sending profile incomplete WhatsApp notification to:',
-          influencer.whatsappNumber,
-        );
-        await this.whatsAppService.sendProfileIncomplete(
-          influencer.whatsappNumber,
-          influencer.name,
-          profileCompletion.missingFields.length.toString(),
-        );
-      } else {
-        console.log(
-          'Profile incomplete WhatsApp notification not sent. Reason:',
-          {
-            hasWhatsappNumber: !!influencer.whatsappNumber,
-            isWhatsappVerified: influencer.isWhatsappVerified,
-          },
-        );
+        if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
+          console.log(
+            'Sending profile incomplete WhatsApp notification to:',
+            influencer.whatsappNumber,
+          );
+          await this.whatsAppService.sendProfileIncomplete(
+            influencer.whatsappNumber,
+            influencer.name,
+            profileCompletion.missingFields.length.toString(),
+          );
+        } else {
+          console.log(
+            'Profile incomplete WhatsApp notification not sent. Reason:',
+            {
+              hasWhatsappNumber: !!influencer.whatsappNumber,
+              isWhatsappVerified: influencer.isWhatsappVerified,
+            },
+          );
+        }
       }
     }
+    // else: Profile has been submitted before - no notification
 
     // Return updated profile with appropriate message
     const profileData = await this.getInfluencerProfile(influencerId);
@@ -448,6 +506,64 @@ export class InfluencerService {
     );
   }
 
+  private async getVerificationStatus(influencerId: number) {
+    // Check if profile has been submitted for review
+    const profileReview = await this.profileReviewModel.findOne({
+      where: {
+        profileId: influencerId,
+        profileType: ProfileType.INFLUENCER,
+      },
+      order: [['createdAt', 'DESC']],
+    });
+
+    if (!profileReview) {
+      return null;
+    }
+
+    const { status, statusViewed } = profileReview;
+
+    switch (status) {
+      case ReviewStatus.PENDING:
+      case ReviewStatus.UNDER_REVIEW:
+        return {
+          status: 'pending',
+          message: 'Profile Under Verification',
+          description:
+            'Usually takes 1-2 business days to complete verification',
+        };
+
+      case ReviewStatus.APPROVED:
+        if (statusViewed) {
+          return null;
+        }
+        // Mark as viewed and return status
+        await profileReview.update({ statusViewed: true });
+        return {
+          status: 'approved',
+          message: 'Profile Verification Successful',
+          description:
+            'Your profile has been approved and is now visible to brands',
+        };
+
+      case ReviewStatus.REJECTED:
+        if (statusViewed) {
+          return null;
+        }
+        // Mark as viewed and return status
+        await profileReview.update({ statusViewed: true });
+        return {
+          status: 'rejected',
+          message: 'Profile Verification Rejected',
+          description:
+            profileReview.rejectionReason ||
+            'Please update your profile and resubmit for verification',
+        };
+
+      default:
+        return null;
+    }
+  }
+
   private getFriendlyFieldName(field: string): string {
     const fieldMap: Record<string, string> = {
       name: 'Full Name',
@@ -556,6 +672,17 @@ export class InfluencerService {
       message: SUCCESS_MESSAGES.WHATSAPP.VERIFIED,
       verified: true,
     };
+  }
+
+  private async hasProfileReview(influencerId: number): Promise<boolean> {
+    const review = await this.profileReviewModel.findOne({
+      where: {
+        profileId: influencerId,
+        profileType: ProfileType.INFLUENCER,
+        status: { [Op.ne]: ReviewStatus.REJECTED },
+      },
+    });
+    return !!review;
   }
 
   private async createProfileReview(influencerId: number) {
@@ -878,7 +1005,7 @@ export class InfluencerService {
       include: [
         {
           model: Campaign,
-          attributes: ['id', 'name', 'description', 'endDate', 'status'],
+          attributes: ['id', 'name', 'description', 'status', 'type'],
           include: [
             {
               model: Brand,
@@ -963,6 +1090,44 @@ export class InfluencerService {
     };
   }
 
+  async createExperience(
+    influencerId: number,
+    createExperienceDto: CreateExperienceDto,
+  ): Promise<Experience> {
+    const experienceData: any = {
+      ...createExperienceDto,
+      influencerId,
+    };
+
+    return this.experienceModel.create(experienceData);
+  }
+
+  async updateExperience(
+    experienceId: number,
+    influencerId: number,
+    updateExperienceDto: UpdateExperienceDto,
+  ): Promise<Experience> {
+    const experience = await this.experienceModel.findOne({
+      where: { id: experienceId, influencerId },
+    });
+
+    if (!experience) {
+      throw new NotFoundException('Experience not found');
+    }
+
+    const updateData: any = { ...updateExperienceDto };
+
+    await experience.update(updateData);
+    return experience;
+  }
+
+  async getExperiences(influencerId: number): Promise<Experience[]> {
+    return this.experienceModel.findAll({
+      where: { influencerId },
+      order: [['createdAt', 'DESC']],
+    });
+  }
+
   private parseNicheIds(nicheIds: string): number[] {
     let parsedIds: number[];
 
@@ -970,26 +1135,31 @@ export class InfluencerService {
     if (nicheIds.startsWith('[') && nicheIds.endsWith(']')) {
       const parsed = JSON.parse(nicheIds);
       if (!Array.isArray(parsed)) {
-        throw new BadRequestException('Invalid niche IDs format: must be array');
+        throw new BadRequestException(
+          'Invalid niche IDs format: must be array',
+        );
       }
-      parsedIds = parsed.map(id => parseInt(id, 10));
+      parsedIds = parsed.map((id) => parseInt(id, 10));
     } else {
       // Handle comma-separated values
-      parsedIds = nicheIds
-        .split(',')
-        .map(id => parseInt(id.trim(), 10));
+      parsedIds = nicheIds.split(',').map((id) => parseInt(id.trim(), 10));
     }
 
     // Check for any invalid numbers
-    const invalidIds = parsedIds.filter(id => isNaN(id));
+    const invalidIds = parsedIds.filter((id) => isNaN(id));
     if (invalidIds.length > 0) {
-      throw new BadRequestException(`Invalid niche IDs: ${invalidIds.join(', ')}`);
+      throw new BadRequestException(
+        `Invalid niche IDs: ${invalidIds.join(', ')}`,
+      );
     }
 
     return parsedIds;
   }
 
-  private async updateInfluencerNiches(influencerId: number, nicheIds: number[]) {
+  private async updateInfluencerNiches(
+    influencerId: number,
+    nicheIds: number[],
+  ) {
     // Validate niche IDs
     const validNiches = await this.nicheModel.findAll({
       where: { id: nicheIds, isActive: true },
@@ -1016,5 +1186,200 @@ export class InfluencerService {
         },
       },
     });
+  }
+
+  private async updateInfluencerCustomNiches(
+    influencerId: number,
+    customNicheNames: string[],
+  ) {
+    // Get existing custom niches to compare
+    const existingCustomNiches = await this.customNicheModel.findAll({
+      where: {
+        userType: CustomNicheUserType.INFLUENCER,
+        userId: influencerId,
+        isActive: true,
+      },
+      attributes: ['name'],
+    });
+
+    const existingNames = existingCustomNiches
+      .map((niche) => niche.name)
+      .sort();
+    const newNames = [...customNicheNames].sort();
+
+    // Compare arrays - if identical, skip update to avoid unnecessary DB operations
+    if (JSON.stringify(existingNames) === JSON.stringify(newNames)) {
+      return; // No changes needed
+    }
+
+    // Validate 5-niche limit (regular + custom combined)
+    const regularNichesCount = await this.influencerNicheModel.count({
+      where: { influencerId },
+    });
+
+    if (regularNichesCount + customNicheNames.length > 5) {
+      throw new BadRequestException(
+        `Maximum 5 niches allowed (regular + custom combined). You have ${regularNichesCount} regular niches and trying to add ${customNicheNames.length} custom niches.`,
+      );
+    }
+
+    // Validate custom niche names are unique
+    const uniqueNames = [...new Set(customNicheNames)];
+    if (uniqueNames.length !== customNicheNames.length) {
+      throw new BadRequestException('Custom niche names must be unique');
+    }
+
+    // Delete all existing custom niches for this influencer (bulk replacement)
+    await this.customNicheModel.destroy({
+      where: {
+        userType: CustomNicheUserType.INFLUENCER,
+        userId: influencerId,
+      },
+    });
+
+    // Create new custom niches if any provided
+    if (customNicheNames.length > 0) {
+      const customNicheData = customNicheNames.map((name) => ({
+        userType: CustomNicheUserType.INFLUENCER,
+        userId: influencerId,
+        influencerId: influencerId,
+        brandId: null,
+        name: name,
+        description: '',
+        isActive: true,
+      }));
+
+      await this.customNicheModel.bulkCreate(customNicheData);
+    }
+  }
+
+  private async calculatePlatformMetrics(influencerId: number) {
+    const [followersCount, followingCount, postsCount, campaignsCount] =
+      await Promise.all([
+        // Count followers (users who follow this influencer)
+        this.followModel.count({
+          where: {
+            followingType: FollowingType.INFLUENCER,
+            followingInfluencerId: influencerId,
+          },
+        }),
+
+        // Count following (users this influencer follows)
+        this.followModel.count({
+          where: {
+            followerType: FollowingType.INFLUENCER,
+            followerInfluencerId: influencerId,
+          },
+        }),
+
+        // Count posts created by this influencer
+        this.postModel.count({
+          where: {
+            userType: UserType.INFLUENCER,
+            influencerId: influencerId,
+            isActive: true,
+          },
+        }),
+
+        // Count campaigns this influencer has applied to
+        this.campaignApplicationModel.count({
+          where: {
+            influencerId: influencerId,
+          },
+        }),
+      ]);
+
+    return {
+      followers: followersCount,
+      following: followingCount,
+      posts: postsCount,
+      campaigns: campaignsCount,
+    };
+  }
+
+  async getTopInfluencers(limit: number = 10, offset: number = 0) {
+    // Fetch all top influencers first (without limit/offset for proper sorting)
+    const allTopInfluencers = await this.influencerRepository.findAll({
+      where: {
+        isTopInfluencer: true,
+        isActive: true,
+        isVerified: true,
+      },
+    });
+
+    // Calculate metrics for each top influencer
+    const influencersWithMetrics = await Promise.all(
+      allTopInfluencers.map(async (influencer) => {
+        const [platformMetrics] = await Promise.all([
+          this.calculatePlatformMetrics(influencer.id),
+        ]);
+
+        return {
+          id: influencer.id,
+          name: influencer.name,
+          username: influencer.username,
+          bio: influencer.bio,
+          profileImage: influencer.profileImage,
+          profileBanner: influencer.profileBanner,
+          profileHeadline: influencer.profileHeadline,
+
+          location: {
+            country: influencer.country
+              ? {
+                  id: influencer.country.id,
+                  name: influencer.country.name,
+                  code: influencer.country.code,
+                }
+              : null,
+            city: influencer.city
+              ? {
+                  id: influencer.city.id,
+                  name: influencer.city.name,
+                  state: influencer.city.state,
+                }
+              : null,
+          },
+
+          socialLinks: {
+            instagram: influencer.instagramUrl,
+            youtube: influencer.youtubeUrl,
+            facebook: influencer.facebookUrl,
+            linkedin: influencer.linkedinUrl,
+            twitter: influencer.twitterUrl,
+          },
+
+          niches: (influencer.niches || []).map((niche) => ({
+            id: niche.id,
+            name: niche.name,
+            description: niche.description,
+          })),
+
+          metrics: platformMetrics,
+          isTopInfluencer: true,
+          isVerified: influencer.isVerified,
+
+          createdAt: influencer.createdAt?.toISOString(),
+          updatedAt: influencer.updatedAt?.toISOString(),
+        };
+      }),
+    );
+
+    // Sort by follower count (descending - most followers first)
+    const sortedInfluencers = influencersWithMetrics.sort(
+      (a, b) => b.metrics.followers - a.metrics.followers,
+    );
+
+    // Apply pagination after sorting
+    const paginatedInfluencers = sortedInfluencers.slice(
+      offset,
+      offset + limit,
+    );
+
+    return {
+      topInfluencers: paginatedInfluencers,
+      total: sortedInfluencers.length,
+      limit,
+      offset,
+    };
   }
 }

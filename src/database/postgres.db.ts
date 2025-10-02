@@ -19,6 +19,7 @@ import { Campaign } from '../campaign/models/campaign.model';
 import { CampaignCity } from '../campaign/models/campaign-city.model';
 import { CampaignDeliverable } from '../campaign/models/campaign-deliverable.model';
 import { CampaignInvitation } from '../campaign/models/campaign-invitation.model';
+import { CustomNiche } from '../auth/model/custom-niche.model';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { CampaignInvitation } from '../campaign/models/campaign-invitation.model
           CampaignCity,
           CampaignDeliverable,
           CampaignInvitation,
+          CustomNiche,
         ],
         autoLoadModels: true,
         synchronize: false, // Disabled to prevent index conflicts with existing database

@@ -11,6 +11,7 @@ import {
   Req,
   UseInterceptors,
   UploadedFiles,
+  Delete,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -24,6 +25,8 @@ import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { InfluencerService } from './influencer.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto';
+import { CreateExperienceDto } from './dto/create-experience.dto';
+import { UpdateExperienceDto } from './dto/update-experience.dto';
 import {
   SendWhatsAppOTPDto,
   VerifyWhatsAppOTPDto,
@@ -106,6 +109,12 @@ export class InfluencerController {
           description:
             'Array of niche IDs. Accepts JSON array "[1,4,12]" or comma-separated "1,4,12"',
           example: '[1,4,12]',
+        },
+        customNiches: {
+          type: 'string',
+          description:
+            'Array of custom niche names for bulk replacement. Accepts JSON array ["Sustainable Fashion","Tech Reviews"] or comma-separated "Sustainable Fashion,Tech Reviews". Will REPLACE all existing custom niches. Use empty string to delete all.',
+          example: '["Sustainable Fashion","Tech Reviews"]',
         },
 
         // Social Media Links (can update existing or add new)
@@ -191,6 +200,7 @@ export class InfluencerController {
         cityId: '3',
         whatsappNumber: '9870541151',
         nicheIds: '[1,4,12]',
+        customNiches: '["Sustainable Fashion","Tech Reviews"]',
         instagramUrl: 'https://www.instagram.com/bharti.1',
         youtubeUrl: 'https://www.youtube.com/watch?v=8_qUi4PyrYk',
         facebookUrl: 'https://www.facebook.com/mishra.bharti.1/',
@@ -492,5 +502,121 @@ export class InfluencerController {
   ) {
     const influencerId = req.user.id;
     return this.influencerService.getCampaignDetails(campaignId, influencerId);
+  }
+
+  @Post('experiences')
+  @ApiOperation({
+    summary: 'Add new experience',
+    description:
+      'Add a new campaign experience to the influencer profile. If campaignId is provided, associates with existing platform campaign. If not provided, creates an external campaign record.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Experience added successfully',
+    schema: {
+      example: {
+        id: 1,
+        campaignName: 'Festive Glam Essentials',
+        brandName: 'Nykaa',
+        campaignCategory: 'Skincare + Makeup',
+        deliverableFormat: '2 Instagram reels, 3 story posts',
+        successfullyCompleted: true,
+        roleDescription: 'Content creator for skincare products',
+        keyResultAchieved:
+          'Reach: 150K, Engagement Rate: 6.1%, Conversions (Dr.Vaid Mkt): 150+ clicks',
+        socialLinks: ['https://instagram.com/p/xyz'],
+        completedDate: '2024-12-01',
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      },
+    },
+  })
+  async createExperience(
+    @Req() req: RequestWithUser,
+    @Body() createExperienceDto: CreateExperienceDto,
+  ) {
+    const influencerId = req.user.id;
+    return this.influencerService.createExperience(
+      influencerId,
+      createExperienceDto,
+    );
+  }
+
+  @Get('experiences')
+  @ApiOperation({
+    summary: 'Get all experiences',
+    description: 'Get list of all campaign experiences for the influencer',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Experiences retrieved successfully',
+    schema: {
+      example: [
+        {
+          id: 1,
+          campaignName: 'Festive Glam Essentials',
+          brandName: 'Nykaa',
+          campaignCategory: 'Skincare + Makeup',
+          deliverableFormat: '2 Instagram reels, 3 story posts',
+          successfullyCompleted: true,
+          roleDescription: 'Content creator for skincare products',
+          keyResultAchieved:
+            'Reach: 150K, Engagement Rate: 6.1%, Conversions (Dr.Vaid Mkt): 150+ clicks',
+          socialLinks: ['https://instagram.com/p/xyz'],
+          completedDate: '2024-12-01',
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+        },
+      ],
+    },
+  })
+  async getExperiences(@Req() req: RequestWithUser) {
+    const influencerId = req.user.id;
+    return this.influencerService.getExperiences(influencerId);
+  }
+
+  @Put('experiences/:experienceId')
+  @ApiOperation({
+    summary: 'Update experience',
+    description: 'Update an existing campaign experience',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Experience updated successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Experience not found',
+  })
+  async updateExperience(
+    @Req() req: RequestWithUser,
+    @Param('experienceId', ParseIntPipe) experienceId: number,
+    @Body() updateExperienceDto: UpdateExperienceDto,
+  ) {
+    const influencerId = req.user.id;
+    return this.influencerService.updateExperience(
+      experienceId,
+      influencerId,
+      updateExperienceDto,
+    );
+  }
+
+  @Get('top-influencers')
+  @ApiOperation({
+    summary: 'Get top influencers',
+    description:
+      'Fetch list of top influencers curated by admin (public endpoint)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Top influencers fetched successfully',
+  })
+  async getTopInfluencers(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const parsedLimit = limit ? parseInt(limit, 10) : 10;
+    const parsedOffset = offset ? parseInt(offset, 10) : 0;
+    return this.influencerService.getTopInfluencers(parsedLimit, parsedOffset);
   }
 }

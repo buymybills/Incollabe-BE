@@ -203,6 +203,13 @@ export class AuthController {
       description: 'FCM token for push notifications (optional)',
       required: false,
     },
+    customNiches: {
+      type: 'string',
+      description:
+        'Array of custom niche names. Accepts JSON array ["Sustainable Fashion","Tech Reviews"] or comma-separated "Sustainable Fashion,Tech Reviews" (optional, max 5 total including regular niches)',
+      example: '["Sustainable Fashion","Tech Reviews"]',
+      required: false,
+    },
   })
   @ApiResponse({
     status: 201,
@@ -235,6 +242,20 @@ export class AuthController {
               id: 4,
               name: 'Beauty',
               description: 'Beauty and makeup content',
+              isActive: true,
+            },
+          ],
+          customNiches: [
+            {
+              id: 1,
+              name: 'Sustainable Fashion',
+              description: '',
+              isActive: true,
+            },
+            {
+              id: 2,
+              name: 'Tech Reviews',
+              description: '',
               isActive: true,
             },
           ],
@@ -491,12 +512,6 @@ export class AuthController {
   @ApiFileFields(
     ['profileImage', 'incorporationDocument', 'gstDocument', 'panDocument'],
     {
-      phone: {
-        type: 'string',
-        description: 'Indian mobile number (10 digits)',
-        example: '9467289789',
-        required: true,
-      },
       brandName: {
         type: 'string',
         description: 'Brand name',

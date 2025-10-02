@@ -8,6 +8,11 @@ import { Country } from '../shared/models/country.model';
 import { City } from '../shared/models/city.model';
 import { Region } from '../shared/models/region.model';
 import { CompanyType } from '../shared/models/company-type.model';
+import { Follow } from '../post/models/follow.model';
+import { Post } from '../post/models/post.model';
+import { Campaign } from '../campaign/models/campaign.model';
+import { CustomNiche } from '../auth/model/custom-niche.model';
+import { ProfileReview } from '../admin/models/profile-review.model';
 import { S3Service } from '../shared/s3.service';
 import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../shared/email.service';
@@ -61,6 +66,7 @@ const mockMasterDataService = {
 
 const mockProfileReviewService = {
   createProfileReview: jest.fn(),
+  hasProfileReview: jest.fn().mockResolvedValue(false),
 };
 
 describe('BrandService', () => {
@@ -107,6 +113,26 @@ describe('BrandService', () => {
         },
         {
           provide: getModelToken(CompanyType),
+          useValue: mockModel(),
+        },
+        {
+          provide: getModelToken(Follow),
+          useValue: { count: jest.fn().mockResolvedValue(0) },
+        },
+        {
+          provide: getModelToken(Post),
+          useValue: { count: jest.fn().mockResolvedValue(0) },
+        },
+        {
+          provide: getModelToken(Campaign),
+          useValue: { count: jest.fn().mockResolvedValue(0) },
+        },
+        {
+          provide: getModelToken(CustomNiche),
+          useValue: mockModel(),
+        },
+        {
+          provide: getModelToken(ProfileReview),
           useValue: mockModel(),
         },
         {
@@ -252,6 +278,7 @@ describe('BrandService', () => {
         brandName: 'Test Brand',
         isProfileCompleted: false,
         update: jest.fn(),
+        reload: jest.fn(),
       };
 
       const mockFiles = {
@@ -334,6 +361,7 @@ describe('BrandService', () => {
         panDocument: 'https://s3.amazonaws.com/pan.pdf',
         isProfileCompleted: false,
         update: jest.fn(),
+        reload: jest.fn(),
       };
 
       brandModel.findByPk.mockResolvedValue(mockBrand);

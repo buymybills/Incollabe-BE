@@ -19,6 +19,7 @@ import { Country } from '../shared/models/country.model';
 import { City } from '../shared/models/city.model';
 import { CompanyType } from '../shared/models/company-type.model';
 import { Admin } from '../admin/models/admin.model';
+import { CustomNiche } from './model/custom-niche.model';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { Admin } from '../admin/models/admin.model';
       City,
       CompanyType,
       Admin,
+      CustomNiche,
     ]),
     SharedModule,
   ],

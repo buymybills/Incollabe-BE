@@ -9,6 +9,7 @@ import {
   UseGuards,
   Req,
   HttpStatus,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -42,6 +43,11 @@ import {
   DashboardStatsDto,
   ReviewActionResponseDto,
 } from './dto/profile-review.dto';
+import {
+  AdminSearchDto,
+  AdminSearchResultDto,
+  UserType,
+} from './dto/admin-search.dto';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -371,5 +377,166 @@ export class AdminController {
   })
   async getDashboardStats() {
     return await this.profileReviewService.getDashboardStats();
+  }
+
+  @Put('influencer/:influencerId/top-status')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Toggle top influencer status',
+    description: 'Mark or unmark an influencer as top influencer (admin only)',
+  })
+  @ApiParam({
+    name: 'influencerId',
+    description: 'ID of the influencer',
+    type: 'number',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        isTopInfluencer: {
+          type: 'boolean',
+          description: 'Whether to mark as top influencer',
+          example: true,
+        },
+      },
+      required: ['isTopInfluencer'],
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Top influencer status updated successfully',
+  })
+  async updateTopInfluencerStatus(
+    @Param('influencerId', ParseIntPipe) influencerId: number,
+    @Body() body: { isTopInfluencer: boolean },
+    @Req() req: RequestWithAdmin,
+  ) {
+    return await this.adminAuthService.updateTopInfluencerStatus(
+      influencerId,
+      body.isTopInfluencer,
+      req.admin.id,
+    );
+  }
+
+  @Get('search/users')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Search and filter influencers and brands',
+    description:
+      'Admin endpoint to search, filter, and manage all users (influencers and brands)',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Users found successfully',
+    type: AdminSearchResultDto,
+  })
+  async searchUsers(@Query() searchDto: AdminSearchDto) {
+    return await this.adminAuthService.searchUsers(searchDto);
+  }
+
+  // Brand Management Endpoints
+  @Get('brands')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'List and filter brands',
+    description:
+      'Admin endpoint to list, search, and filter brands with pagination',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Brands retrieved successfully',
+    type: AdminSearchResultDto,
+  })
+  async listBrands(@Query() searchDto: AdminSearchDto) {
+    const brandSearchDto = { ...searchDto, userType: UserType.BRAND };
+    return await this.adminAuthService.searchUsers(brandSearchDto);
+  }
+
+  @Get('brands/:brandId')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get brand details',
+    description: 'Get comprehensive brand information for admin review',
+  })
+  @ApiParam({
+    name: 'brandId',
+    description: 'ID of the brand',
+    type: 'number',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Brand details retrieved successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Brand not found',
+  })
+  async getBrandDetails(@Param('brandId', ParseIntPipe) brandId: number) {
+    return await this.adminAuthService.getBrandDetails(brandId);
+  }
+
+  @Put('brands/:brandId/status')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update brand status',
+    description: 'Activate or deactivate a brand account (Super Admin only)',
+  })
+  @ApiParam({
+    name: 'brandId',
+    description: 'ID of the brand',
+    type: 'number',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        isActive: {
+          type: 'boolean',
+          description: 'Whether the brand should be active',
+          example: true,
+        },
+      },
+      required: ['isActive'],
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Brand status updated successfully',
+  })
+  async updateBrandStatus(
+    @Param('brandId', ParseIntPipe) brandId: number,
+    @Body() body: { isActive: boolean },
+    @Req() req: RequestWithAdmin,
+  ) {
+    return await this.adminAuthService.updateBrandStatus(
+      brandId,
+      body.isActive,
+      req.admin.id,
+    );
+  }
+
+  @Get('brands/search/advanced')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Advanced brand search',
+    description:
+      'Advanced search and filtering for brands with brand-specific filters',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Brand search results retrieved successfully',
+    type: AdminSearchResultDto,
+  })
+  async advancedBrandSearch(@Query() searchDto: AdminSearchDto) {
+    const brandSearchDto = { ...searchDto, userType: UserType.BRAND };
+    return await this.adminAuthService.advancedBrandSearch(brandSearchDto);
   }
 }

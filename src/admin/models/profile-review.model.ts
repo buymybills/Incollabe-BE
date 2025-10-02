@@ -71,6 +71,13 @@ export class ProfileReview extends Model {
   @Column(DataType.DATE)
   declare submittedAt: Date;
 
+  @AllowNull(false)
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+  })
+  declare statusViewed: boolean;
+
   @CreatedAt
   @Column(DataType.DATE)
   declare createdAt: Date;

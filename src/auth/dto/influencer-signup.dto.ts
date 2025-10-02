@@ -72,7 +72,8 @@ export class InfluencerSignupDto {
   bio?: string;
 
   @ApiProperty({
-    description: 'Array of niche IDs that the influencer is interested in',
+    description:
+      'Array of niche IDs that the influencer is interested in (max 5 total including custom niches)',
     example: [1, 4, 12],
     type: [Number],
   })
@@ -80,6 +81,22 @@ export class InfluencerSignupDto {
   @ArrayMinSize(1, { message: 'At least one niche must be selected' })
   @IsNumber({}, { each: true, message: 'Each niche ID must be a number' })
   nicheIds: number[];
+
+  @ApiProperty({
+    description:
+      'Array of custom niche names to create during signup (optional, max 5 total including regular niches)',
+    example: ['Sustainable Fashion', 'Tech Reviews'],
+    type: [String],
+    required: false,
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true, message: 'Each custom niche must be a string' })
+  @Length(2, 100, {
+    each: true,
+    message: 'Custom niche name must be between 2 and 100 characters',
+  })
+  customNiches?: string[];
 
   @ApiProperty({
     description: 'Profile image URL or base64 string (optional, can be empty)',
@@ -96,5 +113,4 @@ export class InfluencerSignupDto {
   @IsOptional()
   @Allow()
   fcmToken?: string;
-
 }

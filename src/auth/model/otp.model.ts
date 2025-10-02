@@ -9,7 +9,11 @@ import {
   AutoIncrement,
   AllowNull,
   Index,
+  BeforeCreate,
+  BeforeUpdate,
+  AfterFind,
 } from 'sequelize-typescript';
+import { EncryptionService } from '../../shared/services/encryption.service';
 
 @Table({
   tableName: 'otps',
@@ -27,9 +31,13 @@ export class Otp extends Model {
   declare id: number;
 
   @AllowNull(false)
+  @Column(DataType.TEXT)
+  identifier: string; // Can be phone OR email (encrypted)
+
+  @AllowNull(true)
   @Index
   @Column(DataType.STRING)
-  identifier: string; // Can be phone OR email
+  identifierHash: string; // Hash of identifier for searching
 
   @AllowNull(false)
   @Index
@@ -65,4 +73,25 @@ export class Otp extends Model {
   @UpdatedAt
   @Column(DataType.DATE)
   declare updatedAt: Date;
+
+  @AfterFind
+  static async decryptSensitiveData(instances: Otp[] | Otp | null) {
+    if (!instances) return;
+
+    const encryptionService = new EncryptionService({
+      get: (key: string) => process.env[key],
+    } as any);
+
+    const decrypt = (instance: Otp) => {
+      if (instance.identifier) {
+        instance.identifier = encryptionService.decrypt(instance.identifier);
+      }
+    };
+
+    if (Array.isArray(instances)) {
+      instances.forEach(decrypt);
+    } else {
+      decrypt(instances);
+    }
+  }
 }

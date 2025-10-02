@@ -4,6 +4,7 @@ import { Influencer } from '../../auth/model/influencer.model';
 import { Niche } from '../../auth/model/niche.model';
 import { Country } from '../../shared/models/country.model';
 import { City } from '../../shared/models/city.model';
+import { CustomNiche } from '../../auth/model/custom-niche.model';
 
 @Injectable()
 export class InfluencerRepository {
@@ -27,6 +28,12 @@ export class InfluencerRepository {
         {
           model: City,
           attributes: ['id', 'name', 'state'],
+        },
+        {
+          model: CustomNiche,
+          attributes: ['id', 'name', 'description', 'isActive'],
+          where: { isActive: true },
+          required: false,
         },
       ],
     });
@@ -60,5 +67,32 @@ export class InfluencerRepository {
       },
       { where: { id: influencerId } },
     );
+  }
+
+  async findAll(options: any): Promise<Influencer[]> {
+    return this.influencerModel.findAll({
+      ...options,
+      include: [
+        {
+          model: Niche,
+          attributes: ['id', 'name', 'description', 'logoNormal', 'logoDark'],
+          through: { attributes: [] },
+        },
+        {
+          model: Country,
+          attributes: ['id', 'name', 'code'],
+        },
+        {
+          model: City,
+          attributes: ['id', 'name', 'state'],
+        },
+        {
+          model: CustomNiche,
+          attributes: ['id', 'name', 'description', 'isActive'],
+          where: { isActive: true },
+          required: false,
+        },
+      ],
+    });
   }
 }

@@ -106,7 +106,7 @@ export class EmailService {
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Welcome to Cloutsy</title>
+        <title>Welcome to InCollab</title>
         <style>
           body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
           .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -728,7 +728,7 @@ export class EmailService {
       await this.transporter.sendMail({
         from: process.env.EMAIL_USER,
         to: email,
-        subject: '🎉 Profile Verification Approved - Welcome to Cloutsy!',
+        subject: '🎉 Profile Verification Approved - Welcome to InCollab!',
         html: htmlContent,
       });
 
@@ -848,7 +848,7 @@ export class EmailService {
       await this.transporter.sendMail({
         from: process.env.EMAIL_USER,
         to: phone, // Using phone as identifier for influencers
-        subject: '🎉 Profile Verification Approved - Welcome to Cloutsy!',
+        subject: '🎉 Profile Verification Approved - Welcome to InCollab!',
         html: htmlContent,
       });
 
@@ -929,8 +929,11 @@ export class EmailService {
     profileIdentifier: string,
     profileId: number,
   ): Promise<void> {
-    try {
-      const htmlContent = `
+    // Construct the review URL
+    const baseUrl = process.env.ADMIN_PANEL_URL || 'https://admin.incollab.com';
+    const reviewUrl = `${baseUrl}/reviews/profile/${profileId}/${profileType}`;
+
+    const htmlContent = `
         <!DOCTYPE html>
         <html>
         <head>
@@ -944,6 +947,7 @@ export class EmailService {
             .footer { background: #f8f9fa; padding: 15px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; color: #6c757d; }
             .info { background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; padding: 15px; border-radius: 4px; margin: 15px 0; }
             .btn { display: inline-block; padding: 12px 24px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 10px 0; }
+            .btn-container { text-align: center; margin: 20px 0; }
           </style>
         </head>
         <body>
@@ -963,7 +967,10 @@ export class EmailService {
                 <li><strong>Identifier:</strong> ${profileIdentifier}</li>
                 <li><strong>Profile ID:</strong> ${profileId}</li>
               </ul>
-              <p>Please review this profile at your earliest convenience. Log in to the admin panel to view the complete profile details and make a verification decision.</p>
+              <div class="btn-container">
+                <a href="${reviewUrl}" class="btn">Review Profile Now</a>
+              </div>
+              <p>Please review this profile at your earliest convenience. Click the button above to view the complete profile details and make a verification decision.</p>
               <p>Best regards,<br>InCollab Admin System</p>
             </div>
             <div class="footer">
@@ -975,21 +982,15 @@ export class EmailService {
         </html>
       `;
 
-      await this.transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: adminEmail,
-        subject: `🔔 New ${profileType.charAt(0).toUpperCase() + profileType.slice(1)} Profile Pending Verification`,
-        html: htmlContent,
-      });
+    await this.transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: adminEmail,
+      subject: `🔔 New ${profileType.charAt(0).toUpperCase() + profileType.slice(1)} Profile Pending Verification`,
+      html: htmlContent,
+    });
 
-      console.log(
-        `Admin notification email sent to: ${adminEmail} for ${profileType} profile ${profileId}`,
-      );
-    } catch (error) {
-      console.error(
-        `Failed to send admin notification email to ${adminEmail}`,
-        error,
-      );
-    }
+    console.log(
+      `Admin notification email sent to: ${adminEmail} for ${profileType} profile ${profileId}`,
+    );
   }
 }

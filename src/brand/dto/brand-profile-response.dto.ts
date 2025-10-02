@@ -144,6 +144,20 @@ interface CompanyTypeInfo {
   description: string;
 }
 
+export class PlatformMetrics {
+  @ApiProperty({ description: 'Number of followers on this platform' })
+  followers: number;
+
+  @ApiProperty({ description: 'Number of users this brand follows' })
+  following: number;
+
+  @ApiProperty({ description: 'Number of posts created on this platform' })
+  posts: number;
+
+  @ApiProperty({ description: 'Number of campaigns created by this brand' })
+  campaigns: number;
+}
+
 export class BrandProfileResponseDto {
   @ApiProperty({ description: 'Brand ID' })
   id: number;
@@ -162,9 +176,6 @@ export class BrandProfileResponseDto {
 
   @ApiProperty({ description: 'Profile headline' })
   profileHeadline?: string;
-
-  @ApiProperty({ description: 'Phone verification status' })
-  isPhoneVerified: boolean;
 
   @ApiProperty({ description: 'Email verification status' })
   isEmailVerified: boolean;
@@ -213,6 +224,42 @@ export class BrandProfileResponseDto {
     logoNormal?: string;
     logoDark?: string;
   }>;
+
+  @ApiProperty({
+    description: 'Custom niches created by the brand',
+    type: [Object],
+    example: [
+      {
+        id: 1,
+        name: 'Sustainable Fashion',
+      },
+    ],
+  })
+  customNiches: Array<{
+    id: number;
+    name: string;
+  }>;
+
+  @ApiProperty({
+    description: 'Platform engagement metrics',
+    type: PlatformMetrics,
+  })
+  metrics: PlatformMetrics;
+
+  @ApiProperty({
+    description: 'Verification status of the profile',
+    required: false,
+    example: {
+      status: 'pending',
+      message: 'Profile Under Verification',
+      description: 'Usually takes 1-2 business days to complete verification',
+    },
+  })
+  verificationStatus?: {
+    status: string;
+    message: string;
+    description: string;
+  } | null;
 
   @ApiProperty({ description: 'Profile creation timestamp' })
   createdAt: string;

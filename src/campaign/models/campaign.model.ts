@@ -26,11 +26,32 @@ export enum CampaignType {
   HYBRID = 'hybrid',
 }
 
+export interface CampaignCreationAttributes {
+  brandId: number;
+  name: string;
+  description?: string;
+  category?: string;
+  deliverableFormat?: string;
+  status?: CampaignStatus;
+  type?: CampaignType;
+  isPanIndia?: boolean;
+  minAge?: number;
+  maxAge?: number;
+  isOpenToAllAges?: boolean;
+  genderPreferences?: string[];
+  isOpenToAllGenders?: boolean;
+  nicheIds?: number[];
+  customInfluencerRequirements?: string;
+  performanceExpectations?: string;
+  brandSupport?: string;
+  isActive?: boolean;
+}
+
 @Table({
   tableName: 'campaigns',
   timestamps: true,
 })
-export class Campaign extends Model<Campaign> {
+export class Campaign extends Model<Campaign, CampaignCreationAttributes> {
   @Column({
     type: DataType.INTEGER,
     primaryKey: true,
@@ -82,18 +103,6 @@ export class Campaign extends Model<Campaign> {
     defaultValue: CampaignType.PAID,
   })
   type: CampaignType;
-
-  @Column({
-    type: DataType.DATE,
-    allowNull: true,
-  })
-  startDate: Date;
-
-  @Column({
-    type: DataType.DATE,
-    allowNull: true,
-  })
-  endDate: Date;
 
   @Column({
     type: DataType.BOOLEAN,

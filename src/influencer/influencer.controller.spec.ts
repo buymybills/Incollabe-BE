@@ -92,8 +92,8 @@ describe('InfluencerController', () => {
     } as RequestWithUser;
 
     const updateDto: UpdateInfluencerProfileDto = {
-      name: 'Updated Name',
-      bio: 'Updated bio',
+      bio: 'Updated bio with more than 10 characters',
+      profileHeadline: 'Updated headline with sufficient length',
     };
 
     const mockFiles = {
@@ -103,7 +103,7 @@ describe('InfluencerController', () => {
     it('should update profile successfully', async () => {
       const mockResult = {
         message: 'Profile updated successfully',
-        influencer: { id: 1, name: 'Updated Name' },
+        influencer: { id: 1, bio: 'Updated bio with more than 10 characters' },
       };
 
       mockInfluencerService.updateInfluencerProfile.mockResolvedValue(
@@ -127,7 +127,7 @@ describe('InfluencerController', () => {
     it('should handle updates without files', async () => {
       const mockResult = {
         message: 'Profile updated successfully',
-        influencer: { id: 1, name: 'Updated Name' },
+        influencer: { id: 1, bio: 'Updated bio with more than 10 characters' },
       };
 
       mockInfluencerService.updateInfluencerProfile.mockResolvedValue(
@@ -234,7 +234,7 @@ describe('InfluencerController', () => {
         profileBanner: 'banner.jpg',
         profileHeadline: 'Headline',
         location: {},
-        socialLinks: {},
+        socialLinks: [],
         collaborationCosts: {},
         niches: [],
         verification: {
@@ -287,7 +287,7 @@ describe('InfluencerController', () => {
         profileBanner: '',
         profileHeadline: '',
         location: {},
-        socialLinks: {},
+        socialLinks: [],
         collaborationCosts: {},
         niches: [],
         verification: { isProfileCompleted: true },
@@ -341,7 +341,7 @@ describe('InfluencerController', () => {
       await expect(
         controller.updateInfluencerProfile(
           mockRequest,
-          { name: 'Test' },
+          { bio: 'Test bio with minimum required length' },
           undefined,
         ),
       ).rejects.toThrow('Update failed');

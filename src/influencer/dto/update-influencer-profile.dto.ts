@@ -9,6 +9,7 @@ import {
   ValidateNested,
   IsObject,
   IsEnum,
+  IsArray,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { CollaborationCostsDto } from './collaboration-costs.dto';
@@ -100,4 +101,47 @@ export class UpdateInfluencerProfileDto {
   @IsOptional()
   @IsString()
   nicheIds?: string;
+
+  @ApiProperty({
+    description:
+      'Array of custom niche names for bulk replacement. Accepts JSON array ["Sustainable Fashion","Tech Reviews"] or comma-separated "Sustainable Fashion,Tech Reviews". Will replace ALL existing custom niches.',
+    example: '["Sustainable Fashion","Tech Reviews"]',
+    required: false,
+  })
+  @Transform(({ value }) => {
+    if (!value) return undefined; // undefined means don't update custom niches
+    if (typeof value === 'string') {
+      if (value.trim() === '') return []; // empty string means delete all custom niches
+      // Try to parse as JSON array first
+      if (value.startsWith('[') && value.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(value);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      }
+      // Handle comma-separated string
+      if (value.includes(',')) {
+        return value
+          .split(',')
+          .map((name) => name.trim())
+          .filter((name) => name.length > 0);
+      }
+      // Handle single string
+      return value.trim() ? [value.trim()] : [];
+    }
+    if (Array.isArray(value)) {
+      return value;
+    }
+    return undefined;
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true, message: 'Each custom niche must be a string' })
+  @Length(2, 100, {
+    each: true,
+    message: 'Custom niche name must be between 2 and 100 characters',
+  })
+  customNiches?: string[];
 }

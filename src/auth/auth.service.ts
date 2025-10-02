@@ -11,15 +11,17 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/sequelize';
 import * as bcrypt from 'bcrypt';
 import { randomInt, randomUUID } from 'crypto';
+import * as crypto from 'crypto';
 import { Op } from 'sequelize';
 import { Sequelize } from 'sequelize-typescript';
-import { CompanyType } from 'src/shared/models/company-type.model';
+import { CompanyType } from '../shared/models/company-type.model';
 import { BrandNiche } from '../brand/model/brand-niche.model';
 import { Brand, BrandCreationAttributes } from '../brand/model/brand.model';
 import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../shared/email.service';
 import { S3Service } from '../shared/s3.service';
 import { LoggerService } from '../shared/services/logger.service';
+import { EncryptionService } from '../shared/services/encryption.service';
 import { SmsService } from '../shared/sms.service';
 import { SignupFiles } from '../types/file-upload.types';
 import { BrandInitialSignupDto } from './dto/brand-initial-signup.dto';
@@ -41,6 +43,7 @@ import { InfluencerNiche } from './model/influencer-niche.model';
 import { Influencer } from './model/influencer.model';
 import { Niche } from './model/niche.model';
 import { Otp } from './model/otp.model';
+import { CustomNiche } from './model/custom-niche.model';
 import { Gender } from './types/gender.enum';
 
 // Interfaces for token payload
@@ -70,11 +73,16 @@ export class AuthService {
     private readonly influencerNicheModel: typeof InfluencerNiche,
     @InjectModel(BrandNiche)
     private readonly brandNicheModel: typeof BrandNiche,
+    @InjectModel(CustomNiche)
+    private readonly customNicheModel: typeof CustomNiche,
+    @InjectModel(CompanyType)
+    private readonly companyTypeModel: typeof CompanyType,
     private readonly configService: ConfigService,
     private readonly smsService: SmsService,
     private readonly emailService: EmailService,
     private readonly s3Service: S3Service,
     private readonly loggerService: LoggerService,
+    private readonly encryptionService: EncryptionService,
     private readonly jwtService: JwtService,
     private readonly sequelize: Sequelize,
     private readonly redisService: RedisService,
@@ -179,17 +187,26 @@ export class AuthService {
       expiresAt: expiresAt.toISOString(),
     });
 
+    // Encrypt identifier before storing (use formattedPhone for consistency)
+    const crypto = require('crypto');
+    const identifierHash = crypto
+      .createHash('sha256')
+      .update(formattedPhone)
+      .digest('hex');
+    const encryptedIdentifier = this.encryptionService.encrypt(formattedPhone);
+
     // Clear any previously issued OTP for this phone (avoid duplicates/conflicts)
     await this.otpModel.destroy({
       where: {
-        identifier: phone,
+        identifierHash,
         type: 'phone',
       },
     });
 
     // Save the new OTP in the database
     await this.otpModel.create({
-      identifier: phone,
+      identifier: encryptedIdentifier,
+      identifierHash,
       type: 'phone',
       otp: code,
       expiresAt,
@@ -248,15 +265,39 @@ export class AuthService {
     }
 
     // 🔹 Step 2: Validate OTP against DB
+    // Hash the phone number to search (since identifiers are encrypted in DB)
+    const crypto = require('crypto');
+    const identifierHash = crypto
+      .createHash('sha256')
+      .update(formattedPhone)
+      .digest('hex');
+
+    console.log('Verifying OTP:');
+    console.log('Phone:', phone);
+    console.log('Formatted Phone:', formattedPhone);
+    console.log('OTP:', otp);
+    console.log('Identifier Hash:', identifierHash);
+
     const otpRecord = await this.otpModel.findOne({
       where: {
-        identifier: phone,
+        identifierHash,
         type: 'phone',
         otp,
         isUsed: false,
         expiresAt: { [Op.gt]: new Date() },
       },
     });
+
+    console.log('OTP Record found:', !!otpRecord);
+    if (otpRecord) {
+      console.log('OTP Record details:', {
+        id: otpRecord.id,
+        identifierHash: otpRecord.identifierHash,
+        otp: otpRecord.otp,
+        isUsed: otpRecord.isUsed,
+        expiresAt: otpRecord.expiresAt,
+      });
+    }
 
     if (!otpRecord) {
       // Track failed attempt
@@ -280,6 +321,12 @@ export class AuthService {
       .exec();
 
     // 🔹 Step 4: Transaction → consume OTP + find user
+    // Create phone hash for lookup
+    const phoneHash = crypto
+      .createHash('sha256')
+      .update(formattedPhone)
+      .digest('hex');
+
     const user = await this.sequelize.transaction(async (t) => {
       await this.otpModel.destroy({
         where: { id: otpRecord.id },
@@ -287,7 +334,7 @@ export class AuthService {
       });
 
       return await this.influencerModel.findOne({
-        where: { phone: formattedPhone },
+        where: { phoneHash },
         transaction: t,
       });
     });
@@ -374,7 +421,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired verification key');
     }
 
-    const { username, nicheIds, ...influencerData } = signupDto;
+    const { username, nicheIds, customNiches, ...influencerData } = signupDto;
 
     // Handle gender mapping logic
     let finalGender: string | undefined;
@@ -407,6 +454,22 @@ export class AuthService {
 
     if (validNiches.length !== nicheIds.length) {
       throw new BadRequestException('One or more invalid niche IDs provided');
+    }
+
+    // Validate total niche count (regular + custom) doesn't exceed 5
+    const totalNicheCount = nicheIds.length + (customNiches?.length || 0);
+    if (totalNicheCount > 5) {
+      throw new BadRequestException(
+        `Maximum 5 niches allowed (regular + custom combined). You selected ${totalNicheCount} niches.`,
+      );
+    }
+
+    // Validate custom niche names are unique
+    if (customNiches && customNiches.length > 0) {
+      const uniqueCustomNiches = [...new Set(customNiches)];
+      if (uniqueCustomNiches.length !== customNiches.length) {
+        throw new BadRequestException('Custom niche names must be unique');
+      }
     }
 
     // Upload profile image to S3 if provided
@@ -443,10 +506,27 @@ export class AuthService {
         transaction,
       });
 
+      // Create custom niches if provided
+      if (customNiches && customNiches.length > 0) {
+        const customNicheData = customNiches.map((nicheName) => ({
+          userType: 'influencer' as const,
+          userId: createdInfluencer.id,
+          influencerId: createdInfluencer.id,
+          brandId: null,
+          name: nicheName,
+          description: '',
+          isActive: true,
+        }));
+
+        await this.customNicheModel.bulkCreate(customNicheData, {
+          transaction,
+        });
+      }
+
       return createdInfluencer;
     });
 
-    // Fetch complete influencer data with niches
+    // Fetch complete influencer data with niches and custom niches
     const completeInfluencer = await this.influencerModel.findByPk(
       influencer.id,
       {
@@ -462,6 +542,12 @@ export class AuthService {
               'isActive',
             ], // Exclude timestamps
             through: { attributes: [] }, // Exclude junction table data
+          },
+          {
+            model: CustomNiche,
+            attributes: ['id', 'name', 'description', 'isActive'],
+            where: { isActive: true },
+            required: false, // LEFT JOIN to include influencers without custom niches
           },
         ],
       },
@@ -710,11 +796,10 @@ export class AuthService {
     deviceId?: string,
     userAgent?: string,
   ) {
-    const { phone, email, password, ...brandData } = signupDto;
-    const formattedPhone = `+91${phone}`;
+    const { email, password, ...brandData } = signupDto;
 
     // 1️⃣ Check if brand exists
-    const existingBrand = await this.findExistingBrand(email, formattedPhone);
+    const existingBrand = await this.findExistingBrand(email);
 
     if (existingBrand) {
       return this.handleExistingBrand(
@@ -733,7 +818,7 @@ export class AuthService {
 
     // 3️⃣ Transactional brand creation
     const brand = await this.createBrandWithNiches(
-      { email, phone: formattedPhone, password: hashedPassword, ...brandData },
+      { email, password: hashedPassword, ...brandData },
       fileUrls,
     );
 
@@ -749,9 +834,11 @@ export class AuthService {
     };
   }
 
-  private async findExistingBrand(email: string, phone: string) {
+  private async findExistingBrand(email: string) {
+    const emailHash = crypto.createHash('sha256').update(email).digest('hex');
+
     return this.brandModel.findOne({
-      where: { [Op.or]: [{ email }, { phone }] },
+      where: { emailHash },
     });
   }
 
@@ -901,17 +988,25 @@ export class AuthService {
     // Set expiry timestamp for OTP (valid for 10 minutes)
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
+    // Encrypt identifier and create hash for searching
+    const identifierHash = crypto
+      .createHash('sha256')
+      .update(email)
+      .digest('hex');
+    const encryptedIdentifier = this.encryptionService.encrypt(email);
+
     // Clear any previously issued OTP for this email (avoid duplicates/conflicts)
     await this.otpModel.destroy({
       where: {
-        identifier: email,
+        identifierHash,
         type: 'email',
       },
     });
 
-    // Save the new OTP in the database
+    // Save the new OTP in the database with encrypted identifier
     await this.otpModel.create({
-      identifier: email,
+      identifier: encryptedIdentifier,
+      identifierHash,
       type: 'email',
       otp: otp,
       expiresAt,
@@ -937,9 +1032,12 @@ export class AuthService {
   ) {
     const { email, password } = loginDto;
 
-    // Find brand by email
+    // Create hash of email for searching
+    const emailHash = crypto.createHash('sha256').update(email).digest('hex');
+
+    // Find brand by emailHash
     const brand = await this.brandModel.findOne({
-      where: { email },
+      where: { emailHash },
     });
 
     if (!brand) {
@@ -1003,10 +1101,16 @@ export class AuthService {
   ) {
     const { email, otp } = verifyOtpDto;
 
-    // Get stored OTP from database
+    // Create hash of email for searching
+    const identifierHash = crypto
+      .createHash('sha256')
+      .update(email)
+      .digest('hex');
+
+    // Get stored OTP from database using hash
     const otpRecord = await this.otpModel.findOne({
       where: {
-        identifier: email,
+        identifierHash,
         type: 'email',
         otp,
         isUsed: false,
@@ -1018,7 +1122,7 @@ export class AuthService {
       // Check if there's an OTP record for tracking attempts
       const existingRecord = await this.otpModel.findOne({
         where: {
-          identifier: email,
+          identifierHash,
           type: 'email',
           isUsed: false,
         },
@@ -1078,6 +1182,8 @@ export class AuthService {
     // Mark email as verified if not already
     if (!brand.isEmailVerified) {
       await brand.update({ isEmailVerified: true });
+      // Reload to get fresh decrypted data after update
+      await brand.reload();
     }
 
     // Mark OTP as used
@@ -1137,7 +1243,6 @@ export class AuthService {
       brand: {
         id: brand.id,
         email: brand.email,
-        phone: brand.phone,
         brandName: brand.brandName,
         username: brand.username,
         legalEntityName: brand.legalEntityName,
@@ -1465,9 +1570,12 @@ export class AuthService {
   ) {
     const { email, password } = signupDto;
 
+    // Create hash of email for searching
+    const emailHash = crypto.createHash('sha256').update(email).digest('hex');
+
     // Check if brand already exists
     const existingBrand = await this.brandModel.findOne({
-      where: { email },
+      where: { emailHash },
     });
 
     if (existingBrand) {
@@ -1496,10 +1604,13 @@ export class AuthService {
     const saltRounds = 12;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    // Create brand with basic info and null phone (will be updated in profile completion)
+    // Encrypt email manually (hooks don't fire reliably)
+    const encryptedEmail = this.encryptionService.encrypt(email);
+
+    // Create brand with basic info
     const brand = await this.brandModel.create({
-      email,
-      phone: null,
+      email: encryptedEmail,
+      emailHash: emailHash,
       password: hashedPassword,
       isEmailVerified: false,
       isProfileCompleted: false,
@@ -1557,17 +1668,6 @@ export class AuthService {
       }
     }
 
-    // Check for phone uniqueness
-    if (profileDto.phone) {
-      const existingPhone = await this.brandModel.findOne({
-        where: { phone: profileDto.phone },
-      });
-
-      if (existingPhone && existingPhone.id !== brandId) {
-        throw new ConflictException('Phone number already exists');
-      }
-    }
-
     // Validate niche IDs
     const validNiches = await this.nicheModel.findAll({
       where: { id: profileDto.nicheIds, isActive: true },
@@ -1575,6 +1675,18 @@ export class AuthService {
 
     if (validNiches.length !== profileDto.nicheIds.length) {
       throw new BadRequestException('One or more invalid niche IDs provided');
+    }
+
+    // Look up company type ID from company type name
+    let companyTypeId: number | undefined;
+    if (profileDto.companyType) {
+      const companyType = await this.companyTypeModel.findOne({
+        where: { name: profileDto.companyType },
+      });
+      if (!companyType) {
+        throw new BadRequestException('Invalid company type provided');
+      }
+      companyTypeId = companyType.id;
     }
 
     let profileImageUrl: string | undefined;
@@ -1629,14 +1741,21 @@ export class AuthService {
 
     // Update brand with profile data
     const updatedData = {
-      ...profileDto,
+      brandName: profileDto.brandName,
+      username: profileDto.username,
+      legalEntityName: profileDto.legalEntityName,
+      companyTypeId: companyTypeId,
+      pocName: profileDto.pocName,
+      pocDesignation: profileDto.pocDesignation,
+      pocEmailId: profileDto.pocEmailId,
+      pocContactNumber: profileDto.pocContactNumber,
+      brandBio: profileDto.brandBio,
       profileImage: profileImageUrl || brand.profileImage,
       incorporationDocument:
         incorporationDocumentUrl || brand.incorporationDocument,
       gstDocument: gstDocumentUrl || brand.gstDocument,
       panDocument: panDocumentUrl || brand.panDocument,
       isProfileCompleted: true,
-      companyType: profileDto.companyType as unknown as CompanyType, // Cast to Sequelize type
     };
 
     await brand.update(updatedData);
@@ -1659,13 +1778,17 @@ export class AuthService {
       },
     });
 
-    // Fetch updated brand with niches
+    // Fetch updated brand with niches and company type
     const updatedBrand = await this.brandModel.findByPk(brandId, {
       include: [
         {
           model: this.nicheModel,
           as: 'niches',
           attributes: ['id', 'name'],
+        },
+        {
+          model: this.companyTypeModel,
+          attributes: ['id', 'name', 'description'],
         },
       ],
     });
@@ -1681,7 +1804,6 @@ export class AuthService {
         email: updatedBrand.email,
         brandName: updatedBrand.brandName,
         username: updatedBrand.username,
-        phone: updatedBrand.phone,
         isEmailVerified: updatedBrand.isEmailVerified,
         isProfileCompleted: updatedBrand.isProfileCompleted,
         profileImage: updatedBrand.profileImage,

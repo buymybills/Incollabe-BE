@@ -11,19 +11,31 @@ import { Country } from '../shared/models/country.model';
 import { City } from '../shared/models/city.model';
 import { Region } from '../shared/models/region.model';
 import { CompanyType } from '../shared/models/company-type.model';
+import { Follow, FollowingType } from '../post/models/follow.model';
+import { Post, UserType } from '../post/models/post.model';
+import { Campaign } from '../campaign/models/campaign.model';
 import { S3Service } from '../shared/s3.service';
 import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../shared/email.service';
 import { MasterDataService } from '../shared/services/master-data.service';
 import { ProfileReviewService } from '../admin/profile-review.service';
-import { ProfileType } from '../admin/models/profile-review.model';
+import {
+  ProfileReview,
+  ProfileType,
+  ReviewStatus,
+} from '../admin/models/profile-review.model';
 import { SignupFiles } from '../types/file-upload.types';
+import {
+  CustomNiche,
+  UserType as CustomNicheUserType,
+} from '../auth/model/custom-niche.model';
 import {
   BrandProfileResponseDto,
   DocumentInfo,
   ProfileCompletion,
 } from './dto/brand-profile-response.dto';
 import { CompanyTypeDto } from './dto/company-type.dto';
+import { UpdateBrandProfileDto } from './dto/update-brand-profile.dto';
 
 @Injectable()
 export class BrandService {
@@ -36,6 +48,16 @@ export class BrandService {
     private readonly nicheModel: typeof Niche,
     @InjectModel(CompanyType)
     private readonly companyTypeModel: typeof CompanyType,
+    @InjectModel(Follow)
+    private readonly followModel: typeof Follow,
+    @InjectModel(Post)
+    private readonly postModel: typeof Post,
+    @InjectModel(Campaign)
+    private readonly campaignModel: typeof Campaign,
+    @InjectModel(CustomNiche)
+    private readonly customNicheModel: typeof CustomNiche,
+    @InjectModel(ProfileReview)
+    private readonly profileReviewModel: typeof ProfileReview,
     private readonly s3Service: S3Service,
     private readonly redisService: RedisService,
     private readonly emailService: EmailService,
@@ -64,6 +86,12 @@ export class BrandService {
           as: 'headquarterCity',
           attributes: ['id', 'name', 'state'],
         },
+        {
+          model: CustomNiche,
+          attributes: ['id', 'name', 'description', 'isActive'],
+          where: { isActive: true },
+          required: false,
+        },
       ],
     });
 
@@ -71,8 +99,13 @@ export class BrandService {
       throw new NotFoundException('Brand not found');
     }
 
-    // Calculate profile completion
-    const profileCompletion = this.calculateProfileCompletion(brand);
+    // Calculate profile completion, platform metrics, and get verification status
+    const [profileCompletion, platformMetrics, verificationStatus] =
+      await Promise.all([
+        this.calculateProfileCompletion(brand),
+        this.calculatePlatformMetrics(brandId),
+        this.getVerificationStatus(brandId),
+      ]);
 
     // Build comprehensive response
     return {
@@ -82,7 +115,6 @@ export class BrandService {
       username: brand.username || '',
       brandBio: brand.brandBio || '',
       profileHeadline: brand.profileHeadline,
-      isPhoneVerified: brand.isPhoneVerified,
       isEmailVerified: brand.isEmailVerified,
       isActive: brand.isActive,
 
@@ -160,6 +192,19 @@ export class BrandService {
         logoDark: niche.logoDark,
       })),
 
+      customNiches: (brand.customNiches || []).map((customNiche) => ({
+        id: customNiche.id,
+        name: customNiche.name,
+        description: customNiche.description,
+        isActive: customNiche.isActive,
+      })),
+
+      // Platform metrics
+      metrics: platformMetrics,
+
+      // Verification status
+      verificationStatus,
+
       createdAt: brand.createdAt.toISOString(),
       updatedAt: brand.updatedAt.toISOString(),
     };
@@ -167,12 +212,35 @@ export class BrandService {
 
   async updateBrandProfile(
     brandId: number,
-    updateData: Partial<Brand>,
+    updateData: UpdateBrandProfileDto,
     files?: SignupFiles,
   ) {
     const brand = await this.brandModel.findByPk(brandId);
     if (!brand) {
       throw new NotFoundException('Brand not found');
+    }
+
+    // Extract niches and custom niches, handle separately
+    const { nicheIds, customNiches, ...brandUpdateData } = updateData;
+
+    // Validate total niche count if both are provided
+    if (nicheIds && customNiches) {
+      const totalCount = nicheIds.length + customNiches.length;
+      if (totalCount > 5) {
+        throw new BadRequestException(
+          'Maximum 5 niches allowed (regular + custom combined)',
+        );
+      }
+    }
+
+    // Handle regular niche update if provided
+    if (nicheIds !== undefined) {
+      await this.updateBrandNiches(brandId, nicheIds);
+    }
+
+    // Handle custom niche bulk replacement if provided
+    if (customNiches !== undefined) {
+      await this.updateBrandCustomNiches(brandId, customNiches);
     }
 
     // Handle file uploads if provided
@@ -183,14 +251,24 @@ export class BrandService {
 
     // Update brand data
     const updatedData = {
-      ...updateData,
+      ...brandUpdateData,
       ...fileUrls,
     };
 
-    await brand.update(updatedData);
-
-    // Check and update profile completion status
+    // Store the old completion status before update
     const wasComplete = brand.isProfileCompleted;
+
+    await brand.update(updatedData);
+    // Reload brand to get fresh data after update
+    await brand.reload();
+
+    // Check if profile has ever been submitted for review
+    const hasBeenSubmitted = await this.profileReviewService.hasProfileReview(
+      brand.id,
+      ProfileType.BRAND,
+    );
+
+    // Check profile completion status with fresh data
     const isComplete = this.checkBrandProfileCompletion(brand);
 
     // Get profile completion details for email
@@ -217,20 +295,21 @@ export class BrandService {
     }
 
     // Send appropriate email notification based on completion status
-    if (isComplete) {
-      // Profile is complete - already handled above when status changes
-      if (!wasComplete) {
-        // This case is already handled above
+    // Only send notifications if profile has never been submitted
+    if (!hasBeenSubmitted) {
+      if (isComplete && !wasComplete) {
+        // Profile just became complete - verification email already sent above at line 265
+      } else if (!isComplete) {
+        // Profile is incomplete - send missing fields email
+        await this.emailService.sendBrandProfileIncompleteEmail(
+          brand.email,
+          brand.brandName || 'Brand Partner',
+          profileCompletion.missingFields,
+          profileCompletion.nextSteps,
+        );
       }
-    } else {
-      // Profile is incomplete - send missing fields email
-      await this.emailService.sendBrandProfileIncompleteEmail(
-        brand.email,
-        brand.brandName || 'Brand Partner',
-        profileCompletion.missingFields,
-        profileCompletion.nextSteps,
-      );
     }
+    // else: Profile has been submitted before - no notification
 
     // Return updated brand profile with verification status
     const profileData = await this.getBrandProfile(brandId);
@@ -323,13 +402,13 @@ export class BrandService {
       'brandName',
       'username',
       'legalEntityName',
-      'companyType',
+      'companyTypeId',
       'brandBio',
       'profileHeadline',
       'websiteUrl',
       'foundedYear',
-      'headquarterCountry',
-      'headquarterCity',
+      'headquarterCountryId',
+      'headquarterCityId',
       'activeRegions',
       'pocName',
       'pocDesignation',
@@ -379,8 +458,13 @@ export class BrandService {
     const nextSteps: string[] = [];
     const fieldGroups = {
       basic: ['brandName', 'username', 'brandBio'],
-      company: ['legalEntityName', 'companyType', 'websiteUrl', 'foundedYear'],
-      location: ['headquarterCountry', 'headquarterCity', 'activeRegions'],
+      company: [
+        'legalEntityName',
+        'companyTypeId',
+        'websiteUrl',
+        'foundedYear',
+      ],
+      location: ['headquarterCountryId', 'headquarterCityId', 'activeRegions'],
       contact: ['pocName', 'pocDesignation', 'pocEmailId', 'pocContactNumber'],
       media: ['profileImage', 'profileBanner', 'profileHeadline'],
       documents: ['incorporationDocument', 'gstDocument', 'panDocument'],
@@ -436,13 +520,13 @@ export class BrandService {
       brandName: 'Brand Name',
       username: 'Username',
       legalEntityName: 'Legal Entity Name',
-      companyType: 'Company Type',
+      companyTypeId: 'Company Type',
       brandBio: 'Brand Description',
       profileHeadline: 'Profile Headline',
       websiteUrl: 'Website URL',
       foundedYear: 'Founded Year',
-      headquarterCountry: 'Headquarter Country',
-      headquarterCity: 'Headquarter City',
+      headquarterCountryId: 'Headquarter Country',
+      headquarterCityId: 'Headquarter City',
       activeRegions: 'Active Regions',
       pocName: 'Point of Contact Name',
       pocDesignation: 'POC Designation',
@@ -525,6 +609,64 @@ export class BrandService {
       allImagesUploaded &&
       hasSocialMediaLink
     );
+  }
+
+  private async getVerificationStatus(brandId: number) {
+    // Check if profile has been submitted for review
+    const profileReview = await this.profileReviewModel.findOne({
+      where: {
+        profileId: brandId,
+        profileType: ProfileType.BRAND,
+      },
+      order: [['createdAt', 'DESC']],
+    });
+
+    if (!profileReview) {
+      return null;
+    }
+
+    const { status, statusViewed } = profileReview;
+
+    switch (status) {
+      case ReviewStatus.PENDING:
+      case ReviewStatus.UNDER_REVIEW:
+        return {
+          status: 'pending',
+          message: 'Profile Under Verification',
+          description:
+            'Usually takes 1-2 business days to complete verification',
+        };
+
+      case ReviewStatus.APPROVED:
+        if (statusViewed) {
+          return null;
+        }
+        // Mark as viewed and return status
+        await profileReview.update({ statusViewed: true });
+        return {
+          status: 'approved',
+          message: 'Profile Verification Successful',
+          description:
+            'Your profile has been approved and is now visible to influencers',
+        };
+
+      case ReviewStatus.REJECTED:
+        if (statusViewed) {
+          return null;
+        }
+        // Mark as viewed and return status
+        await profileReview.update({ statusViewed: true });
+        return {
+          status: 'rejected',
+          message: 'Profile Verification Rejected',
+          description:
+            profileReview.rejectionReason ||
+            'Please update your profile and resubmit for verification',
+        };
+
+      default:
+        return null;
+    }
   }
 
   private async uploadBrandFiles(files: SignupFiles) {
@@ -611,5 +753,114 @@ export class BrandService {
       isActive: ct.isActive,
       sortOrder: ct.sortOrder,
     }));
+  }
+
+  private async updateBrandCustomNiches(
+    brandId: number,
+    customNicheNames: string[],
+  ) {
+    // Get existing custom niches to compare
+    const existingCustomNiches = await this.customNicheModel.findAll({
+      where: {
+        userType: CustomNicheUserType.BRAND,
+        userId: brandId,
+        isActive: true,
+      },
+      attributes: ['name'],
+    });
+
+    const existingNames = existingCustomNiches
+      .map((niche) => niche.name)
+      .sort();
+    const newNames = [...customNicheNames].sort();
+
+    // Compare arrays - if identical, skip update to avoid unnecessary DB operations
+    if (JSON.stringify(existingNames) === JSON.stringify(newNames)) {
+      return; // No changes needed
+    }
+
+    // Validate 5-niche limit (regular + custom combined)
+    const regularNichesCount = await this.brandNicheModel.count({
+      where: { brandId },
+    });
+
+    if (regularNichesCount + customNicheNames.length > 5) {
+      throw new BadRequestException(
+        `Maximum 5 niches allowed (regular + custom combined). You have ${regularNichesCount} regular niches and trying to add ${customNicheNames.length} custom niches.`,
+      );
+    }
+
+    // Validate custom niche names are unique
+    const uniqueNames = [...new Set(customNicheNames)];
+    if (uniqueNames.length !== customNicheNames.length) {
+      throw new BadRequestException('Custom niche names must be unique');
+    }
+
+    // Delete all existing custom niches for this brand (bulk replacement)
+    await this.customNicheModel.destroy({
+      where: {
+        userType: CustomNicheUserType.BRAND,
+        userId: brandId,
+      },
+    });
+
+    // Create new custom niches if any provided
+    if (customNicheNames.length > 0) {
+      const customNicheData = customNicheNames.map((name) => ({
+        userType: CustomNicheUserType.BRAND,
+        userId: brandId,
+        influencerId: null,
+        brandId: brandId,
+        name: name,
+        description: '',
+        isActive: true,
+      }));
+
+      await this.customNicheModel.bulkCreate(customNicheData);
+    }
+  }
+
+  private async calculatePlatformMetrics(brandId: number) {
+    const [followersCount, followingCount, postsCount, campaignsCount] =
+      await Promise.all([
+        // Count followers (users who follow this brand)
+        this.followModel.count({
+          where: {
+            followingType: FollowingType.BRAND,
+            followingBrandId: brandId,
+          },
+        }),
+
+        // Count following (users this brand follows)
+        this.followModel.count({
+          where: {
+            followerType: FollowingType.BRAND,
+            followerBrandId: brandId,
+          },
+        }),
+
+        // Count posts created by this brand
+        this.postModel.count({
+          where: {
+            userType: UserType.BRAND,
+            brandId: brandId,
+            isActive: true,
+          },
+        }),
+
+        // Count campaigns created by this brand
+        this.campaignModel.count({
+          where: {
+            brandId: brandId,
+          },
+        }),
+      ]);
+
+    return {
+      followers: followersCount,
+      following: followingCount,
+      posts: postsCount,
+      campaigns: campaignsCount,
+    };
   }
 }

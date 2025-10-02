@@ -15,6 +15,7 @@ import { Influencer } from '../auth/model/influencer.model';
 import { EmailService } from '../shared/email.service';
 import { WhatsAppService } from '../shared/whatsapp.service';
 import { ProfileReviewDto } from './dto/profile-review.dto';
+import { Op } from 'sequelize';
 
 @Injectable()
 export class ProfileReviewService {
@@ -177,13 +178,10 @@ export class ProfileReviewService {
 
     // Update the actual profile
     if (review.profileType === ProfileType.BRAND) {
-      await this.brandModel.update(
-        { isVerified: true },
-        { where: { id: review.profileId } },
-      );
-
       const brand = await this.brandModel.findByPk(review.profileId);
       if (brand) {
+        await brand.update({ isVerified: true });
+        await brand.reload(); // Reload to trigger decryption hooks
         await this.emailService.sendBrandProfileApprovedEmail(
           brand.email,
           brand.brandName || 'Brand',
@@ -247,10 +245,12 @@ export class ProfileReviewService {
       adminComments: comments,
     });
 
-    // Notify user of rejection
+    // Set profile completion to false so user must resubmit
     if (review.profileType === ProfileType.BRAND) {
       const brand = await this.brandModel.findByPk(review.profileId);
       if (brand) {
+        await brand.update({ isProfileCompleted: false });
+        await brand.reload(); // Reload to trigger decryption hooks
         await this.emailService.sendBrandProfileRejectedEmail(
           brand.email,
           brand.brandName || 'Brand',
@@ -260,6 +260,10 @@ export class ProfileReviewService {
     } else if (review.profileType === ProfileType.INFLUENCER) {
       const influencer = await this.influencerModel.findByPk(review.profileId);
       if (influencer) {
+        await this.influencerModel.update(
+          { isProfileCompleted: false },
+          { where: { id: review.profileId } },
+        );
         // For influencers, we only send WhatsApp notifications, not emails
         if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
           await this.whatsAppService.sendProfileRejected(
@@ -452,5 +456,19 @@ export class ProfileReviewService {
     return {
       message: 'Profile review deleted successfully',
     };
+  }
+
+  async hasProfileReview(
+    profileId: number,
+    profileType: ProfileType,
+  ): Promise<boolean> {
+    const review = await this.profileReviewModel.findOne({
+      where: {
+        profileId,
+        profileType,
+        status: { [Op.ne]: ReviewStatus.REJECTED },
+      },
+    });
+    return !!review;
   }
 }

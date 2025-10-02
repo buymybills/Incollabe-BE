@@ -14,22 +14,6 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class BrandSignupDto {
   @ApiProperty({
-    description: 'Indian mobile number (10 digits)',
-    example: '9467289789',
-    pattern: '^[6-9]\\d{9}$',
-    minLength: 10,
-    maxLength: 10,
-  })
-  @IsString()
-  @IsNotEmpty()
-  @Length(10, 10, { message: 'Phone number must be exactly 10 digits' })
-  @Matches(/^[6-9]\d{9}$/, {
-    message:
-      'Phone number must be a valid Indian mobile number starting with 6, 7, 8, or 9',
-  })
-  phone: string;
-
-  @ApiProperty({
     description: 'Brand email address for login',
     example: 'brand@example.com',
     format: 'email',

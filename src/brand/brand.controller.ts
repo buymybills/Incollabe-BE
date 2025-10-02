@@ -124,6 +124,18 @@ export class BrandController {
           description: 'LinkedIn company page URL',
         },
         twitterUrl: { type: 'string', description: 'Twitter/X profile URL' },
+        nicheIds: {
+          type: 'string',
+          description:
+            'Array of regular niche IDs (1-5 niches allowed). Accepts JSON array [1,2,3] or comma-separated "1,2,3".',
+          example: '[1,2,3]',
+        },
+        customNiches: {
+          type: 'string',
+          description:
+            'Array of custom niche names for bulk replacement. Accepts JSON array ["Sustainable Fashion","Tech Reviews"] or comma-separated "Sustainable Fashion,Tech Reviews". Will replace ALL existing custom niches.',
+          example: '["Sustainable Fashion","Tech Reviews"]',
+        },
 
         // File upload fields
         profileImage: {

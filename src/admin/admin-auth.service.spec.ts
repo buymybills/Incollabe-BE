@@ -3,6 +3,12 @@ import { AdminAuthService } from './admin-auth.service';
 import { getModelToken } from '@nestjs/sequelize';
 import { JwtService } from '@nestjs/jwt';
 import { Admin, AdminStatus, AdminRole } from './models/admin.model';
+import { Influencer } from '../auth/model/influencer.model';
+import { Brand } from '../brand/model/brand.model';
+import { Niche } from '../auth/model/niche.model';
+import { Country } from '../shared/models/country.model';
+import { City } from '../shared/models/city.model';
+import { CompanyType } from '../shared/models/company-type.model';
 import { UnauthorizedException, BadRequestException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 
@@ -24,6 +30,32 @@ const mockJwtService = {
   verify: jest.fn(),
 };
 
+const mockInfluencerModel = {
+  findAll: jest.fn(),
+  count: jest.fn(),
+};
+
+const mockBrandModel = {
+  findAll: jest.fn(),
+  count: jest.fn(),
+};
+
+const mockNicheModel = {
+  findAll: jest.fn(),
+};
+
+const mockCountryModel = {
+  findAll: jest.fn(),
+};
+
+const mockCityModel = {
+  findAll: jest.fn(),
+};
+
+const mockCompanyTypeModel = {
+  findAll: jest.fn(),
+};
+
 describe('AdminAuthService', () => {
   let service: AdminAuthService;
   let adminModel: typeof Admin;
@@ -36,6 +68,30 @@ describe('AdminAuthService', () => {
         {
           provide: getModelToken(Admin),
           useValue: mockAdminModel,
+        },
+        {
+          provide: getModelToken(Influencer),
+          useValue: mockInfluencerModel,
+        },
+        {
+          provide: getModelToken(Brand),
+          useValue: mockBrandModel,
+        },
+        {
+          provide: getModelToken(Niche),
+          useValue: mockNicheModel,
+        },
+        {
+          provide: getModelToken(Country),
+          useValue: mockCountryModel,
+        },
+        {
+          provide: getModelToken(City),
+          useValue: mockCityModel,
+        },
+        {
+          provide: getModelToken(CompanyType),
+          useValue: mockCompanyTypeModel,
         },
         {
           provide: JwtService,

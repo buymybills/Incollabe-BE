@@ -227,4 +227,79 @@ export class UpdateBrandProfileDto {
   @IsOptional()
   @IsString()
   fcmToken?: string;
+
+  @ApiProperty({
+    description: 'Array of regular niche IDs (1-5 niches allowed)',
+    type: [Number],
+    example: [1, 2, 3],
+    required: false,
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (!value) return undefined;
+    if (typeof value === 'string') {
+      // Handle comma-separated string "1,2,3"
+      if (value.includes(',')) {
+        return value
+          .split(',')
+          .map((id) => parseInt(id.trim(), 10))
+          .filter((id) => !isNaN(id));
+      }
+      // Handle single ID "1"
+      const parsed = parseInt(value, 10);
+      return isNaN(parsed) ? undefined : [parsed];
+    }
+    if (Array.isArray(value)) {
+      return value
+        .map((id) => (typeof id === 'string' ? parseInt(id, 10) : id))
+        .filter((id) => !isNaN(id));
+    }
+    return undefined;
+  })
+  @IsArray()
+  @IsNumber({}, { each: true, message: 'Each niche ID must be a number' })
+  nicheIds?: number[];
+
+  @ApiProperty({
+    description:
+      'Array of custom niche names for bulk replacement. Accepts JSON array ["Sustainable Fashion","Tech Reviews"] or comma-separated "Sustainable Fashion,Tech Reviews". Will replace ALL existing custom niches.',
+    example: '["Sustainable Fashion","Tech Reviews"]',
+    required: false,
+  })
+  @Transform(({ value }) => {
+    if (!value) return undefined; // undefined means don't update custom niches
+    if (typeof value === 'string') {
+      if (value.trim() === '') return []; // empty string means delete all custom niches
+      // Try to parse as JSON array first
+      if (value.startsWith('[') && value.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(value);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      }
+      // Handle comma-separated string
+      if (value.includes(',')) {
+        return value
+          .split(',')
+          .map((name) => name.trim())
+          .filter((name) => name.length > 0);
+      }
+      // Handle single string
+      return value.trim() ? [value.trim()] : [];
+    }
+    if (Array.isArray(value)) {
+      return value;
+    }
+    return undefined;
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true, message: 'Each custom niche must be a string' })
+  @Length(2, 100, {
+    each: true,
+    message: 'Custom niche name must be between 2 and 100 characters',
+  })
+  customNiches?: string[];
 }

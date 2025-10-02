@@ -62,6 +62,20 @@ export class CountrySeeder {
       { name: 'Venezuela', code: 'VE' },
       { name: 'Ecuador', code: 'EC' },
       { name: 'Uruguay', code: 'UY' },
+      { name: 'Russia', code: 'RU' },
+      { name: 'Turkey', code: 'TR' },
+      { name: 'Israel', code: 'IL' },
+      { name: 'Iran', code: 'IR' },
+      { name: 'Iraq', code: 'IQ' },
+      { name: 'Pakistan', code: 'PK' },
+      { name: 'Bangladesh', code: 'BD' },
+      { name: 'Sri Lanka', code: 'LK' },
+      { name: 'Poland', code: 'PL' },
+      { name: 'Czech Republic', code: 'CZ' },
+      { name: 'Hungary', code: 'HU' },
+      { name: 'Romania', code: 'RO' },
+      { name: 'Greece', code: 'GR' },
+      { name: 'Portugal', code: 'PT' },
     ];
 
     for (const countryData of countries) {
