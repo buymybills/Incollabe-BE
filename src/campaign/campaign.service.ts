@@ -12,6 +12,7 @@ import { CampaignDeliverable } from './models/campaign-deliverable.model';
 import { CampaignInvitation } from './models/campaign-invitation.model';
 import { City } from '../shared/models/city.model';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
+import { UpdateCampaignDto } from './dto/update-campaign.dto';
 import { CampaignResponseDto } from './dto/campaign-response.dto';
 import { GetCampaignsDto } from './dto/get-campaigns.dto';
 import { SearchInfluencersDto } from './dto/search-influencers.dto';
@@ -215,6 +216,81 @@ export class CampaignService {
     }
 
     return campaignData as unknown as CampaignResponseDto;
+  }
+
+  async updateCampaign(
+    campaignId: number,
+    updateCampaignDto: UpdateCampaignDto,
+    brandId: number,
+  ): Promise<CampaignResponseDto> {
+    const { deliverables, cityIds, ...campaignData } = updateCampaignDto;
+
+    // Find campaign
+    const campaign = await this.campaignModel.findOne({
+      where: { id: campaignId, brandId, isActive: true },
+    });
+
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+
+    // Validate cities if provided and not pan India
+    if (cityIds !== undefined) {
+      if (
+        updateCampaignDto.isPanIndia === false &&
+        (!cityIds || cityIds.length === 0)
+      ) {
+        throw new BadRequestException(
+          'At least one city must be selected for non-pan-India campaigns',
+        );
+      }
+
+      if (cityIds && cityIds.length > 0) {
+        const existingCities = await this.cityModel.findAll({
+          where: { id: { [Op.in]: cityIds } },
+        });
+
+        if (existingCities.length !== cityIds.length) {
+          throw new BadRequestException('One or more cities are invalid');
+        }
+      }
+
+      // Delete existing cities and add new ones
+      await this.campaignCityModel.destroy({
+        where: { campaignId },
+      });
+
+      if (cityIds && cityIds.length > 0) {
+        const campaignCities = cityIds.map((cityId) => ({
+          campaignId: campaign.id,
+          cityId,
+        }));
+        await this.campaignCityModel.bulkCreate(campaignCities as any);
+      }
+    }
+
+    // Update deliverables if provided
+    if (deliverables !== undefined) {
+      // Delete existing deliverables and add new ones
+      await this.campaignDeliverableModel.destroy({
+        where: { campaignId },
+      });
+
+      if (deliverables && deliverables.length > 0) {
+        const campaignDeliverables = deliverables.map((deliverable) => ({
+          ...deliverable,
+          campaignId: campaign.id,
+        }));
+        await this.campaignDeliverableModel.bulkCreate(
+          campaignDeliverables as any,
+        );
+      }
+    }
+
+    // Update campaign fields
+    await campaign.update(campaignData);
+
+    return this.getCampaignById(campaign.id);
   }
 
   async updateCampaignStatus(

@@ -16,7 +16,6 @@ export enum ApplicationStatus {
   UNDER_REVIEW = 'under_review',
   SELECTED = 'selected',
   REJECTED = 'rejected',
-  WITHDRAWN = 'withdrawn',
 }
 
 @Table({

@@ -24,6 +24,7 @@ import {
 import { CampaignService } from './campaign.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
+import { UpdateCampaignDto } from './dto/update-campaign.dto';
 import { GetCampaignsDto } from './dto/get-campaigns.dto';
 import { SearchInfluencersDto } from './dto/search-influencers.dto';
 import { InviteInfluencersDto } from './dto/invite-influencers.dto';
@@ -509,6 +510,60 @@ export class CampaignController {
   @ApiResponse({ status: 404, description: 'Campaign not found' })
   async getCampaignById(@Param('id', ParseIntPipe) campaignId: number) {
     return this.campaignService.getCampaignById(campaignId);
+  }
+
+  @Put(':id')
+  @ApiOperation({
+    summary: 'Update campaign',
+    description:
+      'Updates a campaign with new data (only by the brand that owns it)',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'Campaign ID',
+    example: 1,
+  })
+  @ApiBody({
+    type: UpdateCampaignDto,
+    description: 'Campaign update data',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Campaign updated successfully',
+    schema: {
+      example: {
+        id: 1,
+        name: 'Updated Summer Fashion Campaign',
+        status: 'active',
+        brandId: 1,
+        updatedAt: '2024-01-01T00:00:00Z',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid campaign data',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Only brands can update campaigns',
+  })
+  @ApiResponse({ status: 404, description: 'Campaign not found' })
+  async updateCampaign(
+    @Param('id', ParseIntPipe) campaignId: number,
+    @Body() updateCampaignDto: UpdateCampaignDto,
+    @Req() req: RequestWithUser,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new ForbiddenException('Only brands can update campaigns');
+    }
+
+    return this.campaignService.updateCampaign(
+      campaignId,
+      updateCampaignDto,
+      req.user.id,
+    );
   }
 
   @Put(':id/status')

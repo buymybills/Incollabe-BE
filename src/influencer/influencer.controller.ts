@@ -20,6 +20,7 @@ import {
   ApiBearerAuth,
   ApiConsumes,
   ApiBody,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { InfluencerService } from './influencer.service';
@@ -33,6 +34,7 @@ import {
 } from './dto/whatsapp-verification.dto';
 import { ApplyCampaignDto } from '../campaign/dto/apply-campaign.dto';
 import { GetOpenCampaignsDto } from '../campaign/dto/get-open-campaigns.dto';
+import { MyApplicationResponseDto } from '../campaign/dto/my-application-response.dto';
 import type { RequestWithUser } from '../types/request.types';
 
 @ApiTags('Influencer Profile')
@@ -445,44 +447,26 @@ export class InfluencerController {
   @ApiOperation({
     summary: 'Get my campaign applications',
     description:
-      'Get list of all campaign applications submitted by the influencer with status',
+      'Get list of all campaign applications submitted by the influencer, optionally filtered by status',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['applied', 'under_review', 'selected', 'rejected'],
+    description: 'Filter applications by status',
+    example: 'applied',
   })
   @ApiResponse({
     status: 200,
     description: 'Applications retrieved successfully',
-    schema: {
-      example: [
-        {
-          id: 1,
-          status: 'applied',
-          coverLetter: 'I am passionate about beauty...',
-          proposalMessage: 'I propose creating 3 Instagram posts...',
-          createdAt: '2024-01-01T00:00:00Z',
-          campaign: {
-            id: 1,
-            name: 'Summer Fashion Campaign',
-            brand: {
-              id: 1,
-              brandName: 'Fashion Brand',
-              profileImage: 'brand.jpg',
-            },
-            deliverables: [
-              {
-                platform: 'instagram',
-                type: 'instagram_post',
-                budget: 2000,
-                quantity: 3,
-              },
-            ],
-            endDate: '2024-07-31',
-          },
-        },
-      ],
-    },
+    type: [MyApplicationResponseDto],
   })
-  async getMyApplications(@Req() req: RequestWithUser) {
+  async getMyApplications(
+    @Req() req: RequestWithUser,
+    @Query('status') status?: string,
+  ) {
     const influencerId = req.user.id;
-    return this.influencerService.getMyApplications(influencerId);
+    return this.influencerService.getMyApplications(influencerId, status);
   }
 
   @Get('campaigns/:campaignId')

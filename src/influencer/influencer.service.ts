@@ -43,6 +43,7 @@ import { City } from '../shared/models/city.model';
 import { Brand } from '../brand/model/brand.model';
 import { ApplyCampaignDto } from '../campaign/dto/apply-campaign.dto';
 import { GetOpenCampaignsDto } from '../campaign/dto/get-open-campaigns.dto';
+import { MyApplicationResponseDto } from '../campaign/dto/my-application-response.dto';
 import { CreateExperienceDto } from './dto/create-experience.dto';
 import { UpdateExperienceDto } from './dto/update-experience.dto';
 import { Op, literal } from 'sequelize';
@@ -999,9 +1000,19 @@ export class InfluencerService {
     };
   }
 
-  async getMyApplications(influencerId: number): Promise<any[]> {
+  async getMyApplications(
+    influencerId: number,
+    status?: string,
+  ): Promise<MyApplicationResponseDto[]> {
+    const whereClause: any = { influencerId };
+
+    // Add status filter if provided
+    if (status) {
+      whereClause.status = status;
+    }
+
     const applications = await this.campaignApplicationModel.findAll({
-      where: { influencerId },
+      where: whereClause,
       include: [
         {
           model: Campaign,
