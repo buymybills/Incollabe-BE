@@ -135,7 +135,7 @@ export class AuthController {
         callback(null, true);
       },
       limits: {
-        fileSize: 5 * 1024 * 1024, // 5MB
+        fileSize: 10 * 1024 * 1024, // 10MB
       },
     }),
   )
@@ -278,7 +278,7 @@ export class AuthController {
   })
   @ApiResponse({
     status: 413,
-    description: 'File too large (max 5MB)',
+    description: 'File too large (max 10MB)',
   })
   @ApiResponse({
     status: 500,
