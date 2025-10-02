@@ -41,7 +41,6 @@ import { CampaignDeliverable } from '../campaign/models/campaign-deliverable.mod
 import { CampaignCity } from '../campaign/models/campaign-city.model';
 import { City } from '../shared/models/city.model';
 import { Brand } from '../brand/model/brand.model';
-import { ApplyCampaignDto } from '../campaign/dto/apply-campaign.dto';
 import { GetOpenCampaignsDto } from '../campaign/dto/get-open-campaigns.dto';
 import { MyApplicationResponseDto } from '../campaign/dto/my-application-response.dto';
 import { CreateExperienceDto } from './dto/create-experience.dto';
@@ -798,30 +797,14 @@ export class InfluencerService {
     const whereCondition: any = {
       status: CampaignStatus.ACTIVE,
       isActive: true,
-      [Op.or]: [
-        { endDate: { [Op.gt]: new Date() } },
-        { endDate: { [Op.is]: null } },
-      ],
     };
 
     // Search by campaign name or brand name
     if (search) {
-      whereCondition[Op.and] = [
-        {
-          [Op.or]: [
-            { endDate: { [Op.gt]: new Date() } },
-            { endDate: { [Op.is]: null } },
-          ],
-        },
-        {
-          [Op.or]: [
-            { name: { [Op.iLike]: `%${search}%` } },
-            { description: { [Op.iLike]: `%${search}%` } },
-          ],
-        },
+      whereCondition[Op.or] = [
+        { name: { [Op.iLike]: `%${search}%` } },
+        { description: { [Op.iLike]: `%${search}%` } },
       ];
-      // Remove the top-level [Op.or] since we're using [Op.and] now
-      delete whereCondition[Op.or];
     }
 
     const includeOptions: any[] = [
@@ -911,7 +894,7 @@ export class InfluencerService {
   }
 
   async applyCampaign(
-    applyCampaignDto: ApplyCampaignDto,
+    campaignId: number,
     influencerId: number,
   ): Promise<{
     success: boolean;
@@ -919,22 +902,12 @@ export class InfluencerService {
     message: string;
     campaign: any;
   }> {
-    const { campaignId, coverLetter, proposalMessage } = applyCampaignDto;
-
     // Verify campaign exists and is active
     const campaign = await this.campaignModel.findOne({
       where: {
-        [Op.and]: [
-          { id: campaignId },
-          { status: CampaignStatus.ACTIVE },
-          { isActive: true },
-          {
-            [Op.or]: [
-              { endDate: { [Op.is]: null } },
-              { endDate: { [Op.gt]: new Date() } },
-            ],
-          },
-        ],
+        id: campaignId,
+        status: CampaignStatus.ACTIVE,
+        isActive: true,
       },
       include: [{ model: Brand, attributes: ['brandName'] }],
     } as any);
@@ -973,8 +946,6 @@ export class InfluencerService {
       campaignId,
       influencerId,
       status: ApplicationStatus.APPLIED,
-      coverLetter,
-      proposalMessage,
     } as any);
 
     // Send WhatsApp notification to influencer
@@ -1045,6 +1016,44 @@ export class InfluencerService {
         campaign: appData.campaign,
       };
     });
+  }
+
+  async withdrawApplication(
+    applicationId: number,
+    influencerId: number,
+  ): Promise<{ message: string }> {
+    // Find the application
+    const application = await this.campaignApplicationModel.findOne({
+      where: {
+        id: applicationId,
+        influencerId,
+      },
+    });
+
+    if (!application) {
+      throw new NotFoundException('Application not found');
+    }
+
+    // Check if application can be withdrawn
+    if (
+      application.status === ApplicationStatus.SELECTED ||
+      application.status === ApplicationStatus.REJECTED ||
+      application.status === ApplicationStatus.WITHDRAWN
+    ) {
+      throw new BadRequestException(
+        `Cannot withdraw application with status: ${application.status}`,
+      );
+    }
+
+    // Update status to withdrawn
+    await application.update({
+      status: ApplicationStatus.WITHDRAWN,
+      reviewedAt: new Date(),
+    });
+
+    return {
+      message: 'Application withdrawn successfully',
+    };
   }
 
   async getCampaignDetails(

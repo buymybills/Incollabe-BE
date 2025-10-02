@@ -26,6 +26,8 @@ import { AuthGuard } from '../auth/guards/auth.guard';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
 import { GetCampaignsDto } from './dto/get-campaigns.dto';
+import { GetCampaignApplicationsDto } from './dto/get-campaign-applications.dto';
+import { UpdateApplicationStatusDto } from './dto/update-application-status.dto';
 import { SearchInfluencersDto } from './dto/search-influencers.dto';
 import { InviteInfluencersDto } from './dto/invite-influencers.dto';
 import { CampaignStatus } from './models/campaign.model';
@@ -527,6 +529,129 @@ export class CampaignController {
   @ApiBody({
     type: UpdateCampaignDto,
     description: 'Campaign update data',
+    examples: {
+      allDeliverableTypes: {
+        summary: 'All Available Deliverable Types',
+        description:
+          'Example showing all supported platform and deliverable type combinations',
+        value: {
+          name: 'Complete Multi-Platform Campaign',
+          description:
+            'Campaign showcasing all available deliverable types across platforms',
+          category: 'Fashion',
+          deliverableFormat: 'Mixed content across all platforms',
+          isPanIndia: false,
+          cityIds: [1, 2, 3],
+          minAge: 18,
+          maxAge: 35,
+          isOpenToAllAges: false,
+          genderPreferences: ['Female', 'Male'],
+          isOpenToAllGenders: false,
+          nicheIds: [1, 2],
+          customInfluencerRequirements:
+            'Active on multiple platforms with good engagement',
+          performanceExpectations: 'Meet platform-specific engagement targets',
+          brandSupport: 'Product samples and creative guidelines provided',
+          deliverables: [
+            {
+              platform: 'instagram',
+              type: 'instagram_post',
+              budget: 2000,
+              quantity: 2,
+              specifications: 'High-quality feed posts with product placement',
+            },
+            {
+              platform: 'instagram',
+              type: 'instagram_story',
+              budget: 1000,
+              quantity: 3,
+              specifications: 'Stories with interactive elements',
+            },
+            {
+              platform: 'instagram',
+              type: 'instagram_reel',
+              budget: 3000,
+              quantity: 2,
+              specifications: 'Trending reels with product showcase',
+            },
+            {
+              platform: 'youtube',
+              type: 'youtube_short',
+              budget: 2500,
+              quantity: 2,
+              specifications: 'Vertical short-form videos under 60 seconds',
+            },
+            {
+              platform: 'youtube',
+              type: 'youtube_long_video',
+              budget: 15000,
+              quantity: 1,
+              specifications: 'Detailed review or tutorial video',
+            },
+            {
+              platform: 'facebook',
+              type: 'facebook_post',
+              budget: 1500,
+              quantity: 1,
+              specifications: 'Engaging Facebook post with brand integration',
+            },
+            {
+              platform: 'linkedin',
+              type: 'linkedin_post',
+              budget: 2000,
+              quantity: 1,
+              specifications:
+                'Professional LinkedIn post with industry insights',
+            },
+            {
+              platform: 'twitter',
+              type: 'twitter_post',
+              budget: 800,
+              quantity: 2,
+              specifications: 'Twitter posts or threads with brand mentions',
+            },
+          ],
+        },
+      },
+      simpleExample: {
+        summary: 'Simple Instagram Campaign',
+        description: 'Basic campaign example matching typical UI flow',
+        value: {
+          name: 'Summer Collection Launch',
+          description: 'Promote new summer fashion collection',
+          category: 'Fashion',
+          deliverableFormat: 'Instagram posts and stories',
+          isPanIndia: true,
+          isOpenToAllAges: false,
+          minAge: 18,
+          maxAge: 30,
+          genderPreferences: ['Female'],
+          isOpenToAllGenders: false,
+          nicheIds: [1],
+          customInfluencerRequirements:
+            'Fashion influencers with style-focused content',
+          performanceExpectations:
+            'High engagement and authentic brand integration',
+          brandSupport: 'Product samples and styling guidelines',
+          deliverables: [
+            {
+              platform: 'instagram',
+              type: 'instagram_post',
+              budget: 5000,
+              quantity: 2,
+              specifications: 'Styled outfit posts featuring collection pieces',
+            },
+            {
+              platform: 'instagram',
+              type: 'instagram_story',
+              budget: 2000,
+              quantity: 3,
+              specifications: 'Behind-the-scenes styling and try-on content',
+            },
+          ],
+        },
+      },
+    },
   })
   @ApiResponse({
     status: 200,
@@ -834,5 +959,177 @@ export class CampaignController {
     }
 
     return this.campaignService.inviteInfluencers(inviteDto, req.user.id);
+  }
+
+  @Get(':campaignId/applications')
+  @ApiOperation({
+    summary: 'Get campaign applications for brand',
+    description:
+      'Get all applications for a specific campaign with optional status filter. Only accessible by the brand that owns the campaign.',
+  })
+  @ApiParam({
+    name: 'campaignId',
+    type: Number,
+    description: 'Campaign ID',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['applied', 'under_review', 'selected', 'rejected', 'withdrawn'],
+    description: 'Filter applications by status',
+    example: 'applied',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Results per page',
+    example: 10,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Applications retrieved successfully',
+    schema: {
+      example: {
+        applications: [
+          {
+            id: 1,
+            status: 'applied',
+            coverLetter: 'I would love to work with your brand...',
+            proposalMessage: 'I can deliver amazing content...',
+            createdAt: '2024-01-01T00:00:00Z',
+            influencer: {
+              id: 1,
+              name: 'Jane Doe',
+              username: 'janedoe',
+              profileImage: 'profile.jpg',
+              profileHeadline: 'Beauty & Lifestyle Influencer',
+            },
+          },
+        ],
+        total: 25,
+        page: 1,
+        limit: 10,
+        totalPages: 3,
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Only brands can access applications',
+  })
+  @ApiResponse({ status: 404, description: 'Campaign not found' })
+  async getCampaignApplications(
+    @Param('campaignId', ParseIntPipe) campaignId: number,
+    @Query() getApplicationsDto: GetCampaignApplicationsDto,
+    @Req() req: RequestWithUser,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new ForbiddenException(
+        'Only brands can access campaign applications',
+      );
+    }
+
+    return this.campaignService.getCampaignApplications(
+      campaignId,
+      getApplicationsDto,
+      req.user.id,
+    );
+  }
+
+  @Put(':campaignId/applications/:applicationId/status')
+  @ApiOperation({
+    summary: 'Update application status',
+    description:
+      'Update the status of a campaign application. Only accessible by the brand that owns the campaign.',
+  })
+  @ApiParam({
+    name: 'campaignId',
+    type: Number,
+    description: 'Campaign ID',
+    example: 1,
+  })
+  @ApiParam({
+    name: 'applicationId',
+    type: Number,
+    description: 'Application ID',
+    example: 1,
+  })
+  @ApiBody({
+    type: UpdateApplicationStatusDto,
+    description: 'Application status update data',
+    examples: {
+      example1: {
+        summary: 'Move to Under Review',
+        value: {
+          status: 'under_review',
+          reviewNotes: 'Reviewing profile and content quality',
+        },
+      },
+      example2: {
+        summary: 'Select Influencer',
+        value: {
+          status: 'selected',
+          reviewNotes: 'Great profile! Selected for the campaign',
+        },
+      },
+      example3: {
+        summary: 'Reject Application',
+        value: {
+          status: 'rejected',
+          reviewNotes: 'Not a good fit for this campaign',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Application status updated successfully',
+    schema: {
+      example: {
+        id: 1,
+        status: 'selected',
+        reviewNotes: 'Great profile! Selected for the campaign',
+        reviewedAt: '2024-01-01T00:00:00Z',
+        influencer: {
+          id: 1,
+          name: 'Jane Doe',
+          username: 'janedoe',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Only brands can update application status',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Campaign or Application not found',
+  })
+  async updateApplicationStatus(
+    @Param('campaignId', ParseIntPipe) campaignId: number,
+    @Param('applicationId', ParseIntPipe) applicationId: number,
+    @Body() updateStatusDto: UpdateApplicationStatusDto,
+    @Req() req: RequestWithUser,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new ForbiddenException('Only brands can update application status');
+    }
+
+    return this.campaignService.updateApplicationStatus(
+      campaignId,
+      applicationId,
+      updateStatusDto,
+      req.user.id,
+    );
   }
 }

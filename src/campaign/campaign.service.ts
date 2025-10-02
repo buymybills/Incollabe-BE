@@ -10,11 +10,17 @@ import { Campaign, CampaignStatus } from './models/campaign.model';
 import { CampaignCity } from './models/campaign-city.model';
 import { CampaignDeliverable } from './models/campaign-deliverable.model';
 import { CampaignInvitation } from './models/campaign-invitation.model';
+import {
+  CampaignApplication,
+  ApplicationStatus,
+} from './models/campaign-application.model';
 import { City } from '../shared/models/city.model';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
 import { CampaignResponseDto } from './dto/campaign-response.dto';
 import { GetCampaignsDto } from './dto/get-campaigns.dto';
+import { GetCampaignApplicationsDto } from './dto/get-campaign-applications.dto';
+import { UpdateApplicationStatusDto } from './dto/update-application-status.dto';
 import { SearchInfluencersDto } from './dto/search-influencers.dto';
 import { InviteInfluencersDto } from './dto/invite-influencers.dto';
 import { Brand } from '../brand/model/brand.model';
@@ -34,6 +40,8 @@ export class CampaignService {
     private readonly campaignDeliverableModel: typeof CampaignDeliverable,
     @InjectModel(CampaignInvitation)
     private readonly campaignInvitationModel: typeof CampaignInvitation,
+    @InjectModel(CampaignApplication)
+    private readonly campaignApplicationModel: typeof CampaignApplication,
     @InjectModel(City)
     private readonly cityModel: typeof City,
     @InjectModel(Brand)
@@ -720,5 +728,244 @@ export class CampaignService {
       invitationsSent: newInfluencerIds.length,
       message: `Successfully sent ${newInfluencerIds.length} campaign invitations and WhatsApp notifications.`,
     };
+  }
+
+  async getCampaignApplications(
+    campaignId: number,
+    getApplicationsDto: GetCampaignApplicationsDto,
+    brandId: number,
+  ): Promise<{
+    applications: CampaignApplication[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    // Verify campaign exists and belongs to the brand
+    const campaign = await this.campaignModel.findOne({
+      where: { id: campaignId, brandId, isActive: true },
+    });
+
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found or access denied');
+    }
+
+    const { status, page = 1, limit = 10 } = getApplicationsDto;
+    const offset = (page - 1) * limit;
+
+    const whereCondition: any = { campaignId };
+
+    if (status) {
+      whereCondition.status = status;
+    }
+
+    const { count, rows: applications } =
+      await this.campaignApplicationModel.findAndCountAll({
+        where: whereCondition,
+        include: [
+          {
+            model: Influencer,
+            attributes: [
+              'id',
+              'name',
+              'username',
+              'profileImage',
+              'profileHeadline',
+              'bio',
+              'gender',
+              'collaborationCosts',
+              'instagramUrl',
+              'youtubeUrl',
+            ],
+            include: [
+              {
+                model: City,
+                attributes: ['id', 'name', 'state', 'tier'],
+              },
+              {
+                model: Niche,
+                attributes: ['id', 'name', 'logoNormal', 'logoDark'],
+                through: { attributes: [] },
+              },
+            ],
+          },
+        ],
+        order: [['createdAt', 'DESC']],
+        limit,
+        offset,
+        distinct: true,
+      });
+
+    const totalPages = Math.ceil(count / limit);
+
+    return {
+      applications,
+      total: count,
+      page,
+      limit,
+      totalPages,
+    };
+  }
+
+  async updateApplicationStatus(
+    campaignId: number,
+    applicationId: number,
+    updateStatusDto: UpdateApplicationStatusDto,
+    brandId: number,
+  ): Promise<CampaignApplication> {
+    // Verify campaign exists and belongs to the brand
+    const campaign = await this.campaignModel.findOne({
+      where: { id: campaignId, brandId, isActive: true },
+      include: [
+        {
+          model: Brand,
+          attributes: ['id', 'brandName'],
+        },
+      ],
+    });
+
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found or access denied');
+    }
+
+    // Find the application with influencer details
+    const application = await this.campaignApplicationModel.findOne({
+      where: { id: applicationId, campaignId },
+      include: [
+        {
+          model: Influencer,
+          attributes: [
+            'id',
+            'name',
+            'username',
+            'profileImage',
+            'profileHeadline',
+            'bio',
+            'gender',
+            'collaborationCosts',
+            'whatsappNumber',
+          ],
+        },
+      ],
+    });
+
+    if (!application) {
+      throw new NotFoundException('Application not found');
+    }
+
+    console.log('Application loaded:', {
+      applicationId: application.id,
+      hasInfluencer: !!application.influencer,
+      influencerData: application.influencer
+        ? {
+            id: application.influencer.id,
+            name: application.influencer.name,
+            whatsappNumber: application.influencer.whatsappNumber,
+          }
+        : null,
+    });
+
+    // Store influencer data before update (as update may clear associations)
+    const influencer = application.influencer;
+    const brandName = campaign.brand?.brandName || 'Brand';
+
+    // Update application status
+    await application.update({
+      status: updateStatusDto.status,
+      reviewNotes: updateStatusDto.reviewNotes,
+      reviewedAt: new Date(),
+    });
+
+    console.log('Attempting to send WhatsApp notification:', {
+      hasInfluencer: !!influencer,
+      hasWhatsappNumber: !!influencer?.whatsappNumber,
+      status: updateStatusDto.status,
+      influencerName: influencer?.name,
+      campaignName: campaign.name,
+      brandName,
+    });
+
+    if (influencer && influencer.whatsappNumber) {
+      try {
+        switch (updateStatusDto.status) {
+          case ApplicationStatus.UNDER_REVIEW:
+            console.log('Sending UNDER_REVIEW notification...');
+            await this.whatsAppService.sendCampaignApplicationUnderReview(
+              influencer.whatsappNumber,
+              influencer.name,
+              campaign.name,
+              brandName,
+            );
+            break;
+
+          case ApplicationStatus.SELECTED:
+            console.log('Sending SELECTED notification...');
+            await this.whatsAppService.sendCampaignApplicationSelected(
+              influencer.whatsappNumber,
+              influencer.name,
+              campaign.name,
+              brandName,
+              updateStatusDto.reviewNotes,
+            );
+            break;
+
+          case ApplicationStatus.REJECTED:
+            console.log('Sending REJECTED notification...');
+            await this.whatsAppService.sendCampaignApplicationRejected(
+              influencer.whatsappNumber,
+              influencer.name,
+              campaign.name,
+              brandName,
+              updateStatusDto.reviewNotes,
+            );
+            break;
+        }
+        console.log('WhatsApp notification sent successfully');
+      } catch (error) {
+        // Log error but don't fail the status update
+        console.error('Failed to send WhatsApp notification:', error);
+      }
+    } else {
+      console.log(
+        'Skipping WhatsApp notification - missing influencer or phone number',
+      );
+    }
+
+    // Return updated application with influencer details
+    const updatedApplication = await this.campaignApplicationModel.findOne({
+      where: { id: applicationId },
+      include: [
+        {
+          model: Influencer,
+          attributes: [
+            'id',
+            'name',
+            'username',
+            'profileImage',
+            'profileHeadline',
+            'bio',
+            'gender',
+            'collaborationCosts',
+          ],
+          include: [
+            {
+              model: City,
+              attributes: ['id', 'name', 'state', 'tier'],
+            },
+            {
+              model: Niche,
+              attributes: ['id', 'name', 'logoNormal', 'logoDark'],
+              through: { attributes: [] },
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!updatedApplication) {
+      throw new NotFoundException('Application not found after update');
+    }
+
+    return updatedApplication;
   }
 }

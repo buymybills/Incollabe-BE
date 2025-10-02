@@ -68,10 +68,16 @@ export class WhatsAppService {
         `WhatsApp message sent to ${to}, response: ${JSON.stringify(response.data)}`,
       );
     } catch (error) {
+      const errorDetails = error.response?.data || error.message;
       this.logger.error(
-        `Failed to send WhatsApp message to ${to}`,
-        error.response?.data || error.message,
+        `Failed to send WhatsApp template "${templateName}" to ${to}: ${JSON.stringify(errorDetails)}`,
       );
+      // Log to console for visibility during development
+      console.error('WhatsApp Error:', {
+        template: templateName,
+        to: to,
+        error: errorDetails,
+      });
       // Don't throw error to prevent breaking the main flow
     }
   }
@@ -124,10 +130,15 @@ export class WhatsAppService {
         `WhatsApp OTP sent to ${to}, response: ${JSON.stringify(response.data)}`,
       );
     } catch (error) {
+      const errorDetails = error.response?.data || error.message;
       this.logger.error(
-        `Failed to send WhatsApp OTP to ${to}`,
-        error.response?.data || error.message,
+        `Failed to send WhatsApp OTP to ${to}: ${JSON.stringify(errorDetails)}`,
       );
+      // Log to console for visibility during development
+      console.error('WhatsApp OTP Error:', {
+        to: to,
+        error: errorDetails,
+      });
       // Don't throw error to prevent breaking the main flow
     }
   }
@@ -236,6 +247,63 @@ export class WhatsAppService {
       to,
       APP_CONSTANTS.WHATSAPP.TEMPLATE_NAMES.CAMPAIGN_APPLICATION_CONFIRMATION ||
         'campaign_application_confirmation',
+      parameters,
+    );
+  }
+
+  async sendCampaignApplicationUnderReview(
+    to: string,
+    influencerName: string,
+    campaignName: string,
+    brandName: string,
+  ): Promise<void> {
+    const parameters = [influencerName, campaignName, brandName];
+
+    await this.sendTemplateMessage(
+      to,
+      APP_CONSTANTS.WHATSAPP.TEMPLATE_NAMES.CAMPAIGN_APPLICATION_UNDER_REVIEW,
+      parameters,
+    );
+  }
+
+  async sendCampaignApplicationSelected(
+    to: string,
+    influencerName: string,
+    campaignName: string,
+    brandName: string,
+    reviewNotes?: string,
+  ): Promise<void> {
+    const parameters = [
+      influencerName,
+      campaignName,
+      brandName,
+      reviewNotes || 'No additional notes',
+    ];
+
+    await this.sendTemplateMessage(
+      to,
+      APP_CONSTANTS.WHATSAPP.TEMPLATE_NAMES.CAMPAIGN_APPLICATION_SELECTED,
+      parameters,
+    );
+  }
+
+  async sendCampaignApplicationRejected(
+    to: string,
+    influencerName: string,
+    campaignName: string,
+    brandName: string,
+    reviewNotes?: string,
+  ): Promise<void> {
+    const parameters = [
+      influencerName,
+      campaignName,
+      brandName,
+      reviewNotes || 'No specific feedback provided',
+    ];
+
+    await this.sendTemplateMessage(
+      to,
+      APP_CONSTANTS.WHATSAPP.TEMPLATE_NAMES.CAMPAIGN_APPLICATION_REJECTED,
       parameters,
     );
   }

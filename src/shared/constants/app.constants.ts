@@ -14,6 +14,9 @@ export const APP_CONSTANTS = {
       PROFILE_REJECTED: 'profile_rejected',
       CAMPAIGN_INVITATION: 'campaign_invite',
       CAMPAIGN_APPLICATION_CONFIRMATION: 'campaign_application_confirmation',
+      CAMPAIGN_APPLICATION_UNDER_REVIEW: 'campaign_application_under_review',
+      CAMPAIGN_APPLICATION_SELECTED: 'campaign_application_selected',
+      CAMPAIGN_APPLICATION_REJECTED: 'campaign_application_rejected',
     },
     BUTTON_TEXT: {
       VERIFY: 'verify',

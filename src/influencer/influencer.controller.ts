@@ -21,6 +21,7 @@ import {
   ApiConsumes,
   ApiBody,
   ApiQuery,
+  ApiParam,
 } from '@nestjs/swagger';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { InfluencerService } from './influencer.service';
@@ -32,7 +33,6 @@ import {
   SendWhatsAppOTPDto,
   VerifyWhatsAppOTPDto,
 } from './dto/whatsapp-verification.dto';
-import { ApplyCampaignDto } from '../campaign/dto/apply-campaign.dto';
 import { GetOpenCampaignsDto } from '../campaign/dto/get-open-campaigns.dto';
 import { MyApplicationResponseDto } from '../campaign/dto/my-application-response.dto';
 import type { RequestWithUser } from '../types/request.types';
@@ -405,11 +405,16 @@ export class InfluencerController {
     );
   }
 
-  @Post('campaigns/apply')
+  @Post('campaigns/:campaignId/apply')
   @ApiOperation({
     summary: 'Apply to a campaign',
-    description:
-      'Submit application for a specific campaign with optional cover letter and proposal',
+    description: 'Submit application for a specific campaign',
+  })
+  @ApiParam({
+    name: 'campaignId',
+    type: Number,
+    description: 'Campaign ID to apply for',
+    example: 1,
   })
   @ApiResponse({
     status: 201,
@@ -436,11 +441,11 @@ export class InfluencerController {
   })
   @ApiResponse({ status: 404, description: 'Campaign not found' })
   async applyCampaign(
-    @Body() applyCampaignDto: ApplyCampaignDto,
+    @Param('campaignId', ParseIntPipe) campaignId: number,
     @Req() req: RequestWithUser,
   ) {
     const influencerId = req.user.id;
-    return this.influencerService.applyCampaign(applyCampaignDto, influencerId);
+    return this.influencerService.applyCampaign(campaignId, influencerId);
   }
 
   @Get('campaigns/my-applications')
@@ -467,6 +472,43 @@ export class InfluencerController {
   ) {
     const influencerId = req.user.id;
     return this.influencerService.getMyApplications(influencerId, status);
+  }
+
+  @Put('campaigns/applications/:applicationId/withdraw')
+  @ApiOperation({
+    summary: 'Withdraw campaign application',
+    description:
+      'Withdraw a campaign application. Can only withdraw applications with status: applied or under_review',
+  })
+  @ApiParam({
+    name: 'applicationId',
+    type: Number,
+    description: 'Application ID',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Application withdrawn successfully',
+    schema: {
+      example: {
+        message: 'Application withdrawn successfully',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Cannot withdraw selected/rejected applications',
+  })
+  @ApiResponse({ status: 404, description: 'Application not found' })
+  async withdrawApplication(
+    @Param('applicationId', ParseIntPipe) applicationId: number,
+    @Req() req: RequestWithUser,
+  ) {
+    const influencerId = req.user.id;
+    return this.influencerService.withdrawApplication(
+      applicationId,
+      influencerId,
+    );
   }
 
   @Get('campaigns/:campaignId')

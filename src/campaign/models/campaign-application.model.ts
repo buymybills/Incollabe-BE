@@ -16,6 +16,7 @@ export enum ApplicationStatus {
   UNDER_REVIEW = 'under_review',
   SELECTED = 'selected',
   REJECTED = 'rejected',
+  WITHDRAWN = 'withdrawn',
 }
 
 @Table({
@@ -83,8 +84,8 @@ export class CampaignApplication extends Model<CampaignApplication> {
 
   // Associations
   @BelongsTo(() => Campaign)
-  campaign: Campaign;
+  declare campaign: Campaign;
 
   @BelongsTo(() => Influencer)
-  influencer: Influencer;
+  declare influencer: Influencer;
 }

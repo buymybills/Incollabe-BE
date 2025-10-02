@@ -14,6 +14,7 @@ import {
   CampaignInvitation,
   InvitationStatus,
 } from './models/campaign-invitation.model';
+import { CampaignApplication } from './models/campaign-application.model';
 import { Platform, DeliverableType } from './models/campaign-deliverable.model';
 import { City } from '../shared/models/city.model';
 import { Brand } from '../brand/model/brand.model';
@@ -45,6 +46,7 @@ describe('CampaignService', () => {
   let campaignCityModel: any;
   let campaignDeliverableModel: any;
   let campaignInvitationModel: any;
+  let campaignApplicationModel: any;
   let cityModel: any;
   let brandModel: any;
   let influencerModel: any;
@@ -71,6 +73,10 @@ describe('CampaignService', () => {
           useValue: mockModel(),
         },
         {
+          provide: getModelToken(CampaignApplication),
+          useValue: mockModel(),
+        },
+        {
           provide: getModelToken(City),
           useValue: mockModel(),
         },
@@ -94,6 +100,7 @@ describe('CampaignService', () => {
     campaignCityModel = module.get(getModelToken(CampaignCity));
     campaignDeliverableModel = module.get(getModelToken(CampaignDeliverable));
     campaignInvitationModel = module.get(getModelToken(CampaignInvitation));
+    campaignApplicationModel = module.get(getModelToken(CampaignApplication));
     cityModel = module.get(getModelToken(City));
     brandModel = module.get(getModelToken(Brand));
     influencerModel = module.get(getModelToken(Influencer));
