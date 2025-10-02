@@ -9,16 +9,22 @@ import {
   Query,
   UseGuards,
   ParseIntPipe,
+  UseInterceptors,
+  UploadedFiles,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiConsumes,
 } from '@nestjs/swagger';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { PostService } from './post.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
+import { CreatePostMultipartDto } from './dto/create-post-multipart.dto';
+import { UpdatePostMultipartDto } from './dto/update-post-multipart.dto';
 import { FollowDto } from './dto/follow.dto';
 import { GetPostsDto } from './dto/get-posts.dto';
 import { AuthGuard } from '../auth/guards/auth.guard';
@@ -34,17 +40,43 @@ export class PostController {
   constructor(private readonly postService: PostService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Create a new post' })
+  @UseInterceptors(
+    FilesInterceptor('media', 10, {
+      fileFilter: (req, file, callback) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|webp|mp4|mov|avi)$/)) {
+          return callback(
+            new Error('Only image and video files are allowed!'),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+      limits: {
+        fileSize: 50 * 1024 * 1024, // 50MB per file
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Create a new post',
+    description:
+      'Create a new post with text content and optional media files (up to 10 files, max 50MB each)',
+  })
   @ApiResponse({ status: 201, description: 'Post created successfully' })
   @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 413,
+    description: 'File too large (max 50MB per file)',
+  })
   async createPost(
-    @Body() createPostDto: CreatePostDto,
+    @Body() createPostDto: CreatePostMultipartDto,
+    @UploadedFiles() files: Express.Multer.File[],
     @CurrentUser() user: User,
   ) {
     const userType =
       user.userType === 'influencer' ? UserType.INFLUENCER : UserType.BRAND;
-    return this.postService.createPost(createPostDto, userType, user.id);
+    return this.postService.createPost(createPostDto, userType, user.id, files);
   }
 
   @Get()
@@ -67,19 +99,51 @@ export class PostController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update a post' })
+  @UseInterceptors(
+    FilesInterceptor('media', 10, {
+      fileFilter: (req, file, callback) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|webp|mp4|mov|avi)$/)) {
+          return callback(
+            new Error('Only image and video files are allowed!'),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+      limits: {
+        fileSize: 50 * 1024 * 1024, // 50MB per file
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Update a post',
+    description:
+      'Update post content and/or media. Use existingMediaUrls to keep specific media, new media files will be added.',
+  })
   @ApiResponse({ status: 200, description: 'Post updated successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - Not your post' })
   @ApiResponse({ status: 404, description: 'Post not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 413,
+    description: 'File too large (max 50MB per file)',
+  })
   async updatePost(
     @Param('id', ParseIntPipe) id: number,
-    @Body() updatePostDto: UpdatePostDto,
+    @Body() updatePostDto: UpdatePostMultipartDto,
+    @UploadedFiles() files: Express.Multer.File[],
     @CurrentUser() user: User,
   ) {
     const userType =
       user.userType === 'influencer' ? UserType.INFLUENCER : UserType.BRAND;
-    return this.postService.updatePost(id, updatePostDto, userType, user.id);
+    return this.postService.updatePost(
+      id,
+      updatePostDto,
+      userType,
+      user.id,
+      files,
+    );
   }
 
   @Delete(':id')

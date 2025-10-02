@@ -10,6 +10,8 @@ import { Like, LikerType } from './models/like.model';
 import { Follow, FollowerType, FollowingType } from './models/follow.model';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
+import { CreatePostMultipartDto } from './dto/create-post-multipart.dto';
+import { UpdatePostMultipartDto } from './dto/update-post-multipart.dto';
 import { FollowDto, FollowUserType } from './dto/follow.dto';
 import { GetPostsDto } from './dto/get-posts.dto';
 import { Influencer } from '../auth/model/influencer.model';
@@ -17,6 +19,7 @@ import { Brand } from '../brand/model/brand.model';
 import { InfluencerNiche } from '../auth/model/influencer-niche.model';
 import { BrandNiche } from '../brand/model/brand-niche.model';
 import { NotificationService } from '../shared/notification.service';
+import { S3Service } from '../shared/s3.service';
 import { Op } from 'sequelize';
 
 @Injectable()
@@ -33,16 +36,31 @@ export class PostService {
     @InjectModel(Brand)
     private readonly brandModel: typeof Brand,
     private readonly notificationService: NotificationService,
+    private readonly s3Service: S3Service,
   ) {}
 
   async createPost(
-    createPostDto: CreatePostDto,
+    createPostDto: CreatePostDto | CreatePostMultipartDto,
     userType: UserType,
     userId: number,
+    files?: Express.Multer.File[],
   ): Promise<Post> {
+    // Upload files to S3 if provided
+    const mediaUrls: string[] = [];
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const folder = file.mimetype.startsWith('video/')
+          ? 'posts/videos'
+          : 'posts/images';
+        const prefix = `${userType}-${userId}`;
+        const url = await this.s3Service.uploadFileToS3(file, folder, prefix);
+        mediaUrls.push(url);
+      }
+    }
+
     const postData: any = {
       content: createPostDto.content,
-      mediaUrls: createPostDto.mediaUrls || [],
+      mediaUrls: mediaUrls,
       userType,
     };
 
@@ -57,9 +75,10 @@ export class PostService {
 
   async updatePost(
     postId: number,
-    updatePostDto: UpdatePostDto,
+    updatePostDto: UpdatePostDto | UpdatePostMultipartDto,
     userType: UserType,
     userId: number,
+    files?: Express.Multer.File[],
   ): Promise<Post> {
     const post = await this.postModel.findByPk(postId);
 
@@ -75,7 +94,38 @@ export class PostService {
       throw new ForbiddenException('You can only update your own posts');
     }
 
-    await post.update(updatePostDto);
+    // Handle media updates
+    let mediaUrls = post.mediaUrls || [];
+
+    // If existingMediaUrls is provided in multipart DTO, keep only those URLs (even if empty array)
+    if (
+      'existingMediaUrls' in updatePostDto &&
+      updatePostDto.existingMediaUrls !== undefined
+    ) {
+      mediaUrls = updatePostDto.existingMediaUrls;
+    }
+
+    // Upload new files to S3 if provided
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const folder = file.mimetype.startsWith('video/')
+          ? 'posts/videos'
+          : 'posts/images';
+        const prefix = `${userType}-${userId}`;
+        const url = await this.s3Service.uploadFileToS3(file, folder, prefix);
+        mediaUrls.push(url);
+      }
+    }
+
+    const updateData: any = {
+      ...updatePostDto,
+      mediaUrls,
+    };
+
+    // Remove the existingMediaUrls field as it's not part of the model
+    delete updateData.existingMediaUrls;
+
+    await post.update(updateData);
     return post;
   }
 

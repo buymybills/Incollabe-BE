@@ -9,6 +9,7 @@ import { Brand } from '../brand/model/brand.model';
 import { InfluencerNiche } from '../auth/model/influencer-niche.model';
 import { BrandNiche } from '../brand/model/brand-niche.model';
 import { NotificationService } from '../shared/notification.service';
+import { S3Service } from '../shared/s3.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { FollowDto, FollowUserType } from './dto/follow.dto';
@@ -66,6 +67,11 @@ const mockNotificationService = {
   sendMentionNotification: jest.fn(),
 };
 
+const mockS3Service = {
+  uploadFileToS3: jest.fn(),
+  getFileUrl: jest.fn(),
+};
+
 describe('PostService', () => {
   let service: PostService;
   let postModel: any;
@@ -110,6 +116,10 @@ describe('PostService', () => {
           provide: NotificationService,
           useValue: mockNotificationService,
         },
+        {
+          provide: S3Service,
+          useValue: mockS3Service,
+        },
       ],
     }).compile();
 
@@ -139,13 +149,12 @@ describe('PostService', () => {
     it('should create a post for influencer', async () => {
       const createPostDto: CreatePostDto = {
         content: 'Test post content',
-        mediaUrls: ['https://example.com/image.jpg'],
       };
 
       const mockPost = {
         id: 1,
         content: 'Test post content',
-        mediaUrls: ['https://example.com/image.jpg'],
+        mediaUrls: [],
         userType: UserType.INFLUENCER,
         influencerId: 1,
         brandId: null,
@@ -164,7 +173,7 @@ describe('PostService', () => {
       expect(result).toEqual(mockPost);
       expect(postModel.create).toHaveBeenCalledWith({
         content: 'Test post content',
-        mediaUrls: ['https://example.com/image.jpg'],
+        mediaUrls: [],
         userType: UserType.INFLUENCER,
         influencerId: 1,
       });
@@ -210,6 +219,7 @@ describe('PostService', () => {
       const mockPost = {
         id: 1,
         content: 'Original content',
+        mediaUrls: [],
         userType: UserType.INFLUENCER,
         influencerId: 1,
         brandId: null,
@@ -221,7 +231,10 @@ describe('PostService', () => {
       await service.updatePost(1, updatePostDto, UserType.INFLUENCER, 1);
 
       expect(postModel.findByPk).toHaveBeenCalledWith(1);
-      expect(mockPost.update).toHaveBeenCalledWith(updatePostDto);
+      expect(mockPost.update).toHaveBeenCalledWith({
+        ...updatePostDto,
+        mediaUrls: [],
+      });
     });
 
     it('should throw NotFoundException for non-existent post', async () => {

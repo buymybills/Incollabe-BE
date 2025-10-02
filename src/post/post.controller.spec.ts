@@ -59,7 +59,6 @@ describe('PostController', () => {
     it('should create a post for influencer', async () => {
       const createPostDto: CreatePostDto = {
         content: 'Test post content',
-        mediaUrls: ['https://example.com/image.jpg'],
       };
 
       const mockUser: User = {
@@ -72,7 +71,7 @@ describe('PostController', () => {
       const mockPost = {
         id: 1,
         content: 'Test post content',
-        mediaUrls: ['https://example.com/image.jpg'],
+        mediaUrls: [],
         userType: UserType.INFLUENCER,
         influencerId: 1,
         isActive: true,
@@ -83,13 +82,14 @@ describe('PostController', () => {
 
       mockPostService.createPost.mockResolvedValue(mockPost);
 
-      const result = await controller.createPost(createPostDto, mockUser);
+      const result = await controller.createPost(createPostDto, [], mockUser);
 
       expect(result).toEqual(mockPost);
       expect(postService.createPost).toHaveBeenCalledWith(
         createPostDto,
         UserType.INFLUENCER,
         1,
+        [],
       );
     });
 
@@ -118,13 +118,14 @@ describe('PostController', () => {
 
       mockPostService.createPost.mockResolvedValue(mockPost);
 
-      const result = await controller.createPost(createPostDto, mockUser);
+      const result = await controller.createPost(createPostDto, [], mockUser);
 
       expect(result).toEqual(mockPost);
       expect(postService.createPost).toHaveBeenCalledWith(
         createPostDto,
         UserType.BRAND,
         2,
+        [],
       );
     });
   });
@@ -216,7 +217,12 @@ describe('PostController', () => {
 
       mockPostService.updatePost.mockResolvedValue(mockUpdatedPost);
 
-      const result = await controller.updatePost(1, updatePostDto, mockUser);
+      const result = await controller.updatePost(
+        1,
+        updatePostDto,
+        [],
+        mockUser,
+      );
 
       expect(result).toEqual(mockUpdatedPost);
       expect(postService.updatePost).toHaveBeenCalledWith(
@@ -224,6 +230,7 @@ describe('PostController', () => {
         updatePostDto,
         UserType.INFLUENCER,
         1,
+        [],
       );
     });
   });
@@ -407,12 +414,13 @@ describe('PostController', () => {
 
       mockPostService.createPost.mockResolvedValue({});
 
-      await controller.createPost(createPostDto, mockUser);
+      await controller.createPost(createPostDto, [], mockUser);
 
       expect(postService.createPost).toHaveBeenCalledWith(
         createPostDto,
         UserType.INFLUENCER,
         1,
+        [],
       );
     });
 
@@ -430,12 +438,13 @@ describe('PostController', () => {
 
       mockPostService.createPost.mockResolvedValue({});
 
-      await controller.createPost(createPostDto, mockUser);
+      await controller.createPost(createPostDto, [], mockUser);
 
       expect(postService.createPost).toHaveBeenCalledWith(
         createPostDto,
         UserType.BRAND,
         1,
+        [],
       );
     });
   });
@@ -495,7 +504,7 @@ describe('PostController', () => {
       mockPostService.createPost.mockRejectedValue(error);
 
       await expect(
-        controller.createPost(createPostDto, mockUser),
+        controller.createPost(createPostDto, [], mockUser),
       ).rejects.toThrow('Service error');
     });
 
@@ -515,7 +524,7 @@ describe('PostController', () => {
       mockPostService.updatePost.mockRejectedValue(error);
 
       await expect(
-        controller.updatePost(1, updatePostDto, mockUser),
+        controller.updatePost(1, updatePostDto, [], mockUser),
       ).rejects.toThrow('Update failed');
     });
 
