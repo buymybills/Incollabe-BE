@@ -20,6 +20,7 @@ import { Influencer } from '../auth/model/influencer.model';
 import { Niche } from '../auth/model/niche.model';
 import { InfluencerNiche } from '../auth/model/influencer-niche.model';
 import { Experience } from './models/experience.model';
+import { ExperienceSocialLink } from './models/experience-social-link.model';
 import { Follow, FollowingType } from '../post/models/follow.model';
 import { Post, UserType } from '../post/models/post.model';
 import { CustomNiche } from '../auth/model/custom-niche.model';
@@ -97,6 +98,8 @@ export class InfluencerService {
     private readonly influencerNicheModel: typeof InfluencerNiche,
     @Inject('EXPERIENCE_MODEL')
     private readonly experienceModel: typeof Experience,
+    @Inject('EXPERIENCE_SOCIAL_LINK_MODEL')
+    private readonly experienceSocialLinkModel: typeof ExperienceSocialLink,
     @Inject('FOLLOW_MODEL')
     private readonly followModel: typeof Follow,
     @Inject('POST_MODEL')
@@ -1114,12 +1117,41 @@ export class InfluencerService {
     influencerId: number,
     createExperienceDto: CreateExperienceDto,
   ): Promise<Experience> {
-    const experienceData: any = {
-      ...createExperienceDto,
-      influencerId,
-    };
+    const { socialLinks, ...experienceData } = createExperienceDto;
 
-    return this.experienceModel.create(experienceData);
+    const experience = await this.experienceModel.create({
+      ...experienceData,
+      influencerId,
+    });
+
+    // Create social links if provided
+    if (socialLinks && socialLinks.length > 0) {
+      const socialLinkData = socialLinks.map((link) => ({
+        experienceId: experience.id,
+        platform: link.platform,
+        contentType: link.contentType,
+        url: link.url,
+      }));
+
+      await this.experienceSocialLinkModel.bulkCreate(socialLinkData);
+    }
+
+    // Return experience with social links
+    const experienceWithLinks = await this.experienceModel.findOne({
+      where: { id: experience.id },
+      include: [
+        {
+          model: ExperienceSocialLink,
+          attributes: ['id', 'platform', 'contentType', 'url'],
+        },
+      ],
+    });
+
+    if (!experienceWithLinks) {
+      throw new NotFoundException('Experience not found after creation');
+    }
+
+    return experienceWithLinks;
   }
 
   async updateExperience(
@@ -1135,15 +1167,57 @@ export class InfluencerService {
       throw new NotFoundException('Experience not found');
     }
 
-    const updateData: any = { ...updateExperienceDto };
+    const { socialLinks, ...updateData } = updateExperienceDto;
 
     await experience.update(updateData);
-    return experience;
+
+    // Update social links if provided
+    if (socialLinks !== undefined) {
+      // Delete existing social links
+      await this.experienceSocialLinkModel.destroy({
+        where: { experienceId },
+      });
+
+      // Create new social links
+      if (socialLinks && socialLinks.length > 0) {
+        const socialLinkData = socialLinks.map((link) => ({
+          experienceId: experience.id,
+          platform: link.platform,
+          contentType: link.contentType,
+          url: link.url,
+        }));
+
+        await this.experienceSocialLinkModel.bulkCreate(socialLinkData);
+      }
+    }
+
+    // Return experience with social links
+    const experienceWithLinks = await this.experienceModel.findOne({
+      where: { id: experienceId },
+      include: [
+        {
+          model: ExperienceSocialLink,
+          attributes: ['id', 'platform', 'contentType', 'url'],
+        },
+      ],
+    });
+
+    if (!experienceWithLinks) {
+      throw new NotFoundException('Experience not found after update');
+    }
+
+    return experienceWithLinks;
   }
 
   async getExperiences(influencerId: number): Promise<Experience[]> {
     return this.experienceModel.findAll({
       where: { influencerId },
+      include: [
+        {
+          model: ExperienceSocialLink,
+          attributes: ['id', 'platform', 'contentType', 'url'],
+        },
+      ],
       order: [['createdAt', 'DESC']],
     });
   }
