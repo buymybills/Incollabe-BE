@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   Inject,
 } from '@nestjs/common';
 import { S3Service } from '../shared/s3.service';
@@ -38,6 +39,7 @@ import {
   CampaignApplication,
   ApplicationStatus,
 } from '../campaign/models/campaign-application.model';
+import { CampaignInvitation } from '../campaign/models/campaign-invitation.model';
 import { CampaignDeliverable } from '../campaign/models/campaign-deliverable.model';
 import { CampaignCity } from '../campaign/models/campaign-city.model';
 import { City } from '../shared/models/city.model';
@@ -90,6 +92,8 @@ export class InfluencerService {
     private readonly campaignModel: typeof Campaign,
     @Inject('CAMPAIGN_APPLICATION_MODEL')
     private readonly campaignApplicationModel: typeof CampaignApplication,
+    @Inject('CAMPAIGN_INVITATION_MODEL')
+    private readonly campaignInvitationModel: typeof CampaignInvitation,
     @Inject('ADMIN_MODEL')
     private readonly adminModel: typeof Admin,
     @Inject('NICHE_MODEL')
@@ -536,30 +540,30 @@ export class InfluencerService {
         };
 
       case ReviewStatus.APPROVED:
-        if (statusViewed) {
-          return null;
+        // Mark as viewed if not already viewed
+        if (!statusViewed) {
+          await profileReview.update({ statusViewed: true });
         }
-        // Mark as viewed and return status
-        await profileReview.update({ statusViewed: true });
         return {
           status: 'approved',
           message: 'Profile Verification Successful',
           description:
             'Your profile has been approved and is now visible to brands',
+          isNew: !statusViewed, // Indicates if this is first time seeing the status
         };
 
       case ReviewStatus.REJECTED:
-        if (statusViewed) {
-          return null;
+        // Mark as viewed if not already viewed
+        if (!statusViewed) {
+          await profileReview.update({ statusViewed: true });
         }
-        // Mark as viewed and return status
-        await profileReview.update({ statusViewed: true });
         return {
           status: 'rejected',
           message: 'Profile Verification Rejected',
           description:
             profileReview.rejectionReason ||
             'Please update your profile and resubmit for verification',
+          isNew: !statusViewed, // Indicates if this is first time seeing the status
         };
 
       default:
@@ -919,6 +923,20 @@ export class InfluencerService {
       throw new NotFoundException(
         'Campaign not found or no longer accepting applications',
       );
+    }
+
+    // Check if campaign is invite-only
+    if (campaign.isInviteOnly) {
+      // Verify influencer has been invited
+      const invitation = await this.campaignInvitationModel.findOne({
+        where: { campaignId, influencerId },
+      });
+
+      if (!invitation) {
+        throw new ForbiddenException(
+          'This is an invite-only campaign. You must be invited to apply.',
+        );
+      }
     }
 
     // Check if influencer has already applied

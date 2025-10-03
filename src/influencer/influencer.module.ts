@@ -16,6 +16,7 @@ import { ProfileReview } from '../admin/models/profile-review.model';
 import { Admin } from '../admin/models/admin.model';
 import { Campaign } from '../campaign/models/campaign.model';
 import { CampaignApplication } from '../campaign/models/campaign-application.model';
+import { CampaignInvitation } from '../campaign/models/campaign-invitation.model';
 import { CustomNiche } from '../auth/model/custom-niche.model';
 import { SharedModule } from '../shared/shared.module';
 
@@ -58,6 +59,10 @@ import { SharedModule } from '../shared/shared.module';
     {
       provide: 'CAMPAIGN_APPLICATION_MODEL',
       useValue: CampaignApplication,
+    },
+    {
+      provide: 'CAMPAIGN_INVITATION_MODEL',
+      useValue: CampaignInvitation,
     },
     {
       provide: 'NICHE_MODEL',

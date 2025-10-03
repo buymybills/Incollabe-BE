@@ -131,6 +131,7 @@ export class CampaignController {
               specifications: 'Twitter posts or threads with brand mentions',
             },
           ],
+          isInviteOnly: false,
         },
       },
       simpleExample: {
@@ -169,6 +170,7 @@ export class CampaignController {
               specifications: 'Behind-the-scenes styling and try-on content',
             },
           ],
+          isInviteOnly: false,
         },
       },
     },
@@ -207,6 +209,102 @@ export class CampaignController {
     }
 
     return this.campaignService.createCampaign(createCampaignDto, req.user.id);
+  }
+
+  @Get('by-category')
+  @ApiOperation({
+    summary: 'Get campaigns by category for brand',
+    description:
+      'Retrieves brand campaigns categorized as Open, Invite, and Finished. Only accessible by brands.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Campaigns retrieved successfully by category',
+    schema: {
+      example: {
+        openCampaigns: [
+          {
+            id: 1,
+            name: 'Glow Like Never Before',
+            category: 'Skincare + Makeup',
+            deliverableFormat: '2 Instagram reels, 3 story posts',
+            status: 'active',
+            createdAt: '2025-09-11T00:00:00Z',
+            brand: {
+              id: 1,
+              brandName: "L'Oréal Paris",
+              profileImage: 'loreal.jpg',
+            },
+            cities: [
+              {
+                id: 5,
+                name: 'Mumbai',
+                tier: '1',
+              },
+            ],
+            deliverables: [
+              {
+                platform: 'instagram',
+                type: 'instagram_reel',
+                budget: 8000,
+                quantity: 2,
+              },
+            ],
+            applications: [
+              { id: 1, status: 'applied' },
+              { id: 2, status: 'under_review' },
+              { id: 3, status: 'applied' },
+            ],
+            totalApplications: 3,
+          },
+        ],
+        inviteCampaigns: [
+          {
+            id: 2,
+            name: 'Exclusive Brand Launch',
+            category: 'Fashion',
+            status: 'active',
+            createdAt: '2025-09-10T00:00:00Z',
+            campaignInvitations: [
+              {
+                id: 1,
+                influencerId: 5,
+                status: 'pending',
+              },
+              {
+                id: 2,
+                influencerId: 8,
+                status: 'accepted',
+              },
+            ],
+            totalInvites: 2,
+          },
+        ],
+        finishedCampaigns: [
+          {
+            id: 3,
+            name: 'Summer Collection 2024',
+            category: 'Fashion',
+            status: 'completed',
+            isActive: false,
+            createdAt: '2024-06-01T00:00:00Z',
+          },
+        ],
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Only brands can access this endpoint',
+  })
+  async getCampaignsByCategory(@Req() req: RequestWithUser) {
+    if (req.user.userType !== 'brand') {
+      throw new ForbiddenException(
+        'Only brands can access campaigns by category',
+      );
+    }
+
+    return this.campaignService.getCampaignsByCategory(req.user.id);
   }
 
   @Get()
@@ -611,6 +709,7 @@ export class CampaignController {
               specifications: 'Twitter posts or threads with brand mentions',
             },
           ],
+          isInviteOnly: false,
         },
       },
       simpleExample: {
@@ -649,6 +748,7 @@ export class CampaignController {
               specifications: 'Behind-the-scenes styling and try-on content',
             },
           ],
+          isInviteOnly: false,
         },
       },
     },
@@ -746,6 +846,43 @@ export class CampaignController {
       status,
       req.user.id,
     );
+  }
+
+  @Put(':id/close')
+  @ApiOperation({
+    summary: 'Close campaign',
+    description:
+      'Closes a campaign by setting isActive to false (only by the brand that owns it)',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'Campaign ID',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Campaign closed successfully',
+    schema: {
+      example: {
+        message: 'Campaign closed successfully',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Only brands can close campaigns',
+  })
+  @ApiResponse({ status: 404, description: 'Campaign not found' })
+  async closeCampaign(
+    @Param('id', ParseIntPipe) campaignId: number,
+    @Req() req: RequestWithUser,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new ForbiddenException('Only brands can close campaigns');
+    }
+
+    return this.campaignService.closeCampaign(campaignId, req.user.id);
   }
 
   @Delete(':id')
@@ -965,7 +1102,7 @@ export class CampaignController {
   @ApiOperation({
     summary: 'Get campaign applications for brand',
     description:
-      'Get all applications for a specific campaign with optional status filter. Only accessible by the brand that owns the campaign.',
+      'Get all applications for a specific campaign with filtering and sorting options. Only accessible by the brand that owns the campaign.',
   })
   @ApiParam({
     name: 'campaignId',
@@ -979,6 +1116,70 @@ export class CampaignController {
     enum: ['applied', 'under_review', 'selected', 'rejected', 'withdrawn'],
     description: 'Filter applications by status',
     example: 'applied',
+  })
+  @ApiQuery({
+    name: 'gender',
+    required: false,
+    type: String,
+    description: 'Filter by influencer gender',
+    example: 'female',
+  })
+  @ApiQuery({
+    name: 'niche',
+    required: false,
+    type: String,
+    description: 'Filter by niche ID',
+    example: '1',
+  })
+  @ApiQuery({
+    name: 'location',
+    required: false,
+    type: String,
+    description: 'Filter by city ID',
+    example: '5',
+  })
+  @ApiQuery({
+    name: 'ageMin',
+    required: false,
+    type: Number,
+    description: 'Minimum age filter',
+    example: 18,
+  })
+  @ApiQuery({
+    name: 'ageMax',
+    required: false,
+    type: Number,
+    description: 'Maximum age filter',
+    example: 35,
+  })
+  @ApiQuery({
+    name: 'platform',
+    required: false,
+    type: String,
+    description:
+      'Filter by platform (instagram, facebook, youtube, linkedin, x)',
+    example: 'instagram',
+  })
+  @ApiQuery({
+    name: 'experience',
+    required: false,
+    type: String,
+    description:
+      'Filter by campaign experience (0, 1, 2, 3, 4, 5 for 0, 1+, 2+, 3+, 4+, 5+ campaigns)',
+    example: '3',
+  })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    enum: [
+      'application_new_old',
+      'application_old_new',
+      'followers_high_low',
+      'followers_low_high',
+      'campaign_charges_lowest',
+    ],
+    description: 'Sort applications by',
+    example: 'application_new_old',
   })
   @ApiQuery({
     name: 'page',
@@ -1003,8 +1204,6 @@ export class CampaignController {
           {
             id: 1,
             status: 'applied',
-            coverLetter: 'I would love to work with your brand...',
-            proposalMessage: 'I can deliver amazing content...',
             createdAt: '2024-01-01T00:00:00Z',
             influencer: {
               id: 1,
@@ -1012,6 +1211,36 @@ export class CampaignController {
               username: 'janedoe',
               profileImage: 'profile.jpg',
               profileHeadline: 'Beauty & Lifestyle Influencer',
+              bio: 'Passionate about beauty and lifestyle content',
+              gender: 'female',
+              age: 28,
+              experienceYears: 3,
+              totalCampaigns: 15,
+              totalFollowers: 150000,
+              collaborationCosts: {
+                instagramPost: 5000,
+                instagramReel: 8000,
+                youtubeVideo: 15000,
+              },
+              instagramUrl: 'https://instagram.com/janedoe',
+              youtubeUrl: 'https://youtube.com/@janedoe',
+              facebookUrl: null,
+              linkedinUrl: null,
+              twitterUrl: null,
+              city: {
+                id: 5,
+                name: 'Mumbai',
+                state: 'Maharashtra',
+                tier: '1',
+              },
+              niches: [
+                {
+                  id: 1,
+                  name: 'Beauty',
+                  logoNormal: 'beauty.png',
+                  logoDark: 'beauty-dark.png',
+                },
+              ],
             },
           },
         ],

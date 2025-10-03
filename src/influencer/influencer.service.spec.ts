@@ -74,6 +74,13 @@ const mockCampaignApplicationModel = {
   count: jest.fn(),
 };
 
+const mockCampaignInvitationModel = {
+  findOne: jest.fn(),
+  findAll: jest.fn(),
+  create: jest.fn(),
+  update: jest.fn(),
+};
+
 const mockAdminModel = {
   findOne: jest.fn(),
   findAll: jest.fn().mockResolvedValue([]), // Default to empty array
@@ -124,6 +131,10 @@ describe('InfluencerService', () => {
         {
           provide: 'CAMPAIGN_APPLICATION_MODEL',
           useValue: mockCampaignApplicationModel,
+        },
+        {
+          provide: 'CAMPAIGN_INVITATION_MODEL',
+          useValue: mockCampaignInvitationModel,
         },
         {
           provide: 'ADMIN_MODEL',

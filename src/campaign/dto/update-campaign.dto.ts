@@ -36,6 +36,10 @@ export class UpdateCampaignDto {
   type?: CampaignType;
 
   @IsOptional()
+  @IsBoolean()
+  isInviteOnly?: boolean;
+
+  @IsOptional()
   @IsDateString()
   startDate?: string;
 

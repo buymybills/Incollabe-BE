@@ -173,6 +173,99 @@ export class CampaignService {
     };
   }
 
+  async getCampaignsByCategory(brandId: number): Promise<{
+    openCampaigns: Array<Campaign & { totalApplications?: number }>;
+    inviteCampaigns: Array<Campaign & { totalInvites?: number }>;
+    finishedCampaigns: Campaign[];
+  }> {
+    const includeOptions = [
+      {
+        model: Brand,
+        attributes: ['id', 'brandName', 'profileImage'],
+      },
+      {
+        model: CampaignCity,
+        include: [
+          {
+            model: City,
+            attributes: ['id', 'name', 'tier'],
+          },
+        ],
+      },
+      {
+        model: CampaignDeliverable,
+        attributes: ['platform', 'type', 'budget', 'quantity'],
+      },
+      {
+        model: CampaignApplication,
+        attributes: ['id', 'status'],
+        required: false,
+      },
+    ];
+
+    // Open Campaigns: Active campaigns that are NOT invite-only
+    const openCampaigns = await this.campaignModel.findAll({
+      where: {
+        brandId,
+        isActive: true,
+        status: CampaignStatus.ACTIVE,
+        isInviteOnly: false,
+      },
+      include: includeOptions,
+      order: [['createdAt', 'DESC']],
+    });
+
+    // Invite Campaigns: Active invite-only campaigns
+    const inviteCampaigns = await this.campaignModel.findAll({
+      where: {
+        brandId,
+        isActive: true,
+        status: CampaignStatus.ACTIVE,
+        isInviteOnly: true,
+      },
+      include: [
+        ...includeOptions,
+        {
+          model: CampaignInvitation,
+          attributes: ['id', 'influencerId', 'status'],
+          required: false, // Include even if no invitations yet
+        },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+
+    // Finished Campaigns: Campaigns with isActive = false
+    const finishedCampaigns = await this.campaignModel.findAll({
+      where: { brandId, isActive: false },
+      include: includeOptions,
+      order: [['createdAt', 'DESC']],
+    });
+
+    // Add totalApplications count to each open campaign
+    const openCampaignsWithCount = openCampaigns.map((campaign) => {
+      const campaignData: any = campaign.toJSON();
+      campaignData.totalApplications = campaign.applications
+        ? campaign.applications.length
+        : 0;
+      return campaignData;
+    });
+
+    // Add totalInvites count to each invite campaign
+    const inviteCampaignsWithCount = inviteCampaigns.map((campaign) => {
+      const campaignData: any = campaign.toJSON();
+      campaignData.totalInvites = campaign.invitations
+        ? campaign.invitations.length
+        : 0;
+      return campaignData;
+    });
+
+    return {
+      openCampaigns: openCampaignsWithCount,
+      inviteCampaigns: inviteCampaignsWithCount,
+      finishedCampaigns,
+    };
+  }
+
   async getCampaignById(campaignId: number): Promise<CampaignResponseDto> {
     const campaign = await this.campaignModel.findOne({
       where: { id: campaignId, isActive: true },
@@ -299,6 +392,23 @@ export class CampaignService {
     await campaign.update(campaignData);
 
     return this.getCampaignById(campaign.id);
+  }
+
+  async closeCampaign(
+    campaignId: number,
+    brandId: number,
+  ): Promise<{ message: string }> {
+    const campaign = await this.campaignModel.findOne({
+      where: { id: campaignId, brandId, isActive: true },
+    });
+
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found');
+    }
+
+    await campaign.update({ isActive: false });
+
+    return { message: 'Campaign closed successfully' };
   }
 
   async updateCampaignStatus(
@@ -750,47 +860,159 @@ export class CampaignService {
       throw new NotFoundException('Campaign not found or access denied');
     }
 
-    const { status, page = 1, limit = 10 } = getApplicationsDto;
+    const {
+      status,
+      gender,
+      niche,
+      location,
+      ageMin,
+      ageMax,
+      platform,
+      experience,
+      sortBy = 'application_new_old',
+      page = 1,
+      limit = 10,
+    } = getApplicationsDto;
     const offset = (page - 1) * limit;
 
     const whereCondition: any = { campaignId };
+    const influencerWhere: any = {};
 
     if (status) {
       whereCondition.status = status;
     }
 
+    // Filter by gender
+    if (gender) {
+      influencerWhere.gender = gender;
+    }
+
+    // Filter by age range
+    if (ageMin || ageMax) {
+      influencerWhere.age = {};
+      if (ageMin) {
+        influencerWhere.age[Op.gte] = ageMin;
+      }
+      if (ageMax) {
+        influencerWhere.age[Op.lte] = ageMax;
+      }
+    }
+
+    // Filter by location (city)
+    if (location) {
+      influencerWhere.cityId = location;
+    }
+
+    // Filter by platform
+    if (platform) {
+      const platformLower = platform.toLowerCase();
+      if (platformLower === 'instagram') {
+        influencerWhere.instagramUrl = { [Op.ne]: null };
+      } else if (platformLower === 'youtube') {
+        influencerWhere.youtubeUrl = { [Op.ne]: null };
+      } else if (platformLower === 'facebook') {
+        influencerWhere.facebookUrl = { [Op.ne]: null };
+      } else if (platformLower === 'linkedin') {
+        influencerWhere.linkedinUrl = { [Op.ne]: null };
+      } else if (platformLower === 'x' || platformLower === 'twitter') {
+        influencerWhere.twitterUrl = { [Op.ne]: null };
+      }
+    }
+
+    // Filter by experience (campaign count: 0, 1+, 2+, 3+, 4+, 5+ Campaigns)
+    if (experience) {
+      const experienceValue = parseInt(experience);
+      if (!isNaN(experienceValue)) {
+        switch (experienceValue) {
+          case 0:
+            influencerWhere.totalCampaigns = 0;
+            break;
+          case 1:
+            influencerWhere.totalCampaigns = { [Op.gte]: 1 };
+            break;
+          case 2:
+            influencerWhere.totalCampaigns = { [Op.gte]: 2 };
+            break;
+          case 3:
+            influencerWhere.totalCampaigns = { [Op.gte]: 3 };
+            break;
+          case 4:
+            influencerWhere.totalCampaigns = { [Op.gte]: 4 };
+            break;
+          case 5:
+            influencerWhere.totalCampaigns = { [Op.gte]: 5 };
+            break;
+        }
+      }
+    }
+
+    // Determine sort order
+    let order: any[] = [];
+    switch (sortBy) {
+      case 'application_new_old':
+        order = [['createdAt', 'DESC']];
+        break;
+      case 'application_old_new':
+        order = [['createdAt', 'ASC']];
+        break;
+      case 'followers_high_low':
+        order = [[Influencer, 'totalFollowers', 'DESC']];
+        break;
+      case 'followers_low_high':
+        order = [[Influencer, 'totalFollowers', 'ASC']];
+        break;
+      case 'campaign_charges_lowest':
+        order = [[Influencer, 'collaborationCosts', 'ASC']];
+        break;
+      default:
+        order = [['createdAt', 'DESC']];
+    }
+
+    const includeOptions: any = [
+      {
+        model: Influencer,
+        where:
+          Object.keys(influencerWhere).length > 0 ? influencerWhere : undefined,
+        attributes: [
+          'id',
+          'name',
+          'username',
+          'profileImage',
+          'profileHeadline',
+          'bio',
+          'gender',
+          'age',
+          'experienceYears',
+          'totalCampaigns',
+          'totalFollowers',
+          'collaborationCosts',
+          'instagramUrl',
+          'youtubeUrl',
+          'facebookUrl',
+          'linkedinUrl',
+          'twitterUrl',
+        ],
+        include: [
+          {
+            model: City,
+            attributes: ['id', 'name', 'state', 'tier'],
+          },
+          {
+            model: Niche,
+            where: niche ? { id: niche } : undefined,
+            attributes: ['id', 'name', 'logoNormal', 'logoDark'],
+            through: { attributes: [] },
+            required: !!niche,
+          },
+        ],
+      },
+    ];
+
     const { count, rows: applications } =
       await this.campaignApplicationModel.findAndCountAll({
         where: whereCondition,
-        include: [
-          {
-            model: Influencer,
-            attributes: [
-              'id',
-              'name',
-              'username',
-              'profileImage',
-              'profileHeadline',
-              'bio',
-              'gender',
-              'collaborationCosts',
-              'instagramUrl',
-              'youtubeUrl',
-            ],
-            include: [
-              {
-                model: City,
-                attributes: ['id', 'name', 'state', 'tier'],
-              },
-              {
-                model: Niche,
-                attributes: ['id', 'name', 'logoNormal', 'logoDark'],
-                through: { attributes: [] },
-              },
-            ],
-          },
-        ],
-        order: [['createdAt', 'DESC']],
+        include: includeOptions,
+        order,
         limit,
         offset,
         distinct: true,
@@ -851,6 +1073,18 @@ export class CampaignService {
 
     if (!application) {
       throw new NotFoundException('Application not found');
+    }
+
+    // Validate status transition: if under_review, can only move to selected or rejected
+    if (application.status === ApplicationStatus.UNDER_REVIEW) {
+      if (
+        updateStatusDto.status !== ApplicationStatus.SELECTED &&
+        updateStatusDto.status !== ApplicationStatus.REJECTED
+      ) {
+        throw new BadRequestException(
+          'Applications under review can only be moved to selected or rejected status',
+        );
+      }
     }
 
     console.log('Application loaded:', {

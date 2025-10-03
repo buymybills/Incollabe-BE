@@ -36,6 +36,10 @@ export class CreateCampaignDto {
   type?: CampaignType;
 
   @IsOptional()
+  @IsBoolean()
+  isInviteOnly?: boolean;
+
+  @IsOptional()
   @IsDateString()
   startDate?: string;
 

@@ -19,6 +19,7 @@ import { Campaign } from '../campaign/models/campaign.model';
 import { CampaignCity } from '../campaign/models/campaign-city.model';
 import { CampaignDeliverable } from '../campaign/models/campaign-deliverable.model';
 import { CampaignInvitation } from '../campaign/models/campaign-invitation.model';
+import { CampaignApplication } from '../campaign/models/campaign-application.model';
 import { CustomNiche } from '../auth/model/custom-niche.model';
 
 @Module({
@@ -55,6 +56,7 @@ import { CustomNiche } from '../auth/model/custom-niche.model';
           CampaignCity,
           CampaignDeliverable,
           CampaignInvitation,
+          CampaignApplication,
           CustomNiche,
         ],
         autoLoadModels: true,

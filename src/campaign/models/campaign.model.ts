@@ -11,6 +11,7 @@ import { Brand } from '../../brand/model/brand.model';
 import { CampaignCity } from './campaign-city.model';
 import { CampaignDeliverable } from './campaign-deliverable.model';
 import { CampaignInvitation } from './campaign-invitation.model';
+import { CampaignApplication } from './campaign-application.model';
 
 export enum CampaignStatus {
   DRAFT = 'draft',
@@ -34,6 +35,7 @@ export interface CampaignCreationAttributes {
   deliverableFormat?: string;
   status?: CampaignStatus;
   type?: CampaignType;
+  isInviteOnly?: boolean;
   isPanIndia?: boolean;
   minAge?: number;
   maxAge?: number;
@@ -103,6 +105,13 @@ export class Campaign extends Model<Campaign, CampaignCreationAttributes> {
     defaultValue: CampaignType.PAID,
   })
   type: CampaignType;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  isInviteOnly: boolean;
 
   @Column({
     type: DataType.BOOLEAN,
@@ -186,4 +195,7 @@ export class Campaign extends Model<Campaign, CampaignCreationAttributes> {
 
   @HasMany(() => CampaignInvitation)
   declare invitations: CampaignInvitation[];
+
+  @HasMany(() => CampaignApplication)
+  declare applications: CampaignApplication[];
 }

@@ -638,30 +638,30 @@ export class BrandService {
         };
 
       case ReviewStatus.APPROVED:
-        if (statusViewed) {
-          return null;
+        // Mark as viewed if not already viewed
+        if (!statusViewed) {
+          await profileReview.update({ statusViewed: true });
         }
-        // Mark as viewed and return status
-        await profileReview.update({ statusViewed: true });
         return {
           status: 'approved',
           message: 'Profile Verification Successful',
           description:
             'Your profile has been approved and is now visible to influencers',
+          isNew: !statusViewed, // Indicates if this is first time seeing the status
         };
 
       case ReviewStatus.REJECTED:
-        if (statusViewed) {
-          return null;
+        // Mark as viewed if not already viewed
+        if (!statusViewed) {
+          await profileReview.update({ statusViewed: true });
         }
-        // Mark as viewed and return status
-        await profileReview.update({ statusViewed: true });
         return {
           status: 'rejected',
           message: 'Profile Verification Rejected',
           description:
             profileReview.rejectionReason ||
             'Please update your profile and resubmit for verification',
+          isNew: !statusViewed, // Indicates if this is first time seeing the status
         };
 
       default:
