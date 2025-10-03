@@ -1120,9 +1120,9 @@ export class CampaignController {
   @ApiQuery({
     name: 'gender',
     required: false,
-    type: String,
+    enum: ['Male', 'Female', 'Others'],
     description: 'Filter by influencer gender',
-    example: 'female',
+    example: 'Female',
   })
   @ApiQuery({
     name: 'niche',

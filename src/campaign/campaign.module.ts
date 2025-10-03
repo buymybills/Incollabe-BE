@@ -12,6 +12,7 @@ import { Influencer } from '../auth/model/influencer.model';
 import { Niche } from '../auth/model/niche.model';
 import { Brand } from '../brand/model/brand.model';
 import { SharedModule } from '../shared/shared.module';
+import { Follow } from '../post/models/follow.model';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { SharedModule } from '../shared/shared.module';
       Brand,
       Influencer,
       Niche,
+      Follow,
     ]),
     SharedModule,
   ],

@@ -24,6 +24,7 @@ import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { GetCampaignsDto } from './dto/get-campaigns.dto';
 import { SearchInfluencersDto } from './dto/search-influencers.dto';
 import { InviteInfluencersDto } from './dto/invite-influencers.dto';
+import { Follow } from '../post/models/follow.model';
 
 const mockModel = () => ({
   findOne: jest.fn(),
@@ -34,6 +35,7 @@ const mockModel = () => ({
   update: jest.fn(),
   destroy: jest.fn(),
   bulkCreate: jest.fn(),
+  count: jest.fn(),
 });
 
 const mockWhatsAppService = {
@@ -50,6 +52,7 @@ describe('CampaignService', () => {
   let cityModel: any;
   let brandModel: any;
   let influencerModel: any;
+  let followModel: any;
   let whatsAppService: any;
 
   beforeEach(async () => {
@@ -89,6 +92,10 @@ describe('CampaignService', () => {
           useValue: mockModel(),
         },
         {
+          provide: getModelToken(Follow),
+          useValue: mockModel(),
+        },
+        {
           provide: WhatsAppService,
           useValue: mockWhatsAppService,
         },
@@ -104,6 +111,7 @@ describe('CampaignService', () => {
     cityModel = module.get(getModelToken(City));
     brandModel = module.get(getModelToken(Brand));
     influencerModel = module.get(getModelToken(Influencer));
+    followModel = module.get(getModelToken(Follow));
     whatsAppService = module.get(WhatsAppService);
   });
 

@@ -12,6 +12,7 @@ import {
   ArrayMinSize,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ApiProperty } from '@nestjs/swagger';
 import { CampaignType } from '../models/campaign.model';
 import { CreateCampaignDeliverableDto } from './create-campaign-deliverable.dto';
 
@@ -35,6 +36,12 @@ export class CreateCampaignDto {
   @IsEnum(CampaignType)
   type?: CampaignType;
 
+  @ApiProperty({
+    description: 'Whether campaign is invite-only (true) or open for all influencers (false)',
+    example: false,
+    default: false,
+    required: false,
+  })
   @IsOptional()
   @IsBoolean()
   isInviteOnly?: boolean;

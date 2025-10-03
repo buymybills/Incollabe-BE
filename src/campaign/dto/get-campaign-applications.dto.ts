@@ -8,6 +8,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApplicationStatus } from '../models/campaign-application.model';
+import { Gender } from '../../auth/types/gender.enum';
 
 export class GetCampaignApplicationsDto {
   @IsOptional()
@@ -15,8 +16,8 @@ export class GetCampaignApplicationsDto {
   status?: ApplicationStatus;
 
   @IsOptional()
-  @IsString()
-  gender?: string;
+  @IsEnum(Gender)
+  gender?: Gender;
 
   @IsOptional()
   @IsString()

@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
-import { Op } from 'sequelize';
+import { Op, literal } from 'sequelize';
 import { Campaign, CampaignStatus } from './models/campaign.model';
 import { CampaignCity } from './models/campaign-city.model';
 import { CampaignDeliverable } from './models/campaign-deliverable.model';
@@ -28,6 +28,7 @@ import { Influencer } from '../auth/model/influencer.model';
 import { Niche } from '../auth/model/niche.model';
 import { InvitationStatus } from './models/campaign-invitation.model';
 import { WhatsAppService } from '../shared/whatsapp.service';
+import { Follow } from '../post/models/follow.model';
 
 @Injectable()
 export class CampaignService {
@@ -48,6 +49,8 @@ export class CampaignService {
     private readonly brandModel: typeof Brand,
     @InjectModel(Influencer)
     private readonly influencerModel: typeof Influencer,
+    @InjectModel(Follow)
+    private readonly followModel: typeof Follow,
     private readonly whatsAppService: WhatsAppService,
   ) {}
 
@@ -887,14 +890,38 @@ export class CampaignService {
       influencerWhere.gender = gender;
     }
 
-    // Filter by age range
-    if (ageMin || ageMax) {
-      influencerWhere.age = {};
-      if (ageMin) {
-        influencerWhere.age[Op.gte] = ageMin;
-      }
-      if (ageMax) {
-        influencerWhere.age[Op.lte] = ageMax;
+    // Collect literal conditions for Op.and array
+    const literalConditions: any[] = [];
+
+    // Filter by age using dateOfBirth
+    if (ageMin !== undefined || ageMax !== undefined) {
+      const currentYear = new Date().getFullYear();
+
+      if (ageMin !== undefined && ageMax !== undefined) {
+        // Calculate date range for birth years
+        const maxBirthYear = currentYear - ageMin;
+        const minBirthYear = currentYear - ageMax;
+        literalConditions.push(
+          literal(
+            `EXTRACT(YEAR FROM "dateOfBirth") BETWEEN ${minBirthYear} AND ${maxBirthYear}`
+          )
+        );
+      } else if (ageMin !== undefined) {
+        // Only minimum age specified
+        const maxBirthYear = currentYear - ageMin;
+        literalConditions.push(
+          literal(
+            `EXTRACT(YEAR FROM "dateOfBirth") <= ${maxBirthYear}`
+          )
+        );
+      } else if (ageMax !== undefined) {
+        // Only maximum age specified
+        const minBirthYear = currentYear - ageMax;
+        literalConditions.push(
+          literal(
+            `EXTRACT(YEAR FROM "dateOfBirth") >= ${minBirthYear}`
+          )
+        );
       }
     }
 
@@ -920,34 +947,45 @@ export class CampaignService {
     }
 
     // Filter by experience (campaign count: 0, 1+, 2+, 3+, 4+, 5+ Campaigns)
+    // Using subquery to count completed campaigns (selected status)
     if (experience) {
       const experienceValue = parseInt(experience);
       if (!isNaN(experienceValue)) {
+        const subquery = `(SELECT COUNT(*) FROM campaign_applications WHERE campaign_applications."influencerId" = "id" AND campaign_applications.status = 'selected')`;
+
         switch (experienceValue) {
           case 0:
-            influencerWhere.totalCampaigns = 0;
+            literalConditions.push(literal(`${subquery} = 0`));
             break;
           case 1:
-            influencerWhere.totalCampaigns = { [Op.gte]: 1 };
+            literalConditions.push(literal(`${subquery} >= 1`));
             break;
           case 2:
-            influencerWhere.totalCampaigns = { [Op.gte]: 2 };
+            literalConditions.push(literal(`${subquery} >= 2`));
             break;
           case 3:
-            influencerWhere.totalCampaigns = { [Op.gte]: 3 };
+            literalConditions.push(literal(`${subquery} >= 3`));
             break;
           case 4:
-            influencerWhere.totalCampaigns = { [Op.gte]: 4 };
+            literalConditions.push(literal(`${subquery} >= 4`));
             break;
           case 5:
-            influencerWhere.totalCampaigns = { [Op.gte]: 5 };
+            literalConditions.push(literal(`${subquery} >= 5`));
             break;
         }
       }
     }
 
-    // Determine sort order
+    // Apply all literal conditions using Op.and array
+    if (literalConditions.length > 0) {
+      influencerWhere[Op.and] = literalConditions;
+    }
+
+    // Determine sort order (followers sorting will be done in-memory)
     let order: any[] = [];
+    let sortInMemory = false;
+    let sortDirection: 'asc' | 'desc' = 'desc';
+
     switch (sortBy) {
       case 'application_new_old':
         order = [['createdAt', 'DESC']];
@@ -956,10 +994,14 @@ export class CampaignService {
         order = [['createdAt', 'ASC']];
         break;
       case 'followers_high_low':
-        order = [[Influencer, 'totalFollowers', 'DESC']];
+        sortInMemory = true;
+        sortDirection = 'desc';
+        order = [['createdAt', 'DESC']]; // Default order for fetching
         break;
       case 'followers_low_high':
-        order = [[Influencer, 'totalFollowers', 'ASC']];
+        sortInMemory = true;
+        sortDirection = 'asc';
+        order = [['createdAt', 'DESC']]; // Default order for fetching
         break;
       case 'campaign_charges_lowest':
         order = [[Influencer, 'collaborationCosts', 'ASC']];
@@ -973,25 +1015,6 @@ export class CampaignService {
         model: Influencer,
         where:
           Object.keys(influencerWhere).length > 0 ? influencerWhere : undefined,
-        attributes: [
-          'id',
-          'name',
-          'username',
-          'profileImage',
-          'profileHeadline',
-          'bio',
-          'gender',
-          'age',
-          'experienceYears',
-          'totalCampaigns',
-          'totalFollowers',
-          'collaborationCosts',
-          'instagramUrl',
-          'youtubeUrl',
-          'facebookUrl',
-          'linkedinUrl',
-          'twitterUrl',
-        ],
         include: [
           {
             model: City,
@@ -1018,10 +1041,52 @@ export class CampaignService {
         distinct: true,
       });
 
+    // Calculate completedCampaigns and totalFollowers in-memory
+    const applicationsWithStats = await Promise.all(
+      applications.map(async (app) => {
+        const appJson: any = app.toJSON();
+
+        if (appJson.influencer) {
+          // Count completed campaigns
+          const completedCampaigns = await this.campaignApplicationModel.count({
+            where: {
+              influencerId: appJson.influencer.id,
+              status: ApplicationStatus.SELECTED,
+            },
+          });
+
+          // Count followers (using Follow model)
+          const totalFollowers = await this.followModel.count({
+            where: {
+              followingType: 'influencer',
+              followingInfluencerId: appJson.influencer.id,
+            },
+          });
+
+          appJson.influencer.completedCampaigns = completedCampaigns;
+          appJson.influencer.totalFollowers = totalFollowers;
+        }
+
+        return appJson;
+      }),
+    );
+
+    // Sort in-memory if needed (for follower-based sorting)
+    let finalApplications = applicationsWithStats;
+    if (sortInMemory) {
+      finalApplications = applicationsWithStats.sort((a, b) => {
+        const aFollowers = a.influencer?.totalFollowers || 0;
+        const bFollowers = b.influencer?.totalFollowers || 0;
+        return sortDirection === 'desc'
+          ? bFollowers - aFollowers
+          : aFollowers - bFollowers;
+      });
+    }
+
     const totalPages = Math.ceil(count / limit);
 
     return {
-      applications,
+      applications: finalApplications,
       total: count,
       page,
       limit,
