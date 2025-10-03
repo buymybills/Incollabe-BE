@@ -1,6 +1,33 @@
+// get-posts-query.dto.ts
 import { ApiProperty } from '@nestjs/swagger';
-import { IsOptional, IsString, IsNumber, Min } from 'class-validator';
+import { IsOptional, IsNumber, Min, IsString } from 'class-validator';
 import { Transform } from 'class-transformer';
+
+export class GetPostsQueryDto {
+  @ApiProperty({
+    required: false,
+    default: 1,
+    example: 1,
+    description: 'Page number for pagination',
+  })
+  @IsOptional()
+  @Transform(({ value }) => parseInt(value, 10) || 1)
+  @IsNumber()
+  @Min(1)
+  page?: number = 1;
+
+  @ApiProperty({
+    required: false,
+    default: 10,
+    example: 10,
+    description: 'Number of posts per page',
+  })
+  @IsOptional()
+  @Transform(({ value }) => parseInt(value, 10) || 10)
+  @IsNumber()
+  @Min(1)
+  limit?: number = 10;
+}
 
 export class GetPostsDto {
   @ApiProperty({

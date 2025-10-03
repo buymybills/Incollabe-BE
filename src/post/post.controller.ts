@@ -18,6 +18,7 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiConsumes,
+  ApiParam,
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { PostService } from './post.service';
@@ -26,7 +27,7 @@ import { UpdatePostDto } from './dto/update-post.dto';
 import { CreatePostMultipartDto } from './dto/create-post-multipart.dto';
 import { UpdatePostMultipartDto } from './dto/update-post-multipart.dto';
 import { FollowDto } from './dto/follow.dto';
-import { GetPostsDto } from './dto/get-posts.dto';
+import { GetPostsDto, GetPostsQueryDto } from './dto/get-posts.dto';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserType } from './models/post.model';
@@ -189,6 +190,12 @@ export class PostController {
 
   @Get('user/:userType/:userId')
   @ApiOperation({ summary: 'Get posts by specific user' })
+  @ApiParam({
+    name: 'userType',
+    enum: ['influencer', 'brand'],
+    description: 'user type',
+  })
+  @ApiParam({ name: 'userId', description: 'user id', type: Number })
   @ApiResponse({
     status: 200,
     description: 'User posts retrieved successfully',
@@ -197,9 +204,9 @@ export class PostController {
   async getUserPosts(
     @Param('userType') userType: string,
     @Param('userId', ParseIntPipe) userId: number,
-    @Query() getPostsDto: GetPostsDto,
+    @Query() getPostsDto: GetPostsQueryDto,
   ) {
-    const queryDto = { ...getPostsDto, userType, userId };
+    const queryDto = { ...getPostsDto, userType, userId }; // merge path params into query object
     return this.postService.getPosts(queryDto);
   }
 }
