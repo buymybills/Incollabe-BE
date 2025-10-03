@@ -176,10 +176,13 @@ export class CampaignService {
     };
   }
 
-  async getCampaignsByCategory(brandId: number): Promise<{
-    openCampaigns: Array<Campaign & { totalApplications?: number }>;
-    inviteCampaigns: Array<Campaign & { totalInvites?: number }>;
-    finishedCampaigns: Campaign[];
+  async getCampaignsByCategory(
+    brandId: number,
+    type?: string,
+  ): Promise<{
+    campaigns: Array<
+      Campaign & { totalApplications?: number; totalInvites?: number }
+    >;
   }> {
     const includeOptions = [
       {
@@ -206,67 +209,109 @@ export class CampaignService {
       },
     ];
 
-    // Open Campaigns: Active campaigns that are NOT invite-only
-    const openCampaigns = await this.campaignModel.findAll({
-      where: {
-        brandId,
-        isActive: true,
-        status: CampaignStatus.ACTIVE,
-        isInviteOnly: false,
-      },
-      include: includeOptions,
-      order: [['createdAt', 'DESC']],
-    });
+    // If no type specified, return all campaigns
+    if (!type) {
+      const allCampaigns = await this.campaignModel.findAll({
+        where: { brandId },
+        include: [
+          ...includeOptions,
+          {
+            model: CampaignInvitation,
+            attributes: ['id', 'influencerId', 'status'],
+            required: false,
+          },
+        ],
+        order: [['createdAt', 'DESC']],
+      });
 
-    // Invite Campaigns: Active invite-only campaigns
-    const inviteCampaigns = await this.campaignModel.findAll({
-      where: {
-        brandId,
-        isActive: true,
-        status: CampaignStatus.ACTIVE,
-        isInviteOnly: true,
-      },
-      include: [
-        ...includeOptions,
-        {
-          model: CampaignInvitation,
-          attributes: ['id', 'influencerId', 'status'],
-          required: false, // Include even if no invitations yet
+      // Add counts based on campaign type
+      const campaignsWithCount = allCampaigns.map((campaign) => {
+        const campaignData: any = campaign.toJSON();
+        if (!campaign.isActive) {
+          // Finished campaign - no extra count
+        } else if (campaign.isInviteOnly) {
+          campaignData.totalInvites = campaign.invitations
+            ? campaign.invitations.length
+            : 0;
+        } else {
+          campaignData.totalApplications = campaign.applications
+            ? campaign.applications.length
+            : 0;
+        }
+        return campaignData;
+      });
+
+      return { campaigns: campaignsWithCount };
+    }
+
+    let campaigns: Campaign[];
+
+    if (type === 'open') {
+      // Open Campaigns: Active campaigns that are NOT invite-only
+      campaigns = await this.campaignModel.findAll({
+        where: {
+          brandId,
+          isActive: true,
+          status: CampaignStatus.ACTIVE,
+          isInviteOnly: false,
         },
-      ],
-      order: [['createdAt', 'DESC']],
-    });
+        include: includeOptions,
+        order: [['createdAt', 'DESC']],
+      });
 
-    // Finished Campaigns: Campaigns with isActive = false
-    const finishedCampaigns = await this.campaignModel.findAll({
-      where: { brandId, isActive: false },
-      include: includeOptions,
-      order: [['createdAt', 'DESC']],
-    });
+      // Add totalApplications count to each open campaign
+      const campaignsWithCount = campaigns.map((campaign) => {
+        const campaignData: any = campaign.toJSON();
+        campaignData.totalApplications = campaign.applications
+          ? campaign.applications.length
+          : 0;
+        return campaignData;
+      });
 
-    // Add totalApplications count to each open campaign
-    const openCampaignsWithCount = openCampaigns.map((campaign) => {
-      const campaignData: any = campaign.toJSON();
-      campaignData.totalApplications = campaign.applications
-        ? campaign.applications.length
-        : 0;
-      return campaignData;
-    });
+      return { campaigns: campaignsWithCount };
+    } else if (type === 'invite') {
+      // Invite Campaigns: Active invite-only campaigns
+      campaigns = await this.campaignModel.findAll({
+        where: {
+          brandId,
+          isActive: true,
+          status: CampaignStatus.ACTIVE,
+          isInviteOnly: true,
+        },
+        include: [
+          ...includeOptions,
+          {
+            model: CampaignInvitation,
+            attributes: ['id', 'influencerId', 'status'],
+            required: false,
+          },
+        ],
+        order: [['createdAt', 'DESC']],
+      });
 
-    // Add totalInvites count to each invite campaign
-    const inviteCampaignsWithCount = inviteCampaigns.map((campaign) => {
-      const campaignData: any = campaign.toJSON();
-      campaignData.totalInvites = campaign.invitations
-        ? campaign.invitations.length
-        : 0;
-      return campaignData;
-    });
+      // Add totalInvites count to each invite campaign
+      const campaignsWithCount = campaigns.map((campaign) => {
+        const campaignData: any = campaign.toJSON();
+        campaignData.totalInvites = campaign.invitations
+          ? campaign.invitations.length
+          : 0;
+        return campaignData;
+      });
 
-    return {
-      openCampaigns: openCampaignsWithCount,
-      inviteCampaigns: inviteCampaignsWithCount,
-      finishedCampaigns,
-    };
+      return { campaigns: campaignsWithCount };
+    } else if (type === 'finished') {
+      // Finished Campaigns: Campaigns with isActive = false
+      campaigns = await this.campaignModel.findAll({
+        where: { brandId, isActive: false },
+        include: includeOptions,
+        order: [['createdAt', 'DESC']],
+      });
+
+      return { campaigns };
+    }
+
+    // Default to all campaigns if invalid type
+    return { campaigns: [] };
   }
 
   async getCampaignById(campaignId: number): Promise<CampaignResponseDto> {
@@ -903,24 +948,20 @@ export class CampaignService {
         const minBirthYear = currentYear - ageMax;
         literalConditions.push(
           literal(
-            `EXTRACT(YEAR FROM "dateOfBirth") BETWEEN ${minBirthYear} AND ${maxBirthYear}`
-          )
+            `EXTRACT(YEAR FROM "dateOfBirth") BETWEEN ${minBirthYear} AND ${maxBirthYear}`,
+          ),
         );
       } else if (ageMin !== undefined) {
         // Only minimum age specified
         const maxBirthYear = currentYear - ageMin;
         literalConditions.push(
-          literal(
-            `EXTRACT(YEAR FROM "dateOfBirth") <= ${maxBirthYear}`
-          )
+          literal(`EXTRACT(YEAR FROM "dateOfBirth") <= ${maxBirthYear}`),
         );
       } else if (ageMax !== undefined) {
         // Only maximum age specified
         const minBirthYear = currentYear - ageMax;
         literalConditions.push(
-          literal(
-            `EXTRACT(YEAR FROM "dateOfBirth") >= ${minBirthYear}`
-          )
+          literal(`EXTRACT(YEAR FROM "dateOfBirth") >= ${minBirthYear}`),
         );
       }
     }

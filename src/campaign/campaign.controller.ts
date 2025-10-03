@@ -215,7 +215,15 @@ export class CampaignController {
   @ApiOperation({
     summary: 'Get campaigns by category for brand',
     description:
-      'Retrieves brand campaigns categorized as Open, Invite, and Finished. Only accessible by brands.',
+      'Retrieves brand campaigns by category type. If no type is specified, returns all campaigns. Only accessible by brands.',
+  })
+  @ApiQuery({
+    name: 'type',
+    required: false,
+    enum: ['open', 'invite', 'finished'],
+    description:
+      'Filter campaigns by type. If not specified, returns all campaigns.',
+    example: 'open',
   })
   @ApiResponse({
     status: 200,
@@ -297,14 +305,17 @@ export class CampaignController {
     status: 403,
     description: 'Forbidden - Only brands can access this endpoint',
   })
-  async getCampaignsByCategory(@Req() req: RequestWithUser) {
+  async getCampaignsByCategory(
+    @Req() req: RequestWithUser,
+    @Query('type') type?: string,
+  ) {
     if (req.user.userType !== 'brand') {
       throw new ForbiddenException(
         'Only brands can access campaigns by category',
       );
     }
 
-    return this.campaignService.getCampaignsByCategory(req.user.id);
+    return this.campaignService.getCampaignsByCategory(req.user.id, type);
   }
 
   @Get()

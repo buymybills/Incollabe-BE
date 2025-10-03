@@ -37,7 +37,8 @@ export class CreateCampaignDto {
   type?: CampaignType;
 
   @ApiProperty({
-    description: 'Whether campaign is invite-only (true) or open for all influencers (false)',
+    description:
+      'Whether campaign is invite-only (true) or open for all influencers (false)',
     example: false,
     default: false,
     required: false,

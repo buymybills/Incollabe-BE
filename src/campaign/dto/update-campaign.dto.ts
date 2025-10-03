@@ -13,7 +13,7 @@ import {
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { CampaignType } from '../models/campaign.model';
-import { CreateCampaignDeliverableDto } from './create-campaign-deliverable.dto'; 
+import { CreateCampaignDeliverableDto } from './create-campaign-deliverable.dto';
 
 export class UpdateCampaignDto {
   @IsOptional()
@@ -37,7 +37,8 @@ export class UpdateCampaignDto {
   type?: CampaignType;
 
   @ApiProperty({
-    description: 'Whether campaign is invite-only (true) or open for all influencers (false)',
+    description:
+      'Whether campaign is invite-only (true) or open for all influencers (false)',
     example: false,
     default: false,
     required: false,
