@@ -10,6 +10,7 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -135,7 +136,7 @@ export class AuthController {
         callback(null, true);
       },
       limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB
+        fileSize: 5 * 1024 * 1024, // 5MB for profile image
       },
     }),
   )
@@ -496,7 +497,7 @@ export class AuthController {
           callback(null, true);
         },
         limits: {
-          fileSize: 10 * 1024 * 1024, // 10MB for documents
+          fileSize: 10 * 1024 * 1024, // 10MB max for any file
         },
       },
     ),
@@ -627,6 +628,17 @@ export class AuthController {
     },
     @Req() req: Request & { user: { id: number; profileCompleted: boolean } },
   ) {
+    // Validate file sizes
+    const maxProfileImageSize = 5 * 1024 * 1024; // 5MB
+    const maxDocumentSize = 10 * 1024 * 1024; // 10MB
+
+    if (
+      files?.profileImage?.[0] &&
+      files.profileImage[0].size > maxProfileImageSize
+    ) {
+      throw new BadRequestException('Profile image size must not exceed 5MB');
+    }
+
     return this.authService.brandCompleteProfile(
       req.user.id,
       profileDto as BrandProfileCompletionDto,

@@ -148,7 +148,7 @@ export class AdminController {
       properties: {
         id: { type: 'number', example: 1 },
         name: { type: 'string', example: 'John Doe' },
-        email: { type: 'string', example: 'admin@cloutsy.com' },
+        email: { type: 'string', example: 'admin@collabkaroo.com' },
         role: { type: 'string', example: 'super_admin' },
         status: { type: 'string', example: 'active' },
         profileImage: {

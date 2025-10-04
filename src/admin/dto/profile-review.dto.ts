@@ -110,7 +110,7 @@ export class ProfileDetailsDto {
         properties: {
           id: { type: 'number', example: 1 },
           name: { type: 'string', example: 'Admin Name' },
-          email: { type: 'string', example: 'admin@cloutsy.com' },
+          email: { type: 'string', example: 'admin@collabkaroo.com' },
         },
       },
     },

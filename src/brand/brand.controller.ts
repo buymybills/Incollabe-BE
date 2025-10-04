@@ -10,6 +10,7 @@ import {
   UseInterceptors,
   UploadedFiles,
   SetMetadata,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -185,6 +186,20 @@ export class BrandController {
     @Body() updateBrandProfileDto: UpdateBrandProfileDto,
     @UploadedFiles() files: SignupFiles,
   ) {
+    // Validate file sizes - 5MB for profile image and banner
+    const maxImageSize = 5 * 1024 * 1024; // 5MB
+
+    if (files?.profileImage?.[0] && files.profileImage[0].size > maxImageSize) {
+      throw new BadRequestException('Profile image size must not exceed 5MB');
+    }
+
+    if (
+      files?.profileBanner?.[0] &&
+      files.profileBanner[0].size > maxImageSize
+    ) {
+      throw new BadRequestException('Profile banner size must not exceed 5MB');
+    }
+
     const brandId = req.user.id;
     return await this.brandService.updateBrandProfile(
       brandId,

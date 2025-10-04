@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { CampaignController } from './campaign.controller';
 import { CampaignService } from './campaign.service';
+import { CampaignQueryService } from './services/campaign-query.service';
 import { Campaign } from './models/campaign.model';
 import { CampaignCity } from './models/campaign-city.model';
 import { CampaignDeliverable } from './models/campaign-deliverable.model';
@@ -31,7 +32,7 @@ import { Follow } from '../post/models/follow.model';
     SharedModule,
   ],
   controllers: [CampaignController],
-  providers: [CampaignService],
+  providers: [CampaignService, CampaignQueryService],
   exports: [CampaignService],
 })
 export class CampaignModule {}

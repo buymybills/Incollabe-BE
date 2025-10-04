@@ -1,0 +1,91 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Your application logs
+  - job_name: cloutsy-app
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: cloutsy
+          app: cloutsy
+          env: production
+          __path__: /var/log/cloutsy/*.log
+
+    # Parse log structure to extract timestamp and level
+    pipeline_stages:
+      # Extract JSON if logs are in JSON format
+      - json:
+          expressions:
+            timestamp: timestamp
+            level: level
+            message: message
+            context: context
+            trace: trace
+
+      # Extract timestamp
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+
+      # Label the log level for easy filtering
+      - labels:
+          level:
+
+      # Drop debug logs to save space (optional)
+      # - drop:
+      #     source: level
+      #     expression: "debug"
+
+  # PM2 application logs
+  - job_name: pm2-app
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: pm2
+          app: cloutsy
+          env: production
+          __path__: /var/log/pm2/cloutsy-out*.log
+
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<timestamp>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s+(?P<level>\w+)\s+(?P<message>.*)$'
+      - labels:
+          level:
+
+  # PM2 error logs (high priority)
+  - job_name: pm2-errors
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: pm2-errors
+          app: cloutsy
+          env: production
+          level: error
+          __path__: /var/log/pm2/cloutsy-error*.log
+
+  # System logs (optional)
+  - job_name: system
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: syslog
+          __path__: /var/log/syslog
+
+    pipeline_stages:
+      - match:
+          selector: '{job="syslog"}'
+          stages:
+            - regex:
+                expression: '^(?P<timestamp>\w+\s+\d+\s+\d{2}:\d{2}:\d{2})\s+(?P<hostname>\S+)\s+(?P<message>.*)$'

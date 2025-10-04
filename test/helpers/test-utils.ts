@@ -422,7 +422,7 @@ export class TestUtils {
   }
 
   static getTestDatabaseName(): string {
-    return process.env.POSTGRES_DB || 'incollab_test_db';
+    return process.env.POSTGRES_DB || 'collabkaroo_test_db';
   }
 
   static getTestRedisDatabase(): string {

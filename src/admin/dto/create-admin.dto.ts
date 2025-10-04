@@ -12,7 +12,7 @@ export class CreateAdminDto {
 
   @ApiProperty({
     description: 'Admin email address',
-    example: 'john@cloutsy.com',
+    example: 'john@collabkaroo.com',
     format: 'email',
   })
   @IsEmail({}, { message: 'Please provide a valid email address' })
@@ -52,7 +52,7 @@ export class CreateAdminResponseDto {
 
   @ApiProperty({
     description: 'Admin email',
-    example: 'john@cloutsy.com',
+    example: 'john@collabkaroo.com',
   })
   email: string;
 

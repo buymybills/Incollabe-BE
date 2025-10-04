@@ -35,8 +35,8 @@ async function bootstrap() {
   });
 
   const config = new DocumentBuilder()
-    .setTitle('Incollab Application Backend')
-    .setDescription('API documentation for the Incollab application')
+    .setTitle('Collabkaroo Application Backend')
+    .setDescription('API documentation for the Collabkaroo application')
     .setVersion('1.0')
     .addBearerAuth()
     .build();
@@ -57,7 +57,7 @@ async function bootstrap() {
   await app.listen(port);
 
   // Use our custom logger for startup message
-  loggerService.info(`Incollab server started successfully`, {
+  loggerService.info(`Collabkaroo server started successfully`, {
     port,
     environment: process.env.NODE_ENV || 'development',
     apiDocs: `http://localhost:${port}/api/docs`,

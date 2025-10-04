@@ -28,7 +28,14 @@ import { Influencer } from '../auth/model/influencer.model';
 import { Niche } from '../auth/model/niche.model';
 import { InvitationStatus } from './models/campaign-invitation.model';
 import { WhatsAppService } from '../shared/whatsapp.service';
+import { NotificationService } from '../shared/notification.service';
 import { Follow } from '../post/models/follow.model';
+import { CampaignQueryService } from './services/campaign-query.service';
+import { QueryBuilderHelper } from './helpers/query-builder.helper';
+import {
+  CampaignsByCategoryResponse,
+  CampaignCategoryType,
+} from './interfaces/campaign-with-stats.interface';
 
 @Injectable()
 export class CampaignService {
@@ -52,6 +59,8 @@ export class CampaignService {
     @InjectModel(Follow)
     private readonly followModel: typeof Follow,
     private readonly whatsAppService: WhatsAppService,
+    private readonly notificationService: NotificationService,
+    private readonly campaignQueryService: CampaignQueryService,
   ) {}
 
   async createCampaign(
@@ -176,142 +185,22 @@ export class CampaignService {
     };
   }
 
+  /**
+   * Get campaigns by category with proper type safety and separation of concerns
+   * @param brandId - The brand ID to fetch campaigns for
+   * @param type - Optional campaign type filter (open, invite, finished)
+   * @returns Campaigns with appropriate statistics
+   */
   async getCampaignsByCategory(
     brandId: number,
     type?: string,
-  ): Promise<{
-    campaigns: Array<
-      Campaign & { totalApplications?: number; totalInvites?: number }
-    >;
-  }> {
-    const includeOptions = [
-      {
-        model: Brand,
-        attributes: ['id', 'brandName', 'profileImage'],
-      },
-      {
-        model: CampaignCity,
-        include: [
-          {
-            model: City,
-            attributes: ['id', 'name', 'tier'],
-          },
-        ],
-      },
-      {
-        model: CampaignDeliverable,
-        attributes: ['platform', 'type', 'budget', 'quantity'],
-      },
-      {
-        model: CampaignApplication,
-        attributes: ['id', 'status'],
-        required: false,
-      },
-    ];
+  ): Promise<CampaignsByCategoryResponse> {
+    const campaigns = await this.campaignQueryService.getCampaignsByCategory(
+      brandId,
+      type,
+    );
 
-    // If no type specified, return all campaigns
-    if (!type) {
-      const allCampaigns = await this.campaignModel.findAll({
-        where: { brandId },
-        include: [
-          ...includeOptions,
-          {
-            model: CampaignInvitation,
-            attributes: ['id', 'influencerId', 'status'],
-            required: false,
-          },
-        ],
-        order: [['createdAt', 'DESC']],
-      });
-
-      // Add counts based on campaign type
-      const campaignsWithCount = allCampaigns.map((campaign) => {
-        const campaignData: any = campaign.toJSON();
-        if (!campaign.isActive) {
-          // Finished campaign - no extra count
-        } else if (campaign.isInviteOnly) {
-          campaignData.totalInvites = campaign.invitations
-            ? campaign.invitations.length
-            : 0;
-        } else {
-          campaignData.totalApplications = campaign.applications
-            ? campaign.applications.length
-            : 0;
-        }
-        return campaignData;
-      });
-
-      return { campaigns: campaignsWithCount };
-    }
-
-    let campaigns: Campaign[];
-
-    if (type === 'open') {
-      // Open Campaigns: Active campaigns that are NOT invite-only
-      campaigns = await this.campaignModel.findAll({
-        where: {
-          brandId,
-          isActive: true,
-          status: CampaignStatus.ACTIVE,
-          isInviteOnly: false,
-        },
-        include: includeOptions,
-        order: [['createdAt', 'DESC']],
-      });
-
-      // Add totalApplications count to each open campaign
-      const campaignsWithCount = campaigns.map((campaign) => {
-        const campaignData: any = campaign.toJSON();
-        campaignData.totalApplications = campaign.applications
-          ? campaign.applications.length
-          : 0;
-        return campaignData;
-      });
-
-      return { campaigns: campaignsWithCount };
-    } else if (type === 'invite') {
-      // Invite Campaigns: Active invite-only campaigns
-      campaigns = await this.campaignModel.findAll({
-        where: {
-          brandId,
-          isActive: true,
-          status: CampaignStatus.ACTIVE,
-          isInviteOnly: true,
-        },
-        include: [
-          ...includeOptions,
-          {
-            model: CampaignInvitation,
-            attributes: ['id', 'influencerId', 'status'],
-            required: false,
-          },
-        ],
-        order: [['createdAt', 'DESC']],
-      });
-
-      // Add totalInvites count to each invite campaign
-      const campaignsWithCount = campaigns.map((campaign) => {
-        const campaignData: any = campaign.toJSON();
-        campaignData.totalInvites = campaign.invitations
-          ? campaign.invitations.length
-          : 0;
-        return campaignData;
-      });
-
-      return { campaigns: campaignsWithCount };
-    } else if (type === 'finished') {
-      // Finished Campaigns: Campaigns with isActive = false
-      campaigns = await this.campaignModel.findAll({
-        where: { brandId, isActive: false },
-        include: includeOptions,
-        order: [['createdAt', 'DESC']],
-      });
-
-      return { campaigns };
-    }
-
-    // Default to all campaigns if invalid type
-    return { campaigns: [] };
+    return { campaigns };
   }
 
   async getCampaignById(campaignId: number): Promise<CampaignResponseDto> {
@@ -466,13 +355,73 @@ export class CampaignService {
   ): Promise<CampaignResponseDto> {
     const campaign = await this.campaignModel.findOne({
       where: { id: campaignId, brandId, isActive: true },
+      include: [
+        {
+          model: Brand,
+          attributes: ['brandName'],
+        },
+      ],
     });
 
     if (!campaign) {
       throw new NotFoundException('Campaign not found');
     }
 
+    const oldStatus = campaign.status;
     await campaign.update({ status });
+
+    // If campaign is marked as completed, notify all selected influencers
+    if (
+      status === CampaignStatus.COMPLETED &&
+      oldStatus !== CampaignStatus.COMPLETED
+    ) {
+      try {
+        // Find all selected influencers for this campaign
+        const selectedApplications =
+          await this.campaignApplicationModel.findAll({
+            where: {
+              campaignId,
+              status: ApplicationStatus.SELECTED,
+            },
+            include: [
+              {
+                model: Influencer,
+                attributes: ['id', 'name', 'fcmToken'],
+              },
+            ],
+          });
+
+        // Send push notifications to all selected influencers
+        const brandName = campaign.brand?.brandName || 'Brand';
+        for (const application of selectedApplications) {
+          if (application.influencer?.fcmToken) {
+            try {
+              await this.notificationService.sendCampaignStatusUpdate(
+                application.influencer.fcmToken,
+                campaign.name,
+                'completed',
+                brandName,
+              );
+            } catch (error) {
+              console.error(
+                `Failed to send completion notification to influencer ${application.influencer.id}:`,
+                error,
+              );
+              // Continue with other influencers
+            }
+          }
+        }
+        console.log(
+          `Sent campaign completion notifications to ${selectedApplications.length} influencers`,
+        );
+      } catch (error) {
+        console.error(
+          'Failed to send campaign completion notifications:',
+          error,
+        );
+        // Don't fail the status update if notifications fail
+      }
+    }
 
     // Return updated campaign data
     const updatedCampaign = await this.campaignModel.findOne({
@@ -821,7 +770,7 @@ export class CampaignService {
         isProfileCompleted: true,
         isWhatsappVerified: true,
       },
-      attributes: ['id', 'name', 'whatsappNumber'],
+      attributes: ['id', 'name', 'whatsappNumber', 'fcmToken'],
     });
 
     if (influencers.length !== influencerIds.length) {
@@ -868,23 +817,42 @@ export class CampaignService {
       invitationsToCreate as any,
     );
 
-    // Send WhatsApp notifications
+    // Send WhatsApp and push notifications
+    const brandName = campaign.brand?.brandName || 'Brand';
     for (const influencer of influencers.filter((inf) =>
       newInfluencerIds.includes(inf.id),
     )) {
+      // Send WhatsApp notification
       await this.whatsAppService.sendCampaignInvitation(
         influencer.whatsappNumber,
         influencer.name,
         campaign.name,
-        campaign.brand?.brandName || 'Brand',
+        brandName,
         personalMessage,
       );
+
+      // Send push notification
+      if (influencer.fcmToken) {
+        try {
+          await this.notificationService.sendCampaignInviteNotification(
+            [influencer.fcmToken],
+            campaign.name,
+            brandName,
+          );
+        } catch (error) {
+          console.error(
+            `Failed to send push notification to influencer ${influencer.id}:`,
+            error,
+          );
+          // Continue with other influencers even if one fails
+        }
+      }
     }
 
     return {
       success: true,
       invitationsSent: newInfluencerIds.length,
-      message: `Successfully sent ${newInfluencerIds.length} campaign invitations and WhatsApp notifications.`,
+      message: `Successfully sent ${newInfluencerIds.length} campaign invitations with WhatsApp and push notifications.`,
     };
   }
 
@@ -1225,50 +1193,77 @@ export class CampaignService {
       brandName,
     });
 
+    // Send WhatsApp notifications
     if (influencer && influencer.whatsappNumber) {
-      try {
-        switch (updateStatusDto.status) {
-          case ApplicationStatus.UNDER_REVIEW:
-            console.log('Sending UNDER_REVIEW notification...');
-            await this.whatsAppService.sendCampaignApplicationUnderReview(
-              influencer.whatsappNumber,
-              influencer.name,
-              campaign.name,
-              brandName,
-            );
-            break;
+      switch (updateStatusDto.status) {
+        case ApplicationStatus.UNDER_REVIEW:
+          console.log('Sending UNDER_REVIEW notification...');
+          await this.whatsAppService.sendCampaignApplicationUnderReview(
+            influencer.whatsappNumber,
+            influencer.name,
+            campaign.name,
+            brandName,
+          );
+          break;
 
-          case ApplicationStatus.SELECTED:
-            console.log('Sending SELECTED notification...');
-            await this.whatsAppService.sendCampaignApplicationSelected(
-              influencer.whatsappNumber,
-              influencer.name,
-              campaign.name,
-              brandName,
-              updateStatusDto.reviewNotes,
-            );
-            break;
+        case ApplicationStatus.SELECTED:
+          console.log('Sending SELECTED notification...');
+          await this.whatsAppService.sendCampaignApplicationSelected(
+            influencer.whatsappNumber,
+            influencer.name,
+            campaign.name,
+            brandName,
+            updateStatusDto.reviewNotes,
+          );
+          break;
 
-          case ApplicationStatus.REJECTED:
-            console.log('Sending REJECTED notification...');
-            await this.whatsAppService.sendCampaignApplicationRejected(
-              influencer.whatsappNumber,
-              influencer.name,
-              campaign.name,
-              brandName,
-              updateStatusDto.reviewNotes,
-            );
-            break;
-        }
-        console.log('WhatsApp notification sent successfully');
-      } catch (error) {
-        // Log error but don't fail the status update
-        console.error('Failed to send WhatsApp notification:', error);
+        case ApplicationStatus.REJECTED:
+          console.log('Sending REJECTED notification...');
+          await this.whatsAppService.sendCampaignApplicationRejected(
+            influencer.whatsappNumber,
+            influencer.name,
+            campaign.name,
+            brandName,
+            updateStatusDto.reviewNotes,
+          );
+          break;
       }
+      console.log('WhatsApp notification sent successfully');
     } else {
       console.log(
         'Skipping WhatsApp notification - missing influencer or phone number',
       );
+    }
+
+    // Send push notifications to influencer
+    if (influencer && influencer.fcmToken) {
+      try {
+        let pushStatus: string;
+        switch (updateStatusDto.status) {
+          case ApplicationStatus.UNDER_REVIEW:
+            pushStatus = 'pending';
+            break;
+          case ApplicationStatus.SELECTED:
+            pushStatus = 'approved';
+            break;
+          case ApplicationStatus.REJECTED:
+            pushStatus = 'rejected';
+            break;
+          default:
+            pushStatus = updateStatusDto.status;
+        }
+
+        await this.notificationService.sendCampaignStatusUpdate(
+          influencer.fcmToken,
+          campaign.name,
+          pushStatus,
+          brandName,
+        );
+        console.log('Push notification sent successfully to influencer');
+      } catch (error) {
+        console.error('Failed to send push notification to influencer:', error);
+        // Don't fail the status update if notification fails
+      }
     }
 
     // Return updated application with influencer details

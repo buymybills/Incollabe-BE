@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document provides complete instructions for using Firebase services in the Incollab backend application. The Firebase integration includes authentication, push notifications, and cloud storage capabilities.
+This document provides complete instructions for using Firebase services in the Collabkaroo backend application. The Firebase integration includes authentication, push notifications, and cloud storage capabilities.
 
 ## Components Created
 

@@ -12,6 +12,7 @@ import {
   UseInterceptors,
   UploadedFiles,
   Delete,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -29,6 +30,7 @@ import { AuthGuard } from '../auth/guards/auth.guard';
 import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto';
 import { CreateExperienceDto } from './dto/create-experience.dto';
 import { UpdateExperienceDto } from './dto/update-experience.dto';
+import { GetExperiencesDto } from './dto/get-experiences.dto';
 import {
   SendWhatsAppOTPDto,
   VerifyWhatsAppOTPDto,
@@ -265,6 +267,20 @@ export class InfluencerController {
     @Body() updateData: UpdateInfluencerProfileDto,
     @UploadedFiles() files: any,
   ) {
+    // Validate file sizes - 5MB for profile image and banner
+    const maxImageSize = 5 * 1024 * 1024; // 5MB
+
+    if (files?.profileImage?.[0] && files.profileImage[0].size > maxImageSize) {
+      throw new BadRequestException('Profile image size must not exceed 5MB');
+    }
+
+    if (
+      files?.profileBanner?.[0] &&
+      files.profileBanner[0].size > maxImageSize
+    ) {
+      throw new BadRequestException('Profile banner size must not exceed 5MB');
+    }
+
     const influencerId = req.user.id;
     return await this.influencerService.updateInfluencerProfile(
       influencerId,
@@ -570,35 +586,91 @@ export class InfluencerController {
 
   @Get('experiences')
   @ApiOperation({
-    summary: 'Get all experiences',
-    description: 'Get list of all campaign experiences for the influencer',
+    summary: 'Get experiences',
+    description:
+      'Get experiences for the influencer. If ID is provided, returns specific experience. Otherwise returns paginated list.',
   })
   @ApiResponse({
     status: 200,
     description: 'Experiences retrieved successfully',
     schema: {
-      example: [
+      oneOf: [
         {
-          id: 1,
-          campaignName: 'Festive Glam Essentials',
-          brandName: 'Nykaa',
-          campaignCategory: 'Skincare + Makeup',
-          deliverableFormat: '2 Instagram reels, 3 story posts',
-          successfullyCompleted: true,
-          roleDescription: 'Content creator for skincare products',
-          keyResultAchieved:
-            'Reach: 150K, Engagement Rate: 6.1%, Conversions (Dr.Vaid Mkt): 150+ clicks',
-          socialLinks: ['https://instagram.com/p/xyz'],
-          completedDate: '2024-12-01',
-          createdAt: '2024-01-01T00:00:00Z',
-          updatedAt: '2024-01-01T00:00:00Z',
+          description: 'Single experience (when id is provided)',
+          example: {
+            id: 1,
+            campaignName: 'Festive Glam Essentials',
+            brandName: 'Nykaa',
+            campaignCategory: 'Skincare + Makeup',
+            deliverableFormat: '2 Instagram reels, 3 story posts',
+            successfullyCompleted: true,
+            roleDescription: 'Content creator for skincare products',
+            keyResultAchieved:
+              'Reach: 150K, Engagement Rate: 6.1%, Conversions (Dr.Vaid Mkt): 150+ clicks',
+            socialLinks: [
+              {
+                id: 1,
+                platform: 'instagram',
+                contentType: 'reel',
+                url: 'https://instagram.com/p/xyz',
+              },
+            ],
+            completedDate: '2024-12-01',
+            createdAt: '2024-01-01T00:00:00Z',
+            updatedAt: '2024-01-01T00:00:00Z',
+          },
+        },
+        {
+          description: 'Paginated list (when id is not provided)',
+          example: {
+            experiences: [
+              {
+                id: 1,
+                campaignName: 'Festive Glam Essentials',
+                brandName: 'Nykaa',
+                campaignCategory: 'Skincare + Makeup',
+                deliverableFormat: '2 Instagram reels, 3 story posts',
+                successfullyCompleted: true,
+                roleDescription: 'Content creator for skincare products',
+                keyResultAchieved:
+                  'Reach: 150K, Engagement Rate: 6.1%, Conversions (Dr.Vaid Mkt): 150+ clicks',
+                socialLinks: [
+                  {
+                    id: 1,
+                    platform: 'instagram',
+                    contentType: 'reel',
+                    url: 'https://instagram.com/p/xyz',
+                  },
+                ],
+                completedDate: '2024-12-01',
+                createdAt: '2024-01-01T00:00:00Z',
+                updatedAt: '2024-01-01T00:00:00Z',
+              },
+            ],
+            total: 15,
+            page: 1,
+            limit: 10,
+            totalPages: 2,
+          },
         },
       ],
     },
   })
-  async getExperiences(@Req() req: RequestWithUser) {
+  @ApiResponse({
+    status: 404,
+    description: 'Experience not found (when specific ID is requested)',
+  })
+  async getExperiences(
+    @Req() req: RequestWithUser,
+    @Query() query: GetExperiencesDto,
+  ) {
     const influencerId = req.user.id;
-    return this.influencerService.getExperiences(influencerId);
+    return this.influencerService.getExperiences(
+      influencerId,
+      query.id,
+      query.page,
+      query.limit,
+    );
   }
 
   @Put('experiences/:experienceId')

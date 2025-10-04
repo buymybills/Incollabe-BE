@@ -4,7 +4,7 @@ import { IsEmail, IsString, MinLength } from 'class-validator';
 export class AdminLoginDto {
   @ApiProperty({
     description: 'Admin email address',
-    example: 'admin@cloutsy.com',
+    example: 'admin@collabkaroo.com',
     format: 'email',
   })
   @IsEmail({}, { message: 'Please provide a valid email address' })
@@ -33,7 +33,7 @@ export class AdminLoginResponseDto {
     properties: {
       id: { type: 'number', example: 1 },
       name: { type: 'string', example: 'John Doe' },
-      email: { type: 'string', example: 'admin@cloutsy.com' },
+      email: { type: 'string', example: 'admin@collabkaroo.com' },
       role: { type: 'string', example: 'super_admin' },
       profileImage: {
         type: 'string',

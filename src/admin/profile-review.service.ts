@@ -61,12 +61,7 @@ export class ProfileReviewService {
     });
 
     // Send email notification to admins
-    try {
-      await this.notifyAdminsOfPendingProfile(profileId, profileType);
-    } catch (error) {
-      // Log error but don't fail the creation
-      console.error('Failed to send email notification:', error);
-    }
+    await this.notifyAdminsOfPendingProfile(profileId, profileType);
 
     return {
       message: 'Profile review request submitted successfully',

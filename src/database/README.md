@@ -1,6 +1,6 @@
 # Database Module
 
-The Database module manages PostgreSQL database connections, model definitions, and data relationships for the Incollab platform.
+The Database module manages PostgreSQL database connections, model definitions, and data relationships for the Collabkaroo platform.
 
 ## Overview
 

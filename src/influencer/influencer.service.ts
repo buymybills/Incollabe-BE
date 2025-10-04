@@ -8,6 +8,7 @@ import {
 import { S3Service } from '../shared/s3.service';
 import { EmailService } from '../shared/email.service';
 import { WhatsAppService } from '../shared/whatsapp.service';
+import { NotificationService } from '../shared/notification.service';
 import { OtpService } from '../shared/services/otp.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto';
@@ -86,6 +87,7 @@ export class InfluencerService {
     private readonly s3Service: S3Service,
     private readonly emailService: EmailService,
     private readonly whatsAppService: WhatsAppService,
+    private readonly notificationService: NotificationService,
     @Inject('PROFILE_REVIEW_MODEL')
     private readonly profileReviewModel: typeof ProfileReview,
     @Inject('CAMPAIGN_MODEL')
@@ -977,6 +979,22 @@ export class InfluencerService {
       campaign.brand?.brandName || 'Brand',
     );
 
+    // Send push notification to brand owner about new application
+    try {
+      const brand = campaign.brand;
+      if (brand?.fcmToken) {
+        await this.notificationService.sendNewApplicationNotification(
+          brand.fcmToken,
+          influencer.name,
+          campaign.name,
+          influencer.id.toString(),
+        );
+      }
+    } catch (error) {
+      console.error('Failed to send push notification to brand:', error);
+      // Don't fail the application if notification fails
+    }
+
     return {
       success: true,
       applicationId: application.id,
@@ -1227,17 +1245,63 @@ export class InfluencerService {
     return experienceWithLinks;
   }
 
-  async getExperiences(influencerId: number): Promise<Experience[]> {
-    return this.experienceModel.findAll({
-      where: { influencerId },
-      include: [
-        {
-          model: ExperienceSocialLink,
-          attributes: ['id', 'platform', 'contentType', 'url'],
-        },
-      ],
-      order: [['createdAt', 'DESC']],
-    });
+  async getExperiences(
+    influencerId: number,
+    experienceId?: number,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<
+    | Experience
+    | {
+        experiences: Experience[];
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+      }
+  > {
+    const includeOptions = [
+      {
+        model: ExperienceSocialLink,
+        attributes: ['id', 'platform', 'contentType', 'url'],
+      },
+    ];
+
+    // If experience ID is provided, return single experience
+    if (experienceId) {
+      const experience = await this.experienceModel.findOne({
+        where: { id: experienceId, influencerId },
+        include: includeOptions,
+      });
+
+      if (!experience) {
+        throw new NotFoundException('Experience not found');
+      }
+
+      return experience;
+    }
+
+    // Otherwise return paginated list
+    const offset = (page - 1) * limit;
+
+    const { count, rows: experiences } =
+      await this.experienceModel.findAndCountAll({
+        where: { influencerId },
+        include: includeOptions,
+        order: [['createdAt', 'DESC']],
+        limit,
+        offset,
+      });
+
+    const totalPages = Math.ceil(count / limit);
+
+    return {
+      experiences,
+      total: count,
+      page,
+      limit,
+      totalPages,
+    };
   }
 
   private parseNicheIds(nicheIds: string): number[] {

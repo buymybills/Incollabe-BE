@@ -5,6 +5,7 @@ import { EmailService } from '../shared/email.service';
 import { WhatsAppService } from '../shared/whatsapp.service';
 import { OtpService } from '../shared/services/otp.service';
 import { CustomNicheService } from '../shared/services/custom-niche.service';
+import { NotificationService } from '../shared/notification.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import {
   ProfileReview,
@@ -86,6 +87,10 @@ const mockAdminModel = {
   findAll: jest.fn().mockResolvedValue([]), // Default to empty array
   create: jest.fn(),
   update: jest.fn(),
+};
+
+const mockNotificationService = {
+  sendNewApplicationNotification: jest.fn(),
 };
 
 describe('InfluencerService', () => {
@@ -201,6 +206,10 @@ describe('InfluencerService', () => {
             updateCustomNiche: jest.fn(),
             deleteCustomNiche: jest.fn(),
           },
+        },
+        {
+          provide: NotificationService,
+          useValue: mockNotificationService,
         },
       ],
     }).compile();

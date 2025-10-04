@@ -21,7 +21,7 @@ export class EmailService {
   }
 
   async sendBrandOtp(email: string, otp: string): Promise<void> {
-    const subject = 'Your Brand Login OTP - Incollab';
+    const subject = 'Your Brand Login OTP - Collabkaroo';
 
     const html = `
       <!DOCTYPE html>
@@ -69,7 +69,7 @@ export class EmailService {
             </div>
           </div>
           <div class="footer">
-            <p>© 2025 Incollab. All rights reserved.</p>
+            <p>© 2025 Collabkaroo. All rights reserved.</p>
             <p>This is an automated message, please do not reply.</p>
           </div>
         </div>
@@ -98,7 +98,7 @@ export class EmailService {
   }
 
   async sendWelcomeEmail(email: string, brandName: string): Promise<void> {
-    const subject = 'Welcome to Incollab - Brand Partnership';
+    const subject = 'Welcome to Collabkaroo - Brand Partnership';
 
     const html = `
       <!DOCTYPE html>
@@ -106,7 +106,7 @@ export class EmailService {
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Welcome to InCollab</title>
+        <title>Welcome to Collabkaroo</title>
         <style>
           body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
           .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -120,12 +120,12 @@ export class EmailService {
       <body>
         <div class="container">
           <div class="header">
-            <h1>🎉 Welcome to Incollab!</h1>
+            <h1>🎉 Welcome to Collabkaroo!</h1>
             <p>Your brand partnership journey begins here</p>
           </div>
           <div class="content">
             <h2>Hello ${brandName || 'Brand Partner'},</h2>
-            <p>Congratulations! Your brand account has been successfully created on Cloutsy.</p>
+            <p>Congratulations! Your brand account has been successfully created on Collabkaroo.</p>
 
             <div class="highlight">
               <h3>🚀 What's Next?</h3>
@@ -146,8 +146,8 @@ export class EmailService {
             <p>If you have any questions, our support team is here to help.</p>
           </div>
           <div class="footer">
-            <p>© 2025 Incollab. All rights reserved.</p>
-            <p>Need help? Contact us at support@incollab.com</p>
+            <p>© 2025 Collabkaroo. All rights reserved.</p>
+            <p>Need help? Contact us at support@collabkaroo.com</p>
           </div>
         </div>
       </body>
@@ -175,7 +175,7 @@ export class EmailService {
     resetUrl: string,
     resetToken: string,
   ): Promise<void> {
-    const subject = 'Password Reset Request - Incollab';
+    const subject = 'Password Reset Request - Collabkaroo';
 
     const html = `
       <!DOCTYPE html>
@@ -205,7 +205,7 @@ export class EmailService {
           </div>
           <div class="content">
             <h2>Hello ${brandName || 'Brand Partner'},</h2>
-            <p>We received a request to reset the password for your Incollab brand account associated with <strong>${email}</strong>.</p>
+            <p>We received a request to reset the password for your Collabkaroo brand account associated with <strong>${email}</strong>.</p>
 
             <div class="reset-box">
               <h3>Reset Your Password</h3>
@@ -229,16 +229,16 @@ export class EmailService {
             </div>
 
             <div class="warning">
-              ⚠️ If you didn't request a password reset, please contact our support team immediately at support@incollab.com
+              ⚠️ If you didn't request a password reset, please contact our support team immediately at support@collabkaroo.com
             </div>
 
             <p>If the button above doesn't work, you can copy and paste this link into your browser:</p>
             <p style="word-break: break-all; color: #667eea;">${resetUrl}</p>
           </div>
           <div class="footer">
-            <p>© 2025 Incollab. All rights reserved.</p>
+            <p>© 2025 Collabkaroo. All rights reserved.</p>
             <p>This is an automated security email, please do not reply.</p>
-            <p>Need help? Contact us at <a href="mailto:support@incollab.com">support@incollab.com</a></p>
+            <p>Need help? Contact us at <a href="mailto:support@collabkaroo.com">support@collabkaroo.com</a></p>
           </div>
         </div>
       </body>
@@ -264,7 +264,7 @@ export class EmailService {
     email: string,
     brandName: string,
   ): Promise<void> {
-    const subject = 'Profile Submitted for Verification - Incollab';
+    const subject = 'Profile Submitted for Verification - Collabkaroo';
 
     const html = `
       <!DOCTYPE html>
@@ -296,7 +296,7 @@ export class EmailService {
           </div>
           <div class="content">
             <h2>Hello ${brandName || 'Brand Partner'},</h2>
-            <p>Congratulations! You have successfully completed your brand profile on Incollab. Your profile has been submitted for verification and is now under review by our team.</p>
+            <p>Congratulations! You have successfully completed your brand profile on Collabkaroo. Your profile has been submitted for verification and is now under review by our team.</p>
 
             <div class="status-box">
               <div class="status-icon">⏳</div>
@@ -335,11 +335,11 @@ export class EmailService {
               <li>Prepare your first campaign strategy</li>
             </ul>
 
-            <p>Thank you for choosing Incollab! We're excited to help you connect with amazing influencers once your verification is complete.</p>
+            <p>Thank you for choosing Collabkaroo! We're excited to help you connect with amazing influencers once your verification is complete.</p>
           </div>
           <div class="footer">
-            <p>© 2025 Incollab. All rights reserved.</p>
-            <p>Questions? Contact us at <a href="mailto:support@incollab.com">support@incollab.com</a></p>
+            <p>© 2025 Collabkaroo. All rights reserved.</p>
+            <p>Questions? Contact us at <a href="mailto:support@collabkaroo.com">support@collabkaroo.com</a></p>
           </div>
         </div>
       </body>
@@ -371,7 +371,7 @@ export class EmailService {
     nextSteps: string[],
   ): Promise<void> {
     const subject =
-      'Complete Your Brand Profile - Missing Information Required - Incollab';
+      'Complete Your Brand Profile - Missing Information Required - Collabkaroo';
 
     const missingFieldsList = missingFields
       .map((field) => `<li>${field}</li>`)
@@ -408,7 +408,7 @@ export class EmailService {
           </div>
           <div class="content">
             <h2>Hello ${brandName || 'Brand Partner'},</h2>
-            <p>Thank you for updating your brand profile! We're excited to have you on Incollab.</p>
+            <p>Thank you for updating your brand profile! We're excited to have you on Collabkaroo.</p>
 
             <div class="alert-box">
               <h3>⚠️ Profile Incomplete</h3>
@@ -430,7 +430,7 @@ export class EmailService {
             </div>
 
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.FRONTEND_URL || 'https://incollab.com'}/brand/profile" class="cta-button">
+              <a href="${process.env.FRONTEND_URL || 'https://collabkaroo.com'}/brand/profile" class="cta-button">
                 Complete Profile →
               </a>
             </div>
@@ -446,7 +446,7 @@ export class EmailService {
             <p><strong>Need help?</strong> Our support team is here to assist you with completing your profile.</p>
           </div>
           <div class="footer">
-            <p>© 2025 Incollab. All rights reserved.</p>
+            <p>© 2025 Collabkaroo. All rights reserved.</p>
             <p>This email was sent because you recently updated your brand profile.</p>
           </div>
         </div>
@@ -473,7 +473,8 @@ export class EmailService {
     phone: string,
     influencerName: string,
   ): Promise<void> {
-    const subject = 'Profile Submitted for Verification - Incollab Influencer';
+    const subject =
+      'Profile Submitted for Verification - Collabkaroo Influencer';
 
     const html = `
       <!DOCTYPE html>
@@ -538,10 +539,10 @@ export class EmailService {
 
             <p><strong>Expected Timeline:</strong> 24-48 hours</p>
 
-            <p>Thank you for joining Incollab! We're excited to help you connect with amazing brands.</p>
+            <p>Thank you for joining Collabkaroo! We're excited to help you connect with amazing brands.</p>
           </div>
           <div class="footer">
-            <p>© 2025 Incollab. All rights reserved.</p>
+            <p>© 2025 Collabkaroo. All rights reserved.</p>
             <p>This notification was sent to your registered phone number: ${phone}</p>
           </div>
         </div>
@@ -578,7 +579,7 @@ export class EmailService {
     nextSteps: string[],
   ): Promise<void> {
     const subject =
-      'Complete Your Influencer Profile - Missing Information - Incollab';
+      'Complete Your Influencer Profile - Missing Information - Collabkaroo';
 
     const missingFieldsList = missingFields
       .map((field) => `<li>${field}</li>`)
@@ -636,7 +637,7 @@ export class EmailService {
             </div>
 
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.FRONTEND_URL || 'https://incollab.com'}/influencer/profile" class="cta-button">
+              <a href="${process.env.FRONTEND_URL || 'https://collabkaroo.com'}/influencer/profile" class="cta-button">
                 Complete Profile →
               </a>
             </div>
@@ -652,7 +653,7 @@ export class EmailService {
             <p><strong>Need help?</strong> Our team is here to guide you through the process!</p>
           </div>
           <div class="footer">
-            <p>© 2025 Incollab. All rights reserved.</p>
+            <p>© 2025 Collabkaroo. All rights reserved.</p>
             <p>This notification was sent to your registered phone number: ${phone}</p>
           </div>
         </div>
@@ -713,12 +714,12 @@ export class EmailService {
                 Your brand profile has been successfully verified and approved.
               </div>
               <p>You can now access all features of our platform and start connecting with influencers for collaborations.</p>
-              <p>Welcome to the InCollab community!</p>
-              <p>Best regards,<br>The InCollab Team</p>
+              <p>Welcome to the Collabkaroo community!</p>
+              <p>Best regards,<br>The Collabkaroo Team</p>
             </div>
             <div class="footer">
               <p>This is an automated message. Please do not reply to this email.</p>
-              <p>&copy; 2024 InCollab. All rights reserved.</p>
+              <p>&copy; 2024 Collabkaroo. All rights reserved.</p>
             </div>
           </div>
         </body>
@@ -728,7 +729,7 @@ export class EmailService {
       await this.transporter.sendMail({
         from: process.env.EMAIL_USER,
         to: email,
-        subject: '🎉 Profile Verification Approved - Welcome to InCollab!',
+        subject: '🎉 Profile Verification Approved - Welcome to Collabkaroo!',
         html: htmlContent,
       });
 
@@ -774,11 +775,11 @@ export class EmailService {
               <p>${reason}</p>
               <p>Please review the feedback and update your profile accordingly. Once you've made the necessary changes, you can resubmit your profile for verification.</p>
               <p>If you have any questions about the rejection reason or need assistance updating your profile, please contact our support team.</p>
-              <p>Best regards,<br>The InCollab Team</p>
+              <p>Best regards,<br>The Collabkaroo Team</p>
             </div>
             <div class="footer">
               <p>This is an automated message. Please do not reply to this email.</p>
-              <p>&copy; 2024 InCollab. All rights reserved.</p>
+              <p>&copy; 2024 Collabkaroo. All rights reserved.</p>
             </div>
           </div>
         </body>
@@ -833,12 +834,12 @@ export class EmailService {
                 Your influencer profile has been successfully verified and approved.
               </div>
               <p>You can now access all features of our platform and start connecting with brands for collaborations.</p>
-              <p>Welcome to the InCollab community!</p>
-              <p>Best regards,<br>The InCollab Team</p>
+              <p>Welcome to the Collabkaroo community!</p>
+              <p>Best regards,<br>The Collabkaroo Team</p>
             </div>
             <div class="footer">
               <p>This is an automated message. Please do not reply to this email.</p>
-              <p>&copy; 2024 InCollab. All rights reserved.</p>
+              <p>&copy; 2024 Collabkaroo. All rights reserved.</p>
             </div>
           </div>
         </body>
@@ -848,7 +849,7 @@ export class EmailService {
       await this.transporter.sendMail({
         from: process.env.EMAIL_USER,
         to: phone, // Using phone as identifier for influencers
-        subject: '🎉 Profile Verification Approved - Welcome to InCollab!',
+        subject: '🎉 Profile Verification Approved - Welcome to Collabkaroo!',
         html: htmlContent,
       });
 
@@ -894,11 +895,11 @@ export class EmailService {
               <p>${reason}</p>
               <p>Please review the feedback and update your profile accordingly. Once you've made the necessary changes, you can resubmit your profile for verification.</p>
               <p>If you have any questions about the rejection reason or need assistance updating your profile, please contact our support team.</p>
-              <p>Best regards,<br>The InCollab Team</p>
+              <p>Best regards,<br>The Collabkaroo Team</p>
             </div>
             <div class="footer">
               <p>This is an automated message. Please do not reply to this email.</p>
-              <p>&copy; 2024 InCollab. All rights reserved.</p>
+              <p>&copy; 2024 Collabkaroo. All rights reserved.</p>
             </div>
           </div>
         </body>
@@ -930,7 +931,8 @@ export class EmailService {
     profileId: number,
   ): Promise<void> {
     // Construct the review URL
-    const baseUrl = process.env.ADMIN_PANEL_URL || 'https://admin.incollab.com';
+    const baseUrl =
+      process.env.ADMIN_PANEL_URL || 'https://admin.collabkaroo.com';
     const reviewUrl = `${baseUrl}/reviews/profile/${profileId}/${profileType}`;
 
     const htmlContent = `
@@ -971,11 +973,11 @@ export class EmailService {
                 <a href="${reviewUrl}" class="btn">Review Profile Now</a>
               </div>
               <p>Please review this profile at your earliest convenience. Click the button above to view the complete profile details and make a verification decision.</p>
-              <p>Best regards,<br>InCollab Admin System</p>
+              <p>Best regards,<br>Collabkaroo Admin System</p>
             </div>
             <div class="footer">
               <p>This is an automated admin notification.</p>
-              <p>&copy; 2024 InCollab. All rights reserved.</p>
+              <p>&copy; 2024 Collabkaroo. All rights reserved.</p>
             </div>
           </div>
         </body>

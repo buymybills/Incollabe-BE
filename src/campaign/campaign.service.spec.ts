@@ -25,6 +25,8 @@ import { GetCampaignsDto } from './dto/get-campaigns.dto';
 import { SearchInfluencersDto } from './dto/search-influencers.dto';
 import { InviteInfluencersDto } from './dto/invite-influencers.dto';
 import { Follow } from '../post/models/follow.model';
+import { CampaignQueryService } from './services/campaign-query.service';
+import { NotificationService } from '../shared/notification.service';
 
 const mockModel = () => ({
   findOne: jest.fn(),
@@ -40,6 +42,20 @@ const mockModel = () => ({
 
 const mockWhatsAppService = {
   sendCampaignInvitation: jest.fn(),
+};
+
+const mockCampaignQueryService = {
+  getCampaignsByCategory: jest.fn(),
+  fetchOpenCampaigns: jest.fn(),
+  fetchInviteCampaigns: jest.fn(),
+  fetchFinishedCampaigns: jest.fn(),
+  fetchAllCampaigns: jest.fn(),
+};
+
+const mockNotificationService = {
+  sendCampaignStatusUpdate: jest.fn(),
+  sendCampaignInviteNotification: jest.fn(),
+  sendNewApplicationNotification: jest.fn(),
 };
 
 describe('CampaignService', () => {
@@ -99,6 +115,14 @@ describe('CampaignService', () => {
           provide: WhatsAppService,
           useValue: mockWhatsAppService,
         },
+        {
+          provide: CampaignQueryService,
+          useValue: mockCampaignQueryService,
+        },
+        {
+          provide: NotificationService,
+          useValue: mockNotificationService,
+        },
       ],
     }).compile();
 
@@ -132,6 +156,7 @@ describe('CampaignService', () => {
       type: CampaignType.PAID,
       isPanIndia: false,
       cityIds: [1, 2],
+      isOpenToAllAges: true,
       isOpenToAllGenders: true,
       deliverables: [
         {
@@ -147,7 +172,6 @@ describe('CampaignService', () => {
       const brandId = 1;
       const mockCampaign = {
         id: 1,
-        name: 'Test Campaign',
         brandId,
         ...mockCreateCampaignDto,
       };
@@ -166,7 +190,6 @@ describe('CampaignService', () => {
         invitations: [],
         toJSON: jest.fn().mockReturnValue({
           id: 1,
-          name: 'Test Campaign',
           brandId,
           ...mockCreateCampaignDto,
           brand: { id: brandId, brandName: 'Test Brand' },
@@ -189,6 +212,7 @@ describe('CampaignService', () => {
         description: 'Test Description',
         type: CampaignType.PAID,
         isPanIndia: false,
+        isOpenToAllAges: true,
         isOpenToAllGenders: true,
         brandId,
       });

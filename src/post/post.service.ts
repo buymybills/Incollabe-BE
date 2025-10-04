@@ -580,48 +580,48 @@ export class PostService {
     followerUserType: UserType,
     followerUserId: number,
   ) {
-    try {
-      // Get the user being followed
-      let followedUser: Influencer | Brand | null = null;
-      let followerUser: Influencer | Brand | null = null;
+    // Get the user being followed
+    let followedUser: Influencer | Brand | null = null;
+    let followerUser: Influencer | Brand | null = null;
 
-      if (followedUserType === FollowUserType.INFLUENCER) {
-        followedUser = await this.influencerModel.findByPk(followedUserId, {
-          attributes: ['fcmToken', 'name', 'username'],
-        });
-      } else {
-        followedUser = await this.brandModel.findByPk(followedUserId, {
-          attributes: ['fcmToken', 'brandName', 'username'],
-        });
-      }
+    if (followedUserType === FollowUserType.INFLUENCER) {
+      followedUser = await this.influencerModel.findByPk(followedUserId, {
+        attributes: ['fcmToken', 'name', 'username'],
+      });
+    } else {
+      followedUser = await this.brandModel.findByPk(followedUserId, {
+        attributes: ['fcmToken', 'brandName', 'username'],
+      });
+    }
 
-      // Get the follower user
-      if (followerUserType === UserType.INFLUENCER) {
-        followerUser = await this.influencerModel.findByPk(followerUserId, {
-          attributes: ['name', 'username', 'profileImage'],
-        });
-      } else {
-        followerUser = await this.brandModel.findByPk(followerUserId, {
-          attributes: ['brandName', 'username', 'profileImage'],
-        });
-      }
+    // Get the follower user
+    if (followerUserType === UserType.INFLUENCER) {
+      followerUser = await this.influencerModel.findByPk(followerUserId, {
+        attributes: ['name', 'username', 'profileImage'],
+      });
+    } else {
+      followerUser = await this.brandModel.findByPk(followerUserId, {
+        attributes: ['brandName', 'username', 'profileImage'],
+      });
+    }
 
-      if (followedUser?.fcmToken && followerUser) {
-        const followerName =
-          followerUserType === UserType.INFLUENCER
-            ? (followerUser as Influencer).name
-            : (followerUser as Brand).brandName;
+    if (followedUser?.fcmToken && followerUser) {
+      const followerName =
+        followerUserType === UserType.INFLUENCER
+          ? (followerUser as Influencer).name
+          : (followerUser as Brand).brandName;
 
+      try {
         await this.notificationService.sendNewFollowerNotification(
           followedUser.fcmToken,
           followerName,
           followerUser.username,
           (followerUser as any).profileImage,
         );
+      } catch (error) {
+        console.error('Error sending follower notification:', error);
+        // Don't throw - notification failure shouldn't break the follow action
       }
-    } catch (error) {
-      console.error('Error sending follower notification:', error);
-      // Don't throw - notification failure shouldn't break the follow action
     }
   }
 }
