@@ -28,8 +28,17 @@ async function bootstrap() {
       forbidNonWhitelisted: false,
     }),
   );
+
+  const configService = app.get(ConfigService);  
+  const allowedOrigins = configService
+    .get<string>('ALLOWED_ORIGINS', '')
+    .split(',')
+    .filter(Boolean);
+
+  console.log('Allowed CORS origins:', allowedOrigins);
+
   app.enableCors({
-    origin: '*',
+    origin: allowedOrigins,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
@@ -51,7 +60,6 @@ async function bootstrap() {
   app.useGlobalInterceptors(new ResponseInterceptor());
   app.useGlobalFilters(new GlobalExceptionFilter(loggerService));
 
-  const configService = app.get(ConfigService);
   const port = configService.get('PORT') || 3002;
 
   await app.listen(port);
