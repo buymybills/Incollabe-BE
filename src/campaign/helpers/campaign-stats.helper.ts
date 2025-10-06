@@ -9,29 +9,29 @@ export class CampaignStatsHelper {
    * Add application count to open campaign
    */
   static addApplicationCount(campaign: Campaign): CampaignWithStats {
-    const campaignData = campaign.toJSON() as CampaignWithStats;
+    const campaignData = campaign.toJSON() as any;
     campaignData.totalApplications = campaign.applications?.length ?? 0;
-    return campaignData;
+    return campaignData as CampaignWithStats;
   }
 
   /**
    * Add invite count to invite-only campaign
    */
   static addInviteCount(campaign: Campaign): CampaignWithStats {
-    const campaignData = campaign.toJSON() as CampaignWithStats;
+    const campaignData = campaign.toJSON() as any;
     campaignData.totalInvites = campaign.invitations?.length ?? 0;
-    return campaignData;
+    return campaignData as CampaignWithStats;
   }
 
   /**
    * Add appropriate stats based on campaign type
    */
   static addStatsBasedOnType(campaign: Campaign): CampaignWithStats {
-    const campaignData = campaign.toJSON() as CampaignWithStats;
+    const campaignData = campaign.toJSON() as any;
 
     if (!campaign.isActive) {
       // Finished campaign - no extra count needed
-      return campaignData;
+      return campaignData as CampaignWithStats;
     }
 
     if (campaign.isInviteOnly) {
@@ -40,7 +40,7 @@ export class CampaignStatsHelper {
       campaignData.totalApplications = campaign.applications?.length ?? 0;
     }
 
-    return campaignData;
+    return campaignData as CampaignWithStats;
   }
 
   /**

@@ -183,6 +183,9 @@ export class InfluencerService {
       // Top influencer status
       isTopInfluencer: influencer.isTopInfluencer,
 
+      // Collaboration costs (public)
+      collaborationCosts: influencer.collaborationCosts || {},
+
       createdAt:
         influencer.createdAt?.toISOString() || new Date().toISOString(),
       updatedAt:

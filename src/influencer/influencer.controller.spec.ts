@@ -12,6 +12,7 @@ const mockInfluencerService = {
   updateInfluencerProfile: jest.fn(),
   sendWhatsAppVerificationOTP: jest.fn(),
   verifyWhatsAppOTP: jest.fn(),
+  getExperiences: jest.fn(),
 };
 
 const mockAuthGuard = {
@@ -237,32 +238,47 @@ describe('InfluencerController', () => {
         socialLinks: [],
         collaborationCosts: {},
         niches: [],
-        verification: {
-          isProfileCompleted: true,
-        },
+        customNiches: [],
+        metrics: { followers: 0, posts: 0 },
+        isTopInfluencer: false,
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+      };
+
+      const mockExperiences = {
+        experiences: [
+          {
+            id: 1,
+            campaignName: 'Test Campaign',
+            brandName: 'Test Brand',
+          },
+        ],
+        total: 1,
+        page: 1,
+        limit: 100,
+        totalPages: 1,
       };
 
       mockInfluencerService.getInfluencerProfile.mockResolvedValue(
         mockFullProfile,
       );
+      mockInfluencerService.getExperiences.mockResolvedValue(mockExperiences);
 
       const result = await controller.getPublicInfluencerProfile(1);
 
       expect(result).toEqual({
-        id: mockFullProfile.id,
-        name: mockFullProfile.name,
-        username: mockFullProfile.username,
-        bio: mockFullProfile.bio,
-        profileImage: mockFullProfile.profileImage,
-        profileBanner: mockFullProfile.profileBanner,
-        profileHeadline: mockFullProfile.profileHeadline,
-        location: mockFullProfile.location,
-        socialLinks: mockFullProfile.socialLinks,
-        niches: mockFullProfile.niches,
+        ...mockFullProfile,
+        experiences: mockExperiences.experiences,
       });
       expect(influencerService.getInfluencerProfile).toHaveBeenCalledWith(
         1,
         true,
+      );
+      expect(influencerService.getExperiences).toHaveBeenCalledWith(
+        1,
+        undefined,
+        1,
+        100,
       );
     });
 
@@ -291,6 +307,14 @@ describe('InfluencerController', () => {
         collaborationCosts: {},
         niches: [],
         verification: { isProfileCompleted: true },
+      });
+
+      mockInfluencerService.getExperiences.mockResolvedValue({
+        experiences: [],
+        total: 0,
+        page: 1,
+        limit: 100,
+        totalPages: 0,
       });
 
       await controller.getPublicInfluencerProfile(123);

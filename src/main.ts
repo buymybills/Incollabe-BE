@@ -29,7 +29,7 @@ async function bootstrap() {
     }),
   );
 
-  const configService = app.get(ConfigService);  
+  const configService = app.get(ConfigService);
   const allowedOrigins = configService
     .get<string>('ALLOWED_ORIGINS', '')
     .split(',')

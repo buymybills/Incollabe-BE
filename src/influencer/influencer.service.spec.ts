@@ -623,7 +623,7 @@ describe('InfluencerService', () => {
   });
 
   describe('getInfluencerProfile', () => {
-    it('should return public profile data only', async () => {
+    it('should return public profile data with collaborationCosts', async () => {
       const mockInfluencer = {
         id: 1,
         name: 'Test Influencer',
@@ -631,9 +631,9 @@ describe('InfluencerService', () => {
         bio: 'Test bio',
         profileImage: 'profile.jpg',
         profileBanner: 'banner.jpg',
-        email: 'private@email.com', // Should not be included
-        phone: '+91XXXXXXXXXX', // Should not be included
-        collaborationCosts: { instagram: { post: 1000 } }, // Should not be included
+        email: 'private@email.com',
+        phone: '+91XXXXXXXXXX',
+        collaborationCosts: { instagram: { post: 1000 } },
         niches: [{ id: 1, name: 'Fashion' }],
         socialLinks: [
           {
@@ -657,11 +657,12 @@ describe('InfluencerService', () => {
       expect(result).toHaveProperty('bio', 'Test bio');
       expect(result).toHaveProperty('niches');
       expect(result).toHaveProperty('socialLinks');
+      expect(result).toHaveProperty('collaborationCosts');
 
-      // Ensure private data is not included
-      expect(result).not.toHaveProperty('email');
+      // Ensure private data is not included (verification, contact)
+      expect(result).not.toHaveProperty('verification');
+      expect(result).not.toHaveProperty('contact');
       expect(result).not.toHaveProperty('phone');
-      expect(result).not.toHaveProperty('collaborationCosts');
     });
 
     it('should throw NotFoundException for non-existent or inactive influencer', async () => {

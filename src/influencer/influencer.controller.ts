@@ -37,6 +37,7 @@ import {
 } from './dto/whatsapp-verification.dto';
 import { GetOpenCampaignsDto } from '../campaign/dto/get-open-campaigns.dto';
 import { MyApplicationResponseDto } from '../campaign/dto/my-application-response.dto';
+import { PublicProfileResponseDto } from './dto/public-profile-response.dto';
 import type { RequestWithUser } from '../types/request.types';
 
 @ApiTags('Influencer Profile')
@@ -337,27 +338,36 @@ export class InfluencerController {
     summary: 'Get public influencer profile',
     description: 'Get public influencer profile by ID',
   })
+  @ApiResponse({
+    status: 200,
+    description: 'Public influencer profile retrieved successfully',
+    type: PublicProfileResponseDto,
+  })
   async getPublicInfluencerProfile(
     @Param('id', ParseIntPipe) influencerId: number,
-  ) {
+  ): Promise<PublicProfileResponseDto> {
     const profile = await this.influencerService.getInfluencerProfile(
       influencerId,
       true,
     );
 
-    // Return public fields only
+    // Fetch experiences for the influencer
+    const experiences = await this.influencerService.getExperiences(
+      influencerId,
+      undefined,
+      1,
+      100,
+    );
+
+    // Return public fields with proper typing
     return {
-      id: profile.id,
-      name: profile.name,
-      username: profile.username,
-      bio: profile.bio,
-      profileImage: profile.profileImage,
-      profileBanner: profile.profileBanner,
-      profileHeadline: profile.profileHeadline,
-      location: profile.location,
-      socialLinks: profile.socialLinks,
-      niches: profile.niches,
-    };
+      ...profile,
+      collaborationCosts: profile.collaborationCosts || {},
+      experiences:
+        typeof experiences === 'object' && 'experiences' in experiences
+          ? experiences.experiences
+          : [],
+    } as PublicProfileResponseDto;
   }
 
   @Get('campaigns/open')
