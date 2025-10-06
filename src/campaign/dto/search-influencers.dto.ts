@@ -43,26 +43,40 @@ export class SearchInfluencersDto {
   maxFollowers?: number;
 
   @ApiProperty({
-    description: 'City IDs for location-based filtering',
+    description:
+      'City IDs for location-based filtering. Accepts comma-separated values (e.g., "1,2,3") or array format',
     required: false,
     type: [Number],
     example: [1, 2, 3],
   })
   @IsOptional()
-  @Transform(({ value }) => (Array.isArray(value) ? value : [value]))
+  @Transform(({ value }) => {
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string') {
+      return value.split(',').map((v) => parseInt(v.trim(), 10));
+    }
+    return [value];
+  })
   @IsArray()
   @Type(() => Number)
   @IsNumber({}, { each: true })
   cityIds?: number[];
 
   @ApiProperty({
-    description: 'Niche IDs for category-based filtering',
+    description:
+      'Niche IDs for category-based filtering. Accepts comma-separated values (e.g., "1,2") or array format',
     required: false,
     type: [Number],
     example: [1, 2],
   })
   @IsOptional()
-  @Transform(({ value }) => (Array.isArray(value) ? value : [value]))
+  @Transform(({ value }) => {
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string') {
+      return value.split(',').map((v) => parseInt(v.trim(), 10));
+    }
+    return [value];
+  })
   @IsArray()
   @Type(() => Number)
   @IsNumber({}, { each: true })

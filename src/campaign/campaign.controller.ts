@@ -401,40 +401,69 @@ export class CampaignController {
   @Get('my-campaigns')
   @ApiOperation({
     summary: 'Get campaigns for the authenticated brand',
-    description: 'Retrieves all campaigns created by the authenticated brand',
+    description:
+      'Retrieves paginated campaigns created by the authenticated brand',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number for pagination',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Number of campaigns per page',
+    example: 10,
   })
   @ApiResponse({
     status: 200,
     description: 'Brand campaigns retrieved successfully',
     schema: {
-      example: [
-        {
-          id: 1,
-          name: 'Summer Fashion Campaign',
-          status: 'active',
-          deliverables: [
-            {
-              platform: 'instagram',
-              type: 'instagram_post',
-              budget: 2000,
-            },
-          ],
-          invitations: [{ status: 'pending' }, { status: 'accepted' }],
-          totalApplications: 15,
-        },
-      ],
+      example: {
+        campaigns: [
+          {
+            id: 1,
+            name: 'Summer Fashion Campaign',
+            status: 'active',
+            deliverables: [
+              {
+                platform: 'instagram',
+                type: 'instagram_post',
+                budget: 2000,
+              },
+            ],
+            invitations: [{ status: 'pending' }, { status: 'accepted' }],
+            totalApplications: 15,
+          },
+        ],
+        total: 25,
+        page: 1,
+        limit: 10,
+        totalPages: 3,
+      },
     },
   })
   @ApiResponse({
     status: 403,
     description: 'Forbidden - Only brands can access this endpoint',
   })
-  async getMyBrandCampaigns(@Req() req: RequestWithUser) {
+  async getMyBrandCampaigns(
+    @Req() req: RequestWithUser,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
     if (req.user.userType !== 'brand') {
       throw new ForbiddenException('Only brands can access this endpoint');
     }
 
-    return this.campaignService.getBrandCampaigns(req.user.id);
+    return this.campaignService.getBrandCampaigns(
+      req.user.id,
+      page || 1,
+      limit || 10,
+    );
   }
 
   @Get('cities/popular')
@@ -963,16 +992,18 @@ export class CampaignController {
   @ApiQuery({
     name: 'cityIds',
     required: false,
-    type: [Number],
-    description: 'Filter by city IDs',
-    example: [1, 2, 3],
+    type: String,
+    description:
+      'Filter by city IDs. Accepts comma-separated values (e.g., "1,2,3")',
+    example: '1,2,3',
   })
   @ApiQuery({
     name: 'nicheIds',
     required: false,
-    type: [Number],
-    description: 'Filter by niche IDs',
-    example: [1, 2],
+    type: String,
+    description:
+      'Filter by niche IDs. Accepts comma-separated values (e.g., "1,2")',
+    example: '1,2',
   })
   @ApiQuery({
     name: 'gender',

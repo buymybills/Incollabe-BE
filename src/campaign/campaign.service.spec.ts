@@ -872,26 +872,39 @@ describe('CampaignService', () => {
         },
       ];
 
-      campaignModel.findAll.mockResolvedValue(mockCampaigns);
+      campaignModel.findAndCountAll.mockResolvedValue({
+        rows: mockCampaigns,
+        count: mockCampaigns.length,
+      });
 
       const result = await service.getBrandCampaigns(brandId);
 
-      expect(result).toEqual([
-        {
-          id: 1,
-          name: 'Campaign 1',
-          brandId,
-          deliverables: [],
-          invitations: [],
-          applications: [{ id: 1 }, { id: 2 }, { id: 3 }],
-          totalApplications: 3,
-        },
-      ]);
-      expect(campaignModel.findAll).toHaveBeenCalledWith({
-        where: { brandId, isActive: true },
-        include: expect.any(Array),
-        order: [['createdAt', 'DESC']],
+      expect(result).toEqual({
+        campaigns: [
+          {
+            id: 1,
+            name: 'Campaign 1',
+            brandId,
+            deliverables: [],
+            invitations: [],
+            applications: [{ id: 1 }, { id: 2 }, { id: 3 }],
+            totalApplications: 3,
+          },
+        ],
+        total: 1,
+        page: 1,
+        limit: 10,
+        totalPages: 1,
       });
+      expect(campaignModel.findAndCountAll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { brandId, isActive: true },
+          order: [['createdAt', 'DESC']],
+          limit: 10,
+          offset: 0,
+          include: expect.any(Array),
+        }),
+      );
     });
   });
 });

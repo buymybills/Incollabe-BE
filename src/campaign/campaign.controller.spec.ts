@@ -83,6 +83,7 @@ describe('CampaignController', () => {
             quantity: 1,
           },
         ],
+        isOpenToAllAges: false,
       };
 
       const mockRequest: RequestWithUser = {
@@ -297,26 +298,32 @@ describe('CampaignController', () => {
   });
 
   describe('getMyBrandCampaigns', () => {
-    it('should get brand campaigns with application count', async () => {
+    it('should get paginated brand campaigns with application count', async () => {
       const mockRequest: RequestWithUser = {
         user: { id: 1, userType: 'brand' },
       } as any;
 
-      const mockCampaigns = [
-        {
-          id: 1,
-          name: 'Campaign 1',
-          brandId: 1,
-          totalApplications: 15,
-        },
-      ];
+      const mockResponse = {
+        campaigns: [
+          {
+            id: 1,
+            name: 'Campaign 1',
+            brandId: 1,
+            totalApplications: 15,
+          },
+        ],
+        total: 25,
+        page: 1,
+        limit: 10,
+        totalPages: 3,
+      };
 
-      campaignService.getBrandCampaigns.mockResolvedValue(mockCampaigns);
+      campaignService.getBrandCampaigns.mockResolvedValue(mockResponse);
 
-      const result = await controller.getMyBrandCampaigns(mockRequest);
+      const result = await controller.getMyBrandCampaigns(mockRequest, 1, 10);
 
-      expect(result).toEqual(mockCampaigns);
-      expect(campaignService.getBrandCampaigns).toHaveBeenCalledWith(1);
+      expect(result).toEqual(mockResponse);
+      expect(campaignService.getBrandCampaigns).toHaveBeenCalledWith(1, 1, 10);
     });
   });
 
@@ -399,6 +406,7 @@ describe('CampaignController', () => {
             quantity: 1,
           },
         ],
+        isOpenToAllAges: false,
       };
 
       const mockRequest: RequestWithUser = {
@@ -430,7 +438,7 @@ describe('CampaignController', () => {
 
       await controller.getMyBrandCampaigns(mockRequest);
 
-      expect(campaignService.getBrandCampaigns).toHaveBeenCalledWith(42);
+      expect(campaignService.getBrandCampaigns).toHaveBeenCalledWith(42, 1, 10);
     });
   });
 

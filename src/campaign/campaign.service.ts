@@ -576,34 +576,56 @@ export class CampaignService {
     });
   }
 
-  async getBrandCampaigns(brandId: number): Promise<Campaign[]> {
-    const campaigns = await this.campaignModel.findAll({
-      where: { brandId, isActive: true },
-      include: [
-        {
-          model: CampaignDeliverable,
-          attributes: ['platform', 'type', 'budget'],
-        },
-        {
-          model: CampaignInvitation,
-          attributes: ['status'],
-        },
-        {
-          model: CampaignApplication,
-          attributes: ['id'],
-        },
-      ],
-      order: [['createdAt', 'DESC']],
-    });
+  async getBrandCampaigns(
+    brandId: number,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<{
+    campaigns: Campaign[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const offset = (page - 1) * limit;
+
+    const { rows: campaigns, count: total } =
+      await this.campaignModel.findAndCountAll({
+        where: { brandId, isActive: true },
+        include: [
+          {
+            model: CampaignDeliverable,
+            attributes: ['platform', 'type', 'budget'],
+          },
+          {
+            model: CampaignInvitation,
+            attributes: ['status'],
+          },
+          {
+            model: CampaignApplication,
+            attributes: ['id'],
+          },
+        ],
+        order: [['createdAt', 'DESC']],
+        limit,
+        offset,
+      });
 
     // Add application count to each campaign
-    return campaigns.map((campaign) => {
-      const campaignData = campaign.toJSON() as Campaign & {
-        totalApplications: number;
-      };
+    const campaignsWithStats = campaigns.map((campaign) => {
+      const campaignData: Campaign & { totalApplications: number } =
+        campaign.toJSON();
       campaignData.totalApplications = campaign.applications?.length ?? 0;
-      return campaignData as Campaign;
+      return campaignData;
     });
+
+    return {
+      campaigns: campaignsWithStats,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async searchInfluencers(searchDto: SearchInfluencersDto): Promise<{
