@@ -851,7 +851,7 @@ describe('CampaignService', () => {
   });
 
   describe('getBrandCampaigns', () => {
-    it('should return campaigns for a specific brand', async () => {
+    it('should return campaigns for a specific brand with application count', async () => {
       const brandId = 1;
       const mockCampaigns = [
         {
@@ -860,6 +860,15 @@ describe('CampaignService', () => {
           brandId,
           deliverables: [],
           invitations: [],
+          applications: [{ id: 1 }, { id: 2 }, { id: 3 }],
+          toJSON: jest.fn().mockReturnValue({
+            id: 1,
+            name: 'Campaign 1',
+            brandId,
+            deliverables: [],
+            invitations: [],
+            applications: [{ id: 1 }, { id: 2 }, { id: 3 }],
+          }),
         },
       ];
 
@@ -867,7 +876,17 @@ describe('CampaignService', () => {
 
       const result = await service.getBrandCampaigns(brandId);
 
-      expect(result).toEqual(mockCampaigns);
+      expect(result).toEqual([
+        {
+          id: 1,
+          name: 'Campaign 1',
+          brandId,
+          deliverables: [],
+          invitations: [],
+          applications: [{ id: 1 }, { id: 2 }, { id: 3 }],
+          totalApplications: 3,
+        },
+      ]);
       expect(campaignModel.findAll).toHaveBeenCalledWith({
         where: { brandId, isActive: true },
         include: expect.any(Array),

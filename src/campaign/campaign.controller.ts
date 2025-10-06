@@ -420,6 +420,7 @@ export class CampaignController {
             },
           ],
           invitations: [{ status: 'pending' }, { status: 'accepted' }],
+          totalApplications: 15,
         },
       ],
     },

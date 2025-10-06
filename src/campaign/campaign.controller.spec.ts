@@ -297,7 +297,7 @@ describe('CampaignController', () => {
   });
 
   describe('getMyBrandCampaigns', () => {
-    it('should get brand campaigns', async () => {
+    it('should get brand campaigns with application count', async () => {
       const mockRequest: RequestWithUser = {
         user: { id: 1, userType: 'brand' },
       } as any;
@@ -307,6 +307,7 @@ describe('CampaignController', () => {
           id: 1,
           name: 'Campaign 1',
           brandId: 1,
+          totalApplications: 15,
         },
       ];
 

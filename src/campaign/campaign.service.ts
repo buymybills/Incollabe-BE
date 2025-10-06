@@ -577,7 +577,7 @@ export class CampaignService {
   }
 
   async getBrandCampaigns(brandId: number): Promise<Campaign[]> {
-    return this.campaignModel.findAll({
+    const campaigns = await this.campaignModel.findAll({
       where: { brandId, isActive: true },
       include: [
         {
@@ -588,8 +588,21 @@ export class CampaignService {
           model: CampaignInvitation,
           attributes: ['status'],
         },
+        {
+          model: CampaignApplication,
+          attributes: ['id'],
+        },
       ],
       order: [['createdAt', 'DESC']],
+    });
+
+    // Add application count to each campaign
+    return campaigns.map((campaign) => {
+      const campaignData = campaign.toJSON() as Campaign & {
+        totalApplications: number;
+      };
+      campaignData.totalApplications = campaign.applications?.length ?? 0;
+      return campaignData as Campaign;
     });
   }
 
