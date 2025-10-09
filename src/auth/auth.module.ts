@@ -22,6 +22,7 @@ import { City } from '../shared/models/city.model';
 import { CompanyType } from '../shared/models/company-type.model';
 import { Admin } from '../admin/models/admin.model';
 import { CustomNiche } from './model/custom-niche.model';
+import { ProfileReview } from '../admin/models/profile-review.model';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { CustomNiche } from './model/custom-niche.model';
       CompanyType,
       Admin,
       CustomNiche,
+      ProfileReview,
     ]),
     ScheduleModule.forRoot(),
     SharedModule,

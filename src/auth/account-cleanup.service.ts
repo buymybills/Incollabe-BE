@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { InjectModel } from '@nestjs/sequelize';
 import { Influencer } from './model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
+import { ProfileReview } from '../admin/models/profile-review.model';
 import { LoggerService } from '../shared/services/logger.service';
 import { Op } from 'sequelize';
 
@@ -13,11 +14,13 @@ export class AccountCleanupService {
     private readonly influencerModel: typeof Influencer,
     @InjectModel(Brand)
     private readonly brandModel: typeof Brand,
+    @InjectModel(ProfileReview)
+    private readonly profileReviewModel: typeof ProfileReview,
     private readonly loggerService: LoggerService,
   ) {}
 
-  // Run daily at 2:00 AM
-  @Cron(CronExpression.EVERY_DAY_AT_2AM)
+  // Run daily at 2:00 AM (cron: minute hour day month weekday)
+  @Cron('0 2 * * *')
   async hardDeleteOldAccounts() {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -36,7 +39,17 @@ export class AccountCleanupService {
       });
 
       for (const influencer of deletedInfluencers) {
-        await influencer.destroy({ force: true }); // Hard delete
+        // Delete profile reviews first (polymorphic relationship - no CASCADE)
+        await this.profileReviewModel.destroy({
+          where: {
+            profileId: influencer.id,
+            profileType: 'influencer',
+          },
+          force: true,
+        });
+
+        // Now hard delete the influencer (CASCADE will handle other related records)
+        await influencer.destroy({ force: true });
       }
 
       // Find and hard delete brands deleted more than 30 days ago
@@ -50,7 +63,17 @@ export class AccountCleanupService {
       });
 
       for (const brand of deletedBrands) {
-        await brand.destroy({ force: true }); // Hard delete
+        // Delete profile reviews first (polymorphic relationship - no CASCADE)
+        await this.profileReviewModel.destroy({
+          where: {
+            profileId: brand.id,
+            profileType: 'brand',
+          },
+          force: true,
+        });
+
+        // Now hard delete the brand (CASCADE will handle other related records)
+        await brand.destroy({ force: true });
       }
 
       this.loggerService.info(
