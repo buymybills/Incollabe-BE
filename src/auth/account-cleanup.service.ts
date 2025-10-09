@@ -25,15 +25,16 @@ export class AccountCleanupService {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    this.loggerService.info('Starting hard deletion of accounts older than 30 days');
+    this.loggerService.info(`Starting hard deletion of accounts older than 30 days (before ${thirtyDaysAgo.toISOString()})`);
 
     try {
       // Find and hard delete influencers deleted more than 30 days ago
       const deletedInfluencers = await this.influencerModel.findAll({
         where: {
-          deletedAt: {
-            [Op.lte]: thirtyDaysAgo,
-          },
+          [Op.and]: [
+            { deletedAt: { [Op.ne]: null } },
+            { deletedAt: { [Op.lte]: thirtyDaysAgo } },
+          ],
         },
         paranoid: false, // Include soft-deleted records
       });
