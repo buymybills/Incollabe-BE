@@ -3,12 +3,16 @@ import {
   CanActivate,
   ExecutionContext,
   UnauthorizedException,
+  Inject,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
+import { InjectModel } from '@nestjs/sequelize';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { Influencer } from '../model/influencer.model';
+import { Brand } from '../../brand/model/brand.model';
 
 interface JwtPayload {
   id: number;
@@ -35,6 +39,10 @@ export class AuthGuard implements CanActivate {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly reflector: Reflector,
+    @InjectModel(Influencer)
+    private readonly influencerModel: typeof Influencer,
+    @InjectModel(Brand)
+    private readonly brandModel: typeof Brand,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -59,6 +67,25 @@ export class AuthGuard implements CanActivate {
         secret: this.configService.get<string>('JWT_SECRET'),
       });
 
+      // Check if the account exists and is active
+      if (payload.userType === 'influencer') {
+        const influencer = await this.influencerModel.findByPk(payload.id);
+        if (!influencer) {
+          throw new UnauthorizedException('Account not found or has been deleted');
+        }
+        if (!influencer.isActive) {
+          throw new UnauthorizedException('Account is inactive');
+        }
+      } else if (payload.userType === 'brand') {
+        const brand = await this.brandModel.findByPk(payload.id);
+        if (!brand) {
+          throw new UnauthorizedException('Account not found or has been deleted');
+        }
+        if (!brand.isActive) {
+          throw new UnauthorizedException('Account is inactive');
+        }
+      }
+
       // Attach user info to request for use in controllers
       request.user = {
         id: payload.id,
@@ -70,6 +97,9 @@ export class AuthGuard implements CanActivate {
 
       return true;
     } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
       throw new UnauthorizedException('Invalid or expired access token');
     }
   }

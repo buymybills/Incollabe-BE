@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { AccountCleanupService } from './account-cleanup.service';
 import { Influencer } from './model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { Niche } from './model/niche.model';
@@ -36,11 +38,13 @@ import { CustomNiche } from './model/custom-niche.model';
       Admin,
       CustomNiche,
     ]),
+    ScheduleModule.forRoot(),
     SharedModule,
   ],
   controllers: [AuthController, SeedController],
   providers: [
     AuthService,
+    AccountCleanupService,
     NicheSeeder,
     CountrySeeder,
     CitySeeder,

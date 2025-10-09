@@ -29,6 +29,7 @@ import { EncryptionService } from '../../shared/services/encryption.service';
 @Table({
   tableName: 'influencers',
   timestamps: true,
+  paranoid: true,
 })
 export class Influencer extends Model {
   @PrimaryKey

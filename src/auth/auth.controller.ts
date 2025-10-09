@@ -11,6 +11,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Delete,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -19,7 +20,7 @@ import {
   ApiBody,
   ApiHeader,
   ApiBearerAuth,
-  ApiConsumes,
+  ApiConsumes, 
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RequestOtpDto } from './dto/request-otp.dto';
@@ -949,21 +950,21 @@ export class AuthController {
     return this.authService.resetPassword(resetPasswordDto);
   }
 
-  @Post('deactivate-account')
+  @Delete('delete-account')
   @UseGuards(AuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Deactivate user account',
+    summary: 'Delete user account',
     description:
-      'Deactivates the authenticated user account (influencer or brand) and logs out all sessions',
+      'Deletes the authenticated user account (influencer or brand) and logs out all sessions. The account can be restored within 30 days by logging in again. After 30 days, the account will be permanently deleted.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Account deactivated successfully',
+    description: 'Account deleted successfully',
     schema: {
       example: {
-        message: 'Account deactivated successfully',
+        message: 'Account deleted successfully',
       },
     },
   })
@@ -975,7 +976,7 @@ export class AuthController {
     status: 404,
     description: 'User not found',
   })
-  async deactivateAccount(@Req() req: Request & { user: { id: number; userType: 'influencer' | 'brand' } }) {
-    return this.authService.deactivateAccount(req.user.id, req.user.userType);
+  async deleteAccount(@Req() req: Request & { user: { id: number; userType: 'influencer' | 'brand' } }) {
+    return this.authService.deleteAccount(req.user.id, req.user.userType);
   }
 }

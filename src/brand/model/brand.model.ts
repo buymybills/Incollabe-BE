@@ -58,7 +58,7 @@ export interface BrandCreationAttributes {
   isVerified?: boolean;
 }
 
-@Table({ tableName: 'brands', timestamps: true })
+@Table({ tableName: 'brands', timestamps: true, paranoid: true })
 export class Brand extends Model<Brand, BrandCreationAttributes> {
   @PrimaryKey
   @AutoIncrement

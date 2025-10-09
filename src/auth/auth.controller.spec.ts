@@ -1,8 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
+import { AuthGuard } from './guards/auth.guard';
 import { RequestOtpDto } from './dto/request-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { InfluencerSignupDto } from './dto/influencer-signup.dto';
@@ -24,6 +23,11 @@ const mockAuthService = {
   brandLogin: jest.fn(),
   getNiches: jest.fn(),
   checkUsernameAvailability: jest.fn(),
+  deleteAccount: jest.fn(),
+};
+
+const mockAuthGuard = {
+  canActivate: jest.fn(() => true),
 };
 
 describe('AuthController', () => {
@@ -38,21 +42,11 @@ describe('AuthController', () => {
           provide: AuthService,
           useValue: mockAuthService,
         },
-        {
-          provide: JwtService,
-          useValue: {
-            sign: jest.fn(),
-            verify: jest.fn(),
-          },
-        },
-        {
-          provide: ConfigService,
-          useValue: {
-            get: jest.fn(),
-          },
-        },
       ],
-    }).compile();
+    })
+      .overrideGuard(AuthGuard)
+      .useValue(mockAuthGuard)
+      .compile();
 
     controller = module.get<AuthController>(AuthController);
     authService = module.get<AuthService>(AuthService);
@@ -354,6 +348,36 @@ describe('AuthController', () => {
         undefined,
         undefined,
       );
+      expect(result).toEqual(expectedResult);
+    });
+  });
+
+  describe('deleteAccount', () => {
+    it('should delete influencer account', async () => {
+      const mockReq = {
+        user: { id: 1, userType: 'influencer' },
+      } as any;
+      const expectedResult = { message: 'Account deleted successfully' };
+
+      mockAuthService.deleteAccount.mockResolvedValue(expectedResult);
+
+      const result = await controller.deleteAccount(mockReq);
+
+      expect(authService.deleteAccount).toHaveBeenCalledWith(1, 'influencer');
+      expect(result).toEqual(expectedResult);
+    });
+
+    it('should delete brand account', async () => {
+      const mockReq = {
+        user: { id: 2, userType: 'brand' },
+      } as any;
+      const expectedResult = { message: 'Account deleted successfully' };
+
+      mockAuthService.deleteAccount.mockResolvedValue(expectedResult);
+
+      const result = await controller.deleteAccount(mockReq);
+
+      expect(authService.deleteAccount).toHaveBeenCalledWith(2, 'brand');
       expect(result).toEqual(expectedResult);
     });
   });

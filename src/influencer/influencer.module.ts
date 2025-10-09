@@ -4,6 +4,7 @@ import { InfluencerController } from './influencer.controller';
 import { InfluencerService } from './influencer.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import { Influencer } from '../auth/model/influencer.model';
+import { Brand } from '../brand/model/brand.model';
 import { Niche } from '../auth/model/niche.model';
 import { InfluencerNiche } from '../auth/model/influencer-niche.model';
 import { Experience } from './models/experience.model';
@@ -24,6 +25,7 @@ import { SharedModule } from '../shared/shared.module';
   imports: [
     SequelizeModule.forFeature([
       Influencer,
+      Brand,
       Niche,
       InfluencerNiche,
       Experience,

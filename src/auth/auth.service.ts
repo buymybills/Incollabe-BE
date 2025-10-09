@@ -333,6 +333,31 @@ export class AuthService {
         transaction: t,
       });
 
+      // Check for deleted account within 30 days
+      const deletedUser = await this.influencerModel.findOne({
+        where: { phoneHash },
+        paranoid: false,
+        transaction: t,
+      });
+
+      // If account was deleted within 30 days, restore it
+      if (deletedUser && deletedUser.deletedAt) {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        if (deletedUser.deletedAt > thirtyDaysAgo) {
+          await deletedUser.restore({ transaction: t });
+          await deletedUser.update({ isActive: true }, { transaction: t });
+          this.loggerService.info(
+            `Restored deleted account for influencer: ${deletedUser.id}`,
+          );
+          return deletedUser;
+        } else {
+          // Account deleted more than 30 days ago, treat as new user
+          return null;
+        }
+      }
+
       return await this.influencerModel.findOne({
         where: { phoneHash },
         transaction: t,
@@ -361,6 +386,13 @@ export class AuthService {
     }
 
     // 🔹 Step 6: Handle returning users → issue tokens
+
+    // Reactivate account if deactivated
+    if (!user.isActive) {
+      await user.update({ isActive: true });
+      this.loggerService.info(`Account reactivated for influencer: ${user.id}`);
+    }
+
     const profileCompleted = Boolean(
       user.dataValues.name && user.dataValues.username,
     );
@@ -1035,10 +1067,36 @@ export class AuthService {
     // Create hash of email for searching
     const emailHash = crypto.createHash('sha256').update(email).digest('hex');
 
-    // Find brand by emailHash
-    const brand = await this.brandModel.findOne({
+    // Find brand by emailHash (including soft-deleted)
+    let brand = await this.brandModel.findOne({
       where: { emailHash },
+      paranoid: false,
     });
+
+    // If account was deleted within 30 days, restore it
+    if (brand && brand.deletedAt) {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      if (brand.deletedAt > thirtyDaysAgo) {
+        // Verify password before restoring
+        if (!password || !brand.password) {
+          throw new UnauthorizedException('Invalid email or password');
+        }
+
+        const isValidPassword = await bcrypt.compare(password, brand.password);
+        if (!isValidPassword) {
+          throw new UnauthorizedException('Invalid email or password');
+        }
+
+        await brand.restore();
+        await brand.update({ isActive: true });
+        this.loggerService.info(`Restored deleted account for brand: ${brand.id}`);
+      } else {
+        // Account deleted more than 30 days ago
+        throw new UnauthorizedException('Invalid email or password');
+      }
+    }
 
     if (!brand) {
       throw new UnauthorizedException('Invalid email or password');
@@ -1174,6 +1232,12 @@ export class AuthService {
 
     if (!brand) {
       throw new UnauthorizedException('Brand not found');
+    }
+
+    // Reactivate account if deactivated
+    if (!brand.isActive) {
+      await brand.update({ isActive: true });
+      this.loggerService.info(`Account reactivated for brand: ${brand.id}`);
     }
 
     // Check if this is a new signup (profile not completed yet)
@@ -1812,25 +1876,11 @@ export class AuthService {
     };
   }
 
-  async deactivateAccount(
+  async deleteAccount(
     userId: number,
     userType: 'influencer' | 'brand',
   ): Promise<{ message: string }> {
-    if (userType === 'influencer') {
-      const influencer = await this.influencerModel.findByPk(userId);
-      if (!influencer) {
-        throw new NotFoundException('Influencer not found');
-      }
-      await influencer.update({ isActive: false });
-    } else if (userType === 'brand') {
-      const brand = await this.brandModel.findByPk(userId);
-      if (!brand) {
-        throw new NotFoundException('Brand not found');
-      }
-      await brand.update({ isActive: false });
-    }
-
-    // Invalidate all user sessions
+    // Invalidate all user sessions first
     const sessionsKey = this.sessionsSetKey(userId);
     const sessionJtis = await this.redisService.getClient().smembers(sessionsKey);
 
@@ -1839,6 +1889,23 @@ export class AuthService {
     }
     await this.redisService.del(sessionsKey);
 
-    return { message: 'Account deactivated successfully' };
+    // Soft delete using paranoid mode (sets deletedAt timestamp and isActive=false)
+    if (userType === 'influencer') {
+      const influencer = await this.influencerModel.findByPk(userId);
+      if (!influencer) {
+        throw new NotFoundException('Influencer not found');
+      }
+      await influencer.update({ isActive: false });
+      await influencer.destroy(); // Sets deletedAt with paranoid mode
+    } else if (userType === 'brand') {
+      const brand = await this.brandModel.findByPk(userId);
+      if (!brand) {
+        throw new NotFoundException('Brand not found');
+      }
+      await brand.update({ isActive: false });
+      await brand.destroy(); // Sets deletedAt with paranoid mode
+    }
+
+    return { message: 'Account deleted successfully' };
   }
 }

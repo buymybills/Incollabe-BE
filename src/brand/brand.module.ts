@@ -6,6 +6,7 @@ import { BrandController } from './brand.controller';
 import { Brand } from './model/brand.model';
 import { BrandNiche } from './model/brand-niche.model';
 import { Niche } from '../auth/model/niche.model';
+import { Influencer } from '../auth/model/influencer.model';
 import { Country } from '../shared/models/country.model';
 import { City } from '../shared/models/city.model';
 import { Region } from '../shared/models/region.model';
@@ -24,6 +25,7 @@ import { SharedModule } from '../shared/shared.module';
   imports: [
     SequelizeModule.forFeature([
       Brand,
+      Influencer,
       BrandNiche,
       Niche,
       Country,
