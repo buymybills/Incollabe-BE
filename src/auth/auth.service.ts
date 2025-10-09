@@ -188,7 +188,6 @@ export class AuthService {
     });
 
     // Encrypt identifier before storing (use formattedPhone for consistency)
-    const crypto = require('crypto');
     const identifierHash = crypto
       .createHash('sha256')
       .update(formattedPhone)
