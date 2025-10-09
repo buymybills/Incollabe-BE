@@ -265,7 +265,6 @@ export class AuthService {
 
     // 🔹 Step 2: Validate OTP against DB
     // Hash the phone number to search (since identifiers are encrypted in DB)
-    const crypto = require('crypto');
     const identifierHash = crypto
       .createHash('sha256')
       .update(formattedPhone)
