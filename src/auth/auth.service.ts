@@ -1811,4 +1811,34 @@ export class AuthService {
       },
     };
   }
+
+  async deactivateAccount(
+    userId: number,
+    userType: 'influencer' | 'brand',
+  ): Promise<{ message: string }> {
+    if (userType === 'influencer') {
+      const influencer = await this.influencerModel.findByPk(userId);
+      if (!influencer) {
+        throw new NotFoundException('Influencer not found');
+      }
+      await influencer.update({ isActive: false });
+    } else if (userType === 'brand') {
+      const brand = await this.brandModel.findByPk(userId);
+      if (!brand) {
+        throw new NotFoundException('Brand not found');
+      }
+      await brand.update({ isActive: false });
+    }
+
+    // Invalidate all user sessions
+    const sessionsKey = this.sessionsSetKey(userId);
+    const sessionJtis = await this.redisService.getClient().smembers(sessionsKey);
+
+    for (const jti of sessionJtis) {
+      await this.redisService.del(this.sessionKey(userId, jti));
+    }
+    await this.redisService.del(sessionsKey);
+
+    return { message: 'Account deactivated successfully' };
+  }
 }

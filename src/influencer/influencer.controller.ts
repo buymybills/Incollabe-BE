@@ -709,6 +709,32 @@ export class InfluencerController {
     );
   }
 
+  @Delete('experiences/:experienceId')
+  @ApiOperation({
+    summary: 'Delete experience',
+    description: 'Delete a campaign experience from the influencer profile',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Experience deleted successfully',
+    schema: {
+      example: {
+        message: 'Experience deleted successfully',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Experience not found',
+  })
+  async deleteExperience(
+    @Req() req: RequestWithUser,
+    @Param('experienceId', ParseIntPipe) experienceId: number,
+  ) {
+    const influencerId = req.user.id;
+    return this.influencerService.deleteExperience(experienceId, influencerId);
+  }
+
   @Get('top-influencers')
   @ApiOperation({
     summary: 'Get top influencers',

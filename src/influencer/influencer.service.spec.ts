@@ -100,9 +100,10 @@ describe('InfluencerService', () => {
   let emailService: EmailService;
   let whatsAppService: WhatsAppService;
   let otpService: OtpService;
+  let module: TestingModule;
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
         InfluencerService,
         {
@@ -807,6 +808,43 @@ describe('InfluencerService', () => {
         expect(error.message).not.toContain('sensitive information');
         expect(error.message).toBe(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
       }
+    });
+  });
+
+  describe('deleteExperience', () => {
+    it('should delete experience successfully', async () => {
+      const mockExperience = {
+        id: 1,
+        influencerId: 1,
+        campaignName: 'Test Campaign',
+        destroy: jest.fn().mockResolvedValue(true),
+      };
+
+      const experienceModel = module.get('EXPERIENCE_MODEL');
+      const experienceSocialLinkModel = module.get('EXPERIENCE_SOCIAL_LINK_MODEL');
+
+      experienceModel.findOne.mockResolvedValue(mockExperience);
+      experienceSocialLinkModel.destroy.mockResolvedValue(2);
+
+      const result = await service.deleteExperience(1, 1);
+
+      expect(result).toEqual({ message: 'Experience deleted successfully' });
+      expect(experienceModel.findOne).toHaveBeenCalledWith({
+        where: { id: 1, influencerId: 1 },
+      });
+      expect(experienceSocialLinkModel.destroy).toHaveBeenCalledWith({
+        where: { experienceId: 1 },
+      });
+      expect(mockExperience.destroy).toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundException if experience not found', async () => {
+      const experienceModel = module.get('EXPERIENCE_MODEL');
+      experienceModel.findOne.mockResolvedValue(null);
+
+      await expect(service.deleteExperience(999, 1)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

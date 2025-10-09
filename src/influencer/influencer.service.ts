@@ -1248,6 +1248,29 @@ export class InfluencerService {
     return experienceWithLinks;
   }
 
+  async deleteExperience(
+    experienceId: number,
+    influencerId: number,
+  ): Promise<{ message: string }> {
+    const experience = await this.experienceModel.findOne({
+      where: { id: experienceId, influencerId },
+    });
+
+    if (!experience) {
+      throw new NotFoundException('Experience not found');
+    }
+
+    // Delete associated social links first
+    await this.experienceSocialLinkModel.destroy({
+      where: { experienceId },
+    });
+
+    // Delete the experience
+    await experience.destroy();
+
+    return { message: 'Experience deleted successfully' };
+  }
+
   async getExperiences(
     influencerId: number,
     experienceId?: number,

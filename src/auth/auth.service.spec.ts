@@ -810,4 +810,60 @@ describe('AuthService', () => {
       expect(service['sequelize']).toBeDefined();
     });
   });
+
+  describe('deactivateAccount', () => {
+    it('should deactivate influencer account successfully', async () => {
+      const mockInfluencer = {
+        id: 1,
+        isActive: true,
+        update: jest.fn().mockResolvedValue({ isActive: false }),
+      };
+
+      influencerModel.findByPk.mockResolvedValue(mockInfluencer);
+      redisService.getClient().smembers = jest.fn().mockResolvedValue(['jti1', 'jti2']);
+      redisService.del = jest.fn().mockResolvedValue(1);
+
+      const result = await service.deactivateAccount(1, 'influencer');
+
+      expect(result).toEqual({ message: 'Account deactivated successfully' });
+      expect(influencerModel.findByPk).toHaveBeenCalledWith(1);
+      expect(mockInfluencer.update).toHaveBeenCalledWith({ isActive: false });
+      expect(redisService.del).toHaveBeenCalled();
+    });
+
+    it('should deactivate brand account successfully', async () => {
+      const mockBrand = {
+        id: 1,
+        isActive: true,
+        update: jest.fn().mockResolvedValue({ isActive: false }),
+      };
+
+      brandModel.findByPk.mockResolvedValue(mockBrand);
+      redisService.getClient().smembers = jest.fn().mockResolvedValue(['jti1']);
+      redisService.del = jest.fn().mockResolvedValue(1);
+
+      const result = await service.deactivateAccount(1, 'brand');
+
+      expect(result).toEqual({ message: 'Account deactivated successfully' });
+      expect(brandModel.findByPk).toHaveBeenCalledWith(1);
+      expect(mockBrand.update).toHaveBeenCalledWith({ isActive: false });
+      expect(redisService.del).toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundException if influencer not found', async () => {
+      influencerModel.findByPk.mockResolvedValue(null);
+
+      await expect(service.deactivateAccount(999, 'influencer')).rejects.toThrow(
+        'Influencer not found',
+      );
+    });
+
+    it('should throw NotFoundException if brand not found', async () => {
+      brandModel.findByPk.mockResolvedValue(null);
+
+      await expect(service.deactivateAccount(999, 'brand')).rejects.toThrow(
+        'Brand not found',
+      );
+    });
+  });
 });

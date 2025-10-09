@@ -948,4 +948,34 @@ export class AuthController {
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(resetPasswordDto);
   }
+
+  @Post('deactivate-account')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Deactivate user account',
+    description:
+      'Deactivates the authenticated user account (influencer or brand) and logs out all sessions',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Account deactivated successfully',
+    schema: {
+      example: {
+        message: 'Account deactivated successfully',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async deactivateAccount(@Req() req: Request & { user: { id: number; userType: 'influencer' | 'brand' } }) {
+    return this.authService.deactivateAccount(req.user.id, req.user.userType);
+  }
 }
