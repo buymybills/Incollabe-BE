@@ -1635,13 +1635,14 @@ export class AuthService {
     // Create hash of email for searching
     const emailHash = crypto.createHash('sha256').update(email).digest('hex');
 
-    // Check if brand already exists
+    // Check if brand already exists (only active ones - paranoid true by default)
     const existingBrand = await this.brandModel.findOne({
       where: { emailHash },
     });
 
     if (existingBrand) {
       if (existingBrand.isEmailVerified) {
+        // Active verified account exists
         throw new ConflictException('Brand already exists with this email');
       } else {
         // Brand exists but email not verified - resend OTP
