@@ -338,9 +338,49 @@ describe('InfluencerController', () => {
     });
   });
 
-  describe('Authentication', () => {
+  describe('Authentication and Authorization', () => {
     it('should require authentication for protected routes', () => {
       expect(mockAuthGuard.canActivate).toBeDefined();
+    });
+
+    it('should reject brands from accessing influencer profile endpoint', async () => {
+      const brandRequest: RequestWithUser = {
+        user: {
+          id: 1,
+          email: 'test@brand.com',
+          userType: 'brand',
+          profileCompleted: true,
+        },
+      } as RequestWithUser;
+
+      await expect(
+        controller.getInfluencerProfile(brandRequest),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        controller.getInfluencerProfile(brandRequest),
+      ).rejects.toThrow('Only influencers can access this endpoint');
+    });
+
+    it('should reject brands from updating influencer profile', async () => {
+      const brandRequest: RequestWithUser = {
+        user: {
+          id: 1,
+          email: 'test@brand.com',
+          userType: 'brand',
+          profileCompleted: true,
+        },
+      } as RequestWithUser;
+
+      const updateDto: UpdateInfluencerProfileDto = {
+        bio: 'Test bio with minimum required length',
+      };
+
+      await expect(
+        controller.updateInfluencerProfile(brandRequest, updateDto, undefined),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        controller.updateInfluencerProfile(brandRequest, updateDto, undefined),
+      ).rejects.toThrow('Only influencers can update influencer profiles');
     });
   });
 

@@ -462,7 +462,7 @@ describe('PostService', () => {
 
       postModel.findAndCountAll.mockResolvedValue({
         count: 2,
-        rows: mockPosts.map(post => ({ ...post, toJSON: () => post })),
+        rows: mockPosts.map((post) => ({ ...post, toJSON: () => post })),
       });
 
       likeModel.findAll.mockResolvedValue([]);
@@ -528,7 +528,9 @@ describe('PostService', () => {
         userType: UserType.INFLUENCER,
         influencerId: 1,
         isActive: true,
-        toJSON: function() { return this; }
+        toJSON: function () {
+          return this;
+        },
       };
 
       postModel.findOne.mockResolvedValue(mockPost);

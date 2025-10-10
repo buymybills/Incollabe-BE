@@ -58,7 +58,16 @@ export class InfluencerController {
     description: 'Influencer profile retrieved successfully',
   })
   @ApiResponse({ status: 404, description: 'Influencer not found' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Only influencers can access this endpoint',
+  })
   async getInfluencerProfile(@Req() req: RequestWithUser) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException(
+        'Only influencers can access this endpoint',
+      );
+    }
     const influencerId = req.user.id;
     return await this.influencerService.getInfluencerProfile(influencerId);
   }
@@ -268,6 +277,13 @@ export class InfluencerController {
     @Body() updateData: UpdateInfluencerProfileDto,
     @UploadedFiles() files: any,
   ) {
+    // Check if user is an influencer
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException(
+        'Only influencers can update influencer profiles',
+      );
+    }
+
     // Validate file sizes - 5MB for profile image and banner
     const maxImageSize = 5 * 1024 * 1024; // 5MB
 

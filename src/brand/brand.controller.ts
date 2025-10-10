@@ -70,9 +70,16 @@ export class BrandController {
     status: 401,
     description: 'Unauthorized - valid JWT token required',
   })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Only brands can access this endpoint',
+  })
   async getBrandProfile(
     @Req() req: RequestWithUser,
   ): Promise<BrandProfileResponseDto> {
+    if (req.user.userType !== 'brand') {
+      throw new BadRequestException('Only brands can access this endpoint');
+    }
     const brandId = req.user.id;
     return await this.brandService.getBrandProfile(brandId);
   }
@@ -186,6 +193,11 @@ export class BrandController {
     @Body() updateBrandProfileDto: UpdateBrandProfileDto,
     @UploadedFiles() files: SignupFiles,
   ) {
+    // Check if user is a brand
+    if (req.user.userType !== 'brand') {
+      throw new BadRequestException('Only brands can update brand profiles');
+    }
+
     // Validate file sizes - 5MB for profile image and banner
     const maxImageSize = 5 * 1024 * 1024; // 5MB
 

@@ -196,7 +196,11 @@ describe('PostController', () => {
       const result = await controller.getPostById(1, mockUser);
 
       expect(result).toEqual(mockPost);
-      expect(postService.getPostById).toHaveBeenCalledWith(1, UserType.INFLUENCER, 1);
+      expect(postService.getPostById).toHaveBeenCalledWith(
+        1,
+        UserType.INFLUENCER,
+        1,
+      );
     });
   });
 
@@ -474,7 +478,11 @@ describe('PostController', () => {
 
       await controller.getPostById(123, mockUser);
 
-      expect(postService.getPostById).toHaveBeenCalledWith(123, UserType.INFLUENCER, 1);
+      expect(postService.getPostById).toHaveBeenCalledWith(
+        123,
+        UserType.INFLUENCER,
+        1,
+      );
     });
 
     it('should handle string parameters in getUserPosts', async () => {

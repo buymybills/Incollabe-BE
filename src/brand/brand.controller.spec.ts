@@ -629,6 +629,46 @@ describe('BrandController', () => {
 
       expect(brandService.getBrandProfile).toHaveBeenCalledWith(999);
     });
+
+    it('should reject influencers from accessing brand profile endpoint', async () => {
+      const influencerRequest: RequestWithUser = {
+        user: {
+          id: 1,
+          email: 'test@influencer.com',
+          userType: 'influencer',
+          profileCompleted: true,
+        },
+      } as RequestWithUser;
+
+      await expect(
+        controller.getBrandProfile(influencerRequest),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        controller.getBrandProfile(influencerRequest),
+      ).rejects.toThrow('Only brands can access this endpoint');
+    });
+
+    it('should reject influencers from updating brand profile', async () => {
+      const influencerRequest: RequestWithUser = {
+        user: {
+          id: 1,
+          email: 'test@influencer.com',
+          userType: 'influencer',
+          profileCompleted: true,
+        },
+      } as RequestWithUser;
+
+      const updateDto: UpdateBrandProfileDto = {
+        brandName: 'Test Brand',
+      };
+
+      await expect(
+        controller.updateBrandProfile(influencerRequest, updateDto, {}),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        controller.updateBrandProfile(influencerRequest, updateDto, {}),
+      ).rejects.toThrow('Only brands can update brand profiles');
+    });
   });
 
   describe('Error Handling', () => {
