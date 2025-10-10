@@ -988,14 +988,64 @@ export class AuthController {
   @Delete('delete-account-by-identifier')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Delete account by email or phone',
-    description: 'Delete an influencer account by phone number or brand account by email address. This performs a soft delete with 30-day grace period.',
+    summary: 'Request OTP for account deletion',
+    description: 'Step 1: Send OTP to phone/email for account deletion verification. After receiving OTP, use the verify endpoint to complete deletion.',
   })
   @ApiQuery({
     name: 'userType',
     enum: ['influencer', 'brand'],
     required: true,
     description: 'Select user type to delete',
+  })
+  @ApiQuery({
+    name: 'phone',
+    required: false,
+    description: 'Phone number (without country code) - Required only if userType is "influencer"',
+    example: '9870541151',
+  })
+  @ApiQuery({
+    name: 'email',
+    required: false,
+    description: 'Email address - Required only if userType is "brand"',
+    example: 'testbrand@example.com',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP sent successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid input',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async requestDeleteAccountOtp(
+    @Query('userType') userType: 'influencer' | 'brand',
+    @Query('phone') phone?: string,
+    @Query('email') email?: string,
+  ) {
+    return this.authService.requestDeleteAccountOtp(userType, phone, email);
+  }
+
+  @Post('verify-delete-otp')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Verify OTP and delete account',
+    description: 'Step 2: Verify OTP received and permanently delete the account with 30-day grace period.',
+  })
+  @ApiQuery({
+    name: 'userType',
+    enum: ['influencer', 'brand'],
+    required: true,
+    description: 'Select user type to delete',
+  })
+  @ApiQuery({
+    name: 'otp',
+    required: true,
+    description: 'OTP received via SMS/Email',
+    example: '123456',
   })
   @ApiQuery({
     name: 'phone',
@@ -1018,15 +1068,20 @@ export class AuthController {
     description: 'Bad Request - Invalid input',
   })
   @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or expired OTP',
+  })
+  @ApiResponse({
     status: 404,
     description: 'User not found',
   })
-  async deleteAccountByIdentifier(
+  async verifyAndDeleteAccount(
     @Query('userType') userType: 'influencer' | 'brand',
+    @Query('otp') otp: string,
     @Query('phone') phone?: string,
     @Query('email') email?: string,
   ) {
-    return this.authService.deleteAccountByIdentifier(userType, phone, email);
+    return this.authService.verifyAndDeleteAccount(userType, otp, phone, email);
   }
 
 }

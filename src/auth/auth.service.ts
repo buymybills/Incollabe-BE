@@ -139,7 +139,7 @@ export class AuthService {
 
   async requestOtp(requestOtpDto: RequestOtpDto): Promise<string> {
     const { phone } = requestOtpDto;
-    const formattedPhone = `+91${phone}`; // Add Indian country code
+    const formattedPhone = `+91${phone}`; // Add Indian country code 
 
     // Log OTP request start
     this.loggerService.logAuth('OTP_REQUEST_STARTED', {
@@ -1908,7 +1908,7 @@ export class AuthService {
     return { message: 'Account deleted successfully' };
   }
 
-  async deleteAccountByIdentifier(
+  async requestDeleteAccountOtp(
     userType: 'influencer' | 'brand',
     phone?: string,
     email?: string,
@@ -1935,6 +1935,96 @@ export class AuthService {
         throw new NotFoundException('Influencer not found with this phone number');
       }
 
+      // Send OTP
+      await this.requestOtp({ phone});
+      return {
+        message: 'OTP sent to your phone number. Please verify to delete your account.',
+        requiresOtp: true,
+        phone: formattedPhone,
+      };
+    } else if (userType === 'brand') {
+      if (!email) {
+        throw new BadRequestException('Email is required for brand');
+      }
+      if (phone) {
+        throw new BadRequestException('Phone should not be provided when userType is brand');
+      }
+
+      const emailHash = crypto.createHash('sha256').update(email).digest('hex');
+
+      const brand = await this.brandModel.findOne({
+        where: { emailHash },
+      });
+
+      if (!brand) {
+        throw new NotFoundException('Brand not found with this email address');
+      }
+
+      // Send OTP
+      const otpCode = await this.generateAndStoreOtp(email, { brandId: brand.id });
+      await this.emailService.sendBrandOtp(email, otpCode);
+      return {
+        message: 'OTP sent to your email. Please verify to delete your account.',
+        requiresOtp: true,
+        email,
+      };
+    }
+
+    throw new BadRequestException('Invalid user type');
+  }
+
+  async verifyAndDeleteAccount(
+    userType: 'influencer' | 'brand',
+    otp: string,
+    phone?: string,
+    email?: string,
+  ) {
+    if (userType === 'influencer') {
+      if (!phone) {
+        throw new BadRequestException('Phone number is required for influencer');
+      }
+      if (email) {
+        throw new BadRequestException('Email should not be provided when userType is influencer');
+      }
+
+      const formattedPhone = `+91${phone}`;
+      const phoneHash = crypto
+        .createHash('sha256')
+        .update(formattedPhone)
+        .digest('hex');
+
+      const influencer = await this.influencerModel.findOne({
+        where: { phoneHash },
+      });
+
+      if (!influencer) {
+        throw new NotFoundException('Influencer not found with this phone number');
+      }
+
+      // Verify OTP
+      const identifierHash = crypto
+        .createHash('sha256')
+        .update(formattedPhone)
+        .digest('hex');
+
+      const otpRecord = await this.otpModel.findOne({
+        where: {
+          identifierHash,
+          type: 'phone',
+          otp,
+          isUsed: false,
+          expiresAt: { [Op.gt]: new Date() },
+        },
+      });
+
+      if (!otpRecord) {
+        throw new UnauthorizedException('Invalid or expired OTP');
+      }
+
+      // Mark OTP as used
+      await otpRecord.destroy();
+
+      // Delete the account
       await influencer.update({ isActive: false });
       await influencer.destroy(); // Sets deletedAt with paranoid mode
 
@@ -1958,6 +2048,30 @@ export class AuthService {
         throw new NotFoundException('Brand not found with this email address');
       }
 
+      // Verify OTP
+      const identifierHash = crypto
+        .createHash('sha256')
+        .update(email)
+        .digest('hex');
+
+      const otpRecord = await this.otpModel.findOne({
+        where: {
+          identifierHash,
+          type: 'email',
+          otp,
+          isUsed: false,
+          expiresAt: { [Op.gt]: new Date() },
+        },
+      });
+
+      if (!otpRecord) {
+        throw new UnauthorizedException('Invalid or expired OTP');
+      }
+
+      // Mark OTP as used
+      await otpRecord.destroy();
+
+      // Delete the account
       await brand.update({ isActive: false });
       await brand.destroy(); // Sets deletedAt with paranoid mode
 
