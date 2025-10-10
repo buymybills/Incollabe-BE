@@ -1917,6 +1917,9 @@ export class AuthService {
       if (!phone) {
         throw new BadRequestException('Phone number is required for influencer');
       }
+      if (email) {
+        throw new BadRequestException('Email should not be provided when userType is influencer');
+      }
 
       const formattedPhone = `+91${phone}`;
       const phoneHash = crypto
@@ -1940,6 +1943,9 @@ export class AuthService {
     } else if (userType === 'brand') {
       if (!email) {
         throw new BadRequestException('Email is required for brand');
+      }
+      if (phone) {
+        throw new BadRequestException('Phone should not be provided when userType is brand');
       }
 
       const emailHash = crypto.createHash('sha256').update(email).digest('hex');

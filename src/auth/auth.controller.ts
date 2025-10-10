@@ -12,6 +12,7 @@ import {
   UploadedFile,
   BadRequestException,
   Delete,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -20,7 +21,8 @@ import {
   ApiBody,
   ApiHeader,
   ApiBearerAuth,
-  ApiConsumes, 
+  ApiConsumes,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RequestOtpDto } from './dto/request-otp.dto';
@@ -989,7 +991,24 @@ export class AuthController {
     summary: 'Delete account by email or phone',
     description: 'Delete an influencer account by phone number or brand account by email address. This performs a soft delete with 30-day grace period.',
   })
-  @ApiBody({ type: DeleteAccountByIdentifierDto })
+  @ApiQuery({
+    name: 'userType',
+    enum: ['influencer', 'brand'],
+    required: true,
+    description: 'Select user type to delete',
+  })
+  @ApiQuery({
+    name: 'phone',
+    required: false,
+    description: 'Phone number (without country code) - Required only if userType is "influencer"',
+    example: '9870541151',
+  })
+  @ApiQuery({
+    name: 'email',
+    required: false,
+    description: 'Email address - Required only if userType is "brand"',
+    example: 'testbrand@example.com',
+  })
   @ApiResponse({
     status: 200,
     description: 'Account deleted successfully',
@@ -1002,12 +1021,12 @@ export class AuthController {
     status: 404,
     description: 'User not found',
   })
-  async deleteAccountByIdentifier(@Body() deleteDto: DeleteAccountByIdentifierDto) {
-    return this.authService.deleteAccountByIdentifier(
-      deleteDto.userType,
-      deleteDto.phone,
-      deleteDto.email,
-    );
+  async deleteAccountByIdentifier(
+    @Query('userType') userType: 'influencer' | 'brand',
+    @Query('phone') phone?: string,
+    @Query('email') email?: string,
+  ) {
+    return this.authService.deleteAccountByIdentifier(userType, phone, email);
   }
 
 }
