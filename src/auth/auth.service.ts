@@ -1907,4 +1907,58 @@ export class AuthService {
 
     return { message: 'Account deleted successfully' };
   }
+
+  async deleteAccountByIdentifier(
+    userType: 'influencer' | 'brand',
+    phone?: string,
+    email?: string,
+  ) {
+    if (userType === 'influencer') {
+      if (!phone) {
+        throw new BadRequestException('Phone number is required for influencer');
+      }
+
+      const formattedPhone = `+91${phone}`;
+      const phoneHash = crypto
+        .createHash('sha256')
+        .update(formattedPhone)
+        .digest('hex');
+
+      const influencer = await this.influencerModel.findOne({
+        where: { phoneHash },
+      });
+
+      if (!influencer) {
+        throw new NotFoundException('Influencer not found with this phone number');
+      }
+
+      await influencer.update({ isActive: false });
+      await influencer.destroy(); // Sets deletedAt with paranoid mode
+
+      this.loggerService.info(`Influencer account deleted: ${influencer.id} (phone: ${formattedPhone})`);
+      return { message: 'Influencer account deleted successfully' };
+    } else if (userType === 'brand') {
+      if (!email) {
+        throw new BadRequestException('Email is required for brand');
+      }
+
+      const emailHash = crypto.createHash('sha256').update(email).digest('hex');
+
+      const brand = await this.brandModel.findOne({
+        where: { emailHash },
+      });
+
+      if (!brand) {
+        throw new NotFoundException('Brand not found with this email address');
+      }
+
+      await brand.update({ isActive: false });
+      await brand.destroy(); // Sets deletedAt with paranoid mode
+
+      this.loggerService.info(`Brand account deleted: ${brand.id} (email: ${email})`);
+      return { message: 'Brand account deleted successfully' };
+    }
+
+    throw new BadRequestException('Invalid user type');
+  }
 }

@@ -46,6 +46,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RefreshTokenResponseDto } from './dto/refresh-token-response.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { DeleteAccountByIdentifierDto } from './dto/delete-account-by-identifier.dto';
 import { AuthGuard } from './guards/auth.guard';
 import Request from 'express';
 import { UploadedFiles } from '@nestjs/common';
@@ -54,7 +55,9 @@ import { GENDER_OPTIONS, OTHERS_GENDER_OPTIONS } from './types/gender.enum';
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+  ) {}
 
   @Post('influencer/request-otp')
   @HttpCode(HttpStatus.OK)
@@ -979,4 +982,32 @@ export class AuthController {
   async deleteAccount(@Req() req: Request & { user: { id: number; userType: 'influencer' | 'brand' } }) {
     return this.authService.deleteAccount(req.user.id, req.user.userType);
   }
+
+  @Delete('delete-account-by-identifier')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Delete account by email or phone',
+    description: 'Delete an influencer account by phone number or brand account by email address. This performs a soft delete with 30-day grace period.',
+  })
+  @ApiBody({ type: DeleteAccountByIdentifierDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Account deleted successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid input',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async deleteAccountByIdentifier(@Body() deleteDto: DeleteAccountByIdentifierDto) {
+    return this.authService.deleteAccountByIdentifier(
+      deleteDto.userType,
+      deleteDto.phone,
+      deleteDto.email,
+    );
+  }
+
 }
