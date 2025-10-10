@@ -821,7 +821,9 @@ describe('InfluencerService', () => {
       };
 
       const experienceModel = module.get('EXPERIENCE_MODEL');
-      const experienceSocialLinkModel = module.get('EXPERIENCE_SOCIAL_LINK_MODEL');
+      const experienceSocialLinkModel = module.get(
+        'EXPERIENCE_SOCIAL_LINK_MODEL',
+      );
 
       experienceModel.findOne.mockResolvedValue(mockExperience);
       experienceSocialLinkModel.destroy.mockResolvedValue(2);

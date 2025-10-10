@@ -184,12 +184,19 @@ describe('PostController', () => {
         likesCount: 5,
       };
 
+      const mockUser: User = {
+        id: 1,
+        email: 'test@influencer.com',
+        userType: 'influencer',
+        profileCompleted: true,
+      };
+
       mockPostService.getPostById.mockResolvedValue(mockPost);
 
-      const result = await controller.getPostById(1);
+      const result = await controller.getPostById(1, mockUser);
 
       expect(result).toEqual(mockPost);
-      expect(postService.getPostById).toHaveBeenCalledWith(1);
+      expect(postService.getPostById).toHaveBeenCalledWith(1, UserType.INFLUENCER, 1);
     });
   });
 
@@ -456,11 +463,18 @@ describe('PostController', () => {
         content: 'Test post',
       };
 
+      const mockUser: User = {
+        id: 1,
+        email: 'test@influencer.com',
+        userType: 'influencer',
+        profileCompleted: true,
+      };
+
       mockPostService.getPostById.mockResolvedValue(mockPost);
 
-      await controller.getPostById(123);
+      await controller.getPostById(123, mockUser);
 
-      expect(postService.getPostById).toHaveBeenCalledWith(123);
+      expect(postService.getPostById).toHaveBeenCalledWith(123, UserType.INFLUENCER, 1);
     });
 
     it('should handle string parameters in getUserPosts', async () => {
@@ -603,10 +617,17 @@ describe('PostController', () => {
     });
 
     it('should propagate service errors in getPostById', async () => {
+      const mockUser: User = {
+        id: 1,
+        email: 'test@influencer.com',
+        userType: 'influencer',
+        profileCompleted: true,
+      };
+
       const error = new Error('Get post failed');
       mockPostService.getPostById.mockRejectedValue(error);
 
-      await expect(controller.getPostById(1)).rejects.toThrow(
+      await expect(controller.getPostById(1, mockUser)).rejects.toThrow(
         'Get post failed',
       );
     });

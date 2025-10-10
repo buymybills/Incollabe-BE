@@ -25,7 +25,9 @@ export class AccountCleanupService {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    this.loggerService.info(`Starting hard deletion of accounts older than 30 days (before ${thirtyDaysAgo.toISOString()})`);
+    this.loggerService.info(
+      `Starting hard deletion of accounts older than 30 days (before ${thirtyDaysAgo.toISOString()})`,
+    );
 
     try {
       // Find and hard delete influencers deleted more than 30 days ago

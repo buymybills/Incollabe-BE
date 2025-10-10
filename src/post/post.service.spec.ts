@@ -462,8 +462,10 @@ describe('PostService', () => {
 
       postModel.findAndCountAll.mockResolvedValue({
         count: 2,
-        rows: mockPosts,
+        rows: mockPosts.map(post => ({ ...post, toJSON: () => post })),
       });
+
+      likeModel.findAll.mockResolvedValue([]);
 
       const result = await service.getPosts(
         getPostsDto,
@@ -471,8 +473,9 @@ describe('PostService', () => {
         1,
       );
 
-      expect(result).toEqual({
-        posts: mockPosts,
+      expect(result.posts).toHaveLength(2);
+      expect(result.posts[0]).toHaveProperty('isLikedByCurrentUser', false);
+      expect(result).toMatchObject({
         total: 2,
         page: 1,
         limit: 10,
@@ -525,13 +528,15 @@ describe('PostService', () => {
         userType: UserType.INFLUENCER,
         influencerId: 1,
         isActive: true,
+        toJSON: function() { return this; }
       };
 
       postModel.findOne.mockResolvedValue(mockPost);
+      likeModel.findOne.mockResolvedValue(null);
 
-      const result = await service.getPostById(1);
+      const result = await service.getPostById(1, UserType.INFLUENCER, 1);
 
-      expect(result).toEqual(mockPost);
+      expect(result).toHaveProperty('isLikedByCurrentUser', false);
       expect(postModel.findOne).toHaveBeenCalledWith({
         where: { id: 1, isActive: true },
         include: expect.any(Array),

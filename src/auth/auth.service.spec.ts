@@ -820,7 +820,9 @@ describe('AuthService', () => {
       };
 
       influencerModel.findByPk.mockResolvedValue(mockInfluencer);
-      redisService.getClient().smembers = jest.fn().mockResolvedValue(['jti1', 'jti2']);
+      redisService.getClient().smembers = jest
+        .fn()
+        .mockResolvedValue(['jti1', 'jti2']);
       redisService.del = jest.fn().mockResolvedValue(1);
 
       const result = await service.deleteAccount(1, 'influencer');

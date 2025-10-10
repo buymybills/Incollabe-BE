@@ -139,7 +139,7 @@ export class AuthService {
 
   async requestOtp(requestOtpDto: RequestOtpDto): Promise<string> {
     const { phone } = requestOtpDto;
-    const formattedPhone = `+91${phone}`; // Add Indian country code 
+    const formattedPhone = `+91${phone}`; // Add Indian country code
 
     // Log OTP request start
     this.loggerService.logAuth('OTP_REQUEST_STARTED', {
@@ -1066,7 +1066,7 @@ export class AuthService {
     const emailHash = crypto.createHash('sha256').update(email).digest('hex');
 
     // Find brand by emailHash (including soft-deleted)
-    let brand = await this.brandModel.findOne({
+    const brand = await this.brandModel.findOne({
       where: { emailHash },
       paranoid: false,
     });
@@ -1089,7 +1089,9 @@ export class AuthService {
 
         await brand.restore();
         await brand.update({ isActive: true });
-        this.loggerService.info(`Restored deleted account for brand: ${brand.id}`);
+        this.loggerService.info(
+          `Restored deleted account for brand: ${brand.id}`,
+        );
       } else {
         // Account deleted more than 30 days ago
         throw new UnauthorizedException('Invalid email or password');
@@ -1881,7 +1883,9 @@ export class AuthService {
   ): Promise<{ message: string }> {
     // Invalidate all user sessions first
     const sessionsKey = this.sessionsSetKey(userId);
-    const sessionJtis = await this.redisService.getClient().smembers(sessionsKey);
+    const sessionJtis = await this.redisService
+      .getClient()
+      .smembers(sessionsKey);
 
     for (const jti of sessionJtis) {
       await this.redisService.del(this.sessionKey(userId, jti));
@@ -1915,10 +1919,14 @@ export class AuthService {
   ) {
     if (userType === 'influencer') {
       if (!phone) {
-        throw new BadRequestException('Phone number is required for influencer');
+        throw new BadRequestException(
+          'Phone number is required for influencer',
+        );
       }
       if (email) {
-        throw new BadRequestException('Email should not be provided when userType is influencer');
+        throw new BadRequestException(
+          'Email should not be provided when userType is influencer',
+        );
       }
 
       const formattedPhone = `+91${phone}`;
@@ -1932,13 +1940,16 @@ export class AuthService {
       });
 
       if (!influencer) {
-        throw new NotFoundException('Influencer not found with this phone number');
+        throw new NotFoundException(
+          'Influencer not found with this phone number',
+        );
       }
 
       // Send OTP
-      await this.requestOtp({ phone});
+      await this.requestOtp({ phone });
       return {
-        message: 'OTP sent to your phone number. Please verify to delete your account.',
+        message:
+          'OTP sent to your phone number. Please verify to delete your account.',
         requiresOtp: true,
         phone: formattedPhone,
       };
@@ -1947,7 +1958,9 @@ export class AuthService {
         throw new BadRequestException('Email is required for brand');
       }
       if (phone) {
-        throw new BadRequestException('Phone should not be provided when userType is brand');
+        throw new BadRequestException(
+          'Phone should not be provided when userType is brand',
+        );
       }
 
       const emailHash = crypto.createHash('sha256').update(email).digest('hex');
@@ -1961,10 +1974,13 @@ export class AuthService {
       }
 
       // Send OTP
-      const otpCode = await this.generateAndStoreOtp(email, { brandId: brand.id });
+      const otpCode = await this.generateAndStoreOtp(email, {
+        brandId: brand.id,
+      });
       await this.emailService.sendBrandOtp(email, otpCode);
       return {
-        message: 'OTP sent to your email. Please verify to delete your account.',
+        message:
+          'OTP sent to your email. Please verify to delete your account.',
         requiresOtp: true,
         email,
       };
@@ -1981,10 +1997,14 @@ export class AuthService {
   ) {
     if (userType === 'influencer') {
       if (!phone) {
-        throw new BadRequestException('Phone number is required for influencer');
+        throw new BadRequestException(
+          'Phone number is required for influencer',
+        );
       }
       if (email) {
-        throw new BadRequestException('Email should not be provided when userType is influencer');
+        throw new BadRequestException(
+          'Email should not be provided when userType is influencer',
+        );
       }
 
       const formattedPhone = `+91${phone}`;
@@ -1998,7 +2018,9 @@ export class AuthService {
       });
 
       if (!influencer) {
-        throw new NotFoundException('Influencer not found with this phone number');
+        throw new NotFoundException(
+          'Influencer not found with this phone number',
+        );
       }
 
       // Verify OTP
@@ -2028,14 +2050,18 @@ export class AuthService {
       await influencer.update({ isActive: false });
       await influencer.destroy(); // Sets deletedAt with paranoid mode
 
-      this.loggerService.info(`Influencer account deleted: ${influencer.id} (phone: ${formattedPhone})`);
+      this.loggerService.info(
+        `Influencer account deleted: ${influencer.id} (phone: ${formattedPhone})`,
+      );
       return { message: 'Influencer account deleted successfully' };
     } else if (userType === 'brand') {
       if (!email) {
         throw new BadRequestException('Email is required for brand');
       }
       if (phone) {
-        throw new BadRequestException('Phone should not be provided when userType is brand');
+        throw new BadRequestException(
+          'Phone should not be provided when userType is brand',
+        );
       }
 
       const emailHash = crypto.createHash('sha256').update(email).digest('hex');
@@ -2075,7 +2101,9 @@ export class AuthService {
       await brand.update({ isActive: false });
       await brand.destroy(); // Sets deletedAt with paranoid mode
 
-      this.loggerService.info(`Brand account deleted: ${brand.id} (email: ${email})`);
+      this.loggerService.info(
+        `Brand account deleted: ${brand.id} (email: ${email})`,
+      );
       return { message: 'Brand account deleted successfully' };
     }
 

@@ -1,8 +1,20 @@
-import { IsEnum, IsString, IsNotEmpty, ValidateIf, IsOptional, Validate, ValidatorConstraint, ValidatorConstraintInterface, ValidationArguments } from 'class-validator';
+import {
+  IsEnum,
+  IsString,
+  IsNotEmpty,
+  ValidateIf,
+  IsOptional,
+  Validate,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
+  ValidationArguments,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 @ValidatorConstraint({ name: 'phoneNotAllowedForBrand', async: false })
-class PhoneNotAllowedForBrandConstraint implements ValidatorConstraintInterface {
+class PhoneNotAllowedForBrandConstraint
+  implements ValidatorConstraintInterface
+{
   validate(phone: string, args: ValidationArguments) {
     const object = args.object as DeleteAccountByIdentifierDto;
     if (object.userType === 'brand' && phone !== undefined && phone !== null) {
@@ -17,10 +29,16 @@ class PhoneNotAllowedForBrandConstraint implements ValidatorConstraintInterface 
 }
 
 @ValidatorConstraint({ name: 'emailNotAllowedForInfluencer', async: false })
-class EmailNotAllowedForInfluencerConstraint implements ValidatorConstraintInterface {
+class EmailNotAllowedForInfluencerConstraint
+  implements ValidatorConstraintInterface
+{
   validate(email: string, args: ValidationArguments) {
     const object = args.object as DeleteAccountByIdentifierDto;
-    if (object.userType === 'influencer' && email !== undefined && email !== null) {
+    if (
+      object.userType === 'influencer' &&
+      email !== undefined &&
+      email !== null
+    ) {
       return false;
     }
     return true;
@@ -46,7 +64,8 @@ export class DeleteAccountByIdentifierDto {
   userType: 'influencer' | 'brand';
 
   @ApiProperty({
-    description: 'Phone number (without country code) - Required only if userType is "influencer"',
+    description:
+      'Phone number (without country code) - Required only if userType is "influencer"',
     example: '9870541151',
     required: false,
   })

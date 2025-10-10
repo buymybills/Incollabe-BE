@@ -57,9 +57,7 @@ import { GENDER_OPTIONS, OTHERS_GENDER_OPTIONS } from './types/gender.enum';
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
-  constructor(
-    private readonly authService: AuthService,
-  ) {}
+  constructor(private readonly authService: AuthService) {}
 
   @Post('influencer/request-otp')
   @HttpCode(HttpStatus.OK)
@@ -981,7 +979,10 @@ export class AuthController {
     status: 404,
     description: 'User not found',
   })
-  async deleteAccount(@Req() req: Request & { user: { id: number; userType: 'influencer' | 'brand' } }) {
+  async deleteAccount(
+    @Req()
+    req: Request & { user: { id: number; userType: 'influencer' | 'brand' } },
+  ) {
     return this.authService.deleteAccount(req.user.id, req.user.userType);
   }
 
@@ -989,7 +990,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Request OTP for account deletion',
-    description: 'Step 1: Send OTP to phone/email for account deletion verification. After receiving OTP, use the verify endpoint to complete deletion.',
+    description:
+      'Step 1: Send OTP to phone/email for account deletion verification. After receiving OTP, use the verify endpoint to complete deletion.',
   })
   @ApiQuery({
     name: 'userType',
@@ -1000,7 +1002,8 @@ export class AuthController {
   @ApiQuery({
     name: 'phone',
     required: false,
-    description: 'Phone number (without country code) - Required only if userType is "influencer"',
+    description:
+      'Phone number (without country code) - Required only if userType is "influencer"',
     example: '9870541151',
   })
   @ApiQuery({
@@ -1033,7 +1036,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Verify OTP and delete account',
-    description: 'Step 2: Verify OTP received and permanently delete the account with 30-day grace period.',
+    description:
+      'Step 2: Verify OTP received and permanently delete the account with 30-day grace period.',
   })
   @ApiQuery({
     name: 'userType',
@@ -1050,7 +1054,8 @@ export class AuthController {
   @ApiQuery({
     name: 'phone',
     required: false,
-    description: 'Phone number (without country code) - Required only if userType is "influencer"',
+    description:
+      'Phone number (without country code) - Required only if userType is "influencer"',
     example: '9870541151',
   })
   @ApiQuery({
@@ -1083,5 +1088,4 @@ export class AuthController {
   ) {
     return this.authService.verifyAndDeleteAccount(userType, otp, phone, email);
   }
-
 }

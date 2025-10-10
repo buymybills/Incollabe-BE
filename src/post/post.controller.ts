@@ -95,8 +95,13 @@ export class PostController {
   @ApiResponse({ status: 200, description: 'Post retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Post not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getPostById(@Param('id', ParseIntPipe) id: number) {
-    return this.postService.getPostById(id);
+  async getPostById(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: User,
+  ) {
+    const userType =
+      user.userType === 'influencer' ? UserType.INFLUENCER : UserType.BRAND;
+    return this.postService.getPostById(id, userType, user.id);
   }
 
   @Patch(':id')

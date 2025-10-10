@@ -71,7 +71,9 @@ export class AuthGuard implements CanActivate {
       if (payload.userType === 'influencer') {
         const influencer = await this.influencerModel.findByPk(payload.id);
         if (!influencer) {
-          throw new UnauthorizedException('Account not found or has been deleted');
+          throw new UnauthorizedException(
+            'Account not found or has been deleted',
+          );
         }
         if (!influencer.isActive) {
           throw new UnauthorizedException('Account is inactive');
@@ -79,7 +81,9 @@ export class AuthGuard implements CanActivate {
       } else if (payload.userType === 'brand') {
         const brand = await this.brandModel.findByPk(payload.id);
         if (!brand) {
-          throw new UnauthorizedException('Account not found or has been deleted');
+          throw new UnauthorizedException(
+            'Account not found or has been deleted',
+          );
         }
         if (!brand.isActive) {
           throw new UnauthorizedException('Account is inactive');

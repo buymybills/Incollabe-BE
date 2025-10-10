@@ -314,7 +314,7 @@ export class PostService {
     currentUserType?: UserType,
     currentUserId?: number,
   ): Promise<{
-    posts: Post[];
+    posts: any[];
     total: number;
     page: number;
     limit: number;
@@ -430,10 +430,44 @@ export class PostService {
       distinct: true,
     });
 
+    // Add isLikedByCurrentUser field to each post
+    let postsWithLikeStatus = posts;
+    if (currentUserId && currentUserType) {
+      const likerType =
+        currentUserType === UserType.INFLUENCER
+          ? LikerType.INFLUENCER
+          : LikerType.BRAND;
+      const likerField =
+        currentUserType === UserType.INFLUENCER
+          ? 'likerInfluencerId'
+          : 'likerBrandId';
+
+      // Get all likes by current user for these posts
+      const postIds = posts.map((post) => post.id);
+      const userLikes = await this.likeModel.findAll({
+        where: {
+          postId: { [Op.in]: postIds },
+          likerType,
+          [likerField]: currentUserId,
+        },
+        attributes: ['postId'],
+      });
+
+      const likedPostIds = new Set(userLikes.map((like) => like.postId));
+
+      postsWithLikeStatus = posts.map((post) => {
+        const postJson = post.toJSON();
+        return {
+          ...postJson,
+          isLikedByCurrentUser: likedPostIds.has(post.id),
+        };
+      });
+    }
+
     const totalPages = Math.ceil(count / limit);
 
     return {
-      posts,
+      posts: postsWithLikeStatus,
       total: count,
       page,
       limit,
@@ -540,7 +574,11 @@ export class PostService {
     };
   }
 
-  async getPostById(postId: number): Promise<Post> {
+  async getPostById(
+    postId: number,
+    currentUserType?: UserType,
+    currentUserId?: number,
+  ): Promise<any> {
     const post = await this.postModel.findOne({
       where: { id: postId, isActive: true },
       include: [
@@ -571,7 +609,33 @@ export class PostService {
       throw new NotFoundException('Post not found');
     }
 
-    return post;
+    // Add isLikedByCurrentUser field
+    let postWithLikeStatus = post.toJSON();
+    if (currentUserId && currentUserType) {
+      const likerType =
+        currentUserType === UserType.INFLUENCER
+          ? LikerType.INFLUENCER
+          : LikerType.BRAND;
+      const likerField =
+        currentUserType === UserType.INFLUENCER
+          ? 'likerInfluencerId'
+          : 'likerBrandId';
+
+      const existingLike = await this.likeModel.findOne({
+        where: {
+          postId,
+          likerType,
+          [likerField]: currentUserId,
+        },
+      });
+
+      postWithLikeStatus = {
+        ...postWithLikeStatus,
+        isLikedByCurrentUser: !!existingLike,
+      };
+    }
+
+    return postWithLikeStatus;
   }
 
   private async sendFollowerNotification(
