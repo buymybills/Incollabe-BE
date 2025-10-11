@@ -24,15 +24,15 @@ export class BrandSignupDto {
 
   @ApiProperty({
     description:
-      'Password for brand account (min 10 chars, must include uppercase, lowercase, number, and special character)',
-    example: 'SecurePassword123!',
-    minLength: 10,
+      'Password for brand account (min 8 chars, must include uppercase, lowercase, number, and special character)',
+    example: 'SecurePass123!',
+    minLength: 8,
   })
   @IsString()
   @IsNotEmpty()
-  @MinLength(10, { message: 'Password must be at least 10 characters long' })
+  @MinLength(8, { message: 'Password must be at least 8 characters long' })
   @Matches(
-    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&._-])[A-Za-z\d@$!%*?&._-]{10,}$/,
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&._-])[A-Za-z\d@$!%*?&._-]{8,}$/,
     {
       message:
         'Password must contain at least one lowercase letter, one uppercase letter, one number, and one special character (@$!%*?&._-)',
