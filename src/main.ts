@@ -16,11 +16,12 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
-  // Increase payload size limit for file uploads
+  // Increase payload size limit for file uploads (including multipart/form-data)
+  // Total limit: 2 images (5MB each) + 3 documents (10MB each) = 40MB max
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const express = require('express');
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ limit: '10mb', extended: true }));
+  app.use(express.json({ limit: '5mb' })); // For JSON payloads
+  app.use(express.urlencoded({ limit: '10mb', extended: true })); // For URL-encoded payloads
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,

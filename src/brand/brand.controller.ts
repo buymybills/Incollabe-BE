@@ -180,13 +180,21 @@ export class BrandController {
   })
   @ApiResponse({ status: 404, description: 'Brand not found' })
   @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'profileImage', maxCount: 1 },
-      { name: 'profileBanner', maxCount: 1 },
-      { name: 'incorporationDocument', maxCount: 1 },
-      { name: 'gstDocument', maxCount: 1 },
-      { name: 'panDocument', maxCount: 1 },
-    ]),
+    FileFieldsInterceptor(
+      [
+        { name: 'profileImage', maxCount: 1 },
+        { name: 'profileBanner', maxCount: 1 },
+        { name: 'incorporationDocument', maxCount: 1 },
+        { name: 'gstDocument', maxCount: 1 },
+        { name: 'panDocument', maxCount: 1 },
+      ],
+      {
+        limits: {
+          fileSize: 10 * 1024 * 1024, // 10MB per file
+          fieldSize: 10 * 1024 * 1024, // 10MB for field data
+        },
+      },
+    ),
   )
   async updateBrandProfile(
     @Req() req: RequestWithUser,
