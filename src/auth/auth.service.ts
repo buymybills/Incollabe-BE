@@ -1843,7 +1843,7 @@ export class AuthService {
       },
     });
 
-    // Fetch updated brand with niches and company type
+    // Fetch updated brand with niches, custom niches, and company type
     const updatedBrand = await this.brandModel.findByPk(brandId, {
       include: [
         {
@@ -1854,6 +1854,12 @@ export class AuthService {
         {
           model: this.companyTypeModel,
           attributes: ['id', 'name', 'description'],
+        },
+        {
+          model: this.customNicheModel,
+          attributes: ['id', 'name', 'description', 'isActive'],
+          where: { isActive: true },
+          required: false,
         },
       ],
     });
@@ -1873,6 +1879,12 @@ export class AuthService {
         isProfileCompleted: updatedBrand.isProfileCompleted,
         profileImage: updatedBrand.profileImage,
         niches: updatedBrand.niches,
+        customNiches: (updatedBrand.customNiches || []).map((customNiche) => ({
+          id: customNiche.id,
+          name: customNiche.name,
+          description: customNiche.description,
+          isActive: customNiche.isActive,
+        })),
       },
     };
   }
