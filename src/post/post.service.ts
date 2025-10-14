@@ -451,6 +451,7 @@ export class PostService {
           [likerField]: currentUserId,
         },
         attributes: ['postId'],
+        raw: true,
       });
 
       const likedPostIds = new Set(userLikes.map((like) => like.postId));
