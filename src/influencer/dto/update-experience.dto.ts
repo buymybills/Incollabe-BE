@@ -83,6 +83,15 @@ export class UpdateExperienceDto {
   keyResultAchieved?: string;
 
   @ApiProperty({
+    description: 'Campaign completion date',
+    example: '2024-03-15',
+    required: false,
+  })
+  @IsOptional()
+  @IsDateString()
+  completionDate?: string;
+
+  @ApiProperty({
     description: 'Social media links related to the campaign',
     example: [
       {

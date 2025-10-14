@@ -81,6 +81,12 @@ export class Experience extends Model {
   })
   declare keyResultAchieved: string;
 
+  @Column({
+    type: DataType.DATEONLY,
+    allowNull: true,
+  })
+  declare completionDate: Date;
+
   @BelongsTo(() => Influencer)
   declare influencer: Influencer;
 
