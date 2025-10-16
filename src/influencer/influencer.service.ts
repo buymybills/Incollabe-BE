@@ -303,17 +303,22 @@ export class InfluencerService {
     const hasBeenSubmitted = await this.hasProfileReview(influencerId);
 
     // Check and update profile completion status
-    const wasComplete = influencer.isProfileCompleted;
+    // Fetch updated influencer after all data updates to get current state
     const updatedInfluencer =
       await this.influencerRepository.findById(influencerId);
     if (!updatedInfluencer) {
       throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
     }
+
+    // Save the current completion status (before checking if it should change)
+    const wasComplete = updatedInfluencer.isProfileCompleted;
+
     const profileCompletion =
       this.calculateProfileCompletion(updatedInfluencer);
     const isComplete = profileCompletion.isCompleted;
 
-    if (isComplete !== influencer.isProfileCompleted) {
+    // Update isProfileCompleted flag if it changed
+    if (isComplete !== updatedInfluencer.isProfileCompleted) {
       await this.influencerRepository.updateInfluencer(influencerId, {
         isProfileCompleted: isComplete,
       });
