@@ -1742,6 +1742,23 @@ export class AuthService {
       throw new BadRequestException('One or more invalid niche IDs provided');
     }
 
+    // Validate total niche count (regular + custom) doesn't exceed 5
+    const totalNicheCount =
+      profileDto.nicheIds.length + (profileDto.customNiches?.length || 0);
+    if (totalNicheCount > 5) {
+      throw new BadRequestException(
+        `Maximum 5 niches allowed (regular + custom combined). You selected ${totalNicheCount} niches.`,
+      );
+    }
+
+    // Validate custom niche names are unique
+    if (profileDto.customNiches && profileDto.customNiches.length > 0) {
+      const uniqueCustomNiches = [...new Set(profileDto.customNiches)];
+      if (uniqueCustomNiches.length !== profileDto.customNiches.length) {
+        throw new BadRequestException('Custom niche names must be unique');
+      }
+    }
+
     // Look up company type ID from company type name
     let companyTypeId: number | undefined;
     if (profileDto.companyType) {
@@ -1842,6 +1859,21 @@ export class AuthService {
         },
       },
     });
+
+    // Create custom niches if provided
+    if (profileDto.customNiches && profileDto.customNiches.length > 0) {
+      const customNicheData = profileDto.customNiches.map((nicheName) => ({
+        userType: 'brand' as const,
+        userId: brand.id,
+        brandId: brand.id,
+        influencerId: null,
+        name: nicheName,
+        description: '',
+        isActive: true,
+      }));
+
+      await this.customNicheModel.bulkCreate(customNicheData);
+    }
 
     // Fetch updated brand with niches, custom niches, and company type
     const updatedBrand = await this.brandModel.findByPk(brandId, {
