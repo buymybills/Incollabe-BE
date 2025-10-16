@@ -14,6 +14,13 @@ import { Niche } from '../auth/model/niche.model';
 import { Country } from '../shared/models/country.model';
 import { City } from '../shared/models/city.model';
 import { CompanyType } from '../shared/models/company-type.model';
+import { Campaign, CampaignStatus } from '../campaign/models/campaign.model';
+import {
+  CampaignApplication,
+  ApplicationStatus,
+} from '../campaign/models/campaign-application.model';
+import { CampaignDeliverable } from '../campaign/models/campaign-deliverable.model';
+import { CampaignCity } from '../campaign/models/campaign-city.model';
 import {
   AdminSearchDto,
   UserType,
@@ -21,7 +28,21 @@ import {
   SortField,
   SortOrder,
 } from './dto/admin-search.dto';
-import { Op, Order } from 'sequelize';
+import {
+  TopBrandsRequestDto,
+  TopBrandsResponseDto,
+  TopBrandDto,
+  TopBrandsSortBy,
+  TopBrandsTimeframe,
+} from './dto/top-brands.dto';
+import {
+  TopCampaignsRequestDto,
+  TopCampaignsResponseDto,
+  TopCampaignsSortBy,
+  TopCampaignsTimeframe,
+  TopCampaignsStatus,
+} from './dto/top-campaigns.dto';
+import { Op, Order, Sequelize, literal } from 'sequelize';
 
 export interface CombinedUserResult {
   id: number;
@@ -64,6 +85,14 @@ export class AdminAuthService {
     private readonly cityModel: typeof City,
     @InjectModel(CompanyType)
     private readonly companyTypeModel: typeof CompanyType,
+    @InjectModel(Campaign)
+    private readonly campaignModel: typeof Campaign,
+    @InjectModel(CampaignApplication)
+    private readonly campaignApplicationModel: typeof CampaignApplication,
+    @InjectModel(CampaignDeliverable)
+    private readonly campaignDeliverableModel: typeof CampaignDeliverable,
+    @InjectModel(CampaignCity)
+    private readonly campaignCityModel: typeof CampaignCity,
     private readonly jwtService: JwtService,
   ) {}
 
@@ -593,5 +622,564 @@ export class AdminAuthService {
     // For now, use the same logic as general brand search
     // This can be extended with brand-specific filters later
     return this.searchBrands(searchDto);
+  }
+
+  async getTopBrands(
+    requestDto: TopBrandsRequestDto,
+  ): Promise<TopBrandsResponseDto> {
+    const { sortBy, timeframe, limit } = requestDto;
+
+    // Calculate date filter based on timeframe
+    let dateFilter: any = {};
+    if (timeframe === TopBrandsTimeframe.THIRTY_DAYS) {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      dateFilter = { createdAt: { [Op.gte]: thirtyDaysAgo } };
+    } else if (timeframe === TopBrandsTimeframe.NINETY_DAYS) {
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+      dateFilter = { createdAt: { [Op.gte]: ninetyDaysAgo } };
+    }
+
+    // Get all qualified brands with their metrics
+    const brandsWithMetrics = await this.brandModel.findAll({
+      where: {
+        isVerified: true,
+        isActive: true,
+        isProfileCompleted: true,
+      },
+      attributes: [
+        'id',
+        'brandName',
+        'username',
+        'email',
+        'profileImage',
+        'brandBio',
+        'websiteUrl',
+        'isVerified',
+        'createdAt',
+      ],
+      include: [
+        {
+          model: this.campaignModel,
+          as: 'campaigns',
+          attributes: ['id', 'nicheIds', 'createdAt', 'status'],
+          where: {
+            ...dateFilter,
+            status: { [Op.ne]: CampaignStatus.CANCELLED },
+          },
+          required: false,
+          include: [
+            {
+              model: this.campaignDeliverableModel,
+              as: 'deliverables',
+              attributes: ['budget'],
+              required: false,
+            },
+            {
+              model: this.campaignApplicationModel,
+              as: 'applications',
+              attributes: ['status'],
+              where: {
+                status: ApplicationStatus.SELECTED,
+              },
+              required: false,
+            },
+          ],
+        },
+      ],
+    });
+
+    // Calculate metrics for each brand
+    const brandsWithCalculatedMetrics = brandsWithMetrics
+      .map((brand) => {
+        const campaigns = brand.get('campaigns') as any[] || [];
+
+        // Metric 1: Total campaigns
+        const totalCampaigns = campaigns.length;
+
+        // Metric 2: Unique niches count
+        const allNicheIds = campaigns
+          .flatMap((c) => c.nicheIds || [])
+          .filter((id) => id !== null && id !== undefined);
+        const uniqueNichesCount = new Set(allNicheIds).size;
+
+        // Metric 3: Selected influencers count
+        const selectedInfluencersCount = campaigns.reduce((sum, campaign) => {
+          const applications = campaign.applications || [];
+          return sum + applications.length;
+        }, 0);
+
+        // Metric 4: Average payout
+        let totalBudget = 0;
+        let campaignsWithBudget = 0;
+        campaigns.forEach((campaign) => {
+          const deliverables = campaign.deliverables || [];
+          if (deliverables.length > 0) {
+            const campaignBudget = deliverables.reduce(
+              (sum, d) => sum + (parseFloat(d.budget as any) || 0),
+              0,
+            );
+            if (campaignBudget > 0) {
+              totalBudget += campaignBudget;
+              campaignsWithBudget++;
+            }
+          }
+        });
+        const averagePayout =
+          campaignsWithBudget > 0 ? totalBudget / campaignsWithBudget : 0;
+
+        return {
+          brand,
+          metrics: {
+            totalCampaigns,
+            uniqueNichesCount,
+            selectedInfluencersCount,
+            averagePayout,
+          },
+        };
+      })
+      .filter((item) => {
+        // Apply minimum qualification filters
+        return (
+          item.metrics.totalCampaigns >= 2 &&
+          item.metrics.uniqueNichesCount >= 2 &&
+          item.metrics.selectedInfluencersCount >= 1
+        );
+      });
+
+    // Find max values for normalization
+    const maxCampaigns = Math.max(
+      ...brandsWithCalculatedMetrics.map((b) => b.metrics.totalCampaigns),
+      1,
+    );
+    const maxNiches = Math.max(
+      ...brandsWithCalculatedMetrics.map((b) => b.metrics.uniqueNichesCount),
+      1,
+    );
+    const maxInfluencers = Math.max(
+      ...brandsWithCalculatedMetrics.map(
+        (b) => b.metrics.selectedInfluencersCount,
+      ),
+      1,
+    );
+    const maxPayout = Math.max(
+      ...brandsWithCalculatedMetrics.map((b) => b.metrics.averagePayout),
+      1,
+    );
+
+    // Calculate composite score and prepare final data
+    const brandsWithScores = brandsWithCalculatedMetrics.map((item) => {
+      const { brand, metrics } = item;
+
+      // Normalize metrics (0-100 scale)
+      const normalizedCampaigns = (metrics.totalCampaigns / maxCampaigns) * 100;
+      const normalizedNiches = (metrics.uniqueNichesCount / maxNiches) * 100;
+      const normalizedInfluencers =
+        (metrics.selectedInfluencersCount / maxInfluencers) * 100;
+      const normalizedPayout = (metrics.averagePayout / maxPayout) * 100;
+
+      // Calculate composite score (equal weights: 25% each)
+      const compositeScore =
+        normalizedCampaigns * 0.25 +
+        normalizedNiches * 0.25 +
+        normalizedInfluencers * 0.25 +
+        normalizedPayout * 0.25;
+
+      return {
+        id: brand.id,
+        brandName: brand.brandName,
+        username: brand.username,
+        email: brand.email,
+        profileImage: brand.profileImage,
+        brandBio: brand.brandBio,
+        websiteUrl: brand.websiteUrl,
+        isVerified: brand.isVerified,
+        createdAt: brand.createdAt,
+        metrics: {
+          totalCampaigns: metrics.totalCampaigns,
+          uniqueNichesCount: metrics.uniqueNichesCount,
+          selectedInfluencersCount: metrics.selectedInfluencersCount,
+          averagePayout: Math.round(metrics.averagePayout * 100) / 100,
+          compositeScore: Math.round(compositeScore * 100) / 100,
+        },
+        sortValues: {
+          campaigns: normalizedCampaigns,
+          niches: normalizedNiches,
+          influencers: normalizedInfluencers,
+          payout: normalizedPayout,
+          composite: compositeScore,
+        },
+      };
+    });
+
+    // Sort based on sortBy parameter
+    const sortField =
+      sortBy === TopBrandsSortBy.CAMPAIGNS
+        ? 'campaigns'
+        : sortBy === TopBrandsSortBy.NICHES
+          ? 'niches'
+          : sortBy === TopBrandsSortBy.INFLUENCERS
+            ? 'influencers'
+            : sortBy === TopBrandsSortBy.PAYOUT
+              ? 'payout'
+              : 'composite';
+
+    brandsWithScores.sort(
+      (a, b) => b.sortValues[sortField] - a.sortValues[sortField],
+    );
+
+    // Get top N brands
+    const topBrands = brandsWithScores.slice(0, limit).map((item) => ({
+      id: item.id,
+      brandName: item.brandName,
+      username: item.username,
+      email: item.email,
+      profileImage: item.profileImage,
+      brandBio: item.brandBio,
+      websiteUrl: item.websiteUrl,
+      isVerified: item.isVerified,
+      metrics: item.metrics,
+      createdAt: item.createdAt,
+    }));
+
+    return {
+      brands: topBrands,
+      total: brandsWithScores.length,
+      sortBy: sortBy || TopBrandsSortBy.COMPOSITE,
+      timeframe: timeframe || TopBrandsTimeframe.ALL_TIME,
+      limit: limit || 10,
+    };
+  }
+
+  async getTopCampaigns(
+    requestDto: TopCampaignsRequestDto,
+  ): Promise<TopCampaignsResponseDto> {
+    const { sortBy, timeframe, status, verifiedBrandsOnly, limit } = requestDto;
+
+    // Calculate date filter based on timeframe
+    let dateFilter: any = {};
+    if (timeframe === TopCampaignsTimeframe.SEVEN_DAYS) {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      dateFilter = { createdAt: { [Op.gte]: sevenDaysAgo } };
+    } else if (timeframe === TopCampaignsTimeframe.THIRTY_DAYS) {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      dateFilter = { createdAt: { [Op.gte]: thirtyDaysAgo } };
+    } else if (timeframe === TopCampaignsTimeframe.NINETY_DAYS) {
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+      dateFilter = { createdAt: { [Op.gte]: ninetyDaysAgo } };
+    }
+
+    // Status filter
+    let statusFilter: any = { [Op.ne]: CampaignStatus.CANCELLED };
+    if (status === TopCampaignsStatus.ACTIVE) {
+      statusFilter = CampaignStatus.ACTIVE;
+    } else if (status === TopCampaignsStatus.COMPLETED) {
+      statusFilter = CampaignStatus.COMPLETED;
+    }
+
+    // Brand filter
+    const brandWhere: any = {};
+    if (verifiedBrandsOnly) {
+      brandWhere.isVerified = true;
+    }
+
+    // Fetch campaigns with all related data
+    const campaigns = await this.campaignModel.findAll({
+      where: {
+        ...dateFilter,
+        status: statusFilter,
+      },
+      include: [
+        {
+          model: this.brandModel,
+          as: 'brand',
+          attributes: ['id', 'brandName', 'username', 'profileImage', 'isVerified'],
+          where: brandWhere,
+          required: true,
+        },
+        {
+          model: this.campaignApplicationModel,
+          as: 'applications',
+          attributes: ['id', 'status', 'createdAt'],
+          required: false,
+        },
+        {
+          model: this.campaignDeliverableModel,
+          as: 'deliverables',
+          attributes: ['id', 'budget'],
+          required: false,
+        },
+        {
+          model: this.campaignCityModel,
+          as: 'cities',
+          attributes: ['id', 'cityId'],
+          required: false,
+        },
+      ],
+    });
+
+    // Calculate metrics for each campaign
+    const campaignsWithMetrics = campaigns
+      .map((campaign) => {
+        const applications = campaign.get('applications') as any[] || [];
+        const deliverables = campaign.get('deliverables') as any[] || [];
+        const cities = campaign.get('cities') as any[] || [];
+        const brand = campaign.get('brand') as any;
+
+        // Application Metrics
+        const applicationsCount = applications.length;
+        const selectedApplications = applications.filter(
+          (app) => app.status === ApplicationStatus.SELECTED,
+        );
+        const selectedInfluencers = selectedApplications.length;
+        const conversionRate =
+          applicationsCount > 0 ? (selectedInfluencers / applicationsCount) * 100 : 0;
+
+        // Simple applicant quality score (can be enhanced with actual follower/engagement data)
+        const applicantQuality = applicationsCount > 0 ? 50 : 0; // Placeholder
+
+        // Budget Metrics
+        const totalBudget = deliverables.reduce(
+          (sum, d) => sum + (parseFloat(d.budget as any) || 0),
+          0,
+        );
+        const deliverablesCount = deliverables.length;
+        const budgetPerDeliverable =
+          deliverablesCount > 0 ? totalBudget / deliverablesCount : 0;
+
+        // Scope Metrics
+        const isPanIndia = campaign.isPanIndia;
+        const citiesCount = cities.length;
+        const nichesCount = campaign.nicheIds ? campaign.nicheIds.length : 0;
+        const geographicReach = isPanIndia
+          ? 100
+          : Math.min((citiesCount / 10) * 100, 100);
+
+        // Engagement Metrics
+        const completionRate =
+          campaign.status === CampaignStatus.COMPLETED
+            ? 100
+            : campaign.status === CampaignStatus.ACTIVE
+              ? 50
+              : 0;
+
+        // Recency Metrics
+        const now = new Date();
+        const createdAt = new Date(campaign.createdAt);
+        const daysSinceLaunch = Math.floor(
+          (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24),
+        );
+
+        const lastApplication = applications.sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        )[0];
+        const daysSinceLastApplication = lastApplication
+          ? Math.floor(
+              (now.getTime() - new Date(lastApplication.createdAt).getTime()) /
+                (1000 * 60 * 60 * 24),
+            )
+          : null;
+
+        return {
+          campaign,
+          brand,
+          metrics: {
+            application: {
+              applicationsCount,
+              conversionRate,
+              applicantQuality,
+            },
+            budget: {
+              totalBudget,
+              budgetPerDeliverable,
+              deliverablesCount,
+            },
+            scope: {
+              isPanIndia,
+              citiesCount,
+              nichesCount,
+              geographicReach,
+            },
+            engagement: {
+              selectedInfluencers,
+              completionRate,
+              status: campaign.status,
+            },
+            recency: {
+              daysSinceLaunch,
+              daysSinceLastApplication,
+              createdAt: campaign.createdAt,
+            },
+          },
+        };
+      })
+      .filter((item) => {
+        // Apply minimum qualification filters
+        return (
+          item.metrics.application.applicationsCount >= 3 &&
+          item.metrics.budget.deliverablesCount >= 1
+        );
+      });
+
+    // Find max values for normalization
+    const maxApplications = Math.max(
+      ...campaignsWithMetrics.map((c) => c.metrics.application.applicationsCount),
+      1,
+    );
+    const maxBudget = Math.max(
+      ...campaignsWithMetrics.map((c) => c.metrics.budget.totalBudget),
+      1,
+    );
+    const maxBudgetPerDel = Math.max(
+      ...campaignsWithMetrics.map((c) => c.metrics.budget.budgetPerDeliverable),
+      1,
+    );
+    const maxNiches = Math.max(
+      ...campaignsWithMetrics.map((c) => c.metrics.scope.nichesCount),
+      1,
+    );
+    const maxSelected = Math.max(
+      ...campaignsWithMetrics.map((c) => c.metrics.engagement.selectedInfluencers),
+      1,
+    );
+    const maxDaysSinceLaunch = Math.max(
+      ...campaignsWithMetrics.map((c) => c.metrics.recency.daysSinceLaunch),
+      1,
+    );
+
+    // Calculate composite scores
+    const campaignsWithScores = campaignsWithMetrics.map((item) => {
+      const { campaign, brand, metrics } = item;
+
+      // Normalize metrics (0-100 scale)
+      const normalizedApplications =
+        (metrics.application.applicationsCount / maxApplications) * 100;
+      const normalizedConversionRate = metrics.application.conversionRate;
+      const normalizedApplicantQuality = metrics.application.applicantQuality;
+      const normalizedTotalBudget = (metrics.budget.totalBudget / maxBudget) * 100;
+      const normalizedBudgetPerDel =
+        (metrics.budget.budgetPerDeliverable / maxBudgetPerDel) * 100;
+      const normalizedGeographicReach = metrics.scope.geographicReach;
+      const normalizedNiches = (metrics.scope.nichesCount / maxNiches) * 100;
+      const normalizedSelectedInfluencers =
+        (metrics.engagement.selectedInfluencers / maxSelected) * 100;
+      const normalizedCompletionRate = metrics.engagement.completionRate;
+
+      // Recency scoring: newer = higher score (inverse)
+      const normalizedRecencyLaunch =
+        100 - (metrics.recency.daysSinceLaunch / maxDaysSinceLaunch) * 100;
+      const normalizedRecencyActivity = metrics.recency.daysSinceLastApplication !== null
+        ? 100 - Math.min((metrics.recency.daysSinceLastApplication / 30) * 100, 100)
+        : 0;
+
+      // Calculate composite score with weights
+      const compositeScore =
+        normalizedApplications * 0.1 + // 10%
+        normalizedConversionRate * 0.15 + // 15%
+        normalizedApplicantQuality * 0.05 + // 5%
+        normalizedTotalBudget * 0.1 + // 10%
+        normalizedBudgetPerDel * 0.1 + // 10%
+        normalizedGeographicReach * 0.08 + // 8%
+        normalizedNiches * 0.07 + // 7%
+        normalizedSelectedInfluencers * 0.15 + // 15%
+        normalizedCompletionRate * 0.1 + // 10%
+        normalizedRecencyLaunch * 0.05 + // 5%
+        normalizedRecencyActivity * 0.05; // 5%
+
+      return {
+        id: campaign.id,
+        name: campaign.name,
+        description: campaign.description,
+        category: campaign.category,
+        type: campaign.type,
+        status: campaign.status,
+        brand: {
+          id: brand.id,
+          brandName: brand.brandName,
+          username: brand.username,
+          profileImage: brand.profileImage,
+          isVerified: brand.isVerified,
+        },
+        metrics: {
+          application: {
+            applicationsCount: metrics.application.applicationsCount,
+            conversionRate: Math.round(metrics.application.conversionRate * 100) / 100,
+            applicantQuality: metrics.application.applicantQuality,
+          },
+          budget: {
+            totalBudget: Math.round(metrics.budget.totalBudget * 100) / 100,
+            budgetPerDeliverable:
+              Math.round(metrics.budget.budgetPerDeliverable * 100) / 100,
+            deliverablesCount: metrics.budget.deliverablesCount,
+          },
+          scope: {
+            isPanIndia: metrics.scope.isPanIndia,
+            citiesCount: metrics.scope.citiesCount,
+            nichesCount: metrics.scope.nichesCount,
+            geographicReach: Math.round(metrics.scope.geographicReach * 100) / 100,
+          },
+          engagement: {
+            selectedInfluencers: metrics.engagement.selectedInfluencers,
+            completionRate: Math.round(metrics.engagement.completionRate * 100) / 100,
+            status: metrics.engagement.status,
+          },
+          recency: {
+            daysSinceLaunch: metrics.recency.daysSinceLaunch,
+            daysSinceLastApplication: metrics.recency.daysSinceLastApplication,
+            createdAt: metrics.recency.createdAt,
+          },
+          compositeScore: Math.round(compositeScore * 100) / 100,
+        },
+        createdAt: campaign.createdAt,
+        sortValues: {
+          applications_count: normalizedApplications,
+          conversion_rate: normalizedConversionRate,
+          applicant_quality: normalizedApplicantQuality,
+          total_budget: normalizedTotalBudget,
+          budget_per_deliverable: normalizedBudgetPerDel,
+          geographic_reach: normalizedGeographicReach,
+          cities_count: metrics.scope.citiesCount,
+          niches_count: normalizedNiches,
+          selected_influencers: normalizedSelectedInfluencers,
+          completion_rate: normalizedCompletionRate,
+          recently_launched: normalizedRecencyLaunch,
+          recently_active: normalizedRecencyActivity,
+          composite: compositeScore,
+        },
+      };
+    });
+
+    // Sort based on sortBy parameter
+    const sortField = sortBy || TopCampaignsSortBy.COMPOSITE;
+    campaignsWithScores.sort(
+      (a, b) => b.sortValues[sortField] - a.sortValues[sortField],
+    );
+
+    // Get top N campaigns
+    const topCampaigns = campaignsWithScores.slice(0, limit).map((item) => ({
+      id: item.id,
+      name: item.name,
+      description: item.description,
+      category: item.category,
+      type: item.type,
+      status: item.status,
+      brand: item.brand,
+      metrics: item.metrics,
+      createdAt: item.createdAt,
+    }));
+
+    return {
+      campaigns: topCampaigns,
+      total: campaignsWithScores.length,
+      sortBy: sortBy || TopCampaignsSortBy.COMPOSITE,
+      timeframe: timeframe || TopCampaignsTimeframe.ALL_TIME,
+      statusFilter: status || TopCampaignsStatus.ALL,
+      limit: limit || 10,
+    };
   }
 }

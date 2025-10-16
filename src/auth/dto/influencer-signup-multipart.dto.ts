@@ -19,6 +19,7 @@ import {
   OTHERS_GENDER_OPTIONS,
 } from '../types/gender.enum';
 import { Transform } from 'class-transformer';
+import { Username } from '../../shared/decorators/username.decorator';
 
 export class InfluencerSignupMultipartDto {
   @ApiProperty({
@@ -30,19 +31,7 @@ export class InfluencerSignupMultipartDto {
   @Length(1, 100, { message: 'Name must be between 1 and 100 characters' })
   name: string;
 
-  @ApiProperty({
-    description: 'Unique username for the influencer',
-    example: 'dhruv_1109',
-    pattern: '^[a-zA-Z0-9_]+$',
-    minLength: 3,
-    maxLength: 30,
-  })
-  @IsNotEmpty()
-  @IsString()
-  @Length(3, 30, { message: 'Username must be between 3 and 30 characters' })
-  @Matches(/^[a-zA-Z0-9_]+$/, {
-    message: 'Username can only contain letters, numbers, and underscores',
-  })
+  @Username({ example: 'dhruv_1109' })
   username: string;
 
   @ApiProperty({

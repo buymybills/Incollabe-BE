@@ -12,6 +12,7 @@ import {
   Max,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { Username } from '../../shared/decorators/username.decorator';
 
 export class UpdateBrandProfileDto {
   @ApiProperty({ description: 'Brand name', required: false })
@@ -22,13 +23,7 @@ export class UpdateBrandProfileDto {
   })
   brandName?: string;
 
-  @ApiProperty({ description: 'Username', required: false })
-  @IsOptional()
-  @IsString()
-  @Length(3, 30, { message: 'Username must be between 3 and 30 characters' })
-  @Matches(/^[a-zA-Z0-9._]+$/, {
-    message: 'Username can only contain letters, numbers, dots and underscores',
-  })
+  @Username({ required: false, example: 'brandname_official' })
   username?: string;
 
   @ApiProperty({ description: 'Legal entity name', required: false })

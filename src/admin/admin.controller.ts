@@ -25,6 +25,7 @@ import {
 } from '@nestjs/swagger';
 import { AdminAuthService } from './admin-auth.service';
 import { ProfileReviewService } from './profile-review.service';
+import { AdminCampaignService } from './services/admin-campaign.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import type { RequestWithAdmin } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
@@ -48,6 +49,14 @@ import {
   AdminSearchResultDto,
   UserType,
 } from './dto/admin-search.dto';
+import {
+  TopBrandsRequestDto,
+  TopBrandsResponseDto,
+} from './dto/top-brands.dto';
+import {
+  TopCampaignsRequestDto,
+  TopCampaignsResponseDto,
+} from './dto/top-campaigns.dto';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -55,6 +64,7 @@ export class AdminController {
   constructor(
     private readonly adminAuthService: AdminAuthService,
     private readonly profileReviewService: ProfileReviewService,
+    private readonly adminCampaignService: AdminCampaignService,
   ) {}
 
   @Post('login')
@@ -379,6 +389,46 @@ export class AdminController {
     return await this.profileReviewService.getDashboardStats();
   }
 
+  @Get('dashboard/top-brands')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get top performing brands',
+    description:
+      'Get top brands based on 4 key metrics: campaigns launched, niche diversity, influencers selected, and average payout. Results can be filtered by timeframe and sorted by different metrics.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Top brands retrieved successfully',
+    type: TopBrandsResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getTopBrands(@Query() requestDto: TopBrandsRequestDto) {
+    return await this.adminAuthService.getTopBrands(requestDto);
+  }
+
+  @Get('dashboard/top-campaigns')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get top performing campaigns',
+    description:
+      'Get top campaigns based on comprehensive metrics including applications, conversion rate, budget, geographic reach, niches, selected influencers, completion rate, and recency. Supports multiple sorting options and filters.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Top campaigns retrieved successfully',
+    type: TopCampaignsResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getTopCampaigns(@Query() requestDto: TopCampaignsRequestDto) {
+    return await this.adminAuthService.getTopCampaigns(requestDto);
+  }
+
   @Put('influencer/:influencerId/top-status')
   @UseGuards(AdminAuthGuard, RolesGuard)
   @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
@@ -538,5 +588,126 @@ export class AdminController {
   async advancedBrandSearch(@Query() searchDto: AdminSearchDto) {
     const brandSearchDto = { ...searchDto, userType: UserType.BRAND };
     return await this.adminAuthService.advancedBrandSearch(brandSearchDto);
+  }
+
+  @Get('campaigns/:id/applications')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get campaign applications with AI scoring',
+    description:
+      'Get all applications for a campaign with AI-powered relevance scoring, strengths/concerns analysis, and smart sorting',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Campaign ID',
+    type: 'number',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Campaign applications retrieved successfully with AI scores',
+    schema: {
+      type: 'object',
+      properties: {
+        campaignId: { type: 'number', example: 123 },
+        totalApplications: { type: 'number', example: 50 },
+        topMatches: {
+          type: 'array',
+          description: 'Top 10 highly recommended influencers',
+          items: {
+            type: 'object',
+            properties: {
+              applicationId: { type: 'number', example: 1 },
+              influencer: {
+                type: 'object',
+                properties: {
+                  id: { type: 'number', example: 123 },
+                  name: { type: 'string', example: 'Jane Doe' },
+                  username: { type: 'string', example: '@janedoe' },
+                  followers: { type: 'number', example: 50000 },
+                  engagementRate: { type: 'number', example: 5.2 },
+                  niches: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    example: ['Fashion', 'Lifestyle'],
+                  },
+                  location: { type: 'string', example: 'Mumbai' },
+                },
+              },
+              aiScore: { type: 'number', example: 85 },
+              recommendation: {
+                type: 'string',
+                enum: ['Highly Recommended', 'Recommended', 'Consider'],
+                example: 'Highly Recommended',
+              },
+              strengths: {
+                type: 'array',
+                items: { type: 'string' },
+                example: [
+                  'Perfect niche alignment',
+                  'High engagement rate (5.2%)',
+                ],
+              },
+              concerns: {
+                type: 'array',
+                items: { type: 'string' },
+                example: [],
+              },
+              appliedAt: {
+                type: 'string',
+                example: '2024-01-15T10:30:00Z',
+              },
+              status: { type: 'string', example: 'pending' },
+              scoreBreakdown: {
+                type: 'object',
+                properties: {
+                  overall: { type: 'number', example: 85 },
+                  nicheMatch: { type: 'number', example: 90 },
+                  audienceRelevance: { type: 'number', example: 80 },
+                  engagementRate: { type: 'number', example: 85 },
+                  locationMatch: { type: 'number', example: 100 },
+                  pastPerformance: { type: 'number', example: 70 },
+                  contentQuality: { type: 'number', example: 75 },
+                },
+              },
+            },
+          },
+        },
+        otherApplications: {
+          type: 'array',
+          description: 'Other applications (paginated)',
+        },
+        pagination: {
+          type: 'object',
+          properties: {
+            page: { type: 'number', example: 1 },
+            limit: { type: 'number', example: 50 },
+            total: { type: 'number', example: 40 },
+            totalPages: { type: 'number', example: 1 },
+          },
+        },
+      },
+    },
+  })
+  @ApiNotFoundResponse({
+    description: 'Campaign not found',
+  })
+  async getCampaignApplications(
+    @Param('id', ParseIntPipe) campaignId: number,
+    @Query('sortBy') sortBy?: 'relevance' | 'date' | 'engagement' | 'followers' | null,
+    @Query('filter')
+    filter?: 'all' | 'highly_recommended' | 'recommended' | 'consider' | null,
+    @Query('page', new ParseIntPipe({ optional: true })) page: number = 1,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit: number = 10,
+  ) {
+    return await this.adminCampaignService.getCampaignApplicationsWithAI(
+      campaignId,
+      {
+        sortBy: sortBy || undefined,
+        filter: filter || undefined,
+        page,
+        limit,
+      },
+    );
   }
 }

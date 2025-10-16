@@ -18,6 +18,7 @@ import {
   GENDER_OPTIONS,
   OTHERS_GENDER_OPTIONS,
 } from '../types/gender.enum';
+import { Username } from '../../shared/decorators/username.decorator';
 
 export class InfluencerSignupDto {
   @ApiProperty({
@@ -29,16 +30,7 @@ export class InfluencerSignupDto {
   @Length(2, 50, { message: 'Name must be between 2 and 50 characters' })
   name: string;
 
-  @ApiProperty({
-    description: 'Unique username for the influencer',
-    example: 'dhruv_1109',
-  })
-  @IsNotEmpty()
-  @IsString()
-  @Length(3, 30, { message: 'Username must be between 3 and 30 characters' })
-  @Matches(/^[a-zA-Z0-9_]+$/, {
-    message: 'Username can only contain letters, numbers, and underscores',
-  })
+  @Username({ example: 'dhruv_1109' })
   username: string;
 
   @ApiProperty({
