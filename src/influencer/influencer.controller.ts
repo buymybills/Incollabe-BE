@@ -352,7 +352,7 @@ export class InfluencerController {
   @Get('profile/:id')
   @ApiOperation({
     summary: 'Get public influencer profile',
-    description: 'Get public influencer profile by ID',
+    description: 'Get public influencer profile by ID. If authenticated, includes isFollowing flag.',
   })
   @ApiResponse({
     status: 200,
@@ -361,10 +361,17 @@ export class InfluencerController {
   })
   async getPublicInfluencerProfile(
     @Param('id', ParseIntPipe) influencerId: number,
+    @Req() req?: RequestWithUser,
   ): Promise<PublicProfileResponseDto> {
+    // Pass current user info if authenticated
+    const currentUserId = req?.user?.id;
+    const currentUserType = req?.user?.userType;
+
     const profile = await this.influencerService.getInfluencerProfile(
       influencerId,
       true,
+      currentUserId,
+      currentUserType,
     );
 
     // Fetch experiences for the influencer

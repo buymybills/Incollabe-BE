@@ -477,7 +477,7 @@ describe('BrandController', () => {
       const result = await controller.getBrandProfileById(1);
 
       expect(result).toEqual(mockPublicProfile);
-      expect(brandService.getBrandProfile).toHaveBeenCalledWith(1);
+      expect(brandService.getBrandProfile).toHaveBeenCalledWith(1, undefined, undefined);
 
       // Ensure private fields are not exposed
       expect(result).not.toHaveProperty('email');
@@ -591,7 +591,7 @@ describe('BrandController', () => {
 
       await controller.getBrandProfileById(123);
 
-      expect(brandService.getBrandProfile).toHaveBeenCalledWith(123);
+      expect(brandService.getBrandProfile).toHaveBeenCalledWith(123, undefined, undefined);
     });
 
     it('should handle country ID parameter parsing', async () => {

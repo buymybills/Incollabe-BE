@@ -115,11 +115,37 @@ export class InfluencerService {
     private readonly customNicheService: CustomNicheService,
   ) {}
 
-  async getInfluencerProfile(influencerId: number, isPublic: boolean = false) {
+  async getInfluencerProfile(
+    influencerId: number,
+    isPublic: boolean = false,
+    currentUserId?: number,
+    currentUserType?: 'influencer' | 'brand',
+  ) {
     const influencer = await this.influencerRepository.findById(influencerId);
 
     if (!influencer) {
       throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
+    }
+
+    // Check if current user follows this influencer
+    let isFollowing = false;
+    if (currentUserId && currentUserType) {
+      const followRecord = await this.followModel.findOne({
+        where: {
+          followingType: FollowingType.INFLUENCER,
+          followingInfluencerId: influencerId,
+          ...(currentUserType === 'influencer'
+            ? {
+                followerType: FollowingType.INFLUENCER,
+                followerInfluencerId: currentUserId,
+              }
+            : {
+                followerType: FollowingType.BRAND,
+                followerBrandId: currentUserId,
+              }),
+        },
+      });
+      isFollowing = !!followRecord;
     }
 
     // Calculate profile completion, platform metrics, and get verification status
@@ -182,6 +208,9 @@ export class InfluencerService {
 
       // Top influencer status
       isTopInfluencer: influencer.isTopInfluencer,
+
+      // Following status
+      isFollowing,
 
       // Collaboration costs (public)
       collaborationCosts: influencer.collaborationCosts || {},

@@ -65,7 +65,11 @@ export class BrandService {
     private readonly profileReviewService: ProfileReviewService,
   ) {}
 
-  async getBrandProfile(brandId: number): Promise<BrandProfileResponseDto> {
+  async getBrandProfile(
+    brandId: number,
+    currentUserId?: number,
+    currentUserType?: 'influencer' | 'brand',
+  ): Promise<BrandProfileResponseDto> {
     const brand = await this.brandModel.findByPk(brandId, {
       include: [
         {
@@ -97,6 +101,27 @@ export class BrandService {
 
     if (!brand) {
       throw new NotFoundException('Brand not found');
+    }
+
+    // Check if current user follows this brand
+    let isFollowing = false;
+    if (currentUserId && currentUserType) {
+      const followRecord = await this.followModel.findOne({
+        where: {
+          followingType: FollowingType.BRAND,
+          followingBrandId: brandId,
+          ...(currentUserType === 'influencer'
+            ? {
+                followerType: FollowingType.INFLUENCER,
+                followerInfluencerId: currentUserId,
+              }
+            : {
+                followerType: FollowingType.BRAND,
+                followerBrandId: currentUserId,
+              }),
+        },
+      });
+      isFollowing = !!followRecord;
     }
 
     // Calculate profile completion, platform metrics, and get verification status
@@ -201,6 +226,9 @@ export class BrandService {
 
       // Platform metrics
       metrics: platformMetrics,
+
+      // Following status
+      isFollowing,
 
       // Verification status
       verificationStatus,

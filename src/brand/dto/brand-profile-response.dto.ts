@@ -247,6 +247,13 @@ export class BrandProfileResponseDto {
   metrics: PlatformMetrics;
 
   @ApiProperty({
+    description: 'Whether the current user follows this brand',
+    example: false,
+    required: false,
+  })
+  isFollowing?: boolean;
+
+  @ApiProperty({
     description: 'Verification status of the profile',
     required: false,
     example: {

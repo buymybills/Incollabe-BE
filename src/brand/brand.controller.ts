@@ -248,14 +248,25 @@ export class BrandController {
   }
 
   @Get('profile/:id')
-  @ApiOperation({ summary: 'Get brand profile by ID (public)' })
+  @ApiOperation({ summary: 'Get brand profile by ID (public). If authenticated, includes isFollowing flag.' })
   @ApiResponse({
     status: 200,
     description: 'Brand profile retrieved successfully',
   })
   @ApiResponse({ status: 404, description: 'Brand not found' })
-  async getBrandProfileById(@Param('id', ParseIntPipe) brandId: number) {
-    const profile = await this.brandService.getBrandProfile(brandId);
+  async getBrandProfileById(
+    @Param('id', ParseIntPipe) brandId: number,
+    @Req() req?: RequestWithUser,
+  ) {
+    // Pass current user info if authenticated
+    const currentUserId = req?.user?.id;
+    const currentUserType = req?.user?.userType;
+
+    const profile = await this.brandService.getBrandProfile(
+      brandId,
+      currentUserId,
+      currentUserType,
+    );
 
     // Return public fields only for public access
     return {
@@ -268,7 +279,10 @@ export class BrandController {
       websiteUrl: profile.companyInfo.websiteUrl,
       socialLinks: profile.socialLinks,
       niches: profile.niches,
+      customNiches: profile.customNiches,
       isActive: profile.isActive,
+      isFollowing: profile.isFollowing,
+      metrics: profile.metrics,
     };
   }
 
