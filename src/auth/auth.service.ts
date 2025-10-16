@@ -2090,6 +2090,10 @@ export class AuthService {
       // Mark OTP as used
       await otpRecord.destroy();
 
+      // Store username and profile image before deletion (for testing)
+      const username = influencer.username;
+      const profileImage = influencer.profileImage;
+
       // Delete the account
       await influencer.update({ isActive: false });
       await influencer.destroy(); // Sets deletedAt with paranoid mode
@@ -2097,7 +2101,12 @@ export class AuthService {
       this.loggerService.info(
         `Influencer account deleted: ${influencer.id} (phone: ${formattedPhone})`,
       );
-      return { message: 'Influencer account deleted successfully' };
+
+      return {
+        message: 'Influencer account deleted successfully',
+        username,
+        profileImage,
+      };
     } else if (userType === 'brand') {
       if (!email) {
         throw new BadRequestException('Email is required for brand');
