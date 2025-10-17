@@ -1113,7 +1113,7 @@ export class InfluencerService {
       include: [
         {
           model: Campaign,
-          attributes: ['id', 'name', 'description', 'status', 'type'],
+          attributes: ['id', 'name', 'description', 'status', 'type', 'category'],
           include: [
             {
               model: Brand,
@@ -1252,7 +1252,7 @@ export class InfluencerService {
       const socialLinkData = socialLinks.map((link) => ({
         experienceId: experience.id,
         platform: link.platform,
-        contentType: link.contentType,
+        contentType: link.contentType || 'post', // Default to 'post' if not provided
         url: link.url,
       }));
 
@@ -1306,7 +1306,7 @@ export class InfluencerService {
         const socialLinkData = socialLinks.map((link) => ({
           experienceId: experience.id,
           platform: link.platform,
-          contentType: link.contentType,
+          contentType: link.contentType || 'post', // Default to 'post' if not provided
           url: link.url,
         }));
 
