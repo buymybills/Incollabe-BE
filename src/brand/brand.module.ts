@@ -16,6 +16,7 @@ import { Post } from '../post/models/post.model';
 import { Campaign } from '../campaign/models/campaign.model';
 import { CustomNiche } from '../auth/model/custom-niche.model';
 import { ProfileReview } from '../admin/models/profile-review.model';
+import { Admin } from '../admin/models/admin.model';
 import { RedisService } from '../redis/redis.service';
 import { MasterDataService } from '../shared/services/master-data.service';
 import { AdminModule } from '../admin/admin.module';
@@ -37,6 +38,7 @@ import { SharedModule } from '../shared/shared.module';
       Campaign,
       CustomNiche,
       ProfileReview,
+      Admin,
     ]),
     ConfigModule,
     AdminModule,

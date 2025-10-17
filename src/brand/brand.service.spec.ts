@@ -13,6 +13,7 @@ import { Post } from '../post/models/post.model';
 import { Campaign } from '../campaign/models/campaign.model';
 import { CustomNiche } from '../auth/model/custom-niche.model';
 import { ProfileReview } from '../admin/models/profile-review.model';
+import { Admin } from '../admin/models/admin.model';
 import { S3Service } from '../shared/s3.service';
 import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../shared/email.service';
@@ -53,6 +54,7 @@ const mockRedisService = {
 const mockEmailService = {
   sendBrandProfileIncompleteEmail: jest.fn(),
   sendProfileVerificationPendingEmail: jest.fn(),
+  sendAdminProfilePendingNotification: jest.fn(),
 };
 
 const mockMasterDataService = {
@@ -78,6 +80,7 @@ describe('BrandService', () => {
   let cityModel: any;
   let regionModel: any;
   let companyTypeModel: any;
+  let adminModel: any;
   let s3Service: any;
   let emailService: any;
   let masterDataService: any;
@@ -136,6 +139,10 @@ describe('BrandService', () => {
           useValue: mockModel(),
         },
         {
+          provide: getModelToken(Admin),
+          useValue: mockModel(),
+        },
+        {
           provide: S3Service,
           useValue: mockS3Service,
         },
@@ -166,6 +173,7 @@ describe('BrandService', () => {
     cityModel = module.get(getModelToken(City));
     regionModel = module.get(getModelToken(Region));
     companyTypeModel = module.get(getModelToken(CompanyType));
+    adminModel = module.get(getModelToken(Admin));
     s3Service = module.get(S3Service);
     emailService = module.get(EmailService);
     masterDataService = module.get(MasterDataService);
@@ -367,6 +375,18 @@ describe('BrandService', () => {
       brandModel.findByPk.mockResolvedValue(mockBrand);
       profileReviewService.createProfileReview.mockResolvedValue({ id: 1 });
       emailService.sendProfileVerificationPendingEmail.mockResolvedValue(true);
+      emailService.sendAdminProfilePendingNotification.mockResolvedValue(true);
+
+      // Mock adminModel.findAll to return active admin users
+      adminModel.findAll.mockResolvedValue([
+        {
+          id: 1,
+          name: 'Admin User',
+          email: 'admin@test.com',
+          role: 'SUPER_ADMIN',
+          status: 'ACTIVE',
+        },
+      ]);
 
       // Mock getBrandProfile to return complete profile
       jest.spyOn(service, 'getBrandProfile').mockResolvedValue({

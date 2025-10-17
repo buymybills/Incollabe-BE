@@ -352,7 +352,8 @@ export class InfluencerController {
   @Get('profile/:id')
   @ApiOperation({
     summary: 'Get public influencer profile',
-    description: 'Get public influencer profile by ID. If authenticated, includes isFollowing flag.',
+    description:
+      'Get public influencer profile by ID. If authenticated, includes isFollowing flag.',
   })
   @ApiResponse({
     status: 200,

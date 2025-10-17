@@ -248,7 +248,10 @@ export class BrandController {
   }
 
   @Get('profile/:id')
-  @ApiOperation({ summary: 'Get brand profile by ID (public). If authenticated, includes isFollowing flag.' })
+  @ApiOperation({
+    summary:
+      'Get brand profile by ID (public). If authenticated, includes isFollowing flag.',
+  })
   @ApiResponse({
     status: 200,
     description: 'Brand profile retrieved successfully',

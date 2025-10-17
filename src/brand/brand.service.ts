@@ -24,6 +24,7 @@ import {
   ProfileType,
   ReviewStatus,
 } from '../admin/models/profile-review.model';
+import { Admin, AdminRole, AdminStatus } from '../admin/models/admin.model';
 import { SignupFiles } from '../types/file-upload.types';
 import {
   CustomNiche,
@@ -58,6 +59,8 @@ export class BrandService {
     private readonly customNicheModel: typeof CustomNiche,
     @InjectModel(ProfileReview)
     private readonly profileReviewModel: typeof ProfileReview,
+    @InjectModel(Admin)
+    private readonly adminModel: typeof Admin,
     private readonly s3Service: S3Service,
     private readonly redisService: RedisService,
     private readonly emailService: EmailService,
@@ -319,7 +322,29 @@ export class BrandService {
           brand.email,
           brand.brandName || 'Brand Partner',
         );
+
+        // Notify admins about pending profile
+        await this.notifyAdminsOfPendingProfile(brand.id);
       }
+    }
+
+    // If profile is already complete but has no review record, create one
+    // This handles cases where profiles were completed before verification logic was added
+    if (isComplete && brand.isProfileCompleted && !hasBeenSubmitted) {
+      await this.profileReviewService.createProfileReview({
+        profileId: brand.id,
+        profileType: ProfileType.BRAND,
+        submittedData: brand,
+      });
+
+      // Send verification email to brand
+      await this.emailService.sendProfileVerificationPendingEmail(
+        brand.email,
+        brand.brandName || 'Brand Partner',
+      );
+
+      // Notify admins about pending profile
+      await this.notifyAdminsOfPendingProfile(brand.id);
     }
 
     // Send appropriate email notification based on completion status
@@ -360,7 +385,11 @@ export class BrandService {
       };
     }
 
-    return profileData;
+    // Profile was already complete - just return updated data with message
+    return {
+      ...profileData,
+      message: 'Profile updated successfully',
+    };
   }
 
   async updateBrandNiches(brandId: number, nicheIds: number[]) {
@@ -663,6 +692,7 @@ export class BrandService {
           message: 'Profile Under Verification',
           description:
             'Usually takes 1-2 business days to complete verification',
+          isNew: false, // Pending status doesn't need "new" indicator
         };
 
       case ReviewStatus.APPROVED:
@@ -890,5 +920,32 @@ export class BrandService {
       posts: postsCount,
       campaigns: campaignsCount,
     };
+  }
+
+  private async notifyAdminsOfPendingProfile(brandId: number) {
+    const brand = await this.brandModel.findByPk(brandId);
+    if (!brand) return;
+
+    // Get all active profile reviewer admins
+    const admins = await this.adminModel.findAll({
+      where: {
+        status: AdminStatus.ACTIVE,
+        role: [AdminRole.SUPER_ADMIN, AdminRole.PROFILE_REVIEWER],
+      },
+    });
+
+    // Send notification emails to all admins
+    const emailPromises = admins.map((admin) =>
+      this.emailService.sendAdminProfilePendingNotification(
+        admin.email,
+        admin.name,
+        'brand',
+        brand.brandName || 'Brand',
+        brand.username || brand.email,
+        brandId,
+      ),
+    );
+
+    await Promise.all(emailPromises);
   }
 }

@@ -194,6 +194,8 @@ export class InfluencerService {
         id: niche.id,
         name: niche.name,
         description: niche.description,
+        logoNormal: niche.logoNormal,
+        logoDark: niche.logoDark,
       })),
 
       customNiches: (influencer.customNiches || []).map((customNiche) => ({
@@ -576,6 +578,7 @@ export class InfluencerService {
           message: 'Profile Under Verification',
           description:
             'Usually takes 1-2 business days to complete verification',
+          isNew: false, // Pending status doesn't need "new" indicator
         };
 
       case ReviewStatus.APPROVED:
@@ -1588,6 +1591,8 @@ export class InfluencerService {
             id: niche.id,
             name: niche.name,
             description: niche.description,
+            logoNormal: niche.logoNormal,
+            logoDark: niche.logoDark,
           })),
 
           metrics: platformMetrics,
