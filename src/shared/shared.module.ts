@@ -12,6 +12,7 @@ import { OtpRepository } from './repositories/otp.repository';
 import { LoggerService } from './services/logger.service';
 import { CustomNicheService } from './services/custom-niche.service';
 import { EncryptionService } from './services/encryption.service';
+import { IsValidUsernameConstraint } from './validators/is-valid-username.validator';
 import { Otp } from '../auth/model/otp.model';
 import { CustomNiche } from '../auth/model/custom-niche.model';
 import { Influencer } from '../auth/model/influencer.model';
@@ -35,6 +36,7 @@ import { Niche } from '../auth/model/niche.model';
     LoggerService,
     CustomNicheService,
     EncryptionService,
+    IsValidUsernameConstraint,
   ],
   exports: [
     SmsService,
@@ -48,6 +50,7 @@ import { Niche } from '../auth/model/niche.model';
     LoggerService,
     CustomNicheService,
     EncryptionService,
+    IsValidUsernameConstraint,
   ],
 })
 export class SharedModule {}
