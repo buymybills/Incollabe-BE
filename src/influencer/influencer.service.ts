@@ -353,13 +353,10 @@ export class InfluencerService {
       await this.influencerRepository.updateInfluencer(influencerId, {
         isProfileCompleted: isComplete,
       });
-    }
 
-    // Send appropriate WhatsApp notification based on completion status
-    // Only send notifications if profile has never been submitted
-    if (!hasBeenSubmitted) {
-      if (isComplete && !wasComplete) {
-        // Profile just became complete - automatically submit for verification
+      // If profile just became complete, create profile review and send notifications
+      if (!wasComplete && isComplete) {
+        // Create profile review for admin verification
         await this.createProfileReview(influencerId);
 
         // Send verification pending notifications (WhatsApp only for influencers)
@@ -369,7 +366,25 @@ export class InfluencerService {
             influencer.name,
           );
         }
-      } else if (!isComplete) {
+      }
+    } else if (isComplete && !hasBeenSubmitted) {
+      // If profile is already complete but has no review record, create one
+      // This handles cases where profile was already marked complete but hasn't been submitted yet
+      await this.createProfileReview(influencerId);
+
+      // Send verification pending notifications (WhatsApp only for influencers)
+      if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
+        await this.whatsAppService.sendProfileVerificationPending(
+          influencer.whatsappNumber,
+          influencer.name,
+        );
+      }
+    }
+
+    // Send appropriate WhatsApp notification based on completion status
+    // Only send notifications if profile has never been submitted
+    if (!hasBeenSubmitted) {
+      if (!isComplete) {
         // Profile is incomplete - send missing fields notifications (WhatsApp only for influencers)
         console.log('Profile incomplete notification check:', {
           influencerId: influencer.id,
