@@ -355,7 +355,7 @@ export class InfluencerService {
       });
 
       // If profile just became complete, create profile review and send notifications
-      if (!wasComplete && isComplete) {
+      if (!wasComplete && isComplete && !hasBeenSubmitted) {
         // Create profile review for admin verification
         await this.createProfileReview(influencerId);
 
@@ -367,17 +367,23 @@ export class InfluencerService {
           );
         }
       }
-    } else if (isComplete && !hasBeenSubmitted) {
-      // If profile is already complete but has no review record, create one
-      // This handles cases where profile was already marked complete but hasn't been submitted yet
-      await this.createProfileReview(influencerId);
+    }
 
-      // Send verification pending notifications (WhatsApp only for influencers)
-      if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-        await this.whatsAppService.sendProfileVerificationPending(
-          influencer.whatsappNumber,
-          influencer.name,
-        );
+    // If profile is already complete but has no review record, create one
+    // This handles cases where profile was already marked complete but hasn't been submitted yet
+    if (isComplete && !hasBeenSubmitted) {
+      // Check if we haven't already created review in the block above
+      const reviewCreated = !wasComplete && isComplete;
+      if (!reviewCreated) {
+        await this.createProfileReview(influencerId);
+
+        // Send verification pending notifications (WhatsApp only for influencers)
+        if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
+          await this.whatsAppService.sendProfileVerificationPending(
+            influencer.whatsappNumber,
+            influencer.name,
+          );
+        }
       }
     }
 
