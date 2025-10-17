@@ -326,7 +326,7 @@ describe('AuthService', () => {
       redisService.get.mockResolvedValue('1'); // Cooldown active
 
       await expect(service.requestOtp(requestOtpDto)).rejects.toThrow(
-        'Please wait before requesting another OTP',
+        'Please wait for 60 sec before requesting another OTP',
       );
     });
   });
