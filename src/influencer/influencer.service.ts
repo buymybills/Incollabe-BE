@@ -121,10 +121,41 @@ export class InfluencerService {
     currentUserId?: number,
     currentUserType?: 'influencer' | 'brand',
   ) {
-    const influencer = await this.influencerRepository.findById(influencerId);
+    let influencer = await this.influencerRepository.findById(influencerId);
 
     if (!influencer) {
       throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
+    }
+
+    // Check if profile is actually complete and update flag if needed
+    const isActuallyComplete = this.checkInfluencerProfileCompletion(influencer);
+    if (isActuallyComplete && !influencer.isProfileCompleted) {
+      // Profile is complete but flag is outdated - update it
+      await this.influencerRepository.updateInfluencer(influencerId, {
+        isProfileCompleted: true,
+      });
+
+      // Check if profile has ever been submitted for review
+      const hasBeenSubmitted = await this.hasProfileReview(influencerId);
+
+      // If profile just became complete and hasn't been submitted, create review
+      if (!hasBeenSubmitted) {
+        await this.createProfileReview(influencerId);
+
+        // Send verification pending notification
+        if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
+          await this.whatsAppService.sendProfileVerificationPending(
+            influencer.whatsappNumber,
+            influencer.name,
+          );
+        }
+      }
+
+      // Refresh influencer data with updated flag
+      influencer = await this.influencerRepository.findById(influencerId);
+      if (!influencer) {
+        throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
+      }
     }
 
     // Check if current user follows this influencer
