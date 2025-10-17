@@ -417,7 +417,7 @@ describe('InfluencerService', () => {
       expect(s3Service.uploadFileToS3).not.toHaveBeenCalled();
       expect(influencerRepository.updateInfluencer).toHaveBeenCalledWith(
         1,
-        updateDto,
+        expect.objectContaining(updateDto),
       );
     });
 

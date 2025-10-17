@@ -322,68 +322,63 @@ export class InfluencerService {
       delete processedData.customNiches;
     }
 
-    // Update influencer data
-    const updatedData = {
-      ...processedData,
-      ...fileUrls,
-    };
-
-    // Store the old completion status BEFORE update (to detect when profile becomes complete)
+    // Store the old completion status BEFORE any updates
     const wasComplete = influencer.isProfileCompleted;
-
-    await this.influencerRepository.updateInfluencer(influencerId, updatedData);
 
     // Check if profile has ever been submitted for review
     const hasBeenSubmitted = await this.hasProfileReview(influencerId);
 
-    // Check and update profile completion status
-    // Fetch updated influencer after all data updates to get current state
+    // Pre-calculate what the profile will look like after update to determine completion
+    const tempInfluencer = { ...influencer, ...processedData, ...fileUrls };
+    const willBeComplete = this.checkInfluencerProfileCompletion(tempInfluencer as any);
+
+    // Update influencer data - include isProfileCompleted flag if profile will be complete
+    const updatedData = {
+      ...processedData,
+      ...fileUrls,
+      // Set completion flag immediately if profile is complete
+      ...(willBeComplete ? { isProfileCompleted: true } : {}),
+    };
+
+    await this.influencerRepository.updateInfluencer(influencerId, updatedData);
+
+    // Fetch updated influencer to get current state
     const updatedInfluencer =
       await this.influencerRepository.findById(influencerId);
     if (!updatedInfluencer) {
       throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
     }
 
+    // Calculate profile completion for response
     const profileCompletion =
       this.calculateProfileCompletion(updatedInfluencer);
     const isComplete = profileCompletion.isCompleted;
 
-    // Update isProfileCompleted flag if it changed
-    if (isComplete !== updatedInfluencer.isProfileCompleted) {
-      await this.influencerRepository.updateInfluencer(influencerId, {
-        isProfileCompleted: isComplete,
-      });
+    // If profile just became complete and hasn't been submitted, create review
+    if (!wasComplete && isComplete && !hasBeenSubmitted) {
+      // Create profile review for admin verification
+      await this.createProfileReview(influencerId);
 
-      // If profile just became complete, create profile review and send notifications
-      if (!wasComplete && isComplete && !hasBeenSubmitted) {
-        // Create profile review for admin verification
-        await this.createProfileReview(influencerId);
-
-        // Send verification pending notifications (WhatsApp only for influencers)
-        if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-          await this.whatsAppService.sendProfileVerificationPending(
-            influencer.whatsappNumber,
-            influencer.name,
-          );
-        }
+      // Send verification pending notifications (WhatsApp only for influencers)
+      if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
+        await this.whatsAppService.sendProfileVerificationPending(
+          influencer.whatsappNumber,
+          influencer.name,
+        );
       }
     }
 
     // If profile is already complete but has no review record, create one
     // This handles cases where profile was already marked complete but hasn't been submitted yet
-    if (isComplete && !hasBeenSubmitted) {
-      // Check if we haven't already created review in the block above
-      const reviewCreated = !wasComplete && isComplete;
-      if (!reviewCreated) {
-        await this.createProfileReview(influencerId);
+    if (isComplete && !hasBeenSubmitted && wasComplete) {
+      await this.createProfileReview(influencerId);
 
-        // Send verification pending notifications (WhatsApp only for influencers)
-        if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-          await this.whatsAppService.sendProfileVerificationPending(
-            influencer.whatsappNumber,
-            influencer.name,
-          );
-        }
+      // Send verification pending notifications (WhatsApp only for influencers)
+      if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
+        await this.whatsAppService.sendProfileVerificationPending(
+          influencer.whatsappNumber,
+          influencer.name,
+        );
       }
     }
 
