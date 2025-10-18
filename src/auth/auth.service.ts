@@ -157,7 +157,9 @@ export class AuthService {
         phone: formattedPhone,
         reason: 'cooldown_active',
       });
-      throw new ForbiddenException('Please wait for 60 sec before requesting another OTP');
+      throw new ForbiddenException(
+        'Please wait for 60 sec before requesting another OTP',
+      );
     }
 
     // Check total attempts in window (5 requests / 15 mins)

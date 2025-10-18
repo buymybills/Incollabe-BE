@@ -334,6 +334,11 @@ export class BrandController {
               id: { type: 'number', example: 1 },
               name: { type: 'string', example: 'Mumbai' },
               state: { type: 'string', example: 'Maharashtra' },
+              tier: {
+                type: 'number',
+                example: 1,
+                description: 'City tier (1, 2, or 3)',
+              },
             },
           },
         },

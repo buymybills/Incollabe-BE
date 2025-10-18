@@ -113,7 +113,7 @@ export class InfluencerService {
     @Inject('CUSTOM_NICHE_MODEL')
     private readonly customNicheModel: typeof CustomNiche,
     private readonly customNicheService: CustomNicheService,
-  ) { }
+  ) {}
 
   async getInfluencerProfile(
     influencerId: number,
@@ -128,7 +128,8 @@ export class InfluencerService {
     }
 
     // Check if profile is actually complete and update flag if needed
-    const isActuallyComplete = this.checkInfluencerProfileCompletion(influencer);
+    const isActuallyComplete =
+      this.checkInfluencerProfileCompletion(influencer);
     if (isActuallyComplete && !influencer.isProfileCompleted) {
       // Profile is complete but flag is outdated - update it
       await this.influencerRepository.updateInfluencer(influencerId, {
@@ -167,13 +168,13 @@ export class InfluencerService {
           followingInfluencerId: influencerId,
           ...(currentUserType === 'influencer'
             ? {
-              followerType: FollowingType.INFLUENCER,
-              followerInfluencerId: currentUserId,
-            }
+                followerType: FollowingType.INFLUENCER,
+                followerInfluencerId: currentUserId,
+              }
             : {
-              followerType: FollowingType.BRAND,
-              followerBrandId: currentUserId,
-            }),
+                followerType: FollowingType.BRAND,
+                followerBrandId: currentUserId,
+              }),
         },
       });
       isFollowing = !!followRecord;
@@ -199,17 +200,17 @@ export class InfluencerService {
       location: {
         country: influencer.country
           ? {
-            id: influencer.country.id,
-            name: influencer.country.name,
-            code: influencer.country.code,
-          }
+              id: influencer.country.id,
+              name: influencer.country.name,
+              code: influencer.country.code,
+            }
           : null,
         city: influencer.city
           ? {
-            id: influencer.city.id,
-            name: influencer.city.name,
-            state: influencer.city.state,
-          }
+              id: influencer.city.id,
+              name: influencer.city.name,
+              state: influencer.city.state,
+            }
           : null,
       },
 
@@ -361,7 +362,8 @@ export class InfluencerService {
 
     // Pre-calculate what the profile will look like after update to determine completion
     const tempInfluencer = { ...influencer, ...processedData, ...fileUrls };
-    const willBeComplete = this.checkInfluencerProfileCompletion(tempInfluencer as any);
+    const willBeComplete =
+      this.checkInfluencerProfileCompletion(tempInfluencer);
 
     // Update influencer data - include isProfileCompleted flag if profile will be complete
     const updatedData = {
@@ -578,10 +580,10 @@ export class InfluencerService {
     // At least one social media link required
     const hasSocialMediaLink = Boolean(
       influencer.instagramUrl ||
-      influencer.youtubeUrl ||
-      influencer.facebookUrl ||
-      influencer.linkedinUrl ||
-      influencer.twitterUrl,
+        influencer.youtubeUrl ||
+        influencer.facebookUrl ||
+        influencer.linkedinUrl ||
+        influencer.twitterUrl,
     );
 
     // WhatsApp verification required
@@ -590,7 +592,7 @@ export class InfluencerService {
     // Basic collaboration costs should be set
     const hasCollaborationCosts = Boolean(
       influencer.collaborationCosts &&
-      Object.keys(influencer.collaborationCosts).length > 0,
+        Object.keys(influencer.collaborationCosts).length > 0,
     );
 
     return (
@@ -854,17 +856,17 @@ export class InfluencerService {
     return {
       profileImage: files?.profileImage
         ? await uploadFile(
-          files.profileImage,
-          'profiles/influencers',
-          'profile',
-        )
+            files.profileImage,
+            'profiles/influencers',
+            'profile',
+          )
         : undefined,
       profileBanner: files?.profileBanner
         ? await uploadFile(
-          files.profileBanner,
-          'profiles/influencers',
-          'banner',
-        )
+            files.profileBanner,
+            'profiles/influencers',
+            'banner',
+          )
         : undefined,
     };
   }
@@ -1113,7 +1115,14 @@ export class InfluencerService {
       include: [
         {
           model: Campaign,
-          attributes: ['id', 'name', 'description', 'status', 'type', 'category'],
+          attributes: [
+            'id',
+            'name',
+            'description',
+            'status',
+            'type',
+            'category',
+          ],
           include: [
             {
               model: Brand,
@@ -1363,12 +1372,12 @@ export class InfluencerService {
   ): Promise<
     | Experience
     | {
-      experiences: Experience[];
-      total: number;
-      page: number;
-      limit: number;
-      totalPages: number;
-    }
+        experiences: Experience[];
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+      }
   > {
     const includeOptions = [
       {
@@ -1612,17 +1621,17 @@ export class InfluencerService {
           location: {
             country: influencer.country
               ? {
-                id: influencer.country.id,
-                name: influencer.country.name,
-                code: influencer.country.code,
-              }
+                  id: influencer.country.id,
+                  name: influencer.country.name,
+                  code: influencer.country.code,
+                }
               : null,
             city: influencer.city
               ? {
-                id: influencer.city.id,
-                name: influencer.city.name,
-                state: influencer.city.state,
-              }
+                  id: influencer.city.id,
+                  name: influencer.city.name,
+                  state: influencer.city.state,
+                }
               : null,
           },
 

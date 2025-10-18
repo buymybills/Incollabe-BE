@@ -210,8 +210,11 @@ export class PostController {
     @Param('userType') userType: string,
     @Param('userId', ParseIntPipe) userId: number,
     @Query() getPostsDto: GetPostsQueryDto,
+    @CurrentUser() user: User,
   ) {
     const queryDto = { ...getPostsDto, userType, userId }; // merge path params into query object
-    return this.postService.getPosts(queryDto);
+    const currentUserType =
+      user.userType === 'influencer' ? UserType.INFLUENCER : UserType.BRAND;
+    return this.postService.getPosts(queryDto, currentUserType, user.id);
   }
 }

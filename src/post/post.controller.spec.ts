@@ -377,6 +377,13 @@ describe('PostController', () => {
         limit: 10,
       };
 
+      const mockUser: User = {
+        id: 2,
+        email: 'test@brand.com',
+        userType: 'brand',
+        profileCompleted: true,
+      };
+
       const mockResponse = {
         posts: [
           {
@@ -399,14 +406,19 @@ describe('PostController', () => {
         'influencer',
         1,
         getPostsDto,
+        mockUser,
       );
 
       expect(result).toEqual(mockResponse);
-      expect(postService.getPosts).toHaveBeenCalledWith({
-        ...getPostsDto,
-        userType: 'influencer',
-        userId: 1,
-      });
+      expect(postService.getPosts).toHaveBeenCalledWith(
+        {
+          ...getPostsDto,
+          userType: 'influencer',
+          userId: 1,
+        },
+        UserType.BRAND,
+        2,
+      );
     });
   });
 
@@ -491,6 +503,13 @@ describe('PostController', () => {
         limit: 10,
       };
 
+      const mockUser: User = {
+        id: 3,
+        email: 'test@influencer.com',
+        userType: 'influencer',
+        profileCompleted: true,
+      };
+
       mockPostService.getPosts.mockResolvedValue({
         posts: [],
         total: 0,
@@ -499,13 +518,17 @@ describe('PostController', () => {
         totalPages: 0,
       });
 
-      await controller.getUserPosts('brand', 456, getPostsDto);
+      await controller.getUserPosts('brand', 456, getPostsDto, mockUser);
 
-      expect(postService.getPosts).toHaveBeenCalledWith({
-        ...getPostsDto,
-        userType: 'brand',
-        userId: 456,
-      });
+      expect(postService.getPosts).toHaveBeenCalledWith(
+        {
+          ...getPostsDto,
+          userType: 'brand',
+          userId: 456,
+        },
+        UserType.INFLUENCER,
+        3,
+      );
     });
   });
 
