@@ -158,7 +158,10 @@ export class AdminAuthService {
       throw new UnauthorizedException('Admin not found');
     }
 
-    return admin;
+    return {
+      ...admin.toJSON(),
+      userType: 'admin' as const,
+    };
   }
 
   async updateTopInfluencerStatus(
@@ -564,6 +567,7 @@ export class AdminAuthService {
       niches: brand.niches,
       createdAt: brand.createdAt,
       updatedAt: brand.updatedAt,
+      userType: 'brand' as const,
     };
   }
 

@@ -145,6 +145,7 @@ export class BrandService {
       profileHeadline: brand.profileHeadline,
       isEmailVerified: brand.isEmailVerified,
       isActive: brand.isActive,
+      userType: 'brand' as const,
 
       companyInfo: {
         legalEntityName: brand.legalEntityName || '',

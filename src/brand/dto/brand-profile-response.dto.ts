@@ -268,6 +268,9 @@ export class BrandProfileResponseDto {
     description: string;
   } | null;
 
+  @ApiProperty({ description: 'User type', example: 'brand' })
+  userType: 'brand';
+
   @ApiProperty({ description: 'Profile creation timestamp' })
   createdAt: string;
 

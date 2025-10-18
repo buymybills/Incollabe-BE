@@ -196,6 +196,7 @@ export class InfluencerService {
       profileImage: influencer.profileImage,
       profileBanner: influencer.profileBanner,
       profileHeadline: influencer.profileHeadline,
+      userType: 'influencer' as const,
 
       location: {
         country: influencer.country

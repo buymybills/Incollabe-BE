@@ -180,6 +180,9 @@ export class PublicProfileResponseDto {
   @ApiProperty({ type: CollaborationCostsDto })
   collaborationCosts: CollaborationCostsDto | object;
 
+  @ApiProperty({ description: 'User type', example: 'influencer' })
+  userType: 'influencer';
+
   @ApiProperty({ required: false })
   createdAt?: string;
 

@@ -445,7 +445,11 @@ describe('BrandController', () => {
         niches: [
           { id: 1, name: 'Fashion', description: 'Fashion and clothing' },
         ],
+        customNiches: undefined,
         isActive: true,
+        isFollowing: undefined,
+        metrics: undefined,
+        userType: 'brand',
       };
 
       const fullProfile = {
@@ -467,7 +471,10 @@ describe('BrandController', () => {
         niches: [
           { id: 1, name: 'Fashion', description: 'Fashion and clothing' },
         ],
+        customNiches: undefined,
         isActive: true,
+        isFollowing: undefined,
+        metrics: undefined,
         email: 'test@brand.com',
         // Other private fields
       };

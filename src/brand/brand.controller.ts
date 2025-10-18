@@ -286,6 +286,7 @@ export class BrandController {
       isActive: profile.isActive,
       isFollowing: profile.isFollowing,
       metrics: profile.metrics,
+      userType: 'brand' as const,
     };
   }
 
