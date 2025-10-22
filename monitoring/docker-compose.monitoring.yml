@@ -21,6 +21,7 @@ services:
       - "9090:9090"
     networks:
       - monitoring
+      - incollab-network
 
   # Grafana - Visualization dashboard
   grafana:
@@ -30,16 +31,19 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin  # Change this!
       - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=https://incollab.buymybills.in/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./grafana-dashboards:/etc/grafana/provisioning/dashboards
-      - ./grafana-datasources:/etc/grafana/provisioning/datasources
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
     ports:
-      - "3002:3000"  # Access at http://your-ip:3002
+      - "3003:3000"  # Access at http://your-ip:3003
     depends_on:
       - prometheus
     networks:
       - monitoring
+      - incollab-network
 
   # Node Exporter - System metrics (CPU, Memory, Disk)
   node-exporter:
@@ -63,6 +67,7 @@ services:
     command: -config.file=/etc/loki/local-config.yaml
     networks:
       - monitoring
+      - incollab-network
 
   # Promtail - Ships logs to Loki
   promtail:
@@ -71,8 +76,8 @@ services:
     restart: unless-stopped
     volumes:
       - ./promtail-config.yml:/etc/promtail/config.yml
-      - /home/ubuntu/cloutsy/logs:/var/log/cloutsy  # Mount your app logs
-      - /home/ubuntu/.pm2/logs:/var/log/pm2         # Mount PM2 logs
+      - /home/ubuntu/Incollabe-BE/logs:/var/log/incollab:ro  # Mount your app logs
+      - /home/ubuntu/.pm2/logs:/var/log/pm2:ro               # Mount PM2 logs
     command: -config.file=/etc/promtail/config.yml
     depends_on:
       - loki
@@ -82,6 +87,8 @@ services:
 networks:
   monitoring:
     driver: bridge
+  incollab-network:
+    external: true  # Connect to main app network
 
 volumes:
   prometheus-data:
