@@ -827,7 +827,7 @@ export class InfluencerService {
     // Update WhatsApp verification status using repository
     await this.influencerRepository.updateWhatsAppVerification(
       influencerId,
-      whatsappNumber,
+      formattedNumber,
     );
 
     return {
