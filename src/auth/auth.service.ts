@@ -505,6 +505,28 @@ export class AuthService {
       }
     }
 
+    // Check if username already exists
+    const existingUsername = await this.influencerModel.findOne({
+      where: { username },
+    });
+    if (existingUsername) {
+      throw new BadRequestException('Username already taken');
+    }
+
+    // Check if phone already exists
+    const crypto = require('crypto');
+    const phoneHash = crypto
+      .createHash('sha256')
+      .update(formattedPhone)
+      .digest('hex');
+
+    const existingPhone = await this.influencerModel.findOne({
+      where: { phoneHash },
+    });
+    if (existingPhone) {
+      throw new BadRequestException('Phone number already registered');
+    }
+
     // Upload profile image to S3 if provided
     let profileImageUrl: string | undefined;
     if (profileImage) {
