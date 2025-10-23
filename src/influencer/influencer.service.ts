@@ -1550,7 +1550,7 @@ export class InfluencerService {
   }
 
   private async calculatePlatformMetrics(influencerId: number) {
-    const [followersCount, followingCount, postsCount, campaignsCount] =
+    const [followersCount, followingCount, postsCount, campaignsCount, experiencesCount] =
       await Promise.all([
         // Count followers (users who follow this influencer)
         this.followModel.count({
@@ -1583,6 +1583,13 @@ export class InfluencerService {
             influencerId: influencerId,
           },
         }),
+
+        // Count experiences added by this influencer
+        this.experienceModel.count({
+          where: {
+            influencerId: influencerId,
+          },
+        }),
       ]);
 
     return {
@@ -1590,6 +1597,7 @@ export class InfluencerService {
       following: followingCount,
       posts: postsCount,
       campaigns: campaignsCount,
+      experiences: experiencesCount,
     };
   }
 
