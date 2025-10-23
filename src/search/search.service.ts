@@ -26,7 +26,7 @@ export class SearchService {
         }
       : {};
 
-    let results = {
+    const results = {
       influencers: [] as Influencer[],
       brands: [] as Brand[],
       total: 0,

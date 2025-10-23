@@ -67,7 +67,7 @@ export class SearchService {
         }
       : {};
 
-    let results: SearchUsersResult = {
+    const results: SearchUsersResult = {
       influencers: [],
       brands: [],
       total: 0,

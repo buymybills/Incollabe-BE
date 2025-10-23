@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
+import { Op } from 'sequelize';
 import { Influencer } from '../../auth/model/influencer.model';
 import { Niche } from '../../auth/model/niche.model';
 import { Country } from '../../shared/models/country.model';
@@ -94,5 +95,21 @@ export class InfluencerRepository {
         },
       ],
     });
+  }
+
+  async findByWhatsappHash(
+    whatsappHash: string,
+    excludeId?: number,
+  ): Promise<Influencer | null> {
+    const where: any = {
+      whatsappHash,
+      isWhatsappVerified: true,
+    };
+
+    if (excludeId) {
+      where.id = { [Op.ne]: excludeId };
+    }
+
+    return this.influencerModel.findOne({ where });
   }
 }

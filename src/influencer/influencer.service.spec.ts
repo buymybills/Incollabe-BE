@@ -26,6 +26,7 @@ const mockInfluencerRepository = {
   findByUsername: jest.fn(),
   updateInfluencer: jest.fn(),
   updateWhatsAppVerification: jest.fn(),
+  findByWhatsappHash: jest.fn(),
 };
 
 const mockS3Service = {
@@ -571,6 +572,7 @@ describe('InfluencerService', () => {
 
       mockInfluencerRepository.findById.mockResolvedValue(mockInfluencer);
       mockOtpService.verifyOtp.mockResolvedValue(true);
+      mockInfluencerRepository.findByWhatsappHash.mockResolvedValue(null); // No duplicate
       mockInfluencerRepository.updateWhatsAppVerification.mockResolvedValue({
         ...mockInfluencer,
         isWhatsappVerified: true,
@@ -621,6 +623,34 @@ describe('InfluencerService', () => {
 
       await expect(service.verifyWhatsAppOTP(verificationDto)).rejects.toThrow(
         new BadRequestException(ERROR_MESSAGES.WHATSAPP.ALREADY_VERIFIED),
+      );
+    });
+
+    it('should throw BadRequestException when WhatsApp number is already used by another influencer', async () => {
+      const mockInfluencer = {
+        id: 1,
+        name: 'Test Influencer',
+        whatsappNumber: '+919876543210',
+        isWhatsappVerified: false,
+      };
+
+      const mockExistingInfluencer = {
+        id: 2,
+        name: 'Another Influencer',
+        whatsappNumber: '+919876543210',
+        isWhatsappVerified: true,
+      };
+
+      mockInfluencerRepository.findById.mockResolvedValue(mockInfluencer);
+      mockOtpService.verifyOtp.mockResolvedValue(true);
+      mockInfluencerRepository.findByWhatsappHash.mockResolvedValue(
+        mockExistingInfluencer,
+      );
+
+      await expect(service.verifyWhatsAppOTP(verificationDto)).rejects.toThrow(
+        new BadRequestException(
+          'This WhatsApp number is already verified by another user',
+        ),
       );
     });
   });
@@ -775,6 +805,7 @@ describe('InfluencerService', () => {
 
       mockInfluencerRepository.findById.mockResolvedValue(mockInfluencer);
       mockOtpService.verifyOtp.mockResolvedValue(true);
+      mockInfluencerRepository.findByWhatsappHash.mockResolvedValue(null); // No duplicate
       mockInfluencerRepository.updateWhatsAppVerification.mockResolvedValue(
         mockInfluencer,
       );

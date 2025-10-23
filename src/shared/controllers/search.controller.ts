@@ -12,7 +12,8 @@ export class SearchController {
   @ApiOperation({ summary: 'Search for influencers and brands' })
   @ApiResponse({
     status: 200,
-    description: 'Returns list of influencers and brands based on search criteria',
+    description:
+      'Returns list of influencers and brands based on search criteria',
   })
   async searchUsers(@Query() searchDto: SearchUsersDto) {
     return this.searchService.searchUsers(searchDto);

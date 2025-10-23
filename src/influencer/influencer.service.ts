@@ -50,6 +50,7 @@ import { MyApplicationResponseDto } from '../campaign/dto/my-application-respons
 import { CreateExperienceDto } from './dto/create-experience.dto';
 import { UpdateExperienceDto } from './dto/update-experience.dto';
 import { Op, literal } from 'sequelize';
+import * as crypto from 'crypto';
 import { Gender } from '../auth/types/gender.enum';
 import { CustomNicheService } from '../shared/services/custom-niche.service';
 import { UserType as CustomNicheUserType } from '../auth/model/custom-niche.model';
@@ -735,7 +736,6 @@ export class InfluencerService {
     return {
       message: SUCCESS_MESSAGES.WHATSAPP.OTP_SENT,
       whatsappNumber: whatsappNumber,
-      otp: otp, // Include OTP in response for testing (remove in production)
     };
   }
 
@@ -760,6 +760,24 @@ export class InfluencerService {
       type: 'phone',
       otp: otp,
     });
+
+    // Check if this WhatsApp number is already verified by another influencer
+    const whatsappHash = crypto
+      .createHash('sha256')
+      .update(formattedNumber)
+      .digest('hex');
+
+    const existingInfluencer =
+      await this.influencerRepository.findByWhatsappHash(
+        whatsappHash,
+        influencerId,
+      );
+
+    if (existingInfluencer) {
+      throw new BadRequestException(
+        'This WhatsApp number is already verified by another user',
+      );
+    }
 
     // Update WhatsApp verification status using repository
     await this.influencerRepository.updateWhatsAppVerification(
@@ -1550,47 +1568,52 @@ export class InfluencerService {
   }
 
   private async calculatePlatformMetrics(influencerId: number) {
-    const [followersCount, followingCount, postsCount, campaignsCount, experiencesCount] =
-      await Promise.all([
-        // Count followers (users who follow this influencer)
-        this.followModel.count({
-          where: {
-            followingType: FollowingType.INFLUENCER,
-            followingInfluencerId: influencerId,
-          },
-        }),
+    const [
+      followersCount,
+      followingCount,
+      postsCount,
+      campaignsCount,
+      experiencesCount,
+    ] = await Promise.all([
+      // Count followers (users who follow this influencer)
+      this.followModel.count({
+        where: {
+          followingType: FollowingType.INFLUENCER,
+          followingInfluencerId: influencerId,
+        },
+      }),
 
-        // Count following (users this influencer follows)
-        this.followModel.count({
-          where: {
-            followerType: FollowingType.INFLUENCER,
-            followerInfluencerId: influencerId,
-          },
-        }),
+      // Count following (users this influencer follows)
+      this.followModel.count({
+        where: {
+          followerType: FollowingType.INFLUENCER,
+          followerInfluencerId: influencerId,
+        },
+      }),
 
-        // Count posts created by this influencer
-        this.postModel.count({
-          where: {
-            userType: UserType.INFLUENCER,
-            influencerId: influencerId,
-            isActive: true,
-          },
-        }),
+      // Count posts created by this influencer
+      this.postModel.count({
+        where: {
+          userType: UserType.INFLUENCER,
+          influencerId: influencerId,
+          isActive: true,
+        },
+      }),
 
-        // Count campaigns this influencer has applied to
-        this.campaignApplicationModel.count({
-          where: {
-            influencerId: influencerId,
-          },
-        }),
+      // Count campaigns this influencer has applied to
+      this.campaignApplicationModel.count({
+        where: {
+          influencerId: influencerId,
+        },
+      }),
 
-        // Count experiences added by this influencer
-        this.experienceModel.count({
-          where: {
-            influencerId: influencerId,
-          },
-        }),
-      ]);
+      // Count experiences added by this influencer
+      this.experienceModel.count({
+        where: {
+          influencerId: influencerId,
+        },
+      }),
+    ]);
 
     return {
       followers: followersCount,
