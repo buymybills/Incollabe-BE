@@ -102,9 +102,9 @@ export class InfluencerRepository {
   async findByWhatsappHash(
     whatsappHash: string,
     excludeId?: number,
+    formattedNumber?: string,
   ): Promise<Influencer | null> {
     const where: any = {
-      whatsappHash,
       isWhatsappVerified: true,
     };
 
@@ -112,6 +112,28 @@ export class InfluencerRepository {
       where.id = { [Op.ne]: excludeId };
     }
 
-    return this.influencerModel.findOne({ where });
+    // First try to find by hash (for new records where hash is set)
+    const byHash = await this.influencerModel.findOne({
+      where: { ...where, whatsappHash },
+    });
+
+    if (byHash) {
+      return byHash;
+    }
+
+    // Fallback: Find all verified influencers and check after decryption
+    // This handles old records where whatsappHash might be null
+    if (formattedNumber) {
+      const allVerified = await this.influencerModel.findAll({ where });
+
+      // The @AfterFind hook will decrypt the whatsappNumber for us
+      for (const influencer of allVerified) {
+        if (influencer.whatsappNumber === formattedNumber) {
+          return influencer;
+        }
+      }
+    }
+
+    return null;
   }
 }

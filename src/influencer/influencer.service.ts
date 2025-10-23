@@ -776,6 +776,7 @@ export class InfluencerService {
       await this.influencerRepository.findByWhatsappHash(
         whatsappHash,
         influencerId,
+        formattedNumber,
       );
 
     // If number is already verified by another influencer, block it
