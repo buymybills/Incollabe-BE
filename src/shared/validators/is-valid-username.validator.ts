@@ -119,41 +119,41 @@ export class IsValidUsernameConstraint implements ValidatorConstraintInterface {
 
     // Provide specific error messages
     if (normalizedUsername.length < 3) {
-      return 'Username must be at least 3 characters long';
+      return 'Username too short (min 3 characters)';
     }
 
     if (normalizedUsername.length > 30) {
-      return 'Username must not exceed 30 characters';
+      return 'Username too long (max 30 characters)';
     }
 
     if (
       normalizedUsername.startsWith('.') ||
       normalizedUsername.startsWith('_')
     ) {
-      return 'Username cannot start with a dot or underscore';
+      return 'Cannot start with . or _';
     }
 
     if (normalizedUsername.endsWith('.') || normalizedUsername.endsWith('_')) {
-      return 'Username cannot end with a dot or underscore';
+      return 'Cannot end with . or _';
     }
 
     if (
       normalizedUsername.includes('..') ||
       normalizedUsername.includes('__')
     ) {
-      return 'Username cannot contain consecutive dots or underscores';
+      return 'No consecutive dots or underscores';
     }
 
     const validPattern = /^[a-z0-9._]+$/;
     if (!validPattern.test(normalizedUsername)) {
-      return 'Username can only contain lowercase letters, numbers, dots, and underscores';
+      return 'Only letters, numbers, dots and underscores allowed';
     }
 
     if (isReservedUsername(normalizedUsername)) {
-      return 'This username is reserved and cannot be used';
+      return 'This username is reserved';
     }
 
-    return 'Username is already taken (case-insensitive)';
+    return 'Username already taken';
   }
 }
 

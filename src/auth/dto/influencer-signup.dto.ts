@@ -42,10 +42,7 @@ export class InfluencerSignupDto {
   @IsNotEmpty({ message: 'Username is required' })
   @IsString({ message: 'Username must be a string' })
   @ToLowercase()
-  @IsValidUsername({
-    message:
-      'Invalid username. Must be 3-30 characters, contain only lowercase letters, numbers, dots, and underscores, not start/end with dot/underscore, have no consecutive dots/underscores, not be reserved, and be unique (case-insensitive)',
-  })
+  @IsValidUsername()
   username: string;
 
   @ApiProperty({
