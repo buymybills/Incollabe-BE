@@ -1637,8 +1637,9 @@ export class InfluencerService {
     // Calculate metrics for each top influencer
     const influencersWithMetrics = await Promise.all(
       allTopInfluencers.map(async (influencer) => {
-        const [platformMetrics] = await Promise.all([
+        const [platformMetrics, verificationStatus] = await Promise.all([
           this.calculatePlatformMetrics(influencer.id),
+          this.getVerificationStatus(influencer.id),
         ]);
 
         return {
@@ -1649,6 +1650,7 @@ export class InfluencerService {
           profileImage: influencer.profileImage,
           profileBanner: influencer.profileBanner,
           profileHeadline: influencer.profileHeadline,
+          userType: 'influencer' as const,
 
           location: {
             country: influencer.country
@@ -1686,6 +1688,7 @@ export class InfluencerService {
           metrics: platformMetrics,
           isTopInfluencer: true,
           isVerified: influencer.isVerified,
+          verificationStatus,
 
           createdAt: influencer.createdAt?.toISOString(),
           updatedAt: influencer.updatedAt?.toISOString(),
