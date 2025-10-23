@@ -367,6 +367,45 @@ export class InfluencerService {
     const willBeComplete =
       this.checkInfluencerProfileCompletion(tempInfluencer);
 
+    // Check if this is a rejected profile trying to resubmit
+    const currentVerificationStatus =
+      await this.getVerificationStatus(influencerId);
+    if (currentVerificationStatus?.status === 'rejected' && willBeComplete) {
+      // Check if the WhatsApp number is already in use by another verified or pending account
+      const whatsappNumber = influencer.whatsappNumber;
+      if (whatsappNumber) {
+        const formattedNumber = whatsappNumber.startsWith('+91')
+          ? whatsappNumber
+          : `+91${whatsappNumber}`;
+
+        const whatsappHash = crypto
+          .createHash('sha256')
+          .update(formattedNumber)
+          .digest('hex');
+
+        const existingInfluencer =
+          await this.influencerRepository.findByWhatsappHash(
+            whatsappHash,
+            influencerId,
+          );
+
+        if (existingInfluencer) {
+          const existingVerificationStatus = await this.getVerificationStatus(
+            existingInfluencer.id,
+          );
+          if (
+            existingInfluencer.isWhatsappVerified &&
+            (existingVerificationStatus?.status === 'approved' ||
+              existingVerificationStatus?.status === 'pending')
+          ) {
+            throw new BadRequestException(
+              'This WhatsApp number is already in use by another verified influencer account. Please use a different number.',
+            );
+          }
+        }
+      }
+    }
+
     // Update influencer data - include isProfileCompleted flag if profile will be complete
     const updatedData = {
       ...processedData,
@@ -721,10 +760,50 @@ export class InfluencerService {
       throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
     }
 
-    // Generate and store OTP using OTP service (ensure consistent +91 format)
+    // Format the phone number consistently
     const formattedNumber = whatsappNumber.startsWith('+91')
       ? whatsappNumber
       : `+91${whatsappNumber}`;
+
+    // Generate WhatsApp hash to check for existing verification
+    const whatsappHash = crypto
+      .createHash('sha256')
+      .update(formattedNumber)
+      .digest('hex');
+
+    // Check if number is already verified by another influencer
+    const existingInfluencer =
+      await this.influencerRepository.findByWhatsappHash(
+        whatsappHash,
+        influencerId,
+      );
+
+    // If number is already associated with another influencer, check their verification status
+    if (existingInfluencer && existingInfluencer.isWhatsappVerified) {
+      const verificationStatus = await this.getVerificationStatus(
+        existingInfluencer.id,
+      );
+      const latestReview = await this.profileReviewModel.findOne({
+        where: {
+          profileId: existingInfluencer.id,
+          profileType: ProfileType.INFLUENCER,
+        },
+        order: [['createdAt', 'DESC']],
+      });
+
+      // Block if the existing influencer is verified or pending verification
+      if (
+        existingInfluencer.isVerified ||
+        verificationStatus?.status === 'pending' ||
+        (latestReview && latestReview.status !== ReviewStatus.REJECTED)
+      ) {
+        throw new BadRequestException(
+          'WhatsApp number is already associated with another influencer account',
+        );
+      }
+    }
+
+    // Generate and store OTP
     const otp = await this.otpService.generateAndStoreOtp({
       identifier: formattedNumber,
       type: 'phone',
@@ -751,33 +830,17 @@ export class InfluencerService {
       throw new BadRequestException(ERROR_MESSAGES.WHATSAPP.ALREADY_VERIFIED);
     }
 
-    // Verify OTP using OTP service (ensure consistent +91 format)
+    // Format the phone number consistently
     const formattedNumber = whatsappNumber.startsWith('+91')
       ? whatsappNumber
       : `+91${whatsappNumber}`;
+
+    // Verify OTP using OTP service
     await this.otpService.verifyOtp({
       identifier: formattedNumber,
       type: 'phone',
       otp: otp,
     });
-
-    // Check if this WhatsApp number is already verified by another influencer
-    const whatsappHash = crypto
-      .createHash('sha256')
-      .update(formattedNumber)
-      .digest('hex');
-
-    const existingInfluencer =
-      await this.influencerRepository.findByWhatsappHash(
-        whatsappHash,
-        influencerId,
-      );
-
-    if (existingInfluencer) {
-      throw new BadRequestException(
-        'This WhatsApp number is already verified by another user',
-      );
-    }
 
     // Update WhatsApp verification status using repository
     await this.influencerRepository.updateWhatsAppVerification(
