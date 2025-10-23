@@ -778,29 +778,11 @@ export class InfluencerService {
         influencerId,
       );
 
-    // If number is already associated with another influencer, check their verification status
-    if (existingInfluencer && existingInfluencer.isWhatsappVerified) {
-      const verificationStatus = await this.getVerificationStatus(
-        existingInfluencer.id,
+    // If number is already verified by another influencer, block it
+    if (existingInfluencer) {
+      throw new BadRequestException(
+        'This WhatsApp number is already verified by another user',
       );
-      const latestReview = await this.profileReviewModel.findOne({
-        where: {
-          profileId: existingInfluencer.id,
-          profileType: ProfileType.INFLUENCER,
-        },
-        order: [['createdAt', 'DESC']],
-      });
-
-      // Block if the existing influencer is verified or pending verification
-      if (
-        existingInfluencer.isVerified ||
-        verificationStatus?.status === 'pending' ||
-        (latestReview && latestReview.status !== ReviewStatus.REJECTED)
-      ) {
-        throw new BadRequestException(
-          'WhatsApp number is already associated with another influencer account',
-        );
-      }
     }
 
     // Generate and store OTP
