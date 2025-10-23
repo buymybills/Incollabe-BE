@@ -61,13 +61,15 @@ export class InfluencerRepository {
     influencerId: number,
     whatsappNumber: string,
   ): Promise<void> {
-    await this.influencerModel.update(
-      {
-        whatsappNumber,
-        isWhatsappVerified: true,
-      },
-      { where: { id: influencerId } },
-    );
+    // Use instance method to trigger @BeforeUpdate hook which sets whatsappHash
+    const influencer = await this.influencerModel.findByPk(influencerId);
+    if (!influencer) {
+      throw new Error('Influencer not found');
+    }
+
+    influencer.whatsappNumber = whatsappNumber;
+    influencer.isWhatsappVerified = true;
+    await influencer.save();
   }
 
   async findAll(options: any): Promise<Influencer[]> {
