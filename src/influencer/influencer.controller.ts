@@ -507,7 +507,7 @@ export class InfluencerController {
   @ApiQuery({
     name: 'status',
     required: false,
-    enum: ['applied', 'under_review', 'selected', 'rejected'],
+    enum: ['applied', 'under_review', 'selected', 'rejected', 'withdrawn'],
     description: 'Filter applications by status',
     example: 'applied',
   })
