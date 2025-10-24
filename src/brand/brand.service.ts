@@ -127,12 +127,13 @@ export class BrandService {
       isFollowing = !!followRecord;
     }
 
-    // Calculate profile completion, platform metrics, and get verification status
-    const [profileCompletion, platformMetrics, verificationStatus] =
+    // Calculate profile completion, platform metrics, verification status, and get campaigns
+    const [profileCompletion, platformMetrics, verificationStatus, campaigns] =
       await Promise.all([
         this.calculateProfileCompletion(brand),
         this.calculatePlatformMetrics(brandId),
         this.getVerificationStatus(brandId),
+        this.getBrandCampaigns(brandId),
       ]);
 
     // Build comprehensive response
@@ -239,6 +240,9 @@ export class BrandService {
 
       // Top brand status
       isTopBrand: brand.isTopBrand,
+
+      // Campaigns created by this brand
+      campaigns,
 
       createdAt: brand.createdAt.toISOString(),
       updatedAt: brand.updatedAt.toISOString(),
@@ -924,6 +928,40 @@ export class BrandService {
       posts: postsCount,
       campaigns: campaignsCount,
     };
+  }
+
+  private async getBrandCampaigns(brandId: number) {
+    const campaigns = await this.campaignModel.findAll({
+      where: {
+        brandId: brandId,
+        isActive: true,
+      },
+      attributes: [
+        'id',
+        'name',
+        'description',
+        'status',
+        'type',
+        'category',
+        'deliverableFormat',
+        'createdAt',
+        'updatedAt',
+      ],
+      order: [['createdAt', 'DESC']],
+      limit: 10, // Show latest 10 campaigns
+    });
+
+    return campaigns.map((campaign) => ({
+      id: campaign.id,
+      name: campaign.name,
+      description: campaign.description,
+      status: campaign.status,
+      type: campaign.type,
+      category: campaign.category,
+      deliverableFormat: campaign.deliverableFormat,
+      createdAt: campaign.createdAt?.toISOString(),
+      updatedAt: campaign.updatedAt?.toISOString(),
+    }));
   }
 
   private async notifyAdminsOfPendingProfile(brandId: number) {

@@ -274,6 +274,35 @@ export class BrandProfileResponseDto {
   })
   isTopBrand: boolean;
 
+  @ApiProperty({
+    description: 'Latest campaigns created by this brand',
+    type: [Object],
+    example: [
+      {
+        id: 1,
+        name: 'Summer Fashion Campaign',
+        description: 'Promote our new summer collection',
+        status: 'active',
+        type: 'paid',
+        category: 'Fashion',
+        deliverableFormat: 'Photo and Video',
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      },
+    ],
+  })
+  campaigns: Array<{
+    id: number;
+    name: string;
+    description?: string;
+    status: string;
+    type: string;
+    category?: string;
+    deliverableFormat?: string;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+
   @ApiProperty({ description: 'User type', example: 'brand' })
   userType: 'brand';
 
