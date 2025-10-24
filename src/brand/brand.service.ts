@@ -282,6 +282,22 @@ export class BrandService {
       await this.updateBrandCustomNiches(brandId, customNiches);
     }
 
+    // Handle social links - explicitly set to null if not provided (for clearing)
+    // This ensures that when a user removes a social link from their profile,
+    // it gets cleared instead of retaining the old value
+    const socialLinkFields = [
+      'facebookUrl',
+      'instagramUrl',
+      'youtubeUrl',
+      'linkedinUrl',
+      'twitterUrl',
+    ];
+    socialLinkFields.forEach((field) => {
+      if (brandUpdateData[field] === undefined) {
+        brandUpdateData[field] = null;
+      }
+    });
+
     // Handle file uploads if provided
     let fileUrls = {};
     if (files) {
