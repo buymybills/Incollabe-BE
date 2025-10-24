@@ -356,6 +356,22 @@ export class InfluencerService {
       delete processedData.customNiches;
     }
 
+    // Handle social links - explicitly set to null if not provided (for clearing)
+    // This ensures that when a user removes a social link from their profile,
+    // it gets cleared instead of retaining the old value
+    const socialLinkFields = [
+      'instagramUrl',
+      'youtubeUrl',
+      'facebookUrl',
+      'linkedinUrl',
+      'twitterUrl',
+    ];
+    socialLinkFields.forEach((field) => {
+      if (processedData[field] === undefined) {
+        processedData[field] = null;
+      }
+    });
+
     // Store the old completion status BEFORE any updates
     const wasComplete = influencer.isProfileCompleted;
 

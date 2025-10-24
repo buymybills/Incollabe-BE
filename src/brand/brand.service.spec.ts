@@ -425,6 +425,60 @@ describe('BrandService', () => {
       ).toHaveBeenCalled();
       expect((result as any).status).toBe('pending_verification');
     });
+
+    it('should clear social links that are not provided in update', async () => {
+      const updateDtoWithoutSocialLinks: UpdateBrandProfileDto = {
+        brandName: 'Updated Brand Name',
+        brandBio: 'Updated bio without social links',
+      };
+
+      const mockBrand = {
+        id: 1,
+        email: 'test@brand.com',
+        brandName: 'Old Brand',
+        brandBio: 'Old bio',
+        facebookUrl: 'https://facebook.com/old',
+        instagramUrl: 'https://instagram.com/old',
+        youtubeUrl: 'https://youtube.com/old',
+        linkedinUrl: 'https://linkedin.com/old',
+        twitterUrl: 'https://twitter.com/old',
+        isProfileCompleted: false,
+        update: jest.fn().mockImplementation(function (data) {
+          Object.assign(this, data);
+          return Promise.resolve();
+        }),
+        reload: jest.fn(),
+      };
+
+      brandModel.findByPk.mockResolvedValue(mockBrand);
+
+      // Mock getBrandProfile
+      jest.spyOn(service, 'getBrandProfile').mockResolvedValue({
+        id: 1,
+        email: 'test@brand.com',
+        brandName: 'Updated Brand Name',
+        profileCompletion: {
+          isCompleted: false,
+          missingFields: [],
+          nextSteps: [],
+        },
+      } as any);
+
+      await service.updateBrandProfile(1, updateDtoWithoutSocialLinks);
+
+      // Verify that all social links are set to null when not provided
+      expect(mockBrand.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          brandName: 'Updated Brand Name',
+          brandBio: 'Updated bio without social links',
+          facebookUrl: null,
+          instagramUrl: null,
+          youtubeUrl: null,
+          linkedinUrl: null,
+          twitterUrl: null,
+        }),
+      );
+    });
   });
 
   describe('updateBrandNiches', () => {

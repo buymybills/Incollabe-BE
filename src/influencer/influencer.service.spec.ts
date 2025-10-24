@@ -378,6 +378,10 @@ describe('InfluencerService', () => {
         1,
         expect.objectContaining({
           ...updateDto,
+          // Social links not in updateDto should be set to null
+          facebookUrl: null,
+          linkedinUrl: null,
+          twitterUrl: null,
           profileImage: 'profile-new.jpg',
           profileBanner: 'banner-new.jpg',
         }),
@@ -419,7 +423,13 @@ describe('InfluencerService', () => {
       expect(s3Service.uploadFileToS3).not.toHaveBeenCalled();
       expect(influencerRepository.updateInfluencer).toHaveBeenCalledWith(
         1,
-        expect.objectContaining(updateDto),
+        expect.objectContaining({
+          ...updateDto,
+          // Social links not in updateDto should be set to null
+          facebookUrl: null,
+          linkedinUrl: null,
+          twitterUrl: null,
+        }),
       );
     });
 
@@ -496,6 +506,56 @@ describe('InfluencerService', () => {
         status: 'pending',
         submittedAt: expect.any(Date),
       });
+    });
+
+    it('should clear social links that are not provided in update', async () => {
+      const updateDtoWithoutSocialLinks: UpdateInfluencerProfileDto = {
+        bio: 'Updated bio without social links',
+        profileHeadline: 'Updated headline',
+      };
+
+      const mockInfluencer = {
+        id: 1,
+        name: 'Test Influencer',
+        username: 'test_influencer',
+        bio: 'Old bio',
+        instagramUrl: 'https://instagram.com/old',
+        youtubeUrl: 'https://youtube.com/old',
+        facebookUrl: 'https://facebook.com/old',
+        linkedinUrl: 'https://linkedin.com/old',
+        twitterUrl: 'https://twitter.com/old',
+        isProfileCompleted: true,
+      };
+
+      const mockUpdatedProfile = {
+        ...mockInfluencer,
+        ...updateDtoWithoutSocialLinks,
+      };
+
+      mockInfluencerRepository.findById.mockResolvedValue(mockInfluencer);
+      mockInfluencerRepository.updateInfluencer.mockResolvedValue(
+        mockUpdatedProfile,
+      );
+
+      await service.updateInfluencerProfile(
+        1,
+        updateDtoWithoutSocialLinks,
+        undefined,
+      );
+
+      // Verify that all social links are set to null when not provided
+      expect(influencerRepository.updateInfluencer).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          bio: 'Updated bio without social links',
+          profileHeadline: 'Updated headline',
+          instagramUrl: null,
+          youtubeUrl: null,
+          facebookUrl: null,
+          linkedinUrl: null,
+          twitterUrl: null,
+        }),
+      );
     });
   });
 
