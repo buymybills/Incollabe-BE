@@ -11,6 +11,7 @@ import {
   UploadedFiles,
   SetMetadata,
   BadRequestException,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -369,5 +370,24 @@ export class BrandController {
   })
   async getFoundedYears() {
     return await this.brandService.getFoundedYearsList();
+  }
+
+  @Get('top-brands')
+  @Public()
+  @ApiOperation({
+    summary: 'Get top brands',
+    description: 'Fetch list of top brands curated by admin (public endpoint)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Top brands fetched successfully',
+  })
+  async getTopBrands(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const parsedLimit = limit ? parseInt(limit, 10) : 10;
+    const parsedOffset = offset ? parseInt(offset, 10) : 0;
+    return this.brandService.getTopBrands(parsedLimit, parsedOffset);
   }
 }

@@ -38,6 +38,7 @@ import {
 import { GetOpenCampaignsDto } from '../campaign/dto/get-open-campaigns.dto';
 import { MyApplicationResponseDto } from '../campaign/dto/my-application-response.dto';
 import { PublicProfileResponseDto } from './dto/public-profile-response.dto';
+import { Public } from '../auth/decorators/public.decorator';
 import type { RequestWithUser } from '../types/request.types';
 
 @ApiTags('Influencer Profile')
@@ -760,6 +761,7 @@ export class InfluencerController {
   }
 
   @Get('top-influencers')
+  @Public()
   @ApiOperation({
     summary: 'Get top influencers',
     description:

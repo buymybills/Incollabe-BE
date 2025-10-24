@@ -421,6 +421,48 @@ export class AdminController {
     );
   }
 
+  @Put('brand/:brandId/top-status')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Toggle top brand status',
+    description: 'Mark or unmark a brand as top brand (admin only)',
+  })
+  @ApiParam({
+    name: 'brandId',
+    description: 'ID of the brand',
+    type: 'number',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        isTopBrand: {
+          type: 'boolean',
+          description: 'Whether to mark as top brand',
+          example: true,
+        },
+      },
+      required: ['isTopBrand'],
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Top brand status updated successfully',
+  })
+  async updateTopBrandStatus(
+    @Param('brandId', ParseIntPipe) brandId: number,
+    @Body() body: { isTopBrand: boolean },
+    @Req() req: RequestWithAdmin,
+  ) {
+    return await this.adminAuthService.updateTopBrandStatus(
+      brandId,
+      body.isTopBrand,
+      req.admin.id,
+    );
+  }
+
   @Get('search/users')
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()

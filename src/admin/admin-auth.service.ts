@@ -187,6 +187,29 @@ export class AdminAuthService {
     };
   }
 
+  async updateTopBrandStatus(
+    brandId: number,
+    isTopBrand: boolean,
+    adminId: number,
+  ) {
+    // First check if brand exists
+    const brand = await this.brandModel.findByPk(brandId);
+    if (!brand) {
+      throw new NotFoundException('Brand not found');
+    }
+
+    // Update the top brand status
+    await brand.update({ isTopBrand });
+
+    return {
+      message: `Brand ${isTopBrand ? 'marked as' : 'removed from'} top brand`,
+      brandId,
+      isTopBrand,
+      updatedBy: adminId,
+      updatedAt: new Date(),
+    };
+  }
+
   async searchUsers(searchDto: AdminSearchDto) {
     const {
       search,
