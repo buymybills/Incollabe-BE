@@ -45,7 +45,6 @@ export class PostTestHelper {
       .padStart(4, '0')}`;
     const defaultBrandData: BrandSignupDto = {
       email: `testbrand${Date.now()}@test.com`,
-      phone: `+91${phoneNumber}`,
       password: 'TestPassword123!',
       nicheIds: [1, 2],
       ...overrides,

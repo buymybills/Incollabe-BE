@@ -24,13 +24,11 @@ describe('Posts (e2e)', () => {
 
   const testBrandData: BrandSignupDto = {
     email: 'testbrand@post.com',
-    phone: '+919876543210',
     password: 'TestPassword123!',
     nicheIds: [1, 2],
   };
 
   const testInfluencerData: InfluencerSignupDto = {
-    phone: '9467289789',
     name: 'Test Influencer',
     username: 'test_influencer_post',
     gender: Gender.FEMALE,
@@ -58,10 +56,7 @@ describe('Posts (e2e)', () => {
       await sequelize.close();
     }
     if (redisService) {
-      await redisService.del('otp:+919876543210');
-      await redisService.del('otp:+919467289789');
-      await redisService.del('otp:verified:9876543210');
-      await redisService.del('otp:verified:9467289789');
+      // Clean up any OTP data if needed
     }
     await app.close();
   });
@@ -101,15 +96,16 @@ describe('Posts (e2e)', () => {
       }
 
       // Create influencer user
-      // First verify phone for influencer
+      // First create a verification key for the phone
+      const verificationKey = 'test-verification-key';
       await redisService.set(
-        `otp:verified:${testInfluencerData.phone}`,
-        'verified',
+        `phone-verification:${verificationKey}`,
+        '+919876543210',
         300,
       );
 
       const influencerResponse =
-        await authService.influencerSignup(testInfluencerData);
+        await authService.influencerSignup(testInfluencerData, verificationKey);
       if (!influencerResponse.influencer) {
         throw new Error('Failed to create influencer user');
       }
