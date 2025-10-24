@@ -203,6 +203,19 @@ describe('BrandController', () => {
           posts: 0,
           campaigns: 0,
         },
+        campaigns: [
+          {
+            id: 1,
+            name: 'Test Campaign',
+            description: 'Test campaign description',
+            status: 'active',
+            type: 'paid',
+            category: 'Fashion',
+            deliverableFormat: 'Photo and Video',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };

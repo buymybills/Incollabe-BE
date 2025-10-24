@@ -128,7 +128,10 @@ describe('BrandService', () => {
         },
         {
           provide: getModelToken(Campaign),
-          useValue: { count: jest.fn().mockResolvedValue(0) },
+          useValue: {
+            count: jest.fn().mockResolvedValue(0),
+            findAll: jest.fn().mockResolvedValue([]),
+          },
         },
         {
           provide: getModelToken(CustomNiche),
