@@ -12,7 +12,8 @@ import {
   Max,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
-import { Username } from '../../shared/decorators/username.decorator';
+import { ToLowercase } from '../../shared/decorators/to-lowercase.decorator';
+import { IsValidUsername } from '../../shared/validators/is-valid-username.validator';
 
 export class UpdateBrandProfileDto {
   @ApiProperty({ description: 'Brand name', required: false })
@@ -23,7 +24,18 @@ export class UpdateBrandProfileDto {
   })
   brandName?: string;
 
-  @Username({ required: false, example: 'brandname_official' })
+  @ApiProperty({
+    description:
+      'Username. Must be 3-30 characters, lowercase, and can only contain letters, numbers, dots, and underscores. Cannot start/end with dot or underscore, and cannot have consecutive dots or underscores.',
+    required: false,
+    pattern: '^[a-z0-9._]+$',
+    minLength: 3,
+    maxLength: 30,
+  })
+  @IsOptional()
+  @IsString({ message: 'Username must be a string' })
+  @ToLowercase()
+  @IsValidUsername()
   username?: string;
 
   @ApiProperty({ description: 'Legal entity name', required: false })

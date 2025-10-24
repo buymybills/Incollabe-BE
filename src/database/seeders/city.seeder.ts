@@ -26,158 +26,323 @@ export class CitySeeder {
     }
 
     const cities = [
-      // India (IN) - Keep all existing cities
-      { name: 'Mumbai', state: 'Maharashtra', countryId: countryMap.get('IN') },
-      { name: 'Delhi', state: 'Delhi', countryId: countryMap.get('IN') },
+      // India (IN) - Tier 1 Cities (Major Metros)
+      {
+        name: 'Mumbai',
+        state: 'Maharashtra',
+        countryId: countryMap.get('IN'),
+        tier: 1,
+      },
+      {
+        name: 'Delhi',
+        state: 'Delhi',
+        countryId: countryMap.get('IN'),
+        tier: 1,
+      },
       {
         name: 'Bangalore',
         state: 'Karnataka',
         countryId: countryMap.get('IN'),
+        tier: 1,
       },
       {
         name: 'Hyderabad',
         state: 'Telangana',
         countryId: countryMap.get('IN'),
+        tier: 1,
       },
-      { name: 'Chennai', state: 'Tamil Nadu', countryId: countryMap.get('IN') },
+      {
+        name: 'Chennai',
+        state: 'Tamil Nadu',
+        countryId: countryMap.get('IN'),
+        tier: 1,
+      },
       {
         name: 'Kolkata',
         state: 'West Bengal',
         countryId: countryMap.get('IN'),
+        tier: 1,
       },
-      { name: 'Pune', state: 'Maharashtra', countryId: countryMap.get('IN') },
-      { name: 'Ahmedabad', state: 'Gujarat', countryId: countryMap.get('IN') },
-      { name: 'Jaipur', state: 'Rajasthan', countryId: countryMap.get('IN') },
-      { name: 'Surat', state: 'Gujarat', countryId: countryMap.get('IN') },
+      {
+        name: 'Pune',
+        state: 'Maharashtra',
+        countryId: countryMap.get('IN'),
+        tier: 1,
+      },
+      {
+        name: 'Ahmedabad',
+        state: 'Gujarat',
+        countryId: countryMap.get('IN'),
+        tier: 1,
+      },
+
+      // India (IN) - Tier 2 Cities (Mid-Sized Cities)
+      {
+        name: 'Jaipur',
+        state: 'Rajasthan',
+        countryId: countryMap.get('IN'),
+        tier: 2,
+      },
+      {
+        name: 'Surat',
+        state: 'Gujarat',
+        countryId: countryMap.get('IN'),
+        tier: 2,
+      },
       {
         name: 'Lucknow',
         state: 'Uttar Pradesh',
         countryId: countryMap.get('IN'),
+        tier: 2,
       },
       {
         name: 'Kanpur',
         state: 'Uttar Pradesh',
         countryId: countryMap.get('IN'),
+        tier: 2,
       },
-      { name: 'Nagpur', state: 'Maharashtra', countryId: countryMap.get('IN') },
+      {
+        name: 'Nagpur',
+        state: 'Maharashtra',
+        countryId: countryMap.get('IN'),
+        tier: 2,
+      },
       {
         name: 'Indore',
         state: 'Madhya Pradesh',
         countryId: countryMap.get('IN'),
+        tier: 2,
       },
-      { name: 'Thane', state: 'Maharashtra', countryId: countryMap.get('IN') },
       {
         name: 'Bhopal',
         state: 'Madhya Pradesh',
         countryId: countryMap.get('IN'),
+        tier: 2,
       },
       {
         name: 'Visakhapatnam',
         state: 'Andhra Pradesh',
         countryId: countryMap.get('IN'),
+        tier: 2,
       },
       {
-        name: 'Pimpri-Chinchwad',
-        state: 'Maharashtra',
+        name: 'Patna',
+        state: 'Bihar',
         countryId: countryMap.get('IN'),
+        tier: 2,
       },
-      { name: 'Patna', state: 'Bihar', countryId: countryMap.get('IN') },
-      { name: 'Vadodara', state: 'Gujarat', countryId: countryMap.get('IN') },
       {
-        name: 'Ghaziabad',
+        name: 'Vadodara',
+        state: 'Gujarat',
+        countryId: countryMap.get('IN'),
+        tier: 2,
+      },
+      {
+        name: 'Ludhiana',
+        state: 'Punjab',
+        countryId: countryMap.get('IN'),
+        tier: 2,
+      },
+      {
+        name: 'Agra',
         state: 'Uttar Pradesh',
         countryId: countryMap.get('IN'),
+        tier: 2,
       },
-      { name: 'Ludhiana', state: 'Punjab', countryId: countryMap.get('IN') },
-      { name: 'Agra', state: 'Uttar Pradesh', countryId: countryMap.get('IN') },
-      { name: 'Nashik', state: 'Maharashtra', countryId: countryMap.get('IN') },
-      { name: 'Faridabad', state: 'Haryana', countryId: countryMap.get('IN') },
       {
-        name: 'Meerut',
-        state: 'Uttar Pradesh',
-        countryId: countryMap.get('IN'),
-      },
-      { name: 'Rajkot', state: 'Gujarat', countryId: countryMap.get('IN') },
-      {
-        name: 'Kalyan-Dombivli',
+        name: 'Nashik',
         state: 'Maharashtra',
         countryId: countryMap.get('IN'),
+        tier: 2,
       },
       {
-        name: 'Vasai-Virar',
-        state: 'Maharashtra',
+        name: 'Rajkot',
+        state: 'Gujarat',
         countryId: countryMap.get('IN'),
+        tier: 2,
       },
       {
         name: 'Varanasi',
         state: 'Uttar Pradesh',
         countryId: countryMap.get('IN'),
-      },
-      {
-        name: 'Srinagar',
-        state: 'Jammu and Kashmir',
-        countryId: countryMap.get('IN'),
-      },
-      { name: 'Dhanbad', state: 'Jharkhand', countryId: countryMap.get('IN') },
-      { name: 'Jodhpur', state: 'Rajasthan', countryId: countryMap.get('IN') },
-      { name: 'Amritsar', state: 'Punjab', countryId: countryMap.get('IN') },
-      {
-        name: 'Raipur',
-        state: 'Chhattisgarh',
-        countryId: countryMap.get('IN'),
-      },
-      {
-        name: 'Allahabad',
-        state: 'Uttar Pradesh',
-        countryId: countryMap.get('IN'),
+        tier: 2,
       },
       {
         name: 'Coimbatore',
         state: 'Tamil Nadu',
         countryId: countryMap.get('IN'),
-      },
-      {
-        name: 'Jabalpur',
-        state: 'Madhya Pradesh',
-        countryId: countryMap.get('IN'),
-      },
-      {
-        name: 'Gwalior',
-        state: 'Madhya Pradesh',
-        countryId: countryMap.get('IN'),
+        tier: 2,
       },
       {
         name: 'Vijayawada',
         state: 'Andhra Pradesh',
         countryId: countryMap.get('IN'),
+        tier: 2,
       },
-      { name: 'Madurai', state: 'Tamil Nadu', countryId: countryMap.get('IN') },
-      { name: 'Gurgaon', state: 'Haryana', countryId: countryMap.get('IN') },
+      {
+        name: 'Madurai',
+        state: 'Tamil Nadu',
+        countryId: countryMap.get('IN'),
+        tier: 2,
+      },
+      {
+        name: 'Gurgaon',
+        state: 'Haryana',
+        countryId: countryMap.get('IN'),
+        tier: 2,
+      },
       {
         name: 'Navi Mumbai',
         state: 'Maharashtra',
         countryId: countryMap.get('IN'),
+        tier: 2,
+      },
+      {
+        name: 'Bhubaneswar',
+        state: 'Odisha',
+        countryId: countryMap.get('IN'),
+        tier: 2,
+      },
+      {
+        name: 'Chandigarh',
+        state: 'Chandigarh',
+        countryId: countryMap.get('IN'),
+        tier: 2,
+      },
+
+      // India (IN) - Tier 3 Cities (Smaller Cities)
+      {
+        name: 'Thane',
+        state: 'Maharashtra',
+        countryId: countryMap.get('IN'),
+        tier: 3,
+      },
+      {
+        name: 'Pimpri-Chinchwad',
+        state: 'Maharashtra',
+        countryId: countryMap.get('IN'),
+        tier: 3,
+      },
+      {
+        name: 'Ghaziabad',
+        state: 'Uttar Pradesh',
+        countryId: countryMap.get('IN'),
+        tier: 3,
+      },
+      {
+        name: 'Faridabad',
+        state: 'Haryana',
+        countryId: countryMap.get('IN'),
+        tier: 3,
+      },
+      {
+        name: 'Meerut',
+        state: 'Uttar Pradesh',
+        countryId: countryMap.get('IN'),
+        tier: 3,
+      },
+      {
+        name: 'Kalyan-Dombivli',
+        state: 'Maharashtra',
+        countryId: countryMap.get('IN'),
+        tier: 3,
+      },
+      {
+        name: 'Vasai-Virar',
+        state: 'Maharashtra',
+        countryId: countryMap.get('IN'),
+        tier: 3,
+      },
+      {
+        name: 'Srinagar',
+        state: 'Jammu and Kashmir',
+        countryId: countryMap.get('IN'),
+        tier: 3,
+      },
+      {
+        name: 'Dhanbad',
+        state: 'Jharkhand',
+        countryId: countryMap.get('IN'),
+        tier: 3,
+      },
+      {
+        name: 'Jodhpur',
+        state: 'Rajasthan',
+        countryId: countryMap.get('IN'),
+        tier: 3,
+      },
+      {
+        name: 'Amritsar',
+        state: 'Punjab',
+        countryId: countryMap.get('IN'),
+        tier: 3,
+      },
+      {
+        name: 'Raipur',
+        state: 'Chhattisgarh',
+        countryId: countryMap.get('IN'),
+        tier: 3,
+      },
+      {
+        name: 'Allahabad',
+        state: 'Uttar Pradesh',
+        countryId: countryMap.get('IN'),
+        tier: 3,
+      },
+      {
+        name: 'Jabalpur',
+        state: 'Madhya Pradesh',
+        countryId: countryMap.get('IN'),
+        tier: 3,
+      },
+      {
+        name: 'Gwalior',
+        state: 'Madhya Pradesh',
+        countryId: countryMap.get('IN'),
+        tier: 3,
       },
       {
         name: 'Aurangabad',
         state: 'Maharashtra',
         countryId: countryMap.get('IN'),
+        tier: 3,
       },
       {
         name: 'Solapur',
         state: 'Maharashtra',
         countryId: countryMap.get('IN'),
+        tier: 3,
       },
-      { name: 'Ranchi', state: 'Jharkhand', countryId: countryMap.get('IN') },
-      { name: 'Howrah', state: 'West Bengal', countryId: countryMap.get('IN') },
-      { name: 'Jalandhar', state: 'Punjab', countryId: countryMap.get('IN') },
+      {
+        name: 'Ranchi',
+        state: 'Jharkhand',
+        countryId: countryMap.get('IN'),
+        tier: 3,
+      },
+      {
+        name: 'Howrah',
+        state: 'West Bengal',
+        countryId: countryMap.get('IN'),
+        tier: 3,
+      },
+      {
+        name: 'Jalandhar',
+        state: 'Punjab',
+        countryId: countryMap.get('IN'),
+        tier: 3,
+      },
       {
         name: 'Tiruchirappalli',
         state: 'Tamil Nadu',
         countryId: countryMap.get('IN'),
+        tier: 3,
       },
-      { name: 'Bhubaneswar', state: 'Odisha', countryId: countryMap.get('IN') },
-      { name: 'Salem', state: 'Tamil Nadu', countryId: countryMap.get('IN') },
+      {
+        name: 'Salem',
+        state: 'Tamil Nadu',
+        countryId: countryMap.get('IN'),
+        tier: 3,
+      },
 
       // United States (US)
       { name: 'New York', state: 'New York', countryId: countryMap.get('US') },
@@ -1170,13 +1335,18 @@ export class CitySeeder {
     );
 
     for (const cityData of validCities) {
-      await this.cityModel.findOrCreate({
+      const [city, created] = await this.cityModel.findOrCreate({
         where: {
           name: cityData.name,
           countryId: cityData.countryId,
         },
         defaults: cityData,
       });
+
+      // If the city already exists, update it with the new data (including tier)
+      if (!created) {
+        await city.update(cityData);
+      }
     }
 
     console.log('✅ Cities seeded successfully');

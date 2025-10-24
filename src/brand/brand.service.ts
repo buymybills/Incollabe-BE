@@ -24,6 +24,7 @@ import {
   ProfileType,
   ReviewStatus,
 } from '../admin/models/profile-review.model';
+import { Admin, AdminRole, AdminStatus } from '../admin/models/admin.model';
 import { SignupFiles } from '../types/file-upload.types';
 import {
   CustomNiche,
@@ -58,6 +59,8 @@ export class BrandService {
     private readonly customNicheModel: typeof CustomNiche,
     @InjectModel(ProfileReview)
     private readonly profileReviewModel: typeof ProfileReview,
+    @InjectModel(Admin)
+    private readonly adminModel: typeof Admin,
     private readonly s3Service: S3Service,
     private readonly redisService: RedisService,
     private readonly emailService: EmailService,
@@ -65,7 +68,11 @@ export class BrandService {
     private readonly profileReviewService: ProfileReviewService,
   ) {}
 
-  async getBrandProfile(brandId: number): Promise<BrandProfileResponseDto> {
+  async getBrandProfile(
+    brandId: number,
+    currentUserId?: number,
+    currentUserType?: 'influencer' | 'brand',
+  ): Promise<BrandProfileResponseDto> {
     const brand = await this.brandModel.findByPk(brandId, {
       include: [
         {
@@ -99,6 +106,27 @@ export class BrandService {
       throw new NotFoundException('Brand not found');
     }
 
+    // Check if current user follows this brand
+    let isFollowing = false;
+    if (currentUserId && currentUserType) {
+      const followRecord = await this.followModel.findOne({
+        where: {
+          followingType: FollowingType.BRAND,
+          followingBrandId: brandId,
+          ...(currentUserType === 'influencer'
+            ? {
+                followerType: FollowingType.INFLUENCER,
+                followerInfluencerId: currentUserId,
+              }
+            : {
+                followerType: FollowingType.BRAND,
+                followerBrandId: currentUserId,
+              }),
+        },
+      });
+      isFollowing = !!followRecord;
+    }
+
     // Calculate profile completion, platform metrics, and get verification status
     const [profileCompletion, platformMetrics, verificationStatus] =
       await Promise.all([
@@ -117,6 +145,7 @@ export class BrandService {
       profileHeadline: brand.profileHeadline,
       isEmailVerified: brand.isEmailVerified,
       isActive: brand.isActive,
+      userType: 'brand' as const,
 
       companyInfo: {
         legalEntityName: brand.legalEntityName || '',
@@ -201,6 +230,9 @@ export class BrandService {
 
       // Platform metrics
       metrics: platformMetrics,
+
+      // Following status
+      isFollowing,
 
       // Verification status
       verificationStatus,
@@ -291,7 +323,29 @@ export class BrandService {
           brand.email,
           brand.brandName || 'Brand Partner',
         );
+
+        // Notify admins about pending profile
+        await this.notifyAdminsOfPendingProfile(brand.id);
       }
+    }
+
+    // If profile is already complete but has no review record, create one
+    // This handles cases where profiles were completed before verification logic was added
+    if (isComplete && brand.isProfileCompleted && !hasBeenSubmitted) {
+      await this.profileReviewService.createProfileReview({
+        profileId: brand.id,
+        profileType: ProfileType.BRAND,
+        submittedData: brand,
+      });
+
+      // Send verification email to brand
+      await this.emailService.sendProfileVerificationPendingEmail(
+        brand.email,
+        brand.brandName || 'Brand Partner',
+      );
+
+      // Notify admins about pending profile
+      await this.notifyAdminsOfPendingProfile(brand.id);
     }
 
     // Send appropriate email notification based on completion status
@@ -332,7 +386,11 @@ export class BrandService {
       };
     }
 
-    return profileData;
+    // Profile was already complete - just return updated data with message
+    return {
+      ...profileData,
+      message: 'Profile updated successfully',
+    };
   }
 
   async updateBrandNiches(brandId: number, nicheIds: number[]) {
@@ -635,6 +693,7 @@ export class BrandService {
           message: 'Profile Under Verification',
           description:
             'Usually takes 1-2 business days to complete verification',
+          isNew: false, // Pending status doesn't need "new" indicator
         };
 
       case ReviewStatus.APPROVED:
@@ -861,6 +920,189 @@ export class BrandService {
       following: followingCount,
       posts: postsCount,
       campaigns: campaignsCount,
+    };
+  }
+
+  private async notifyAdminsOfPendingProfile(brandId: number) {
+    const brand = await this.brandModel.findByPk(brandId);
+    if (!brand) return;
+
+    // Get all active profile reviewer admins
+    const admins = await this.adminModel.findAll({
+      where: {
+        status: AdminStatus.ACTIVE,
+        role: [AdminRole.SUPER_ADMIN, AdminRole.PROFILE_REVIEWER],
+      },
+    });
+
+    // Send notification emails to all admins
+    const emailPromises = admins.map((admin) =>
+      this.emailService.sendAdminProfilePendingNotification(
+        admin.email,
+        admin.name,
+        'brand',
+        brand.brandName || 'Brand',
+        brand.username || brand.email,
+        brandId,
+      ),
+    );
+
+    await Promise.all(emailPromises);
+  }
+
+  async getTopBrands(limit: number = 10, offset: number = 0) {
+    // Fetch all top brands first (without limit/offset for proper sorting)
+    const allTopBrands = await this.brandModel.findAll({
+      where: {
+        isTopBrand: true,
+        isActive: true,
+        isVerified: true,
+      },
+      include: [
+        {
+          model: Niche,
+          as: 'niches',
+          attributes: ['id', 'name', 'description', 'logoNormal', 'logoDark'],
+          through: { attributes: [] },
+        },
+        {
+          model: Country,
+          as: 'headquarterCountry',
+          attributes: ['id', 'name', 'code'],
+        },
+        {
+          model: City,
+          as: 'headquarterCity',
+          attributes: ['id', 'name', 'state'],
+        },
+        {
+          model: CompanyType,
+          attributes: ['id', 'name', 'description'],
+        },
+        {
+          model: CustomNiche,
+          attributes: ['id', 'name', 'description', 'isActive'],
+          where: { isActive: true },
+          required: false,
+        },
+      ],
+    });
+
+    // Calculate metrics for each top brand
+    const brandsWithMetrics = await Promise.all(
+      allTopBrands.map(async (brand) => {
+        // Calculate campaign count
+        const campaignsCount = await this.campaignModel.count({
+          where: { brandId: brand.id },
+        });
+
+        // Calculate follower count (users following this brand)
+        const followersCount = await this.followModel.count({
+          where: {
+            followingId: brand.id,
+            followingType: FollowingType.BRAND,
+          },
+        });
+
+        // Calculate posts count
+        const postsCount = await this.postModel.count({
+          where: {
+            userId: brand.id,
+            userType: UserType.BRAND,
+          },
+        });
+
+        return {
+          id: brand.id,
+          brandName: brand.brandName,
+          username: brand.username,
+          brandBio: brand.brandBio,
+          profileImage: brand.profileImage,
+          profileBanner: brand.profileBanner,
+          profileHeadline: brand.profileHeadline,
+          userType: 'brand' as const,
+
+          companyInfo: {
+            legalEntityName: brand.legalEntityName,
+            companyType: brand.companyType
+              ? {
+                  id: brand.companyType.id,
+                  name: brand.companyType.name,
+                  description: brand.companyType.description,
+                }
+              : null,
+            foundedYear: brand.foundedYear,
+            websiteUrl: brand.websiteUrl,
+          },
+
+          location: {
+            country: brand.headquarterCountry
+              ? {
+                  id: brand.headquarterCountry.id,
+                  name: brand.headquarterCountry.name,
+                  code: brand.headquarterCountry.code,
+                }
+              : null,
+            city: brand.headquarterCity
+              ? {
+                  id: brand.headquarterCity.id,
+                  name: brand.headquarterCity.name,
+                  state: brand.headquarterCity.state,
+                }
+              : null,
+          },
+
+          socialLinks: {
+            instagram: brand.instagramUrl,
+            youtube: brand.youtubeUrl,
+            facebook: brand.facebookUrl,
+            linkedin: brand.linkedinUrl,
+            twitter: brand.twitterUrl,
+          },
+
+          niches: (brand.niches || []).map((niche) => ({
+            id: niche.id,
+            name: niche.name,
+            description: niche.description,
+            logoNormal: niche.logoNormal,
+            logoDark: niche.logoDark,
+          })),
+
+          customNiches: (brand.customNiches || []).map((customNiche) => ({
+            id: customNiche.id,
+            name: customNiche.name,
+            description: customNiche.description,
+            isActive: customNiche.isActive,
+          })),
+
+          metrics: {
+            campaigns: campaignsCount,
+            followers: followersCount,
+            posts: postsCount,
+          },
+
+          isTopBrand: true,
+          isVerified: brand.isVerified,
+
+          createdAt: brand.createdAt?.toISOString(),
+          updatedAt: brand.updatedAt?.toISOString(),
+        };
+      }),
+    );
+
+    // Sort by follower count (descending - most followers first)
+    const sortedBrands = brandsWithMetrics.sort(
+      (a, b) => b.metrics.followers - a.metrics.followers,
+    );
+
+    // Apply pagination after sorting
+    const paginatedBrands = sortedBrands.slice(offset, offset + limit);
+
+    return {
+      topBrands: paginatedBrands,
+      total: sortedBrands.length,
+      limit,
+      offset,
     };
   }
 }

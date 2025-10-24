@@ -50,6 +50,7 @@ import { MyApplicationResponseDto } from '../campaign/dto/my-application-respons
 import { CreateExperienceDto } from './dto/create-experience.dto';
 import { UpdateExperienceDto } from './dto/update-experience.dto';
 import { Op, literal } from 'sequelize';
+import * as crypto from 'crypto';
 import { Gender } from '../auth/types/gender.enum';
 import { CustomNicheService } from '../shared/services/custom-niche.service';
 import { UserType as CustomNicheUserType } from '../auth/model/custom-niche.model';
@@ -115,11 +116,69 @@ export class InfluencerService {
     private readonly customNicheService: CustomNicheService,
   ) {}
 
-  async getInfluencerProfile(influencerId: number, isPublic: boolean = false) {
-    const influencer = await this.influencerRepository.findById(influencerId);
+  async getInfluencerProfile(
+    influencerId: number,
+    isPublic: boolean = false,
+    currentUserId?: number,
+    currentUserType?: 'influencer' | 'brand',
+  ) {
+    let influencer = await this.influencerRepository.findById(influencerId);
 
     if (!influencer) {
       throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
+    }
+
+    // Check if profile is actually complete and update flag if needed
+    const isActuallyComplete =
+      this.checkInfluencerProfileCompletion(influencer);
+    if (isActuallyComplete && !influencer.isProfileCompleted) {
+      // Profile is complete but flag is outdated - update it
+      await this.influencerRepository.updateInfluencer(influencerId, {
+        isProfileCompleted: true,
+      });
+
+      // Check if profile has ever been submitted for review
+      const hasBeenSubmitted = await this.hasProfileReview(influencerId);
+
+      // If profile just became complete and hasn't been submitted, create review
+      if (!hasBeenSubmitted) {
+        await this.createProfileReview(influencerId);
+
+        // Send verification pending notification
+        if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
+          await this.whatsAppService.sendProfileVerificationPending(
+            influencer.whatsappNumber,
+            influencer.name,
+          );
+        }
+      }
+
+      // Refresh influencer data with updated flag
+      influencer = await this.influencerRepository.findById(influencerId);
+      if (!influencer) {
+        throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
+      }
+    }
+
+    // Check if current user follows this influencer
+    let isFollowing = false;
+    if (currentUserId && currentUserType) {
+      const followRecord = await this.followModel.findOne({
+        where: {
+          followingType: FollowingType.INFLUENCER,
+          followingInfluencerId: influencerId,
+          ...(currentUserType === 'influencer'
+            ? {
+                followerType: FollowingType.INFLUENCER,
+                followerInfluencerId: currentUserId,
+              }
+            : {
+                followerType: FollowingType.BRAND,
+                followerBrandId: currentUserId,
+              }),
+        },
+      });
+      isFollowing = !!followRecord;
     }
 
     // Calculate profile completion, platform metrics, and get verification status
@@ -138,6 +197,7 @@ export class InfluencerService {
       profileImage: influencer.profileImage,
       profileBanner: influencer.profileBanner,
       profileHeadline: influencer.profileHeadline,
+      userType: 'influencer' as const,
 
       location: {
         country: influencer.country
@@ -168,6 +228,8 @@ export class InfluencerService {
         id: niche.id,
         name: niche.name,
         description: niche.description,
+        logoNormal: niche.logoNormal,
+        logoDark: niche.logoDark,
       })),
 
       customNiches: (influencer.customNiches || []).map((customNiche) => ({
@@ -182,6 +244,9 @@ export class InfluencerService {
 
       // Top influencer status
       isTopInfluencer: influencer.isTopInfluencer,
+
+      // Following status
+      isFollowing,
 
       // Collaboration costs (public)
       collaborationCosts: influencer.collaborationCosts || {},
@@ -291,49 +356,110 @@ export class InfluencerService {
       delete processedData.customNiches;
     }
 
-    // Update influencer data
-    const updatedData = {
-      ...processedData,
-      ...fileUrls,
-    };
-
-    await this.influencerRepository.updateInfluencer(influencerId, updatedData);
+    // Store the old completion status BEFORE any updates
+    const wasComplete = influencer.isProfileCompleted;
 
     // Check if profile has ever been submitted for review
     const hasBeenSubmitted = await this.hasProfileReview(influencerId);
 
-    // Check and update profile completion status
-    const wasComplete = influencer.isProfileCompleted;
+    // Pre-calculate what the profile will look like after update to determine completion
+    const tempInfluencer = { ...influencer, ...processedData, ...fileUrls };
+    const willBeComplete =
+      this.checkInfluencerProfileCompletion(tempInfluencer);
+
+    // Check if this is a rejected profile trying to resubmit
+    const currentVerificationStatus =
+      await this.getVerificationStatus(influencerId);
+    if (currentVerificationStatus?.status === 'rejected' && willBeComplete) {
+      // Check if the WhatsApp number is already in use by another verified or pending account
+      const whatsappNumber = influencer.whatsappNumber;
+      if (whatsappNumber) {
+        const formattedNumber = whatsappNumber.startsWith('+91')
+          ? whatsappNumber
+          : `+91${whatsappNumber}`;
+
+        const whatsappHash = crypto
+          .createHash('sha256')
+          .update(formattedNumber)
+          .digest('hex');
+
+        const existingInfluencer =
+          await this.influencerRepository.findByWhatsappHash(
+            whatsappHash,
+            influencerId,
+          );
+
+        if (existingInfluencer) {
+          const existingVerificationStatus = await this.getVerificationStatus(
+            existingInfluencer.id,
+          );
+          if (
+            existingInfluencer.isWhatsappVerified &&
+            (existingVerificationStatus?.status === 'approved' ||
+              existingVerificationStatus?.status === 'pending')
+          ) {
+            throw new BadRequestException(
+              'This WhatsApp number is already in use by another verified influencer account. Please use a different number.',
+            );
+          }
+        }
+      }
+    }
+
+    // Update influencer data - include isProfileCompleted flag if profile will be complete
+    const updatedData = {
+      ...processedData,
+      ...fileUrls,
+      // Set completion flag immediately if profile is complete
+      ...(willBeComplete ? { isProfileCompleted: true } : {}),
+    };
+
+    await this.influencerRepository.updateInfluencer(influencerId, updatedData);
+
+    // Fetch updated influencer to get current state
     const updatedInfluencer =
       await this.influencerRepository.findById(influencerId);
     if (!updatedInfluencer) {
       throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
     }
+
+    // Calculate profile completion for response
     const profileCompletion =
       this.calculateProfileCompletion(updatedInfluencer);
     const isComplete = profileCompletion.isCompleted;
 
-    if (isComplete !== influencer.isProfileCompleted) {
-      await this.influencerRepository.updateInfluencer(influencerId, {
-        isProfileCompleted: isComplete,
-      });
+    // If profile just became complete and hasn't been submitted, create review
+    if (!wasComplete && isComplete && !hasBeenSubmitted) {
+      // Create profile review for admin verification
+      await this.createProfileReview(influencerId);
+
+      // Send verification pending notifications (WhatsApp only for influencers)
+      if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
+        await this.whatsAppService.sendProfileVerificationPending(
+          influencer.whatsappNumber,
+          influencer.name,
+        );
+      }
+    }
+
+    // If profile is already complete but has no review record, create one
+    // This handles cases where profile was already marked complete but hasn't been submitted yet
+    if (isComplete && !hasBeenSubmitted && wasComplete) {
+      await this.createProfileReview(influencerId);
+
+      // Send verification pending notifications (WhatsApp only for influencers)
+      if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
+        await this.whatsAppService.sendProfileVerificationPending(
+          influencer.whatsappNumber,
+          influencer.name,
+        );
+      }
     }
 
     // Send appropriate WhatsApp notification based on completion status
     // Only send notifications if profile has never been submitted
     if (!hasBeenSubmitted) {
-      if (isComplete && !wasComplete) {
-        // Profile just became complete - automatically submit for verification
-        await this.createProfileReview(influencerId);
-
-        // Send verification pending notifications (WhatsApp only for influencers)
-        if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-          await this.whatsAppService.sendProfileVerificationPending(
-            influencer.whatsappNumber,
-            influencer.name,
-          );
-        }
-      } else if (!isComplete) {
+      if (!isComplete) {
         // Profile is incomplete - send missing fields notifications (WhatsApp only for influencers)
         console.log('Profile incomplete notification check:', {
           influencerId: influencer.id,
@@ -542,6 +668,7 @@ export class InfluencerService {
           message: 'Profile Under Verification',
           description:
             'Usually takes 1-2 business days to complete verification',
+          isNew: false, // Pending status doesn't need "new" indicator
         };
 
       case ReviewStatus.APPROVED:
@@ -633,10 +760,33 @@ export class InfluencerService {
       throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
     }
 
-    // Generate and store OTP using OTP service (ensure consistent +91 format)
+    // Format the phone number consistently
     const formattedNumber = whatsappNumber.startsWith('+91')
       ? whatsappNumber
       : `+91${whatsappNumber}`;
+
+    // Generate WhatsApp hash to check for existing verification
+    const whatsappHash = crypto
+      .createHash('sha256')
+      .update(formattedNumber)
+      .digest('hex');
+
+    // Check if number is already verified by another influencer
+    const existingInfluencer =
+      await this.influencerRepository.findByWhatsappHash(
+        whatsappHash,
+        influencerId,
+        formattedNumber,
+      );
+
+    // If number is already verified by another influencer, block it
+    if (existingInfluencer) {
+      throw new BadRequestException(
+        'This WhatsApp number is already verified by another user',
+      );
+    }
+
+    // Generate and store OTP
     const otp = await this.otpService.generateAndStoreOtp({
       identifier: formattedNumber,
       type: 'phone',
@@ -648,7 +798,6 @@ export class InfluencerService {
     return {
       message: SUCCESS_MESSAGES.WHATSAPP.OTP_SENT,
       whatsappNumber: whatsappNumber,
-      otp: otp, // Include OTP in response for testing (remove in production)
     };
   }
 
@@ -664,10 +813,12 @@ export class InfluencerService {
       throw new BadRequestException(ERROR_MESSAGES.WHATSAPP.ALREADY_VERIFIED);
     }
 
-    // Verify OTP using OTP service (ensure consistent +91 format)
+    // Format the phone number consistently
     const formattedNumber = whatsappNumber.startsWith('+91')
       ? whatsappNumber
       : `+91${whatsappNumber}`;
+
+    // Verify OTP using OTP service
     await this.otpService.verifyOtp({
       identifier: formattedNumber,
       type: 'phone',
@@ -677,7 +828,7 @@ export class InfluencerService {
     // Update WhatsApp verification status using repository
     await this.influencerRepository.updateWhatsAppVerification(
       influencerId,
-      whatsappNumber,
+      formattedNumber,
     );
 
     return {
@@ -1029,7 +1180,14 @@ export class InfluencerService {
       include: [
         {
           model: Campaign,
-          attributes: ['id', 'name', 'description', 'status', 'type'],
+          attributes: [
+            'id',
+            'name',
+            'description',
+            'status',
+            'type',
+            'category',
+          ],
           include: [
             {
               model: Brand,
@@ -1168,7 +1326,7 @@ export class InfluencerService {
       const socialLinkData = socialLinks.map((link) => ({
         experienceId: experience.id,
         platform: link.platform,
-        contentType: link.contentType,
+        contentType: link.contentType || 'post', // Default to 'post' if not provided
         url: link.url,
       }));
 
@@ -1222,7 +1380,7 @@ export class InfluencerService {
         const socialLinkData = socialLinks.map((link) => ({
           experienceId: experience.id,
           platform: link.platform,
-          contentType: link.contentType,
+          contentType: link.contentType || 'post', // Default to 'post' if not provided
           url: link.url,
         }));
 
@@ -1456,46 +1614,59 @@ export class InfluencerService {
   }
 
   private async calculatePlatformMetrics(influencerId: number) {
-    const [followersCount, followingCount, postsCount, campaignsCount] =
-      await Promise.all([
-        // Count followers (users who follow this influencer)
-        this.followModel.count({
-          where: {
-            followingType: FollowingType.INFLUENCER,
-            followingInfluencerId: influencerId,
-          },
-        }),
+    const [
+      followersCount,
+      followingCount,
+      postsCount,
+      campaignsCount,
+      experiencesCount,
+    ] = await Promise.all([
+      // Count followers (users who follow this influencer)
+      this.followModel.count({
+        where: {
+          followingType: FollowingType.INFLUENCER,
+          followingInfluencerId: influencerId,
+        },
+      }),
 
-        // Count following (users this influencer follows)
-        this.followModel.count({
-          where: {
-            followerType: FollowingType.INFLUENCER,
-            followerInfluencerId: influencerId,
-          },
-        }),
+      // Count following (users this influencer follows)
+      this.followModel.count({
+        where: {
+          followerType: FollowingType.INFLUENCER,
+          followerInfluencerId: influencerId,
+        },
+      }),
 
-        // Count posts created by this influencer
-        this.postModel.count({
-          where: {
-            userType: UserType.INFLUENCER,
-            influencerId: influencerId,
-            isActive: true,
-          },
-        }),
+      // Count posts created by this influencer
+      this.postModel.count({
+        where: {
+          userType: UserType.INFLUENCER,
+          influencerId: influencerId,
+          isActive: true,
+        },
+      }),
 
-        // Count campaigns this influencer has applied to
-        this.campaignApplicationModel.count({
-          where: {
-            influencerId: influencerId,
-          },
-        }),
-      ]);
+      // Count campaigns this influencer has applied to
+      this.campaignApplicationModel.count({
+        where: {
+          influencerId: influencerId,
+        },
+      }),
+
+      // Count experiences added by this influencer
+      this.experienceModel.count({
+        where: {
+          influencerId: influencerId,
+        },
+      }),
+    ]);
 
     return {
       followers: followersCount,
       following: followingCount,
       posts: postsCount,
       campaigns: campaignsCount,
+      experiences: experiencesCount,
     };
   }
 
@@ -1512,8 +1683,9 @@ export class InfluencerService {
     // Calculate metrics for each top influencer
     const influencersWithMetrics = await Promise.all(
       allTopInfluencers.map(async (influencer) => {
-        const [platformMetrics] = await Promise.all([
+        const [platformMetrics, verificationStatus] = await Promise.all([
           this.calculatePlatformMetrics(influencer.id),
+          this.getVerificationStatus(influencer.id),
         ]);
 
         return {
@@ -1524,6 +1696,7 @@ export class InfluencerService {
           profileImage: influencer.profileImage,
           profileBanner: influencer.profileBanner,
           profileHeadline: influencer.profileHeadline,
+          userType: 'influencer' as const,
 
           location: {
             country: influencer.country
@@ -1554,11 +1727,14 @@ export class InfluencerService {
             id: niche.id,
             name: niche.name,
             description: niche.description,
+            logoNormal: niche.logoNormal,
+            logoDark: niche.logoDark,
           })),
 
           metrics: platformMetrics,
           isTopInfluencer: true,
           isVerified: influencer.isVerified,
+          verificationStatus,
 
           createdAt: influencer.createdAt?.toISOString(),
           updatedAt: influencer.updatedAt?.toISOString(),

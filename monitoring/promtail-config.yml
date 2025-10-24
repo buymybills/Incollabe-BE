@@ -10,15 +10,15 @@ clients:
 
 scrape_configs:
   # Your application logs
-  - job_name: cloutsy-app
+  - job_name: incollab-app
     static_configs:
       - targets:
           - localhost
         labels:
-          job: cloutsy
-          app: cloutsy
+          job: incollab
+          app: incollab
           env: production
-          __path__: /var/log/cloutsy/*.log
+          __path__: /var/log/incollab/*.log
 
     # Parse log structure to extract timestamp and level
     pipeline_stages:
@@ -52,9 +52,9 @@ scrape_configs:
           - localhost
         labels:
           job: pm2
-          app: cloutsy
+          app: incollab
           env: production
-          __path__: /var/log/pm2/cloutsy-out*.log
+          __path__: /var/log/pm2/incollab-out*.log
 
     pipeline_stages:
       - regex:
@@ -69,10 +69,10 @@ scrape_configs:
           - localhost
         labels:
           job: pm2-errors
-          app: cloutsy
+          app: incollab
           env: production
           level: error
-          __path__: /var/log/pm2/cloutsy-error*.log
+          __path__: /var/log/pm2/incollab-error*.log
 
   # System logs (optional)
   - job_name: system

@@ -589,6 +589,13 @@ export class AuthController {
         example: '[1,4,12]',
         required: true,
       },
+      customNiches: {
+        type: 'string',
+        description:
+          'Array of custom niche names. Accepts JSON array ["Sustainable Fashion","Tech Reviews"] or comma-separated "Sustainable Fashion,Tech Reviews" (optional)',
+        example: '["Sustainable Fashion","Tech Reviews"]',
+        required: false,
+      },
       fcmToken: {
         type: 'string',
         description: 'FCM token for push notifications (optional)',

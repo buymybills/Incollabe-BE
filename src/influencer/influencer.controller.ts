@@ -38,6 +38,7 @@ import {
 import { GetOpenCampaignsDto } from '../campaign/dto/get-open-campaigns.dto';
 import { MyApplicationResponseDto } from '../campaign/dto/my-application-response.dto';
 import { PublicProfileResponseDto } from './dto/public-profile-response.dto';
+import { Public } from '../auth/decorators/public.decorator';
 import type { RequestWithUser } from '../types/request.types';
 
 @ApiTags('Influencer Profile')
@@ -352,7 +353,8 @@ export class InfluencerController {
   @Get('profile/:id')
   @ApiOperation({
     summary: 'Get public influencer profile',
-    description: 'Get public influencer profile by ID',
+    description:
+      'Get public influencer profile by ID. If authenticated, includes isFollowing flag.',
   })
   @ApiResponse({
     status: 200,
@@ -361,10 +363,17 @@ export class InfluencerController {
   })
   async getPublicInfluencerProfile(
     @Param('id', ParseIntPipe) influencerId: number,
+    @Req() req?: RequestWithUser,
   ): Promise<PublicProfileResponseDto> {
+    // Pass current user info if authenticated
+    const currentUserId = req?.user?.id;
+    const currentUserType = req?.user?.userType;
+
     const profile = await this.influencerService.getInfluencerProfile(
       influencerId,
       true,
+      currentUserId,
+      currentUserType,
     );
 
     // Fetch experiences for the influencer
@@ -499,7 +508,7 @@ export class InfluencerController {
   @ApiQuery({
     name: 'status',
     required: false,
-    enum: ['applied', 'under_review', 'selected', 'rejected'],
+    enum: ['applied', 'under_review', 'selected', 'rejected', 'withdrawn'],
     description: 'Filter applications by status',
     example: 'applied',
   })
@@ -752,6 +761,7 @@ export class InfluencerController {
   }
 
   @Get('top-influencers')
+  @Public()
   @ApiOperation({
     summary: 'Get top influencers',
     description:

@@ -18,7 +18,8 @@ import {
   GENDER_OPTIONS,
   OTHERS_GENDER_OPTIONS,
 } from '../types/gender.enum';
-import { Username } from '../../shared/decorators/username.decorator';
+import { ToLowercase } from '../../shared/decorators/to-lowercase.decorator';
+import { IsValidUsername } from '../../shared/validators/is-valid-username.validator';
 
 export class InfluencerSignupDto {
   @ApiProperty({
@@ -30,7 +31,18 @@ export class InfluencerSignupDto {
   @Length(2, 50, { message: 'Name must be between 2 and 50 characters' })
   name: string;
 
-  @Username({ example: 'dhruv_1109' })
+  @ApiProperty({
+    description:
+      'Unique username for the influencer. Must be 3-30 characters, lowercase, and can only contain letters, numbers, dots, and underscores. Cannot start/end with dot or underscore, and cannot have consecutive dots or underscores.',
+    example: 'dhruv_1109',
+    pattern: '^[a-z0-9._]+$',
+    minLength: 3,
+    maxLength: 30,
+  })
+  @IsNotEmpty({ message: 'Username is required' })
+  @IsString({ message: 'Username must be a string' })
+  @ToLowercase()
+  @IsValidUsername()
   username: string;
 
   @ApiProperty({

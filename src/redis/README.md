@@ -126,7 +126,7 @@ if (sessionData) {
 // Check cooldown
 const cooldownKey = `otp:cooldown:${phone}`;
 if (await this.redisService.get(cooldownKey)) {
-  throw new ForbiddenException("Please wait before requesting another OTP");
+  throw new ForbiddenException("Please wait for 60 sec before requesting another OTP");
 }
 
 // Track attempts

@@ -26,6 +26,7 @@ const mockInfluencerRepository = {
   findByUsername: jest.fn(),
   updateInfluencer: jest.fn(),
   updateWhatsAppVerification: jest.fn(),
+  findByWhatsappHash: jest.fn(),
 };
 
 const mockS3Service = {
@@ -168,6 +169,8 @@ describe('InfluencerService', () => {
             create: jest.fn(),
             update: jest.fn(),
             destroy: jest.fn(),
+            count: jest.fn().mockResolvedValue(0),
+            findAndCountAll: jest.fn(),
           },
         },
         {
@@ -417,7 +420,7 @@ describe('InfluencerService', () => {
       expect(s3Service.uploadFileToS3).not.toHaveBeenCalled();
       expect(influencerRepository.updateInfluencer).toHaveBeenCalledWith(
         1,
-        updateDto,
+        expect.objectContaining(updateDto),
       );
     });
 
@@ -569,6 +572,7 @@ describe('InfluencerService', () => {
 
       mockInfluencerRepository.findById.mockResolvedValue(mockInfluencer);
       mockOtpService.verifyOtp.mockResolvedValue(true);
+      mockInfluencerRepository.findByWhatsappHash.mockResolvedValue(null); // No duplicate
       mockInfluencerRepository.updateWhatsAppVerification.mockResolvedValue({
         ...mockInfluencer,
         isWhatsappVerified: true,
@@ -673,6 +677,52 @@ describe('InfluencerService', () => {
         new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND),
       );
     });
+
+    it('should include experiences count in metrics', async () => {
+      const mockInfluencer = {
+        id: 1,
+        name: 'Test Influencer',
+        username: 'test_influencer',
+        bio: 'Test bio',
+        profileImage: 'profile.jpg',
+        profileBanner: 'banner.jpg',
+        isProfileCompleted: true,
+        niches: [],
+        customNiches: [],
+        city: null,
+        country: null,
+        collaborationCosts: {},
+        createdAt: new Date('2023-01-01'),
+        updatedAt: new Date('2023-01-02'),
+      };
+
+      const followModel = module.get('FOLLOW_MODEL');
+      const postModel = module.get('POST_MODEL');
+      const campaignApplicationModel = module.get('CAMPAIGN_APPLICATION_MODEL');
+      const experienceModel = module.get('EXPERIENCE_MODEL');
+
+      mockInfluencerRepository.findById.mockResolvedValue(mockInfluencer);
+      followModel.count.mockResolvedValue(150); // followers
+      followModel.count.mockResolvedValueOnce(150); // followers (first call)
+      followModel.count.mockResolvedValueOnce(75); // following (second call)
+      postModel.count.mockResolvedValue(25);
+      campaignApplicationModel.count.mockResolvedValue(10);
+      experienceModel.count.mockResolvedValue(5);
+
+      const result = await service.getInfluencerProfile(1);
+
+      expect(result).toHaveProperty('metrics');
+      expect(result.metrics).toEqual({
+        followers: 150,
+        following: 75,
+        posts: 25,
+        campaigns: 10,
+        experiences: 5,
+      });
+      expect(experienceModel.count).toHaveBeenCalledWith({
+        where: { influencerId: 1 },
+      });
+    });
   });
 
   describe('Error Handling and Edge Cases', () => {
@@ -727,6 +777,7 @@ describe('InfluencerService', () => {
 
       mockInfluencerRepository.findById.mockResolvedValue(mockInfluencer);
       mockOtpService.verifyOtp.mockResolvedValue(true);
+      mockInfluencerRepository.findByWhatsappHash.mockResolvedValue(null); // No duplicate
       mockInfluencerRepository.updateWhatsAppVerification.mockResolvedValue(
         mockInfluencer,
       );

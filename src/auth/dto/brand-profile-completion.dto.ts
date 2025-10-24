@@ -114,4 +114,19 @@ export class BrandProfileCompletionDto {
   @IsArray()
   @IsNotEmpty()
   nicheIds: number[];
+
+  @ApiProperty({
+    description: 'Array of custom niche names (optional)',
+    type: [String],
+    example: ['Sustainable Fashion', 'Tech Reviews'],
+    required: false,
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @Length(2, 100, {
+    each: true,
+    message: 'Custom niche name must be between 2 and 100 characters',
+  })
+  customNiches?: string[];
 }

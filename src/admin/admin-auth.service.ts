@@ -187,7 +187,10 @@ export class AdminAuthService {
       throw new UnauthorizedException('Admin not found');
     }
 
-    return admin;
+    return {
+      ...admin.toJSON(),
+      userType: 'admin' as const,
+    };
   }
 
   async updateTopInfluencerStatus(
@@ -208,6 +211,29 @@ export class AdminAuthService {
       message: `Influencer ${isTopInfluencer ? 'marked as' : 'removed from'} top influencer`,
       influencerId,
       isTopInfluencer,
+      updatedBy: adminId,
+      updatedAt: new Date(),
+    };
+  }
+
+  async updateTopBrandStatus(
+    brandId: number,
+    isTopBrand: boolean,
+    adminId: number,
+  ) {
+    // First check if brand exists
+    const brand = await this.brandModel.findByPk(brandId);
+    if (!brand) {
+      throw new NotFoundException('Brand not found');
+    }
+
+    // Update the top brand status
+    await brand.update({ isTopBrand });
+
+    return {
+      message: `Brand ${isTopBrand ? 'marked as' : 'removed from'} top brand`,
+      brandId,
+      isTopBrand,
       updatedBy: adminId,
       updatedAt: new Date(),
     };
@@ -593,6 +619,7 @@ export class AdminAuthService {
       niches: brand.niches,
       createdAt: brand.createdAt,
       updatedAt: brand.updatedAt,
+      userType: 'brand' as const,
     };
   }
 

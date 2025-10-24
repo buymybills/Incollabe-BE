@@ -445,7 +445,11 @@ describe('BrandController', () => {
         niches: [
           { id: 1, name: 'Fashion', description: 'Fashion and clothing' },
         ],
+        customNiches: undefined,
         isActive: true,
+        isFollowing: undefined,
+        metrics: undefined,
+        userType: 'brand',
       };
 
       const fullProfile = {
@@ -467,7 +471,10 @@ describe('BrandController', () => {
         niches: [
           { id: 1, name: 'Fashion', description: 'Fashion and clothing' },
         ],
+        customNiches: undefined,
         isActive: true,
+        isFollowing: undefined,
+        metrics: undefined,
         email: 'test@brand.com',
         // Other private fields
       };
@@ -477,7 +484,11 @@ describe('BrandController', () => {
       const result = await controller.getBrandProfileById(1);
 
       expect(result).toEqual(mockPublicProfile);
-      expect(brandService.getBrandProfile).toHaveBeenCalledWith(1);
+      expect(brandService.getBrandProfile).toHaveBeenCalledWith(
+        1,
+        undefined,
+        undefined,
+      );
 
       // Ensure private fields are not exposed
       expect(result).not.toHaveProperty('email');
@@ -591,7 +602,11 @@ describe('BrandController', () => {
 
       await controller.getBrandProfileById(123);
 
-      expect(brandService.getBrandProfile).toHaveBeenCalledWith(123);
+      expect(brandService.getBrandProfile).toHaveBeenCalledWith(
+        123,
+        undefined,
+        undefined,
+      );
     });
 
     it('should handle country ID parameter parsing', async () => {

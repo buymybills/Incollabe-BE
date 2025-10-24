@@ -45,6 +45,7 @@ import { Niche } from './model/niche.model';
 import { Otp } from './model/otp.model';
 import { CustomNiche } from './model/custom-niche.model';
 import { Gender } from './types/gender.enum';
+import { SearchUsersResult } from '../shared/services/search.service';
 
 // Interfaces for token payload
 interface DecodedRefresh {
@@ -157,7 +158,9 @@ export class AuthService {
         phone: formattedPhone,
         reason: 'cooldown_active',
       });
-      throw new ForbiddenException('Please wait before requesting another OTP');
+      throw new ForbiddenException(
+        'Please wait for 60 sec before requesting another OTP',
+      );
     }
 
     // Check total attempts in window (5 requests / 15 mins)
@@ -500,6 +503,28 @@ export class AuthService {
       if (uniqueCustomNiches.length !== customNiches.length) {
         throw new BadRequestException('Custom niche names must be unique');
       }
+    }
+
+    // Check if username already exists
+    const existingUsername = await this.influencerModel.findOne({
+      where: { username },
+    });
+    if (existingUsername) {
+      throw new BadRequestException('Username already taken');
+    }
+
+    // Check if phone already exists
+    const crypto = require('crypto');
+    const phoneHash = crypto
+      .createHash('sha256')
+      .update(formattedPhone)
+      .digest('hex');
+
+    const existingPhone = await this.influencerModel.findOne({
+      where: { phoneHash },
+    });
+    if (existingPhone) {
+      throw new BadRequestException('Phone number already registered');
     }
 
     // Upload profile image to S3 if provided
@@ -1742,6 +1767,23 @@ export class AuthService {
       throw new BadRequestException('One or more invalid niche IDs provided');
     }
 
+    // Validate total niche count (regular + custom) doesn't exceed 5
+    const totalNicheCount =
+      profileDto.nicheIds.length + (profileDto.customNiches?.length || 0);
+    if (totalNicheCount > 5) {
+      throw new BadRequestException(
+        `Maximum 5 niches allowed (regular + custom combined). You selected ${totalNicheCount} niches.`,
+      );
+    }
+
+    // Validate custom niche names are unique
+    if (profileDto.customNiches && profileDto.customNiches.length > 0) {
+      const uniqueCustomNiches = [...new Set(profileDto.customNiches)];
+      if (uniqueCustomNiches.length !== profileDto.customNiches.length) {
+        throw new BadRequestException('Custom niche names must be unique');
+      }
+    }
+
     // Look up company type ID from company type name
     let companyTypeId: number | undefined;
     if (profileDto.companyType) {
@@ -1842,6 +1884,21 @@ export class AuthService {
         },
       },
     });
+
+    // Create custom niches if provided
+    if (profileDto.customNiches && profileDto.customNiches.length > 0) {
+      const customNicheData = profileDto.customNiches.map((nicheName) => ({
+        userType: 'brand' as const,
+        userId: brand.id,
+        brandId: brand.id,
+        influencerId: null,
+        name: nicheName,
+        description: '',
+        isActive: true,
+      }));
+
+      await this.customNicheModel.bulkCreate(customNicheData);
+    }
 
     // Fetch updated brand with niches, custom niches, and company type
     const updatedBrand = await this.brandModel.findByPk(brandId, {
@@ -2058,6 +2115,10 @@ export class AuthService {
       // Mark OTP as used
       await otpRecord.destroy();
 
+      // Store username and profile image before deletion (for testing)
+      const username = influencer.username;
+      const profileImage = influencer.profileImage;
+
       // Delete the account
       await influencer.update({ isActive: false });
       await influencer.destroy(); // Sets deletedAt with paranoid mode
@@ -2065,7 +2126,12 @@ export class AuthService {
       this.loggerService.info(
         `Influencer account deleted: ${influencer.id} (phone: ${formattedPhone})`,
       );
-      return { message: 'Influencer account deleted successfully' };
+
+      return {
+        message: 'Influencer account deleted successfully',
+        username,
+        profileImage,
+      };
     } else if (userType === 'brand') {
       if (!email) {
         throw new BadRequestException('Email is required for brand');
@@ -2120,5 +2186,98 @@ export class AuthService {
     }
 
     throw new BadRequestException('Invalid user type');
+  }
+
+  async searchUsers(dto: {
+    search?: string;
+    type?: 'ALL' | 'INFLUENCER' | 'BRAND';
+    page?: number;
+    limit?: number;
+  }): Promise<SearchUsersResult> {
+    const { search, type = 'ALL', page = 1, limit = 20 } = dto;
+    const offset = (page - 1) * limit;
+    const influencerSearchCondition = search
+      ? {
+          [Op.or]: [
+            { name: { [Op.iLike]: `%${search}%` } },
+            { username: { [Op.iLike]: `%${search}%` } },
+          ],
+        }
+      : {};
+
+    const brandSearchCondition = search
+      ? {
+          [Op.or]: [
+            { brandName: { [Op.iLike]: `%${search}%` } },
+            { username: { [Op.iLike]: `%${search}%` } },
+          ],
+        }
+      : {};
+
+    const results: SearchUsersResult = {
+      influencers: [],
+      brands: [],
+      total: 0,
+      page,
+      limit,
+      totalPages: 0,
+    };
+
+    if (type === 'ALL' || type === 'INFLUENCER') {
+      const influencers = await this.influencerModel.findAndCountAll({
+        where: {
+          ...influencerSearchCondition,
+          isProfileCompleted: true,
+          isWhatsappVerified: true,
+        },
+        attributes: [
+          'id',
+          'name',
+          'username',
+          'profileImage',
+          'cityId',
+          'gender',
+          'bio',
+          'isVerified',
+        ],
+        limit,
+        offset,
+        distinct: true,
+      });
+      results.influencers = influencers.rows.map((influencer) => ({
+        ...influencer.toJSON(),
+        userType: 'influencer' as const,
+      }));
+      results.total += influencers.count;
+    }
+
+    if (type === 'ALL' || type === 'BRAND') {
+      const brands = await this.brandModel.findAndCountAll({
+        where: {
+          ...brandSearchCondition,
+          isProfileCompleted: true,
+        },
+        attributes: [
+          'id',
+          'brandName',
+          'username',
+          'profileImage',
+          'headquarterCityId',
+          'brandBio',
+          'isVerified',
+        ],
+        limit,
+        offset,
+        distinct: true,
+      });
+      results.brands = brands.rows.map((brand) => ({
+        ...brand.toJSON(),
+        userType: 'brand' as const,
+      }));
+      results.total += brands.count;
+    }
+
+    results.totalPages = Math.ceil(results.total / limit);
+    return results;
   }
 }

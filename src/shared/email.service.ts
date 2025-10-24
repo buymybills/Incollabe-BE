@@ -930,11 +930,6 @@ export class EmailService {
     profileIdentifier: string,
     profileId: number,
   ): Promise<void> {
-    // Construct the review URL
-    const baseUrl =
-      process.env.ADMIN_PANEL_URL || 'https://admin.collabkaroo.com';
-    const reviewUrl = `${baseUrl}/reviews/profile/${profileId}/${profileType}`;
-
     const htmlContent = `
         <!DOCTYPE html>
         <html>
@@ -948,8 +943,6 @@ export class EmailService {
             .content { background: #fff; padding: 30px; border: 1px solid #dee2e6; }
             .footer { background: #f8f9fa; padding: 15px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; color: #6c757d; }
             .info { background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; padding: 15px; border-radius: 4px; margin: 15px 0; }
-            .btn { display: inline-block; padding: 12px 24px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 10px 0; }
-            .btn-container { text-align: center; margin: 20px 0; }
           </style>
         </head>
         <body>
@@ -969,10 +962,7 @@ export class EmailService {
                 <li><strong>Identifier:</strong> ${profileIdentifier}</li>
                 <li><strong>Profile ID:</strong> ${profileId}</li>
               </ul>
-              <div class="btn-container">
-                <a href="${reviewUrl}" class="btn">Review Profile Now</a>
-              </div>
-              <p>Please review this profile at your earliest convenience. Click the button above to view the complete profile details and make a verification decision.</p>
+              <p>Please review this profile at your earliest convenience by logging into the admin panel.</p>
               <p>Best regards,<br>Collabkaroo Admin System</p>
             </div>
             <div class="footer">

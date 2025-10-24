@@ -496,10 +496,10 @@ export class CampaignService {
     userId?: number,
     userType?: 'brand' | 'influencer',
   ): Promise<City[]> {
+    // Default: Indian tier 1 cities
     let whereCondition: any = {
-      tier: {
-        [Op.in]: [1, 2, 3], // Default: all tiers
-      },
+      countryId: 1, // India
+      tier: 1, // Tier 1 cities only
     };
 
     // If user is provided, check if they're from India
@@ -518,33 +518,12 @@ export class CampaignService {
         isFromIndia = influencer?.countryId === 1;
       }
 
-      // If user is from India (countryId = 1), show only Indian tier 1 cities
+      // If user is from India (countryId = 1), show Indian tier 1 and tier 2 cities
       if (isFromIndia) {
         whereCondition = {
           countryId: 1, // India
-          name: {
-            [Op.in]: [
-              'Mumbai',
-              'Delhi',
-              'Bangalore',
-              'Chennai',
-              'Kolkata',
-              'Hyderabad',
-              'Pune',
-              'Ahmedabad',
-              'Jaipur',
-              'Surat',
-              'Lucknow',
-              'Kanpur',
-              'Nagpur',
-              'Indore',
-              'Thane',
-              'Bhopal',
-              'Visakhapatnam',
-              'Pimpri-Chinchwad',
-              'Patna',
-              'Vadodara',
-            ],
+          tier: {
+            [Op.in]: [1, 2], // Tier 1 and Tier 2 cities
           },
         };
       }
@@ -552,7 +531,10 @@ export class CampaignService {
 
     return this.cityModel.findAll({
       where: whereCondition,
-      order: [['name', 'ASC']],
+      order: [
+        ['tier', 'ASC'], // Sort by tier first (1, then 2)
+        ['name', 'ASC'], // Then alphabetically
+      ],
       limit: 20,
     });
   }

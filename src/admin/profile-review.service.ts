@@ -146,7 +146,13 @@ export class ProfileReviewService {
     });
 
     return {
-      profile,
+      profile: {
+        ...profile.toJSON(),
+        userType:
+          profileType === ProfileType.BRAND
+            ? ('brand' as const)
+            : ('influencer' as const),
+      },
       review,
     };
   }

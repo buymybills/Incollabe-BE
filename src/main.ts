@@ -3,6 +3,7 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ResponseInterceptor } from './middleware/response.interceptor';
+import { useContainer } from 'class-validator';
 
 import { GlobalExceptionFilter } from './shared/filters/global-exception.filter';
 import { LoggerService } from './shared/services/logger.service';
@@ -10,6 +11,9 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Enable dependency injection for class-validator custom validators
+  useContainer(app.select(AppModule), { fallbackOnErrors: true });
 
   // Get our custom logger service
   const loggerService = app.get(LoggerService);
@@ -66,7 +70,7 @@ async function bootstrap() {
   await app.listen(port);
 
   // Use our custom logger for startup message
-  loggerService.info(`Collabkaroo server started successfully`, {
+  loggerService.info(`Collabkaroo server started successfully!!`, {
     port,
     environment: process.env.NODE_ENV || 'development',
     apiDocs: `http://localhost:${port}/api/docs`,

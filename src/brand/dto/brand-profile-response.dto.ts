@@ -247,6 +247,13 @@ export class BrandProfileResponseDto {
   metrics: PlatformMetrics;
 
   @ApiProperty({
+    description: 'Whether the current user follows this brand',
+    example: false,
+    required: false,
+  })
+  isFollowing?: boolean;
+
+  @ApiProperty({
     description: 'Verification status of the profile',
     required: false,
     example: {
@@ -260,6 +267,9 @@ export class BrandProfileResponseDto {
     message: string;
     description: string;
   } | null;
+
+  @ApiProperty({ description: 'User type', example: 'brand' })
+  userType: 'brand';
 
   @ApiProperty({ description: 'Profile creation timestamp' })
   createdAt: string;

@@ -273,6 +273,8 @@ describe('InfluencerController', () => {
       expect(influencerService.getInfluencerProfile).toHaveBeenCalledWith(
         1,
         true,
+        undefined,
+        undefined,
       );
       expect(influencerService.getExperiences).toHaveBeenCalledWith(
         1,
@@ -322,6 +324,8 @@ describe('InfluencerController', () => {
       expect(influencerService.getInfluencerProfile).toHaveBeenCalledWith(
         123,
         true,
+        undefined,
+        undefined,
       );
     });
 

@@ -1,77 +1,111 @@
 /**
- * List of reserved usernames that cannot be used by users
- * These include system keywords, admin terms, and common routes
+ * Reserved usernames that cannot be used by users
+ * These are typically system keywords, common routes, or admin-related terms
  */
 export const RESERVED_USERNAMES = [
-  // System & Admin
+  // System and admin
   'admin',
   'administrator',
+  'root',
+  'system',
+  'moderator',
+  'mod',
   'support',
   'help',
+  'team',
+  'staff',
+  'superadmin',
+  'super_admin',
+
+  // API and technical
   'api',
   'app',
-  'system',
-  'root',
-  'mod',
-  'moderator',
-  'official',
-  'verified',
-  'staff',
-  'team',
-  'collabkaroo',
-  'incollab',
+  'www',
+  'mail',
+  'email',
+  'ftp',
+  'ssh',
+  'http',
+  'https',
+  'rest',
+  'graphql',
+  'webhook',
 
-  // Common Routes
-  'settings',
-  'profile',
-  'account',
+  // Common routes and pages
   'login',
+  'logout',
   'signup',
+  'register',
   'signin',
   'signout',
-  'logout',
-  'register',
   'auth',
-  'about',
-  'terms',
-  'privacy',
-  'contact',
-  'home',
+  'profile',
+  'settings',
+  'account',
   'dashboard',
-  'analytics',
+  'home',
+  'about',
+  'contact',
+  'privacy',
+  'terms',
+  'tos',
+  'faq',
+  'help',
+  'blog',
+  'news',
+  'feed',
+  'search',
   'explore',
   'discover',
-  'search',
-  'messages',
-  'notifications',
+  'trending',
+  'popular',
+
+  // Brand/Company specific
+  'incollabe',
+  'incollab',
+  'official',
+  'verified',
+  'brand',
+  'influencer',
+  'brands',
+  'influencers',
+  'campaign',
   'campaigns',
-  'posts',
-  'feed',
 
-  // Programming Keywords
-  'null',
-  'undefined',
-  'true',
-  'false',
-  'boolean',
-  'string',
-  'number',
-  'object',
-  'array',
-
-  // Common User Types
+  // User related
   'user',
   'users',
-  'influencer',
-  'influencers',
-  'brand',
-  'brands',
+  'username',
   'guest',
   'anonymous',
+  'deleted',
+  'removed',
+  'banned',
+  'suspended',
 
-  // Other Reserved
+  // Common words to prevent confusion
   'test',
   'demo',
   'example',
   'sample',
+  'null',
+  'undefined',
+  'true',
+  'false',
+
+  // Offensive/inappropriate (add more as needed)
+  'abuse',
+  'spam',
+  'fake',
+  'scam',
+  'fraud',
 ];
+
+/**
+ * Check if a username is reserved (case-insensitive)
+ * @param username The username to check
+ * @returns true if the username is reserved
+ */
+export function isReservedUsername(username: string): boolean {
+  return RESERVED_USERNAMES.includes(username.toLowerCase());
+}

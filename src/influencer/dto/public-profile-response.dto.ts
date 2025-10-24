@@ -170,8 +170,18 @@ export class PublicProfileResponseDto {
   @ApiProperty({ required: false })
   isTopInfluencer?: boolean;
 
+  @ApiProperty({
+    description: 'Whether the current user follows this influencer',
+    example: false,
+    required: false,
+  })
+  isFollowing?: boolean;
+
   @ApiProperty({ type: CollaborationCostsDto })
   collaborationCosts: CollaborationCostsDto | object;
+
+  @ApiProperty({ description: 'User type', example: 'influencer' })
+  userType: 'influencer';
 
   @ApiProperty({ required: false })
   createdAt?: string;

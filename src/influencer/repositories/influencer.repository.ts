@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
+import { Op } from 'sequelize';
 import { Influencer } from '../../auth/model/influencer.model';
 import { Niche } from '../../auth/model/niche.model';
 import { Country } from '../../shared/models/country.model';
@@ -60,13 +61,15 @@ export class InfluencerRepository {
     influencerId: number,
     whatsappNumber: string,
   ): Promise<void> {
-    await this.influencerModel.update(
-      {
-        whatsappNumber,
-        isWhatsappVerified: true,
-      },
-      { where: { id: influencerId } },
-    );
+    // Use instance method to trigger @BeforeUpdate hook which sets whatsappHash
+    const influencer = await this.influencerModel.findByPk(influencerId);
+    if (!influencer) {
+      throw new Error('Influencer not found');
+    }
+
+    influencer.whatsappNumber = whatsappNumber;
+    influencer.isWhatsappVerified = true;
+    await influencer.save();
   }
 
   async findAll(options: any): Promise<Influencer[]> {
@@ -94,5 +97,43 @@ export class InfluencerRepository {
         },
       ],
     });
+  }
+
+  async findByWhatsappHash(
+    whatsappHash: string,
+    excludeId?: number,
+    formattedNumber?: string,
+  ): Promise<Influencer | null> {
+    const where: any = {
+      isWhatsappVerified: true,
+    };
+
+    if (excludeId) {
+      where.id = { [Op.ne]: excludeId };
+    }
+
+    // First try to find by hash (for new records where hash is set)
+    const byHash = await this.influencerModel.findOne({
+      where: { ...where, whatsappHash },
+    });
+
+    if (byHash) {
+      return byHash;
+    }
+
+    // Fallback: Find all verified influencers and check after decryption
+    // This handles old records where whatsappHash might be null
+    if (formattedNumber) {
+      const allVerified = await this.influencerModel.findAll({ where });
+
+      // The @AfterFind hook will decrypt the whatsappNumber for us
+      for (const influencer of allVerified) {
+        if (influencer.whatsappNumber === formattedNumber) {
+          return influencer;
+        }
+      }
+    }
+
+    return null;
   }
 }

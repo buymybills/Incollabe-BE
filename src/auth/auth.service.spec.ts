@@ -45,6 +45,8 @@ const mockModel = () => ({
   findByPk: jest.fn(),
   destroy: jest.fn(),
   bulkCreate: jest.fn(),
+  findAndCountAll: jest.fn(),
+  findOrCreate: jest.fn(),
 });
 
 const mockRedisService = {
@@ -326,7 +328,7 @@ describe('AuthService', () => {
       redisService.get.mockResolvedValue('1'); // Cooldown active
 
       await expect(service.requestOtp(requestOtpDto)).rejects.toThrow(
-        'Please wait before requesting another OTP',
+        'Please wait for 60 sec before requesting another OTP',
       );
     });
   });
@@ -898,6 +900,225 @@ describe('AuthService', () => {
 
       // Mock the brand OTP verification flow would detect inactive account and reactivate
       expect(mockBrand.isActive).toBe(false);
+    });
+  });
+
+  describe('searchUsers', () => {
+    it('should search and return influencers only', async () => {
+      const mockInfluencers = [
+        {
+          id: 1,
+          name: 'Test Influencer',
+          username: 'testinfluencer',
+          profileImage: 'https://example.com/image.jpg',
+          cityId: 1,
+          gender: 'male',
+          bio: 'Test bio',
+          isVerified: true,
+          toJSON: jest.fn().mockReturnValue({
+            id: 1,
+            name: 'Test Influencer',
+            username: 'testinfluencer',
+            profileImage: 'https://example.com/image.jpg',
+            cityId: 1,
+            gender: 'male',
+            bio: 'Test bio',
+            isVerified: true,
+          }),
+        },
+      ];
+
+      influencerModel.findAndCountAll.mockResolvedValue({
+        rows: mockInfluencers,
+        count: 1,
+      });
+
+      const result = await service.searchUsers({
+        search: 'test',
+        type: 'INFLUENCER',
+        page: 1,
+        limit: 20,
+      });
+
+      expect(result.influencers).toHaveLength(1);
+      expect(result.influencers[0].userType).toBe('influencer');
+      expect(result.brands).toHaveLength(0);
+      expect(result.total).toBe(1);
+      expect(result.totalPages).toBe(1);
+    });
+
+    it('should search and return brands only', async () => {
+      const mockBrands = [
+        {
+          id: 1,
+          brandName: 'Test Brand',
+          username: 'testbrand',
+          profileImage: 'https://example.com/brand.jpg',
+          headquarterCityId: 1,
+          brandBio: 'Test brand bio',
+          isVerified: true,
+          toJSON: jest.fn().mockReturnValue({
+            id: 1,
+            brandName: 'Test Brand',
+            username: 'testbrand',
+            profileImage: 'https://example.com/brand.jpg',
+            headquarterCityId: 1,
+            brandBio: 'Test brand bio',
+            isVerified: true,
+          }),
+        },
+      ];
+
+      brandModel.findAndCountAll.mockResolvedValue({
+        rows: mockBrands,
+        count: 1,
+      });
+
+      const result = await service.searchUsers({
+        search: 'test',
+        type: 'BRAND',
+        page: 1,
+        limit: 20,
+      });
+
+      expect(result.brands).toHaveLength(1);
+      expect(result.brands[0].userType).toBe('brand');
+      expect(result.influencers).toHaveLength(0);
+      expect(result.total).toBe(1);
+      expect(result.totalPages).toBe(1);
+    });
+
+    it('should search and return both influencers and brands', async () => {
+      const mockInfluencers = [
+        {
+          id: 1,
+          name: 'Test Influencer',
+          username: 'testinfluencer',
+          profileImage: 'https://example.com/image.jpg',
+          cityId: 1,
+          gender: 'male',
+          bio: 'Test bio',
+          isVerified: true,
+          toJSON: jest.fn().mockReturnValue({
+            id: 1,
+            name: 'Test Influencer',
+            username: 'testinfluencer',
+            profileImage: 'https://example.com/image.jpg',
+            cityId: 1,
+            gender: 'male',
+            bio: 'Test bio',
+            isVerified: true,
+          }),
+        },
+      ];
+
+      const mockBrands = [
+        {
+          id: 1,
+          brandName: 'Test Brand',
+          username: 'testbrand',
+          profileImage: 'https://example.com/brand.jpg',
+          headquarterCityId: 1,
+          brandBio: 'Test brand bio',
+          isVerified: true,
+          toJSON: jest.fn().mockReturnValue({
+            id: 1,
+            brandName: 'Test Brand',
+            username: 'testbrand',
+            profileImage: 'https://example.com/brand.jpg',
+            headquarterCityId: 1,
+            brandBio: 'Test brand bio',
+            isVerified: true,
+          }),
+        },
+      ];
+
+      influencerModel.findAndCountAll.mockResolvedValue({
+        rows: mockInfluencers,
+        count: 1,
+      });
+
+      brandModel.findAndCountAll.mockResolvedValue({
+        rows: mockBrands,
+        count: 1,
+      });
+
+      const result = await service.searchUsers({
+        search: 'test',
+        type: 'ALL',
+        page: 1,
+        limit: 20,
+      });
+
+      expect(result.influencers).toHaveLength(1);
+      expect(result.brands).toHaveLength(1);
+      expect(result.total).toBe(2);
+      expect(result.totalPages).toBe(1);
+    });
+
+    it('should handle pagination correctly', async () => {
+      const mockInfluencers = Array.from({ length: 10 }, (_, i) => ({
+        id: i + 1,
+        name: `Influencer ${i + 1}`,
+        username: `influencer${i + 1}`,
+        profileImage: null,
+        cityId: 1,
+        gender: 'male',
+        bio: null,
+        isVerified: false,
+        toJSON: jest.fn().mockReturnValue({
+          id: i + 1,
+          name: `Influencer ${i + 1}`,
+          username: `influencer${i + 1}`,
+          profileImage: null,
+          cityId: 1,
+          gender: 'male',
+          bio: null,
+          isVerified: false,
+        }),
+      }));
+
+      influencerModel.findAndCountAll.mockResolvedValue({
+        rows: mockInfluencers,
+        count: 50,
+      });
+
+      const result = await service.searchUsers({
+        search: 'influencer',
+        type: 'INFLUENCER',
+        page: 2,
+        limit: 10,
+      });
+
+      expect(result.influencers).toHaveLength(10);
+      expect(result.total).toBe(50);
+      expect(result.page).toBe(2);
+      expect(result.limit).toBe(10);
+      expect(result.totalPages).toBe(5);
+    });
+
+    it('should return empty results when no matches found', async () => {
+      influencerModel.findAndCountAll.mockResolvedValue({
+        rows: [],
+        count: 0,
+      });
+
+      brandModel.findAndCountAll.mockResolvedValue({
+        rows: [],
+        count: 0,
+      });
+
+      const result = await service.searchUsers({
+        search: 'nonexistent',
+        type: 'ALL',
+        page: 1,
+        limit: 20,
+      });
+
+      expect(result.influencers).toHaveLength(0);
+      expect(result.brands).toHaveLength(0);
+      expect(result.total).toBe(0);
+      expect(result.totalPages).toBe(0);
     });
   });
 });

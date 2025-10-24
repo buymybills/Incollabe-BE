@@ -57,6 +57,7 @@ export interface BrandCreationAttributes {
   isProfileCompleted?: boolean;
   isActive?: boolean;
   isVerified?: boolean;
+  isTopBrand?: boolean;
 }
 
 @Table({ tableName: 'brands', timestamps: true, paranoid: true })
@@ -278,6 +279,12 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
     defaultValue: false,
   })
   declare isVerified: boolean;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+  })
+  declare isTopBrand: boolean;
 
   @BelongsToMany(() => Niche, () => BrandNiche)
   declare niches: Niche[];

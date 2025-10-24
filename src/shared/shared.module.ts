@@ -12,6 +12,9 @@ import { OtpRepository } from './repositories/otp.repository';
 import { LoggerService } from './services/logger.service';
 import { CustomNicheService } from './services/custom-niche.service';
 import { EncryptionService } from './services/encryption.service';
+import { SearchService } from './services/search.service';
+import { SearchController } from './controllers/search.controller';
+import { IsValidUsernameConstraint } from './validators/is-valid-username.validator';
 import { Otp } from '../auth/model/otp.model';
 import { CustomNiche } from '../auth/model/custom-niche.model';
 import { Influencer } from '../auth/model/influencer.model';
@@ -23,6 +26,7 @@ import { Niche } from '../auth/model/niche.model';
     ConfigModule,
     SequelizeModule.forFeature([Otp, CustomNiche, Influencer, Brand, Niche]),
   ],
+  controllers: [SearchController],
   providers: [
     SmsService,
     S3Service,
@@ -35,6 +39,8 @@ import { Niche } from '../auth/model/niche.model';
     LoggerService,
     CustomNicheService,
     EncryptionService,
+    SearchService,
+    IsValidUsernameConstraint,
   ],
   exports: [
     SmsService,
@@ -46,8 +52,10 @@ import { Niche } from '../auth/model/niche.model';
     OtpService,
     OtpRepository,
     LoggerService,
+    SearchService,
     CustomNicheService,
     EncryptionService,
+    IsValidUsernameConstraint,
   ],
 })
 export class SharedModule {}

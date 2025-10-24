@@ -11,6 +11,7 @@ import {
   UploadedFiles,
   SetMetadata,
   BadRequestException,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -248,14 +249,28 @@ export class BrandController {
   }
 
   @Get('profile/:id')
-  @ApiOperation({ summary: 'Get brand profile by ID (public)' })
+  @ApiOperation({
+    summary:
+      'Get brand profile by ID (public). If authenticated, includes isFollowing flag.',
+  })
   @ApiResponse({
     status: 200,
     description: 'Brand profile retrieved successfully',
   })
   @ApiResponse({ status: 404, description: 'Brand not found' })
-  async getBrandProfileById(@Param('id', ParseIntPipe) brandId: number) {
-    const profile = await this.brandService.getBrandProfile(brandId);
+  async getBrandProfileById(
+    @Param('id', ParseIntPipe) brandId: number,
+    @Req() req?: RequestWithUser,
+  ) {
+    // Pass current user info if authenticated
+    const currentUserId = req?.user?.id;
+    const currentUserType = req?.user?.userType;
+
+    const profile = await this.brandService.getBrandProfile(
+      brandId,
+      currentUserId,
+      currentUserType,
+    );
 
     // Return public fields only for public access
     return {
@@ -268,7 +283,11 @@ export class BrandController {
       websiteUrl: profile.companyInfo.websiteUrl,
       socialLinks: profile.socialLinks,
       niches: profile.niches,
+      customNiches: profile.customNiches,
       isActive: profile.isActive,
+      isFollowing: profile.isFollowing,
+      metrics: profile.metrics,
+      userType: 'brand' as const,
     };
   }
 
@@ -317,6 +336,11 @@ export class BrandController {
               id: { type: 'number', example: 1 },
               name: { type: 'string', example: 'Mumbai' },
               state: { type: 'string', example: 'Maharashtra' },
+              tier: {
+                type: 'number',
+                example: 1,
+                description: 'City tier (1, 2, or 3)',
+              },
             },
           },
         },
@@ -346,5 +370,24 @@ export class BrandController {
   })
   async getFoundedYears() {
     return await this.brandService.getFoundedYearsList();
+  }
+
+  @Get('top-brands')
+  @Public()
+  @ApiOperation({
+    summary: 'Get top brands',
+    description: 'Fetch list of top brands curated by admin (public endpoint)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Top brands fetched successfully',
+  })
+  async getTopBrands(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const parsedLimit = limit ? parseInt(limit, 10) : 10;
+    const parsedOffset = offset ? parseInt(offset, 10) : 0;
+    return this.brandService.getTopBrands(parsedLimit, parsedOffset);
   }
 }

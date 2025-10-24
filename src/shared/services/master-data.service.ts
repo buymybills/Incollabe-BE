@@ -30,7 +30,7 @@ export class MasterDataService {
         isActive: true,
       },
       order: [['name', 'ASC']],
-      attributes: ['id', 'name', 'state'],
+      attributes: ['id', 'name', 'state', 'tier'],
       include: [
         {
           model: Country,
