@@ -121,8 +121,9 @@ describe('BrandController', () => {
         brandBio: 'Test brand bio',
         profileHeadline: 'Test brand headline',
         isActive: true,
-        isPhoneVerified: false,
         isEmailVerified: true,
+        isTopBrand: false,
+        userType: 'brand' as const,
         profileCompletion: {
           completionPercentage: 75,
           missingFields: ['brandBio'],
@@ -195,6 +196,13 @@ describe('BrandController', () => {
             description: 'Fashion and clothing',
           },
         ],
+        customNiches: [],
+        metrics: {
+          followers: 0,
+          following: 0,
+          posts: 0,
+          campaigns: 0,
+        },
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };

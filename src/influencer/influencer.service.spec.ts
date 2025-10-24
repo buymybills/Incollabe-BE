@@ -305,7 +305,6 @@ describe('InfluencerService', () => {
 
   describe('updateInfluencerProfile', () => {
     const updateDto: UpdateInfluencerProfileDto = {
-      name: 'Updated Name',
       bio: 'Updated bio with more content',
       profileHeadline: 'Updated headline',
       cityId: 2,
@@ -728,7 +727,7 @@ describe('InfluencerService', () => {
   describe('Error Handling and Edge Cases', () => {
     it('should handle database transaction failures', async () => {
       const updateDto: UpdateInfluencerProfileDto = {
-        name: 'Updated Name',
+        bio: 'Updated bio',
       };
 
       mockInfluencerRepository.findById.mockResolvedValue({
@@ -745,7 +744,7 @@ describe('InfluencerService', () => {
     });
 
     it('should handle file cleanup on partial upload failures', async () => {
-      const updateDto: UpdateInfluencerProfileDto = { name: 'Test' };
+      const updateDto: UpdateInfluencerProfileDto = { bio: 'Test bio' };
       const mockFiles = {
         profileImage: [
           { buffer: Buffer.from('image'), originalname: 'profile.jpg' },
@@ -805,7 +804,7 @@ describe('InfluencerService', () => {
         ],
       };
 
-      const updateDto: UpdateInfluencerProfileDto = { name: 'Test' };
+      const updateDto: UpdateInfluencerProfileDto = { bio: 'Test bio' };
 
       mockInfluencerRepository.findById.mockResolvedValue({
         id: 1,

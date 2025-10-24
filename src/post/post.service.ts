@@ -20,7 +20,7 @@ import { InfluencerNiche } from '../auth/model/influencer-niche.model';
 import { BrandNiche } from '../brand/model/brand-niche.model';
 import { NotificationService } from '../shared/notification.service';
 import { S3Service } from '../shared/s3.service';
-import { Op } from 'sequelize';
+import { Op, Sequelize } from 'sequelize';
 
 @Injectable()
 export class PostService {
@@ -325,8 +325,10 @@ export class PostService {
 
     let whereCondition: any = { isActive: true };
     let includeCondition: any[] = [];
+    let orderCondition: any[] = [];
 
     if (userType && userId) {
+      // Viewing specific user's posts - no priority needed
       if (userType === 'influencer') {
         whereCondition.influencerId = userId;
         whereCondition.userType = UserType.INFLUENCER;
@@ -334,7 +336,12 @@ export class PostService {
         whereCondition.brandId = userId;
         whereCondition.userType = UserType.BRAND;
       }
+      orderCondition = [
+        ['createdAt', 'DESC'],
+        ['likesCount', 'DESC'],
+      ];
     } else if (currentUserId && currentUserType) {
+      // Feed generation with priority ordering
       const userNiches = await this.getUserNiches(
         currentUserType,
         currentUserId,
@@ -344,53 +351,34 @@ export class PostService {
         currentUserId,
       );
 
-      const relevantUserIds = await this.getRelevantUserIds(
+      // Get users with matching niches (separate from following)
+      const nicheMatchingUserIds = await this.getNicheMatchingUserIds(
         userNiches,
+      );
+
+      // Build priority-based ordering using CASE statement
+      const priorityCase = this.buildPriorityCase(
+        currentUserType,
+        currentUserId,
+        nicheMatchingUserIds,
         followingUsers,
       );
 
-      if (
-        relevantUserIds.influencerIds.length > 0 ||
-        relevantUserIds.brandIds.length > 0
-      ) {
-        whereCondition = {
-          ...whereCondition,
-          [Op.or]: [
-            ...(relevantUserIds.influencerIds.length > 0
-              ? [
-                  {
-                    userType: UserType.INFLUENCER,
-                    influencerId: { [Op.in]: relevantUserIds.influencerIds },
-                  },
-                ]
-              : []),
-            ...(relevantUserIds.brandIds.length > 0
-              ? [
-                  {
-                    userType: UserType.BRAND,
-                    brandId: { [Op.in]: relevantUserIds.brandIds },
-                  },
-                ]
-              : []),
-            ...(currentUserType === UserType.INFLUENCER
-              ? [
-                  {
-                    userType: UserType.INFLUENCER,
-                    influencerId: currentUserId,
-                  },
-                ]
-              : []),
-            ...(currentUserType === UserType.BRAND
-              ? [
-                  {
-                    userType: UserType.BRAND,
-                    brandId: currentUserId,
-                  },
-                ]
-              : []),
-          ],
-        };
-      }
+      // Order by priority first, then by creation date
+      orderCondition = [
+        Sequelize.literal(priorityCase),
+        ['createdAt', 'DESC'],
+        ['likesCount', 'DESC'],
+      ];
+
+      // No filtering - show all active posts
+      // Priority ordering will handle the feed relevance
+    } else {
+      // Public feed - no user context
+      orderCondition = [
+        ['createdAt', 'DESC'],
+        ['likesCount', 'DESC'],
+      ];
     }
 
     includeCondition = [
@@ -421,10 +409,7 @@ export class PostService {
     const { count, rows: posts } = await this.postModel.findAndCountAll({
       where: whereCondition,
       include: includeCondition,
-      order: [
-        ['createdAt', 'DESC'],
-        ['likesCount', 'DESC'],
-      ],
+      order: orderCondition,
       limit,
       offset,
       distinct: true,
@@ -573,6 +558,116 @@ export class PostService {
       influencerIds: Array.from(relevantInfluencerIds),
       brandIds: Array.from(relevantBrandIds),
     };
+  }
+
+  private async getNicheMatchingUserIds(
+    userNiches: number[],
+  ): Promise<{ influencerIds: number[]; brandIds: number[] }> {
+    const influencerIds: number[] = [];
+    const brandIds: number[] = [];
+
+    if (userNiches.length > 0) {
+      const influencersWithSimilarNiches = await InfluencerNiche.findAll({
+        where: { nicheId: { [Op.in]: userNiches } },
+        attributes: ['influencerId'],
+      });
+
+      const brandsWithSimilarNiches = await BrandNiche.findAll({
+        where: { nicheId: { [Op.in]: userNiches } },
+        attributes: ['brandId'],
+      });
+
+      influencersWithSimilarNiches.forEach((item) => {
+        if (!influencerIds.includes(item.influencerId)) {
+          influencerIds.push(item.influencerId);
+        }
+      });
+
+      brandsWithSimilarNiches.forEach((item) => {
+        if (!brandIds.includes(item.brandId)) {
+          brandIds.push(item.brandId);
+        }
+      });
+    }
+
+    return { influencerIds, brandIds };
+  }
+
+  private buildPriorityCase(
+    currentUserType: UserType,
+    currentUserId: number,
+    nicheMatchingUsers: { influencerIds: number[]; brandIds: number[] },
+    followingUsers: { influencerIds: number[]; brandIds: number[] },
+  ): string {
+    // Build CASE statement for priority ordering (Instagram-style)
+    // P1 (Priority 1): Recent own posts (posted within last 10 minutes) - appears on top temporarily
+    // P2 (Priority 2): Same niche AND followed profiles (intersection)
+    // P3 (Priority 3): Same niche but NOT followed (new profiles to discover)
+    // P4 (Priority 4): Other posts from followed profiles (any niche)
+    // P5 (Priority 5): All other posts (not following, different niche)
+    // P6 (Priority 6): Old own posts (older than 10 minutes)
+
+    const nicheInfluencers = nicheMatchingUsers.influencerIds.join(',') || '0';
+    const nicheBrands = nicheMatchingUsers.brandIds.join(',') || '0';
+    const followingInfluencers = followingUsers.influencerIds.join(',') || '0';
+    const followingBrands = followingUsers.brandIds.join(',') || '0';
+
+    const isInfluencer = currentUserType === UserType.INFLUENCER;
+
+    // Own post check
+    const ownUserTypeCheck = isInfluencer
+      ? `"Post"."userType" = 'influencer' AND "Post"."influencerId" = ${currentUserId}`
+      : `"Post"."userType" = 'brand' AND "Post"."brandId" = ${currentUserId}`;
+
+    // Recent own posts (within last 10 minutes)
+    const recentOwnPostCheck = `
+      ${ownUserTypeCheck} AND
+      "Post"."createdAt" > NOW() - INTERVAL '10 minutes'
+    `;
+
+    // Old own posts (older than 10 minutes)
+    const oldOwnPostCheck = `
+      ${ownUserTypeCheck} AND
+      "Post"."createdAt" <= NOW() - INTERVAL '10 minutes'
+    `;
+
+    // Check if user is followed
+    const isFollowedCheck = `
+      ("Post"."userType" = 'influencer' AND "Post"."influencerId" IN (${followingInfluencers})) OR
+      ("Post"."userType" = 'brand' AND "Post"."brandId" IN (${followingBrands}))
+    `;
+
+    // Check if post matches niche
+    const nicheMatchCheck = `
+      ("Post"."userType" = 'influencer' AND "Post"."influencerId" IN (${nicheInfluencers})) OR
+      ("Post"."userType" = 'brand' AND "Post"."brandId" IN (${nicheBrands}))
+    `;
+
+    // P2: Same niche AND followed (intersection)
+    const nicheAndFollowedCheck = `
+      (${nicheMatchCheck}) AND (${isFollowedCheck})
+    `;
+
+    // P3: Same niche but NOT followed
+    const nicheButNotFollowedCheck = `
+      (${nicheMatchCheck}) AND NOT (${isFollowedCheck}) AND NOT (${ownUserTypeCheck})
+    `;
+
+    // P4: Followed but not matching niche
+    const followedButNotNicheCheck = `
+      (${isFollowedCheck}) AND NOT (${nicheMatchCheck}) AND NOT (${ownUserTypeCheck})
+    `;
+
+    return `
+      CASE
+        WHEN ${recentOwnPostCheck} THEN 1
+        WHEN ${nicheAndFollowedCheck} THEN 2
+        WHEN ${nicheButNotFollowedCheck} THEN 3
+        WHEN ${followedButNotNicheCheck} THEN 4
+        WHEN ${oldOwnPostCheck} THEN 6
+        ELSE 5
+      END
+    `;
   }
 
   async getPostById(

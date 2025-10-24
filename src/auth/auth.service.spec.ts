@@ -381,7 +381,6 @@ describe('AuthService', () => {
     it('should create a new brand successfully', async () => {
       const brandSignupDto: BrandSignupDto = {
         email: 'test@brand.com',
-        phone: '+919876543210',
         password: 'Test123!',
         nicheIds: [1, 2],
       };
@@ -419,7 +418,6 @@ describe('AuthService', () => {
     it('should throw ConflictException if email already exists', async () => {
       const brandSignupDto: BrandSignupDto = {
         email: 'existing@brand.com',
-        phone: '+919876543210',
         password: 'Test123!',
         nicheIds: [1, 2],
       };
