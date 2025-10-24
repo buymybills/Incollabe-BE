@@ -571,6 +571,51 @@ export class InfluencerController {
   @ApiResponse({
     status: 200,
     description: 'Campaign details retrieved successfully',
+    schema: {
+      example: {
+        id: 1,
+        name: 'Summer Fashion Campaign',
+        description: 'Promote our new summer collection',
+        status: 'active',
+        type: 'paid',
+        category: 'Fashion',
+        startDate: '2024-01-01',
+        endDate: '2024-03-31',
+        applicationDeadline: '2024-01-15',
+        deliverableFormat: 'Photo and Video',
+        guidelines: 'Follow brand guidelines...',
+        isActive: true,
+        brand: {
+          id: 1,
+          brandName: 'Fashion Brand',
+          profileImage: 'brand.jpg',
+          websiteUrl: 'https://example.com',
+        },
+        campaignCities: [
+          {
+            city: {
+              id: 1,
+              name: 'Mumbai',
+              tier: 1,
+            },
+          },
+        ],
+        campaignDeliverables: [
+          {
+            platform: 'instagram',
+            type: 'instagram_post',
+            budget: 2000,
+            quantity: 3,
+          },
+        ],
+        hasApplied: false,
+        applicationStatus: null,
+        appliedAt: null,
+        totalApplications: 25,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      },
+    },
   })
   @ApiResponse({ status: 404, description: 'Campaign not found' })
   async getCampaignDetails(

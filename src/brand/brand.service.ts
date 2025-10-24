@@ -237,6 +237,9 @@ export class BrandService {
       // Verification status
       verificationStatus,
 
+      // Top brand status
+      isTopBrand: brand.isTopBrand,
+
       createdAt: brand.createdAt.toISOString(),
       updatedAt: brand.updatedAt.toISOString(),
     };

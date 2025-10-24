@@ -1266,6 +1266,22 @@ export class InfluencerService {
         status: CampaignStatus.ACTIVE,
         isActive: true,
       },
+      attributes: [
+        'id',
+        'name',
+        'description',
+        'status',
+        'type',
+        'category',
+        'startDate',
+        'endDate',
+        'applicationDeadline',
+        'deliverableFormat',
+        'guidelines',
+        'isActive',
+        'createdAt',
+        'updatedAt',
+      ],
       include: [
         {
           model: Brand,

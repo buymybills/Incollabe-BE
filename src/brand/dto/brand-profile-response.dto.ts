@@ -268,6 +268,12 @@ export class BrandProfileResponseDto {
     description: string;
   } | null;
 
+  @ApiProperty({
+    description: 'Whether this brand is featured as a top brand',
+    example: false,
+  })
+  isTopBrand: boolean;
+
   @ApiProperty({ description: 'User type', example: 'brand' })
   userType: 'brand';
 
