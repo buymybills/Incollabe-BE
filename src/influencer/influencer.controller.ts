@@ -579,11 +579,18 @@ export class InfluencerController {
         status: 'active',
         type: 'paid',
         category: 'Fashion',
-        startDate: '2024-01-01',
-        endDate: '2024-03-31',
-        applicationDeadline: '2024-01-15',
         deliverableFormat: 'Photo and Video',
-        guidelines: 'Follow brand guidelines...',
+        isInviteOnly: false,
+        isPanIndia: true,
+        minAge: 18,
+        maxAge: 35,
+        isOpenToAllAges: false,
+        genderPreferences: ['female', 'non-binary'],
+        isOpenToAllGenders: false,
+        nicheIds: [1, 2, 5],
+        customInfluencerRequirements: 'Must have fashion portfolio',
+        performanceExpectations: 'Minimum 5% engagement rate',
+        brandSupport: 'Content review and feedback provided',
         isActive: true,
         brand: {
           id: 1,
@@ -591,7 +598,7 @@ export class InfluencerController {
           profileImage: 'brand.jpg',
           websiteUrl: 'https://example.com',
         },
-        campaignCities: [
+        cities: [
           {
             city: {
               id: 1,
@@ -600,7 +607,7 @@ export class InfluencerController {
             },
           },
         ],
-        campaignDeliverables: [
+        deliverables: [
           {
             platform: 'instagram',
             type: 'instagram_post',
