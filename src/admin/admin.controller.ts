@@ -27,6 +27,7 @@ import { AdminAuthService } from './admin-auth.service';
 import { ProfileReviewService } from './profile-review.service';
 import { AdminCampaignService } from './services/admin-campaign.service';
 import { InfluencerScoringService } from './services/influencer-scoring.service';
+import { DashboardStatsService } from './services/dashboard-stats.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import type { RequestWithAdmin } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
@@ -62,6 +63,11 @@ import { GetTopInfluencersDto } from './dto/get-top-influencers.dto';
 import { GetInfluencersDto } from './dto/get-influencers.dto';
 import { GetBrandsDto } from './dto/get-brands.dto';
 import { TopInfluencersResponseDto } from './dto/top-influencer-response.dto';
+import {
+  DashboardRequestDto,
+  MainDashboardResponseDto,
+  InfluencerDashboardResponseDto,
+} from './dto/admin-dashboard.dto';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -71,6 +77,7 @@ export class AdminController {
     private readonly profileReviewService: ProfileReviewService,
     private readonly adminCampaignService: AdminCampaignService,
     private readonly influencerScoringService: InfluencerScoringService,
+    private readonly dashboardStatsService: DashboardStatsService,
   ) {}
 
   @Post('login')
@@ -921,6 +928,48 @@ export class AdminController {
         page,
         limit,
       },
+    );
+  }
+
+  @Get('dashboard/main')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get main dashboard statistics',
+    description:
+      'Get comprehensive statistics for the main admin dashboard including influencers, brands, campaigns metrics with percentage changes vs last month, and lists of top influencers, top brands, and top campaigns.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Main dashboard statistics retrieved successfully',
+    type: MainDashboardResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getMainDashboardStats() {
+    return await this.dashboardStatsService.getMainDashboardStats();
+  }
+
+  @Get('dashboard/influencers')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get influencer dashboard statistics',
+    description:
+      'Get detailed influencer analytics including city presence, city distribution, daily active influencers time series, and niche distribution. Supports different time frames for the chart data.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Influencer dashboard statistics retrieved successfully',
+    type: InfluencerDashboardResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getInfluencerDashboardStats(@Query() requestDto: DashboardRequestDto) {
+    return await this.dashboardStatsService.getInfluencerDashboardStats(
+      requestDto.timeFrame,
     );
   }
 }

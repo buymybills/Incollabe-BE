@@ -3,6 +3,8 @@ import { AdminController } from './admin.controller';
 import { AdminAuthService } from './admin-auth.service';
 import { ProfileReviewService } from './profile-review.service';
 import { AdminCampaignService } from './services/admin-campaign.service';
+import { InfluencerScoringService } from './services/influencer-scoring.service';
+import { DashboardStatsService } from './services/dashboard-stats.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { AdminLoginDto } from './dto/admin-login.dto';
@@ -37,6 +39,16 @@ const mockAdminCampaignService = {
   getCampaignApplicationsWithAI: jest.fn(),
 };
 
+const mockInfluencerScoringService = {
+  getTopInfluencers: jest.fn(),
+  getInfluencers: jest.fn(),
+};
+
+const mockDashboardStatsService = {
+  getMainDashboardStats: jest.fn(),
+  getInfluencerDashboardStats: jest.fn(),
+};
+
 const mockAdminAuthGuard = {
   canActivate: jest.fn(() => true),
 };
@@ -65,6 +77,14 @@ describe('AdminController', () => {
         {
           provide: AdminCampaignService,
           useValue: mockAdminCampaignService,
+        },
+        {
+          provide: InfluencerScoringService,
+          useValue: mockInfluencerScoringService,
+        },
+        {
+          provide: DashboardStatsService,
+          useValue: mockDashboardStatsService,
         },
       ],
     })

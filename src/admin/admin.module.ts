@@ -7,6 +7,7 @@ import { ProfileReviewService } from './profile-review.service';
 import { AdminCampaignService } from './services/admin-campaign.service';
 import { AIScoringService } from './services/ai-scoring.service';
 import { InfluencerScoringService } from './services/influencer-scoring.service';
+import { DashboardStatsService } from './services/dashboard-stats.service';
 
 import { Admin } from './models/admin.model';
 import { ProfileReview } from './models/profile-review.model';
@@ -59,6 +60,7 @@ import { RolesGuard } from './guards/roles.guard';
     AdminCampaignService,
     AIScoringService,
     InfluencerScoringService,
+    DashboardStatsService,
     AdminAuthGuard,
     RolesGuard,
   ],
