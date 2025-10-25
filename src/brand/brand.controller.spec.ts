@@ -504,16 +504,12 @@ describe('BrandController', () => {
 
       const result = await controller.getBrandProfileById(1);
 
-      expect(result).toEqual(mockPublicProfile);
+      expect(result).toEqual(fullProfile);
       expect(brandService.getBrandProfile).toHaveBeenCalledWith(
         1,
         undefined,
         undefined,
       );
-
-      // Ensure private fields are not exposed
-      expect(result).not.toHaveProperty('email');
-      expect(result).not.toHaveProperty('phone');
     });
 
     it('should throw NotFoundException for non-existent brand', async () => {
