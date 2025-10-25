@@ -22,6 +22,11 @@ import {
 import { CampaignDeliverable } from '../campaign/models/campaign-deliverable.model';
 import { CampaignCity } from '../campaign/models/campaign-city.model';
 import {
+  ProfileReview,
+  ReviewStatus,
+  ProfileType,
+} from './models/profile-review.model';
+import {
   AdminSearchDto,
   UserType,
   VerificationStatus,
@@ -35,6 +40,7 @@ import {
   TopBrandsSortBy,
   TopBrandsTimeframe,
 } from './dto/top-brands.dto';
+import { GetBrandsDto, BrandProfileFilter } from './dto/get-brands.dto';
 import {
   TopCampaignsRequestDto,
   TopCampaignsResponseDto,
@@ -93,6 +99,8 @@ export class AdminAuthService {
     private readonly campaignDeliverableModel: typeof CampaignDeliverable,
     @InjectModel(CampaignCity)
     private readonly campaignCityModel: typeof CampaignCity,
+    @InjectModel(ProfileReview)
+    private readonly profileReviewModel: typeof ProfileReview,
     private readonly jwtService: JwtService,
   ) {}
 
@@ -879,6 +887,221 @@ export class AdminAuthService {
     };
   }
 
+  /**
+   * Get brands with different profile filters
+   * - allProfile: All profiles ordered by createdAt asc
+   * - topProfile: Top profiles using scoring metrics (same as getTopBrands)
+   * - verifiedProfile: Verified profiles ordered by createdAt asc
+   * - unverifiedProfile: Unverified profiles ordered by createdAt asc
+   */
+  async getBrands(filters: GetBrandsDto): Promise<TopBrandsResponseDto> {
+    const {
+      profileFilter,
+      sortBy,
+      minCampaigns,
+      minSelectedInfluencers,
+      minCompositeScore,
+      page = 1,
+      limit = 20,
+    } = filters;
+
+    // For topProfile, use the existing scoring logic
+    if (profileFilter === BrandProfileFilter.TOP_PROFILE) {
+      const topBrandsRequest: TopBrandsRequestDto = {
+        sortBy: (sortBy as unknown as TopBrandsSortBy) || TopBrandsSortBy.COMPOSITE,
+        timeframe: TopBrandsTimeframe.ALL_TIME,
+        limit: limit,
+      };
+      const result = await this.getTopBrands(topBrandsRequest);
+
+      // Apply additional filters if provided
+      let filteredBrands = result.brands;
+
+      if (minCampaigns !== undefined) {
+        filteredBrands = filteredBrands.filter(
+          (b) => b.metrics.totalCampaigns >= minCampaigns,
+        );
+      }
+
+      if (minSelectedInfluencers !== undefined) {
+        filteredBrands = filteredBrands.filter(
+          (b) => b.metrics.selectedInfluencersCount >= minSelectedInfluencers,
+        );
+      }
+
+      if (minCompositeScore !== undefined) {
+        filteredBrands = filteredBrands.filter(
+          (b) => b.metrics.compositeScore >= minCompositeScore,
+        );
+      }
+
+      // Apply pagination
+      const total = filteredBrands.length;
+      const totalPages = Math.ceil(total / limit);
+      const offset = (page - 1) * limit;
+      const paginatedBrands = filteredBrands.slice(offset, offset + limit);
+
+      return {
+        brands: paginatedBrands,
+        total,
+        sortBy: (sortBy as unknown as TopBrandsSortBy) || TopBrandsSortBy.COMPOSITE,
+        timeframe: TopBrandsTimeframe.ALL_TIME,
+        limit,
+      };
+    }
+
+    // For other filters, build appropriate where conditions
+    const whereConditions: any = {
+      isProfileCompleted: true,
+      isActive: true,
+    };
+
+    // Apply profile filter
+    switch (profileFilter) {
+      case BrandProfileFilter.VERIFIED_PROFILE:
+        whereConditions.isVerified = true;
+        break;
+      case BrandProfileFilter.UNVERIFIED_PROFILE:
+        whereConditions.isVerified = false;
+        break;
+      case BrandProfileFilter.ALL_PROFILE:
+      default:
+        // No additional filter for all profiles
+        break;
+    }
+
+    // Fetch brands ordered by createdAt asc
+    const allBrands = await this.brandModel.findAll({
+      where: whereConditions,
+      attributes: [
+        'id',
+        'brandName',
+        'username',
+        'email',
+        'profileImage',
+        'brandBio',
+        'websiteUrl',
+        'isVerified',
+        'createdAt',
+      ],
+      include: [
+        {
+          model: this.campaignModel,
+          as: 'campaigns',
+          attributes: ['id', 'nicheIds', 'status'],
+          where: {
+            status: { [Op.ne]: CampaignStatus.CANCELLED },
+          },
+          required: false,
+          include: [
+            {
+              model: this.campaignDeliverableModel,
+              as: 'deliverables',
+              attributes: ['budget'],
+              required: false,
+            },
+            {
+              model: this.campaignApplicationModel,
+              as: 'applications',
+              attributes: ['status'],
+              where: {
+                status: ApplicationStatus.SELECTED,
+              },
+              required: false,
+            },
+          ],
+        },
+      ],
+      order: [['createdAt', 'ASC']], // Order by creation date ascending
+    });
+
+    // Map brands and calculate metrics
+    const mappedBrands = allBrands
+      .map((brand) => {
+        const campaigns = (brand.get('campaigns') as any[]) || [];
+
+        // Calculate metrics
+        const totalCampaigns = campaigns.length;
+
+        const allNicheIds = campaigns
+          .flatMap((c) => c.nicheIds || [])
+          .filter((id) => id !== null && id !== undefined);
+        const uniqueNichesCount = new Set(allNicheIds).size;
+
+        const selectedInfluencersCount = campaigns.reduce((sum, campaign) => {
+          const applications = campaign.applications || [];
+          return sum + applications.length;
+        }, 0);
+
+        let totalBudget = 0;
+        let campaignsWithBudget = 0;
+        campaigns.forEach((campaign) => {
+          const deliverables = campaign.deliverables || [];
+          if (deliverables.length > 0) {
+            const campaignBudget = deliverables.reduce(
+              (sum, d) => sum + (parseFloat(d.budget as any) || 0),
+              0,
+            );
+            if (campaignBudget > 0) {
+              totalBudget += campaignBudget;
+              campaignsWithBudget++;
+            }
+          }
+        });
+        const averagePayout =
+          campaignsWithBudget > 0 ? totalBudget / campaignsWithBudget : 0;
+
+        // Apply filters
+        if (minCampaigns !== undefined && totalCampaigns < minCampaigns) {
+          return null;
+        }
+        if (
+          minSelectedInfluencers !== undefined &&
+          selectedInfluencersCount < minSelectedInfluencers
+        ) {
+          return null;
+        }
+
+        // For non-top profiles, we don't calculate composite score
+        // Set it to 0 for consistency
+        const brandDto: TopBrandDto = {
+          id: brand.id,
+          brandName: brand.brandName,
+          username: brand.username,
+          email: brand.email,
+          profileImage: brand.profileImage,
+          brandBio: brand.brandBio,
+          websiteUrl: brand.websiteUrl,
+          isVerified: brand.isVerified,
+          createdAt: brand.createdAt,
+          metrics: {
+            totalCampaigns,
+            uniqueNichesCount,
+            selectedInfluencersCount,
+            averagePayout: Math.round(averagePayout * 100) / 100,
+            compositeScore: 0, // Not calculated for non-top profiles
+          },
+        };
+
+        return brandDto;
+      })
+      .filter((brand): brand is TopBrandDto => brand !== null);
+
+    // Pagination
+    const total = mappedBrands.length;
+    const totalPages = Math.ceil(total / limit);
+    const offset = (page - 1) * limit;
+    const paginatedBrands = mappedBrands.slice(offset, offset + limit);
+
+    return {
+      brands: paginatedBrands,
+      total,
+      sortBy: TopBrandsSortBy.COMPOSITE,
+      timeframe: TopBrandsTimeframe.ALL_TIME,
+      limit,
+    };
+  }
+
   async getTopCampaigns(
     requestDto: TopCampaignsRequestDto,
   ): Promise<TopCampaignsResponseDto> {
@@ -1207,6 +1430,194 @@ export class AdminAuthService {
       timeframe: timeframe || TopCampaignsTimeframe.ALL_TIME,
       statusFilter: status || TopCampaignsStatus.ALL,
       limit: limit || 10,
+    };
+  }
+
+  async getComprehensiveDashboardStats() {
+    const now = new Date();
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Get all counts in parallel
+    const [
+      // Current month counts
+      totalInfluencers,
+      totalBrands,
+      totalCampaigns,
+      verifiedInfluencers,
+      verifiedBrands,
+      unverifiedInfluencers,
+      unverifiedBrands,
+      campaignsLive,
+      campaignsCompleted,
+      influencersPendingVerification,
+      brandsPendingVerification,
+      totalCampaignApplications,
+
+      // Last month counts for comparison
+      lastMonthInfluencers,
+      lastMonthBrands,
+      lastMonthCampaigns,
+      lastMonthVerifiedInfluencers,
+      lastMonthVerifiedBrands,
+      lastMonthCampaignsLive,
+      lastMonthUnverifiedInfluencers,
+      lastMonthUnverifiedBrands,
+      lastMonthCampaignsCompleted,
+    ] = await Promise.all([
+      // Current month counts
+      this.influencerModel.count(),
+      this.brandModel.count(),
+      this.campaignModel.count(),
+      this.influencerModel.count({ where: { isVerified: true } }),
+      this.brandModel.count({ where: { isVerified: true } }),
+      this.influencerModel.count({ where: { isVerified: false } }),
+      this.brandModel.count({ where: { isVerified: false } }),
+      this.campaignModel.count({ where: { status: CampaignStatus.ACTIVE } }),
+      this.campaignModel.count({ where: { status: CampaignStatus.COMPLETED } }),
+      this.profileReviewModel.count({
+        where: {
+          profileType: ProfileType.INFLUENCER,
+          status: {
+            [Op.in]: [ReviewStatus.PENDING, ReviewStatus.UNDER_REVIEW],
+          },
+        },
+      }),
+      this.profileReviewModel.count({
+        where: {
+          profileType: ProfileType.BRAND,
+          status: {
+            [Op.in]: [ReviewStatus.PENDING, ReviewStatus.UNDER_REVIEW],
+          },
+        },
+      }),
+      this.campaignApplicationModel.count(),
+
+      // Last month counts
+      this.influencerModel.count({
+        where: {
+          createdAt: {
+            [Op.lt]: currentMonthStart,
+          },
+        },
+      }),
+      this.brandModel.count({
+        where: {
+          createdAt: {
+            [Op.lt]: currentMonthStart,
+          },
+        },
+      }),
+      this.campaignModel.count({
+        where: {
+          createdAt: {
+            [Op.lt]: currentMonthStart,
+          },
+        },
+      }),
+      this.influencerModel.count({
+        where: {
+          isVerified: true,
+          createdAt: {
+            [Op.lt]: currentMonthStart,
+          },
+        },
+      }),
+      this.brandModel.count({
+        where: {
+          isVerified: true,
+          createdAt: {
+            [Op.lt]: currentMonthStart,
+          },
+        },
+      }),
+      this.campaignModel.count({
+        where: {
+          status: CampaignStatus.ACTIVE,
+          createdAt: {
+            [Op.lt]: currentMonthStart,
+          },
+        },
+      }),
+      this.influencerModel.count({
+        where: {
+          isVerified: false,
+          createdAt: {
+            [Op.lt]: currentMonthStart,
+          },
+        },
+      }),
+      this.brandModel.count({
+        where: {
+          isVerified: false,
+          createdAt: {
+            [Op.lt]: currentMonthStart,
+          },
+        },
+      }),
+      this.campaignModel.count({
+        where: {
+          status: CampaignStatus.COMPLETED,
+          createdAt: {
+            [Op.lt]: currentMonthStart,
+          },
+        },
+      }),
+    ]);
+
+    // Helper function to calculate percentage growth
+    const calculateGrowth = (current: number, previous: number): number => {
+      if (previous === 0) return current > 0 ? 100 : 0;
+      return Math.round(((current - previous) / previous) * 100 * 10) / 10;
+    };
+
+    return {
+      totalInfluencers: {
+        count: totalInfluencers,
+        growth: calculateGrowth(totalInfluencers, lastMonthInfluencers),
+      },
+      totalBrands: {
+        count: totalBrands,
+        growth: calculateGrowth(totalBrands, lastMonthBrands),
+      },
+      totalCampaigns: {
+        count: totalCampaigns,
+        growth: calculateGrowth(totalCampaigns, lastMonthCampaigns),
+      },
+      verifiedInfluencers: {
+        count: verifiedInfluencers,
+        growth: calculateGrowth(verifiedInfluencers, lastMonthVerifiedInfluencers),
+      },
+      verifiedBrands: {
+        count: verifiedBrands,
+        growth: calculateGrowth(verifiedBrands, lastMonthVerifiedBrands),
+      },
+      campaignsLive: {
+        count: campaignsLive,
+        growth: calculateGrowth(campaignsLive, lastMonthCampaignsLive),
+      },
+      unverifiedInfluencers: {
+        count: unverifiedInfluencers,
+        growth: calculateGrowth(unverifiedInfluencers, lastMonthUnverifiedInfluencers),
+      },
+      unverifiedBrands: {
+        count: unverifiedBrands,
+        growth: calculateGrowth(unverifiedBrands, lastMonthUnverifiedBrands),
+      },
+      campaignsCompleted: {
+        count: campaignsCompleted,
+        growth: calculateGrowth(campaignsCompleted, lastMonthCampaignsCompleted),
+      },
+      influencersPendingVerification: {
+        count: influencersPendingVerification,
+      },
+      brandsPendingVerification: {
+        count: brandsPendingVerification,
+      },
+      totalCampaignApplications: {
+        count: totalCampaignApplications,
+      },
     };
   }
 }

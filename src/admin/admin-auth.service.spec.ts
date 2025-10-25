@@ -9,6 +9,11 @@ import { Niche } from '../auth/model/niche.model';
 import { Country } from '../shared/models/country.model';
 import { City } from '../shared/models/city.model';
 import { CompanyType } from '../shared/models/company-type.model';
+import { Campaign } from '../campaign/models/campaign.model';
+import { CampaignApplication } from '../campaign/models/campaign-application.model';
+import { CampaignDeliverable } from '../campaign/models/campaign-deliverable.model';
+import { CampaignCity } from '../campaign/models/campaign-city.model';
+import { ProfileReview } from './models/profile-review.model';
 import { UnauthorizedException, BadRequestException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 
@@ -56,6 +61,27 @@ const mockCompanyTypeModel = {
   findAll: jest.fn(),
 };
 
+const mockCampaignModel = {
+  findAll: jest.fn(),
+  count: jest.fn(),
+};
+
+const mockCampaignApplicationModel = {
+  count: jest.fn(),
+};
+
+const mockCampaignDeliverableModel = {
+  findAll: jest.fn(),
+};
+
+const mockCampaignCityModel = {
+  findAll: jest.fn(),
+};
+
+const mockProfileReviewModel = {
+  count: jest.fn(),
+};
+
 describe('AdminAuthService', () => {
   let service: AdminAuthService;
   let adminModel: typeof Admin;
@@ -92,6 +118,26 @@ describe('AdminAuthService', () => {
         {
           provide: getModelToken(CompanyType),
           useValue: mockCompanyTypeModel,
+        },
+        {
+          provide: getModelToken(Campaign),
+          useValue: mockCampaignModel,
+        },
+        {
+          provide: getModelToken(CampaignApplication),
+          useValue: mockCampaignApplicationModel,
+        },
+        {
+          provide: getModelToken(CampaignDeliverable),
+          useValue: mockCampaignDeliverableModel,
+        },
+        {
+          provide: getModelToken(CampaignCity),
+          useValue: mockCampaignCityModel,
+        },
+        {
+          provide: getModelToken(ProfileReview),
+          useValue: mockProfileReviewModel,
         },
         {
           provide: JwtService,

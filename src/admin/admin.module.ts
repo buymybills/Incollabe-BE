@@ -6,11 +6,13 @@ import { AdminAuthService } from './admin-auth.service';
 import { ProfileReviewService } from './profile-review.service';
 import { AdminCampaignService } from './services/admin-campaign.service';
 import { AIScoringService } from './services/ai-scoring.service';
+import { InfluencerScoringService } from './services/influencer-scoring.service';
 
 import { Admin } from './models/admin.model';
 import { ProfileReview } from './models/profile-review.model';
 import { Brand } from '../brand/model/brand.model';
 import { Influencer } from '../auth/model/influencer.model';
+import { InfluencerNiche } from '../auth/model/influencer-niche.model';
 import { Niche } from '../auth/model/niche.model';
 import { Country } from '../shared/models/country.model';
 import { City } from '../shared/models/city.model';
@@ -35,6 +37,7 @@ import { RolesGuard } from './guards/roles.guard';
       ProfileReview,
       Brand,
       Influencer,
+      InfluencerNiche,
       Niche,
       Country,
       City,
@@ -55,6 +58,7 @@ import { RolesGuard } from './guards/roles.guard';
     ProfileReviewService,
     AdminCampaignService,
     AIScoringService,
+    InfluencerScoringService,
     AdminAuthGuard,
     RolesGuard,
   ],
