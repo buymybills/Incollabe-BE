@@ -287,6 +287,8 @@ export class BrandController {
       isActive: profile.isActive,
       isFollowing: profile.isFollowing,
       metrics: profile.metrics,
+      isTopBrand: profile.isTopBrand,
+      campaigns: profile.campaigns,
       userType: 'brand' as const,
     };
   }
