@@ -1060,6 +1060,16 @@ export class CampaignService {
     const { count, rows: applications } =
       await this.campaignApplicationModel.findAndCountAll({
         where: whereCondition,
+        attributes: [
+          'id',
+          'status',
+          'coverLetter',
+          'proposalMessage',
+          'createdAt',
+          'updatedAt',
+          'reviewedAt',
+          'reviewNotes',
+        ],
         include: includeOptions,
         order,
         limit,

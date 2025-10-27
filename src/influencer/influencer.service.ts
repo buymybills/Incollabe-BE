@@ -198,7 +198,11 @@ export class InfluencerService {
       profileBanner: influencer.profileBanner,
       profileHeadline: influencer.profileHeadline,
       userType: 'influencer' as const,
-      dateOfBirth: influencer.dateOfBirth?.toISOString() || null,
+      dateOfBirth: influencer.dateOfBirth
+        ? influencer.dateOfBirth instanceof Date
+          ? influencer.dateOfBirth.toISOString()
+          : influencer.dateOfBirth
+        : null,
       gender: influencer.gender || null,
       othersGender: influencer.othersGender || null,
 
