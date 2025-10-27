@@ -1353,7 +1353,7 @@ export class CampaignController {
           name: 'Jane Doe',
           username: 'janedoe',
           profileImage: 'https://example.com/profile.jpg',
-          verificationStatus: 'verified',
+          isVerified: true,
           profileHeadline: 'Fashion & Lifestyle Influencer',
           bio: 'Passionate about fashion...',
           gender: 'Female',

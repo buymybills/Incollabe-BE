@@ -1199,7 +1199,7 @@ export class CampaignService {
             'name',
             'username',
             'profileImage',
-            'verificationStatus',
+            'isVerified',
             'profileHeadline',
             'bio',
             'gender',
