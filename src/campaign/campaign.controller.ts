@@ -1321,7 +1321,7 @@ export class CampaignController {
   @ApiOperation({
     summary: 'Get specific influencer application for campaign',
     description:
-      'Get the application details for a specific influencer on a specific campaign. Only accessible by the brand that owns the campaign.',
+      'Get the application details for a specific influencer on a specific campaign. Accessible by brands (to view any influencer) and influencers (to view their own application).',
   })
   @ApiParam({
     name: 'campaignId',
@@ -1352,16 +1352,35 @@ export class CampaignController {
           id: 1,
           name: 'Jane Doe',
           username: 'janedoe',
-          email: 'jane@example.com',
-          profilePicture: 'https://example.com/profile.jpg',
+          profileImage: 'https://example.com/profile.jpg',
           verificationStatus: 'verified',
+          profileHeadline: 'Fashion & Lifestyle Influencer',
+          bio: 'Passionate about fashion...',
+          gender: 'Female',
+          dateOfBirth: '1995-01-01',
+          whatsappNumber: '+1234567890',
+          collaborationCosts: 5000,
+          city: {
+            id: 1,
+            name: 'Mumbai',
+            state: 'Maharashtra',
+            tier: 1,
+          },
+          niches: [
+            {
+              id: 1,
+              name: 'Fashion',
+              logoNormal: 'url',
+              logoDark: 'url',
+            },
+          ],
         },
       },
     },
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - Only brands can access application details',
+    description: 'Forbidden - Influencers can only view their own applications',
   })
   @ApiResponse({
     status: 404,
@@ -1372,16 +1391,17 @@ export class CampaignController {
     @Param('influencerId', ParseIntPipe) influencerId: number,
     @Req() req: RequestWithUser,
   ) {
-    if (req.user.userType !== 'brand') {
+    // If influencer, they can only view their own application
+    if (req.user.userType === 'influencer' && req.user.id !== influencerId) {
       throw new ForbiddenException(
-        'Only brands can access application details',
+        'You can only view your own application details',
       );
     }
 
     return this.campaignService.getInfluencerApplicationForCampaign(
       campaignId,
       influencerId,
-      req.user.id,
+      req.user.userType === 'brand' ? req.user.id : null,
     );
   }
 

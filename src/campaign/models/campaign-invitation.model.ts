@@ -21,6 +21,13 @@ export enum InvitationStatus {
 @Table({
   tableName: 'campaign_invitations',
   timestamps: true,
+  indexes: [
+    {
+      unique: true,
+      fields: ['campaign_id', 'influencer_id'],
+      name: 'unique_campaign_influencer_invitation',
+    },
+  ],
 })
 export class CampaignInvitation extends Model<CampaignInvitation> {
   @Column({

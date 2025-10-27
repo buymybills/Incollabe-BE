@@ -807,7 +807,10 @@ export class CampaignService {
     const existingInfluencerIds = existingInvitations.map(
       (inv) => inv.influencerId,
     );
-    const newInfluencerIds = influencerIds.filter(
+    
+    // Remove duplicates from influencerIds array and filter out existing invitations
+    const uniqueInfluencerIds = [...new Set(influencerIds)];
+    const newInfluencerIds = uniqueInfluencerIds.filter(
       (id) => !existingInfluencerIds.includes(id),
     );
 
@@ -830,23 +833,42 @@ export class CampaignService {
       expiresAt,
     }));
 
+    // Use bulkCreate with ignoreDuplicates to handle race conditions
     const createdInvitations = await this.campaignInvitationModel.bulkCreate(
       invitationsToCreate as any,
+      { 
+        ignoreDuplicates: true, // This will skip duplicates instead of throwing error
+      },
     );
 
     // Send WhatsApp and push notifications
     const brandName = campaign.brand?.brandName || 'Brand';
-    for (const influencer of influencers.filter((inf) =>
-      newInfluencerIds.includes(inf.id),
-    )) {
+    
+    // Create a Set of newInfluencerIds for faster lookup and to ensure uniqueness
+    const newInfluencerIdsSet = new Set(newInfluencerIds);
+    
+    // Filter influencers to only those who are newly invited (no duplicates)
+    const influencersToNotify = influencers.filter((inf) =>
+      newInfluencerIdsSet.has(inf.id),
+    );
+
+    for (const influencer of influencersToNotify) {
       // Send WhatsApp notification
-      await this.whatsAppService.sendCampaignInvitation(
-        influencer.whatsappNumber,
-        influencer.name,
-        campaign.name,
-        brandName,
-        personalMessage,
-      );
+      try {
+        await this.whatsAppService.sendCampaignInvitation(
+          influencer.whatsappNumber,
+          influencer.name,
+          campaign.name,
+          brandName,
+          personalMessage,
+        );
+      } catch (error) {
+        console.error(
+          `Failed to send WhatsApp notification to influencer ${influencer.id}:`,
+          error,
+        );
+        // Continue with other influencers even if one fails
+      }
 
       // Send push notification
       if (influencer.fcmToken) {
@@ -1133,15 +1155,27 @@ export class CampaignService {
   async getInfluencerApplicationForCampaign(
     campaignId: number,
     influencerId: number,
-    brandId: number,
+    brandId: number | null,
   ) {
-    // Verify campaign exists and belongs to the brand
+    // Build where condition for campaign based on user type
+    const campaignWhere: any = { id: campaignId, isActive: true };
+    
+    // If brandId is provided (brand is viewing), verify campaign belongs to them
+    if (brandId !== null) {
+      campaignWhere.brandId = brandId;
+    }
+
+    // Verify campaign exists (and belongs to brand if applicable)
     const campaign = await this.campaignModel.findOne({
-      where: { id: campaignId, brandId, isActive: true },
+      where: campaignWhere,
     });
 
     if (!campaign) {
-      throw new NotFoundException('Campaign not found or access denied');
+      throw new NotFoundException(
+        brandId !== null
+          ? 'Campaign not found or access denied'
+          : 'Campaign not found',
+      );
     }
 
     // Find the application for this influencer on this campaign
@@ -1164,7 +1198,6 @@ export class CampaignService {
             'id',
             'name',
             'username',
-            'email',
             'profileImage',
             'verificationStatus',
             'profileHeadline',
