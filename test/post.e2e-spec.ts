@@ -104,8 +104,10 @@ describe('Posts (e2e)', () => {
         300,
       );
 
-      const influencerResponse =
-        await authService.influencerSignup(testInfluencerData, verificationKey);
+      const influencerResponse = await authService.influencerSignup(
+        testInfluencerData,
+        verificationKey,
+      );
       if (!influencerResponse.influencer) {
         throw new Error('Failed to create influencer user');
       }

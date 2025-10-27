@@ -33,7 +33,8 @@ export class GetOpenCampaignsDto {
   cityIds?: number[];
 
   @ApiProperty({
-    description: 'Filter by niche IDs',
+    description:
+      "Filter by niche IDs. If not provided, campaigns matching the influencer's niches will be shown automatically. Provide specific IDs to override this behavior.",
     required: false,
     type: [Number],
     example: [1, 2],

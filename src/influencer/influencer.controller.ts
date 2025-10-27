@@ -399,7 +399,12 @@ export class InfluencerController {
   @ApiOperation({
     summary: 'Browse open campaigns available for application',
     description:
-      'Get list of open campaigns that influencers can apply to, with filtering options',
+      'Get list of open campaigns that influencers can apply to. Campaigns are automatically filtered based on:\n' +
+      '1. Niche matching (your niches vs campaign requirements)\n' +
+      '2. Age requirements (if campaign has age restrictions)\n' +
+      '3. Gender preferences (if campaign has gender targeting)\n' +
+      '4. Location (if campaign is not Pan-India, only influencers in target cities see it)\n' +
+      'You can further filter by search query, specific niches, cities, and budget range.',
   })
   @ApiResponse({
     status: 200,

@@ -323,7 +323,7 @@ export class PostService {
     const { page = 1, limit = 10, userType, userId } = getPostsDto;
     const offset = (page - 1) * limit;
 
-    let whereCondition: any = { isActive: true };
+    const whereCondition: any = { isActive: true };
     let includeCondition: any[] = [];
     let orderCondition: any[] = [];
 
@@ -352,9 +352,8 @@ export class PostService {
       );
 
       // Get users with matching niches (separate from following)
-      const nicheMatchingUserIds = await this.getNicheMatchingUserIds(
-        userNiches,
-      );
+      const nicheMatchingUserIds =
+        await this.getNicheMatchingUserIds(userNiches);
 
       // Build priority-based ordering using CASE statement
       const priorityCase = this.buildPriorityCase(
