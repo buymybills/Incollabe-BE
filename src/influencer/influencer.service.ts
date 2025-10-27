@@ -198,6 +198,13 @@ export class InfluencerService {
       profileBanner: influencer.profileBanner,
       profileHeadline: influencer.profileHeadline,
       userType: 'influencer' as const,
+      dateOfBirth: influencer.dateOfBirth
+        ? influencer.dateOfBirth instanceof Date
+          ? influencer.dateOfBirth.toISOString()
+          : influencer.dateOfBirth
+        : null,
+      gender: influencer.gender || null,
+      othersGender: influencer.othersGender || null,
 
       location: {
         country: influencer.country
@@ -248,6 +255,9 @@ export class InfluencerService {
       // Following status
       isFollowing,
 
+      // Verification status (available for both public and private)
+      verificationStatus,
+
       // Collaboration costs (public)
       collaborationCosts: influencer.collaborationCosts || {},
 
@@ -272,7 +282,6 @@ export class InfluencerService {
           isWhatsappVerified: influencer.isWhatsappVerified,
           isProfileCompleted: influencer.isProfileCompleted,
         },
-        verificationStatus,
         profileCompletion,
       };
     }

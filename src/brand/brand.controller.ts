@@ -266,29 +266,11 @@ export class BrandController {
     const currentUserId = req?.user?.id;
     const currentUserType = req?.user?.userType;
 
-    const profile = await this.brandService.getBrandProfile(
+    return await this.brandService.getBrandProfile(
       brandId,
       currentUserId,
       currentUserType,
     );
-
-    // Return public fields only for public access
-    return {
-      id: profile.id,
-      brandName: profile.brandName,
-      username: profile.username,
-      brandBio: profile.brandBio,
-      profileImage: profile.profileMedia.profileImage,
-      profileBanner: profile.profileMedia.profileBanner,
-      websiteUrl: profile.companyInfo.websiteUrl,
-      socialLinks: profile.socialLinks,
-      niches: profile.niches,
-      customNiches: profile.customNiches,
-      isActive: profile.isActive,
-      isFollowing: profile.isFollowing,
-      metrics: profile.metrics,
-      userType: 'brand' as const,
-    };
   }
 
   @Get('dropdown-data/countries')

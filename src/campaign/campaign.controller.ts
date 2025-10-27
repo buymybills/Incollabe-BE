@@ -1317,6 +1317,94 @@ export class CampaignController {
     );
   }
 
+  @Get(':campaignId/applications/influencer/:influencerId')
+  @ApiOperation({
+    summary: 'Get specific influencer application for campaign',
+    description:
+      'Get the application details for a specific influencer on a specific campaign. Accessible by brands (to view any influencer) and influencers (to view their own application).',
+  })
+  @ApiParam({
+    name: 'campaignId',
+    type: Number,
+    description: 'Campaign ID',
+    example: 1,
+  })
+  @ApiParam({
+    name: 'influencerId',
+    type: Number,
+    description: 'Influencer ID',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Application details retrieved successfully',
+    schema: {
+      example: {
+        id: 1,
+        status: 'under_review',
+        coverLetter: 'I would love to collaborate...',
+        proposalMessage: 'My proposal for this campaign...',
+        reviewNotes: 'Reviewing profile and content quality',
+        reviewedAt: '2024-01-01T00:00:00Z',
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+        influencer: {
+          id: 1,
+          name: 'Jane Doe',
+          username: 'janedoe',
+          profileImage: 'https://example.com/profile.jpg',
+          isVerified: true,
+          profileHeadline: 'Fashion & Lifestyle Influencer',
+          bio: 'Passionate about fashion...',
+          gender: 'Female',
+          dateOfBirth: '1995-01-01',
+          whatsappNumber: '+1234567890',
+          collaborationCosts: 5000,
+          city: {
+            id: 1,
+            name: 'Mumbai',
+            state: 'Maharashtra',
+            tier: 1,
+          },
+          niches: [
+            {
+              id: 1,
+              name: 'Fashion',
+              logoNormal: 'url',
+              logoDark: 'url',
+            },
+          ],
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Influencers can only view their own applications',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Campaign or Application not found',
+  })
+  async getInfluencerApplicationForCampaign(
+    @Param('campaignId', ParseIntPipe) campaignId: number,
+    @Param('influencerId', ParseIntPipe) influencerId: number,
+    @Req() req: RequestWithUser,
+  ) {
+    // If influencer, they can only view their own application
+    if (req.user.userType === 'influencer' && req.user.id !== influencerId) {
+      throw new ForbiddenException(
+        'You can only view your own application details',
+      );
+    }
+
+    return this.campaignService.getInfluencerApplicationForCampaign(
+      campaignId,
+      influencerId,
+      req.user.userType === 'brand' ? req.user.id : null,
+    );
+  }
+
   @Put(':campaignId/applications/:applicationId/status')
   @ApiOperation({
     summary: 'Update application status',
