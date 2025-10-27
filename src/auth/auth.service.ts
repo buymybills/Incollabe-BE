@@ -672,7 +672,7 @@ export class AuthService {
         'createdAt',
         'updatedAt',
       ],
-      order: [['name', 'ASC']],
+      order: [['id', 'ASC']],
     });
 
     return {
