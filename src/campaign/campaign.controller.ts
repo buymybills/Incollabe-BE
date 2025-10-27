@@ -1317,6 +1317,74 @@ export class CampaignController {
     );
   }
 
+  @Get(':campaignId/applications/influencer/:influencerId')
+  @ApiOperation({
+    summary: 'Get specific influencer application for campaign',
+    description:
+      'Get the application details for a specific influencer on a specific campaign. Only accessible by the brand that owns the campaign.',
+  })
+  @ApiParam({
+    name: 'campaignId',
+    type: Number,
+    description: 'Campaign ID',
+    example: 1,
+  })
+  @ApiParam({
+    name: 'influencerId',
+    type: Number,
+    description: 'Influencer ID',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Application details retrieved successfully',
+    schema: {
+      example: {
+        id: 1,
+        status: 'under_review',
+        coverLetter: 'I would love to collaborate...',
+        proposalMessage: 'My proposal for this campaign...',
+        reviewNotes: 'Reviewing profile and content quality',
+        reviewedAt: '2024-01-01T00:00:00Z',
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+        influencer: {
+          id: 1,
+          name: 'Jane Doe',
+          username: 'janedoe',
+          email: 'jane@example.com',
+          profilePicture: 'https://example.com/profile.jpg',
+          verificationStatus: 'verified',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Only brands can access application details',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Campaign or Application not found',
+  })
+  async getInfluencerApplicationForCampaign(
+    @Param('campaignId', ParseIntPipe) campaignId: number,
+    @Param('influencerId', ParseIntPipe) influencerId: number,
+    @Req() req: RequestWithUser,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new ForbiddenException(
+        'Only brands can access application details',
+      );
+    }
+
+    return this.campaignService.getInfluencerApplicationForCampaign(
+      campaignId,
+      influencerId,
+      req.user.id,
+    );
+  }
+
   @Put(':campaignId/applications/:applicationId/status')
   @ApiOperation({
     summary: 'Update application status',

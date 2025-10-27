@@ -1130,6 +1130,74 @@ export class CampaignService {
     };
   }
 
+  async getInfluencerApplicationForCampaign(
+    campaignId: number,
+    influencerId: number,
+    brandId: number,
+  ) {
+    // Verify campaign exists and belongs to the brand
+    const campaign = await this.campaignModel.findOne({
+      where: { id: campaignId, brandId, isActive: true },
+    });
+
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found or access denied');
+    }
+
+    // Find the application for this influencer on this campaign
+    const application = await this.campaignApplicationModel.findOne({
+      where: { campaignId, influencerId },
+      attributes: [
+        'id',
+        'status',
+        'coverLetter',
+        'proposalMessage',
+        'reviewNotes',
+        'reviewedAt',
+        'createdAt',
+        'updatedAt',
+      ],
+      include: [
+        {
+          model: Influencer,
+          attributes: [
+            'id',
+            'name',
+            'username',
+            'email',
+            'profileImage',
+            'verificationStatus',
+            'profileHeadline',
+            'bio',
+            'gender',
+            'dateOfBirth',
+            'whatsappNumber',
+            'collaborationCosts',
+          ],
+          include: [
+            {
+              model: City,
+              attributes: ['id', 'name', 'state', 'tier'],
+            },
+            {
+              model: Niche,
+              attributes: ['id', 'name', 'logoNormal', 'logoDark'],
+              through: { attributes: [] },
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!application) {
+      throw new NotFoundException(
+        'No application found for this influencer on this campaign',
+      );
+    }
+
+    return application;
+  }
+
   async updateApplicationStatus(
     campaignId: number,
     applicationId: number,
