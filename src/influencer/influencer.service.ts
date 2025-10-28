@@ -1036,9 +1036,7 @@ export class InfluencerService {
       whereCondition[Op.and] = [
         ...(whereCondition[Op.and] || []),
         {
-          [Op.or]: nicheIdsToFilter.map((nicheId) => ({
-            nicheIds: { [Op.contains]: [nicheId] },
-          })),
+          nicheIds: { [Op.overlap]: nicheIdsToFilter },
         },
       ];
     }
@@ -1068,7 +1066,7 @@ export class InfluencerService {
         {
           [Op.or]: [
             { isOpenToAllGenders: true },
-            { genderPreferences: { [Op.contains]: [influencer.gender] } },
+            { genderPreferences: { [Op.overlap]: [influencer.gender] } },
           ],
         },
       ];
