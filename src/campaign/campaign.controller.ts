@@ -972,7 +972,7 @@ export class CampaignController {
     name: 'search',
     required: false,
     type: String,
-    description: 'Search by influencer name or username',
+    description: 'Search by influencer name or username', 
     example: 'john',
   })
   @ApiQuery({

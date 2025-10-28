@@ -25,6 +25,9 @@ import {
 } from '@nestjs/swagger';
 import { AdminAuthService } from './admin-auth.service';
 import { ProfileReviewService } from './profile-review.service';
+import { AdminCampaignService } from './services/admin-campaign.service';
+import { InfluencerScoringService } from './services/influencer-scoring.service';
+import { DashboardStatsService } from './services/dashboard-stats.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import type { RequestWithAdmin } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
@@ -42,12 +45,31 @@ import {
   ProfileDetailsDto,
   DashboardStatsDto,
   ReviewActionResponseDto,
+  GetPendingProfilesDto,
 } from './dto/profile-review.dto';
 import {
   AdminSearchDto,
   AdminSearchResultDto,
   UserType,
 } from './dto/admin-search.dto';
+import {
+  TopBrandsRequestDto,
+  TopBrandsResponseDto,
+} from './dto/top-brands.dto';
+import {
+  TopCampaignsRequestDto,
+  TopCampaignsResponseDto,
+} from './dto/top-campaigns.dto';
+import { GetTopInfluencersDto } from './dto/get-top-influencers.dto';
+import { GetInfluencersDto } from './dto/get-influencers.dto';
+import { GetBrandsDto } from './dto/get-brands.dto';
+import { TopInfluencersResponseDto } from './dto/top-influencer-response.dto';
+import {
+  DashboardRequestDto,
+  MainDashboardResponseDto,
+  InfluencerDashboardResponseDto,
+  DashboardTimeFrame,
+} from './dto/admin-dashboard.dto';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -55,6 +77,9 @@ export class AdminController {
   constructor(
     private readonly adminAuthService: AdminAuthService,
     private readonly profileReviewService: ProfileReviewService,
+    private readonly adminCampaignService: AdminCampaignService,
+    private readonly influencerScoringService: InfluencerScoringService,
+    private readonly dashboardStatsService: DashboardStatsService,
   ) {}
 
   @Post('login')
@@ -174,7 +199,7 @@ export class AdminController {
   @ApiOperation({
     summary: 'Get pending profile reviews',
     description:
-      'Get all brand and influencer profiles that are pending verification, ordered by submission time',
+      'Get brand and/or influencer profiles that are pending verification, ordered by submission time. Optionally filter by profileType to get only brands or only influencers.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -213,8 +238,14 @@ export class AdminController {
     description:
       'Insufficient permissions - Only Super Admin and Profile Reviewer can access',
   })
-  async getPendingProfiles(@Req() req: RequestWithAdmin) {
-    return await this.profileReviewService.getPendingProfiles(req.admin.id);
+  async getPendingProfiles(
+    @Req() req: RequestWithAdmin,
+    @Query() filters: GetPendingProfilesDto,
+  ) {
+    return await this.profileReviewService.getPendingProfiles(
+      req.admin.id,
+      filters.profileType,
+    );
   }
 
   @Get('reviews/profile/:profileId/:profileType')
@@ -377,6 +408,211 @@ export class AdminController {
   })
   async getDashboardStats() {
     return await this.profileReviewService.getDashboardStats();
+  }
+
+  @Get('dashboard/comprehensive')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get comprehensive dashboard metrics',
+    description:
+      'Get all dashboard metrics including total counts, verified/unverified users, campaign statistics, pending verifications, and month-over-month growth percentages',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Comprehensive dashboard statistics retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        totalInfluencers: {
+          type: 'object',
+          properties: {
+            count: { type: 'number', example: 3200 },
+            growth: { type: 'number', example: 36 },
+          },
+        },
+        totalBrands: {
+          type: 'object',
+          properties: {
+            count: { type: 'number', example: 3200 },
+            growth: { type: 'number', example: 36 },
+          },
+        },
+        totalCampaigns: {
+          type: 'object',
+          properties: {
+            count: { type: 'number', example: 3200 },
+            growth: { type: 'number', example: 36 },
+          },
+        },
+        verifiedInfluencers: {
+          type: 'object',
+          properties: {
+            count: { type: 'number', example: 1200 },
+            growth: { type: 'number', example: -2.9 },
+          },
+        },
+        verifiedBrands: {
+          type: 'object',
+          properties: {
+            count: { type: 'number', example: 1200 },
+            growth: { type: 'number', example: -2.9 },
+          },
+        },
+        campaignsLive: {
+          type: 'object',
+          properties: {
+            count: { type: 'number', example: 1200 },
+            growth: { type: 'number', example: -2.9 },
+          },
+        },
+        unverifiedInfluencers: {
+          type: 'object',
+          properties: {
+            count: { type: 'number', example: 1200 },
+            growth: { type: 'number', example: -2.9 },
+          },
+        },
+        unverifiedBrands: {
+          type: 'object',
+          properties: {
+            count: { type: 'number', example: 1200 },
+            growth: { type: 'number', example: -2.9 },
+          },
+        },
+        campaignsCompleted: {
+          type: 'object',
+          properties: {
+            count: { type: 'number', example: 1200 },
+            growth: { type: 'number', example: -2.9 },
+          },
+        },
+        influencersPendingVerification: {
+          type: 'object',
+          properties: {
+            count: { type: 'number', example: 32 },
+          },
+        },
+        brandsPendingVerification: {
+          type: 'object',
+          properties: {
+            count: { type: 'number', example: 32 },
+          },
+        },
+        totalCampaignApplications: {
+          type: 'object',
+          properties: {
+            count: { type: 'number', example: 32000 },
+          },
+        },
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getComprehensiveDashboardStats() {
+    return await this.adminAuthService.getComprehensiveDashboardStats();
+  }
+
+  @Get('dashboard/top-brands')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get top performing brands',
+    description:
+      'Get top brands based on 4 key metrics: campaigns launched, niche diversity, influencers selected, and average payout. Results can be filtered by timeframe and sorted by different metrics.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Top brands retrieved successfully',
+    type: TopBrandsResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getTopBrands(@Query() requestDto: TopBrandsRequestDto) {
+    return await this.adminAuthService.getTopBrands(requestDto);
+  }
+
+  @Get('brands')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get brands with profile filters, search, and sorting',
+    description:
+      'Get brands based on profile filters: allProfile (all profiles), topProfile (scored brands using comprehensive metrics), verifiedProfile (verified profiles), or unverifiedProfile (unverified profiles). Supports search by brand name, username, location (city), and niche, and sorting by posts, followers, following, campaigns, or createdAt. For topProfile filter, the same scoring metrics as top-brands API are used.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Brands retrieved successfully based on selected filter',
+    type: TopBrandsResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getBrands(@Query() requestDto: GetBrandsDto) {
+    return await this.adminAuthService.getBrands(requestDto);
+  }
+
+  @Get('dashboard/top-campaigns')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get top performing campaigns',
+    description:
+      'Get top campaigns based on comprehensive metrics including applications, conversion rate, budget, geographic reach, niches, selected influencers, completion rate, and recency. Supports multiple sorting options and filters.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Top campaigns retrieved successfully',
+    type: TopCampaignsResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getTopCampaigns(@Query() requestDto: TopCampaignsRequestDto) {
+    return await this.adminAuthService.getTopCampaigns(requestDto);
+  }
+
+  @Get('dashboard/top-influencers')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get top influencers with comprehensive scoring and search',
+    description:
+      'Get top influencers based on 6 key metrics: niche match (30%), engagement rate (25%), audience relevance (15%), location match (15%), past performance (10%), and collaboration charges match (5%). Supports search by name, username, location (city), and niche. Results include detailed score breakdown for each influencer and can be filtered by various criteria. Admins can customize the weights for each metric.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Top influencers retrieved successfully with scoring details',
+    type: TopInfluencersResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getTopInfluencers(@Query() requestDto: GetTopInfluencersDto) {
+    return await this.influencerScoringService.getTopInfluencers(requestDto);
+  }
+
+  @Get('influencers')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get influencers with profile filters, search, and sorting',
+    description:
+      'Get influencers based on profile filters: allProfile (all profiles), topProfile (scored influencers using comprehensive metrics), verifiedProfile (verified profiles), or unverifiedProfile (unverified profiles). Supports search by name, username, location (city), and niche, and sorting by posts, followers, following, campaigns, or createdAt. For topProfile filter, the same scoring metrics as top-influencers API are used.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Influencers retrieved successfully based on selected filter',
+    type: TopInfluencersResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getInfluencers(@Query() requestDto: GetInfluencersDto) {
+    return await this.influencerScoringService.getInfluencers(requestDto);
   }
 
   @Put('influencer/:influencerId/top-status')
@@ -580,5 +816,168 @@ export class AdminController {
   async advancedBrandSearch(@Query() searchDto: AdminSearchDto) {
     const brandSearchDto = { ...searchDto, userType: UserType.BRAND };
     return await this.adminAuthService.advancedBrandSearch(brandSearchDto);
+  }
+
+  @Get('campaigns/:id/applications')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get campaign applications with AI scoring',
+    description:
+      'Get all applications for a campaign with AI-powered relevance scoring, strengths/concerns analysis, and smart sorting',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Campaign ID',
+    type: 'number',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Campaign applications retrieved successfully with AI scores',
+    schema: {
+      type: 'object',
+      properties: {
+        campaignId: { type: 'number', example: 123 },
+        totalApplications: { type: 'number', example: 50 },
+        topMatches: {
+          type: 'array',
+          description: 'Top 10 highly recommended influencers',
+          items: {
+            type: 'object',
+            properties: {
+              applicationId: { type: 'number', example: 1 },
+              influencer: {
+                type: 'object',
+                properties: {
+                  id: { type: 'number', example: 123 },
+                  name: { type: 'string', example: 'Jane Doe' },
+                  username: { type: 'string', example: '@janedoe' },
+                  followers: { type: 'number', example: 50000 },
+                  engagementRate: { type: 'number', example: 5.2 },
+                  niches: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    example: ['Fashion', 'Lifestyle'],
+                  },
+                  location: { type: 'string', example: 'Mumbai' },
+                },
+              },
+              aiScore: { type: 'number', example: 85 },
+              recommendation: {
+                type: 'string',
+                enum: ['Highly Recommended', 'Recommended', 'Consider'],
+                example: 'Highly Recommended',
+              },
+              strengths: {
+                type: 'array',
+                items: { type: 'string' },
+                example: [
+                  'Perfect niche alignment',
+                  'High engagement rate (5.2%)',
+                ],
+              },
+              concerns: {
+                type: 'array',
+                items: { type: 'string' },
+                example: [],
+              },
+              appliedAt: {
+                type: 'string',
+                example: '2024-01-15T10:30:00Z',
+              },
+              status: { type: 'string', example: 'pending' },
+              scoreBreakdown: {
+                type: 'object',
+                properties: {
+                  overall: { type: 'number', example: 85 },
+                  nicheMatch: { type: 'number', example: 90 },
+                  audienceRelevance: { type: 'number', example: 80 },
+                  engagementRate: { type: 'number', example: 85 },
+                  locationMatch: { type: 'number', example: 100 },
+                  pastPerformance: { type: 'number', example: 70 },
+                  contentQuality: { type: 'number', example: 75 },
+                },
+              },
+            },
+          },
+        },
+        otherApplications: {
+          type: 'array',
+          description: 'Other applications (paginated)',
+        },
+        pagination: {
+          type: 'object',
+          properties: {
+            page: { type: 'number', example: 1 },
+            limit: { type: 'number', example: 50 },
+            total: { type: 'number', example: 40 },
+            totalPages: { type: 'number', example: 1 },
+          },
+        },
+      },
+    },
+  })
+  @ApiNotFoundResponse({
+    description: 'Campaign not found',
+  })
+  async getCampaignApplications(
+    @Param('id', ParseIntPipe) campaignId: number,
+    @Query('sortBy') sortBy?: 'relevance' | 'date' | 'engagement' | 'followers' | null,
+    @Query('filter')
+    filter?: 'all' | 'highly_recommended' | 'recommended' | 'consider' | null,
+    @Query('page', new ParseIntPipe({ optional: true })) page: number = 1,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit: number = 10,
+  ) {
+    return await this.adminCampaignService.getCampaignApplicationsWithAI(
+      campaignId,
+      {
+        sortBy: sortBy || undefined,
+        filter: filter || undefined,
+        page,
+        limit,
+      },
+    );
+  }
+
+  @Get('dashboard/main')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get main dashboard statistics',
+    description:
+      'Get comprehensive statistics for the main admin dashboard including influencers, brands, campaigns metrics with percentage changes vs last month, and lists of top influencers, top brands, and top campaigns.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Main dashboard statistics retrieved successfully',
+    type: MainDashboardResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getMainDashboardStats() {
+    return await this.dashboardStatsService.getMainDashboardStats();
+  }
+
+  @Get('dashboard/influencers')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get influencer dashboard statistics',
+    description:
+      'Get detailed influencer analytics including city presence, city distribution, daily active influencers time series, and niche distribution. Supports different time frames for the chart data.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Influencer dashboard statistics retrieved successfully',
+    type: InfluencerDashboardResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getInfluencerDashboardStats(@Query() requestDto: DashboardRequestDto) {
+    return await this.dashboardStatsService.getInfluencerDashboardStats(
+      requestDto.timeFrame || DashboardTimeFrame.LAST_7_DAYS,
+    );
   }
 }

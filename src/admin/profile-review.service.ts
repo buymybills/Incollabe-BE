@@ -69,9 +69,16 @@ export class ProfileReviewService {
     };
   }
 
-  async getPendingProfiles(adminId: number) {
+  async getPendingProfiles(adminId: number, profileType?: ProfileType) {
+    const whereConditions: any = { status: ReviewStatus.PENDING };
+    
+    // Add profile type filter if provided
+    if (profileType) {
+      whereConditions.profileType = profileType;
+    }
+
     const profiles = await this.profileReviewModel.findAll({
-      where: { status: ReviewStatus.PENDING },
+      where: whereConditions,
       include: [
         {
           model: Admin,
