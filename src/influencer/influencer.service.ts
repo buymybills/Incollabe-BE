@@ -1033,11 +1033,13 @@ export class InfluencerService {
 
     // Add niche filter to WHERE condition if nicheIds are available
     if (nicheIdsToFilter.length > 0) {
+      const nicheConditions = nicheIdsToFilter.map(
+        (nicheId) =>
+          literal(`"Campaign"."nicheIds"::jsonb @> '[${nicheId}]'::jsonb`),
+      );
       whereCondition[Op.and] = [
         ...(whereCondition[Op.and] || []),
-        literal(
-          `"Campaign"."nicheIds"::jsonb ?| array[${nicheIdsToFilter.map(id => `'${id}'`).join(',')}]`,
-        ),
+        { [Op.or]: nicheConditions },
       ];
     }
 
@@ -1067,7 +1069,7 @@ export class InfluencerService {
           [Op.or]: [
             { isOpenToAllGenders: true },
             literal(
-              `"Campaign"."genderPreferences"::jsonb ? '${influencer.gender}'`,
+              `"Campaign"."genderPreferences"::jsonb @> '["${influencer.gender}"]'::jsonb`,
             ),
           ],
         },
