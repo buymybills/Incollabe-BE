@@ -1036,7 +1036,7 @@ export class InfluencerService {
       whereCondition[Op.and] = [
         ...(whereCondition[Op.and] || []),
         literal(
-          `"Campaign"."nicheIds"::jsonb && '[${nicheIdsToFilter.join(',')}]'::jsonb`,
+          `"Campaign"."nicheIds"::jsonb ?| array[${nicheIdsToFilter.map(id => `'${id}'`).join(',')}]`,
         ),
       ];
     }
@@ -1067,7 +1067,7 @@ export class InfluencerService {
           [Op.or]: [
             { isOpenToAllGenders: true },
             literal(
-              `"Campaign"."genderPreferences"::jsonb && '["${influencer.gender}"]'::jsonb`,
+              `"Campaign"."genderPreferences"::jsonb ? '${influencer.gender}'`,
             ),
           ],
         },
