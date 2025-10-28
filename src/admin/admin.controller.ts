@@ -70,6 +70,8 @@ import {
   InfluencerDashboardResponseDto,
   DashboardTimeFrame,
 } from './dto/admin-dashboard.dto';
+import { ForgotPasswordDto } from '../auth/dto/forgot-password.dto';
+import { ResetPasswordDto } from '../auth/dto/reset-password.dto';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -156,6 +158,73 @@ export class AdminController {
   })
   async createAdmin(@Body() createAdminData: CreateAdminDto) {
     return await this.adminAuthService.createAdmin(createAdminData);
+  }
+
+  @Post('forgot-password')
+  @ApiOperation({
+    summary: 'Admin forgot password',
+    description:
+      'Request password reset link for admin account. Sends reset token via email.',
+  })
+  @ApiBody({
+    description: 'Admin email address for password reset',
+    type: ForgotPasswordDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description:
+      'Password reset instructions sent (response same for security even if email not found)',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example: 'If the email exists, a password reset link has been sent',
+        },
+        success: { type: 'boolean', example: true },
+      },
+    },
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid email format',
+  })
+  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    return this.adminAuthService.forgotPassword(forgotPasswordDto);
+  }
+
+  @Post('reset-password')
+  @ApiOperation({
+    summary: 'Admin reset password',
+    description:
+      'Reset admin password using token received via email. Invalidates all existing sessions.',
+  })
+  @ApiBody({
+    description: 'Password reset token and new password',
+    type: ResetPasswordDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Password reset successful - All sessions logged out',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example:
+            'Password has been reset successfully. Please log in with your new password.',
+        },
+        success: { type: 'boolean', example: true },
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Invalid or expired reset token',
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid password format or missing required fields',
+  })
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    return this.adminAuthService.resetPassword(resetPasswordDto);
   }
 
   @Get('profile')

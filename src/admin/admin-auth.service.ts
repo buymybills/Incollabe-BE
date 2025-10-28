@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { Admin, AdminStatus } from './models/admin.model';
 import { Influencer } from '../auth/model/influencer.model';
@@ -28,6 +29,10 @@ import {
   ReviewStatus,
   ProfileType,
 } from './models/profile-review.model';
+import { RedisService } from '../redis/redis.service';
+import { EmailService } from '../shared/email.service';
+import { ForgotPasswordDto } from '../auth/dto/forgot-password.dto';
+import { ResetPasswordDto } from '../auth/dto/reset-password.dto';
 import {
   AdminSearchDto,
   UserType,
@@ -112,6 +117,9 @@ export class AdminAuthService {
     @InjectModel(ProfileReview)
     private readonly profileReviewModel: typeof ProfileReview,
     private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+    private readonly redisService: RedisService,
+    private readonly emailService: EmailService,
   ) {}
 
   async login(email: string, password: string) {
@@ -1781,6 +1789,138 @@ export class AdminAuthService {
       totalCampaignApplications: {
         count: totalCampaignApplications,
       },
+    };
+  }
+
+  // Redis key helper for password reset
+  private passwordResetKey(token: string): string {
+    return `admin:password-reset:${token}`;
+  }
+
+  /**
+   * Forgot password - Send password reset email with token for admin
+   */
+  async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
+    const { email } = forgotPasswordDto;
+
+    // Step 1: Check if admin exists
+    const admin = await this.adminModel.findOne({
+      where: { email: email.toLowerCase() },
+      attributes: ['id', 'email', 'name'],
+    });
+
+    if (!admin) {
+      // Don't reveal if email exists or not for security
+      return {
+        message: 'If the email exists, a password reset link has been sent',
+        success: true,
+      };
+    }
+
+    // Step 2: Generate password reset token (JWT with admin ID and expiration)
+    const resetPayload = {
+      adminId: admin.id,
+      email: admin.email,
+      type: 'admin-password-reset',
+    };
+
+    const resetToken = this.jwtService.sign(resetPayload, {
+      secret: this.configService.get<string>('JWT_REFRESH_SECRET'), // Use refresh secret for reset tokens
+      expiresIn: '1h', // 1 hour expiry
+    });
+
+    // Step 3: Store token in Redis with 1 hour TTL for additional validation
+    const tokenKey = this.passwordResetKey(resetToken);
+    await this.redisService.set(
+      tokenKey,
+      JSON.stringify({
+        adminId: admin.id,
+        email: admin.email,
+        createdAt: new Date().toISOString(),
+      }),
+      3600,
+    ); // 1 hour
+
+    // Step 4: Generate password reset URL (admin reset page)
+    const resetUrl = `${this.configService.get<string>('ADMIN_FRONTEND_URL') || this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000'}/admin/reset-password?token=${resetToken}`;
+
+    // Step 5: Send password reset email
+    await this.emailService.sendPasswordResetEmail(
+      admin.email,
+      admin.name,
+      resetUrl,
+      resetToken,
+    );
+
+    return {
+      message: 'If the email exists, a password reset link has been sent',
+      success: true,
+    };
+  }
+
+  /**
+   * Reset password - Verify token and set new password for admin
+   */
+  async resetPassword(resetPasswordDto: ResetPasswordDto) {
+    const { token, newPassword } = resetPasswordDto;
+
+    // Step 1: Verify and decode the reset token
+    const decoded = this.jwtService.verify<{
+      adminId: number;
+      email: string;
+      type: string;
+    }>(token, {
+      secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+    });
+
+    // Step 2: Validate token payload
+    if (
+      decoded.type !== 'admin-password-reset' ||
+      !decoded.adminId ||
+      !decoded.email
+    ) {
+      throw new UnauthorizedException('Invalid reset token format');
+    }
+
+    // Step 3: Check if token exists in Redis (additional security)
+    const tokenKey = this.passwordResetKey(token);
+    const tokenData = await this.redisService.get(tokenKey);
+
+    if (!tokenData) {
+      throw new UnauthorizedException(
+        'Reset token has expired or already been used',
+      );
+    }
+
+    // Step 4: Find the admin
+    const admin = await this.adminModel.findOne({
+      where: {
+        id: decoded.adminId,
+        email: decoded.email.toLowerCase(),
+      },
+    });
+
+    if (!admin) {
+      throw new UnauthorizedException('Admin not found');
+    }
+
+    // Step 5: Hash new password
+    const saltRounds = 12;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    // Step 6: Update admin password in database
+    await admin.update({ password: hashedPassword });
+
+    // Step 7: Invalidate the reset token (delete from Redis)
+    await this.redisService.del(tokenKey);
+
+    // Step 8: Clear any admin sessions (optional - invalidate all admin sessions for security)
+    // Note: We could implement logout all functionality here if needed
+
+    return {
+      message:
+        'Password has been reset successfully. Please log in with your new password.',
+      success: true,
     };
   }
 }
