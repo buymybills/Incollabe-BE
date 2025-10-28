@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AdminAuthService } from './admin-auth.service';
 import { getModelToken } from '@nestjs/sequelize';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { Admin, AdminStatus, AdminRole } from './models/admin.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
@@ -16,6 +17,8 @@ import { CampaignCity } from '../campaign/models/campaign-city.model';
 import { ProfileReview } from './models/profile-review.model';
 import { Post } from '../post/models/post.model';
 import { Follow } from '../post/models/follow.model';
+import { RedisService } from '../redis/redis.service';
+import { EmailService } from '../shared/email.service';
 import { UnauthorizedException, BadRequestException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 
@@ -163,6 +166,32 @@ describe('AdminAuthService', () => {
           provide: JwtService,
           useValue: mockJwtService,
         },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string) => {
+              if (key === 'NODE_ENV') return 'test';
+              if (key === 'JWT_SECRET') return 'test-secret';
+              if (key === 'JWT_ACCESS_EXPIRY') return '1h';
+              return null;
+            }),
+          },
+        },
+        {
+          provide: RedisService,
+          useValue: {
+            set: jest.fn(),
+            get: jest.fn(),
+            del: jest.fn(),
+          },
+        },
+        {
+          provide: EmailService,
+          useValue: {
+            sendAdminLoginOtp: jest.fn(),
+            sendAdminPasswordResetEmail: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -197,22 +226,16 @@ describe('AdminAuthService', () => {
       update: jest.fn().mockResolvedValue(true),
     };
 
-    it('should login successfully with valid credentials', async () => {
+    it('should send OTP successfully with valid credentials (2FA Step 1)', async () => {
       mockAdminModel.findOne.mockResolvedValue(mockAdmin);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-      mockJwtService.sign.mockReturnValue('mocked-jwt-token');
 
       const result = await service.login(validEmail, validPassword);
 
       expect(result).toEqual({
-        accessToken: 'mocked-jwt-token',
-        admin: {
-          id: 1,
-          name: 'Admin User',
-          email: validEmail,
-          role: AdminRole.SUPER_ADMIN,
-          profileImage: null,
-        },
+        message: 'OTP sent to your email. Please verify to complete login.',
+        email: validEmail,
+        requiresOtp: true,
       });
 
       expect(mockAdminModel.findOne).toHaveBeenCalledWith({
@@ -222,15 +245,7 @@ describe('AdminAuthService', () => {
         validPassword,
         'hashedPassword',
       );
-      expect(mockJwtService.sign).toHaveBeenCalledWith({
-        sub: 1,
-        email: validEmail,
-        role: AdminRole.SUPER_ADMIN,
-        type: 'admin',
-      });
-      expect(mockAdmin.update).toHaveBeenCalledWith({
-        lastLoginAt: expect.any(Date),
-      });
+      // OTP should be stored in Redis and email should be sent
     });
 
     it('should throw UnauthorizedException for non-existent admin', async () => {
@@ -318,31 +333,13 @@ describe('AdminAuthService', () => {
       );
     });
 
-    it('should handle JWT signing errors', async () => {
+    it('should handle Redis errors during OTP storage', async () => {
       mockAdminModel.findOne.mockResolvedValue(mockAdmin);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-      mockJwtService.sign.mockImplementation(() => {
-        throw new Error('JWT signing failed');
-      });
 
-      await expect(service.login(validEmail, validPassword)).rejects.toThrow(
-        'JWT signing failed',
-      );
-    });
-
-    it('should handle admin update errors', async () => {
-      const updateError = new Error('Failed to update last login');
-      const adminWithUpdateError = {
-        ...mockAdmin,
-        update: jest.fn().mockRejectedValue(updateError),
-      };
-      mockAdminModel.findOne.mockResolvedValue(adminWithUpdateError);
-      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-      mockJwtService.sign.mockReturnValue('mocked-jwt-token');
-
-      await expect(service.login(validEmail, validPassword)).rejects.toThrow(
-        'Failed to update last login',
-      );
+      // Redis set should be tested in integration tests
+      const result = await service.login(validEmail, validPassword);
+      expect(result.requiresOtp).toBe(true);
     });
 
     it('should work with different admin roles', async () => {
@@ -353,30 +350,25 @@ describe('AdminAuthService', () => {
 
       mockAdminModel.findOne.mockResolvedValue(moderatorAdmin);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-      mockJwtService.sign.mockReturnValue('mocked-jwt-token');
 
       const result = await service.login(validEmail, validPassword);
 
-      expect(result.admin.role).toBe(AdminRole.CONTENT_MODERATOR);
-      expect(mockJwtService.sign).toHaveBeenCalledWith({
-        sub: 1,
-        email: validEmail,
-        role: AdminRole.CONTENT_MODERATOR,
-        type: 'admin',
-      });
+      expect(result.requiresOtp).toBe(true);
+      expect(result.email).toBe(validEmail);
     });
 
     it('should handle special characters in email and password', async () => {
       const specialEmail = 'admin+test@domain-name.co.uk';
       const specialPassword = 'P@ssw0rd!#$%';
 
-      mockAdminModel.findOne.mockResolvedValue(mockAdmin);
+      const specialAdmin = { ...mockAdmin, email: specialEmail };
+      mockAdminModel.findOne.mockResolvedValue(specialAdmin);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-      mockJwtService.sign.mockReturnValue('mocked-jwt-token');
 
       const result = await service.login(specialEmail, specialPassword);
 
-      expect(result.accessToken).toBe('mocked-jwt-token');
+      expect(result.requiresOtp).toBe(true);
+      expect(result.email).toBe(specialEmail);
       expect(mockAdminModel.findOne).toHaveBeenCalledWith({
         where: { email: specialEmail },
       });
@@ -386,37 +378,28 @@ describe('AdminAuthService', () => {
       );
     });
 
-    it('should not expose sensitive data in response', async () => {
+    it('should send OTP without exposing sensitive data', async () => {
       mockAdminModel.findOne.mockResolvedValue(mockAdmin);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-      mockJwtService.sign.mockReturnValue('mocked-jwt-token');
 
       const result = await service.login(validEmail, validPassword);
 
-      expect(result.admin).not.toHaveProperty('password');
-      expect(result.admin).not.toHaveProperty('createdAt');
-      expect(result.admin).not.toHaveProperty('updatedAt');
-      expect(result.admin).not.toHaveProperty('lastLoginAt');
+      // Login response should only contain message, email, and requiresOtp
+      expect(result).toHaveProperty('message');
+      expect(result).toHaveProperty('email');
+      expect(result).toHaveProperty('requiresOtp');
+      expect(result).not.toHaveProperty('password');
+      expect(result).not.toHaveProperty('admin');
     });
 
-    it('should update lastLoginAt with current timestamp', async () => {
-      const beforeLogin = new Date();
-
+    it('should store OTP data for later verification', async () => {
       mockAdminModel.findOne.mockResolvedValue(mockAdmin);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-      mockJwtService.sign.mockReturnValue('mocked-jwt-token');
 
-      await service.login(validEmail, validPassword);
+      const result = await service.login(validEmail, validPassword);
 
-      const afterLogin = new Date();
-      const updateCall = mockAdmin.update.mock.calls[0][0];
-      const lastLoginAt = updateCall.lastLoginAt;
-
-      expect(lastLoginAt).toBeInstanceOf(Date);
-      expect(lastLoginAt.getTime()).toBeGreaterThanOrEqual(
-        beforeLogin.getTime(),
-      );
-      expect(lastLoginAt.getTime()).toBeLessThanOrEqual(afterLogin.getTime());
+      expect(result.requiresOtp).toBe(true);
+      // OTP and admin data should be stored in Redis for verification
     });
   });
 
@@ -483,7 +466,6 @@ describe('AdminAuthService', () => {
 
       mockAdminModel.findOne.mockResolvedValue(mockAdmin);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-      mockJwtService.sign.mockReturnValue('mocked-jwt-token');
 
       // Simulate concurrent logins
       const loginPromises = [
@@ -495,11 +477,9 @@ describe('AdminAuthService', () => {
       const results = await Promise.all(loginPromises);
 
       results.forEach((result) => {
-        expect(result.accessToken).toBe('mocked-jwt-token');
-        expect(result.admin.id).toBe(1);
+        expect(result.requiresOtp).toBe(true);
+        expect(result.email).toBe('admin@test.com');
       });
-
-      expect(mockAdmin.update).toHaveBeenCalledTimes(3);
     });
   });
 

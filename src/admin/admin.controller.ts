@@ -72,6 +72,12 @@ import {
 } from './dto/admin-dashboard.dto';
 import { ForgotPasswordDto } from '../auth/dto/forgot-password.dto';
 import { ResetPasswordDto } from '../auth/dto/reset-password.dto';
+import {
+  VerifyLoginOtpDto,
+  ResendLoginOtpDto,
+} from './dto/verify-login-otp.dto';
+import { RefreshTokenDto, RefreshTokenResponseDto } from './dto/refresh-token.dto';
+import { LogoutDto, LogoutResponseDto } from './dto/logout.dto';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -86,9 +92,9 @@ export class AdminController {
 
   @Post('login')
   @ApiOperation({
-    summary: 'Admin login',
+    summary: 'Admin login - Step 1',
     description:
-      'Authenticate admin user with email and password to get JWT access token',
+      'Authenticate admin user with email and password. Sends OTP to email for 2FA verification.',
   })
   @ApiBody({
     description: 'Admin login credentials',
@@ -96,8 +102,18 @@ export class AdminController {
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Login successful - Returns JWT token and admin profile',
-    type: AdminLoginResponseDto,
+    description: 'OTP sent to email - Requires OTP verification',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example: 'OTP sent to your email. Please verify to complete login.',
+        },
+        email: { type: 'string', example: 'admin@example.com' },
+        requiresOtp: { type: 'boolean', example: true },
+      },
+    },
   })
   @ApiUnauthorizedResponse({
     description: 'Invalid credentials or account inactive/suspended',
@@ -115,6 +131,130 @@ export class AdminController {
       loginData.email,
       loginData.password,
     );
+  }
+
+  @Post('verify-otp')
+  @ApiOperation({
+    summary: 'Admin login - Step 2: Verify OTP',
+    description:
+      'Verify OTP sent to email and complete login. Returns access token, refresh token, and admin profile on success.',
+  })
+  @ApiBody({
+    description: 'Email and OTP for verification',
+    type: VerifyLoginOtpDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description:
+      'OTP verified successfully - Returns access token, refresh token, and admin profile',
+    type: AdminLoginResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Invalid or expired OTP, or too many failed attempts',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 401 },
+        message: {
+          type: 'string',
+          example: 'Invalid OTP or Too many failed attempts',
+        },
+        error: { type: 'string', example: 'Unauthorized' },
+      },
+    },
+  })
+  async verifyOtp(@Body() verifyOtpData: VerifyLoginOtpDto) {
+    return await this.adminAuthService.verifyLoginOtp(
+      verifyOtpData.email,
+      verifyOtpData.otp,
+    );
+  }
+
+  @Post('resend-otp')
+  @ApiOperation({
+    summary: 'Resend OTP for admin login',
+    description:
+      'Resend OTP to admin email if previous OTP expired or was not received.',
+  })
+  @ApiBody({
+    description: 'Admin email address',
+    type: ResendLoginOtpDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'New OTP sent to email',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'New OTP sent to your email' },
+        email: { type: 'string', example: 'admin@example.com' },
+      },
+    },
+  })
+  @ApiNotFoundResponse({
+    description: 'Admin not found',
+  })
+  async resendOtp(@Body() resendOtpData: ResendLoginOtpDto) {
+    return await this.adminAuthService.resendLoginOtp(resendOtpData.email);
+  }
+
+  @Post('refresh-token')
+  @ApiOperation({
+    summary: 'Refresh access token',
+    description:
+      'Exchange a valid refresh token for a new access token and refresh token.',
+  })
+  @ApiBody({ type: RefreshTokenDto })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Token refresh successful',
+    type: RefreshTokenResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Invalid or expired refresh token',
+  })
+  @ApiForbiddenResponse({
+    description: 'Refresh token has been revoked',
+  })
+  async refreshToken(@Body() refreshTokenDto: RefreshTokenDto) {
+    return await this.adminAuthService.refreshToken(
+      refreshTokenDto.refreshToken,
+    );
+  }
+
+  @Post('logout')
+  @ApiOperation({
+    summary: 'Logout from current device',
+    description: 'Revoke the refresh token to logout from the current device.',
+  })
+  @ApiBody({ type: LogoutDto })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Logout successful',
+    type: LogoutResponseDto,
+  })
+  async logout(@Body() logoutDto: LogoutDto) {
+    return await this.adminAuthService.logout(logoutDto.refreshToken);
+  }
+
+  @Post('logout-all')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Logout from all devices',
+    description:
+      'Revoke all refresh tokens to logout from all devices. Requires authentication.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Logout from all devices successful',
+    type: LogoutResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async logoutAll(@Req() req: RequestWithAdmin) {
+    return await this.adminAuthService.logoutAll(req.admin.id);
   }
 
   @Post('create')

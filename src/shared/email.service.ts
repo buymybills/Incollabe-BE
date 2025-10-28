@@ -985,4 +985,82 @@ export class EmailService {
       `Admin notification email sent to: ${adminEmail} for ${profileType} profile ${profileId}`,
     );
   }
+
+  /**
+   * Send OTP for admin login (2FA)
+   */
+  async sendAdminLoginOtp(
+    email: string,
+    adminName: string,
+    otp: string,
+  ): Promise<void> {
+    const subject = 'Admin Login Verification - Collabkaroo';
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Admin Login Verification</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-align: center; padding: 30px; border-radius: 10px 10px 0 0; }
+          .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; }
+          .otp-box { background: white; border: 3px solid #667eea; padding: 30px; text-align: center; margin: 25px 0; border-radius: 8px; }
+          .otp-code { font-size: 36px; font-weight: bold; color: #667eea; letter-spacing: 8px; margin: 20px 0; font-family: 'Courier New', monospace; }
+          .footer { text-align: center; margin-top: 20px; color: #666; font-size: 14px; }
+          .warning { color: #dc3545; font-weight: bold; margin-top: 20px; padding: 15px; background: #f8d7da; border-radius: 5px; }
+          .timer { background: #fff3cd; padding: 10px; border-radius: 5px; margin: 15px 0; color: #856404; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🔐 Admin Login Verification</h1>
+            <p>Two-Factor Authentication</p>
+          </div>
+          <div class="content">
+            <h2>Hello ${adminName},</h2>
+            <p>A login attempt was made to your Collabkaroo admin account from <strong>${email}</strong>.</p>
+
+            <div class="otp-box">
+              <h3>Your Verification Code</h3>
+              <p>Enter this code to complete your login:</p>
+              <div class="otp-code">${otp}</div>
+              <div class="timer">⏱️ This code expires in 5 minutes</div>
+            </div>
+
+            <p><strong>Security Information:</strong></p>
+            <ul>
+              <li>This OTP is valid for <strong>5 minutes only</strong></li>
+              <li>Never share this code with anyone</li>
+              <li>You have 5 attempts to enter the correct code</li>
+              <li>If you didn't attempt to login, please secure your account immediately</li>
+            </ul>
+
+            <div class="warning">
+              ⚠️ <strong>Security Alert:</strong> If this wasn't you, please contact support immediately and change your password.
+            </div>
+
+            <div class="footer">
+              <p>This is an automated security notification.</p>
+              <p><strong>Collabkaroo Admin Panel</strong></p>
+              <p>&copy; 2025 Collabkaroo. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+    await this.transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject,
+      html,
+    });
+
+    console.log(`Admin login OTP sent to: ${email}`);
+  }
 }

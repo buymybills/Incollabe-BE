@@ -3,10 +3,12 @@ import {
   UnauthorizedException,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { randomUUID } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { Admin, AdminStatus } from './models/admin.model';
 import { Influencer } from '../auth/model/influencer.model';
@@ -122,6 +124,71 @@ export class AdminAuthService {
     private readonly emailService: EmailService,
   ) {}
 
+  // Redis key helpers
+  private adminOtpKey(email: string): string {
+    return `admin:otp:${email}`;
+  }
+
+  private adminOtpAttemptsKey(email: string): string {
+    return `admin:otp:attempts:${email}`;
+  }
+
+  // Redis key helper for password reset
+  private passwordResetKey(token: string): string {
+    return `admin:password-reset:${token}`;
+  }
+
+  // Redis key helper for refresh token sessions
+  private refreshTokenKey(jti: string): string {
+    return `admin:refresh:${jti}`;
+  }
+
+  // Redis key helper for blacklisted tokens
+  private blacklistKey(jti: string): string {
+    return `admin:blacklist:${jti}`;
+  }
+
+  // Redis key helper for admin's active sessions set
+  private sessionsSetKey(adminId: number): string {
+    return `admin:sessions:${adminId}`;
+  }
+
+  /**
+   * Generate access and refresh tokens for admin
+   */
+  private async generateTokens(
+    adminId: number,
+    email: string,
+    role: string,
+  ): Promise<{ accessToken: string; refreshToken: string; jti: string }> {
+    // Generate access token
+    const accessToken = this.jwtService.sign(
+      {
+        sub: adminId,
+        email,
+        role,
+        type: 'admin',
+      },
+      { jwtid: randomUUID() },
+    );
+
+    // Generate refresh token with separate secret
+    const jti = randomUUID();
+    const refreshToken = this.jwtService.sign(
+      { sub: adminId, type: 'admin' },
+      {
+        jwtid: jti,
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+        // No expiresIn - token persists until explicitly revoked
+      },
+    );
+
+    return { accessToken, refreshToken, jti };
+  }
+
+  /**
+   * Step 1: Login with email and password - Send OTP
+   */
   async login(email: string, password: string) {
     if (!email || !password) {
       throw new UnauthorizedException('Invalid credentials');
@@ -144,20 +211,116 @@ export class AdminAuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // Generate 6-digit OTP based on environment
+    const isStaging = this.configService.get<string>('NODE_ENV') === 'staging';
+    const otp = isStaging
+      ? '123456'
+      : Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Store OTP in Redis with 5 minutes expiry
+    const otpKey = this.adminOtpKey(email);
+    await this.redisService.set(
+      otpKey,
+      JSON.stringify({
+        otp,
+        adminId: admin.id,
+        email: admin.email,
+        createdAt: new Date().toISOString(),
+      }),
+      300, // 5 minutes
+    );
+
+    // Send OTP via email
+    await this.emailService.sendAdminLoginOtp(admin.email, admin.name, otp);
+
+    return {
+      message: 'OTP sent to your email. Please verify to complete login.',
+      email: admin.email,
+      requiresOtp: true,
+    };
+  }
+
+  /**
+   * Step 2: Verify OTP and return JWT token
+   */
+  async verifyLoginOtp(email: string, otp: string) {
+    if (!email || !otp) {
+      throw new BadRequestException('Email and OTP are required');
+    }
+
+    // Check failed attempts
+    const attemptsKey = this.adminOtpAttemptsKey(email);
+    const attempts = await this.redisService.get(attemptsKey);
+    const attemptCount = attempts ? parseInt(attempts) : 0;
+
+    if (attemptCount >= 5) {
+      throw new UnauthorizedException(
+        'Too many failed attempts. Please request a new OTP.',
+      );
+    }
+
+    // Get OTP from Redis
+    const otpKey = this.adminOtpKey(email);
+    const otpData = await this.redisService.get(otpKey);
+
+    if (!otpData) {
+      throw new UnauthorizedException('OTP expired or invalid');
+    }
+
+    const { otp: storedOtp, adminId } = JSON.parse(otpData);
+
+    // Verify OTP
+    if (otp !== storedOtp) {
+      // Increment failed attempts
+      await this.redisService.set(
+        attemptsKey,
+        (attemptCount + 1).toString(),
+        300,
+      );
+      throw new UnauthorizedException('Invalid OTP');
+    }
+
+    // OTP is valid - get admin details
+    const admin = await this.adminModel.findByPk(adminId);
+
+    if (!admin) {
+      throw new UnauthorizedException('Admin not found');
+    }
+
+    // Clear OTP and attempts from Redis
+    await this.redisService.del(otpKey);
+    await this.redisService.del(attemptsKey);
+
     // Update last login
     await admin.update({ lastLoginAt: new Date() });
 
-    const payload = {
-      sub: admin.id,
-      email: admin.email,
-      role: admin.role,
-      type: 'admin',
-    };
+    // Generate access and refresh tokens
+    const { accessToken, refreshToken, jti } = await this.generateTokens(
+      admin.id,
+      admin.email,
+      admin.role,
+    );
 
-    const accessToken = this.jwtService.sign(payload);
+    // Store refresh token JTI in Redis for session management
+    await this.redisService.set(
+      this.refreshTokenKey(jti),
+      JSON.stringify({
+        adminId: admin.id,
+        email: admin.email,
+        createdAt: new Date().toISOString(),
+      }),
+      // 30 days in seconds
+      30 * 24 * 60 * 60,
+    );
+
+    // Add JTI to admin's active sessions set
+    await this.redisService
+      .getClient()
+      .sadd(this.sessionsSetKey(admin.id), jti);
 
     return {
       accessToken,
+      refreshToken,
       admin: {
         id: admin.id,
         name: admin.name,
@@ -166,6 +329,226 @@ export class AdminAuthService {
         profileImage: admin.profileImage,
       },
     };
+  }
+
+  /**
+   * Resend OTP for admin login
+   */
+  async resendLoginOtp(email: string) {
+    if (!email) {
+      throw new BadRequestException('Email is required');
+    }
+
+    const admin = await this.adminModel.findOne({
+      where: { email },
+    });
+
+    if (!admin) {
+      throw new NotFoundException('Admin not found');
+    }
+
+    if (admin.status !== AdminStatus.ACTIVE) {
+      throw new UnauthorizedException('Account is inactive or suspended');
+    }
+
+    // Generate new 6-digit OTP based on environment
+    const isStaging = this.configService.get<string>('NODE_ENV') === 'staging';
+    const otp = isStaging
+      ? '123456'
+      : Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Store OTP in Redis with 5 minutes expiry
+    const otpKey = this.adminOtpKey(email);
+    await this.redisService.set(
+      otpKey,
+      JSON.stringify({
+        otp,
+        adminId: admin.id,
+        email: admin.email,
+        createdAt: new Date().toISOString(),
+      }),
+      300, // 5 minutes
+    );
+
+    // Reset failed attempts
+    const attemptsKey = this.adminOtpAttemptsKey(email);
+    await this.redisService.del(attemptsKey);
+
+    // Send OTP via email
+    await this.emailService.sendAdminLoginOtp(admin.email, admin.name, otp);
+
+    return {
+      message: 'New OTP sent to your email',
+      email: admin.email,
+    };
+  }
+
+  /**
+   * Logout from single device by revoking refresh token
+   */
+  async logout(refreshToken: string) {
+    try {
+      // Verify and decode the refresh token
+      const decoded: any = this.jwtService.verify(refreshToken, {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      });
+
+      const adminId = decoded.sub;
+      const jti = decoded.jti;
+
+      if (!adminId || !jti) {
+        return { message: 'Logged out' };
+      }
+
+      // Remove session from Redis and blacklist the token
+      const sessionKey = this.refreshTokenKey(jti);
+      const sessionsSetKey = this.sessionsSetKey(adminId);
+      const blacklistKey = this.blacklistKey(jti);
+
+      // Calculate TTL for blacklist (30 days)
+      const ttl = 30 * 24 * 60 * 60;
+
+      await this.redisService
+        .getClient()
+        .multi()
+        .set(blacklistKey, '1', 'EX', ttl)
+        .del(sessionKey)
+        .srem(sessionsSetKey, jti)
+        .exec();
+
+      return { message: 'Logged out' };
+    } catch (error) {
+      // Invalid token - still return success for security
+      return { message: 'Logged out' };
+    }
+  }
+
+  /**
+   * Logout from all devices by revoking all refresh tokens
+   */
+  async logoutAll(adminId: number) {
+    const sessionsSetKey = this.sessionsSetKey(adminId);
+    const jtis = await this.redisService.getClient().smembers(sessionsSetKey);
+
+    if (jtis.length) {
+      const multi = this.redisService.getClient().multi();
+
+      for (const jti of jtis) {
+        // Delete session key
+        multi.del(this.refreshTokenKey(jti));
+
+        // Blacklist token for 30 days
+        multi.set(this.blacklistKey(jti), '1', 'EX', 30 * 24 * 60 * 60);
+      }
+
+      // Remove the sessions set
+      multi.del(sessionsSetKey);
+
+      await multi.exec();
+    }
+
+    return { message: 'Logged out from all devices' };
+  }
+
+  /**
+   * Refresh access token using refresh token
+   */
+  async refreshToken(refreshToken: string) {
+    try {
+      // Verify and decode the refresh token
+      const decoded: any = this.jwtService.verify(refreshToken, {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      });
+
+      const adminId = decoded.sub;
+      const jti = decoded.jti;
+
+      if (!adminId || !jti) {
+        throw new UnauthorizedException('Malformed refresh token');
+      }
+
+      // Check if token is blacklisted
+      const isBlacklisted = await this.redisService
+        .getClient()
+        .get(this.blacklistKey(jti));
+      if (isBlacklisted) {
+        throw new ForbiddenException('Refresh token revoked');
+      }
+
+      // Check if session exists
+      const sessionExists = await this.redisService
+        .getClient()
+        .get(this.refreshTokenKey(jti));
+      if (!sessionExists) {
+        throw new UnauthorizedException('Session expired or revoked');
+      }
+
+      // Get admin details
+      const admin = await this.adminModel.findByPk(adminId);
+      if (!admin || admin.status !== AdminStatus.ACTIVE) {
+        throw new UnauthorizedException('Admin not found or inactive');
+      }
+
+      // Generate new tokens
+      const {
+        accessToken,
+        refreshToken: newRefreshToken,
+        jti: newJti,
+      } = await this.generateTokens(adminId, admin.email, admin.role);
+
+      // Rotate session in Redis
+      await this.rotateSession(adminId, jti, newJti);
+
+      return {
+        accessToken,
+        refreshToken: newRefreshToken,
+      };
+    } catch (error) {
+      if (
+        error instanceof UnauthorizedException ||
+        error instanceof ForbiddenException
+      ) {
+        throw error;
+      }
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+  }
+
+  /**
+   * Helper: Rotate refresh token session
+   */
+  private async rotateSession(
+    adminId: number,
+    oldJti: string,
+    newJti: string,
+  ) {
+    const oldKey = this.refreshTokenKey(oldJti);
+    const newKey = this.refreshTokenKey(newJti);
+    const sessionsSetKey = this.sessionsSetKey(adminId);
+
+    // Get old session data
+    const oldSession = await this.redisService.getClient().get(oldKey);
+    const sessionData = oldSession
+      ? JSON.parse(oldSession)
+      : { adminId, createdAt: new Date().toISOString() };
+
+    // Update rotation timestamp
+    sessionData.rotatedAt = new Date().toISOString();
+
+    // Atomic operations to rotate session
+    await this.redisService
+      .getClient()
+      .multi()
+      .del(oldKey)
+      .srem(sessionsSetKey, oldJti)
+      .set(newKey, JSON.stringify(sessionData), 'EX', 30 * 24 * 60 * 60)
+      .sadd(sessionsSetKey, newJti)
+      .exec();
+
+    // Blacklist old token
+    await this.redisService
+      .getClient()
+      .set(this.blacklistKey(oldJti), '1', 'EX', 30 * 24 * 60 * 60);
   }
 
   async createAdmin(createAdminData: any) {
@@ -1790,11 +2173,6 @@ export class AdminAuthService {
         count: totalCampaignApplications,
       },
     };
-  }
-
-  // Redis key helper for password reset
-  private passwordResetKey(token: string): string {
-    return `admin:password-reset:${token}`;
   }
 
   /**
