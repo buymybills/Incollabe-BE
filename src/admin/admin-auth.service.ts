@@ -822,7 +822,7 @@ export class AdminAuthService {
     const { count, rows } = await this.influencerModel.findAndCountAll({
       where: whereClause,
       include,
-      limit,
+      limit: limit || 10,
       offset,
       order,
       distinct: true,
@@ -845,13 +845,13 @@ export class AdminAuthService {
       updatedAt: influencer.updatedAt,
     }));
 
-    const totalPages = Math.ceil(count / limit);
+    const totalPages = Math.ceil(count / (limit || 10));
 
     return {
       data,
       total: count,
-      page: Math.floor(offset / limit) + 1,
-      limit,
+      page: Math.floor(offset / (limit || 10)) + 1,
+      limit: limit || 10,
       totalPages,
       hasNext: offset + limit < count,
       hasPrevious: offset > 0,
@@ -926,7 +926,7 @@ export class AdminAuthService {
     const { count, rows } = await this.brandModel.findAndCountAll({
       where: whereClause,
       include,
-      limit,
+      limit: limit || 10,
       offset,
       order,
       distinct: true,
@@ -1126,6 +1126,10 @@ export class AdminAuthService {
       ],
     });
 
+    console.log(
+      `Found ${brandsWithMetrics.length} verified brands with isVerified=true, isActive=true, isProfileCompleted=true`,
+    );
+
     // Calculate metrics for each brand
     const brandsWithCalculatedMetrics = brandsWithMetrics
       .map((brand) => {
@@ -1176,13 +1180,26 @@ export class AdminAuthService {
         };
       })
       .filter((item) => {
-        // Apply minimum qualification filters
-        return (
-          item.metrics.totalCampaigns >= 2 &&
-          item.metrics.uniqueNichesCount >= 2 &&
-          item.metrics.selectedInfluencersCount >= 1
-        );
+        // Apply minimum qualification filters - relaxed for better results
+        // At least 1 campaign to be considered
+        return item.metrics.totalCampaigns >= 1;
       });
+
+    console.log(
+      `After filtering: ${brandsWithCalculatedMetrics.length} brands with at least 1 campaign`,
+    );
+
+    // If no brands meet criteria, return empty result
+    if (brandsWithCalculatedMetrics.length === 0) {
+      console.warn('No brands found matching the criteria');
+      return {
+        brands: [],
+        total: 0,
+        sortBy: sortBy || TopBrandsSortBy.COMPOSITE,
+        timeframe: timeframe || TopBrandsTimeframe.ALL_TIME,
+        limit: limit ?? 10,
+      };
+    }
 
     // Find max values for normalization
     const maxCampaigns = Math.max(
@@ -1284,7 +1301,7 @@ export class AdminAuthService {
       total: brandsWithScores.length,
       sortBy: sortBy || TopBrandsSortBy.COMPOSITE,
       timeframe: timeframe || TopBrandsTimeframe.ALL_TIME,
-      limit: limit || 10,
+      limit: limit ?? 10,
     };
   }
 
@@ -1317,7 +1334,7 @@ export class AdminAuthService {
             ? TopBrandsSortBy.COMPOSITE
             : TopBrandsSortBy.CAMPAIGNS,
         timeframe: TopBrandsTimeframe.ALL_TIME,
-        limit: limit,
+        limit: limit || 20,
       };
       const result = await this.getTopBrands(topBrandsRequest);
 
@@ -1354,9 +1371,9 @@ export class AdminAuthService {
 
       // Apply pagination
       const total = filteredBrands.length;
-      const totalPages = Math.ceil(total / limit);
-      const offset = (page - 1) * limit;
-      const paginatedBrands = filteredBrands.slice(offset, offset + limit);
+      const totalPages = Math.ceil(total / (limit ?? 20));
+      const offset = (page - 1) * (limit ?? 20);
+      const paginatedBrands = filteredBrands.slice(offset, offset + (limit ?? 20));
 
       return {
         brands: paginatedBrands,
@@ -1366,7 +1383,7 @@ export class AdminAuthService {
             ? TopBrandsSortBy.COMPOSITE
             : TopBrandsSortBy.CAMPAIGNS,
         timeframe: TopBrandsTimeframe.ALL_TIME,
-        limit,
+        limit: limit ?? 20,
       };
     }
 
@@ -1609,16 +1626,16 @@ export class AdminAuthService {
 
     // Pagination
     const total = validBrands.length;
-    const totalPages = Math.ceil(total / limit);
-    const offset = (page - 1) * limit;
-    const paginatedBrands = validBrands.slice(offset, offset + limit);
+    const totalPages = Math.ceil(total / (limit ?? 20));
+    const offset = (page - 1) * (limit ?? 20);
+    const paginatedBrands = validBrands.slice(offset, offset + (limit ?? 20));
 
     return {
       brands: paginatedBrands,
       total,
       sortBy: TopBrandsSortBy.COMPOSITE,
       timeframe: TopBrandsTimeframe.ALL_TIME,
-      limit,
+      limit: limit ?? 20,
     };
   }
 
