@@ -328,7 +328,7 @@ export class PostService {
     let orderCondition: any[] = [];
 
     if (userType && userId) {
-      // Viewing specific user's posts - no priority needed
+      // Viewing specific user's profile posts - show only that user's posts
       if (userType === 'influencer') {
         whereCondition.influencerId = userId;
         whereCondition.userType = UserType.INFLUENCER;
@@ -341,37 +341,76 @@ export class PostService {
         ['likesCount', 'DESC'],
       ];
     } else if (currentUserId && currentUserType) {
-      // Feed generation with priority ordering
-      const userNiches = await this.getUserNiches(
-        currentUserType,
-        currentUserId,
-      );
+      // Hybrid feed generation: P1-P6 priority + recency within each priority
       const followingUsers = await this.getFollowingUsers(
         currentUserType,
         currentUserId,
       );
 
-      // Get users with matching niches (separate from following)
-      const nicheMatchingUserIds =
-        await this.getNicheMatchingUserIds(userNiches);
-
-      // Build priority-based ordering using CASE statement
-      const priorityCase = this.buildPriorityCase(
+      // Get user's niches for relevance matching
+      const userNiches = await this.getUserNiches(
         currentUserType,
         currentUserId,
-        nicheMatchingUserIds,
-        followingUsers,
       );
 
-      // Order by priority first, then by creation date
-      orderCondition = [
-        Sequelize.literal(priorityCase),
-        ['createdAt', 'DESC'],
-        ['likesCount', 'DESC'],
-      ];
+      // Get users in matching niches
+      const nicheMatchingUserIds = await this.getNicheMatchingUserIds(
+        userNiches,
+      );
 
-      // No filtering - show all active posts
-      // Priority ordering will handle the feed relevance
+      // Build OR condition to show posts from followed users + own posts
+      const orConditions: any[] = [];
+
+      // Own posts
+      if (currentUserType === UserType.INFLUENCER) {
+        orConditions.push({
+          influencerId: currentUserId,
+          userType: UserType.INFLUENCER,
+        });
+      } else {
+        orConditions.push({
+          brandId: currentUserId,
+          userType: UserType.BRAND,
+        });
+      }
+
+      // Posts from followed influencers
+      if (followingUsers.influencerIds.length > 0) {
+        orConditions.push({
+          influencerId: { [Op.in]: followingUsers.influencerIds },
+          userType: UserType.INFLUENCER,
+        });
+      }
+
+      // Posts from followed brands
+      if (followingUsers.brandIds.length > 0) {
+        orConditions.push({
+          brandId: { [Op.in]: followingUsers.brandIds },
+          userType: UserType.BRAND,
+        });
+      }
+
+      // If user follows someone, filter feed to show only followed users' posts
+      if (orConditions.length > 0) {
+        whereCondition[Op.or] = orConditions;
+      }
+
+      // Build priority case with P1-P6 levels
+      const priorityCase = this.buildPriorityCase(
+        currentUserId,
+        currentUserType,
+        followingUsers.influencerIds,
+        followingUsers.brandIds,
+        nicheMatchingUserIds.influencerIds,
+        nicheMatchingUserIds.brandIds,
+      );
+
+      // Hybrid ordering: Priority level (P1-P6) THEN recency within each priority
+      orderCondition = [
+        Sequelize.literal(priorityCase), // Priority level
+        ['createdAt', 'DESC'], // Newest first within each priority
+        ['likesCount', 'DESC'], // Engagement as tiebreaker
+      ];
     } else {
       // Public feed - no user context
       orderCondition = [
@@ -593,10 +632,12 @@ export class PostService {
   }
 
   private buildPriorityCase(
-    currentUserType: UserType,
     currentUserId: number,
-    nicheMatchingUsers: { influencerIds: number[]; brandIds: number[] },
-    followingUsers: { influencerIds: number[]; brandIds: number[] },
+    currentUserType: UserType,
+    followingInfluencerIds: number[],
+    followingBrandIds: number[],
+    nicheMatchingInfluencerIds: number[],
+    nicheMatchingBrandIds: number[],
   ): string {
     // Build CASE statement for priority ordering (Instagram-style)
     // P1 (Priority 1): Recent own posts (posted within last 10 minutes) - appears on top temporarily
@@ -606,10 +647,10 @@ export class PostService {
     // P5 (Priority 5): All other posts (not following, different niche)
     // P6 (Priority 6): Old own posts (older than 10 minutes)
 
-    const nicheInfluencers = nicheMatchingUsers.influencerIds.join(',') || '0';
-    const nicheBrands = nicheMatchingUsers.brandIds.join(',') || '0';
-    const followingInfluencers = followingUsers.influencerIds.join(',') || '0';
-    const followingBrands = followingUsers.brandIds.join(',') || '0';
+    const nicheInfluencers = nicheMatchingInfluencerIds.join(',') || '0';
+    const nicheBrands = nicheMatchingBrandIds.join(',') || '0';
+    const followingInfluencers = followingInfluencerIds.join(',') || '0';
+    const followingBrands = followingBrandIds.join(',') || '0';
 
     const isInfluencer = currentUserType === UserType.INFLUENCER;
 
