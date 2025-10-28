@@ -54,7 +54,10 @@ export class SearchInfluencersDto {
     if (!value || value === '') return undefined;
     if (Array.isArray(value)) return value;
     if (typeof value === 'string') {
-      return value.split(',').map((v) => parseInt(v.trim(), 10)).filter(v => !isNaN(v));
+      return value
+        .split(',')
+        .map((v) => parseInt(v.trim(), 10))
+        .filter((v) => !isNaN(v));
     }
     return [value];
   })
@@ -75,7 +78,10 @@ export class SearchInfluencersDto {
     if (!value || value === '') return undefined;
     if (Array.isArray(value)) return value;
     if (typeof value === 'string') {
-      return value.split(',').map((v) => parseInt(v.trim(), 10)).filter(v => !isNaN(v));
+      return value
+        .split(',')
+        .map((v) => parseInt(v.trim(), 10))
+        .filter((v) => !isNaN(v));
     }
     return [value];
   })

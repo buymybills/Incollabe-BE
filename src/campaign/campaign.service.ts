@@ -807,7 +807,7 @@ export class CampaignService {
     const existingInfluencerIds = existingInvitations.map(
       (inv) => inv.influencerId,
     );
-    
+
     // Remove duplicates from influencerIds array and filter out existing invitations
     const uniqueInfluencerIds = [...new Set(influencerIds)];
     const newInfluencerIds = uniqueInfluencerIds.filter(
@@ -836,17 +836,17 @@ export class CampaignService {
     // Use bulkCreate with ignoreDuplicates to handle race conditions
     const createdInvitations = await this.campaignInvitationModel.bulkCreate(
       invitationsToCreate as any,
-      { 
+      {
         ignoreDuplicates: true, // This will skip duplicates instead of throwing error
       },
     );
 
     // Send WhatsApp and push notifications
     const brandName = campaign.brand?.brandName || 'Brand';
-    
+
     // Create a Set of newInfluencerIds for faster lookup and to ensure uniqueness
     const newInfluencerIdsSet = new Set(newInfluencerIds);
-    
+
     // Filter influencers to only those who are newly invited (no duplicates)
     const influencersToNotify = influencers.filter((inf) =>
       newInfluencerIdsSet.has(inf.id),
@@ -1159,7 +1159,7 @@ export class CampaignService {
   ) {
     // Build where condition for campaign based on user type
     const campaignWhere: any = { id: campaignId, isActive: true };
-    
+
     // If brandId is provided (brand is viewing), verify campaign belongs to them
     if (brandId !== null) {
       campaignWhere.brandId = brandId;

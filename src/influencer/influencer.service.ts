@@ -981,6 +981,27 @@ export class InfluencerService {
       limit = 10,
     } = getOpenCampaignsDto;
 
+    // Fetch influencer profile data for filtering
+    const influencer = await this.influencerRepository.findById(influencerId);
+    if (!influencer) {
+      throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
+    }
+
+    // Calculate influencer's age if dateOfBirth exists
+    let influencerAge: number | null = null;
+    if (influencer.dateOfBirth) {
+      const today = new Date();
+      const birthDate = new Date(influencer.dateOfBirth);
+      influencerAge = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (
+        monthDiff < 0 ||
+        (monthDiff === 0 && today.getDate() < birthDate.getDate())
+      ) {
+        influencerAge--;
+      }
+    }
+
     const offset = (page - 1) * limit;
     const whereCondition: any = {
       status: CampaignStatus.ACTIVE,
@@ -992,6 +1013,66 @@ export class InfluencerService {
       whereCondition[Op.or] = [
         { name: { [Op.iLike]: `%${search}%` } },
         { description: { [Op.iLike]: `%${search}%` } },
+      ];
+    }
+
+    // Niche filter - use provided nicheIds or fetch influencer's niches
+    let nicheIdsToFilter: number[] = [];
+    if (nicheIds && nicheIds.length > 0) {
+      // Use explicitly provided nicheIds from query parameter
+      nicheIdsToFilter = nicheIds;
+    } else {
+      // Fetch influencer's niches automatically
+      const influencerNiches = await this.influencerNicheModel.findAll({
+        where: { influencerId },
+        attributes: ['nicheId'],
+        raw: true,
+      });
+      nicheIdsToFilter = influencerNiches.map((n: any) => n.nicheId);
+    }
+
+    // Add niche filter to WHERE condition if nicheIds are available
+    if (nicheIdsToFilter.length > 0) {
+      const nicheConditions = nicheIdsToFilter.map(
+        (nicheId) =>
+          literal(`"Campaign"."nicheIds"::jsonb @> '[${nicheId}]'::jsonb`),
+      );
+      whereCondition[Op.and] = [
+        ...(whereCondition[Op.and] || []),
+        { [Op.or]: nicheConditions },
+      ];
+    }
+
+    // Add age filter to WHERE condition
+    if (influencerAge !== null) {
+      whereCondition[Op.and] = [
+        ...(whereCondition[Op.and] || []),
+        {
+          [Op.or]: [
+            { isOpenToAllAges: true },
+            {
+              [Op.and]: [
+                { minAge: { [Op.lte]: influencerAge } },
+                { maxAge: { [Op.gte]: influencerAge } },
+              ],
+            },
+          ],
+        },
+      ];
+    }
+
+    // Add gender filter to WHERE condition
+    if (influencer.gender) {
+      whereCondition[Op.and] = [
+        ...(whereCondition[Op.and] || []),
+        {
+          [Op.or]: [
+            { isOpenToAllGenders: true },
+            literal(
+              `"Campaign"."genderPreferences"::jsonb @> '["${influencer.gender}"]'::jsonb`,
+            ),
+          ],
+        },
       ];
     }
 
@@ -1015,7 +1096,7 @@ export class InfluencerService {
       },
     ];
 
-    // City filter
+    // City filter (from user's filter OR campaign location requirements)
     if (cityIds && cityIds.length > 0) {
       includeOptions.push({
         model: CampaignCity,
@@ -1024,6 +1105,22 @@ export class InfluencerService {
       });
     }
 
+    // Location filter - campaigns that match influencer's city or are Pan-India
+    if (influencer.cityId) {
+      whereCondition[Op.and] = [
+        ...(whereCondition[Op.and] || []),
+        {
+          [Op.or]: [
+            { isPanIndia: true },
+            {
+              '$cities.cityId$': influencer.cityId,
+            },
+          ],
+        },
+      ];
+    }
+
+    // Apply pagination at database level
     const { count, rows: campaigns } = await this.campaignModel.findAndCountAll(
       {
         where: whereCondition,
@@ -1032,6 +1129,7 @@ export class InfluencerService {
         limit,
         offset,
         distinct: true,
+        subQuery: false,
       },
     );
 
