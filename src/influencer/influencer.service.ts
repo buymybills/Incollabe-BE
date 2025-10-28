@@ -1033,9 +1033,8 @@ export class InfluencerService {
 
     // Add niche filter to WHERE condition if nicheIds are available
     if (nicheIdsToFilter.length > 0) {
-      const nicheConditions = nicheIdsToFilter.map(
-        (nicheId) =>
-          literal(`"Campaign"."nicheIds"::jsonb @> '[${nicheId}]'::jsonb`),
+      const nicheConditions = nicheIdsToFilter.map((nicheId) =>
+        literal(`"Campaign"."nicheIds"::jsonb @> '[${nicheId}]'::jsonb`),
       );
       whereCondition[Op.and] = [
         ...(whereCondition[Op.and] || []),

@@ -37,7 +37,8 @@ export class GetInfluencersDto {
   profileFilter: ProfileFilter;
 
   @ApiProperty({
-    description: 'Search query to filter influencers by profile name or username',
+    description:
+      'Search query to filter influencers by profile name or username',
     required: false,
     example: 'John',
   })
@@ -64,7 +65,8 @@ export class GetInfluencersDto {
   nicheSearch?: string;
 
   @ApiProperty({
-    description: 'Sort by metric (posts, followers, following, campaigns, or createdAt)',
+    description:
+      'Sort by metric (posts, followers, following, campaigns, or createdAt)',
     enum: InfluencerSortBy,
     required: false,
     default: InfluencerSortBy.CREATED_AT,
@@ -75,7 +77,8 @@ export class GetInfluencersDto {
   sortBy?: InfluencerSortBy = InfluencerSortBy.CREATED_AT;
 
   @ApiProperty({
-    description: 'Target niche IDs for matching (only used with topProfile filter)',
+    description:
+      'Target niche IDs for matching (only used with topProfile filter)',
     required: false,
     type: [Number],
     example: [1, 2, 3],
@@ -90,7 +93,9 @@ export class GetInfluencersDto {
         .filter((id) => !isNaN(id));
     }
     if (Array.isArray(value)) {
-      return value.map((id) => (typeof id === 'string' ? parseInt(id, 10) : id));
+      return value.map((id) =>
+        typeof id === 'string' ? parseInt(id, 10) : id,
+      );
     }
     return undefined;
   })
@@ -98,7 +103,8 @@ export class GetInfluencersDto {
   nicheIds?: number[];
 
   @ApiProperty({
-    description: 'Target city IDs for location matching (only used with topProfile filter)',
+    description:
+      'Target city IDs for location matching (only used with topProfile filter)',
     required: false,
     type: [Number],
     example: [1, 5, 10],
@@ -113,7 +119,9 @@ export class GetInfluencersDto {
         .filter((id) => !isNaN(id));
     }
     if (Array.isArray(value)) {
-      return value.map((id) => (typeof id === 'string' ? parseInt(id, 10) : id));
+      return value.map((id) =>
+        typeof id === 'string' ? parseInt(id, 10) : id,
+      );
     }
     return undefined;
   })
@@ -151,7 +159,8 @@ export class GetInfluencersDto {
   maxFollowers?: number;
 
   @ApiProperty({
-    description: 'Minimum budget per post in INR (only used with topProfile filter)',
+    description:
+      'Minimum budget per post in INR (only used with topProfile filter)',
     required: false,
     example: 5000,
   })
@@ -161,7 +170,8 @@ export class GetInfluencersDto {
   minBudget?: number;
 
   @ApiProperty({
-    description: 'Maximum budget per post in INR (only used with topProfile filter)',
+    description:
+      'Maximum budget per post in INR (only used with topProfile filter)',
     required: false,
     example: 50000,
   })
@@ -171,7 +181,8 @@ export class GetInfluencersDto {
   maxBudget?: number;
 
   @ApiProperty({
-    description: 'Minimum overall score percentage (only used with topProfile filter)',
+    description:
+      'Minimum overall score percentage (only used with topProfile filter)',
     required: false,
     example: 70,
   })
@@ -210,7 +221,8 @@ export class GetInfluencersDto {
   limit?: number = 20;
 
   @ApiProperty({
-    description: 'Weight for niche match score (only used with topProfile filter, default: 30)',
+    description:
+      'Weight for niche match score (only used with topProfile filter, default: 30)',
     required: false,
     default: 30,
   })
@@ -222,7 +234,8 @@ export class GetInfluencersDto {
   nicheMatchWeight?: number = 30;
 
   @ApiProperty({
-    description: 'Weight for engagement rate score (only used with topProfile filter, default: 25)',
+    description:
+      'Weight for engagement rate score (only used with topProfile filter, default: 25)',
     required: false,
     default: 25,
   })
@@ -234,7 +247,8 @@ export class GetInfluencersDto {
   engagementRateWeight?: number = 25;
 
   @ApiProperty({
-    description: 'Weight for audience relevance score (only used with topProfile filter, default: 15)',
+    description:
+      'Weight for audience relevance score (only used with topProfile filter, default: 15)',
     required: false,
     default: 15,
   })
@@ -246,7 +260,8 @@ export class GetInfluencersDto {
   audienceRelevanceWeight?: number = 15;
 
   @ApiProperty({
-    description: 'Weight for location match score (only used with topProfile filter, default: 15)',
+    description:
+      'Weight for location match score (only used with topProfile filter, default: 15)',
     required: false,
     default: 15,
   })
@@ -258,7 +273,8 @@ export class GetInfluencersDto {
   locationMatchWeight?: number = 15;
 
   @ApiProperty({
-    description: 'Weight for past performance score (only used with topProfile filter, default: 10)',
+    description:
+      'Weight for past performance score (only used with topProfile filter, default: 10)',
     required: false,
     default: 10,
   })
@@ -270,7 +286,8 @@ export class GetInfluencersDto {
   pastPerformanceWeight?: number = 10;
 
   @ApiProperty({
-    description: 'Weight for collaboration charges match score (only used with topProfile filter, default: 5)',
+    description:
+      'Weight for collaboration charges match score (only used with topProfile filter, default: 5)',
     required: false,
     default: 5,
   })

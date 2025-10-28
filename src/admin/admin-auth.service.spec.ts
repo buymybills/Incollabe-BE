@@ -14,6 +14,8 @@ import { CampaignApplication } from '../campaign/models/campaign-application.mod
 import { CampaignDeliverable } from '../campaign/models/campaign-deliverable.model';
 import { CampaignCity } from '../campaign/models/campaign-city.model';
 import { ProfileReview } from './models/profile-review.model';
+import { Post } from '../post/models/post.model';
+import { Follow } from '../post/models/follow.model';
 import { UnauthorizedException, BadRequestException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 
@@ -82,6 +84,16 @@ const mockProfileReviewModel = {
   count: jest.fn(),
 };
 
+const mockPostModel = {
+  findAll: jest.fn(),
+  count: jest.fn(),
+};
+
+const mockFollowModel = {
+  findAll: jest.fn(),
+  count: jest.fn(),
+};
+
 describe('AdminAuthService', () => {
   let service: AdminAuthService;
   let adminModel: typeof Admin;
@@ -134,6 +146,14 @@ describe('AdminAuthService', () => {
         {
           provide: getModelToken(CampaignCity),
           useValue: mockCampaignCityModel,
+        },
+        {
+          provide: getModelToken(Post),
+          useValue: mockPostModel,
+        },
+        {
+          provide: getModelToken(Follow),
+          useValue: mockFollowModel,
         },
         {
           provide: getModelToken(ProfileReview),

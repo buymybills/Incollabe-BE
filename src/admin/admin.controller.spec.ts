@@ -243,28 +243,46 @@ describe('AdminController', () => {
         mockPendingReviews,
       );
 
-      const result = await controller.getPendingProfiles({
-        admin: { id: 1 },
-      } as any);
+      const result = await controller.getPendingProfiles(
+        {
+          admin: { id: 1 },
+        } as any,
+        {} as any,
+      );
 
       expect(result).toEqual(mockPendingReviews);
-      expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(1);
+      expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(
+        1,
+        undefined,
+      );
     });
 
     it('should handle request without pagination', async () => {
       mockProfileReviewService.getPendingProfiles.mockResolvedValue([]);
 
-      await controller.getPendingProfiles({ admin: { id: 1 } } as any);
+      await controller.getPendingProfiles(
+        { admin: { id: 1 } } as any,
+        {} as any,
+      );
 
-      expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(1);
+      expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(
+        1,
+        undefined,
+      );
     });
 
     it('should extract admin ID from request', async () => {
       mockProfileReviewService.getPendingProfiles.mockResolvedValue([]);
 
-      await controller.getPendingProfiles({ admin: { id: 3 } } as any);
+      await controller.getPendingProfiles(
+        { admin: { id: 3 } } as any,
+        {} as any,
+      );
 
-      expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(3);
+      expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(
+        3,
+        undefined,
+      );
     });
   });
 
@@ -481,18 +499,30 @@ describe('AdminController', () => {
     it('should handle different admin IDs', async () => {
       mockProfileReviewService.getPendingProfiles.mockResolvedValue([]);
 
-      await controller.getPendingProfiles({ admin: { id: 2 } } as any);
+      await controller.getPendingProfiles(
+        { admin: { id: 2 } } as any,
+        {} as any,
+      );
 
-      expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(2);
+      expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(
+        2,
+        undefined,
+      );
     });
 
     it('should handle invalid number strings gracefully', async () => {
       mockProfileReviewService.getPendingProfiles.mockResolvedValue([]);
 
-      await controller.getPendingProfiles({ admin: { id: 1 } } as any);
+      await controller.getPendingProfiles(
+        { admin: { id: 1 } } as any,
+        {} as any,
+      );
 
       // Should extract admin ID from request
-      expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(1);
+      expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(
+        1,
+        undefined,
+      );
     });
   });
 
@@ -513,9 +543,9 @@ describe('AdminController', () => {
       mockProfileReviewService.getPendingProfiles.mockResolvedValue([]);
 
       const promises = [
-        controller.getPendingProfiles({ admin: { id: 1 } } as any),
-        controller.getPendingProfiles({ admin: { id: 1 } } as any),
-        controller.getPendingProfiles({ admin: { id: 1 } } as any),
+        controller.getPendingProfiles({ admin: { id: 1 } } as any, {} as any),
+        controller.getPendingProfiles({ admin: { id: 1 } } as any, {} as any),
+        controller.getPendingProfiles({ admin: { id: 1 } } as any, {} as any),
       ];
 
       const results = await Promise.all(promises);

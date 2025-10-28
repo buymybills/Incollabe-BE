@@ -68,12 +68,18 @@ export class DailyActiveInfluencersDto {
   @ApiProperty({ description: 'Current unverified profile count' })
   currentUnverifiedCount: number;
 
-  @ApiProperty({ description: 'Time series data', type: [DailyActiveInfluencersDataPointDto] })
+  @ApiProperty({
+    description: 'Time series data',
+    type: [DailyActiveInfluencersDataPointDto],
+  })
   timeSeriesData: DailyActiveInfluencersDataPointDto[];
 }
 
 export class NicheDistributionDto {
-  @ApiProperty({ description: 'Niche category name', example: 'Fashion, Lifestyle, Beauty' })
+  @ApiProperty({
+    description: 'Niche category name',
+    example: 'Fashion, Lifestyle, Beauty',
+  })
   nicheName: string;
 
   @ApiProperty({ description: 'Number of influencers in this niche' })
@@ -90,12 +96,18 @@ export class InfluencerDashboardStatsResponseDto {
   @ApiProperty({ description: 'City presence metrics' })
   cityPresence: CityPresenceDto;
 
-  @ApiProperty({ description: 'Top cities with most active influencers', type: [CityDistributionDto] })
+  @ApiProperty({
+    description: 'Top cities with most active influencers',
+    type: [CityDistributionDto],
+  })
   cityDistribution: CityDistributionDto[];
 
   @ApiProperty({ description: 'Daily active influencers data' })
   dailyActiveInfluencers: DailyActiveInfluencersDto;
 
-  @ApiProperty({ description: 'Influencer distribution by niche', type: [NicheDistributionDto] })
+  @ApiProperty({
+    description: 'Influencer distribution by niche',
+    type: [NicheDistributionDto],
+  })
   nicheDistribution: NicheDistributionDto[];
 }

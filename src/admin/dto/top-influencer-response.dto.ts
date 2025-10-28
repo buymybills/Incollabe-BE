@@ -148,7 +148,10 @@ export class TopInfluencersResponseDto {
   })
   influencers: TopInfluencerDto[];
 
-  @ApiProperty({ description: 'Total number of influencers found', example: 150 })
+  @ApiProperty({
+    description: 'Total number of influencers found',
+    example: 150,
+  })
   total: number;
 
   @ApiProperty({ description: 'Current page number', example: 1 })

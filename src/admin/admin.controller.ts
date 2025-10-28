@@ -922,7 +922,8 @@ export class AdminController {
   })
   async getCampaignApplications(
     @Param('id', ParseIntPipe) campaignId: number,
-    @Query('sortBy') sortBy?: 'relevance' | 'date' | 'engagement' | 'followers' | null,
+    @Query('sortBy')
+    sortBy?: 'relevance' | 'date' | 'engagement' | 'followers' | null,
     @Query('filter')
     filter?: 'all' | 'highly_recommended' | 'recommended' | 'consider' | null,
     @Query('page', new ParseIntPipe({ optional: true })) page: number = 1,

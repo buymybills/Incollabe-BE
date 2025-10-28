@@ -51,8 +51,12 @@ export class DashboardStatsService {
       influencersPending,
     ] = await Promise.all([
       this.influencerModel.count({ where: { isActive: true } }),
-      this.influencerModel.count({ where: { isActive: true, isVerified: true } }),
-      this.influencerModel.count({ where: { isActive: true, isVerified: false } }),
+      this.influencerModel.count({
+        where: { isActive: true, isVerified: true },
+      }),
+      this.influencerModel.count({
+        where: { isActive: true, isVerified: false },
+      }),
       this.influencerModel.count({
         where: {
           isActive: true,
@@ -134,7 +138,9 @@ export class DashboardStatsService {
     ] = await Promise.all([
       this.campaignModel.count({ where: { isActive: true } }),
       this.campaignModel.count({ where: { isActive: true, status: 'active' } }),
-      this.campaignModel.count({ where: { isActive: true, status: 'completed' } }),
+      this.campaignModel.count({
+        where: { isActive: true, status: 'completed' },
+      }),
       this.campaignModel.count({
         where: {
           isActive: true,
@@ -211,45 +217,72 @@ export class DashboardStatsService {
       influencerMetrics: {
         totalInfluencers: {
           count: totalInfluencers,
-          percentageChange: this.calculatePercentageChange(totalInfluencers, lastMonthTotalInfluencers),
+          percentageChange: this.calculatePercentageChange(
+            totalInfluencers,
+            lastMonthTotalInfluencers,
+          ),
         },
         verifiedInfluencers: {
           count: verifiedInfluencers,
-          percentageChange: this.calculatePercentageChange(verifiedInfluencers, lastMonthVerifiedInfluencers),
+          percentageChange: this.calculatePercentageChange(
+            verifiedInfluencers,
+            lastMonthVerifiedInfluencers,
+          ),
         },
         unverifiedInfluencers: {
           count: unverifiedInfluencers,
-          percentageChange: this.calculatePercentageChange(unverifiedInfluencers, lastMonthUnverifiedInfluencers),
+          percentageChange: this.calculatePercentageChange(
+            unverifiedInfluencers,
+            lastMonthUnverifiedInfluencers,
+          ),
         },
         influencersPendingVerification: influencersPending,
       },
       brandMetrics: {
         totalBrands: {
           count: totalBrands,
-          percentageChange: this.calculatePercentageChange(totalBrands, lastMonthTotalBrands),
+          percentageChange: this.calculatePercentageChange(
+            totalBrands,
+            lastMonthTotalBrands,
+          ),
         },
         verifiedBrands: {
           count: verifiedBrands,
-          percentageChange: this.calculatePercentageChange(verifiedBrands, lastMonthVerifiedBrands),
+          percentageChange: this.calculatePercentageChange(
+            verifiedBrands,
+            lastMonthVerifiedBrands,
+          ),
         },
         unverifiedBrands: {
           count: unverifiedBrands,
-          percentageChange: this.calculatePercentageChange(unverifiedBrands, lastMonthUnverifiedBrands),
+          percentageChange: this.calculatePercentageChange(
+            unverifiedBrands,
+            lastMonthUnverifiedBrands,
+          ),
         },
         brandsPendingVerification: brandsPending,
       },
       campaignMetrics: {
         totalCampaigns: {
           count: totalCampaigns,
-          percentageChange: this.calculatePercentageChange(totalCampaigns, lastMonthTotalCampaigns),
+          percentageChange: this.calculatePercentageChange(
+            totalCampaigns,
+            lastMonthTotalCampaigns,
+          ),
         },
         campaignsLive: {
           count: campaignsLive,
-          percentageChange: this.calculatePercentageChange(campaignsLive, lastMonthCampaignsLive),
+          percentageChange: this.calculatePercentageChange(
+            campaignsLive,
+            lastMonthCampaignsLive,
+          ),
         },
         campaignsCompleted: {
           count: campaignsCompleted,
-          percentageChange: this.calculatePercentageChange(campaignsCompleted, lastMonthCampaignsCompleted),
+          percentageChange: this.calculatePercentageChange(
+            campaignsCompleted,
+            lastMonthCampaignsCompleted,
+          ),
         },
         totalCampaignApplications: totalApplications,
       },
@@ -311,8 +344,12 @@ export class DashboardStatsService {
       influencersPending,
     ] = await Promise.all([
       this.influencerModel.count({ where: { isActive: true } }),
-      this.influencerModel.count({ where: { isActive: true, isVerified: true } }),
-      this.influencerModel.count({ where: { isActive: true, isVerified: false } }),
+      this.influencerModel.count({
+        where: { isActive: true, isVerified: true },
+      }),
+      this.influencerModel.count({
+        where: { isActive: true, isVerified: false },
+      }),
       this.influencerModel.count({
         where: {
           isActive: true,
@@ -343,13 +380,35 @@ export class DashboardStatsService {
 
     // City Presence
     const distinctCitiesNow = await this.influencerModel.findAll({
-      attributes: [[this.influencerModel.sequelize!.fn('COUNT', this.influencerModel.sequelize!.fn('DISTINCT', this.influencerModel.sequelize!.col('cityId'))), 'count']],
+      attributes: [
+        [
+          this.influencerModel.sequelize!.fn(
+            'COUNT',
+            this.influencerModel.sequelize!.fn(
+              'DISTINCT',
+              this.influencerModel.sequelize!.col('cityId'),
+            ),
+          ),
+          'count',
+        ],
+      ],
       where: { cityId: { [Op.ne]: null }, isActive: true },
       raw: true,
     });
 
     const distinctCitiesLastMonth = await this.influencerModel.findAll({
-      attributes: [[this.influencerModel.sequelize!.fn('COUNT', this.influencerModel.sequelize!.fn('DISTINCT', this.influencerModel.sequelize!.col('cityId'))), 'count']],
+      attributes: [
+        [
+          this.influencerModel.sequelize!.fn(
+            'COUNT',
+            this.influencerModel.sequelize!.fn(
+              'DISTINCT',
+              this.influencerModel.sequelize!.col('cityId'),
+            ),
+          ),
+          'count',
+        ],
+      ],
       where: {
         cityId: { [Op.ne]: null },
         isActive: true,
@@ -359,7 +418,8 @@ export class DashboardStatsService {
     });
 
     const totalCitiesNow = parseInt((distinctCitiesNow[0] as any).count) || 0;
-    const totalCitiesLastMonth = parseInt((distinctCitiesLastMonth[0] as any).count) || 0;
+    const totalCitiesLastMonth =
+      parseInt((distinctCitiesLastMonth[0] as any).count) || 0;
     const changeVsLastMonth = totalCitiesNow - totalCitiesLastMonth;
     const percentageChange =
       totalCitiesLastMonth > 0
@@ -370,7 +430,13 @@ export class DashboardStatsService {
     const cityDistribution = await this.influencerModel.findAll({
       attributes: [
         'cityId',
-        [this.influencerModel.sequelize!.fn('COUNT', this.influencerModel.sequelize!.col('Influencer.id')), 'count'],
+        [
+          this.influencerModel.sequelize!.fn(
+            'COUNT',
+            this.influencerModel.sequelize!.col('Influencer.id'),
+          ),
+          'count',
+        ],
       ],
       include: [
         {
@@ -467,9 +533,7 @@ export class DashboardStatsService {
     );
 
     for (let i = 0; i <= daysDiff; i++) {
-      const date = new Date(
-        startDate.getTime() + i * 24 * 60 * 60 * 1000,
-      );
+      const date = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
       const endOfDay = new Date(
         date.getFullYear(),
         date.getMonth(),

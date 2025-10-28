@@ -12,7 +12,8 @@ import { Transform, Type } from 'class-transformer';
 
 export class GetTopInfluencersDto {
   @ApiProperty({
-    description: 'Search query to filter influencers by profile name or username',
+    description:
+      'Search query to filter influencers by profile name or username',
     required: false,
     example: 'John',
   })
@@ -54,7 +55,9 @@ export class GetTopInfluencersDto {
         .filter((id) => !isNaN(id));
     }
     if (Array.isArray(value)) {
-      return value.map((id) => (typeof id === 'string' ? parseInt(id, 10) : id));
+      return value.map((id) =>
+        typeof id === 'string' ? parseInt(id, 10) : id,
+      );
     }
     return undefined;
   })
@@ -77,7 +80,9 @@ export class GetTopInfluencersDto {
         .filter((id) => !isNaN(id));
     }
     if (Array.isArray(value)) {
-      return value.map((id) => (typeof id === 'string' ? parseInt(id, 10) : id));
+      return value.map((id) =>
+        typeof id === 'string' ? parseInt(id, 10) : id,
+      );
     }
     return undefined;
   })

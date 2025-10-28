@@ -10,7 +10,11 @@ import { Niche } from '../../auth/model/niche.model';
 import { City } from '../../shared/models/city.model';
 import { Country } from '../../shared/models/country.model';
 import { GetTopInfluencersDto } from '../dto/get-top-influencers.dto';
-import { GetInfluencersDto, ProfileFilter, InfluencerSortBy } from '../dto/get-influencers.dto';
+import {
+  GetInfluencersDto,
+  ProfileFilter,
+  InfluencerSortBy,
+} from '../dto/get-influencers.dto';
 import {
   TopInfluencerDto,
   TopInfluencersResponseDto,
@@ -148,11 +152,13 @@ export class InfluencerScoringService {
 
         const followersCount = await this.getFollowersCount(influencer.id);
         const postsCount = await this.getPostsCount(influencer.id);
-        const completedCampaigns =
-          await this.getCompletedCampaignsCount(influencer.id);
+        const completedCampaigns = await this.getCompletedCampaignsCount(
+          influencer.id,
+        );
 
         // Get niche names
-        const niches = (influencer as any).niches?.map((niche: any) => niche.name) || [];
+        const niches =
+          (influencer as any).niches?.map((niche: any) => niche.name) || [];
 
         // Get collaboration costs
         const instagramCosts =
@@ -163,17 +169,9 @@ export class InfluencerScoringService {
         // Apply filters
         if (minFollowers && followersCount < minFollowers) return null;
         if (maxFollowers && followersCount > maxFollowers) return null;
-        if (
-          minBudget &&
-          instagramPostCost > 0 &&
-          instagramPostCost < minBudget
-        )
+        if (minBudget && instagramPostCost > 0 && instagramPostCost < minBudget)
           return null;
-        if (
-          maxBudget &&
-          instagramPostCost > 0 &&
-          instagramPostCost > maxBudget
-        )
+        if (maxBudget && instagramPostCost > 0 && instagramPostCost > maxBudget)
           return null;
         if (minScore && scoreBreakdown.overallScore < minScore) return null;
 
@@ -203,16 +201,15 @@ export class InfluencerScoringService {
     // Filter out null values and sort by overall score
     const validInfluencers = scoredInfluencers
       .filter((inf): inf is TopInfluencerDto => inf !== null)
-      .sort((a, b) => b.scoreBreakdown.overallScore - a.scoreBreakdown.overallScore);
+      .sort(
+        (a, b) => b.scoreBreakdown.overallScore - a.scoreBreakdown.overallScore,
+      );
 
     // Pagination
     const total = validInfluencers.length;
     const totalPages = Math.ceil(total / limit);
     const offset = (page - 1) * limit;
-    const paginatedInfluencers = validInfluencers.slice(
-      offset,
-      offset + limit,
-    );
+    const paginatedInfluencers = validInfluencers.slice(offset, offset + limit);
 
     return {
       influencers: paginatedInfluencers,
@@ -234,7 +231,15 @@ export class InfluencerScoringService {
   async getInfluencers(
     filters: GetInfluencersDto,
   ): Promise<TopInfluencersResponseDto> {
-    const { profileFilter, page = 1, limit = 20, searchQuery, locationSearch, nicheSearch, sortBy = InfluencerSortBy.CREATED_AT } = filters;
+    const {
+      profileFilter,
+      page = 1,
+      limit = 20,
+      searchQuery,
+      locationSearch,
+      nicheSearch,
+      sortBy = InfluencerSortBy.CREATED_AT,
+    } = filters;
 
     // For topProfile, use the existing scoring logic
     if (profileFilter === ProfileFilter.TOP_PROFILE) {
@@ -319,8 +324,9 @@ export class InfluencerScoringService {
         const followersCount = await this.getFollowersCount(influencer.id);
         const followingCount = await this.getFollowingCount(influencer.id);
         const postsCount = await this.getPostsCount(influencer.id);
-        const completedCampaigns =
-          await this.getCompletedCampaignsCount(influencer.id);
+        const completedCampaigns = await this.getCompletedCampaignsCount(
+          influencer.id,
+        );
 
         // Apply follower filters
         if (filters.minFollowers && followersCount < filters.minFollowers)
@@ -329,7 +335,8 @@ export class InfluencerScoringService {
           return null;
 
         // Get niche names
-        const niches = (influencer as any).niches?.map((niche: any) => niche.name) || [];
+        const niches =
+          (influencer as any).niches?.map((niche: any) => niche.name) || [];
 
         // Get collaboration costs
         const instagramCosts =
@@ -375,8 +382,9 @@ export class InfluencerScoringService {
     );
 
     // Filter out null values
-    let validInfluencers = mappedInfluencers.filter(
-      (inf): inf is TopInfluencerDto & { followingCount: number } => inf !== null,
+    const validInfluencers = mappedInfluencers.filter(
+      (inf): inf is TopInfluencerDto & { followingCount: number } =>
+        inf !== null,
     );
 
     // Apply sorting based on sortBy parameter
@@ -391,7 +399,9 @@ export class InfluencerScoringService {
         validInfluencers.sort((a, b) => b.followingCount - a.followingCount);
         break;
       case InfluencerSortBy.CAMPAIGNS:
-        validInfluencers.sort((a, b) => b.completedCampaigns - a.completedCampaigns);
+        validInfluencers.sort(
+          (a, b) => b.completedCampaigns - a.completedCampaigns,
+        );
         break;
       case InfluencerSortBy.CREATED_AT:
       default:
@@ -446,12 +456,11 @@ export class InfluencerScoringService {
     );
     const pastPerformanceScore =
       await this.calculatePastPerformanceScore(influencer);
-    const collaborationChargesScore =
-      this.calculateCollaborationChargesScore(
-        influencer,
-        filters.minBudget,
-        filters.maxBudget,
-      );
+    const collaborationChargesScore = this.calculateCollaborationChargesScore(
+      influencer,
+      filters.minBudget,
+      filters.maxBudget,
+    );
 
     // Calculate overall weighted score
     const overallScore =
@@ -499,7 +508,9 @@ export class InfluencerScoringService {
       where: { influencerId: influencer.id },
     });
 
-    const influencerNicheIds = influencerNiches.map((nicheRel) => nicheRel.nicheId);
+    const influencerNicheIds = influencerNiches.map(
+      (nicheRel) => nicheRel.nicheId,
+    );
 
     if (influencerNicheIds.length === 0) {
       return 30; // Low score if influencer has no niches
@@ -684,7 +695,8 @@ export class InfluencerScoringService {
     minBudget?: number,
     maxBudget?: number,
   ): number {
-    const instagramCosts = (influencer.collaborationCosts as any)?.instagram || {};
+    const instagramCosts =
+      (influencer.collaborationCosts as any)?.instagram || {};
     const postCost = instagramCosts.post || 0;
 
     // If no budget specified or influencer hasn't set rates
@@ -731,7 +743,7 @@ export class InfluencerScoringService {
    */
   private async getFollowingCount(influencerId: number): Promise<number> {
     return await this.followModel.count({
-      where: { 
+      where: {
         followerInfluencerId: influencerId,
         followingInfluencerId: { [Op.not]: null },
       },

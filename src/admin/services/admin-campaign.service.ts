@@ -154,7 +154,7 @@ export class AdminCampaignService {
     application: CampaignApplication,
     campaign: Campaign,
   ): Promise<ScoredApplication> {
-    const influencer = application.influencer as Influencer;
+    const influencer = application.influencer;
 
     // Get follower count for this influencer
     const followerCount = await this.getFollowerCount(influencer.id);
@@ -289,7 +289,9 @@ export class AdminCampaignService {
     const successfulCount = experiences.filter(
       (exp) => exp.successfullyCompleted,
     ).length;
-    const successRate = Math.round((successfulCount / experiences.length) * 100);
+    const successRate = Math.round(
+      (successfulCount / experiences.length) * 100,
+    );
 
     return {
       total: experiences.length,
@@ -308,7 +310,9 @@ export class AdminCampaignService {
       ],
     });
 
-    return campaignCities.map((cc) => (cc.city as any)?.name || '').filter(Boolean);
+    return campaignCities
+      .map((cc) => (cc.city as any)?.name || '')
+      .filter(Boolean);
   }
 
   private async getCampaignNiches(nicheIds: number[]): Promise<string[]> {

@@ -42,7 +42,11 @@ import {
   TopBrandsSortBy,
   TopBrandsTimeframe,
 } from './dto/top-brands.dto';
-import { GetBrandsDto, BrandProfileFilter, BrandSortBy } from './dto/get-brands.dto';
+import {
+  GetBrandsDto,
+  BrandProfileFilter,
+  BrandSortBy,
+} from './dto/get-brands.dto';
 import {
   TopCampaignsRequestDto,
   TopCampaignsResponseDto,
@@ -734,7 +738,7 @@ export class AdminAuthService {
     // Calculate metrics for each brand
     const brandsWithCalculatedMetrics = brandsWithMetrics
       .map((brand) => {
-        const campaigns = brand.get('campaigns') as any[] || [];
+        const campaigns = (brand.get('campaigns') as any[]) || [];
 
         // Metric 1: Total campaigns
         const totalCampaigns = campaigns.length;
@@ -758,7 +762,7 @@ export class AdminAuthService {
           const deliverables = campaign.deliverables || [];
           if (deliverables.length > 0) {
             const campaignBudget = deliverables.reduce(
-              (sum, d) => sum + (parseFloat(d.budget as any) || 0),
+              (sum, d) => sum + (parseFloat(d.budget) || 0),
               0,
             );
             if (campaignBudget > 0) {
@@ -917,7 +921,10 @@ export class AdminAuthService {
     // For topProfile, use the existing scoring logic
     if (profileFilter === BrandProfileFilter.TOP_PROFILE) {
       const topBrandsRequest: TopBrandsRequestDto = {
-        sortBy: sortBy === BrandSortBy.COMPOSITE ? TopBrandsSortBy.COMPOSITE : TopBrandsSortBy.CAMPAIGNS,
+        sortBy:
+          sortBy === BrandSortBy.COMPOSITE
+            ? TopBrandsSortBy.COMPOSITE
+            : TopBrandsSortBy.CAMPAIGNS,
         timeframe: TopBrandsTimeframe.ALL_TIME,
         limit: limit,
       };
@@ -963,7 +970,10 @@ export class AdminAuthService {
       return {
         brands: paginatedBrands,
         total,
-        sortBy: sortBy === BrandSortBy.COMPOSITE ? TopBrandsSortBy.COMPOSITE : TopBrandsSortBy.CAMPAIGNS,
+        sortBy:
+          sortBy === BrandSortBy.COMPOSITE
+            ? TopBrandsSortBy.COMPOSITE
+            : TopBrandsSortBy.CAMPAIGNS,
         timeframe: TopBrandsTimeframe.ALL_TIME,
         limit,
       };
@@ -1092,7 +1102,7 @@ export class AdminAuthService {
           const deliverables = campaign.deliverables || [];
           if (deliverables.length > 0) {
             const campaignBudget = deliverables.reduce(
-              (sum, d) => sum + (parseFloat(d.budget as any) || 0),
+              (sum, d) => sum + (parseFloat(d.budget) || 0),
               0,
             );
             if (campaignBudget > 0) {
@@ -1174,8 +1184,10 @@ export class AdminAuthService {
     );
 
     // Filter out null values
-    let validBrands = mappedBrands.filter(
-      (brand): brand is TopBrandDto & {
+    const validBrands = mappedBrands.filter(
+      (
+        brand,
+      ): brand is TopBrandDto & {
         postsCount: number;
         followersCount: number;
         followingCount: number;
@@ -1264,7 +1276,13 @@ export class AdminAuthService {
         {
           model: this.brandModel,
           as: 'brand',
-          attributes: ['id', 'brandName', 'username', 'profileImage', 'isVerified'],
+          attributes: [
+            'id',
+            'brandName',
+            'username',
+            'profileImage',
+            'isVerified',
+          ],
           where: brandWhere,
           required: true,
         },
@@ -1292,9 +1310,9 @@ export class AdminAuthService {
     // Calculate metrics for each campaign
     const campaignsWithMetrics = campaigns
       .map((campaign) => {
-        const applications = campaign.get('applications') as any[] || [];
-        const deliverables = campaign.get('deliverables') as any[] || [];
-        const cities = campaign.get('cities') as any[] || [];
+        const applications = (campaign.get('applications') as any[]) || [];
+        const deliverables = (campaign.get('deliverables') as any[]) || [];
+        const cities = (campaign.get('cities') as any[]) || [];
         const brand = campaign.get('brand') as any;
 
         // Application Metrics
@@ -1304,14 +1322,16 @@ export class AdminAuthService {
         );
         const selectedInfluencers = selectedApplications.length;
         const conversionRate =
-          applicationsCount > 0 ? (selectedInfluencers / applicationsCount) * 100 : 0;
+          applicationsCount > 0
+            ? (selectedInfluencers / applicationsCount) * 100
+            : 0;
 
         // Simple applicant quality score (can be enhanced with actual follower/engagement data)
         const applicantQuality = applicationsCount > 0 ? 50 : 0; // Placeholder
 
         // Budget Metrics
         const totalBudget = deliverables.reduce(
-          (sum, d) => sum + (parseFloat(d.budget as any) || 0),
+          (sum, d) => sum + (parseFloat(d.budget) || 0),
           0,
         );
         const deliverablesCount = deliverables.length;
@@ -1395,7 +1415,9 @@ export class AdminAuthService {
 
     // Find max values for normalization
     const maxApplications = Math.max(
-      ...campaignsWithMetrics.map((c) => c.metrics.application.applicationsCount),
+      ...campaignsWithMetrics.map(
+        (c) => c.metrics.application.applicationsCount,
+      ),
       1,
     );
     const maxBudget = Math.max(
@@ -1411,7 +1433,9 @@ export class AdminAuthService {
       1,
     );
     const maxSelected = Math.max(
-      ...campaignsWithMetrics.map((c) => c.metrics.engagement.selectedInfluencers),
+      ...campaignsWithMetrics.map(
+        (c) => c.metrics.engagement.selectedInfluencers,
+      ),
       1,
     );
     const maxDaysSinceLaunch = Math.max(
@@ -1428,7 +1452,8 @@ export class AdminAuthService {
         (metrics.application.applicationsCount / maxApplications) * 100;
       const normalizedConversionRate = metrics.application.conversionRate;
       const normalizedApplicantQuality = metrics.application.applicantQuality;
-      const normalizedTotalBudget = (metrics.budget.totalBudget / maxBudget) * 100;
+      const normalizedTotalBudget =
+        (metrics.budget.totalBudget / maxBudget) * 100;
       const normalizedBudgetPerDel =
         (metrics.budget.budgetPerDeliverable / maxBudgetPerDel) * 100;
       const normalizedGeographicReach = metrics.scope.geographicReach;
@@ -1440,9 +1465,11 @@ export class AdminAuthService {
       // Recency scoring: newer = higher score (inverse)
       const normalizedRecencyLaunch =
         100 - (metrics.recency.daysSinceLaunch / maxDaysSinceLaunch) * 100;
-      const normalizedRecencyActivity = metrics.recency.daysSinceLastApplication !== null
-        ? 100 - Math.min((metrics.recency.daysSinceLastApplication / 30) * 100, 100)
-        : 0;
+      const normalizedRecencyActivity =
+        metrics.recency.daysSinceLastApplication !== null
+          ? 100 -
+            Math.min((metrics.recency.daysSinceLastApplication / 30) * 100, 100)
+          : 0;
 
       // Calculate composite score with weights
       const compositeScore =
@@ -1475,7 +1502,8 @@ export class AdminAuthService {
         metrics: {
           application: {
             applicationsCount: metrics.application.applicationsCount,
-            conversionRate: Math.round(metrics.application.conversionRate * 100) / 100,
+            conversionRate:
+              Math.round(metrics.application.conversionRate * 100) / 100,
             applicantQuality: metrics.application.applicantQuality,
           },
           budget: {
@@ -1488,11 +1516,13 @@ export class AdminAuthService {
             isPanIndia: metrics.scope.isPanIndia,
             citiesCount: metrics.scope.citiesCount,
             nichesCount: metrics.scope.nichesCount,
-            geographicReach: Math.round(metrics.scope.geographicReach * 100) / 100,
+            geographicReach:
+              Math.round(metrics.scope.geographicReach * 100) / 100,
           },
           engagement: {
             selectedInfluencers: metrics.engagement.selectedInfluencers,
-            completionRate: Math.round(metrics.engagement.completionRate * 100) / 100,
+            completionRate:
+              Math.round(metrics.engagement.completionRate * 100) / 100,
             status: metrics.engagement.status,
           },
           recency: {
@@ -1553,7 +1583,14 @@ export class AdminAuthService {
   async getComprehensiveDashboardStats() {
     const now = new Date();
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+    const lastMonthEnd = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      0,
+      23,
+      59,
+      59,
+    );
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
     // Get all counts in parallel
@@ -1704,7 +1741,10 @@ export class AdminAuthService {
       },
       verifiedInfluencers: {
         count: verifiedInfluencers,
-        growth: calculateGrowth(verifiedInfluencers, lastMonthVerifiedInfluencers),
+        growth: calculateGrowth(
+          verifiedInfluencers,
+          lastMonthVerifiedInfluencers,
+        ),
       },
       verifiedBrands: {
         count: verifiedBrands,
@@ -1716,7 +1756,10 @@ export class AdminAuthService {
       },
       unverifiedInfluencers: {
         count: unverifiedInfluencers,
-        growth: calculateGrowth(unverifiedInfluencers, lastMonthUnverifiedInfluencers),
+        growth: calculateGrowth(
+          unverifiedInfluencers,
+          lastMonthUnverifiedInfluencers,
+        ),
       },
       unverifiedBrands: {
         count: unverifiedBrands,
@@ -1724,7 +1767,10 @@ export class AdminAuthService {
       },
       campaignsCompleted: {
         count: campaignsCompleted,
-        growth: calculateGrowth(campaignsCompleted, lastMonthCampaignsCompleted),
+        growth: calculateGrowth(
+          campaignsCompleted,
+          lastMonthCampaignsCompleted,
+        ),
       },
       influencersPendingVerification: {
         count: influencersPendingVerification,

@@ -71,7 +71,7 @@ export class ProfileReviewService {
 
   async getPendingProfiles(adminId: number, profileType?: ProfileType) {
     const whereConditions: any = { status: ReviewStatus.PENDING };
-    
+
     // Add profile type filter if provided
     if (profileType) {
       whereConditions.profileType = profileType;
