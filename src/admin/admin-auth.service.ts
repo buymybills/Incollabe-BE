@@ -21,6 +21,8 @@ import {
 } from '../campaign/models/campaign-application.model';
 import { CampaignDeliverable } from '../campaign/models/campaign-deliverable.model';
 import { CampaignCity } from '../campaign/models/campaign-city.model';
+import { Post } from '../post/models/post.model';
+import { Follow } from '../post/models/follow.model';
 import {
   ProfileReview,
   ReviewStatus,
@@ -40,7 +42,7 @@ import {
   TopBrandsSortBy,
   TopBrandsTimeframe,
 } from './dto/top-brands.dto';
-import { GetBrandsDto, BrandProfileFilter } from './dto/get-brands.dto';
+import { GetBrandsDto, BrandProfileFilter, BrandSortBy } from './dto/get-brands.dto';
 import {
   TopCampaignsRequestDto,
   TopCampaignsResponseDto,
@@ -99,6 +101,10 @@ export class AdminAuthService {
     private readonly campaignDeliverableModel: typeof CampaignDeliverable,
     @InjectModel(CampaignCity)
     private readonly campaignCityModel: typeof CampaignCity,
+    @InjectModel(Post)
+    private readonly postModel: typeof Post,
+    @InjectModel(Follow)
+    private readonly followModel: typeof Follow,
     @InjectModel(ProfileReview)
     private readonly profileReviewModel: typeof ProfileReview,
     private readonly jwtService: JwtService,
@@ -897,7 +903,10 @@ export class AdminAuthService {
   async getBrands(filters: GetBrandsDto): Promise<TopBrandsResponseDto> {
     const {
       profileFilter,
-      sortBy,
+      sortBy = BrandSortBy.CREATED_AT,
+      searchQuery,
+      locationSearch,
+      nicheSearch,
       minCampaigns,
       minSelectedInfluencers,
       minCompositeScore,
@@ -908,7 +917,7 @@ export class AdminAuthService {
     // For topProfile, use the existing scoring logic
     if (profileFilter === BrandProfileFilter.TOP_PROFILE) {
       const topBrandsRequest: TopBrandsRequestDto = {
-        sortBy: (sortBy as unknown as TopBrandsSortBy) || TopBrandsSortBy.COMPOSITE,
+        sortBy: sortBy === BrandSortBy.COMPOSITE ? TopBrandsSortBy.COMPOSITE : TopBrandsSortBy.CAMPAIGNS,
         timeframe: TopBrandsTimeframe.ALL_TIME,
         limit: limit,
       };
@@ -916,6 +925,16 @@ export class AdminAuthService {
 
       // Apply additional filters if provided
       let filteredBrands = result.brands;
+
+      // Apply search filters
+      if (searchQuery && searchQuery.trim()) {
+        const search = searchQuery.trim().toLowerCase();
+        filteredBrands = filteredBrands.filter(
+          (b) =>
+            b.brandName?.toLowerCase().includes(search) ||
+            b.username?.toLowerCase().includes(search),
+        );
+      }
 
       if (minCampaigns !== undefined) {
         filteredBrands = filteredBrands.filter(
@@ -944,7 +963,7 @@ export class AdminAuthService {
       return {
         brands: paginatedBrands,
         total,
-        sortBy: (sortBy as unknown as TopBrandsSortBy) || TopBrandsSortBy.COMPOSITE,
+        sortBy: sortBy === BrandSortBy.COMPOSITE ? TopBrandsSortBy.COMPOSITE : TopBrandsSortBy.CAMPAIGNS,
         timeframe: TopBrandsTimeframe.ALL_TIME,
         limit,
       };
@@ -955,6 +974,14 @@ export class AdminAuthService {
       isProfileCompleted: true,
       isActive: true,
     };
+
+    // Apply search query for brand name or username
+    if (searchQuery && searchQuery.trim()) {
+      whereConditions[Op.or] = [
+        { brandName: { [Op.iLike]: `%${searchQuery.trim()}%` } },
+        { username: { [Op.iLike]: `%${searchQuery.trim()}%` } },
+      ];
+    }
 
     // Apply profile filter
     switch (profileFilter) {
@@ -968,6 +995,30 @@ export class AdminAuthService {
       default:
         // No additional filter for all profiles
         break;
+    }
+
+    // Build dynamic includes for city and niche search
+    const cityInclude: any = {
+      model: this.cityModel,
+      as: 'city',
+    };
+    if (locationSearch && locationSearch.trim()) {
+      cityInclude.where = {
+        name: { [Op.iLike]: `%${locationSearch.trim()}%` },
+      };
+      cityInclude.required = true; // Inner join to filter results
+    }
+
+    const nicheInclude: any = {
+      model: this.nicheModel,
+      as: 'niches',
+      through: { attributes: [] },
+    };
+    if (nicheSearch && nicheSearch.trim()) {
+      nicheInclude.where = {
+        name: { [Op.iLike]: `%${nicheSearch.trim()}%` },
+      };
+      nicheInclude.required = true; // Inner join to filter results
     }
 
     // Fetch brands ordered by createdAt asc
@@ -985,6 +1036,8 @@ export class AdminAuthService {
         'createdAt',
       ],
       include: [
+        cityInclude,
+        nicheInclude,
         {
           model: this.campaignModel,
           as: 'campaigns',
@@ -1012,12 +1065,12 @@ export class AdminAuthService {
           ],
         },
       ],
-      order: [['createdAt', 'ASC']], // Order by creation date ascending
+      order: [['createdAt', 'ASC']], // Default order, will be re-sorted based on sortBy
     });
 
-    // Map brands and calculate metrics
-    const mappedBrands = allBrands
-      .map((brand) => {
+    // Map brands and calculate metrics (including posts, followers, following)
+    const mappedBrands = await Promise.all(
+      allBrands.map(async (brand) => {
         const campaigns = (brand.get('campaigns') as any[]) || [];
 
         // Calculate metrics
@@ -1051,6 +1104,32 @@ export class AdminAuthService {
         const averagePayout =
           campaignsWithBudget > 0 ? totalBudget / campaignsWithBudget : 0;
 
+        // Get posts count
+        const postsCount = await this.postModel.count({
+          where: {
+            userType: 'brand',
+            userId: brand.id,
+          },
+        });
+
+        // Get followers count (users following this brand)
+        const followersCount = await this.followModel.count({
+          where: {
+            followingBrandId: brand.id,
+          },
+        });
+
+        // Get following count (brands/influencers this brand follows)
+        const followingCount = await this.followModel.count({
+          where: {
+            followerBrandId: brand.id,
+            [Op.or]: [
+              { followingInfluencerId: { [Op.not]: null } },
+              { followingBrandId: { [Op.not]: null } },
+            ],
+          },
+        });
+
         // Apply filters
         if (minCampaigns !== undefined && totalCampaigns < minCampaigns) {
           return null;
@@ -1064,7 +1143,11 @@ export class AdminAuthService {
 
         // For non-top profiles, we don't calculate composite score
         // Set it to 0 for consistency
-        const brandDto: TopBrandDto = {
+        const brandDto: TopBrandDto & {
+          postsCount: number;
+          followersCount: number;
+          followingCount: number;
+        } = {
           id: brand.id,
           brandName: brand.brandName,
           username: brand.username,
@@ -1074,6 +1157,9 @@ export class AdminAuthService {
           websiteUrl: brand.websiteUrl,
           isVerified: brand.isVerified,
           createdAt: brand.createdAt,
+          postsCount,
+          followersCount,
+          followingCount,
           metrics: {
             totalCampaigns,
             uniqueNichesCount,
@@ -1084,14 +1170,45 @@ export class AdminAuthService {
         };
 
         return brandDto;
-      })
-      .filter((brand): brand is TopBrandDto => brand !== null);
+      }),
+    );
+
+    // Filter out null values
+    let validBrands = mappedBrands.filter(
+      (brand): brand is TopBrandDto & {
+        postsCount: number;
+        followersCount: number;
+        followingCount: number;
+      } => brand !== null,
+    );
+
+    // Apply sorting based on sortBy parameter
+    switch (sortBy) {
+      case BrandSortBy.POSTS:
+        validBrands.sort((a, b) => b.postsCount - a.postsCount);
+        break;
+      case BrandSortBy.FOLLOWERS:
+        validBrands.sort((a, b) => b.followersCount - a.followersCount);
+        break;
+      case BrandSortBy.FOLLOWING:
+        validBrands.sort((a, b) => b.followingCount - a.followingCount);
+        break;
+      case BrandSortBy.CAMPAIGNS:
+        validBrands.sort(
+          (a, b) => b.metrics.totalCampaigns - a.metrics.totalCampaigns,
+        );
+        break;
+      case BrandSortBy.CREATED_AT:
+      default:
+        // Already sorted by createdAt ASC from database query
+        break;
+    }
 
     // Pagination
-    const total = mappedBrands.length;
+    const total = validBrands.length;
     const totalPages = Math.ceil(total / limit);
     const offset = (page - 1) * limit;
-    const paginatedBrands = mappedBrands.slice(offset, offset + limit);
+    const paginatedBrands = validBrands.slice(offset, offset + limit);
 
     return {
       brands: paginatedBrands,

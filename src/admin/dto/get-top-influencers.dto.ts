@@ -4,12 +4,40 @@ import {
   IsNumber,
   IsArray,
   IsBoolean,
+  IsString,
   Min,
   Max,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 
 export class GetTopInfluencersDto {
+  @ApiProperty({
+    description: 'Search query to filter influencers by profile name or username',
+    required: false,
+    example: 'John',
+  })
+  @IsOptional()
+  @IsString()
+  searchQuery?: string;
+
+  @ApiProperty({
+    description: 'Search query to filter influencers by location (city name)',
+    required: false,
+    example: 'Mumbai',
+  })
+  @IsOptional()
+  @IsString()
+  locationSearch?: string;
+
+  @ApiProperty({
+    description: 'Search query to filter influencers by niche name',
+    required: false,
+    example: 'Fashion',
+  })
+  @IsOptional()
+  @IsString()
+  nicheSearch?: string;
+
   @ApiProperty({
     description: 'Target niche IDs for matching',
     required: false,

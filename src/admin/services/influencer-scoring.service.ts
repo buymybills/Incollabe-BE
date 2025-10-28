@@ -1,4 +1,5 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { InjectModel } from '@nestjs/sequelize';
 import { Influencer } from '../../auth/model/influencer.model';
 import { Post } from '../../post/models/post.model';
 import { Follow } from '../../post/models/follow.model';
@@ -9,14 +10,13 @@ import { Niche } from '../../auth/model/niche.model';
 import { City } from '../../shared/models/city.model';
 import { Country } from '../../shared/models/country.model';
 import { GetTopInfluencersDto } from '../dto/get-top-influencers.dto';
-import { GetInfluencersDto, ProfileFilter } from '../dto/get-influencers.dto';
+import { GetInfluencersDto, ProfileFilter, InfluencerSortBy } from '../dto/get-influencers.dto';
 import {
   TopInfluencerDto,
   TopInfluencersResponseDto,
   InfluencerScoreBreakdown,
 } from '../dto/top-influencer-response.dto';
 import { Op } from 'sequelize';
-import { Sequelize } from 'sequelize-typescript';
 
 interface ScoringWeights {
   nicheMatchWeight: number;
@@ -30,20 +30,18 @@ interface ScoringWeights {
 @Injectable()
 export class InfluencerScoringService {
   constructor(
-    @Inject('INFLUENCER_MODEL')
+    @InjectModel(Influencer)
     private influencerModel: typeof Influencer,
-    @Inject('POST_MODEL')
+    @InjectModel(Post)
     private postModel: typeof Post,
-    @Inject('FOLLOW_MODEL')
+    @InjectModel(Follow)
     private followModel: typeof Follow,
-    @Inject('CAMPAIGN_APPLICATION_MODEL')
+    @InjectModel(CampaignApplication)
     private campaignApplicationModel: typeof CampaignApplication,
-    @Inject('EXPERIENCE_MODEL')
+    @InjectModel(Experience)
     private experienceModel: typeof Experience,
-    @Inject('INFLUENCER_NICHE_MODEL')
+    @InjectModel(InfluencerNiche)
     private influencerNicheModel: typeof InfluencerNiche,
-    @Inject('SEQUELIZE')
-    private sequelize: Sequelize,
   ) {}
 
   /**
@@ -53,6 +51,9 @@ export class InfluencerScoringService {
     filters: GetTopInfluencersDto,
   ): Promise<TopInfluencersResponseDto> {
     const {
+      searchQuery,
+      locationSearch,
+      nicheSearch,
       nicheIds,
       cityIds,
       isPanIndia,
@@ -86,24 +87,49 @@ export class InfluencerScoringService {
       isActive: true,
     };
 
+    // Apply search query if provided
+    if (searchQuery && searchQuery.trim()) {
+      whereConditions[Op.or] = [
+        { name: { [Op.iLike]: `%${searchQuery.trim()}%` } },
+        { username: { [Op.iLike]: `%${searchQuery.trim()}%` } },
+      ];
+    }
+
     // Apply city filter if provided and not Pan India
     if (cityIds && cityIds.length > 0 && !isPanIndia) {
       whereConditions.cityId = { [Op.in]: cityIds };
+    }
+
+    // Build include conditions for City and Niche with search
+    const cityInclude: any = {
+      model: City,
+      as: 'city',
+    };
+    if (locationSearch && locationSearch.trim()) {
+      cityInclude.where = {
+        name: { [Op.iLike]: `%${locationSearch.trim()}%` },
+      };
+      cityInclude.required = true; // Inner join to filter results
+    }
+
+    const nicheInclude: any = {
+      model: Niche,
+      as: 'niches',
+      through: { attributes: [] }, // Exclude join table attributes
+    };
+    if (nicheSearch && nicheSearch.trim()) {
+      nicheInclude.where = {
+        name: { [Op.iLike]: `%${nicheSearch.trim()}%` },
+      };
+      nicheInclude.required = true; // Inner join to filter results
     }
 
     // Fetch all eligible influencers with their related data
     const influencers = await this.influencerModel.findAll({
       where: whereConditions,
       include: [
-        {
-          model: Niche,
-          as: 'niches',
-          through: { attributes: [] }, // Exclude join table attributes
-        },
-        {
-          model: City,
-          as: 'city',
-        },
+        nicheInclude,
+        cityInclude,
         {
           model: Country,
           as: 'country',
@@ -208,7 +234,7 @@ export class InfluencerScoringService {
   async getInfluencers(
     filters: GetInfluencersDto,
   ): Promise<TopInfluencersResponseDto> {
-    const { profileFilter, page = 1, limit = 20 } = filters;
+    const { profileFilter, page = 1, limit = 20, searchQuery, locationSearch, nicheSearch, sortBy = InfluencerSortBy.CREATED_AT } = filters;
 
     // For topProfile, use the existing scoring logic
     if (profileFilter === ProfileFilter.TOP_PROFILE) {
@@ -220,6 +246,14 @@ export class InfluencerScoringService {
       isProfileCompleted: true,
       isActive: true,
     };
+
+    // Apply search query if provided
+    if (searchQuery && searchQuery.trim()) {
+      whereConditions[Op.or] = [
+        { name: { [Op.iLike]: `%${searchQuery.trim()}%` } },
+        { username: { [Op.iLike]: `%${searchQuery.trim()}%` } },
+      ];
+    }
 
     // Apply profile filter
     switch (profileFilter) {
@@ -241,31 +275,49 @@ export class InfluencerScoringService {
       // For now, we'll fetch all and filter in application code
     }
 
+    // Build include conditions for City and Niche with search
+    const cityInclude: any = {
+      model: City,
+      as: 'city',
+    };
+    if (locationSearch && locationSearch.trim()) {
+      cityInclude.where = {
+        name: { [Op.iLike]: `%${locationSearch.trim()}%` },
+      };
+      cityInclude.required = true; // Inner join to filter results
+    }
+
+    const nicheInclude: any = {
+      model: Niche,
+      as: 'niches',
+      through: { attributes: [] },
+    };
+    if (nicheSearch && nicheSearch.trim()) {
+      nicheInclude.where = {
+        name: { [Op.iLike]: `%${nicheSearch.trim()}%` },
+      };
+      nicheInclude.required = true; // Inner join to filter results
+    }
+
     // Fetch influencers ordered by createdAt asc
     const allInfluencers = await this.influencerModel.findAll({
       where: whereConditions,
       include: [
-        {
-          model: Niche,
-          as: 'niches',
-          through: { attributes: [] },
-        },
-        {
-          model: City,
-          as: 'city',
-        },
+        nicheInclude,
+        cityInclude,
         {
           model: Country,
           as: 'country',
         },
       ],
-      order: [['createdAt', 'ASC']], // Order by creation date ascending
+      order: [['createdAt', 'ASC']], // Default order, will be re-sorted based on sortBy
     });
 
     // Map influencers and apply follower filters
     const mappedInfluencers = await Promise.all(
       allInfluencers.map(async (influencer) => {
         const followersCount = await this.getFollowersCount(influencer.id);
+        const followingCount = await this.getFollowingCount(influencer.id);
         const postsCount = await this.getPostsCount(influencer.id);
         const completedCampaigns =
           await this.getCompletedCampaignsCount(influencer.id);
@@ -298,7 +350,7 @@ export class InfluencerScoringService {
           recommendationLevel: 'not_recommended',
         };
 
-        const topInfluencer: TopInfluencerDto = {
+        const topInfluencer: TopInfluencerDto & { followingCount: number } = {
           id: influencer.id,
           name: influencer.name,
           username: influencer.username,
@@ -308,6 +360,7 @@ export class InfluencerScoringService {
           city: influencer.city?.name || '',
           country: influencer.country?.name || '',
           followersCount,
+          followingCount,
           engagementRate: 0, // Not calculated for non-top profiles
           postsCount,
           completedCampaigns,
@@ -322,9 +375,29 @@ export class InfluencerScoringService {
     );
 
     // Filter out null values
-    const validInfluencers = mappedInfluencers.filter(
-      (inf): inf is TopInfluencerDto => inf !== null,
+    let validInfluencers = mappedInfluencers.filter(
+      (inf): inf is TopInfluencerDto & { followingCount: number } => inf !== null,
     );
+
+    // Apply sorting based on sortBy parameter
+    switch (sortBy) {
+      case InfluencerSortBy.POSTS:
+        validInfluencers.sort((a, b) => b.postsCount - a.postsCount);
+        break;
+      case InfluencerSortBy.FOLLOWERS:
+        validInfluencers.sort((a, b) => b.followersCount - a.followersCount);
+        break;
+      case InfluencerSortBy.FOLLOWING:
+        validInfluencers.sort((a, b) => b.followingCount - a.followingCount);
+        break;
+      case InfluencerSortBy.CAMPAIGNS:
+        validInfluencers.sort((a, b) => b.completedCampaigns - a.completedCampaigns);
+        break;
+      case InfluencerSortBy.CREATED_AT:
+      default:
+        // Already sorted by createdAt ASC from database query
+        break;
+    }
 
     // Pagination
     const total = validInfluencers.length;
@@ -650,6 +723,18 @@ export class InfluencerScoringService {
   private async getFollowersCount(influencerId: number): Promise<number> {
     return await this.followModel.count({
       where: { followingInfluencerId: influencerId },
+    });
+  }
+
+  /**
+   * Helper: Get following count for an influencer
+   */
+  private async getFollowingCount(influencerId: number): Promise<number> {
+    return await this.followModel.count({
+      where: { 
+        followerInfluencerId: influencerId,
+        followingInfluencerId: { [Op.not]: null },
+      },
     });
   }
 

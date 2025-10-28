@@ -8,6 +8,20 @@ import {
 } from 'class-validator';
 import { ProfileType, ReviewStatus } from '../models/profile-review.model';
 
+export class GetPendingProfilesDto {
+  @ApiProperty({
+    description: 'Filter by profile type (brand or influencer)',
+    enum: ProfileType,
+    required: false,
+    example: ProfileType.INFLUENCER,
+  })
+  @IsOptional()
+  @IsEnum(ProfileType, {
+    message: 'profileType must be either "brand" or "influencer"',
+  })
+  profileType?: ProfileType;
+}
+
 export class ApproveProfileDto {
   @ApiProperty({
     description: 'Optional admin comments for approval',

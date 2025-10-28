@@ -3,6 +3,7 @@ import {
   IsOptional,
   IsEnum,
   IsNumber,
+  IsString,
   Min,
   Max,
 } from 'class-validator';
@@ -16,14 +17,41 @@ export enum BrandProfileFilter {
 }
 
 export enum BrandSortBy {
+  POSTS = 'posts',
+  FOLLOWERS = 'followers',
+  FOLLOWING = 'following',
   CAMPAIGNS = 'campaigns',
-  NICHES = 'niches',
-  INFLUENCERS = 'influencers',
-  PAYOUT = 'payout',
+  CREATED_AT = 'createdAt',
   COMPOSITE = 'composite',
 }
 
 export class GetBrandsDto {
+  @ApiProperty({
+    description: 'Search by brand name or username',
+    required: false,
+    example: 'Nike',
+  })
+  @IsOptional()
+  @IsString()
+  searchQuery?: string;
+
+  @ApiProperty({
+    description: 'Search by location (city)',
+    required: false,
+    example: 'Mumbai',
+  })
+  @IsOptional()
+  @IsString()
+  locationSearch?: string;
+
+  @ApiProperty({
+    description: 'Search by niche name',
+    required: false,
+    example: 'Fashion',
+  })
+  @IsOptional()
+  @IsString()
+  nicheSearch?: string;
   @ApiProperty({
     description: 'Profile filter type',
     enum: BrandProfileFilter,

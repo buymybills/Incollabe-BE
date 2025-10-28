@@ -45,6 +45,7 @@ import {
   ProfileDetailsDto,
   DashboardStatsDto,
   ReviewActionResponseDto,
+  GetPendingProfilesDto,
 } from './dto/profile-review.dto';
 import {
   AdminSearchDto,
@@ -67,6 +68,7 @@ import {
   DashboardRequestDto,
   MainDashboardResponseDto,
   InfluencerDashboardResponseDto,
+  DashboardTimeFrame,
 } from './dto/admin-dashboard.dto';
 
 @ApiTags('Admin')
@@ -197,7 +199,7 @@ export class AdminController {
   @ApiOperation({
     summary: 'Get pending profile reviews',
     description:
-      'Get all brand and influencer profiles that are pending verification, ordered by submission time',
+      'Get brand and/or influencer profiles that are pending verification, ordered by submission time. Optionally filter by profileType to get only brands or only influencers.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -236,8 +238,14 @@ export class AdminController {
     description:
       'Insufficient permissions - Only Super Admin and Profile Reviewer can access',
   })
-  async getPendingProfiles(@Req() req: RequestWithAdmin) {
-    return await this.profileReviewService.getPendingProfiles(req.admin.id);
+  async getPendingProfiles(
+    @Req() req: RequestWithAdmin,
+    @Query() filters: GetPendingProfilesDto,
+  ) {
+    return await this.profileReviewService.getPendingProfiles(
+      req.admin.id,
+      filters.profileType,
+    );
   }
 
   @Get('reviews/profile/:profileId/:profileType')
@@ -531,9 +539,9 @@ export class AdminController {
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Get brands with profile filters',
+    summary: 'Get brands with profile filters, search, and sorting',
     description:
-      'Get brands based on profile filters: allProfile (all profiles ordered by createdAt asc), topProfile (scored brands using comprehensive metrics same as top-brands API), verifiedProfile (verified profiles ordered by createdAt asc), or unverifiedProfile (unverified profiles ordered by createdAt asc). For topProfile filter, the same scoring metrics as top-brands API are used with equal 25% weights for campaigns, niches, selected influencers, and average payout.',
+      'Get brands based on profile filters: allProfile (all profiles), topProfile (scored brands using comprehensive metrics), verifiedProfile (verified profiles), or unverifiedProfile (unverified profiles). Supports search by brand name, username, location (city), and niche, and sorting by posts, followers, following, campaigns, or createdAt. For topProfile filter, the same scoring metrics as top-brands API are used.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -571,9 +579,9 @@ export class AdminController {
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Get top influencers with comprehensive scoring',
+    summary: 'Get top influencers with comprehensive scoring and search',
     description:
-      'Get top influencers based on 6 key metrics: niche match (30%), engagement rate (25%), audience relevance (15%), location match (15%), past performance (10%), and collaboration charges match (5%). Results include detailed score breakdown for each influencer and can be filtered by various criteria. Admins can customize the weights for each metric.',
+      'Get top influencers based on 6 key metrics: niche match (30%), engagement rate (25%), audience relevance (15%), location match (15%), past performance (10%), and collaboration charges match (5%). Supports search by name, username, location (city), and niche. Results include detailed score breakdown for each influencer and can be filtered by various criteria. Admins can customize the weights for each metric.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -591,9 +599,9 @@ export class AdminController {
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Get influencers with profile filters',
+    summary: 'Get influencers with profile filters, search, and sorting',
     description:
-      'Get influencers based on profile filters: allProfile (all profiles ordered by createdAt asc), topProfile (scored influencers using comprehensive metrics), verifiedProfile (verified profiles ordered by createdAt asc), or unverifiedProfile (unverified profiles ordered by createdAt asc). For topProfile filter, the same scoring metrics as top-influencers API are used.',
+      'Get influencers based on profile filters: allProfile (all profiles), topProfile (scored influencers using comprehensive metrics), verifiedProfile (verified profiles), or unverifiedProfile (unverified profiles). Supports search by name, username, location (city), and niche, and sorting by posts, followers, following, campaigns, or createdAt. For topProfile filter, the same scoring metrics as top-influencers API are used.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -969,7 +977,7 @@ export class AdminController {
   })
   async getInfluencerDashboardStats(@Query() requestDto: DashboardRequestDto) {
     return await this.dashboardStatsService.getInfluencerDashboardStats(
-      requestDto.timeFrame,
+      requestDto.timeFrame || DashboardTimeFrame.LAST_7_DAYS,
     );
   }
 }

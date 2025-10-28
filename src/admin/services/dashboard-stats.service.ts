@@ -287,6 +287,9 @@ export class DashboardStatsService {
       case DashboardTimeFrame.LAST_24_HOURS:
         chartStartDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
         break;
+      case DashboardTimeFrame.LAST_3_DAYS:
+        chartStartDate = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+        break;
       case DashboardTimeFrame.LAST_7_DAYS:
         chartStartDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         break;
@@ -340,13 +343,13 @@ export class DashboardStatsService {
 
     // City Presence
     const distinctCitiesNow = await this.influencerModel.findAll({
-      attributes: [[this.influencerModel.sequelize.fn('COUNT', this.influencerModel.sequelize.fn('DISTINCT', this.influencerModel.sequelize.col('cityId'))), 'count']],
+      attributes: [[this.influencerModel.sequelize!.fn('COUNT', this.influencerModel.sequelize!.fn('DISTINCT', this.influencerModel.sequelize!.col('cityId'))), 'count']],
       where: { cityId: { [Op.ne]: null }, isActive: true },
       raw: true,
     });
 
     const distinctCitiesLastMonth = await this.influencerModel.findAll({
-      attributes: [[this.influencerModel.sequelize.fn('COUNT', this.influencerModel.sequelize.fn('DISTINCT', this.influencerModel.sequelize.col('cityId'))), 'count']],
+      attributes: [[this.influencerModel.sequelize!.fn('COUNT', this.influencerModel.sequelize!.fn('DISTINCT', this.influencerModel.sequelize!.col('cityId'))), 'count']],
       where: {
         cityId: { [Op.ne]: null },
         isActive: true,
@@ -367,7 +370,7 @@ export class DashboardStatsService {
     const cityDistribution = await this.influencerModel.findAll({
       attributes: [
         'cityId',
-        [this.influencerModel.sequelize.fn('COUNT', this.influencerModel.sequelize.col('Influencer.id')), 'count'],
+        [this.influencerModel.sequelize!.fn('COUNT', this.influencerModel.sequelize!.col('Influencer.id')), 'count'],
       ],
       include: [
         {
@@ -377,7 +380,7 @@ export class DashboardStatsService {
       ],
       where: { cityId: { [Op.ne]: null }, isActive: true },
       group: ['cityId', 'city.id'],
-      order: [[this.influencerModel.sequelize.literal('count'), 'DESC']],
+      order: [[this.influencerModel.sequelize!.literal('count'), 'DESC']],
       raw: true,
     });
 
@@ -453,7 +456,12 @@ export class DashboardStatsService {
   }
 
   private async generateTimeSeriesData(startDate: Date, endDate: Date) {
-    const timeSeriesData = [];
+    const timeSeriesData: Array<{
+      date: string;
+      verifiedCount: number;
+      unverifiedCount: number;
+      totalCount: number;
+    }> = [];
     const daysDiff = Math.ceil(
       (endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000),
     );
@@ -506,7 +514,7 @@ export class DashboardStatsService {
         'id',
         'name',
         [
-          this.nicheModel.sequelize.literal(
+          this.nicheModel.sequelize!.literal(
             '(SELECT COUNT(DISTINCT "influencerId") FROM "influencer_niches" WHERE "influencer_niches"."nicheId" = "Niche"."id")',
           ),
           'influencerCount',

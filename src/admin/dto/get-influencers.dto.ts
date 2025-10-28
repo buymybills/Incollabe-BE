@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsArray,
   IsBoolean,
+  IsString,
   Min,
   Max,
 } from 'class-validator';
@@ -17,6 +18,14 @@ export enum ProfileFilter {
   UNVERIFIED_PROFILE = 'unverifiedProfile',
 }
 
+export enum InfluencerSortBy {
+  POSTS = 'posts',
+  FOLLOWERS = 'followers',
+  FOLLOWING = 'following',
+  CAMPAIGNS = 'campaigns',
+  CREATED_AT = 'createdAt',
+}
+
 export class GetInfluencersDto {
   @ApiProperty({
     description: 'Profile filter type',
@@ -26,6 +35,44 @@ export class GetInfluencersDto {
   })
   @IsEnum(ProfileFilter)
   profileFilter: ProfileFilter;
+
+  @ApiProperty({
+    description: 'Search query to filter influencers by profile name or username',
+    required: false,
+    example: 'John',
+  })
+  @IsOptional()
+  @IsString()
+  searchQuery?: string;
+
+  @ApiProperty({
+    description: 'Search query to filter influencers by location (city name)',
+    required: false,
+    example: 'Mumbai',
+  })
+  @IsOptional()
+  @IsString()
+  locationSearch?: string;
+
+  @ApiProperty({
+    description: 'Search query to filter influencers by niche name',
+    required: false,
+    example: 'Fashion',
+  })
+  @IsOptional()
+  @IsString()
+  nicheSearch?: string;
+
+  @ApiProperty({
+    description: 'Sort by metric (posts, followers, following, campaigns, or createdAt)',
+    enum: InfluencerSortBy,
+    required: false,
+    default: InfluencerSortBy.CREATED_AT,
+    example: InfluencerSortBy.FOLLOWERS,
+  })
+  @IsOptional()
+  @IsEnum(InfluencerSortBy)
+  sortBy?: InfluencerSortBy = InfluencerSortBy.CREATED_AT;
 
   @ApiProperty({
     description: 'Target niche IDs for matching (only used with topProfile filter)',

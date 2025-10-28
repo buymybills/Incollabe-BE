@@ -4,6 +4,7 @@ import { Transform } from 'class-transformer';
 
 export enum DashboardTimeFrame {
   LAST_24_HOURS = 'last_24_hours',
+  LAST_3_DAYS = 'last_3_days',
   LAST_7_DAYS = 'last_7_days',
   LAST_30_DAYS = 'last_30_days',
 }
