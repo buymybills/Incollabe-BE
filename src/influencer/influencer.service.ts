@@ -1035,9 +1035,9 @@ export class InfluencerService {
     if (nicheIdsToFilter.length > 0) {
       whereCondition[Op.and] = [
         ...(whereCondition[Op.and] || []),
-        {
-          nicheIds: { [Op.overlap]: nicheIdsToFilter },
-        },
+        literal(
+          `"Campaign"."nicheIds" && ARRAY[${nicheIdsToFilter.join(',')}]::integer[]`,
+        ),
       ];
     }
 
@@ -1066,7 +1066,9 @@ export class InfluencerService {
         {
           [Op.or]: [
             { isOpenToAllGenders: true },
-            { genderPreferences: { [Op.overlap]: [influencer.gender] } },
+            literal(
+              `"Campaign"."genderPreferences" && ARRAY['${influencer.gender}']::text[]`,
+            ),
           ],
         },
       ];
