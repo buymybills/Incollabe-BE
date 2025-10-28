@@ -657,7 +657,7 @@ export class InfluencerScoringService {
     const acceptedApplications = await this.campaignApplicationModel.count({
       where: {
         influencerId: influencer.id,
-        status: 'accepted',
+        status: 'selected',
       },
     });
 
