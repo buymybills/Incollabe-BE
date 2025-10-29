@@ -81,7 +81,7 @@ import {
 } from './dto/verify-login-otp.dto';
 import {
   RefreshTokenDto,
-  RefreshTokenResponseDto,
+  AdminRefreshTokenResponseDto,
 } from './dto/refresh-token.dto';
 import {
   ChangePasswordDto,
@@ -216,7 +216,7 @@ export class AdminController {
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Token refresh successful',
-    type: RefreshTokenResponseDto,
+    type: AdminRefreshTokenResponseDto,
   })
   @ApiUnauthorizedResponse({
     description: 'Invalid or expired refresh token',

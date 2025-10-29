@@ -11,7 +11,7 @@ export class RefreshTokenDto {
   refreshToken: string;
 }
 
-export class RefreshTokenResponseDto {
+export class AdminRefreshTokenResponseDto {
   @ApiProperty({
     description: 'New JWT access token',
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
