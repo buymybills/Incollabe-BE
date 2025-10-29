@@ -92,6 +92,18 @@ export class TopInfluencerDto {
   country: string;
 
   @ApiProperty({
+    description: 'Verification status',
+    example: true,
+  })
+  isVerified: boolean;
+
+  @ApiProperty({
+    description: 'Top influencer status',
+    example: false,
+  })
+  isTopInfluencer: boolean;
+
+  @ApiProperty({
     description: 'Total followers count',
     example: 150000,
   })

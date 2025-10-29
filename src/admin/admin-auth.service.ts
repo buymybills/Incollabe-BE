@@ -1290,6 +1290,7 @@ export class AdminAuthService {
         brandBio: brand.brandBio,
         websiteUrl: brand.websiteUrl,
         isVerified: brand.isVerified,
+        isTopBrand: brand.isTopBrand || false,
         createdAt: brand.createdAt,
         metrics: {
           totalCampaigns: metrics.totalCampaigns,
@@ -1334,6 +1335,7 @@ export class AdminAuthService {
       brandBio: item.brandBio,
       websiteUrl: item.websiteUrl,
       isVerified: item.isVerified,
+      isTopBrand: item.isTopBrand,
       metrics: item.metrics,
       createdAt: item.createdAt,
     }));
@@ -1619,6 +1621,7 @@ export class AdminAuthService {
           brandBio: brand.brandBio,
           websiteUrl: brand.websiteUrl,
           isVerified: brand.isVerified,
+          isTopBrand: brand.isTopBrand || false,
           createdAt: brand.createdAt,
           postsCount,
           followersCount,

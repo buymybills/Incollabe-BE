@@ -137,6 +137,12 @@ export class TopBrandDto {
   isVerified: boolean;
 
   @ApiProperty({
+    description: 'Top brand status',
+    example: false,
+  })
+  isTopBrand: boolean;
+
+  @ApiProperty({
     description: 'Top brand metrics',
     type: TopBrandMetrics,
   })

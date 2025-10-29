@@ -185,6 +185,8 @@ export class InfluencerScoringService {
           profileHeadline: influencer.profileHeadline || '',
           city: influencer.city?.name || '',
           country: influencer.country?.name || '',
+          isVerified: influencer.isVerified || false,
+          isTopInfluencer: influencer.isTopInfluencer || false,
           followersCount,
           engagementRate: scoreBreakdown.engagementRateScore / 10, // Convert back to percentage
           postsCount,
@@ -367,6 +369,8 @@ export class InfluencerScoringService {
           profileHeadline: influencer.profileHeadline || '',
           city: influencer.city?.name || '',
           country: influencer.country?.name || '',
+          isVerified: influencer.isVerified || false,
+          isTopInfluencer: influencer.isTopInfluencer || false,
           followersCount,
           followingCount,
           engagementRate: 0, // Not calculated for non-top profiles
