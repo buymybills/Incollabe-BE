@@ -926,24 +926,6 @@ export class AdminController {
   }
 
   // Brand Management Endpoints
-  @Get('brands')
-  @UseGuards(AdminAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({
-    summary: 'List and filter brands',
-    description:
-      'Admin endpoint to list, search, and filter brands with pagination',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Brands retrieved successfully',
-    type: AdminSearchResultDto,
-  })
-  async listBrands(@Query() searchDto: AdminSearchDto) {
-    const brandSearchDto = { ...searchDto, userType: UserType.BRAND };
-    return await this.adminAuthService.searchUsers(brandSearchDto);
-  }
-
   @Get('brands/:brandId')
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
@@ -968,7 +950,7 @@ export class AdminController {
   }
 
   @Put('brands/:brandId/status')
-  @UseGuards(AdminAuthGuard, RolesGuard)
+  @UseGuards(AdminAuthGuard, RolesGuard)  
   @Roles(AdminRole.SUPER_ADMIN)
   @ApiBearerAuth()
   @ApiOperation({
