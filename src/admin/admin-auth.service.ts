@@ -1680,6 +1680,18 @@ export class AdminAuthService {
         ...dateFilter,
         status: statusFilter,
       },
+      attributes: [
+        'id',
+        'name',
+        'description',
+        'category',
+        'type',
+        'status',
+        'isPanIndia',
+        'nicheIds',
+        'createdAt',
+        'updatedAt', // Include updatedAt for completion date
+      ],
       include: [
         {
           model: this.brandModel,
@@ -1941,6 +1953,7 @@ export class AdminAuthService {
           compositeScore: Math.round(compositeScore * 100) / 100,
         },
         createdAt: campaign.createdAt,
+        updatedAt: campaign.updatedAt, // Add updatedAt from campaign
         sortValues: {
           applications_count: normalizedApplications,
           conversion_rate: normalizedConversionRate,
@@ -1966,17 +1979,39 @@ export class AdminAuthService {
     );
 
     // Get top N campaigns
-    const topCampaigns = campaignsWithScores.slice(0, limit).map((item) => ({
-      id: item.id,
-      name: item.name,
-      description: item.description,
-      category: item.category,
-      type: item.type,
-      status: item.status,
-      brand: item.brand,
-      metrics: item.metrics,
-      createdAt: item.createdAt,
-    }));
+    const topCampaigns = campaignsWithScores.slice(0, limit).map((item) => {
+      // Format status for UI display
+      const statusLabel =
+        item.status === CampaignStatus.ACTIVE
+          ? 'Ongoing'
+          : item.status === CampaignStatus.COMPLETED
+            ? 'Completed'
+            : item.status === CampaignStatus.DRAFT
+              ? 'Draft'
+              : item.status;
+
+      // Get completion date if completed (use updatedAt as proxy)
+      const completedAt =
+        item.status === CampaignStatus.COMPLETED
+          ? item.updatedAt || item.createdAt
+          : null;
+
+      return {
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        category: item.category,
+        type: item.type,
+        status: item.status,
+        statusLabel, // Human-readable status: "Ongoing", "Completed", "Draft"
+        applicationsCount: item.metrics.application.applicationsCount, // Top-level for easy UI access
+        completedAt, // Date when completed (null if not completed)
+        brand: item.brand,
+        metrics: item.metrics,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      };
+    });
 
     return {
       campaigns: topCampaigns,
