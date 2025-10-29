@@ -232,7 +232,7 @@ describe('AdminAuthService', () => {
       name: 'Admin User',
       role: AdminRole.SUPER_ADMIN,
       status: AdminStatus.ACTIVE,
-      twoFactorEnabled: true, // Default: 2FA enabled
+      twoFactorEnabled: true, // Set to true for testing OTP flow (default is false in DB)
       lastLoginAt: null,
       profileImage: null,
       update: jest.fn().mockResolvedValue(true),

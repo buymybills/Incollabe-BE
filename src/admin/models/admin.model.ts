@@ -89,7 +89,7 @@ export class Admin extends Model {
   declare profileImage: string;
 
   @AllowNull(false)
-  @Default(true)
+  @Default(false)
   @Column(DataType.BOOLEAN)
   declare twoFactorEnabled: boolean;
 
