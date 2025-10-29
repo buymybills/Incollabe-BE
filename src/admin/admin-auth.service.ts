@@ -1083,6 +1083,7 @@ export class AdminAuthService {
         isVerified: true,
         isActive: true,
         isProfileCompleted: true,
+        isTopBrand: true,
       },
       attributes: [
         'id',

@@ -89,6 +89,7 @@ export class InfluencerScoringService {
     const whereConditions: any = {
       isProfileCompleted: true,
       isActive: true,
+      isTopInfluencer: true,
     };
 
     // Apply search query if provided
