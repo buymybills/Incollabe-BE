@@ -183,6 +183,17 @@ describe('AdminAuthService', () => {
             set: jest.fn(),
             get: jest.fn(),
             del: jest.fn(),
+            getClient: jest.fn(() => ({
+              sadd: jest.fn(),
+              smembers: jest.fn(),
+              srem: jest.fn(),
+              multi: jest.fn(() => ({
+                set: jest.fn().mockReturnThis(),
+                del: jest.fn().mockReturnThis(),
+                srem: jest.fn().mockReturnThis(),
+                exec: jest.fn(),
+              })),
+            })),
           },
         },
         {
@@ -221,6 +232,7 @@ describe('AdminAuthService', () => {
       name: 'Admin User',
       role: AdminRole.SUPER_ADMIN,
       status: AdminStatus.ACTIVE,
+      twoFactorEnabled: true, // Default: 2FA enabled
       lastLoginAt: null,
       profileImage: null,
       update: jest.fn().mockResolvedValue(true),
@@ -461,6 +473,7 @@ describe('AdminAuthService', () => {
         email: 'admin@test.com',
         password: 'hashedPassword',
         status: AdminStatus.ACTIVE,
+        twoFactorEnabled: true, // 2FA enabled for this test
         update: jest.fn().mockResolvedValue(true),
       };
 

@@ -10,7 +10,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import * as bcrypt from 'bcrypt';
-import { Admin, AdminStatus } from './models/admin.model';
+import { Admin, AdminStatus, AdminRole } from './models/admin.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { Niche } from '../auth/model/niche.model';
@@ -161,6 +161,9 @@ export class AdminAuthService {
     email: string,
     role: string,
   ): Promise<{ accessToken: string; refreshToken: string; jti: string }> {
+    // Generate a single JTI for both access and refresh tokens to enable session tracking
+    const jti = randomUUID();
+
     // Generate access token
     const accessToken = this.jwtService.sign(
       {
@@ -169,11 +172,10 @@ export class AdminAuthService {
         role,
         type: 'admin',
       },
-      { jwtid: randomUUID() },
+      { jwtid: jti },
     );
 
-    // Generate refresh token with separate secret
-    const jti = randomUUID();
+    // Generate refresh token with separate secret and same JTI
     const refreshToken = this.jwtService.sign(
       { sub: adminId, type: 'admin' },
       {
@@ -187,7 +189,7 @@ export class AdminAuthService {
   }
 
   /**
-   * Step 1: Login with email and password - Send OTP
+   * Step 1: Login with email and password - Send OTP (if 2FA enabled) or return tokens directly
    */
   async login(email: string, password: string) {
     if (!email || !password) {
@@ -211,7 +213,50 @@ export class AdminAuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Generate 6-digit OTP based on environment
+    // Check if 2FA is enabled for this admin
+    if (!admin.twoFactorEnabled) {
+      // 2FA disabled - login directly without OTP
+      await admin.update({ lastLoginAt: new Date() });
+
+      // Generate access and refresh tokens
+      const { accessToken, refreshToken, jti } = await this.generateTokens(
+        admin.id,
+        admin.email,
+        admin.role,
+      );
+
+      // Store refresh token JTI in Redis for session management
+      await this.redisService.set(
+        this.refreshTokenKey(jti),
+        JSON.stringify({
+          adminId: admin.id,
+          email: admin.email,
+          createdAt: new Date().toISOString(),
+        }),
+        // 30 days in seconds
+        30 * 24 * 60 * 60,
+      );
+
+      // Add JTI to admin's active sessions set
+      await this.redisService
+        .getClient()
+        .sadd(this.sessionsSetKey(admin.id), jti);
+
+      return {
+        accessToken,
+        refreshToken,
+        admin: {
+          id: admin.id,
+          name: admin.name,
+          email: admin.email,
+          role: admin.role,
+          status: admin.status,
+        },
+        requiresOtp: false,
+      };
+    }
+
+    // 2FA enabled - send OTP
     const isStaging = this.configService.get<string>('NODE_ENV') === 'staging';
     const otp = isStaging
       ? '123456'
@@ -517,11 +562,7 @@ export class AdminAuthService {
   /**
    * Helper: Rotate refresh token session
    */
-  private async rotateSession(
-    adminId: number,
-    oldJti: string,
-    newJti: string,
-  ) {
+  private async rotateSession(adminId: number, oldJti: string, newJti: string) {
     const oldKey = this.refreshTokenKey(oldJti);
     const newKey = this.refreshTokenKey(newJti);
     const sessionsSetKey = this.sessionsSetKey(adminId);
@@ -1374,7 +1415,10 @@ export class AdminAuthService {
       const total = filteredBrands.length;
       const totalPages = Math.ceil(total / (limit ?? 20));
       const offset = (page - 1) * (limit ?? 20);
-      const paginatedBrands = filteredBrands.slice(offset, offset + (limit ?? 20));
+      const paginatedBrands = filteredBrands.slice(
+        offset,
+        offset + (limit ?? 20),
+      );
 
       return {
         brands: paginatedBrands,
@@ -2352,6 +2396,248 @@ export class AdminAuthService {
       message:
         'Password has been reset successfully. Please log in with your new password.',
       success: true,
+    };
+  }
+
+  /**
+   * Change password for authenticated admin
+   */
+  async changePassword(
+    adminId: number,
+    currentPassword: string,
+    newPassword: string,
+    confirmPassword: string,
+  ) {
+    // Validate passwords match
+    if (newPassword !== confirmPassword) {
+      throw new BadRequestException(
+        'New password and confirm password do not match',
+      );
+    }
+
+    // Get admin
+    const admin = await this.adminModel.findByPk(adminId);
+    if (!admin) {
+      throw new NotFoundException('Admin not found');
+    }
+
+    // Verify current password
+    const isPasswordValid = await bcrypt.compare(
+      currentPassword,
+      admin.password,
+    );
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    // Check if new password is same as current
+    const isSamePassword = await bcrypt.compare(newPassword, admin.password);
+    if (isSamePassword) {
+      throw new BadRequestException(
+        'New password cannot be the same as current password',
+      );
+    }
+
+    // Hash and update password
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+    await admin.update({ password: hashedPassword });
+
+    return {
+      message: 'Password changed successfully',
+      updatedAt: new Date(),
+    };
+  }
+
+  /**
+   * Get 2FA status for admin
+   */
+  async get2FAStatus(adminId: number) {
+    const admin = await this.adminModel.findByPk(adminId, {
+      attributes: ['id', 'email', 'twoFactorEnabled'],
+    });
+
+    if (!admin) {
+      throw new NotFoundException('Admin not found');
+    }
+
+    return {
+      isEnabled: admin.twoFactorEnabled ?? true,
+      email: admin.email,
+    };
+  }
+
+  /**
+   * Enable 2FA for admin
+   */
+  async enable2FA(adminId: number, password: string) {
+    const admin = await this.adminModel.findByPk(adminId);
+    if (!admin) {
+      throw new NotFoundException('Admin not found');
+    }
+
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, admin.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Password is incorrect');
+    }
+
+    // Enable 2FA
+    await admin.update({ twoFactorEnabled: true });
+
+    return {
+      message: 'Two-factor authentication enabled successfully',
+      isEnabled: true,
+      updatedAt: new Date(),
+    };
+  }
+
+  /**
+   * Disable 2FA for admin
+   */
+  async disable2FA(adminId: number, password: string) {
+    const admin = await this.adminModel.findByPk(adminId);
+    if (!admin) {
+      throw new NotFoundException('Admin not found');
+    }
+
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, admin.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Password is incorrect');
+    }
+
+    // Disable 2FA
+    await admin.update({ twoFactorEnabled: false });
+
+    return {
+      message: 'Two-factor authentication disabled successfully',
+      isEnabled: false,
+      updatedAt: new Date(),
+    };
+  }
+
+  /**
+   * Get all active sessions for admin
+   */
+  async getActiveSessions(adminId: number, currentJti: string) {
+    // Get all refresh token JTIs for this admin from Redis
+    const pattern = `refresh_token:${adminId}:*`;
+    const keys = await this.redisService.keys(pattern);
+
+    const sessions = await Promise.all(
+      keys.map(async (key) => {
+        const sessionData = await this.redisService.get(key);
+        if (!sessionData) return null;
+
+        const jti = key.split(':')[2];
+        const data = JSON.parse(sessionData);
+
+        return {
+          sessionId: jti,
+          device: data.device || 'Unknown Device',
+          ipAddress: data.ipAddress || 'Unknown IP',
+          location: data.location || undefined,
+          lastActivity: new Date(data.lastActivity || data.createdAt),
+          isCurrent: jti === currentJti,
+        };
+      }),
+    );
+
+    const validSessions = sessions.filter((s) => s !== null);
+
+    return {
+      sessions: validSessions,
+      totalSessions: validSessions.length,
+    };
+  }
+
+  /**
+   * Logout specific session
+   */
+  async logoutSession(adminId: number, sessionId: string, currentJti: string) {
+    // Prevent logging out current session
+    if (sessionId === currentJti) {
+      throw new BadRequestException(
+        'Cannot logout current session. Use regular logout instead.',
+      );
+    }
+
+    // Delete the specific session from Redis
+    const key = `refresh_token:${adminId}:${sessionId}`;
+    const result = await this.redisService.del(key);
+
+    if (result === 0) {
+      throw new NotFoundException('Session not found or already logged out');
+    }
+
+    return {
+      message: 'Session logged out successfully',
+      sessionId,
+    };
+  }
+
+  /**
+   * Delete admin account (soft delete)
+   */
+  async deleteAccount(
+    adminId: number,
+    password: string,
+    confirmationText: string,
+    reason?: string,
+  ) {
+    // Validate confirmation text
+    if (confirmationText !== 'DELETE MY ACCOUNT') {
+      throw new BadRequestException(
+        'Confirmation text must be exactly "DELETE MY ACCOUNT"',
+      );
+    }
+
+    // Get admin
+    const admin = await this.adminModel.findByPk(adminId);
+    if (!admin) {
+      throw new NotFoundException('Admin not found');
+    }
+
+    // Prevent super admin from deleting their own account if they're the only one
+    if (admin.role === AdminRole.SUPER_ADMIN) {
+      const superAdminCount = await this.adminModel.count({
+        where: { role: AdminRole.SUPER_ADMIN, status: AdminStatus.ACTIVE },
+      });
+
+      if (superAdminCount <= 1) {
+        throw new ForbiddenException(
+          'Cannot delete the last super admin account',
+        );
+      }
+    }
+
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, admin.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Password is incorrect');
+    }
+
+    // Soft delete: set status to inactive
+    await admin.update({
+      status: AdminStatus.INACTIVE,
+      email: `deleted_${Date.now()}_${admin.email}`, // Prevent email conflicts
+    });
+
+    // Clear all sessions
+    await this.logoutAll(adminId);
+
+    // Log the deletion reason if provided
+    if (reason) {
+      console.log(
+        `Admin ${adminId} (${admin.email}) deleted account. Reason: ${reason}`,
+      );
+    }
+
+    return {
+      message: 'Account deleted successfully',
+      adminId,
+      deletedAt: new Date(),
     };
   }
 }

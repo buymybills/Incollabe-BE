@@ -9,6 +9,7 @@ import {
   AutoIncrement,
   Unique,
   AllowNull,
+  Default,
 } from 'sequelize-typescript';
 
 export enum AdminRole {
@@ -86,6 +87,11 @@ export class Admin extends Model {
   @AllowNull(true)
   @Column(DataType.STRING)
   declare profileImage: string;
+
+  @AllowNull(false)
+  @Default(true)
+  @Column(DataType.BOOLEAN)
+  declare twoFactorEnabled: boolean;
 
   @CreatedAt
   @Column(DataType.DATE)

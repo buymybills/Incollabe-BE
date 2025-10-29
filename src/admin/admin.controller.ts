@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   Body,
   Param,
   ParseIntPipe,
@@ -10,6 +11,7 @@ import {
   Req,
   HttpStatus,
   Query,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -77,7 +79,22 @@ import {
   VerifyLoginOtpDto,
   ResendLoginOtpDto,
 } from './dto/verify-login-otp.dto';
-import { RefreshTokenDto, RefreshTokenResponseDto } from './dto/refresh-token.dto';
+import {
+  RefreshTokenDto,
+  RefreshTokenResponseDto,
+} from './dto/refresh-token.dto';
+import {
+  ChangePasswordDto,
+  ChangePasswordResponseDto,
+  Enable2FADto,
+  Disable2FADto,
+  TwoFactorStatusDto,
+  TwoFactorResponseDto,
+  BrowserSessionsResponseDto,
+  LogoutSessionResponseDto,
+  DeleteAccountDto,
+  DeleteAccountResponseDto,
+} from './dto/admin-settings.dto';
 import { LogoutDto, LogoutResponseDto } from './dto/logout.dto';
 
 @ApiTags('Admin')
@@ -93,9 +110,9 @@ export class AdminController {
 
   @Post('login')
   @ApiOperation({
-    summary: 'Admin login - Step 1',
+    summary: 'Admin login',
     description:
-      'Authenticate admin user with email and password. Sends OTP to email for 2FA verification.',
+      'Authenticate admin user with email and password. If 2FA is enabled, sends OTP to email. If 2FA is disabled, returns tokens directly.',
   })
   @ApiBody({
     description: 'Admin login credentials',
@@ -103,18 +120,8 @@ export class AdminController {
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'OTP sent to email - Requires OTP verification',
-    schema: {
-      type: 'object',
-      properties: {
-        message: {
-          type: 'string',
-          example: 'OTP sent to your email. Please verify to complete login.',
-        },
-        email: { type: 'string', example: 'admin@example.com' },
-        requiresOtp: { type: 'boolean', example: true },
-      },
-    },
+    description: 'Login successful - Returns OTP requirement status or tokens',
+    type: AdminLoginResponseDto,
   })
   @ApiUnauthorizedResponse({
     description: 'Invalid credentials or account inactive/suspended',
@@ -367,6 +374,204 @@ export class AdminController {
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.adminAuthService.resetPassword(resetPasswordDto);
   }
+
+  // ==================== Admin Settings APIs ====================
+
+  @Put('change-password')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Change admin password',
+    description:
+      'Change password for authenticated admin. Requires current password for verification.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Password changed successfully',
+    type: ChangePasswordResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Current password is incorrect',
+  })
+  @ApiBadRequestResponse({
+    description: 'Passwords do not match or invalid format',
+  })
+  async changePassword(
+    @Body() changePasswordDto: ChangePasswordDto,
+    @Req() req: RequestWithAdmin,
+  ) {
+    return await this.adminAuthService.changePassword(
+      req.admin.id,
+      changePasswordDto.currentPassword,
+      changePasswordDto.newPassword,
+      changePasswordDto.confirmPassword,
+    );
+  }
+
+  @Get('2fa-status')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get 2FA status',
+    description: 'Check if two-factor authentication is enabled for admin',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: '2FA status retrieved successfully',
+    type: TwoFactorStatusDto,
+  })
+  async get2FAStatus(@Req() req: RequestWithAdmin) {
+    return await this.adminAuthService.get2FAStatus(req.admin.id);
+  }
+
+  @Post('enable-2fa')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Enable two-factor authentication',
+    description:
+      'Enable 2FA for admin account. OTP will be sent to email during login.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: '2FA enabled successfully',
+    type: TwoFactorResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Password is incorrect',
+  })
+  async enable2FA(
+    @Body() enable2FADto: Enable2FADto,
+    @Req() req: RequestWithAdmin,
+  ) {
+    return await this.adminAuthService.enable2FA(
+      req.admin.id,
+      enable2FADto.password,
+    );
+  }
+
+  @Post('disable-2fa')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Disable two-factor authentication',
+    description:
+      'Disable 2FA for admin account. Requires password confirmation.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: '2FA disabled successfully',
+    type: TwoFactorResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Password is incorrect',
+  })
+  async disable2FA(
+    @Body() disable2FADto: Disable2FADto,
+    @Req() req: RequestWithAdmin,
+  ) {
+    return await this.adminAuthService.disable2FA(
+      req.admin.id,
+      disable2FADto.password,
+    );
+  }
+
+  @Get('sessions')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get active browser sessions',
+    description:
+      'Get all active browser sessions for admin. Shows device info, IP address, and last activity.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Active sessions retrieved successfully',
+    type: BrowserSessionsResponseDto,
+  })
+  async getActiveSessions(@Req() req: RequestWithAdmin) {
+    if (!req.admin.jti) {
+      throw new UnauthorizedException('Session ID not found in token');
+    }
+    return await this.adminAuthService.getActiveSessions(
+      req.admin.id,
+      req.admin.jti,
+    );
+  }
+
+  @Delete('sessions/:sessionId')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Logout specific session',
+    description:
+      'Logout from a specific browser session. Cannot logout current session.',
+  })
+  @ApiParam({
+    name: 'sessionId',
+    description: 'Session ID (JTI) to logout',
+    type: 'string',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Session logged out successfully',
+    type: LogoutSessionResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Cannot logout current session',
+  })
+  @ApiNotFoundResponse({
+    description: 'Session not found',
+  })
+  async logoutSession(
+    @Param('sessionId') sessionId: string,
+    @Req() req: RequestWithAdmin,
+  ) {
+    if (!req.admin.jti) {
+      throw new UnauthorizedException('Session ID not found in token');
+    }
+    return await this.adminAuthService.logoutSession(
+      req.admin.id,
+      sessionId,
+      req.admin.jti,
+    );
+  }
+
+  @Delete('account')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Delete admin account',
+    description:
+      'Permanently delete admin account. Requires password and confirmation text. Cannot delete last super admin.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Account deleted successfully',
+    type: DeleteAccountResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Password is incorrect',
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid confirmation text',
+  })
+  @ApiForbiddenResponse({
+    description: 'Cannot delete last super admin',
+  })
+  async deleteAccount(
+    @Body() deleteAccountDto: DeleteAccountDto,
+    @Req() req: RequestWithAdmin,
+  ) {
+    return await this.adminAuthService.deleteAccount(
+      req.admin.id,
+      deleteAccountDto.password,
+      deleteAccountDto.confirmationText,
+      deleteAccountDto.reason,
+    );
+  }
+
+  // ==================== End Admin Settings APIs ====================
 
   @Get('profile')
   @UseGuards(AdminAuthGuard)
@@ -951,7 +1156,7 @@ export class AdminController {
   }
 
   @Put('brands/:brandId/status')
-  @UseGuards(AdminAuthGuard, RolesGuard)  
+  @UseGuards(AdminAuthGuard, RolesGuard)
   @Roles(AdminRole.SUPER_ADMIN)
   @ApiBearerAuth()
   @ApiOperation({

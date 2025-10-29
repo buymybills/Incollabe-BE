@@ -354,9 +354,8 @@ export class PostService {
       );
 
       // Get users in matching niches
-      const nicheMatchingUserIds = await this.getNicheMatchingUserIds(
-        userNiches,
-      );
+      const nicheMatchingUserIds =
+        await this.getNicheMatchingUserIds(userNiches);
 
       // Build OR condition to show posts from followed users + own posts
       const orConditions: any[] = [];

@@ -974,10 +974,7 @@ export class DashboardStatsService {
         nicheLower.includes('beauty')
       ) {
         nicheGroups['Fashion, Lifestyle, Beauty'] += count;
-      } else if (
-        nicheLower.includes('food') ||
-        nicheLower.includes('travel')
-      ) {
+      } else if (nicheLower.includes('food') || nicheLower.includes('travel')) {
         nicheGroups['Food, Travel'] += count;
       } else if (
         nicheLower.includes('electronics') ||

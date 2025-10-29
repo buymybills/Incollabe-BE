@@ -22,38 +22,53 @@ export class AdminLoginDto {
 
 export class AdminLoginResponseDto {
   @ApiProperty({
-    description: 'JWT access token',
+    description: 'JWT access token (only present when 2FA is disabled)',
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
   })
-  accessToken: string;
+  accessToken?: string;
 
   @ApiProperty({
-    description: 'JWT refresh token for obtaining new access tokens',
+    description:
+      'JWT refresh token for obtaining new access tokens (only present when 2FA is disabled)',
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
   })
-  refreshToken: string;
+  refreshToken?: string;
 
   @ApiProperty({
-    description: 'Admin user information',
+    description: 'Admin user information (only present when 2FA is disabled)',
     type: 'object',
     properties: {
       id: { type: 'number', example: 1 },
       name: { type: 'string', example: 'John Doe' },
       email: { type: 'string', example: 'admin@collabkaroo.com' },
       role: { type: 'string', example: 'super_admin' },
-      profileImage: {
-        type: 'string',
-        example: 'https://s3.amazonaws.com/profile.jpg',
-      },
-      lastLoginAt: { type: 'string', example: '2024-01-15T10:30:00Z' },
+      status: { type: 'string', example: 'ACTIVE' },
     },
   })
-  admin: {
+  admin?: {
     id: number;
     name: string;
     email: string;
     role: string;
-    profileImage?: string;
-    lastLoginAt?: Date;
+    status: string;
   };
+
+  @ApiProperty({
+    description:
+      'Message indicating OTP has been sent (only present when 2FA is enabled)',
+    example: 'OTP sent to your email. Please verify to complete login.',
+  })
+  message?: string;
+
+  @ApiProperty({
+    description: 'Email where OTP was sent (only present when 2FA is enabled)',
+    example: 'admin@collabkaroo.com',
+  })
+  email?: string;
+
+  @ApiProperty({
+    description: 'Indicates if OTP verification is required to complete login',
+    example: true,
+  })
+  requiresOtp: boolean;
 }

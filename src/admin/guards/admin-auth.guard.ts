@@ -15,6 +15,7 @@ export interface RequestWithAdmin extends Request {
     email: string;
     role: AdminRole;
     type: string;
+    jti?: string; // JWT ID for session management
   };
 }
 
@@ -49,6 +50,7 @@ export class AdminAuthGuard implements CanActivate {
         email: payload.email,
         role: payload.role,
         type: payload.type,
+        jti: payload.jti, // Include JWT ID for session management
       };
 
       return true;
