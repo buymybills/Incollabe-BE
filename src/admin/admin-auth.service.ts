@@ -1760,7 +1760,14 @@ export class AdminAuthService {
         {
           model: this.campaignDeliverableModel,
           as: 'deliverables',
-          attributes: ['id', 'budget'],
+          attributes: [
+            'id',
+            'platform',
+            'type',
+            'budget',
+            'quantity',
+            'specifications',
+          ],
           required: false,
         },
         {
@@ -1957,6 +1964,7 @@ export class AdminAuthService {
         category: campaign.category,
         type: campaign.type,
         status: campaign.status,
+        deliverables: (campaign.get('deliverables') as any[]) || [],
         brand: {
           id: brand.id,
           brandName: brand.brandName,
@@ -2051,6 +2059,14 @@ export class AdminAuthService {
         statusLabel, // Human-readable status: "Ongoing", "Completed", "Draft"
         applicationsCount: item.metrics.application.applicationsCount, // Top-level for easy UI access
         completedAt, // Date when completed (null if not completed)
+        deliverables: item.deliverables.map((d: any) => ({
+          id: d.id,
+          platform: d.platform,
+          type: d.type,
+          budget: d.budget ? parseFloat(d.budget) : null,
+          quantity: d.quantity,
+          specifications: d.specifications,
+        })),
         brand: item.brand,
         metrics: item.metrics,
         createdAt: item.createdAt,

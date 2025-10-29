@@ -250,6 +250,46 @@ export class CampaignMetrics {
   compositeScore: number;
 }
 
+export class CampaignDeliverableDto {
+  @ApiProperty({
+    description: 'Deliverable ID',
+    example: 1,
+  })
+  id: number;
+
+  @ApiProperty({
+    description: 'Platform',
+    example: 'instagram',
+  })
+  platform: string;
+
+  @ApiProperty({
+    description: 'Deliverable type',
+    example: 'instagram_post',
+  })
+  type: string;
+
+  @ApiProperty({
+    description: 'Budget for deliverable',
+    example: 5000,
+    nullable: true,
+  })
+  budget: number | null;
+
+  @ApiProperty({
+    description: 'Quantity of deliverables',
+    example: 2,
+  })
+  quantity: number;
+
+  @ApiProperty({
+    description: 'Specifications',
+    example: 'Post must include brand hashtag',
+    nullable: true,
+  })
+  specifications: string | null;
+}
+
 export class TopCampaignDto {
   @ApiProperty({
     description: 'Campaign ID',
@@ -288,6 +328,22 @@ export class TopCampaignDto {
     example: 'active',
   })
   status: string;
+
+  @ApiProperty({
+    description: 'Campaign deliverables',
+    type: [CampaignDeliverableDto],
+    example: [
+      {
+        id: 1,
+        platform: 'instagram',
+        type: 'instagram_post',
+        budget: 5000,
+        quantity: 2,
+        specifications: 'Post must include brand hashtag',
+      },
+    ],
+  })
+  deliverables: CampaignDeliverableDto[];
 
   @ApiProperty({
     description: 'Brand information',
