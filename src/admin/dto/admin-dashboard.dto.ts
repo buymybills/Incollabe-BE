@@ -252,3 +252,56 @@ export class InfluencerDashboardResponseDto {
   })
   nicheDistribution: NicheDistributionDto[];
 }
+
+// Brand Dashboard DTOs
+
+export class DailyActiveBrandsDataPointDto {
+  @ApiProperty({ description: 'Date' })
+  date: string;
+
+  @ApiProperty({ description: 'Verified profile count' })
+  verifiedCount: number;
+
+  @ApiProperty({ description: 'Unverified profile count' })
+  unverifiedCount: number;
+
+  @ApiProperty({ description: 'Total count' })
+  totalCount: number;
+}
+
+export class DailyActiveBrandsDto {
+  @ApiProperty({ description: 'Current verified count' })
+  currentVerifiedCount: number;
+
+  @ApiProperty({ description: 'Current unverified count' })
+  currentUnverifiedCount: number;
+
+  @ApiProperty({
+    description: 'Time series data',
+    type: [DailyActiveBrandsDataPointDto],
+  })
+  timeSeriesData: DailyActiveBrandsDataPointDto[];
+}
+
+export class BrandDashboardResponseDto {
+  @ApiProperty({ description: 'Brand metrics' })
+  brandMetrics: BrandMetricsDto;
+
+  @ApiProperty({ description: 'City presence data' })
+  cityPresence: CityPresenceDto;
+
+  @ApiProperty({
+    description: 'City distribution',
+    type: [CityDistributionDto],
+  })
+  cityDistribution: CityDistributionDto[];
+
+  @ApiProperty({ description: 'Daily active brands' })
+  dailyActiveBrands: DailyActiveBrandsDto;
+
+  @ApiProperty({
+    description: 'Niche distribution',
+    type: [NicheDistributionDto],
+  })
+  nicheDistribution: NicheDistributionDto[];
+}

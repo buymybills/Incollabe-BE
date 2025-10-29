@@ -68,6 +68,7 @@ import {
   DashboardRequestDto,
   MainDashboardResponseDto,
   InfluencerDashboardResponseDto,
+  BrandDashboardResponseDto,
   DashboardTimeFrame,
 } from './dto/admin-dashboard.dto';
 import { ForgotPasswordDto } from '../auth/dto/forgot-password.dto';
@@ -1169,6 +1170,28 @@ export class AdminController {
   })
   async getInfluencerDashboardStats(@Query() requestDto: DashboardRequestDto) {
     return await this.dashboardStatsService.getInfluencerDashboardStats(
+      requestDto.timeFrame || DashboardTimeFrame.LAST_7_DAYS,
+    );
+  }
+
+  @Get('dashboard/brands')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get brand dashboard statistics',
+    description:
+      'Get detailed brand analytics including city presence, city distribution, daily active brands time series, and niche distribution. Supports different time frames for the chart data.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Brand dashboard statistics retrieved successfully',
+    type: BrandDashboardResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getBrandDashboardStats(@Query() requestDto: DashboardRequestDto) {
+    return await this.dashboardStatsService.getBrandDashboardStats(
       requestDto.timeFrame || DashboardTimeFrame.LAST_7_DAYS,
     );
   }

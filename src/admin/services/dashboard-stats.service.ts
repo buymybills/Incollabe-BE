@@ -12,6 +12,7 @@ import { ProfileType, ReviewStatus } from '../models/profile-review.model';
 import {
   MainDashboardResponseDto,
   InfluencerDashboardResponseDto,
+  BrandDashboardResponseDto,
   DashboardTimeFrame,
 } from '../dto/admin-dashboard.dto';
 
@@ -635,5 +636,369 @@ export class DashboardStatsService {
   private calculatePercentageChange(current: number, previous: number): number {
     if (previous === 0) return current > 0 ? 100 : 0;
     return parseFloat((((current - previous) / previous) * 100).toFixed(1));
+  }
+
+  /**
+   * Get brand dashboard statistics
+   */
+  async getBrandDashboardStats(
+    timeFrame: DashboardTimeFrame,
+  ): Promise<BrandDashboardResponseDto> {
+    // Calculate date range based on timeFrame
+    let startDate: Date;
+    switch (timeFrame) {
+      case DashboardTimeFrame.LAST_24_HOURS:
+        startDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        break;
+      case DashboardTimeFrame.LAST_3_DAYS:
+        startDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+        break;
+      case DashboardTimeFrame.LAST_7_DAYS:
+        startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case DashboardTimeFrame.LAST_30_DAYS:
+        startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      default:
+        startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    }
+
+    const currentDate = new Date();
+    const currentMonthStart = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      1,
+    );
+    const lastMonthStart = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth() - 1,
+      1,
+    );
+    const lastMonthEnd = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      0,
+      23,
+      59,
+      59,
+    );
+
+    // Get brand metrics
+    const [
+      totalBrands,
+      verifiedBrands,
+      unverifiedBrands,
+      lastMonthTotalBrands,
+      lastMonthVerifiedBrands,
+      lastMonthUnverifiedBrands,
+      brandsPendingVerification,
+    ] = await Promise.all([
+      this.brandModel.count({ where: { isActive: true } }),
+      this.brandModel.count({ where: { isActive: true, isVerified: true } }),
+      this.brandModel.count({ where: { isActive: true, isVerified: false } }),
+      this.brandModel.count({
+        where: {
+          isActive: true,
+          createdAt: { [Op.between]: [lastMonthStart, lastMonthEnd] },
+        },
+      }),
+      this.brandModel.count({
+        where: {
+          isActive: true,
+          isVerified: true,
+          createdAt: { [Op.between]: [lastMonthStart, lastMonthEnd] },
+        },
+      }),
+      this.brandModel.count({
+        where: {
+          isActive: true,
+          isVerified: false,
+          createdAt: { [Op.between]: [lastMonthStart, lastMonthEnd] },
+        },
+      }),
+      this.profileReviewModel.count({
+        where: {
+          profileType: ProfileType.BRAND,
+          status: ReviewStatus.PENDING,
+        },
+      }),
+    ]);
+
+    const brandMetrics = {
+      totalBrands: {
+        count: totalBrands,
+        percentageChange: this.calculatePercentageChange(
+          totalBrands,
+          lastMonthTotalBrands,
+        ),
+      },
+      verifiedBrands: {
+        count: verifiedBrands,
+        percentageChange: this.calculatePercentageChange(
+          verifiedBrands,
+          lastMonthVerifiedBrands,
+        ),
+      },
+      unverifiedBrands: {
+        count: unverifiedBrands,
+        percentageChange: this.calculatePercentageChange(
+          unverifiedBrands,
+          lastMonthUnverifiedBrands,
+        ),
+      },
+      brandsPendingVerification,
+    };
+
+    // Get city presence
+    const cityPresence = await this.getBrandCityPresence();
+
+    // Get city distribution (top 3 cities + others)
+    const cityDistribution = await this.getBrandCityDistribution();
+
+    // Get daily active brands
+    const dailyActiveBrands = await this.getDailyActiveBrands(startDate);
+
+    // Get niche distribution
+    const nicheDistribution = await this.getBrandNicheDistribution();
+
+    return {
+      brandMetrics,
+      cityPresence,
+      cityDistribution,
+      dailyActiveBrands,
+      nicheDistribution,
+    };
+  }
+
+  private async getBrandCityPresence() {
+    const currentDate = new Date();
+    const lastMonthDate = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth() - 1,
+      currentDate.getDate(),
+    );
+
+    // Get unique cities with brands currently
+    const currentBrands = await this.brandModel.findAll({
+      attributes: ['headquarterCityId'],
+      where: {
+        isActive: true,
+        headquarterCityId: { [Op.ne]: null as any },
+      },
+      group: ['headquarterCityId'],
+    });
+
+    // Get unique cities with brands last month
+    const lastMonthBrands = await this.brandModel.findAll({
+      attributes: ['headquarterCityId'],
+      where: {
+        isActive: true,
+        headquarterCityId: { [Op.ne]: null as any },
+        createdAt: { [Op.lte]: lastMonthDate },
+      },
+      group: ['headquarterCityId'],
+    });
+
+    const currentCities = currentBrands.length;
+    const lastMonthCities = lastMonthBrands.length;
+    const change = currentCities - lastMonthCities;
+    const percentageChange = this.calculatePercentageChange(
+      currentCities,
+      lastMonthCities,
+    );
+
+    return {
+      totalCities: currentCities,
+      changeVsLastMonth: change,
+      percentageChange,
+    };
+  }
+
+  private async getBrandCityDistribution() {
+    // Get all brands with city information
+    const brands = await this.brandModel.findAll({
+      attributes: ['id', 'headquarterCityId'],
+      include: [
+        {
+          model: City,
+          as: 'headquarterCity',
+          attributes: ['id', 'name'],
+        },
+      ],
+      where: {
+        isActive: true,
+        headquarterCityId: { [Op.ne]: null as any },
+      },
+    });
+
+    const totalBrands = brands.length;
+    const cityCounts: { [key: string]: number } = {};
+
+    brands.forEach((brand) => {
+      const cityName = brand.headquarterCity?.name || 'Unknown';
+      cityCounts[cityName] = (cityCounts[cityName] || 0) + 1;
+    });
+
+    // Sort by count and get top 3
+    const sortedCities = Object.entries(cityCounts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 3);
+
+    const top3Count = sortedCities.reduce((sum, [, count]) => sum + count, 0);
+    const othersCount = totalBrands - top3Count;
+
+    const distribution = sortedCities.map(([cityName, count]) => ({
+      cityName,
+      influencerCount: count,
+      percentage: parseFloat(((count / totalBrands) * 100).toFixed(1)),
+    }));
+
+    if (othersCount > 0) {
+      distribution.push({
+        cityName: 'Others',
+        influencerCount: othersCount,
+        percentage: parseFloat(((othersCount / totalBrands) * 100).toFixed(1)),
+      });
+    }
+
+    return distribution;
+  }
+
+  private async getDailyActiveBrands(startDate: Date) {
+    const endDate = new Date();
+    const timeSeriesData: Array<{
+      date: string;
+      verifiedCount: number;
+      unverifiedCount: number;
+      totalCount: number;
+    }> = [];
+
+    // Generate daily data points
+    for (
+      let date = new Date(startDate);
+      date <= endDate;
+      date.setDate(date.getDate() + 1)
+    ) {
+      const dayStart = new Date(date);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(date);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      // Count verified brands created on this day
+      const verifiedCount = await this.brandModel.count({
+        where: {
+          isVerified: true,
+          isActive: true,
+          createdAt: {
+            [Op.gte]: dayStart,
+            [Op.lte]: dayEnd,
+          },
+        },
+      });
+
+      // Count unverified brands created on this day
+      const unverifiedCount = await this.brandModel.count({
+        where: {
+          isVerified: false,
+          isActive: true,
+          createdAt: {
+            [Op.gte]: dayStart,
+            [Op.lte]: dayEnd,
+          },
+        },
+      });
+
+      timeSeriesData.push({
+        date: dayStart.toISOString().split('T')[0],
+        verifiedCount,
+        unverifiedCount,
+        totalCount: verifiedCount + unverifiedCount,
+      });
+    }
+
+    // Get current totals
+    const currentVerifiedCount = await this.brandModel.count({
+      where: { isVerified: true, isActive: true },
+    });
+
+    const currentUnverifiedCount = await this.brandModel.count({
+      where: { isVerified: false, isActive: true },
+    });
+
+    return {
+      currentVerifiedCount,
+      currentUnverifiedCount,
+      timeSeriesData,
+    };
+  }
+
+  private async getBrandNicheDistribution() {
+    // Get all brands with their niches
+    const brands = await this.brandModel.findAll({
+      include: [
+        {
+          model: Niche,
+          as: 'niches',
+          attributes: ['id', 'name'],
+          through: { attributes: [] },
+        },
+      ],
+    });
+
+    const totalBrands = brands.length;
+    const nicheCounts: { [key: string]: number } = {};
+
+    brands.forEach((brand) => {
+      if (brand.niches && brand.niches.length > 0) {
+        brand.niches.forEach((niche) => {
+          const nicheName = niche.name;
+          nicheCounts[nicheName] = (nicheCounts[nicheName] || 0) + 1;
+        });
+      }
+    });
+
+    // Group niches into categories
+    const nicheGroups: { [key: string]: number } = {
+      'Fashion, Lifestyle, Beauty': 0,
+      'Food, Travel': 0,
+      'Electronics, Music': 0,
+      'Sports, Podcast, Motivational Speakers': 0,
+      'Others + Custom': 0,
+    };
+
+    Object.entries(nicheCounts).forEach(([nicheName, count]) => {
+      const nicheLower = nicheName.toLowerCase();
+      if (
+        nicheLower.includes('fashion') ||
+        nicheLower.includes('lifestyle') ||
+        nicheLower.includes('beauty')
+      ) {
+        nicheGroups['Fashion, Lifestyle, Beauty'] += count;
+      } else if (
+        nicheLower.includes('food') ||
+        nicheLower.includes('travel')
+      ) {
+        nicheGroups['Food, Travel'] += count;
+      } else if (
+        nicheLower.includes('electronics') ||
+        nicheLower.includes('music')
+      ) {
+        nicheGroups['Electronics, Music'] += count;
+      } else if (
+        nicheLower.includes('sports') ||
+        nicheLower.includes('podcast') ||
+        nicheLower.includes('motivat')
+      ) {
+        nicheGroups['Sports, Podcast, Motivational Speakers'] += count;
+      } else {
+        nicheGroups['Others + Custom'] += count;
+      }
+    });
+
+    return Object.entries(nicheGroups).map(([nicheName, count]) => ({
+      nicheName,
+      influencerCount: count,
+      percentage: parseFloat(((count / totalBrands) * 100).toFixed(1)),
+    }));
   }
 }
