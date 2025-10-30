@@ -23,6 +23,7 @@ import {
 } from '@nestjs/swagger';
 import { CampaignService } from './campaign.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
+import { Public } from '../auth/decorators/public.decorator';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
 import { GetCampaignsDto } from './dto/get-campaigns.dto';
@@ -461,6 +462,77 @@ export class CampaignController {
 
     return this.campaignService.getBrandCampaigns(
       req.user.id,
+      page || 1,
+      limit || 10,
+    );
+  }
+
+  @Get('brand/:brandId/campaigns')
+  @Public()
+  @ApiOperation({
+    summary: 'Get campaigns for a specific brand (Public)',
+    description:
+      'Retrieves paginated campaigns created by a specific brand. This is a public endpoint that can be accessed without authentication, useful for viewing brand profiles.',
+  })
+  @ApiParam({
+    name: 'brandId',
+    type: Number,
+    description: 'Brand ID to view campaigns for',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number for pagination',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Number of campaigns per page',
+    example: 10,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Brand campaigns retrieved successfully',
+    schema: {
+      example: {
+        campaigns: [
+          {
+            id: 1,
+            name: 'Summer Fashion Campaign',
+            status: 'active',
+            deliverables: [
+              {
+                platform: 'instagram',
+                type: 'instagram_post',
+                budget: 2000,
+              },
+            ],
+            invitations: [{ status: 'pending' }, { status: 'accepted' }],
+            totalApplications: 15,
+          },
+        ],
+        total: 25,
+        page: 1,
+        limit: 10,
+        totalPages: 3,
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Brand not found',
+  })
+  async getBrandCampaigns(
+    @Param('brandId', ParseIntPipe) brandId: number,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.campaignService.getBrandCampaigns(
+      brandId,
       page || 1,
       limit || 10,
     );
