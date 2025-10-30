@@ -45,6 +45,16 @@ export class PostService {
     userId: number,
     files?: Express.Multer.File[],
   ): Promise<Post> {
+    // Validate that at least content or media is provided
+    const hasContent = createPostDto.content && createPostDto.content.trim().length > 0;
+    const hasMedia = files && files.length > 0;
+
+    if (!hasContent && !hasMedia) {
+      throw new BadRequestException(
+        'Post must have either content or media (or both)',
+      );
+    }
+
     // Upload files to S3 if provided
     const mediaUrls: string[] = [];
     if (files && files.length > 0) {
@@ -115,6 +125,19 @@ export class PostService {
         const url = await this.s3Service.uploadFileToS3(file, folder, prefix);
         mediaUrls.push(url);
       }
+    }
+
+    // Validate that updated post will have either content or media
+    const updatedContent = updatePostDto.content !== undefined
+      ? updatePostDto.content
+      : post.content;
+    const hasContent = updatedContent && updatedContent.trim().length > 0;
+    const hasMedia = mediaUrls && mediaUrls.length > 0;
+
+    if (!hasContent && !hasMedia) {
+      throw new BadRequestException(
+        'Post must have either content or media (or both)',
+      );
     }
 
     const updateData: any = {

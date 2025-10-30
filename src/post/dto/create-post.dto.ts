@@ -1,6 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
-  IsNotEmpty,
   IsString,
   IsArray,
   IsOptional,
@@ -9,15 +8,16 @@ import {
 
 export class CreatePostDto {
   @ApiProperty({
-    description: 'Post content text',
+    description: 'Post content text (required if no media provided)',
     example: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit...',
+    required: false,
   })
-  @IsNotEmpty({ message: 'Post content is required' })
+  @IsOptional()
   @IsString()
   @Length(1, 5000, {
     message: 'Post content must be between 1 and 5000 characters',
   })
-  content: string;
+  content?: string;
 
   @ApiProperty({
     description: 'Array of media URLs (images/videos)',
