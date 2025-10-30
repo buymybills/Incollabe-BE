@@ -1804,9 +1804,10 @@ export class AdminAuthService {
         // Simple applicant quality score (can be enhanced with actual follower/engagement data)
         const applicantQuality = applicationsCount > 0 ? 50 : 0; // Placeholder
 
-        // Budget Metrics
+        // Budget Metrics - multiply budget by quantity for each deliverable
         const totalBudget = deliverables.reduce(
-          (sum, d) => sum + (parseFloat(d.budget) || 0),
+          (sum, d) =>
+            sum + (parseFloat(d.budget) || 0) * (parseInt(d.quantity) || 1),
           0,
         );
         const deliverablesCount = deliverables.length;
