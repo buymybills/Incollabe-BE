@@ -382,4 +382,338 @@ describe('Auth (e2e)', () => {
       });
     });
   });
+
+  describe('Brand Two-Step Signup - Case Insensitive Email', () => {
+    const testPassword = 'SecurePass123!';
+    const baseEmail = 'vinay@gmail.com';
+
+    describe('/auth/brand/initial-signup (POST)', () => {
+      it('should create brand account with lowercase email', async () => {
+        return request(app.getHttpServer())
+          .post('/auth/brand/initial-signup')
+          .send({
+            email: baseEmail,
+            password: testPassword,
+          })
+          .expect(201)
+          .expect((res) => {
+            expect(res.body).toHaveProperty('message');
+            expect(res.body.message).toContain('OTP sent to your email');
+            expect(res.body).toHaveProperty('email', baseEmail);
+            expect(res.body).toHaveProperty('requiresOtp', true);
+            expect(res.body).toHaveProperty('brandId');
+          });
+      });
+
+      it('should reject duplicate email with exact same case (vinay@gmail.com)', async () => {
+        // First signup
+        await request(app.getHttpServer())
+          .post('/auth/brand/initial-signup')
+          .send({
+            email: baseEmail,
+            password: testPassword,
+          })
+          .expect(201);
+
+        // Try to signup with same email - should resend OTP
+        return request(app.getHttpServer())
+          .post('/auth/brand/initial-signup')
+          .send({
+            email: baseEmail,
+            password: testPassword,
+          })
+          .expect(201)
+          .expect((res) => {
+            expect(res.body.message).toContain('OTP sent to your email');
+            expect(res.body).toHaveProperty('requiresOtp', true);
+          });
+      });
+
+      it('should reject email with different case - uppercase first letter (Vinay@gmail.com)', async () => {
+        // First signup with lowercase
+        await request(app.getHttpServer())
+          .post('/auth/brand/initial-signup')
+          .send({
+            email: baseEmail,
+            password: testPassword,
+          })
+          .expect(201);
+
+        // Try with different case - should get same response (resend OTP)
+        return request(app.getHttpServer())
+          .post('/auth/brand/initial-signup')
+          .send({
+            email: 'Vinay@gmail.com',
+            password: testPassword,
+          })
+          .expect(201)
+          .expect((res) => {
+            // Should normalize to lowercase and find existing account
+            expect(res.body.message).toContain('OTP sent to your email');
+            expect(res.body).toHaveProperty('email', baseEmail); // Should be normalized
+            expect(res.body).toHaveProperty('requiresOtp', true);
+          });
+      });
+
+      it('should reject email with different case - uppercase V and I (VInay@gmail.com)', async () => {
+        // First signup with lowercase
+        await request(app.getHttpServer())
+          .post('/auth/brand/initial-signup')
+          .send({
+            email: baseEmail,
+            password: testPassword,
+          })
+          .expect(201);
+
+        // Try with different case variation
+        return request(app.getHttpServer())
+          .post('/auth/brand/initial-signup')
+          .send({
+            email: 'VInay@gmail.com',
+            password: testPassword,
+          })
+          .expect(201)
+          .expect((res) => {
+            // Should normalize to lowercase and find existing account
+            expect(res.body.message).toContain('OTP sent to your email');
+            expect(res.body).toHaveProperty('email', baseEmail); // Should be normalized
+            expect(res.body).toHaveProperty('requiresOtp', true);
+          });
+      });
+
+      it('should reject email with all uppercase (VINAY@GMAIL.COM)', async () => {
+        // First signup with lowercase
+        await request(app.getHttpServer())
+          .post('/auth/brand/initial-signup')
+          .send({
+            email: baseEmail,
+            password: testPassword,
+          })
+          .expect(201);
+
+        // Try with all uppercase
+        return request(app.getHttpServer())
+          .post('/auth/brand/initial-signup')
+          .send({
+            email: 'VINAY@GMAIL.COM',
+            password: testPassword,
+          })
+          .expect(201)
+          .expect((res) => {
+            // Should normalize to lowercase and find existing account
+            expect(res.body.message).toContain('OTP sent to your email');
+            expect(res.body).toHaveProperty('email', baseEmail); // Should be normalized
+            expect(res.body).toHaveProperty('requiresOtp', true);
+          });
+      });
+
+      it('should reject email with mixed case (vInAy@GmAiL.cOm)', async () => {
+        // First signup with lowercase
+        await request(app.getHttpServer())
+          .post('/auth/brand/initial-signup')
+          .send({
+            email: baseEmail,
+            password: testPassword,
+          })
+          .expect(201);
+
+        // Try with random mixed case
+        return request(app.getHttpServer())
+          .post('/auth/brand/initial-signup')
+          .send({
+            email: 'vInAy@GmAiL.cOm',
+            password: testPassword,
+          })
+          .expect(201)
+          .expect((res) => {
+            // Should normalize to lowercase and find existing account
+            expect(res.body.message).toContain('OTP sent to your email');
+            expect(res.body).toHaveProperty('email', baseEmail); // Should be normalized
+            expect(res.body).toHaveProperty('requiresOtp', true);
+          });
+      });
+
+      it('should reject verified brand with case variation (409 Conflict)', async () => {
+        // Create and verify brand with lowercase email
+        const signupResponse = await request(app.getHttpServer())
+          .post('/auth/brand/initial-signup')
+          .send({
+            email: baseEmail,
+            password: testPassword,
+          })
+          .expect(201);
+
+        const brandId = signupResponse.body.brandId;
+
+        // Manually mark as verified for testing
+        const Brand = sequelize.model('Brand');
+        await Brand.update(
+          { isEmailVerified: true },
+          { where: { id: brandId } },
+        );
+
+        // Try to signup with different case - should get conflict
+        return request(app.getHttpServer())
+          .post('/auth/brand/initial-signup')
+          .send({
+            email: 'VINAY@GMAIL.COM',
+            password: testPassword,
+          })
+          .expect(409)
+          .expect((res) => {
+            expect(res.body).toHaveProperty('message', 'Brand already exists with this email');
+          });
+      });
+    });
+
+    describe('/auth/brand/login (POST) - Case Insensitive', () => {
+      it('should login with lowercase email', async () => {
+        // Create and verify brand
+        const signupResponse = await request(app.getHttpServer())
+          .post('/auth/brand/initial-signup')
+          .send({
+            email: baseEmail,
+            password: testPassword,
+          })
+          .expect(201);
+
+        const brandId = signupResponse.body.brandId;
+
+        // Manually mark as verified and profile completed for testing
+        const Brand = sequelize.model('Brand');
+        await Brand.update(
+          { 
+            isEmailVerified: true,
+            isProfileCompleted: true,
+            brandName: 'Test Brand',
+            username: 'testbrand123',
+          },
+          { where: { id: brandId } },
+        );
+
+        // Login with lowercase
+        return request(app.getHttpServer())
+          .post('/auth/brand/login')
+          .send({
+            email: baseEmail,
+            password: testPassword,
+          })
+          .expect(200)
+          .expect((res) => {
+            expect(res.body).toHaveProperty('accessToken');
+            expect(res.body).toHaveProperty('refreshToken');
+          });
+      });
+
+      it('should login with uppercase email (Vinay@gmail.com)', async () => {
+        // Create and verify brand with lowercase
+        const signupResponse = await request(app.getHttpServer())
+          .post('/auth/brand/initial-signup')
+          .send({
+            email: baseEmail,
+            password: testPassword,
+          })
+          .expect(201);
+
+        const brandId = signupResponse.body.brandId;
+
+        // Mark as verified and profile completed
+        const Brand = sequelize.model('Brand');
+        await Brand.update(
+          { 
+            isEmailVerified: true,
+            isProfileCompleted: true,
+            brandName: 'Test Brand',
+            username: 'testbrand456',
+          },
+          { where: { id: brandId } },
+        );
+
+        // Login with different case
+        return request(app.getHttpServer())
+          .post('/auth/brand/login')
+          .send({
+            email: 'Vinay@gmail.com',
+            password: testPassword,
+          })
+          .expect(200)
+          .expect((res) => {
+            expect(res.body).toHaveProperty('accessToken');
+            expect(res.body).toHaveProperty('refreshToken');
+          });
+      });
+
+      it('should login with all uppercase email (VINAY@GMAIL.COM)', async () => {
+        // Create and verify brand with lowercase
+        const signupResponse = await request(app.getHttpServer())
+          .post('/auth/brand/initial-signup')
+          .send({
+            email: baseEmail,
+            password: testPassword,
+          })
+          .expect(201);
+
+        const brandId = signupResponse.body.brandId;
+
+        // Mark as verified and profile completed
+        const Brand = sequelize.model('Brand');
+        await Brand.update(
+          { 
+            isEmailVerified: true,
+            isProfileCompleted: true,
+            brandName: 'Test Brand',
+            username: 'testbrand789',
+          },
+          { where: { id: brandId } },
+        );
+
+        // Login with all uppercase
+        return request(app.getHttpServer())
+          .post('/auth/brand/login')
+          .send({
+            email: 'VINAY@GMAIL.COM',
+            password: testPassword,
+          })
+          .expect(200)
+          .expect((res) => {
+            expect(res.body).toHaveProperty('accessToken');
+            expect(res.body).toHaveProperty('refreshToken');
+          });
+      });
+
+      it('should reject login with wrong password regardless of email case', async () => {
+        // Create and verify brand
+        const signupResponse = await request(app.getHttpServer())
+          .post('/auth/brand/initial-signup')
+          .send({
+            email: baseEmail,
+            password: testPassword,
+          })
+          .expect(201);
+
+        const brandId = signupResponse.body.brandId;
+
+        // Mark as verified and profile completed
+        const Brand = sequelize.model('Brand');
+        await Brand.update(
+          { 
+            isEmailVerified: true,
+            isProfileCompleted: true,
+            brandName: 'Test Brand',
+            username: 'testbrand000',
+          },
+          { where: { id: brandId } },
+        );
+
+        // Try login with different case but wrong password
+        return request(app.getHttpServer())
+          .post('/auth/brand/login')
+          .send({
+            email: 'VINAY@GMAIL.COM',
+            password: 'WrongPassword123!',
+          })
+          .expect(401);
+      });
+    });
+  });
 });

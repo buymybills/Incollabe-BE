@@ -183,6 +183,9 @@ export class BrandProfileResponseDto {
   @ApiProperty({ description: 'Account active status' })
   isActive: boolean;
 
+  @ApiProperty({ description: 'Brand verification status' })
+  isVerified: boolean;
+
   @ApiProperty({ description: 'Company information', type: CompanyInfo })
   companyInfo: CompanyInfo;
 
@@ -260,12 +263,14 @@ export class BrandProfileResponseDto {
       status: 'pending',
       message: 'Profile Under Verification',
       description: 'Usually takes 1-2 business days to complete verification',
+      isNew: false,
     },
   })
   verificationStatus?: {
     status: string;
     message: string;
     description: string;
+    isNew: boolean;
   } | null;
 
   @ApiProperty({

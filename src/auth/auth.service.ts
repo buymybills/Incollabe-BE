@@ -1108,8 +1108,11 @@ export class AuthService {
   ) {
     const { email, password } = loginDto;
 
+    // Normalize email to lowercase for case-insensitive comparison
+    const normalizedEmail = email.toLowerCase().trim();
+
     // Create hash of email for searching
-    const emailHash = crypto.createHash('sha256').update(email).digest('hex');
+    const emailHash = crypto.createHash('sha256').update(normalizedEmail).digest('hex');
 
     // Find brand by emailHash (including soft-deleted)
     const brand = await this.brandModel.findOne({
@@ -1680,8 +1683,11 @@ export class AuthService {
   ) {
     const { email, password } = signupDto;
 
+    // Normalize email to lowercase for case-insensitive comparison
+    const normalizedEmail = email.toLowerCase().trim();
+
     // Create hash of email for searching
-    const emailHash = crypto.createHash('sha256').update(email).digest('hex');
+    const emailHash = crypto.createHash('sha256').update(normalizedEmail).digest('hex');
 
     // Check if brand already exists (only active ones - paranoid true by default)
     const existingBrand = await this.brandModel.findOne({
@@ -1694,17 +1700,17 @@ export class AuthService {
         throw new ConflictException('Brand already exists with this email');
       } else {
         // Brand exists but email not verified - resend OTP
-        const otp = await this.generateAndStoreOtp(email, {
+        const otp = await this.generateAndStoreOtp(normalizedEmail, {
           brandId: existingBrand.id,
           deviceId,
           userAgent,
         });
 
-        await this.emailService.sendBrandOtp(email, otp);
+        await this.emailService.sendBrandOtp(normalizedEmail, otp);
 
         return {
           message: 'OTP sent to your email for verification.',
-          email: email,
+          email: normalizedEmail,
           requiresOtp: true,
           brandId: existingBrand.id,
         };
@@ -1716,7 +1722,7 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
     // Encrypt email manually (hooks don't fire reliably)
-    const encryptedEmail = this.encryptionService.encrypt(email);
+    const encryptedEmail = this.encryptionService.encrypt(normalizedEmail);
 
     // Create brand with basic info
     const brand = await this.brandModel.create({
@@ -1728,19 +1734,19 @@ export class AuthService {
     });
 
     // Generate and store OTP
-    const otp = await this.generateAndStoreOtp(email, {
+    const otp = await this.generateAndStoreOtp(normalizedEmail, {
       brandId: brand.id,
       deviceId,
       userAgent,
     });
 
     // Send OTP email
-    await this.emailService.sendBrandOtp(email, otp);
+    await this.emailService.sendBrandOtp(normalizedEmail, otp);
 
     return {
       message:
         'Account created successfully. OTP sent to your email for verification.',
-      email: email,
+      email: normalizedEmail,
       requiresOtp: true,
       brandId: brand.id,
     };
