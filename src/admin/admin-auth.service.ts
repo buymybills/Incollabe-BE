@@ -1922,7 +1922,7 @@ export class AdminAuthService {
 
     // Calculate composite scores
     const campaignsWithScores = campaignsWithMetrics.map((item) => {
-      const { campaign, brand, metrics } = item;
+      const { campaign, brand, deliverables, metrics } = item;
 
       // Normalize metrics (0-100 scale)
       const normalizedApplications =
@@ -1969,7 +1969,7 @@ export class AdminAuthService {
         category: campaign.category,
         type: campaign.type,
         status: campaign.status,
-        deliverables: (campaign.get('deliverables') as any[]) || [],
+        deliverables: deliverables || [],
         brand: {
           id: brand.id,
           brandName: brand.brandName,
