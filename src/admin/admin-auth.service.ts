@@ -1571,7 +1571,7 @@ export class AdminAuthService {
     // Build dynamic includes for city and niche search
     const cityInclude: any = {
       model: this.cityModel,
-      as: 'city',
+      as: 'headquarterCity',
     };
     if (locationSearch && locationSearch.trim()) {
       cityInclude.where = {
