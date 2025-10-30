@@ -63,6 +63,112 @@ import {
 } from './dto/top-campaigns.dto';
 import { Op, Order, Sequelize, literal } from 'sequelize';
 
+// Interfaces for Top Campaigns
+interface CampaignDeliverableJson {
+  id: number;
+  platform: string;
+  type: string;
+  budget: number | string | null; // Can be string (DECIMAL from DB) or number
+  quantity: number | string; // Can be string from DB
+  specifications: string | null;
+}
+
+interface CampaignApplicationJson {
+  id: number;
+  status: string;
+  createdAt: Date;
+}
+
+interface CampaignBrandJson {
+  id: number;
+  brandName: string;
+  username: string;
+  profileImage: string | null;
+  isVerified: boolean;
+}
+
+interface CampaignJson {
+  id: number;
+  name: string;
+  description: string | null;
+  category: string | null;
+  type: string;
+  status: string;
+  isPanIndia: boolean;
+  nicheIds: number[] | null;
+  createdAt: Date;
+  updatedAt: Date;
+  applications?: CampaignApplicationJson[];
+  deliverables?: CampaignDeliverableJson[];
+  cities?: any[];
+  brand?: CampaignBrandJson;
+}
+
+interface CampaignMetrics {
+  application: {
+    applicationsCount: number;
+    conversionRate: number;
+    applicantQuality: number;
+  };
+  budget: {
+    totalBudget: number;
+    budgetPerDeliverable: number;
+    deliverablesCount: number;
+  };
+  scope: {
+    isPanIndia: boolean;
+    citiesCount: number;
+    nichesCount: number;
+    geographicReach: number;
+  };
+  engagement: {
+    selectedInfluencers: number;
+    completionRate: number;
+    status: string;
+  };
+  recency: {
+    daysSinceLaunch: number;
+    daysSinceLastApplication: number | null;
+    createdAt: Date;
+  };
+}
+
+interface CampaignWithMetrics {
+  campaign: CampaignJson;
+  brand: CampaignBrandJson;
+  deliverables: CampaignDeliverableJson[];
+  metrics: CampaignMetrics;
+}
+
+interface CampaignWithScores extends CampaignWithMetrics {
+  id: number;
+  name: string;
+  description: string | null;
+  category: string | null;
+  type: string;
+  status: string;
+  deliverables: CampaignDeliverableJson[];
+  brand: CampaignBrandJson;
+  metrics: CampaignMetrics & { compositeScore: number };
+  createdAt: Date;
+  updatedAt: Date;
+  sortValues: {
+    applications_count: number;
+    conversion_rate: number;
+    applicant_quality: number;
+    total_budget: number;
+    budget_per_deliverable: number;
+    geographic_reach: number;
+    cities_count: number;
+    niches_count: number;
+    selected_influencers: number;
+    completion_rate: number;
+    recently_launched: number;
+    recently_active: number;
+    composite: number;
+  };
+}
+
 export interface CombinedUserResult {
   id: number;
   name: string;
@@ -1783,12 +1889,13 @@ export class AdminAuthService {
     });
 
     // Calculate metrics for each campaign
-    const campaignsWithMetrics = campaigns
-      .map((campaign) => {
-        const applications = (campaign.get('applications') as any[]) || [];
-        const deliverables = (campaign.get('deliverables') as any[]) || [];
-        const cities = (campaign.get('cities') as any[]) || [];
-        const brand = campaign.get('brand') as any;
+    const campaignsWithMetrics: CampaignWithMetrics[] = campaigns
+      .map((campaign): CampaignWithMetrics | null => {
+        const campaignJson = campaign.toJSON() as CampaignJson;
+        const applications: CampaignApplicationJson[] = campaignJson.applications || [];
+        const deliverables: CampaignDeliverableJson[] = campaignJson.deliverables || [];
+        const cities = campaignJson.cities || [];
+        const brand = campaignJson.brand!;
 
         // Application Metrics
         const applicationsCount = applications.length;
@@ -1807,7 +1914,7 @@ export class AdminAuthService {
         // Budget Metrics - multiply budget by quantity for each deliverable
         const totalBudget = deliverables.reduce(
           (sum, d) =>
-            sum + (parseFloat(d.budget) || 0) * (parseInt(d.quantity) || 1),
+            sum + (parseFloat(String(d.budget || '0')) || 0) * (parseInt(String(d.quantity || '1')) || 1),
           0,
         );
         const deliverablesCount = deliverables.length;
@@ -1815,24 +1922,24 @@ export class AdminAuthService {
           deliverablesCount > 0 ? totalBudget / deliverablesCount : 0;
 
         // Scope Metrics
-        const isPanIndia = campaign.isPanIndia;
+        const isPanIndia = campaignJson.isPanIndia;
         const citiesCount = cities.length;
-        const nichesCount = campaign.nicheIds ? campaign.nicheIds.length : 0;
+        const nichesCount = campaignJson.nicheIds ? campaignJson.nicheIds.length : 0;
         const geographicReach = isPanIndia
           ? 100
           : Math.min((citiesCount / 10) * 100, 100);
 
         // Engagement Metrics
         const completionRate =
-          campaign.status === CampaignStatus.COMPLETED
+          campaignJson.status === CampaignStatus.COMPLETED
             ? 100
-            : campaign.status === CampaignStatus.ACTIVE
+            : campaignJson.status === CampaignStatus.ACTIVE
               ? 50
               : 0;
 
         // Recency Metrics
         const now = new Date();
-        const createdAt = new Date(campaign.createdAt);
+        const createdAt = new Date(campaignJson.createdAt);
         const daysSinceLaunch = Math.floor(
           (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24),
         );
@@ -1849,7 +1956,7 @@ export class AdminAuthService {
           : null;
 
         return {
-          campaign,
+          campaign: campaignJson,
           brand,
           deliverables, // Include deliverables array for response mapping
           metrics: {
@@ -1872,19 +1979,20 @@ export class AdminAuthService {
             engagement: {
               selectedInfluencers,
               completionRate,
-              status: campaign.status,
+              status: campaignJson.status,
             },
             recency: {
               daysSinceLaunch,
               daysSinceLastApplication,
-              createdAt: campaign.createdAt,
+              createdAt: campaignJson.createdAt,
             },
           },
         };
       })
-      .filter((item) => {
+      .filter((item): item is CampaignWithMetrics => {
         // Apply minimum qualification filters
         return (
+          item !== null &&
           item.metrics.application.applicationsCount >= 3 &&
           item.metrics.budget.deliverablesCount >= 1
         );
@@ -1921,7 +2029,7 @@ export class AdminAuthService {
     );
 
     // Calculate composite scores
-    const campaignsWithScores = campaignsWithMetrics.map((item) => {
+    const campaignsWithScores: CampaignWithScores[] = campaignsWithMetrics.map((item): CampaignWithScores => {
       const { campaign, brand, deliverables, metrics } = item;
 
       // Normalize metrics (0-100 scale)
@@ -1963,6 +2071,7 @@ export class AdminAuthService {
         normalizedRecencyActivity * 0.05; // 5%
 
       return {
+        campaign,
         id: campaign.id,
         name: campaign.name,
         description: campaign.description,
@@ -1970,13 +2079,7 @@ export class AdminAuthService {
         type: campaign.type,
         status: campaign.status,
         deliverables: deliverables || [],
-        brand: {
-          id: brand.id,
-          brandName: brand.brandName,
-          username: brand.username,
-          profileImage: brand.profileImage,
-          isVerified: brand.isVerified,
-        },
+        brand,
         metrics: {
           application: {
             applicationsCount: metrics.application.applicationsCount,
@@ -2064,13 +2167,10 @@ export class AdminAuthService {
         statusLabel, // Human-readable status: "Ongoing", "Completed", "Draft"
         applicationsCount: item.metrics.application.applicationsCount, // Top-level for easy UI access
         completedAt, // Date when completed (null if not completed)
-        deliverables: item.deliverables.map((d: any) => ({
-          id: d.id,
-          platform: d.platform,
-          type: d.type,
-          budget: d.budget ? parseFloat(d.budget) : null,
-          quantity: d.quantity,
-          specifications: d.specifications,
+        deliverables: item.deliverables.map(d => ({
+          ...d,
+          budget: d.budget ? parseFloat(String(d.budget)) : null,
+          quantity: typeof d.quantity === 'string' ? parseInt(d.quantity) : d.quantity,
         })),
         brand: item.brand,
         metrics: item.metrics,
@@ -2091,15 +2191,6 @@ export class AdminAuthService {
 
   async getComprehensiveDashboardStats() {
     const now = new Date();
-    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastMonthEnd = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      0,
-      23,
-      59,
-      59,
-    );
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
     // Get all counts in parallel
