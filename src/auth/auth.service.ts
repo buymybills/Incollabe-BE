@@ -46,6 +46,7 @@ import { Otp } from './model/otp.model';
 import { CustomNiche } from './model/custom-niche.model';
 import { Gender } from './types/gender.enum';
 import { SearchUsersResult } from '../shared/services/search.service';
+import { isReservedUsername } from '../shared/constants/reserved-usernames';
 
 // Interfaces for token payload
 interface DecodedRefresh {
@@ -684,10 +685,22 @@ export class AuthService {
   async checkUsernameAvailability(checkUsernameDto: CheckUsernameDto) {
     const { username } = checkUsernameDto;
 
+    // Check if it's a reserved username
+    if (isReservedUsername(username)) {
+      throw new BadRequestException('This username is reserved and cannot be used');
+    }
+
     // Check if username exists in either influencer or brand tables
+    // Only select id and username to avoid issues with missing columns
     const [influencerExists, brandExists] = await Promise.all([
-      this.influencerModel.findOne({ where: { username } }),
-      this.brandModel.findOne({ where: { username } }),
+      this.influencerModel.findOne({
+        where: { username },
+        attributes: ['id', 'username'],
+      }),
+      this.brandModel.findOne({
+        where: { username },
+        attributes: ['id', 'username'], 
+      }),
     ]);
 
     const isAvailable = !influencerExists && !brandExists;
@@ -701,10 +714,7 @@ export class AuthService {
     }
 
     // Only generate suggestions when username is taken
-    const suggestions = await this.generateUsernameSuggestions(
-      username,
-      isAvailable,
-    );
+    const suggestions = await this.generateUsernameSuggestions(username);
 
     return {
       available: false,
@@ -716,7 +726,6 @@ export class AuthService {
 
   private async generateUsernameSuggestions(
     baseUsername: string,
-    originalAvailable: boolean = false,
   ): Promise<string[]> {
     const suggestions: string[] = [];
     const maxSuggestions = 5;
@@ -777,8 +786,14 @@ export class AuthService {
       if (availableSuggestions.length >= maxSuggestions) break;
 
       const [influencerExists, brandExists] = await Promise.all([
-        this.influencerModel.findOne({ where: { username: suggestion } }),
-        this.brandModel.findOne({ where: { username: suggestion } }),
+        this.influencerModel.findOne({
+          where: { username: suggestion },
+          attributes: ['id', 'username'],
+        }),
+        this.brandModel.findOne({
+          where: { username: suggestion },
+          attributes: ['id', 'username'],
+        }),
       ]);
 
       if (!influencerExists && !brandExists) {
@@ -792,8 +807,14 @@ export class AuthService {
       const suggestion = `${baseUsername}_${counter}`;
 
       const [influencerExists, brandExists] = await Promise.all([
-        this.influencerModel.findOne({ where: { username: suggestion } }),
-        this.brandModel.findOne({ where: { username: suggestion } }),
+        this.influencerModel.findOne({
+          where: { username: suggestion },
+          attributes: ['id', 'username'],
+        }),
+        this.brandModel.findOne({
+          where: { username: suggestion },
+          attributes: ['id', 'username'],
+        }),
       ]);
 
       if (!influencerExists && !brandExists) {

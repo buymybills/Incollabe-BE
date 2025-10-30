@@ -83,6 +83,7 @@ export class IsValidUsernameConstraint implements ValidatorConstraintInterface {
           ? { id: { [Op.ne]: currentUserId } } // Exclude current user if updating
           : {}),
       },
+      attributes: ['id', 'username'], // Only select needed columns to avoid isTopBrand error
     });
 
     if (existingBrand) {
@@ -99,6 +100,7 @@ export class IsValidUsernameConstraint implements ValidatorConstraintInterface {
           ? { id: { [Op.ne]: currentUserId } } // Exclude current user if updating
           : {}),
       },
+      attributes: ['id', 'username'], // Only select needed columns
     });
 
     if (existingInfluencer) {

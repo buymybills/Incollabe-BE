@@ -1,7 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsString, MinLength, MaxLength, Matches } from 'class-validator';
 import { ToLowercase } from '../../shared/decorators/to-lowercase.decorator';
-import { IsValidUsername } from '../../shared/validators/is-valid-username.validator';
 
 export class CheckUsernameDto {
   @ApiProperty({
@@ -14,7 +13,23 @@ export class CheckUsernameDto {
   })
   @IsNotEmpty({ message: 'Username is required' })
   @IsString({ message: 'Username must be a string' })
+  @MinLength(3, { message: 'Username too short (min 3 characters)' })
+  @MaxLength(30, { message: 'Username too long (max 30 characters)' })
+  @Matches(/^[a-z0-9._]+$/, {
+    message: 'Username can only contain lowercase letters (a-z), numbers (0-9), dots (.) and underscores (_). No spaces or special characters like hyphens are allowed',
+  })
+  @Matches(/^[a-z0-9]/, {
+    message: 'Username must start with a letter or number',
+  })
+  @Matches(/[a-z0-9]$/, {
+    message: 'Username must end with a letter or number',
+  })
+  @Matches(/^(?!.*\.\..*$).*$/, {
+    message: 'Username cannot contain consecutive dots (..)',
+  })
+  @Matches(/^(?!.*__.*$).*$/, {
+    message: 'Username cannot contain consecutive underscores (__)',
+  })
   @ToLowercase()
-  @IsValidUsername()
   username: string;
 }
