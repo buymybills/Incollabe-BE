@@ -723,11 +723,12 @@ describe('InfluencerService', () => {
       expect(result).toHaveProperty('niches');
       expect(result).toHaveProperty('socialLinks');
       expect(result).toHaveProperty('collaborationCosts');
+      expect(result).toHaveProperty('phone');
+      expect(result).toHaveProperty('whatsappNumber');
 
       // Ensure private data is not included (verification, contact)
       expect(result).not.toHaveProperty('verification');
       expect(result).not.toHaveProperty('contact');
-      expect(result).not.toHaveProperty('phone');
     });
 
     it('should throw NotFoundException for non-existent or inactive influencer', async () => {

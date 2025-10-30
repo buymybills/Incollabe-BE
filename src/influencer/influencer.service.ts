@@ -198,6 +198,8 @@ export class InfluencerService {
       profileBanner: influencer.profileBanner,
       profileHeadline: influencer.profileHeadline,
       userType: 'influencer' as const,
+      phone: influencer.phone || null,
+      whatsappNumber: influencer.whatsappNumber || null,
       dateOfBirth: influencer.dateOfBirth
         ? influencer.dateOfBirth instanceof Date
           ? influencer.dateOfBirth.toISOString()
