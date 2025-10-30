@@ -120,7 +120,7 @@ export class ProfileReviewService {
               'profileImage',
               'isProfileCompleted',
               'gender',
-              'age',
+              'dateOfBirth',
             ],
             include: [
               {
@@ -142,6 +142,25 @@ export class ProfileReviewService {
               },
             ],
           });
+
+          // Calculate age from dateOfBirth if it exists
+          if (profileData && profileData.dateOfBirth) {
+            const today = new Date();
+            const birthDate = new Date(profileData.dateOfBirth);
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            if (
+              monthDiff < 0 ||
+              (monthDiff === 0 && today.getDate() < birthDate.getDate())
+            ) {
+              age--;
+            }
+            // Add age to profileData
+            profileData = {
+              ...profileData.toJSON(),
+              age,
+            };
+          }
         }
 
         return {
