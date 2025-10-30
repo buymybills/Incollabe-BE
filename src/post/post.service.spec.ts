@@ -611,32 +611,6 @@ describe('PostService', () => {
         });
       });
     });
-
-    describe('getRelevantUserIds', () => {
-      it('should return relevant user IDs based on niches and follows', async () => {
-        mockInfluencerNiche.findAll.mockResolvedValue([
-          { influencerId: 3 },
-          { influencerId: 4 },
-        ]);
-        mockBrandNiche.findAll.mockResolvedValue([{ brandId: 2 }]);
-
-        const followingUsers = {
-          influencerIds: [1],
-          brandIds: [1],
-        };
-
-        const result = await service['getRelevantUserIds'](
-          [1, 2],
-          followingUsers,
-        );
-
-        expect(result.influencerIds).toContain(1);
-        expect(result.influencerIds).toContain(3);
-        expect(result.influencerIds).toContain(4);
-        expect(result.brandIds).toContain(1);
-        expect(result.brandIds).toContain(2);
-      });
-    });
   });
 
   describe('Error Handling', () => {

@@ -357,7 +357,7 @@ export class PostService {
       const nicheMatchingUserIds =
         await this.getNicheMatchingUserIds(userNiches);
 
-      // Build OR condition to show posts from followed users + own posts
+      // Build OR condition to show posts from followed users + niche-matching users + own posts
       const orConditions: any[] = [];
 
       // Own posts
@@ -389,8 +389,31 @@ export class PostService {
         });
       }
 
-      // If user follows someone, filter feed to show only followed users' posts
-      if (orConditions.length > 0) {
+      // Posts from niche-matching influencers (for discovery - P3)
+      if (nicheMatchingUserIds.influencerIds.length > 0) {
+        orConditions.push({
+          influencerId: { [Op.in]: nicheMatchingUserIds.influencerIds },
+          userType: UserType.INFLUENCER,
+        });
+      }
+
+      // Posts from niche-matching brands (for discovery - P3)
+      if (nicheMatchingUserIds.brandIds.length > 0) {
+        orConditions.push({
+          brandId: { [Op.in]: nicheMatchingUserIds.brandIds },
+          userType: UserType.BRAND,
+        });
+      }
+
+      // Only apply OR filter if user follows someone OR has niche matches
+      // If neither, show all posts (full discovery mode)
+      const hasRelevantContent =
+        followingUsers.influencerIds.length > 0 ||
+        followingUsers.brandIds.length > 0 ||
+        nicheMatchingUserIds.influencerIds.length > 0 ||
+        nicheMatchingUserIds.brandIds.length > 0;
+
+      if (hasRelevantContent) {
         whereCondition[Op.or] = orConditions;
       }
 
@@ -563,38 +586,6 @@ export class PostService {
     });
 
     return { influencerIds, brandIds };
-  }
-
-  private async getRelevantUserIds(
-    userNiches: number[],
-    followingUsers: { influencerIds: number[]; brandIds: number[] },
-  ): Promise<{ influencerIds: number[]; brandIds: number[] }> {
-    const relevantInfluencerIds = new Set(followingUsers.influencerIds);
-    const relevantBrandIds = new Set(followingUsers.brandIds);
-
-    if (userNiches.length > 0) {
-      const influencersWithSimilarNiches = await InfluencerNiche.findAll({
-        where: { nicheId: { [Op.in]: userNiches } },
-        attributes: ['influencerId'],
-      });
-
-      const brandsWithSimilarNiches = await BrandNiche.findAll({
-        where: { nicheId: { [Op.in]: userNiches } },
-        attributes: ['brandId'],
-      });
-
-      influencersWithSimilarNiches.forEach((item) =>
-        relevantInfluencerIds.add(item.influencerId),
-      );
-      brandsWithSimilarNiches.forEach((item) =>
-        relevantBrandIds.add(item.brandId),
-      );
-    }
-
-    return {
-      influencerIds: Array.from(relevantInfluencerIds),
-      brandIds: Array.from(relevantBrandIds),
-    };
   }
 
   private async getNicheMatchingUserIds(
