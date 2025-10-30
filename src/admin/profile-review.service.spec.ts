@@ -8,6 +8,8 @@ import {
 } from './models/profile-review.model';
 import { Brand } from '../brand/model/brand.model';
 import { Influencer } from '../auth/model/influencer.model';
+import { Niche } from '../auth/model/niche.model';
+import { City } from '../shared/models/city.model';
 import { Admin } from './models/admin.model';
 import { EmailService } from '../shared/email.service';
 import { WhatsAppService } from '../shared/whatsapp.service';
@@ -41,6 +43,16 @@ const mockInfluencerModel = {
   findByPk: jest.fn(),
   findOne: jest.fn(),
   update: jest.fn(),
+};
+
+const mockNicheModel = {
+  findByPk: jest.fn(),
+  findAll: jest.fn(),
+};
+
+const mockCityModel = {
+  findByPk: jest.fn(),
+  findOne: jest.fn(),
 };
 
 const mockAdminModel = {
@@ -78,6 +90,14 @@ describe('ProfileReviewService', () => {
         {
           provide: getModelToken(Influencer),
           useValue: mockInfluencerModel,
+        },
+        {
+          provide: getModelToken(Niche),
+          useValue: mockNicheModel,
+        },
+        {
+          provide: getModelToken(City),
+          useValue: mockCityModel,
         },
         {
           provide: getModelToken(Admin),
