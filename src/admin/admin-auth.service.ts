@@ -1851,6 +1851,7 @@ export class AdminAuthService {
         return {
           campaign,
           brand,
+          deliverables, // Include deliverables array for response mapping
           metrics: {
             application: {
               applicationsCount,
