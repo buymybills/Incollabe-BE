@@ -10,6 +10,7 @@ import { Brand } from '../brand/model/brand.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Niche } from '../auth/model/niche.model';
 import { City } from '../shared/models/city.model';
+import { Country } from '../shared/models/country.model';
 import { Admin } from './models/admin.model';
 import { EmailService } from '../shared/email.service';
 import { WhatsAppService } from '../shared/whatsapp.service';
@@ -51,6 +52,11 @@ const mockNicheModel = {
 };
 
 const mockCityModel = {
+  findByPk: jest.fn(),
+  findOne: jest.fn(),
+};
+
+const mockCountryModel = {
   findByPk: jest.fn(),
   findOne: jest.fn(),
 };
@@ -98,6 +104,10 @@ describe('ProfileReviewService', () => {
         {
           provide: getModelToken(City),
           useValue: mockCityModel,
+        },
+        {
+          provide: getModelToken(Country),
+          useValue: mockCountryModel,
         },
         {
           provide: getModelToken(Admin),

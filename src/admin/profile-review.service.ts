@@ -14,6 +14,7 @@ import { Brand } from '../brand/model/brand.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Niche } from '../auth/model/niche.model';
 import { City } from '../shared/models/city.model';
+import { Country } from '../shared/models/country.model';
 import { EmailService } from '../shared/email.service';
 import { WhatsAppService } from '../shared/whatsapp.service';
 import { ProfileReviewDto } from './dto/profile-review.dto';
@@ -32,6 +33,8 @@ export class ProfileReviewService {
     private readonly nicheModel: typeof Niche,
     @InjectModel(City)
     private readonly cityModel: typeof City,
+    @InjectModel(Country)
+    private readonly countryModel: typeof Country,
     @InjectModel(Admin)
     private readonly adminModel: typeof Admin,
     private readonly emailService: EmailService,
@@ -138,7 +141,12 @@ export class ProfileReviewService {
               {
                 model: this.cityModel,
                 as: 'city',
-                attributes: ['id', 'name'],
+                attributes: ['id', 'name', 'state'],
+              },
+              {
+                model: this.countryModel,
+                as: 'country',
+                attributes: ['id', 'name', 'code'],
               },
             ],
           });
