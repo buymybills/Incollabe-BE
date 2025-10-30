@@ -1679,7 +1679,7 @@ export class AdminAuthService {
         const postsCount = await this.postModel.count({
           where: {
             userType: 'brand',
-            userId: brand.id,
+            brandId: brand.id,
           },
         });
 
