@@ -5,6 +5,7 @@ import { Influencer } from '../../auth/model/influencer.model';
 import { Brand } from '../../brand/model/brand.model';
 import { Campaign } from '../../campaign/models/campaign.model';
 import { CampaignApplication } from '../../campaign/models/campaign-application.model';
+import { CampaignDeliverable } from '../../campaign/models/campaign-deliverable.model';
 import { City } from '../../shared/models/city.model';
 import { Niche } from '../../auth/model/niche.model';
 import { ProfileReview } from '../models/profile-review.model';
@@ -27,6 +28,8 @@ export class DashboardStatsService {
     private readonly campaignModel: typeof Campaign,
     @InjectModel(CampaignApplication)
     private readonly campaignApplicationModel: typeof CampaignApplication,
+    @InjectModel(CampaignDeliverable)
+    private readonly campaignDeliverableModel: typeof CampaignDeliverable,
     @InjectModel(City)
     private readonly cityModel: typeof City,
     @InjectModel(Niche)
@@ -189,6 +192,9 @@ export class DashboardStatsService {
           model: this.brandModel,
           attributes: ['brandName', 'profileImage'],
         },
+        {
+          model: CampaignDeliverable,
+        },
       ],
       limit: 12,
       order: [['createdAt', 'DESC']],
@@ -201,6 +207,16 @@ export class DashboardStatsService {
         const applicationCount = await this.campaignApplicationModel.count({
           where: { campaignId: campaign.id },
         });
+        const campaignData = campaign.toJSON();
+        const deliverables = (campaignData as any).deliverables || [];
+
+        // Calculate total budget from deliverables
+        const totalBudget = deliverables.reduce(
+          (sum: number, deliverable: any) =>
+            sum + (deliverable.budget || 0) * (deliverable.quantity || 1),
+          0,
+        );
+
         return {
           id: campaign.id,
           name: campaign.name,
@@ -209,6 +225,8 @@ export class DashboardStatsService {
           category: campaign.category || '',
           deliverableFormat: campaign.deliverableFormat || '',
           status: campaign.status,
+          budget: totalBudget,
+          deliverables: deliverables,
           applicationCount,
         };
       }),
@@ -664,11 +682,6 @@ export class DashboardStatsService {
     }
 
     const currentDate = new Date();
-    const currentMonthStart = new Date(
-      currentDate.getFullYear(),
-      currentDate.getMonth(),
-      1,
-    );
     const lastMonthStart = new Date(
       currentDate.getFullYear(),
       currentDate.getMonth() - 1,
