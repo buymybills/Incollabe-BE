@@ -357,65 +357,8 @@ export class PostService {
       const nicheMatchingUserIds =
         await this.getNicheMatchingUserIds(userNiches);
 
-      // Build OR condition to show posts from followed users + niche-matching users + own posts
-      const orConditions: any[] = [];
-
-      // Own posts
-      if (currentUserType === UserType.INFLUENCER) {
-        orConditions.push({
-          influencerId: currentUserId,
-          userType: UserType.INFLUENCER,
-        });
-      } else {
-        orConditions.push({
-          brandId: currentUserId,
-          userType: UserType.BRAND,
-        });
-      }
-
-      // Posts from followed influencers
-      if (followingUsers.influencerIds.length > 0) {
-        orConditions.push({
-          influencerId: { [Op.in]: followingUsers.influencerIds },
-          userType: UserType.INFLUENCER,
-        });
-      }
-
-      // Posts from followed brands
-      if (followingUsers.brandIds.length > 0) {
-        orConditions.push({
-          brandId: { [Op.in]: followingUsers.brandIds },
-          userType: UserType.BRAND,
-        });
-      }
-
-      // Posts from niche-matching influencers (for discovery - P3)
-      if (nicheMatchingUserIds.influencerIds.length > 0) {
-        orConditions.push({
-          influencerId: { [Op.in]: nicheMatchingUserIds.influencerIds },
-          userType: UserType.INFLUENCER,
-        });
-      }
-
-      // Posts from niche-matching brands (for discovery - P3)
-      if (nicheMatchingUserIds.brandIds.length > 0) {
-        orConditions.push({
-          brandId: { [Op.in]: nicheMatchingUserIds.brandIds },
-          userType: UserType.BRAND,
-        });
-      }
-
-      // Only apply OR filter if user follows someone OR has niche matches
-      // If neither, show all posts (full discovery mode)
-      const hasRelevantContent =
-        followingUsers.influencerIds.length > 0 ||
-        followingUsers.brandIds.length > 0 ||
-        nicheMatchingUserIds.influencerIds.length > 0 ||
-        nicheMatchingUserIds.brandIds.length > 0;
-
-      if (hasRelevantContent) {
-        whereCondition[Op.or] = orConditions;
-      }
+      // DO NOT FILTER - Show all posts but prioritize using P1-P6 system
+      // The priority ordering will handle showing relevant content first
 
       // Build priority case with P1-P6 levels
       const priorityCase = this.buildPriorityCase(
