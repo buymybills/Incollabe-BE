@@ -15,6 +15,7 @@ import { Influencer } from '../auth/model/influencer.model';
 import { Niche } from '../auth/model/niche.model';
 import { City } from '../shared/models/city.model';
 import { Country } from '../shared/models/country.model';
+import { Campaign } from '../campaign/models/campaign.model';
 import { EmailService } from '../shared/email.service';
 import { WhatsAppService } from '../shared/whatsapp.service';
 import { ProfileReviewDto } from './dto/profile-review.dto';
@@ -35,6 +36,8 @@ export class ProfileReviewService {
     private readonly cityModel: typeof City,
     @InjectModel(Country)
     private readonly countryModel: typeof Country,
+    @InjectModel(Campaign)
+    private readonly campaignModel: typeof Campaign,
     @InjectModel(Admin)
     private readonly adminModel: typeof Admin,
     private readonly emailService: EmailService,
@@ -111,8 +114,39 @@ export class ProfileReviewService {
               'legalEntityName',
               'websiteUrl',
               'isProfileCompleted',
+              'username',
+            ],
+            include: [
+              {
+                model: this.nicheModel,
+                as: 'niches',
+                attributes: [
+                  'id',
+                  'name',
+                  'description',
+                  'logoNormal',
+                  'logoDark',
+                ],
+                through: { attributes: [] },
+              },
+              {
+                model: this.cityModel,
+                as: 'headquarterCity',
+                attributes: ['id', 'name', 'state'],
+              },
             ],
           });
+
+          // Get campaign count for the brand
+          if (profileData) {
+            const campaignCount = await this.campaignModel.count({
+              where: { brandId: review.profileId },
+            });
+            profileData = {
+              ...profileData.toJSON(),
+              campaignCount,
+            };
+          }
         } else if (review.profileType === ProfileType.INFLUENCER) {
           profileData = await this.influencerModel.findByPk(review.profileId, {
             attributes: [

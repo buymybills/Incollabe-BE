@@ -11,6 +11,7 @@ import { Influencer } from '../auth/model/influencer.model';
 import { Niche } from '../auth/model/niche.model';
 import { City } from '../shared/models/city.model';
 import { Country } from '../shared/models/country.model';
+import { Campaign } from '../campaign/models/campaign.model';
 import { Admin } from './models/admin.model';
 import { EmailService } from '../shared/email.service';
 import { WhatsAppService } from '../shared/whatsapp.service';
@@ -67,6 +68,13 @@ const mockAdminModel = {
   findAll: jest.fn(),
 };
 
+const mockCampaignModel = {
+  findByPk: jest.fn(),
+  findOne: jest.fn(),
+  findAll: jest.fn(),
+  count: jest.fn(),
+};
+
 const mockWhatsAppService = {
   sendProfileApprovalNotification: jest.fn(),
   sendProfileRejectionNotification: jest.fn(),
@@ -108,6 +116,10 @@ describe('ProfileReviewService', () => {
         {
           provide: getModelToken(Country),
           useValue: mockCountryModel,
+        },
+        {
+          provide: getModelToken(Campaign),
+          useValue: mockCampaignModel,
         },
         {
           provide: getModelToken(Admin),
