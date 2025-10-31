@@ -1712,12 +1712,60 @@ export class AdminAuthService {
           return null;
         }
 
+        // Get niches array
+        const brandNiches = brand.get('niches') as Array<{
+          id: number;
+          name: string;
+          description?: string;
+          logoNormal?: string;
+          logoDark?: string;
+        }> | undefined;
+
+        const niches = brandNiches
+          ? brandNiches.map((niche) => ({
+              id: niche.id,
+              name: niche.name,
+              description: niche.description || null,
+              logoNormal: niche.logoNormal || null,
+              logoDark: niche.logoDark || null,
+            }))
+          : [];
+
+        // Get headquarter details
+        const headquarterCityData = brand.get('headquarterCity') as
+          | {
+              id: number;
+              name: string;
+              state?: string;
+            }
+          | undefined;
+
+        const headquarterCity = headquarterCityData
+          ? {
+              id: headquarterCityData.id,
+              name: headquarterCityData.name,
+              state: headquarterCityData.state || null,
+            }
+          : null;
+
         // For non-top profiles, we don't calculate composite score
         // Set it to 0 for consistency
         const brandDto: TopBrandDto & {
           postsCount: number;
           followersCount: number;
           followingCount: number;
+          niches: Array<{
+            id: number;
+            name: string;
+            description: string | null;
+            logoNormal: string | null;
+            logoDark: string | null;
+          }>;
+          headquarterCity: {
+            id: number;
+            name: string;
+            state: string | null;
+          } | null;
         } = {
           id: brand.id,
           brandName: brand.brandName,
@@ -1732,6 +1780,8 @@ export class AdminAuthService {
           postsCount,
           followersCount,
           followingCount,
+          niches,
+          headquarterCity,
           metrics: {
             totalCampaigns,
             uniqueNichesCount,
@@ -1753,6 +1803,18 @@ export class AdminAuthService {
         postsCount: number;
         followersCount: number;
         followingCount: number;
+        niches: Array<{
+          id: number;
+          name: string;
+          description: string | null;
+          logoNormal: string | null;
+          logoDark: string | null;
+        }>;
+        headquarterCity: {
+          id: number;
+          name: string;
+          state: string | null;
+        } | null;
       } => brand !== null,
     );
 
