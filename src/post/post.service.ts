@@ -595,12 +595,12 @@ export class PostService {
     nicheMatchingInfluencerIds: number[],
     nicheMatchingBrandIds: number[],
   ): string {
-    // Build CASE statement for priority ordering (Instagram-style)
+    // Build CASE statement for priority ordering with time-based degradation
     // P1 (Priority 1): Recent own posts (posted within last 10 minutes) - appears on top temporarily
-    // P2 (Priority 2): Same niche AND followed profiles (intersection)
-    // P3 (Priority 3): Same niche but NOT followed (new profiles to discover)
-    // P4 (Priority 4): Other posts from followed profiles (any niche)
-    // P5 (Priority 5): All other posts (not following, different niche)
+    // P2 (Priority 2): Same niche AND followed profiles (less than 30 days old)
+    // P3 (Priority 3): Same niche but NOT followed (less than 30 days old)
+    // P4 (Priority 4): Other posts from followed profiles (less than 30 days old)
+    // P5 (Priority 5): All other posts + Old P2/P3/P4 posts (mixed by recency)
     // P6 (Priority 6): Old own posts (older than 10 minutes)
 
     const nicheInfluencers = nicheMatchingInfluencerIds.join(',') || '0';
@@ -639,27 +639,48 @@ export class PostService {
       ("Post"."userType" = 'brand' AND "Post"."brandId" IN (${nicheBrands}))
     `;
 
-    // P2: Same niche AND followed (intersection)
-    const nicheAndFollowedCheck = `
-      (${nicheMatchCheck}) AND (${isFollowedCheck})
+    // Check if post is recent (less than 30 days old)
+    const isRecentCheck = `"Post"."createdAt" > NOW() - INTERVAL '30 days'`;
+
+    // P2: Same niche AND followed (intersection) - recent posts
+    const nicheAndFollowedRecentCheck = `
+      (${nicheMatchCheck}) AND (${isFollowedCheck}) AND (${isRecentCheck})
     `;
 
-    // P3: Same niche but NOT followed
-    const nicheButNotFollowedCheck = `
-      (${nicheMatchCheck}) AND NOT (${isFollowedCheck}) AND NOT (${ownUserTypeCheck})
+    // P2 old: Same niche AND followed but older than 30 days
+    const nicheAndFollowedOldCheck = `
+      (${nicheMatchCheck}) AND (${isFollowedCheck}) AND NOT (${isRecentCheck})
     `;
 
-    // P4: Followed but not matching niche
-    const followedButNotNicheCheck = `
-      (${isFollowedCheck}) AND NOT (${nicheMatchCheck}) AND NOT (${ownUserTypeCheck})
+    // P3: Same niche but NOT followed - recent posts
+    const nicheButNotFollowedRecentCheck = `
+      (${nicheMatchCheck}) AND NOT (${isFollowedCheck}) AND NOT (${ownUserTypeCheck}) AND (${isRecentCheck})
+    `;
+
+    // P3 old: Same niche but NOT followed and older than 30 days
+    const nicheButNotFollowedOldCheck = `
+      (${nicheMatchCheck}) AND NOT (${isFollowedCheck}) AND NOT (${ownUserTypeCheck}) AND NOT (${isRecentCheck})
+    `;
+
+    // P4: Followed but not matching niche - recent posts
+    const followedButNotNicheRecentCheck = `
+      (${isFollowedCheck}) AND NOT (${nicheMatchCheck}) AND NOT (${ownUserTypeCheck}) AND (${isRecentCheck})
+    `;
+
+    // P4 old: Followed but not matching niche and older than 30 days
+    const followedButNotNicheOldCheck = `
+      (${isFollowedCheck}) AND NOT (${nicheMatchCheck}) AND NOT (${ownUserTypeCheck}) AND NOT (${isRecentCheck})
     `;
 
     return `
       CASE
         WHEN ${recentOwnPostCheck} THEN 1
-        WHEN ${nicheAndFollowedCheck} THEN 2
-        WHEN ${nicheButNotFollowedCheck} THEN 3
-        WHEN ${followedButNotNicheCheck} THEN 4
+        WHEN ${nicheAndFollowedRecentCheck} THEN 2
+        WHEN ${nicheButNotFollowedRecentCheck} THEN 3
+        WHEN ${followedButNotNicheRecentCheck} THEN 4
+        WHEN ${nicheAndFollowedOldCheck} THEN 5
+        WHEN ${nicheButNotFollowedOldCheck} THEN 5
+        WHEN ${followedButNotNicheOldCheck} THEN 5
         WHEN ${oldOwnPostCheck} THEN 6
         ELSE 5
       END
