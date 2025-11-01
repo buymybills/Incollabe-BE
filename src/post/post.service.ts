@@ -46,7 +46,8 @@ export class PostService {
     files?: Express.Multer.File[],
   ): Promise<Post> {
     // Validate that at least content or media is provided
-    const hasContent = createPostDto.content && createPostDto.content.trim().length > 0;
+    const hasContent =
+      createPostDto.content && createPostDto.content.trim().length > 0;
     const hasMedia = files && files.length > 0;
 
     if (!hasContent && !hasMedia) {
@@ -128,9 +129,10 @@ export class PostService {
     }
 
     // Validate that updated post will have either content or media
-    const updatedContent = updatePostDto.content !== undefined
-      ? updatePostDto.content
-      : post.content;
+    const updatedContent =
+      updatePostDto.content !== undefined
+        ? updatePostDto.content
+        : post.content;
     const hasContent = updatedContent && updatedContent.trim().length > 0;
     const hasMedia = mediaUrls && mediaUrls.length > 0;
 

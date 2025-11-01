@@ -75,7 +75,7 @@ interface CampaignDeliverableJson {
 
 interface CampaignApplicationJson {
   id: number;
-  status: string;
+  status: ApplicationStatus;
   createdAt: Date;
 }
 
@@ -93,7 +93,7 @@ interface CampaignJson {
   description: string | null;
   category: string | null;
   type: string;
-  status: string;
+  status: CampaignStatus;
   isPanIndia: boolean;
   nicheIds: number[] | null;
   createdAt: Date;
@@ -146,7 +146,7 @@ interface CampaignWithScores extends CampaignWithMetrics {
   description: string | null;
   category: string | null;
   type: string;
-  status: string;
+  status: CampaignStatus;
   deliverables: CampaignDeliverableJson[];
   brand: CampaignBrandJson;
   metrics: CampaignMetrics & { compositeScore: number };
@@ -1713,13 +1713,15 @@ export class AdminAuthService {
         }
 
         // Get niches array
-        const brandNiches = brand.get('niches') as Array<{
-          id: number;
-          name: string;
-          description?: string;
-          logoNormal?: string;
-          logoDark?: string;
-        }> | undefined;
+        const brandNiches = brand.get('niches') as
+          | Array<{
+              id: number;
+              name: string;
+              description?: string;
+              logoNormal?: string;
+              logoDark?: string;
+            }>
+          | undefined;
 
         const niches = brandNiches
           ? brandNiches.map((niche) => ({
@@ -1954,8 +1956,10 @@ export class AdminAuthService {
     const campaignsWithMetrics: CampaignWithMetrics[] = campaigns
       .map((campaign): CampaignWithMetrics | null => {
         const campaignJson = campaign.toJSON() as CampaignJson;
-        const applications: CampaignApplicationJson[] = campaignJson.applications || [];
-        const deliverables: CampaignDeliverableJson[] = campaignJson.deliverables || [];
+        const applications: CampaignApplicationJson[] =
+          campaignJson.applications || [];
+        const deliverables: CampaignDeliverableJson[] =
+          campaignJson.deliverables || [];
         const cities = campaignJson.cities || [];
         const brand = campaignJson.brand!;
 
@@ -1976,7 +1980,9 @@ export class AdminAuthService {
         // Budget Metrics - multiply budget by quantity for each deliverable
         const totalBudget = deliverables.reduce(
           (sum, d) =>
-            sum + (parseFloat(String(d.budget || '0')) || 0) * (parseInt(String(d.quantity || '1')) || 1),
+            sum +
+            (parseFloat(String(d.budget || '0')) || 0) *
+              (parseInt(String(d.quantity || '1')) || 1),
           0,
         );
         const deliverablesCount = deliverables.length;
@@ -1986,7 +1992,9 @@ export class AdminAuthService {
         // Scope Metrics
         const isPanIndia = campaignJson.isPanIndia;
         const citiesCount = cities.length;
-        const nichesCount = campaignJson.nicheIds ? campaignJson.nicheIds.length : 0;
+        const nichesCount = campaignJson.nicheIds
+          ? campaignJson.nicheIds.length
+          : 0;
         const geographicReach = isPanIndia
           ? 100
           : Math.min((citiesCount / 10) * 100, 100);
@@ -2091,109 +2099,115 @@ export class AdminAuthService {
     );
 
     // Calculate composite scores
-    const campaignsWithScores: CampaignWithScores[] = campaignsWithMetrics.map((item): CampaignWithScores => {
-      const { campaign, brand, deliverables, metrics } = item;
+    const campaignsWithScores: CampaignWithScores[] = campaignsWithMetrics.map(
+      (item): CampaignWithScores => {
+        const { campaign, brand, deliverables, metrics } = item;
 
-      // Normalize metrics (0-100 scale)
-      const normalizedApplications =
-        (metrics.application.applicationsCount / maxApplications) * 100;
-      const normalizedConversionRate = metrics.application.conversionRate;
-      const normalizedApplicantQuality = metrics.application.applicantQuality;
-      const normalizedTotalBudget =
-        (metrics.budget.totalBudget / maxBudget) * 100;
-      const normalizedBudgetPerDel =
-        (metrics.budget.budgetPerDeliverable / maxBudgetPerDel) * 100;
-      const normalizedGeographicReach = metrics.scope.geographicReach;
-      const normalizedNiches = (metrics.scope.nichesCount / maxNiches) * 100;
-      const normalizedSelectedInfluencers =
-        (metrics.engagement.selectedInfluencers / maxSelected) * 100;
-      const normalizedCompletionRate = metrics.engagement.completionRate;
+        // Normalize metrics (0-100 scale)
+        const normalizedApplications =
+          (metrics.application.applicationsCount / maxApplications) * 100;
+        const normalizedConversionRate = metrics.application.conversionRate;
+        const normalizedApplicantQuality = metrics.application.applicantQuality;
+        const normalizedTotalBudget =
+          (metrics.budget.totalBudget / maxBudget) * 100;
+        const normalizedBudgetPerDel =
+          (metrics.budget.budgetPerDeliverable / maxBudgetPerDel) * 100;
+        const normalizedGeographicReach = metrics.scope.geographicReach;
+        const normalizedNiches = (metrics.scope.nichesCount / maxNiches) * 100;
+        const normalizedSelectedInfluencers =
+          (metrics.engagement.selectedInfluencers / maxSelected) * 100;
+        const normalizedCompletionRate = metrics.engagement.completionRate;
 
-      // Recency scoring: newer = higher score (inverse)
-      const normalizedRecencyLaunch =
-        100 - (metrics.recency.daysSinceLaunch / maxDaysSinceLaunch) * 100;
-      const normalizedRecencyActivity =
-        metrics.recency.daysSinceLastApplication !== null
-          ? 100 -
-            Math.min((metrics.recency.daysSinceLastApplication / 30) * 100, 100)
-          : 0;
+        // Recency scoring: newer = higher score (inverse)
+        const normalizedRecencyLaunch =
+          100 - (metrics.recency.daysSinceLaunch / maxDaysSinceLaunch) * 100;
+        const normalizedRecencyActivity =
+          metrics.recency.daysSinceLastApplication !== null
+            ? 100 -
+              Math.min(
+                (metrics.recency.daysSinceLastApplication / 30) * 100,
+                100,
+              )
+            : 0;
 
-      // Calculate composite score with weights
-      const compositeScore =
-        normalizedApplications * 0.1 + // 10%
-        normalizedConversionRate * 0.15 + // 15%
-        normalizedApplicantQuality * 0.05 + // 5%
-        normalizedTotalBudget * 0.1 + // 10%
-        normalizedBudgetPerDel * 0.1 + // 10%
-        normalizedGeographicReach * 0.08 + // 8%
-        normalizedNiches * 0.07 + // 7%
-        normalizedSelectedInfluencers * 0.15 + // 15%
-        normalizedCompletionRate * 0.1 + // 10%
-        normalizedRecencyLaunch * 0.05 + // 5%
-        normalizedRecencyActivity * 0.05; // 5%
+        // Calculate composite score with weights
+        const compositeScore =
+          normalizedApplications * 0.1 + // 10%
+          normalizedConversionRate * 0.15 + // 15%
+          normalizedApplicantQuality * 0.05 + // 5%
+          normalizedTotalBudget * 0.1 + // 10%
+          normalizedBudgetPerDel * 0.1 + // 10%
+          normalizedGeographicReach * 0.08 + // 8%
+          normalizedNiches * 0.07 + // 7%
+          normalizedSelectedInfluencers * 0.15 + // 15%
+          normalizedCompletionRate * 0.1 + // 10%
+          normalizedRecencyLaunch * 0.05 + // 5%
+          normalizedRecencyActivity * 0.05; // 5%
 
-      return {
-        campaign,
-        id: campaign.id,
-        name: campaign.name,
-        description: campaign.description,
-        category: campaign.category,
-        type: campaign.type,
-        status: campaign.status,
-        deliverables: deliverables || [],
-        brand,
-        metrics: {
-          application: {
-            applicationsCount: metrics.application.applicationsCount,
-            conversionRate:
-              Math.round(metrics.application.conversionRate * 100) / 100,
-            applicantQuality: metrics.application.applicantQuality,
+        return {
+          campaign,
+          id: campaign.id,
+          name: campaign.name,
+          description: campaign.description,
+          category: campaign.category,
+          type: campaign.type,
+          status: campaign.status,
+          deliverables: deliverables || [],
+          brand,
+          metrics: {
+            application: {
+              applicationsCount: metrics.application.applicationsCount,
+              conversionRate:
+                Math.round(metrics.application.conversionRate * 100) / 100,
+              applicantQuality: metrics.application.applicantQuality,
+            },
+            budget: {
+              totalBudget: Math.round(metrics.budget.totalBudget * 100) / 100,
+              budgetPerDeliverable:
+                Math.round(metrics.budget.budgetPerDeliverable * 100) / 100,
+              deliverablesCount: metrics.budget.deliverablesCount,
+            },
+            scope: {
+              isPanIndia: metrics.scope.isPanIndia,
+              citiesCount: metrics.scope.citiesCount,
+              nichesCount: metrics.scope.nichesCount,
+              geographicReach:
+                Math.round(metrics.scope.geographicReach * 100) / 100,
+            },
+            engagement: {
+              selectedInfluencers: metrics.engagement.selectedInfluencers,
+              completionRate:
+                Math.round(metrics.engagement.completionRate * 100) / 100,
+              status: metrics.engagement.status,
+            },
+            recency: {
+              daysSinceLaunch: metrics.recency.daysSinceLaunch,
+              daysSinceLastApplication:
+                metrics.recency.daysSinceLastApplication,
+              createdAt: metrics.recency.createdAt,
+            },
+            compositeScore: Math.round(compositeScore * 100) / 100,
           },
-          budget: {
-            totalBudget: Math.round(metrics.budget.totalBudget * 100) / 100,
-            budgetPerDeliverable:
-              Math.round(metrics.budget.budgetPerDeliverable * 100) / 100,
-            deliverablesCount: metrics.budget.deliverablesCount,
+          createdAt: campaign.createdAt,
+          updatedAt: campaign.updatedAt, // Add updatedAt from campaign
+          sortValues: {
+            applications_count: normalizedApplications,
+            conversion_rate: normalizedConversionRate,
+            applicant_quality: normalizedApplicantQuality,
+            total_budget: normalizedTotalBudget,
+            budget_per_deliverable: normalizedBudgetPerDel,
+            geographic_reach: normalizedGeographicReach,
+            cities_count: metrics.scope.citiesCount,
+            niches_count: normalizedNiches,
+            selected_influencers: normalizedSelectedInfluencers,
+            completion_rate: normalizedCompletionRate,
+            recently_launched: normalizedRecencyLaunch,
+            recently_active: normalizedRecencyActivity,
+            composite: compositeScore,
           },
-          scope: {
-            isPanIndia: metrics.scope.isPanIndia,
-            citiesCount: metrics.scope.citiesCount,
-            nichesCount: metrics.scope.nichesCount,
-            geographicReach:
-              Math.round(metrics.scope.geographicReach * 100) / 100,
-          },
-          engagement: {
-            selectedInfluencers: metrics.engagement.selectedInfluencers,
-            completionRate:
-              Math.round(metrics.engagement.completionRate * 100) / 100,
-            status: metrics.engagement.status,
-          },
-          recency: {
-            daysSinceLaunch: metrics.recency.daysSinceLaunch,
-            daysSinceLastApplication: metrics.recency.daysSinceLastApplication,
-            createdAt: metrics.recency.createdAt,
-          },
-          compositeScore: Math.round(compositeScore * 100) / 100,
-        },
-        createdAt: campaign.createdAt,
-        updatedAt: campaign.updatedAt, // Add updatedAt from campaign
-        sortValues: {
-          applications_count: normalizedApplications,
-          conversion_rate: normalizedConversionRate,
-          applicant_quality: normalizedApplicantQuality,
-          total_budget: normalizedTotalBudget,
-          budget_per_deliverable: normalizedBudgetPerDel,
-          geographic_reach: normalizedGeographicReach,
-          cities_count: metrics.scope.citiesCount,
-          niches_count: normalizedNiches,
-          selected_influencers: normalizedSelectedInfluencers,
-          completion_rate: normalizedCompletionRate,
-          recently_launched: normalizedRecencyLaunch,
-          recently_active: normalizedRecencyActivity,
-          composite: compositeScore,
-        },
-      };
-    });
+        };
+      },
+    );
 
     // Sort based on sortBy parameter
     const sortField = sortBy || TopCampaignsSortBy.COMPOSITE;
@@ -2229,10 +2243,11 @@ export class AdminAuthService {
         statusLabel, // Human-readable status: "Ongoing", "Completed", "Draft"
         applicationsCount: item.metrics.application.applicationsCount, // Top-level for easy UI access
         completedAt, // Date when completed (null if not completed)
-        deliverables: item.deliverables.map(d => ({
+        deliverables: item.deliverables.map((d) => ({
           ...d,
           budget: d.budget ? parseFloat(String(d.budget)) : null,
-          quantity: typeof d.quantity === 'string' ? parseInt(d.quantity) : d.quantity,
+          quantity:
+            typeof d.quantity === 'string' ? parseInt(d.quantity) : d.quantity,
         })),
         brand: item.brand,
         metrics: item.metrics,

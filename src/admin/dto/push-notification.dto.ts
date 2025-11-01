@@ -309,7 +309,7 @@ export class GetNotificationsDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  page?: number; 
+  page?: number;
 
   @ApiProperty({
     description: 'Items per page',

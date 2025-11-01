@@ -687,7 +687,9 @@ export class AuthService {
 
     // Check if it's a reserved username
     if (isReservedUsername(username)) {
-      throw new BadRequestException('This username is reserved and cannot be used');
+      throw new BadRequestException(
+        'This username is reserved and cannot be used',
+      );
     }
 
     // Check if username exists in either influencer or brand tables
@@ -699,7 +701,7 @@ export class AuthService {
       }),
       this.brandModel.findOne({
         where: { username },
-        attributes: ['id', 'username'], 
+        attributes: ['id', 'username'],
       }),
     ]);
 
@@ -1112,7 +1114,10 @@ export class AuthService {
     const normalizedEmail = email.toLowerCase().trim();
 
     // Create hash of email for searching
-    const emailHash = crypto.createHash('sha256').update(normalizedEmail).digest('hex');
+    const emailHash = crypto
+      .createHash('sha256')
+      .update(normalizedEmail)
+      .digest('hex');
 
     // Find brand by emailHash (including soft-deleted)
     const brand = await this.brandModel.findOne({
@@ -1687,7 +1692,10 @@ export class AuthService {
     const normalizedEmail = email.toLowerCase().trim();
 
     // Create hash of email for searching
-    const emailHash = crypto.createHash('sha256').update(normalizedEmail).digest('hex');
+    const emailHash = crypto
+      .createHash('sha256')
+      .update(normalizedEmail)
+      .digest('hex');
 
     // Check if brand already exists (only active ones - paranoid true by default)
     const existingBrand = await this.brandModel.findOne({

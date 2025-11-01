@@ -116,7 +116,9 @@ async function bootstrap() {
   // Setup Swagger UI with dynamic URL
   expressApp.get('/api/docs', (req: Request, res: Response) => {
     const isAdminQuery = req.query.admin === 'true';
-    const jsonUrl = isAdminQuery ? '/api/docs-json?admin=true' : '/api/docs-json';
+    const jsonUrl = isAdminQuery
+      ? '/api/docs-json?admin=true'
+      : '/api/docs-json';
 
     // Generate Swagger HTML with dynamic JSON URL
     const swaggerHtml = `

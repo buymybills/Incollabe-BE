@@ -4,7 +4,11 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { Sequelize } from 'sequelize-typescript';
 import { Admin } from '../src/admin/models/admin.model';
-import { ReceiverType, NotificationStatus, GenderFilter } from '../src/admin/models/push-notification.model';
+import {
+  ReceiverType,
+  NotificationStatus,
+  GenderFilter,
+} from '../src/admin/models/push-notification.model';
 import * as bcrypt from 'bcrypt';
 
 describe('Push Notifications (e2e)', () => {
@@ -104,8 +108,14 @@ describe('Push Notifications (e2e)', () => {
         .expect((res) => {
           expect(res.body).toHaveProperty('id');
           expect(res.body).toHaveProperty('title', 'Test Notification');
-          expect(res.body).toHaveProperty('body', 'This is a test notification body');
-          expect(res.body).toHaveProperty('receiverType', ReceiverType.ALL_USERS);
+          expect(res.body).toHaveProperty(
+            'body',
+            'This is a test notification body',
+          );
+          expect(res.body).toHaveProperty(
+            'receiverType',
+            ReceiverType.ALL_USERS,
+          );
           expect(res.body).toHaveProperty('status', NotificationStatus.DRAFT);
           expect(res.body).toHaveProperty('createdBy');
           testNotificationId = res.body.id;
@@ -134,7 +144,10 @@ describe('Push Notifications (e2e)', () => {
         .expect(201)
         .expect((res) => {
           expect(res.body).toHaveProperty('id');
-          expect(res.body).toHaveProperty('status', NotificationStatus.SCHEDULED);
+          expect(res.body).toHaveProperty(
+            'status',
+            NotificationStatus.SCHEDULED,
+          );
           expect(res.body).toHaveProperty('genderFilter', GenderFilter.FEMALE);
           expect(res.body).toHaveProperty('minAge', 18);
           expect(res.body).toHaveProperty('maxAge', 35);
@@ -261,21 +274,27 @@ describe('Push Notifications (e2e)', () => {
         .set('Authorization', `Bearer ${superAdminToken}`)
         .expect(200)
         .expect((res) => {
-          expect(res.body.notifications.every(
-            (n: any) => n.status === NotificationStatus.DRAFT
-          )).toBe(true);
+          expect(
+            res.body.notifications.every(
+              (n: any) => n.status === NotificationStatus.DRAFT,
+            ),
+          ).toBe(true);
         });
     });
 
     it('should filter notifications by receiver type', () => {
       return request(app.getHttpServer())
-        .get(`/admin/notifications?receiverType=${ReceiverType.ALL_INFLUENCERS}`)
+        .get(
+          `/admin/notifications?receiverType=${ReceiverType.ALL_INFLUENCERS}`,
+        )
         .set('Authorization', `Bearer ${superAdminToken}`)
         .expect(200)
         .expect((res) => {
-          expect(res.body.notifications.every(
-            (n: any) => n.receiverType === ReceiverType.ALL_INFLUENCERS
-          )).toBe(true);
+          expect(
+            res.body.notifications.every(
+              (n: any) => n.receiverType === ReceiverType.ALL_INFLUENCERS,
+            ),
+          ).toBe(true);
         });
     });
 
@@ -365,7 +384,10 @@ describe('Push Notifications (e2e)', () => {
         .expect((res) => {
           expect(res.body).toHaveProperty('title', 'Updated Notification');
           expect(res.body).toHaveProperty('body', 'Updated body');
-          expect(res.body).toHaveProperty('receiverType', ReceiverType.ALL_INFLUENCERS);
+          expect(res.body).toHaveProperty(
+            'receiverType',
+            ReceiverType.ALL_INFLUENCERS,
+          );
         });
     });
 
@@ -422,7 +444,10 @@ describe('Push Notifications (e2e)', () => {
         .set('Authorization', `Bearer ${superAdminToken}`)
         .expect(200)
         .expect((res) => {
-          expect(res.body).toHaveProperty('message', 'Notification deleted successfully');
+          expect(res.body).toHaveProperty(
+            'message',
+            'Notification deleted successfully',
+          );
         });
     });
 
