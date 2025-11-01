@@ -379,10 +379,7 @@ describe('InfluencerService', () => {
         1,
         expect.objectContaining({
           ...updateDto,
-          // Social links not in updateDto should be set to null
-          facebookUrl: null,
-          linkedinUrl: null,
-          twitterUrl: null,
+          // Social links not in updateDto should be preserved (not included in update)
           profileImage: 'profile-new.jpg',
           profileBanner: 'banner-new.jpg',
         }),
@@ -426,10 +423,7 @@ describe('InfluencerService', () => {
         1,
         expect.objectContaining({
           ...updateDto,
-          // Social links not in updateDto should be set to null
-          facebookUrl: null,
-          linkedinUrl: null,
-          twitterUrl: null,
+          // Social links not in updateDto should be preserved (not included in update)
         }),
       );
     });
@@ -509,10 +503,15 @@ describe('InfluencerService', () => {
       });
     });
 
-    it('should clear social links that are not provided in update', async () => {
-      const updateDtoWithoutSocialLinks: UpdateInfluencerProfileDto = {
+    it('should clear social links when explicitly provided as empty strings', async () => {
+      const updateDtoWithEmptySocialLinks: UpdateInfluencerProfileDto = {
         bio: 'Updated bio without social links',
         profileHeadline: 'Updated headline',
+        instagramUrl: '',
+        youtubeUrl: '',
+        facebookUrl: '',
+        linkedinUrl: '',
+        twitterUrl: '',
       };
 
       const mockInfluencer = {
@@ -530,7 +529,12 @@ describe('InfluencerService', () => {
 
       const mockUpdatedProfile = {
         ...mockInfluencer,
-        ...updateDtoWithoutSocialLinks,
+        ...updateDtoWithEmptySocialLinks,
+        instagramUrl: null,
+        youtubeUrl: null,
+        facebookUrl: null,
+        linkedinUrl: null,
+        twitterUrl: null,
       };
 
       mockInfluencerRepository.findById.mockResolvedValue(mockInfluencer);
@@ -540,11 +544,11 @@ describe('InfluencerService', () => {
 
       await service.updateInfluencerProfile(
         1,
-        updateDtoWithoutSocialLinks,
+        updateDtoWithEmptySocialLinks,
         undefined,
       );
 
-      // Verify that all social links are set to null when not provided
+      // Verify that all social links are set to null when explicitly provided as empty strings
       expect(influencerRepository.updateInfluencer).toHaveBeenCalledWith(
         1,
         expect.objectContaining({

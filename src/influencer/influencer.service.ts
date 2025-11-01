@@ -367,9 +367,9 @@ export class InfluencerService {
       delete processedData.customNiches;
     }
 
-    // Handle social links - explicitly set to null if not provided (for clearing)
+    // Handle social links - set to null only if explicitly provided as empty string
     // This ensures that when a user removes a social link from their profile,
-    // it gets cleared instead of retaining the old value
+    // it gets cleared, but when updating other fields, social links are preserved
     const socialLinkFields = [
       'instagramUrl',
       'youtubeUrl',
@@ -378,8 +378,11 @@ export class InfluencerService {
       'twitterUrl',
     ];
     socialLinkFields.forEach((field) => {
-      if (processedData[field] === undefined) {
+      if (processedData[field] === '') {
         processedData[field] = null;
+      } else if (processedData[field] === undefined) {
+        // Remove the field from processedData to preserve existing value
+        delete processedData[field];
       }
     });
 

@@ -283,9 +283,9 @@ export class BrandService {
       await this.updateBrandCustomNiches(brandId, customNiches);
     }
 
-    // Handle social links - explicitly set to null if not provided (for clearing)
+    // Handle social links - set to null only if explicitly provided as empty string
     // This ensures that when a user removes a social link from their profile,
-    // it gets cleared instead of retaining the old value
+    // it gets cleared, but when updating other fields, social links are preserved
     const socialLinkFields = [
       'facebookUrl',
       'instagramUrl',
@@ -294,8 +294,11 @@ export class BrandService {
       'twitterUrl',
     ];
     socialLinkFields.forEach((field) => {
-      if (brandUpdateData[field] === undefined) {
+      if (brandUpdateData[field] === '') {
         brandUpdateData[field] = null;
+      } else if (brandUpdateData[field] === undefined) {
+        // Remove the field from brandUpdateData to preserve existing value
+        delete brandUpdateData[field];
       }
     });
 

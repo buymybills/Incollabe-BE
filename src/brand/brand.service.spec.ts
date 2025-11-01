@@ -426,10 +426,15 @@ describe('BrandService', () => {
       expect((result as any).status).toBe('pending_verification');
     });
 
-    it('should clear social links that are not provided in update', async () => {
-      const updateDtoWithoutSocialLinks: UpdateBrandProfileDto = {
+    it('should clear social links when explicitly provided as empty strings', async () => {
+      const updateDtoWithEmptySocialLinks: UpdateBrandProfileDto = {
         brandName: 'Updated Brand Name',
         brandBio: 'Updated bio without social links',
+        facebookUrl: '',
+        instagramUrl: '',
+        youtubeUrl: '',
+        linkedinUrl: '',
+        twitterUrl: '',
       };
 
       const mockBrand = {
@@ -464,9 +469,9 @@ describe('BrandService', () => {
         },
       } as any);
 
-      await service.updateBrandProfile(1, updateDtoWithoutSocialLinks);
+      await service.updateBrandProfile(1, updateDtoWithEmptySocialLinks);
 
-      // Verify that all social links are set to null when not provided
+      // Verify that all social links are set to null when explicitly provided as empty strings
       expect(mockBrand.update).toHaveBeenCalledWith(
         expect.objectContaining({
           brandName: 'Updated Brand Name',
