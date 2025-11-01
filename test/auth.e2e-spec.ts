@@ -561,7 +561,10 @@ describe('Auth (e2e)', () => {
           })
           .expect(409)
           .expect((res) => {
-            expect(res.body).toHaveProperty('message', 'Brand already exists with this email');
+            expect(res.body).toHaveProperty(
+              'message',
+              'Brand already exists with this email',
+            );
           });
       });
     });
@@ -582,7 +585,7 @@ describe('Auth (e2e)', () => {
         // Manually mark as verified and profile completed for testing
         const Brand = sequelize.model('Brand');
         await Brand.update(
-          { 
+          {
             isEmailVerified: true,
             isProfileCompleted: true,
             brandName: 'Test Brand',
@@ -620,7 +623,7 @@ describe('Auth (e2e)', () => {
         // Mark as verified and profile completed
         const Brand = sequelize.model('Brand');
         await Brand.update(
-          { 
+          {
             isEmailVerified: true,
             isProfileCompleted: true,
             brandName: 'Test Brand',
@@ -658,7 +661,7 @@ describe('Auth (e2e)', () => {
         // Mark as verified and profile completed
         const Brand = sequelize.model('Brand');
         await Brand.update(
-          { 
+          {
             isEmailVerified: true,
             isProfileCompleted: true,
             brandName: 'Test Brand',
@@ -696,7 +699,7 @@ describe('Auth (e2e)', () => {
         // Mark as verified and profile completed
         const Brand = sequelize.model('Brand');
         await Brand.update(
-          { 
+          {
             isEmailVerified: true,
             isProfileCompleted: true,
             brandName: 'Test Brand',
