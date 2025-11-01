@@ -35,8 +35,7 @@ services:
       - /etc/letsencrypt/live/incollab.buymybills.in:/etc/ssl/certs:ro
       - /etc/letsencrypt/archive/incollab.buymybills.in:/etc/ssl/private:ro
       # SSL certificates for api.teamcollabkaroo.com
-      - /etc/letsencrypt/live/api.teamcollabkaroo.com/fullchain.pem:/etc/ssl/admin/fullchain.pem:ro
-      - /etc/letsencrypt/live/api.teamcollabkaroo.com/privkey.pem:/etc/ssl/admin/privkey.pem:ro
+      - /etc/letsencrypt/live/api.teamcollabkaroo.com:/etc/ssl/admin-certs:ro
     depends_on:
       - incollab-app
     networks:
