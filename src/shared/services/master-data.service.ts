@@ -52,8 +52,8 @@ export class MasterDataService {
     const currentYear = new Date().getFullYear();
     const years: { id: number; value: number }[] = [];
 
-    // Generate years from 1900 to current year
-    for (let year = currentYear; year >= 1900; year--) {
+    // Generate years from 1800 to current year
+    for (let year = currentYear; year >= 1800; year--) {
       years.push({
         id: year,
         value: year,
