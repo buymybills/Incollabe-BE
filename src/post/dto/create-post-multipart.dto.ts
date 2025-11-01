@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsOptional, Length } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class CreatePostMultipartDto {
   @ApiProperty({
@@ -7,6 +8,7 @@ export class CreatePostMultipartDto {
     example: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit...',
     required: false,
   })
+  @Transform(({ value }) => (value === '' ? undefined : value))
   @IsOptional()
   @IsString()
   @Length(1, 5000, {
@@ -15,7 +17,8 @@ export class CreatePostMultipartDto {
   content?: string;
 
   @ApiProperty({
-    description: 'Media files (images/videos)',
+    description:
+      'Media files - supports both images and videos. Allowed formats: Images (jpg, jpeg, png, webp), Videos (mp4, mov, avi). Max 10 files, 50MB per file.',
     type: 'array',
     items: {
       type: 'string',

@@ -8,6 +8,7 @@ export class UpdatePostMultipartDto {
     example: 'Updated post content...',
     required: false,
   })
+  @Transform(({ value }) => (value === '' ? undefined : value))
   @IsOptional()
   @IsString()
   @Length(1, 5000, {
@@ -16,7 +17,8 @@ export class UpdatePostMultipartDto {
   content?: string;
 
   @ApiProperty({
-    description: 'Media files (images/videos) to add',
+    description:
+      'Media files to add - supports both images and videos. Allowed formats: Images (jpg, jpeg, png, webp), Videos (mp4, mov, avi). Max 10 files, 50MB per file.',
     type: 'array',
     items: {
       type: 'string',

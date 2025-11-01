@@ -31,9 +31,9 @@ export class Post extends Model {
   @Column(DataType.INTEGER)
   declare id: number;
 
-  @AllowNull(false)
+  @AllowNull(true)
   @Column(DataType.TEXT)
-  declare content: string;
+  declare content?: string;
 
   @AllowNull(true)
   @Column(DataType.JSON)
