@@ -174,19 +174,21 @@ cleanup() {
 # Function to handle nginx configuration
 handle_nginx_config() {
     if [ -f "nginx.conf" ]; then
-        log "Updating nginx configuration..."
-        if docker cp nginx.conf incollab-nginx:/etc/nginx/conf.d/incollab.conf 2>/dev/null; then
-            if docker exec incollab-nginx nginx -t 2>/dev/null; then
-                docker exec incollab-nginx nginx -s reload
-                log "Nginx configuration updated successfully"
-            else
-                warn "Nginx configuration test failed, keeping old config"
-            fi
+        log "Reloading nginx configuration..."
+        # Test nginx configuration
+        if docker exec incollab-nginx nginx -t 2>/dev/null; then
+            # Reload nginx to apply changes
+            docker exec incollab-nginx nginx -s reload
+            log "Nginx configuration reloaded successfully"
         else
-            log "Nginx container not running or config copy failed"
+            error "Nginx configuration test failed!"
+            warn "Please check nginx.conf for errors"
+            # Restart nginx container to pick up changes if test fails
+            log "Restarting nginx container..."
+            docker-compose restart nginx
         fi
     else
-        log "No nginx.conf file found, skipping nginx update"
+        warn "No nginx.conf file found in current directory"
     fi
 }
 

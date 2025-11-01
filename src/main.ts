@@ -4,6 +4,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ResponseInterceptor } from './middleware/response.interceptor';
 import { useContainer } from 'class-validator';
+import { Request, Response } from 'express';
 
 import { GlobalExceptionFilter } from './shared/filters/global-exception.filter';
 import { LoggerService } from './shared/services/logger.service';
@@ -48,6 +49,7 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // Create full Swagger document
   const config = new DocumentBuilder()
     .setTitle('Collabkaroo Application Backend')
     .setDescription('API documentation for the Collabkaroo application')
@@ -55,11 +57,99 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document, {
-    swaggerOptions: {
-      persistAuthorization: true,
+  const fullDocument = SwaggerModule.createDocument(app, config);
+
+  // Filter documents for different domains
+  const adminDocument = {
+    ...fullDocument,
+    info: {
+      ...fullDocument.info,
+      title: 'Collabkaroo Admin API',
+      description: 'API documentation for Admin endpoints only',
     },
+    paths: Object.keys(fullDocument.paths || {})
+      .filter((path) => path.startsWith('/api/admin'))
+      .reduce((acc, path) => {
+        acc[path] = fullDocument.paths[path];
+        return acc;
+      }, {}),
+  };
+
+  const publicDocument = {
+    ...fullDocument,
+    info: {
+      ...fullDocument.info,
+      title: 'Collabkaroo Public API',
+      description: 'API documentation for public endpoints (excludes admin)',
+    },
+    paths: Object.keys(fullDocument.paths || {})
+      .filter((path) => !path.startsWith('/api/admin'))
+      .reduce((acc, path) => {
+        acc[path] = fullDocument.paths[path];
+        return acc;
+      }, {}),
+  };
+
+  // Setup dynamic Swagger that serves different docs based on domain
+  const expressApp = app.getHttpAdapter().getInstance();
+
+  // Custom middleware to serve domain-specific Swagger JSON
+  expressApp.get('/api/docs-json', (req: Request, res: Response) => {
+    const domain =
+      (req.headers['x-original-domain'] as string) ||
+      (req.headers['host'] as string) ||
+      '';
+
+    // Serve admin docs if:
+    // 1. Domain is teamcollabkaroo.com (production)
+    // 2. Query param ?admin=true is present (local testing)
+    const isAdminDomain = domain.includes('teamcollabkaroo.com');
+    const isAdminQuery = req.query.admin === 'true';
+
+    if (isAdminDomain || isAdminQuery) {
+      return res.json(adminDocument);
+    }
+
+    return res.json(publicDocument);
+  });
+
+  // Setup Swagger UI with dynamic URL
+  expressApp.get('/api/docs', (req: Request, res: Response) => {
+    const isAdminQuery = req.query.admin === 'true';
+    const jsonUrl = isAdminQuery ? '/api/docs-json?admin=true' : '/api/docs-json';
+
+    // Generate Swagger HTML with dynamic JSON URL
+    const swaggerHtml = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${isAdminQuery ? 'Collabkaroo Admin API Docs' : 'Collabkaroo API Docs'}</title>
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+    <script>
+        window.onload = function() {
+            SwaggerUIBundle({
+                url: '${jsonUrl}',
+                dom_id: '#swagger-ui',
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIStandalonePreset
+                ],
+                layout: "BaseLayout",
+                persistAuthorization: true
+            });
+        };
+    </script>
+</body>
+</html>`;
+
+    res.send(swaggerHtml);
   });
 
   app.useGlobalInterceptors(new ResponseInterceptor());

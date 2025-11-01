@@ -2,15 +2,18 @@ import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
 
 import { AdminController } from './admin.controller';
+import { PushNotificationController } from './push-notification.controller';
 import { AdminAuthService } from './admin-auth.service';
 import { ProfileReviewService } from './profile-review.service';
 import { AdminCampaignService } from './services/admin-campaign.service';
 import { AIScoringService } from './services/ai-scoring.service';
 import { InfluencerScoringService } from './services/influencer-scoring.service';
 import { DashboardStatsService } from './services/dashboard-stats.service';
+import { PushNotificationService } from './services/push-notification.service';
 
 import { Admin } from './models/admin.model';
 import { ProfileReview } from './models/profile-review.model';
+import { PushNotification } from './models/push-notification.model';
 import { Brand } from '../brand/model/brand.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { InfluencerNiche } from '../auth/model/influencer-niche.model';
@@ -36,6 +39,7 @@ import { RolesGuard } from './guards/roles.guard';
     SequelizeModule.forFeature([
       Admin,
       ProfileReview,
+      PushNotification,
       Brand,
       Influencer,
       InfluencerNiche,
@@ -53,7 +57,7 @@ import { RolesGuard } from './guards/roles.guard';
     ]),
     SharedModule,
   ],
-  controllers: [AdminController],
+  controllers: [AdminController, PushNotificationController],
   providers: [
     AdminAuthService,
     ProfileReviewService,
@@ -61,6 +65,7 @@ import { RolesGuard } from './guards/roles.guard';
     AIScoringService,
     InfluencerScoringService,
     DashboardStatsService,
+    PushNotificationService,
     AdminAuthGuard,
     RolesGuard,
   ],

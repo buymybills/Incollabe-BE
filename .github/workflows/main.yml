@@ -34,6 +34,8 @@ jobs:
               - 'package.json'
               - 'Dockerfile'
               - 'docker-compose.yml'
+              - 'nginx.conf'
+              - '.env'
 
 
   # Incollab Pipeline

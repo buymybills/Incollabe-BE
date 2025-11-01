@@ -307,4 +307,19 @@ export class NotificationService {
 
     return subscriptionResults;
   }
+
+  /**
+   * Send custom notification with custom title, body and data
+   */
+  async sendCustomNotification(
+    fcmToken: string | string[],
+    title: string,
+    body: string,
+    data: Record<string, any> = {},
+  ) {
+    return await this.firebaseService.sendNotification(fcmToken, title, body, {
+      ...data,
+      timestamp: Date.now().toString(),
+    });
+  }
 }
