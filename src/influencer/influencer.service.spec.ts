@@ -585,6 +585,7 @@ describe('InfluencerService', () => {
 
       expect(result.message).toBe(SUCCESS_MESSAGES.WHATSAPP.OTP_SENT);
       expect(result.whatsappNumber).toBe(whatsappOtpRequest.whatsappNumber);
+      expect(result.otp).toBe(mockOtp);
       expect(whatsAppService.sendOTP).toHaveBeenCalledWith(
         whatsappOtpRequest.whatsappNumber,
         mockOtp,

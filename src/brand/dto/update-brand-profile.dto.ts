@@ -119,7 +119,7 @@ export class UpdateBrandProfileDto {
   @IsOptional()
   @Transform(({ value }) => (value ? parseInt(value, 10) : undefined))
   @IsNumber({}, { message: 'Founded year must be a number' })
-  @Min(1900, { message: 'Founded year must be 1900 or later' })
+  @Min(1800, { message: 'Founded year must be 1800 or later' })
   @Max(2099, { message: 'Founded year must be 2099 or earlier' })
   foundedYear?: number;
 

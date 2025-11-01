@@ -828,6 +828,7 @@ export class InfluencerService {
     return {
       message: SUCCESS_MESSAGES.WHATSAPP.OTP_SENT,
       whatsappNumber: whatsappNumber,
+      otp: otp,
     };
   }
 

@@ -1,0 +1,6107 @@
+[
+  {
+    "name": "Mumbai",
+    "state": "Maharashtra",
+    "tier": 1
+  },
+  {
+    "name": "Delhi",
+    "state": "Delhi",
+    "tier": 1
+  },
+  {
+    "name": "Bengaluru",
+    "state": "Karnataka",
+    "tier": 1
+  },
+  {
+    "name": "Ahmedabad",
+    "state": "Gujarat",
+    "tier": 1
+  },
+  {
+    "name": "Hyderabad",
+    "state": "Telangana",
+    "tier": 1
+  },
+  {
+    "name": "Chennai",
+    "state": "Tamil Nadu",
+    "tier": 1
+  },
+  {
+    "name": "Kolkata",
+    "state": "West Bengal",
+    "tier": 1
+  },
+  {
+    "name": "Pune",
+    "state": "Maharashtra",
+    "tier": 1
+  },
+  {
+    "name": "Jaipur",
+    "state": "Rajasthan",
+    "tier": 1
+  },
+  {
+    "name": "Surat",
+    "state": "Gujarat",
+    "tier": 1
+  },
+  {
+    "name": "Lucknow",
+    "state": "Uttar Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Kanpur",
+    "state": "Uttar Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Nagpur",
+    "state": "Maharashtra",
+    "tier": 2
+  },
+  {
+    "name": "Patna",
+    "state": "Bihar",
+    "tier": 2
+  },
+  {
+    "name": "Indore",
+    "state": "Madhya Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Thane",
+    "state": "Maharashtra",
+    "tier": 2
+  },
+  {
+    "name": "Bhopal",
+    "state": "Madhya Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Visakhapatnam",
+    "state": "Andhra Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Vadodara",
+    "state": "Gujarat",
+    "tier": 2
+  },
+  {
+    "name": "Firozabad",
+    "state": "Uttar Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Ludhiana",
+    "state": "Punjab",
+    "tier": 2
+  },
+  {
+    "name": "Rajkot",
+    "state": "Gujarat",
+    "tier": 2
+  },
+  {
+    "name": "Agra",
+    "state": "Uttar Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Siliguri",
+    "state": "West Bengal",
+    "tier": 2
+  },
+  {
+    "name": "Nashik",
+    "state": "Maharashtra",
+    "tier": 2
+  },
+  {
+    "name": "Faridabad",
+    "state": "Haryana",
+    "tier": 2
+  },
+  {
+    "name": "Patiala",
+    "state": "Punjab",
+    "tier": 2
+  },
+  {
+    "name": "Meerut",
+    "state": "Uttar Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Kalyan-Dombivali",
+    "state": "Maharashtra",
+    "tier": 2
+  },
+  {
+    "name": "Vasai-Virar",
+    "state": "Maharashtra",
+    "tier": 2
+  },
+  {
+    "name": "Varanasi",
+    "state": "Uttar Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Srinagar",
+    "state": "Jammu and Kashmir",
+    "tier": 2
+  },
+  {
+    "name": "Dhanbad",
+    "state": "Jharkhand",
+    "tier": 2
+  },
+  {
+    "name": "Jodhpur",
+    "state": "Rajasthan",
+    "tier": 2
+  },
+  {
+    "name": "Amritsar",
+    "state": "Punjab",
+    "tier": 2
+  },
+  {
+    "name": "Raipur",
+    "state": "Chhattisgarh",
+    "tier": 2
+  },
+  {
+    "name": "Allahabad",
+    "state": "Uttar Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Coimbatore",
+    "state": "Tamil Nadu",
+    "tier": 2
+  },
+  {
+    "name": "Jabalpur",
+    "state": "Madhya Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Gwalior",
+    "state": "Madhya Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Vijayawada",
+    "state": "Andhra Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Madurai",
+    "state": "Tamil Nadu",
+    "tier": 2
+  },
+  {
+    "name": "Guwahati",
+    "state": "Assam",
+    "tier": 2
+  },
+  {
+    "name": "Chandigarh",
+    "state": "Chandigarh",
+    "tier": 2
+  },
+  {
+    "name": "Hubli-Dharwad",
+    "state": "Karnataka",
+    "tier": 2
+  },
+  {
+    "name": "Amroha",
+    "state": "Uttar Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Moradabad",
+    "state": "Uttar Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Gurgaon",
+    "state": "Haryana",
+    "tier": 2
+  },
+  {
+    "name": "Aligarh",
+    "state": "Uttar Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Solapur",
+    "state": "Maharashtra",
+    "tier": 2
+  },
+  {
+    "name": "Ranchi",
+    "state": "Jharkhand",
+    "tier": 2
+  },
+  {
+    "name": "Jalandhar",
+    "state": "Punjab",
+    "tier": 2
+  },
+  {
+    "name": "Tiruchirappalli",
+    "state": "Tamil Nadu",
+    "tier": 2
+  },
+  {
+    "name": "Bhubaneswar",
+    "state": "Odisha",
+    "tier": 2
+  },
+  {
+    "name": "Salem",
+    "state": "Tamil Nadu",
+    "tier": 2
+  },
+  {
+    "name": "Warangal",
+    "state": "Telangana",
+    "tier": 2
+  },
+  {
+    "name": "Mira-Bhayandar",
+    "state": "Maharashtra",
+    "tier": 2
+  },
+  {
+    "name": "Thiruvananthapuram",
+    "state": "Kerala",
+    "tier": 2
+  },
+  {
+    "name": "Bhiwandi",
+    "state": "Maharashtra",
+    "tier": 2
+  },
+  {
+    "name": "Saharanpur",
+    "state": "Uttar Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Guntur",
+    "state": "Andhra Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Amravati",
+    "state": "Maharashtra",
+    "tier": 2
+  },
+  {
+    "name": "Bikaner",
+    "state": "Rajasthan",
+    "tier": 2
+  },
+  {
+    "name": "Noida",
+    "state": "Uttar Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Jamshedpur",
+    "state": "Jharkhand",
+    "tier": 2
+  },
+  {
+    "name": "Bhilai Nagar",
+    "state": "Chhattisgarh",
+    "tier": 2
+  },
+  {
+    "name": "Cuttack",
+    "state": "Odisha",
+    "tier": 2
+  },
+  {
+    "name": "Kochi",
+    "state": "Kerala",
+    "tier": 2
+  },
+  {
+    "name": "Udaipur",
+    "state": "Rajasthan",
+    "tier": 2
+  },
+  {
+    "name": "Bhavnagar",
+    "state": "Gujarat",
+    "tier": 2
+  },
+  {
+    "name": "Dehradun",
+    "state": "Uttarakhand",
+    "tier": 2
+  },
+  {
+    "name": "Asansol",
+    "state": "West Bengal",
+    "tier": 2
+  },
+  {
+    "name": "Nanded-Waghala",
+    "state": "Maharashtra",
+    "tier": 2
+  },
+  {
+    "name": "Ajmer",
+    "state": "Rajasthan",
+    "tier": 2
+  },
+  {
+    "name": "Jamnagar",
+    "state": "Gujarat",
+    "tier": 2
+  },
+  {
+    "name": "Ujjain",
+    "state": "Madhya Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Sangli",
+    "state": "Maharashtra",
+    "tier": 2
+  },
+  {
+    "name": "Loni",
+    "state": "Uttar Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Jhansi",
+    "state": "Uttar Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Pondicherry",
+    "state": "Puducherry",
+    "tier": 2
+  },
+  {
+    "name": "Nellore",
+    "state": "Andhra Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Jammu",
+    "state": "Jammu and Kashmir",
+    "tier": 2
+  },
+  {
+    "name": "Belagavi",
+    "state": "Karnataka",
+    "tier": 2
+  },
+  {
+    "name": "Raurkela",
+    "state": "Odisha",
+    "tier": 2
+  },
+  {
+    "name": "Mangaluru",
+    "state": "Karnataka",
+    "tier": 2
+  },
+  {
+    "name": "Tirunelveli",
+    "state": "Tamil Nadu",
+    "tier": 2
+  },
+  {
+    "name": "Malegaon",
+    "state": "Maharashtra",
+    "tier": 2
+  },
+  {
+    "name": "Gaya",
+    "state": "Bihar",
+    "tier": 2
+  },
+  {
+    "name": "Tiruppur",
+    "state": "Tamil Nadu",
+    "tier": 2
+  },
+  {
+    "name": "Davanagere",
+    "state": "Karnataka",
+    "tier": 2
+  },
+  {
+    "name": "Kozhikode",
+    "state": "Kerala",
+    "tier": 2
+  },
+  {
+    "name": "Akola",
+    "state": "Maharashtra",
+    "tier": 2
+  },
+  {
+    "name": "Kurnool",
+    "state": "Andhra Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Bokaro Steel City",
+    "state": "Jharkhand",
+    "tier": 2
+  },
+  {
+    "name": "Rajahmundry",
+    "state": "Andhra Pradesh",
+    "tier": 2
+  },
+  {
+    "name": "Ballari",
+    "state": "Karnataka",
+    "tier": 2
+  },
+  {
+    "name": "Agartala",
+    "state": "Tripura",
+    "tier": 2
+  },
+  {
+    "name": "Bhagalpur",
+    "state": "Bihar",
+    "tier": 2
+  },
+  {
+    "name": "Latur",
+    "state": "Maharashtra",
+    "tier": 2
+  },
+  {
+    "name": "Dhule",
+    "state": "Maharashtra",
+    "tier": 2
+  },
+  {
+    "name": "Korba",
+    "state": "Chhattisgarh",
+    "tier": 3
+  },
+  {
+    "name": "Bhilwara",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Brahmapur",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Mysore",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Muzaffarpur",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Ahmednagar",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Kollam",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Raghunathganj",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Bilaspur",
+    "state": "Chhattisgarh",
+    "tier": 3
+  },
+  {
+    "name": "Shahjahanpur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Thrissur",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Alwar",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Kakinada",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Nizamabad",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Sagar",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Tumkur",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Hisar",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Rohtak",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Panipat",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Darbhanga",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Kharagpur",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Aizawl",
+    "state": "Mizoram",
+    "tier": 3
+  },
+  {
+    "name": "Ichalkaranji",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Tirupati",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Karnal",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Bathinda",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Rampur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Shivamogga",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Ratlam",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Modinagar",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Durg",
+    "state": "Chhattisgarh",
+    "tier": 3
+  },
+  {
+    "name": "Shillong",
+    "state": "Meghalaya",
+    "tier": 3
+  },
+  {
+    "name": "Imphal",
+    "state": "Manipur",
+    "tier": 3
+  },
+  {
+    "name": "Hapur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Ranipet",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Anantapur",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Arrah",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Karimnagar",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Parbhani",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Etawah",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Bharatpur",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Begusarai",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "New Delhi",
+    "state": "Delhi",
+    "tier": 3
+  },
+  {
+    "name": "Chhapra",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Kadapa",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Ramagundam",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Pali",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Satna",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Vizianagaram",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Katihar",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Hardwar",
+    "state": "Uttarakhand",
+    "tier": 3
+  },
+  {
+    "name": "Sonipat",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Nagercoil",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Thanjavur",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Murwara (Katni)",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Naihati",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Sambhal",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Nadiad",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Yamunanagar",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "English Bazar",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Eluru",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Munger",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Panchkula",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Raayachuru",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Panvel",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Deoghar",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Ongole",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Nandyal",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Morena",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Bhiwani",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Porbandar",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Palakkad",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Anand",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Purnia",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Baharampur",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Barmer",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Morvi",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Orai",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Bahraich",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sikar",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Vellore",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Singrauli",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Khammam",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Mahesana",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Silchar",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Sambalpur",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Rewa",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Unnao",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Hugli-Chinsurah",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Raiganj",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Phusro",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Adityapur",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Alappuzha",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Bahadurgarh",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Machilipatnam",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Rae Bareli",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Jalpaiguri",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Bharuch",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Pathankot",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Hoshiarpur",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Baramula",
+    "state": "Jammu and Kashmir",
+    "tier": 3
+  },
+  {
+    "name": "Adoni",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Jind",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Tonk",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Tenali",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Kancheepuram",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Vapi",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Sirsa",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Navsari",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Mahbubnagar",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Puri",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Robertson Pet",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Erode",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Batala",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Haldwani-cum-Kathgodam",
+    "state": "Uttarakhand",
+    "tier": 3
+  },
+  {
+    "name": "Vidisha",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Saharsa",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Thanesar",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Chittoor",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Veraval",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Lakhimpur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sitapur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Hindupur",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Santipur",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Balurghat",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Ganjbasoda",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Moga",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Proddatur",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Srinagar",
+    "state": "Uttarakhand",
+    "tier": 3
+  },
+  {
+    "name": "Medinipur",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Habra",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Sasaram",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Hajipur",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Bhuj",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Shivpuri",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Ranaghat",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Shimla",
+    "state": "Himachal Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Tiruvannamalai",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Kaithal",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Rajnandgaon",
+    "state": "Chhattisgarh",
+    "tier": 3
+  },
+  {
+    "name": "Godhra",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Hazaribag",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Bhimavaram",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Mandsaur",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Dibrugarh",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Kolar",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Bankura",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Mandya",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Dehri-on-Sone",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Madanapalle",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Malerkotla",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Lalitpur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Bettiah",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Pollachi",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Khanna",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Neemuch",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Palwal",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Palanpur",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Guntakal",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Nabadwip",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Udupi",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Jagdalpur",
+    "state": "Chhattisgarh",
+    "tier": 3
+  },
+  {
+    "name": "Motihari",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Pilibhit",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Dimapur",
+    "state": "Nagaland",
+    "tier": 3
+  },
+  {
+    "name": "Mohali",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Sadulpur",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Rajapalayam",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Dharmavaram",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Kashipur",
+    "state": "Uttarakhand",
+    "tier": 3
+  },
+  {
+    "name": "Sivakasi",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Darjiling",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Chikkamagaluru",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Gudivada",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Baleshwar Town",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Mancherial",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Srikakulam",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Adilabad",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Yavatmal",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Barnala",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Nagaon",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Narasaraopet",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Raigarh",
+    "state": "Chhattisgarh",
+    "tier": 3
+  },
+  {
+    "name": "Roorkee",
+    "state": "Uttarakhand",
+    "tier": 3
+  },
+  {
+    "name": "Valsad",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Ambikapur",
+    "state": "Chhattisgarh",
+    "tier": 3
+  },
+  {
+    "name": "Giridih",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Chandausi",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Purulia",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Patan",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Bagaha",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Hardoi ",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Achalpur",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Osmanabad",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Deesa",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Nandurbar",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Azamgarh",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Ramgarh",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Firozpur",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Baripada Town",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Karwar",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Siwan",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Rajampet",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Pudukkottai",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Anantnag",
+    "state": "Jammu and Kashmir",
+    "tier": 3
+  },
+  {
+    "name": "Tadpatri",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Satara",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Bhadrak",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Kishanganj",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Suryapet",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Wardha",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Ranebennuru",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Amreli",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Neyveli (TS)",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Jamalpur",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Marmagao",
+    "state": "Goa",
+    "tier": 3
+  },
+  {
+    "name": "Udgir",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Tadepalligudem",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Nagapattinam",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Buxar",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Aurangabad",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Jehanabad",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Phagwara",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Khair",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sawai Madhopur",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Kapurthala",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Chilakaluripet",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Aurangabad",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Malappuram",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Rewari",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Nagaur",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Sultanpur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Nagda",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Port Blair",
+    "state": "Andaman and Nicobar Islands",
+    "tier": 3
+  },
+  {
+    "name": "Lakhisarai",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Panaji",
+    "state": "Goa",
+    "tier": 3
+  },
+  {
+    "name": "Tinsukia",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Itarsi",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Kohima",
+    "state": "Nagaland",
+    "tier": 3
+  },
+  {
+    "name": "Balangir",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Nawada",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Jharsuguda",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Jagtial",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Viluppuram",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Amalner",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Zirakpur",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Tanda",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Tiruchengode",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Nagina",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Yemmiganur",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Vaniyambadi",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Sarni",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Theni Allinagaram",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Margao",
+    "state": "Goa",
+    "tier": 3
+  },
+  {
+    "name": "Akot",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Sehore",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Mhow Cantonment",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Kot Kapura",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Makrana",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Pandharpur",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Miryalaguda",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Shamli",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Seoni",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Ranibennur",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Kadiri",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Shrirampur",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Rudrapur",
+    "state": "Uttarakhand",
+    "tier": 3
+  },
+  {
+    "name": "Parli",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Najibabad",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Nirmal",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Udhagamandalam",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Shikohabad",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Jhumri Tilaiya",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Aruppukkottai",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Ponnani",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Jamui",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Sitamarhi",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Chirala",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Anjar",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Karaikal",
+    "state": "Puducherry",
+    "tier": 3
+  },
+  {
+    "name": "Hansi",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Anakapalle",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Mahasamund",
+    "state": "Chhattisgarh",
+    "tier": 3
+  },
+  {
+    "name": "Faridkot",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Saunda",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Dhoraji",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Paramakudi",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Balaghat",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sujangarh",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Khambhat",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Muktsar",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Rajpura",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Kavali",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Dhamtari",
+    "state": "Chhattisgarh",
+    "tier": 3
+  },
+  {
+    "name": "Ashok Nagar",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sardarshahar",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Mahuva",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Bargarh",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Kamareddy",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Sahibganj",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Kothagudem",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Ramanagaram",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Gokak",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Tikamgarh",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Araria",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Rishikesh",
+    "state": "Uttarakhand",
+    "tier": 3
+  },
+  {
+    "name": "Shahdol",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Medininagar (Daltonganj)",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Arakkonam",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Washim",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Sangrur",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Bodhan",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Fazilka",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Palacole",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Keshod",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Sullurpeta",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Wadhwan",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Gurdaspur",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Vatakara",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Tura",
+    "state": "Meghalaya",
+    "tier": 3
+  },
+  {
+    "name": "Narnaul",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Kharar",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Yadgir",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Ambejogai",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Ankleshwar",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Savarkundla",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Paradip",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Virudhachalam",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Kanhangad",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Kadi",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Srivilliputhur",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Gobindgarh",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Tindivanam",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Mansa",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Taliparamba",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Manmad",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Tanuku",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Rayachoti",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Virudhunagar",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Koyilandy",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Jorhat",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Karur",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Valparai",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Srikalahasti",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Neyyattinkara",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Bapatla",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Fatehabad",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Malout",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Sankarankovil",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Tenkasi",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Ratnagiri",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Rabkavi Banhatti",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Sikandrabad",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Chaibasa",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Chirmiri",
+    "state": "Chhattisgarh",
+    "tier": 3
+  },
+  {
+    "name": "Palwancha",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Bhawanipatna",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Kayamkulam",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Pithampur",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Nabha",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Shahabad, Hardoi",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Dhenkanal",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Uran Islampur",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Gopalganj",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Bongaigaon City",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Palani",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Pusad",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Sopore",
+    "state": "Jammu and Kashmir",
+    "tier": 3
+  },
+  {
+    "name": "Pilkhuwa",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Tarn Taran",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Renukoot",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Mandamarri",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Shahabad",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Barbil",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Koratla",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Madhubani",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Arambagh",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Gohana",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Ladnu",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Pattukkottai",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Sirsi",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Sircilla",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Tamluk",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Jagraon",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "AlipurdUrban Agglomerationr",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Alirajpur",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Tandur",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Naidupet",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Tirupathur",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Tohana",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Ratangarh",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Dhubri",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Masaurhi",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Visnagar",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Vrindavan",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Nokha",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Nagari",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Narwana",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Ramanathapuram",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Ujhani",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Samastipur",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Laharpur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sangamner",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Nimbahera",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Siddipet",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Suri",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Diphu",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Jhargram",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Shirpur-Warwade",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Tilhar",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sindhnur",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Udumalaipettai",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Malkapur",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Wanaparthy",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Gudur",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Kendujhar",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Mandla",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Mandi",
+    "state": "Himachal Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Nedumangad",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "North Lakhimpur",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Vinukonda",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Tiptur",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Gobichettipalayam",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Sunabeda",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Wani",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Upleta",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Narasapuram",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Nuzvid",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Tezpur",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Una",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Markapur",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sheopur",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Thiruvarur",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Sidhpur",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Sahaswan",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Suratgarh",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Shajapur",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Rayagada",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Lonavla",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Ponnur",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Kagaznagar",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Gadwal",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Bhatapara",
+    "state": "Chhattisgarh",
+    "tier": 3
+  },
+  {
+    "name": "Kandukur",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sangareddy",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Unjha",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Lunglei",
+    "state": "Mizoram",
+    "tier": 3
+  },
+  {
+    "name": "Karimganj",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Kannur",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Bobbili",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Mokameh",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Talegaon Dabhade",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Anjangaon",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Mangrol",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Sunam",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Gangarampur",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Thiruvallur",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Tirur",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Rath",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Jatani",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Viramgam",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Rajsamand",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Yanam",
+    "state": "Puducherry",
+    "tier": 3
+  },
+  {
+    "name": "Kottayam",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Panruti",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Dhuri",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Namakkal",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Kasaragod",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Modasa",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Rayadurg",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Supaul",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Kunnamkulam",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Umred",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Bellampalle",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Sibsagar",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Mandi Dabwali",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Ottappalam",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Dumraon",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Samalkot",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Jaggaiahpet",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Goalpara",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Tuni",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Lachhmangarh",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Bhongir",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Amalapuram",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Firozpur Cantt.",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Vikarabad",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Thiruvalla",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Sherkot",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Palghar",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Shegaon",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Jangaon",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Bheemunipatnam",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Panna",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Thodupuzha",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "KathUrban Agglomeration",
+    "state": "Jammu and Kashmir",
+    "tier": 3
+  },
+  {
+    "name": "Palitana",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Arwal",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Venkatagiri",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Kalpi",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Rajgarh (Churu)",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Sattenapalle",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Arsikere",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Ozar",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Thirumangalam",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Petlad",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Nasirabad",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Phaltan",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Rampurhat",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Nanjangud",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Forbesganj",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Tundla",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "BhabUrban Agglomeration",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Sagara",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Pithapuram",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sira",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Bhadrachalam",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Charkhi Dadri",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Chatra",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Palasa Kasibugga",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Nohar",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Yevla",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Sirhind Fatehgarh Sahib",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Bhainsa",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Parvathipuram",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Shahade",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Chalakudy",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Narkatiaganj",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Kapadvanj",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Macherla",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Raghogarh-Vijaypur",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Rupnagar",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Naugachhia",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Sendhwa",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Byasanagar",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Sandila",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Gooty",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Salur",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Nanpara",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sardhana",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Vita",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Gumia",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Puttur",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Jalandhar Cantt.",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Nehtaur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Changanassery",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Mandapeta",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Dumka",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Seohara",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Umarkhed",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Madhupur",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Vikramasingapuram",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Punalur",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Kendrapara",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Sihor",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Nellikuppam",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Samana",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Warora",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Nilambur",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Rasipuram",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Ramnagar",
+    "state": "Uttarakhand",
+    "tier": 3
+  },
+  {
+    "name": "Jammalamadugu",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Nawanshahr",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Thoubal",
+    "state": "Manipur",
+    "tier": 3
+  },
+  {
+    "name": "Athni",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Cherthala",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Sidhi",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Farooqnagar",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Peddapuram",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Chirkunda",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Pachora",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Madhepura",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Pithoragarh",
+    "state": "Uttarakhand",
+    "tier": 3
+  },
+  {
+    "name": "Tumsar",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Phalodi",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Tiruttani",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Rampura Phul",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Perinthalmanna",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Padrauna",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Pipariya",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Dalli-Rajhara",
+    "state": "Chhattisgarh",
+    "tier": 3
+  },
+  {
+    "name": "Punganur",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Mattannur",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Mathura",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Thakurdwara",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Nandivaram-Guduvancheri",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Mulbagal",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Manjlegaon",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Wankaner",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Sillod",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Nidadavole",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Surapura",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Rajagangapur",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Sheikhpura",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Parlakhemundi",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Kalimpong",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Siruguppa",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Arvi",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Limbdi",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Barpeta",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Manglaur",
+    "state": "Uttarakhand",
+    "tier": 3
+  },
+  {
+    "name": "Repalle",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Mudhol",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Shujalpur",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Mandvi",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Thangadh",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Sironj",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Nandura",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Shoranur",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Nathdwara",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Periyakulam",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Sultanganj",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Medak",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Narayanpet",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Raxaul Bazar",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Rajauri",
+    "state": "Jammu and Kashmir",
+    "tier": 3
+  },
+  {
+    "name": "Pernampattu",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Nainital",
+    "state": "Uttarakhand",
+    "tier": 3
+  },
+  {
+    "name": "Ramachandrapuram",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Vaijapur",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Nangal",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Sidlaghatta",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Punch",
+    "state": "Jammu and Kashmir",
+    "tier": 3
+  },
+  {
+    "name": "Pandhurna",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Wadgaon Road",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Talcher",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Varkala",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Pilani",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Nowgong",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Naila Janjgir",
+    "state": "Chhattisgarh",
+    "tier": 3
+  },
+  {
+    "name": "Mapusa",
+    "state": "Goa",
+    "tier": 3
+  },
+  {
+    "name": "Vellakoil",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Merta City",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Sivaganga",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Mandideep",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sailu",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Vyara",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Kovvur",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Vadalur",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Nawabganj",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Padra",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Sainthia",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Siana",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Shahpur",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Sojat",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Noorpur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Paravoor",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Murtijapur",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Ramnagar",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Sundargarh",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Taki",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Saundatti-Yellamma",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Pathanamthitta",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Wadi",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Rameshwaram",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Tasgaon",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Sikandra Rao",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sihora",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Tiruvethipuram",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Tiruvuru",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Mehkar",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Peringathur",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Perambalur",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Manvi",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Zunheboto",
+    "state": "Nagaland",
+    "tier": 3
+  },
+  {
+    "name": "Mahnar Bazar",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Attingal",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Shahbad",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Puranpur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Nelamangala",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Nakodar",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Lunawada",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Murshidabad",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Mahe",
+    "state": "Puducherry",
+    "tier": 3
+  },
+  {
+    "name": "Lanka",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Rudauli",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Tuensang",
+    "state": "Nagaland",
+    "tier": 3
+  },
+  {
+    "name": "Lakshmeshwar",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Zira",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Yawal",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Thana Bhawan",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Ramdurg",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Pulgaon",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Sadasivpet",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Nargund",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Neem-Ka-Thana",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Memari",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Nilanga",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Naharlagun",
+    "state": "Arunachal Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Pakaur",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Wai",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Tarikere",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Malavalli",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Raisen",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Lahar",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Uravakonda",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Savanur",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Sirohi",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Udhampur",
+    "state": "Jammu and Kashmir",
+    "tier": 3
+  },
+  {
+    "name": "Umarga",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Pratapgarh",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Lingsugur",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Usilampatti",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Palia Kalan",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Wokha",
+    "state": "Nagaland",
+    "tier": 3
+  },
+  {
+    "name": "Rajpipla",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Vijayapura",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Rawatbhata",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Sangaria",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Paithan",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Rahuri",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Patti",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Zaidpur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Lalsot",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Maihar",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Vedaranyam",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Nawapur",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Solan",
+    "state": "Himachal Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Vapi",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Sanawad",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Warisaliganj",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Revelganj",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Sabalgarh",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Tuljapur",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Simdega",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Musabani",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Kodungallur",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Phulabani",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Umreth",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Narsipatnam",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Nautanwa",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Rajgir",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Yellandu",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Sathyamangalam",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Pilibanga",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Morshi",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Pehowa",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Sonepur",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Pappinisseri",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Zamania",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Mihijam",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Purna",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Puliyankudi",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Shikarpur, Bulandshahr",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Umaria",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Porsa",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Naugawan Sadat",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Fatehpur Sikri",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Manuguru",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Udaipur",
+    "state": "Tripura",
+    "tier": 3
+  },
+  {
+    "name": "Pipar City",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Pattamundai",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Nanjikottai",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Taranagar",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Yerraguntla",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Satana",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Sherghati",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Sankeshwara",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Madikeri",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Thuraiyur",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Sanand",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Rajula",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Kyathampalle",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Shahabad, Rampur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Tilda Newra",
+    "state": "Chhattisgarh",
+    "tier": 3
+  },
+  {
+    "name": "Narsinghgarh",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Chittur-Thathamangalam",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Malaj Khand",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sarangpur",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Robertsganj",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sirkali",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Radhanpur",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Tiruchendur",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Utraula",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Patratu",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Vijainagar, Ajmer",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Periyasemur",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Pathri",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Sadabad",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Talikota",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Sinnar",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Mungeli",
+    "state": "Chhattisgarh",
+    "tier": 3
+  },
+  {
+    "name": "Sedam",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Shikaripur",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Sumerpur",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Sattur",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Sugauli",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Lumding",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Vandavasi",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Titlagarh",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Uchgaon",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Mokokchung",
+    "state": "Nagaland",
+    "tier": 3
+  },
+  {
+    "name": "Paschim Punropara",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Sagwara",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Ramganj Mandi",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Tarakeswar",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Mahalingapura",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Dharmanagar",
+    "state": "Tripura",
+    "tier": 3
+  },
+  {
+    "name": "Mahemdabad",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Manendragarh",
+    "state": "Chhattisgarh",
+    "tier": 3
+  },
+  {
+    "name": "Uran",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Tharamangalam",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Tirukkoyilur",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Pen",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Makhdumpur",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Maner",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Oddanchatram",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Palladam",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Mundi",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Nabarangapur",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Mudalagi",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Samalkha",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Nepanagar",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Karjat",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Ranavav",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Pedana",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Pinjore",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Lakheri",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Pasan",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Puttur",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Vadakkuvalliyur",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Tirukalukundram",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Mahidpur",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Mussoorie",
+    "state": "Uttarakhand",
+    "tier": 3
+  },
+  {
+    "name": "Muvattupuzha",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Rasra",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Udaipurwati",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Manwath",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Adoor",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Uthamapalayam",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Partur",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Nahan",
+    "state": "Himachal Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Ladwa",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Mankachar",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Nongstoin",
+    "state": "Meghalaya",
+    "tier": 3
+  },
+  {
+    "name": "Losal",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Sri Madhopur",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Ramngarh",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Mavelikkara",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Rawatsar",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Rajakhera",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Lar",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Lal Gopalganj Nindaura",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Muddebihal",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Sirsaganj",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Shahpura",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Surandai",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Sangole",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Pavagada",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Tharad",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Mansa",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Umbergaon",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Mavoor",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Nalbari",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Talaja",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Malur",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Mangrulpir",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Soro",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Shahpura",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Vadnagar",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Raisinghnagar",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Sindhagi",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Sanduru",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Sohna",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Manavadar",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Pihani",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Safidon",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Risod",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Rosera",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Sankari",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Malpura",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Sonamukhi",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Shamsabad, Agra",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Nokha",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "PandUrban Agglomeration",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Mainaguri",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Afzalpur",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Shirur",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Salaya",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Shenkottai",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Pratapgarh",
+    "state": "Tripura",
+    "tier": 3
+  },
+  {
+    "name": "Vadipatti",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Nagarkurnool",
+    "state": "Telangana",
+    "tier": 3
+  },
+  {
+    "name": "Savner",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Sasvad",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Rudrapur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Soron",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sholingur",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Pandharkaoda",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Perumbavoor",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Maddur",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Nadbai",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Talode",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Shrigonda",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Madhugiri",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Tekkalakote",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Seoni-Malwa",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Shirdi",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "SUrban Agglomerationr",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Terdal",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Raver",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Tirupathur",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Taraori",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Mukhed",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Manachanallur",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Rehli",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sanchore",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Rajura",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Piro",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Mudabidri",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Vadgaon Kasba",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Nagar",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Vijapur",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Viswanatham",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Polur",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Panagudi",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Manawar",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Tehri",
+    "state": "Uttarakhand",
+    "tier": 3
+  },
+  {
+    "name": "Samdhan",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Pardi",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Rahatgarh",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Panagar",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Uthiramerur",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Tirora",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Rangia",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Sahjanwa",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Wara Seoni",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Magadi",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Rajgarh (Alwar)",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Rafiganj",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Tarana",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Rampur Maniharan",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sheoganj",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Raikot",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Pauri",
+    "state": "Uttarakhand",
+    "tier": 3
+  },
+  {
+    "name": "Sumerpur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Navalgund",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Shahganj",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Marhaura",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Tulsipur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sadri",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Thiruthuraipoondi",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Shiggaon",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Pallapatti",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Mahendragarh",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Sausar",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Ponneri",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Mahad",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Lohardaga",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Tirwaganj",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Margherita",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Sundarnagar",
+    "state": "Himachal Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Rajgarh",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Mangaldoi",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Renigunta",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Longowal",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Ratia",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Lalgudi",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Shrirangapattana",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Niwari",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Natham",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Unnamalaikadai",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "PurqUrban Agglomerationzi",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Shamsabad, Farrukhabad",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Mirganj",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Todaraisingh",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Warhapur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Rajam",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Urmar Tanda",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Lonar",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Powayan",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "P.N.Patti",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Palampur",
+    "state": "Himachal Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Srisailam Project (Right Flank Colony) Township",
+    "state": "Andhra Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sindagi",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Sandi",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Vaikom",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Malda",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Tharangambadi",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Sakaleshapura",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Lalganj",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Malkangiri",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Rapar",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Mauganj",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Todabhim",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Srinivaspur",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Murliganj",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Reengus",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Sawantwadi",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Tittakudi",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Lilong",
+    "state": "Manipur",
+    "tier": 3
+  },
+  {
+    "name": "Rajaldesar",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Pathardi",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Achhnera",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Pacode",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Naraura",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Nakur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Palai",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Morinda, India",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Manasa",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Nainpur",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sahaspur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Pauni",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Prithvipur",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Ramtek",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Silapathar",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Songadh",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Safipur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sohagpur",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Mul",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Sadulshahar",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Phillaur",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Sambhar",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Prantij",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Nagla",
+    "state": "Uttarakhand",
+    "tier": 3
+  },
+  {
+    "name": "Pattran",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Mount Abu",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Reoti",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Tenu dam-cum-Kathhara",
+    "state": "Jharkhand",
+    "tier": 3
+  },
+  {
+    "name": "Panchla",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Sitarganj",
+    "state": "Uttarakhand",
+    "tier": 3
+  },
+  {
+    "name": "Pasighat",
+    "state": "Arunachal Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Motipur",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "O' Valley",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Raghunathpur",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Suriyampalayam",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Qadian",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Rairangpur",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Silvassa",
+    "state": "Dadra and Nagar Haveli",
+    "tier": 3
+  },
+  {
+    "name": "Nowrozabad (Khodargama)",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Mangrol",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Soyagaon",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Sujanpur",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Manihari",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Sikanderpur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Mangalvedhe",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Phulera",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Ron",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Sholavandan",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Saidpur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Shamgarh",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Thammampatti",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Maharajpur",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Multai",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Mukerian",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Sirsi",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Purwa",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sheohar",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Namagiripettai",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Parasi",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Lathi",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Lalganj",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Narkhed",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Mathabhanga",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Shendurjana",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Peravurani",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Mariani",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Phulpur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Rania",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Pali",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Pachore",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Parangipettai",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Pudupattinam",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Panniyannur",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Maharajganj",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Rau",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Monoharpur",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Mandawa",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Marigaon",
+    "state": "Assam",
+    "tier": 3
+  },
+  {
+    "name": "Pallikonda",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Pindwara",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Shishgarh",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Patur",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Mayang Imphal",
+    "state": "Manipur",
+    "tier": 3
+  },
+  {
+    "name": "Mhowgaon",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Guruvayoor",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Mhaswad",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Sahawar",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sivagiri",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Mundargi",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Punjaipugalur",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Kailasahar",
+    "state": "Tripura",
+    "tier": 3
+  },
+  {
+    "name": "Samthar",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Sakti",
+    "state": "Chhattisgarh",
+    "tier": 3
+  },
+  {
+    "name": "Sadalagi",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Silao",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Mandalgarh",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Loha",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Pukhrayan",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Padmanabhapuram",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Belonia",
+    "state": "Tripura",
+    "tier": 3
+  },
+  {
+    "name": "Saiha",
+    "state": "Mizoram",
+    "tier": 3
+  },
+  {
+    "name": "Srirampore",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Talwara",
+    "state": "Punjab",
+    "tier": 3
+  },
+  {
+    "name": "Puthuppally",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Khowai",
+    "state": "Tripura",
+    "tier": 3
+  },
+  {
+    "name": "Vijaypur",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Takhatgarh",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Thirupuvanam",
+    "state": "Tamil Nadu",
+    "tier": 3
+  },
+  {
+    "name": "Adra",
+    "state": "West Bengal",
+    "tier": 3
+  },
+  {
+    "name": "Piriyapatna",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Obra",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Adalaj",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Nandgaon",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Barh",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Chhapra",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Panamattom",
+    "state": "Kerala",
+    "tier": 3
+  },
+  {
+    "name": "Niwai",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Bageshwar",
+    "state": "Uttarakhand",
+    "tier": 3
+  },
+  {
+    "name": "Tarbha",
+    "state": "Odisha",
+    "tier": 3
+  },
+  {
+    "name": "Adyar",
+    "state": "Karnataka",
+    "tier": 3
+  },
+  {
+    "name": "Narsinghgarh",
+    "state": "Madhya Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Warud",
+    "state": "Maharashtra",
+    "tier": 3
+  },
+  {
+    "name": "Asarganj",
+    "state": "Bihar",
+    "tier": 3
+  },
+  {
+    "name": "Sarsod",
+    "state": "Haryana",
+    "tier": 3
+  },
+  {
+    "name": "Gandhinagar",
+    "state": "Gujarat",
+    "tier": 3
+  },
+  {
+    "name": "Kullu",
+    "state": "Himachal Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Manali",
+    "state": "Himachal Praddesh",
+    "tier": 3
+  },
+  {
+    "name": "Mirzapur",
+    "state": "Uttar Pradesh",
+    "tier": 3
+  },
+  {
+    "name": "Kota",
+    "state": "Rajasthan",
+    "tier": 3
+  },
+  {
+    "name": "Dispur",
+    "state": "Assam",
+    "tier": 3
+  }
+]
