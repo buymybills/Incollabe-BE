@@ -34,11 +34,9 @@ services:
       # SSL certificates for incollab.buymybills.in
       - /etc/letsencrypt/live/incollab.buymybills.in:/etc/ssl/certs:ro
       - /etc/letsencrypt/archive/incollab.buymybills.in:/etc/ssl/private:ro
-      # SSL certificates for api.teamcollabkaroo.com (DISABLED - certificates not properly generated yet)
-      # TODO: Generate proper SSL certificates with: sudo certbot certonly --nginx -d api.teamcollabkaroo.com
-      # Then uncomment these lines:
-      # - /etc/letsencrypt/live/api.teamcollabkaroo.com/fullchain.pem:/etc/ssl/private/api-teamcollabkaroo-fullchain.pem:ro
-      # - /etc/letsencrypt/live/api.teamcollabkaroo.com/privkey.pem:/etc/ssl/private/api-teamcollabkaroo-privkey.pem:ro
+      # SSL certificates for api.teamcollabkaroo.com
+      - /etc/letsencrypt/live/api.teamcollabkaroo.com/fullchain.pem:/etc/ssl/private/api-teamcollabkaroo-fullchain.pem:ro
+      - /etc/letsencrypt/live/api.teamcollabkaroo.com/privkey.pem:/etc/ssl/private/api-teamcollabkaroo-privkey.pem:ro
     depends_on:
       - incollab-app
     networks:
