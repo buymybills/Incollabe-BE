@@ -87,6 +87,26 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       return exception.getStatus();
     }
+
+    // Handle Multer errors
+    if (exception instanceof Error) {
+      const multerError = exception as any;
+      if (multerError.code === 'LIMIT_FILE_SIZE') {
+        return HttpStatus.PAYLOAD_TOO_LARGE; // 413
+      }
+      if (
+        multerError.code === 'LIMIT_UNEXPECTED_FILE' ||
+        multerError.code === 'LIMIT_FILE_COUNT'
+      ) {
+        return HttpStatus.BAD_REQUEST; // 400
+      }
+      // File type validation error from fileFilter
+      const errorMessage = multerError.message || '';
+      if (errorMessage.includes('Only image and video files are allowed')) {
+        return HttpStatus.BAD_REQUEST; // 400
+      }
+    }
+
     return HttpStatus.INTERNAL_SERVER_ERROR;
   }
 
@@ -100,9 +120,27 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         return (response as any).message || exception.message;
       }
     }
+
+    // Handle Multer errors with custom messages
     if (exception instanceof Error) {
+      const multerError = exception as any;
+      if (multerError.code === 'LIMIT_FILE_SIZE') {
+        return 'File size exceeds the maximum limit of 50MB per file';
+      }
+      if (multerError.code === 'LIMIT_FILE_COUNT') {
+        return 'Too many files. Maximum 10 files allowed';
+      }
+      if (multerError.code === 'LIMIT_UNEXPECTED_FILE') {
+        return 'Unexpected file field';
+      }
+      // File type validation error
+      const errorMsg = multerError.message || '';
+      if (errorMsg.includes('Only image and video files are allowed')) {
+        return 'Invalid file type. Only JPG, JPEG, PNG, WEBP, MP4, MOV, and AVI files are allowed';
+      }
       return exception.message;
     }
+
     return 'An unexpected error occurred';
   }
 

@@ -44,7 +44,18 @@ export class PostController {
   @UseInterceptors(
     FilesInterceptor('media', 10, {
       fileFilter: (req, file, callback) => {
-        if (!file.mimetype.match(/\/(jpg|jpeg|png|webp|mp4|mov|avi)$/)) {
+        const allowedMimeTypes = [
+          'image/jpeg',
+          'image/jpg',
+          'image/png',
+          'image/webp',
+          'video/mp4',
+          'video/quicktime', // .mov files
+          'video/x-msvideo', // .avi files
+          'video/avi',
+        ];
+
+        if (!allowedMimeTypes.includes(file.mimetype)) {
           return callback(
             new Error('Only image and video files are allowed!'),
             false,
@@ -108,7 +119,18 @@ export class PostController {
   @UseInterceptors(
     FilesInterceptor('media', 10, {
       fileFilter: (req, file, callback) => {
-        if (!file.mimetype.match(/\/(jpg|jpeg|png|webp|mp4|mov|avi)$/)) {
+        const allowedMimeTypes = [
+          'image/jpeg',
+          'image/jpg',
+          'image/png',
+          'image/webp',
+          'video/mp4',
+          'video/quicktime', // .mov files
+          'video/x-msvideo', // .avi files
+          'video/avi',
+        ];
+
+        if (!allowedMimeTypes.includes(file.mimetype)) {
           return callback(
             new Error('Only image and video files are allowed!'),
             false,
