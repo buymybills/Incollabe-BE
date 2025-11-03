@@ -502,12 +502,14 @@ describe('PostService', () => {
 
       postModel.findAndCountAll.mockResolvedValue({
         count: 1,
-        rows: mockPosts,
+        rows: mockPosts.map((post) => ({ ...post, toJSON: () => post })),
       });
 
       const result = await service.getPosts(getPostsDto);
 
-      expect(result.posts).toEqual(mockPosts);
+      expect(result.posts).toEqual(
+        mockPosts.map((post) => ({ ...post, postType: 'text' })),
+      );
       expect(postModel.findAndCountAll).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({

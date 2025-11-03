@@ -474,6 +474,15 @@ export class PostService {
         return {
           ...postJson,
           isLikedByCurrentUser: likedPostIds.has(post.id),
+          postType: this.getPostType(post.mediaUrls),
+        };
+      });
+    } else {
+      postsWithLikeStatus = posts.map((post) => {
+        const postJson = post.toJSON();
+        return {
+          ...postJson,
+          postType: this.getPostType(post.mediaUrls),
         };
       });
     }
@@ -587,6 +596,22 @@ export class PostService {
     }
 
     return { influencerIds, brandIds };
+  }
+
+  private getPostType(mediaUrls: string[]): 'video' | 'image' | 'text' {
+    if (!mediaUrls || mediaUrls.length === 0) {
+      return 'text';
+    }
+
+    // Check if any media URL is a video (contains /videos/ folder or video extensions)
+    const hasVideo = mediaUrls.some((url) => {
+      return (
+        url.includes('/posts/videos/') ||
+        url.match(/\.(mp4|mov|avi|webm|mkv)$/i)
+      );
+    });
+
+    return hasVideo ? 'video' : 'image';
   }
 
   private buildPriorityCase(
@@ -747,6 +772,12 @@ export class PostService {
       postWithLikeStatus = {
         ...postWithLikeStatus,
         isLikedByCurrentUser: !!existingLike,
+        postType: this.getPostType(post.mediaUrls),
+      };
+    } else {
+      postWithLikeStatus = {
+        ...postWithLikeStatus,
+        postType: this.getPostType(post.mediaUrls),
       };
     }
 
