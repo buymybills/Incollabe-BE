@@ -11,6 +11,7 @@ import {
   ParseIntPipe,
   UseInterceptors,
   UploadedFiles,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -86,6 +87,20 @@ export class PostController {
     @UploadedFiles() files: Express.Multer.File[],
     @CurrentUser() user: User,
   ) {
+    // Validate file sizes (50MB limit per file)
+    const maxFileSize = 50 * 1024 * 1024; // 50MB in bytes
+    if (files && files.length > 0) {
+      const oversizedFiles = files.filter(file => file.size > maxFileSize);
+      if (oversizedFiles.length > 0) {
+        const filesInfo = oversizedFiles.map(f => 
+          `${f.originalname} (${(f.size / 1024 / 1024).toFixed(2)}MB)`
+        ).join(', ');
+        throw new BadRequestException(
+          `The following files exceed the 50MB size limit: ${filesInfo}. Please reduce file size and try again.`
+        );
+      }
+    }
+
     const userType =
       user.userType === 'influencer' ? UserType.INFLUENCER : UserType.BRAND;
     return this.postService.createPost(createPostDto, userType, user.id, files);
@@ -163,6 +178,20 @@ export class PostController {
     @UploadedFiles() files: Express.Multer.File[],
     @CurrentUser() user: User,
   ) {
+    // Validate file sizes (50MB limit per file)
+    const maxFileSize = 50 * 1024 * 1024; // 50MB in bytes
+    if (files && files.length > 0) {
+      const oversizedFiles = files.filter(file => file.size > maxFileSize);
+      if (oversizedFiles.length > 0) {
+        const filesInfo = oversizedFiles.map(f => 
+          `${f.originalname} (${(f.size / 1024 / 1024).toFixed(2)}MB)`
+        ).join(', ');
+        throw new BadRequestException(
+          `The following files exceed the 50MB size limit: ${filesInfo}. Please reduce file size and try again.`
+        );
+      }
+    }
+
     const userType =
       user.userType === 'influencer' ? UserType.INFLUENCER : UserType.BRAND;
     return this.postService.updatePost(
