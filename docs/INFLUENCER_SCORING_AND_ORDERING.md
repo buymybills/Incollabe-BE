@@ -146,22 +146,48 @@ engagementRate = (averageLikes / followersCount) × 100
 
 ## Niche Match Score
 
-Calculates how well influencer's niches align with campaign requirements:
+Calculates how well influencer's niches align with the **current search/filter criteria** (NOT based on past campaigns).
+
+### Important Note:
+This score is calculated **at the time of the API request** based on what niches the admin is searching for. It measures: *"How relevant is this influencer for the current search?"*
+
+- ✅ **Measured Against:** Admin's current `nicheIds` filter parameter
+- ❌ **NOT Measured Against:** Past campaigns the influencer applied to or completed
+
+### Calculation:
 
 ```typescript
-// No target niches specified
-score = 70 (default)
+// Scenario 1: No target niches specified in the search
+// (admin didn't provide nicheIds parameter)
+score = 70 (neutral default - can't determine relevance)
 
-// No matching niches
-score = 30
+// Scenario 2: Admin searches with specific niches, but influencer has none
+score = 30 (low - influencer has no niches set)
 
-// Perfect match (all target niches covered)
-score = 100
+// Scenario 3: Influencer's niches don't match any search criteria
+score = 30 (no relevance to current search)
 
-// Partial match
+// Scenario 4: Perfect match - influencer has all the niches being searched for
+score = 100 (highly relevant)
+
+// Scenario 5: Partial match - influencer has some of the searched niches
 matchPercentage = (matchingNiches / targetNiches) × 100
 score = 50 + (matchPercentage / 2)
 ```
+
+### Example:
+
+Admin searches for Fashion & Beauty influencers:
+```
+GET /api/admin/influencers?profileFilter=topProfile&nicheIds=1,2
+```
+
+| Influencer | Their Niches | Match | Score |
+|------------|-------------|--------|-------|
+| Alice | Fashion, Beauty | 2/2 perfect match | 100 |
+| Bob | Fashion, Tech | 1/2 partial match | 75 |
+| Carol | Fitness, Gaming | 0/2 no match | 30 |
+| David | (no niches set) | N/A | 30 |
 
 ---
 
