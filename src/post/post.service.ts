@@ -470,19 +470,19 @@ export class PostService {
       const likedPostIds = new Set(userLikes.map((like) => like.postId));
 
       postsWithLikeStatus = posts.map((post) => {
-        const postJson = post.toJSON();
+        const { mediaUrls, ...postJson } = post.toJSON();
         return {
           ...postJson,
           isLikedByCurrentUser: likedPostIds.has(post.id),
-          postType: this.getPostType(post.mediaUrls),
+          media: this.getMediaArray(mediaUrls),
         };
       });
     } else {
       postsWithLikeStatus = posts.map((post) => {
-        const postJson = post.toJSON();
+        const { mediaUrls, ...postJson } = post.toJSON();
         return {
           ...postJson,
-          postType: this.getPostType(post.mediaUrls),
+          media: this.getMediaArray(mediaUrls),
         };
       });
     }
@@ -598,20 +598,26 @@ export class PostService {
     return { influencerIds, brandIds };
   }
 
-  private getPostType(mediaUrls: string[]): 'video' | 'image' | 'text' {
+  private getMediaType(url: string): 'video' | 'image' {
+    // Check if URL is a video (contains /videos/ folder or video extensions)
+    const isVideo =
+      url.includes('/posts/videos/') ||
+      url.match(/\.(mp4|mov|avi|webm|mkv)$/i);
+
+    return isVideo ? 'video' : 'image';
+  }
+
+  private getMediaArray(
+    mediaUrls: string[],
+  ): Array<{ mediaUrl: string; mediaType: 'video' | 'image' }> {
     if (!mediaUrls || mediaUrls.length === 0) {
-      return 'text';
+      return [];
     }
 
-    // Check if any media URL is a video (contains /videos/ folder or video extensions)
-    const hasVideo = mediaUrls.some((url) => {
-      return (
-        url.includes('/posts/videos/') ||
-        url.match(/\.(mp4|mov|avi|webm|mkv)$/i)
-      );
-    });
-
-    return hasVideo ? 'video' : 'image';
+    return mediaUrls.map((url) => ({
+      mediaUrl: url,
+      mediaType: this.getMediaType(url),
+    }));
   }
 
   private buildPriorityCase(
@@ -749,8 +755,10 @@ export class PostService {
       throw new NotFoundException('Post not found');
     }
 
-    // Add isLikedByCurrentUser field
-    let postWithLikeStatus = post.toJSON();
+    // Add isLikedByCurrentUser field and media array
+    const { mediaUrls, ...postData } = post.toJSON();
+    let postWithLikeStatus = postData;
+
     if (currentUserId && currentUserType) {
       const likerType =
         currentUserType === UserType.INFLUENCER
@@ -770,14 +778,14 @@ export class PostService {
       });
 
       postWithLikeStatus = {
-        ...postWithLikeStatus,
+        ...postData,
         isLikedByCurrentUser: !!existingLike,
-        postType: this.getPostType(post.mediaUrls),
+        media: this.getMediaArray(mediaUrls),
       };
     } else {
       postWithLikeStatus = {
-        ...postWithLikeStatus,
-        postType: this.getPostType(post.mediaUrls),
+        ...postData,
+        media: this.getMediaArray(mediaUrls),
       };
     }
 

@@ -508,7 +508,7 @@ describe('PostService', () => {
       const result = await service.getPosts(getPostsDto);
 
       expect(result.posts).toEqual(
-        mockPosts.map((post) => ({ ...post, postType: 'text' })),
+        mockPosts.map((post) => ({ ...post, media: [] })),
       );
       expect(postModel.findAndCountAll).toHaveBeenCalledWith(
         expect.objectContaining({
