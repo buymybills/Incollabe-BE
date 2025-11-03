@@ -251,7 +251,6 @@ export class InfluencerScoringService {
 
     // For other filters, build appropriate where conditions
     const whereConditions: any = {
-      isProfileCompleted: true,
       isActive: true,
     };
 
@@ -266,6 +265,7 @@ export class InfluencerScoringService {
     // Apply profile filter
     switch (profileFilter) {
       case ProfileFilter.VERIFIED_PROFILE:
+        whereConditions.isProfileCompleted = true;
         whereConditions.isVerified = true;
         break;
       case ProfileFilter.UNVERIFIED_PROFILE:
@@ -273,7 +273,7 @@ export class InfluencerScoringService {
         break;
       case ProfileFilter.ALL_PROFILE:
       default:
-        // No additional filter for all profiles
+        // For ALL_PROFILE, only filter by isActive (shows all active influencers regardless of profile completion)
         break;
     }
 
