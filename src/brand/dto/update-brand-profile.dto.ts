@@ -160,70 +160,80 @@ export class UpdateBrandProfileDto {
   @ApiProperty({ description: 'Facebook page URL', required: false })
   @IsOptional()
   @Transform(({ value }) => {
+    // Keep empty string to allow clearing the field
+    if (value === '') return '';
     if (!value || value === 'string' || !value.startsWith('http'))
       return undefined;
     return value;
   })
   @IsString()
-  @Matches(/^https?:\/\/.+/, {
+  @Matches(/^(https?:\/\/.+|)$/, {
     message:
-      'Facebook URL must be a valid URL starting with http:// or https://',
+      'Facebook URL must be a valid URL starting with http:// or https://, or empty to clear',
   })
   facebookUrl?: string;
 
   @ApiProperty({ description: 'Instagram profile URL', required: false })
   @IsOptional()
   @Transform(({ value }) => {
+    // Keep empty string to allow clearing the field
+    if (value === '') return '';
     if (!value || value === 'string' || !value.startsWith('http'))
       return undefined;
     return value;
   })
   @IsString()
-  @Matches(/^https?:\/\/.+/, {
+  @Matches(/^(https?:\/\/.+|)$/, {
     message:
-      'Instagram URL must be a valid URL starting with http:// or https://',
+      'Instagram URL must be a valid URL starting with http:// or https://, or empty to clear',
   })
   instagramUrl?: string;
 
   @ApiProperty({ description: 'YouTube channel URL', required: false })
   @IsOptional()
   @Transform(({ value }) => {
+    // Keep empty string to allow clearing the field
+    if (value === '') return '';
     if (!value || value === 'string' || !value.startsWith('http'))
       return undefined;
     return value;
   })
   @IsString()
-  @Matches(/^https?:\/\/.+/, {
+  @Matches(/^(https?:\/\/.+|)$/, {
     message:
-      'YouTube URL must be a valid URL starting with http:// or https://',
+      'YouTube URL must be a valid URL starting with http:// or https://, or empty to clear',
   })
   youtubeUrl?: string;
 
   @ApiProperty({ description: 'LinkedIn company page URL', required: false })
   @IsOptional()
   @Transform(({ value }) => {
+    // Keep empty string to allow clearing the field
+    if (value === '') return '';
     if (!value || value === 'string' || !value.startsWith('http'))
       return undefined;
     return value;
   })
   @IsString()
-  @Matches(/^https?:\/\/.+/, {
+  @Matches(/^(https?:\/\/.+|)$/, {
     message:
-      'LinkedIn URL must be a valid URL starting with http:// or https://',
+      'LinkedIn URL must be a valid URL starting with http:// or https://, or empty to clear',
   })
   linkedinUrl?: string;
 
   @ApiProperty({ description: 'Twitter/X profile URL', required: false })
   @IsOptional()
   @Transform(({ value }) => {
+    // Keep empty string to allow clearing the field
+    if (value === '') return '';
     if (!value || value === 'string' || !value.startsWith('http'))
       return undefined;
     return value;
   })
   @IsString()
-  @Matches(/^https?:\/\/.+/, {
+  @Matches(/^(https?:\/\/.+|)$/, {
     message:
-      'Twitter/X URL must be a valid URL starting with http:// or https://',
+      'Twitter/X URL must be a valid URL starting with http:// or https://, or empty to clear',
   })
   twitterUrl?: string;
 

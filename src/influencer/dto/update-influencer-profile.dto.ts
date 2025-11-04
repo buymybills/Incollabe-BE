@@ -51,26 +51,51 @@ export class UpdateInfluencerProfileDto {
 
   @ApiProperty({ description: 'Instagram profile URL', required: false })
   @IsOptional()
+  @Transform(({ value }) => {
+    // Keep empty string to allow clearing the field
+    if (value === '') return '';
+    return value || undefined;
+  })
   @IsString()
   instagramUrl?: string;
 
   @ApiProperty({ description: 'YouTube channel URL', required: false })
   @IsOptional()
+  @Transform(({ value }) => {
+    // Keep empty string to allow clearing the field
+    if (value === '') return '';
+    return value || undefined;
+  })
   @IsString()
   youtubeUrl?: string;
 
   @ApiProperty({ description: 'Facebook profile URL', required: false })
   @IsOptional()
+  @Transform(({ value }) => {
+    // Keep empty string to allow clearing the field
+    if (value === '') return '';
+    return value || undefined;
+  })
   @IsString()
   facebookUrl?: string;
 
   @ApiProperty({ description: 'LinkedIn profile URL', required: false })
   @IsOptional()
+  @Transform(({ value }) => {
+    // Keep empty string to allow clearing the field
+    if (value === '') return '';
+    return value || undefined;
+  })
   @IsString()
   linkedinUrl?: string;
 
   @ApiProperty({ description: 'Twitter/X profile URL', required: false })
   @IsOptional()
+  @Transform(({ value }) => {
+    // Keep empty string to allow clearing the field
+    if (value === '') return '';
+    return value || undefined;
+  })
   @IsString()
   twitterUrl?: string;
 
