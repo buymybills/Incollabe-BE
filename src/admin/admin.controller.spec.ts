@@ -10,6 +10,8 @@ import { RolesGuard } from './guards/roles.guard';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { CreateAdminDto } from './dto/create-admin.dto';
 import { ApproveProfileDto, RejectProfileDto } from './dto/profile-review.dto';
+import { CampaignFilter, CampaignSortBy } from './dto/get-campaigns.dto';
+import { DashboardTimeFrame } from './dto/admin-dashboard.dto';
 import { AdminRole, AdminStatus } from './models/admin.model';
 import { ReviewStatus, ProfileType } from './models/profile-review.model';
 import {
@@ -37,6 +39,7 @@ const mockProfileReviewService = {
 
 const mockAdminCampaignService = {
   getCampaignApplicationsWithAI: jest.fn(),
+  getCampaigns: jest.fn(),
 };
 
 const mockInfluencerScoringService = {
@@ -47,6 +50,7 @@ const mockInfluencerScoringService = {
 const mockDashboardStatsService = {
   getMainDashboardStats: jest.fn(),
   getInfluencerDashboardStats: jest.fn(),
+  getCampaignDashboardStats: jest.fn(),
 };
 
 const mockAdminAuthGuard = {
@@ -555,6 +559,210 @@ describe('AdminController', () => {
       });
 
       expect(profileReviewService.getPendingProfiles).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  describe('Campaign Admin APIs', () => {
+    describe('getCampaigns', () => {
+      it('should return campaigns with filters', async () => {
+        const requestDto = {
+          campaignFilter: CampaignFilter.ACTIVE_CAMPAIGNS,
+          page: 1,
+          limit: 20,
+        };
+
+        const mockResponse = {
+          campaigns: [
+            {
+              id: 1,
+              name: 'Test Campaign',
+              status: 'active',
+              applicationsCount: 10,
+            },
+          ],
+          total: 1,
+          page: 1,
+          limit: 20,
+          totalPages: 1,
+        };
+
+        mockAdminCampaignService.getCampaigns.mockResolvedValue(mockResponse);
+
+        const result = await controller.getCampaigns(requestDto as any);
+
+        expect(result).toEqual(mockResponse);
+        expect(mockAdminCampaignService.getCampaigns).toHaveBeenCalledWith(
+          requestDto,
+        );
+      });
+
+      it('should handle search and filter combinations', async () => {
+        const requestDto = {
+          campaignFilter: CampaignFilter.ALL_CAMPAIGNS,
+          searchQuery: 'Fashion',
+          brandSearch: 'Nike',
+          locationSearch: 'Mumbai',
+          nicheSearch: 'Fashion',
+          campaignType: 'paid' as any,
+          sortBy: CampaignSortBy.APPLICATIONS,
+          page: 1,
+          limit: 20,
+        };
+
+        const mockResponse = {
+          campaigns: [],
+          total: 0,
+          page: 1,
+          limit: 20,
+          totalPages: 0,
+        };
+
+        mockAdminCampaignService.getCampaigns.mockResolvedValue(mockResponse);
+
+        const result = await controller.getCampaigns(requestDto as any);
+
+        expect(mockAdminCampaignService.getCampaigns).toHaveBeenCalledWith(
+          requestDto,
+        );
+        expect(result).toEqual(mockResponse);
+      });
+    });
+
+    describe('getCampaignDashboardStats', () => {
+      it('should return campaign dashboard stats with default timeframe', async () => {
+        const requestDto = {
+          timeFrame: DashboardTimeFrame.LAST_7_DAYS,
+        };
+
+        const mockResponse = {
+          campaignMetrics: {
+            totalCampaigns: { count: 100, percentageChange: 10 },
+            campaignsLive: { count: 50, percentageChange: 5 },
+            campaignsCompleted: { count: 40, percentageChange: -2 },
+            totalCampaignApplications: 500,
+          },
+          totalCityPresence: 25,
+          citiesWithMostActiveCampaigns: [
+            { cityName: 'Mumbai', percentage: 30 },
+            { cityName: 'Delhi', percentage: 25 },
+          ],
+          campaignPostedVsApplications: {
+            currentVerifiedProfileApplicants: 300,
+            currentUnverifiedProfileApplicants: 200,
+            timeSeriesData: [],
+          },
+          campaignCategoryDistribution: [
+            { categoryName: 'Fashion', campaignCount: 40, percentage: 40 },
+          ],
+        };
+
+        mockDashboardStatsService.getCampaignDashboardStats.mockResolvedValue(
+          mockResponse,
+        );
+
+        const result = await controller.getCampaignDashboardStats(
+          requestDto as any,
+        );
+
+        expect(result).toEqual(mockResponse);
+        expect(
+          mockDashboardStatsService.getCampaignDashboardStats,
+        ).toHaveBeenCalledWith(
+          DashboardTimeFrame.LAST_7_DAYS,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+        );
+      });
+
+      it('should handle custom date range', async () => {
+        const requestDto = {
+          chartTimeFrame: DashboardTimeFrame.CUSTOM,
+          chartStartDate: '2025-01-01',
+          chartEndDate: '2025-01-31',
+          metricsStartDate: '2025-01-01',
+          metricsEndDate: '2025-01-31',
+        };
+
+        const mockResponse = {
+          campaignMetrics: {
+            totalCampaigns: { count: 50, percentageChange: 0 },
+            campaignsLive: { count: 25, percentageChange: 0 },
+            campaignsCompleted: { count: 20, percentageChange: 0 },
+            totalCampaignApplications: 250,
+          },
+          totalCityPresence: 15,
+          citiesWithMostActiveCampaigns: [],
+          campaignPostedVsApplications: {
+            currentVerifiedProfileApplicants: 150,
+            currentUnverifiedProfileApplicants: 100,
+            timeSeriesData: [],
+          },
+          campaignCategoryDistribution: [],
+        };
+
+        mockDashboardStatsService.getCampaignDashboardStats.mockResolvedValue(
+          mockResponse,
+        );
+
+        const result = await controller.getCampaignDashboardStats(
+          requestDto as any,
+        );
+
+        expect(result).toEqual(mockResponse);
+        expect(
+          mockDashboardStatsService.getCampaignDashboardStats,
+        ).toHaveBeenCalledWith(
+          DashboardTimeFrame.CUSTOM,
+          '2025-01-01',
+          '2025-01-31',
+          '2025-01-01',
+          '2025-01-31',
+        );
+      });
+
+      it('should handle last_15_days timeframe', async () => {
+        const requestDto = {
+          chartTimeFrame: DashboardTimeFrame.LAST_15_DAYS,
+        };
+
+        const mockResponse = {
+          campaignMetrics: {
+            totalCampaigns: { count: 75, percentageChange: 5 },
+            campaignsLive: { count: 35, percentageChange: 3 },
+            campaignsCompleted: { count: 30, percentageChange: -1 },
+            totalCampaignApplications: 375,
+          },
+          totalCityPresence: 20,
+          citiesWithMostActiveCampaigns: [],
+          campaignPostedVsApplications: {
+            currentVerifiedProfileApplicants: 225,
+            currentUnverifiedProfileApplicants: 150,
+            timeSeriesData: [],
+          },
+          campaignCategoryDistribution: [],
+        };
+
+        mockDashboardStatsService.getCampaignDashboardStats.mockResolvedValue(
+          mockResponse,
+        );
+
+        const result = await controller.getCampaignDashboardStats(
+          requestDto as any,
+        );
+
+        expect(result).toEqual(mockResponse);
+        expect(
+          mockDashboardStatsService.getCampaignDashboardStats,
+        ).toHaveBeenCalledWith(
+          DashboardTimeFrame.LAST_15_DAYS,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+        );
+      });
     });
   });
 });

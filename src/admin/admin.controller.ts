@@ -65,12 +65,15 @@ import {
 import { GetTopInfluencersDto } from './dto/get-top-influencers.dto';
 import { GetInfluencersDto } from './dto/get-influencers.dto';
 import { GetBrandsDto } from './dto/get-brands.dto';
+import { GetCampaignsDto } from './dto/get-campaigns.dto';
 import { TopInfluencersResponseDto } from './dto/top-influencer-response.dto';
 import {
   DashboardRequestDto,
+  CampaignDashboardRequestDto,
   MainDashboardResponseDto,
   InfluencerDashboardResponseDto,
   BrandDashboardResponseDto,
+  CampaignDashboardResponseDto,
   DashboardTimeFrame,
 } from './dto/admin-dashboard.dto';
 import { ForgotPasswordDto } from '../auth/dto/forgot-password.dto';
@@ -990,6 +993,25 @@ export class AdminController {
     return await this.adminAuthService.getTopCampaigns(requestDto);
   }
 
+  @Get('campaigns')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get campaigns with filters, search, and sorting',
+    description:
+      'Get campaigns based on campaign filters: allCampaigns (all campaigns), activeCampaigns, draftCampaigns, completedCampaigns, pausedCampaigns, or cancelledCampaigns. Supports search by campaign name/title, brand name, location (city), and niche, and sorting by createdAt, applications, or title.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Campaigns retrieved successfully based on selected filter',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getCampaigns(@Query() requestDto: GetCampaignsDto) {
+    return await this.adminCampaignService.getCampaigns(requestDto);
+  }
+
   @Get('dashboard/top-influencers')
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
@@ -1363,7 +1385,7 @@ export class AdminController {
   @ApiOperation({
     summary: 'Get influencer dashboard statistics',
     description:
-      'Get detailed influencer analytics including city presence, city distribution, daily active influencers time series, and niche distribution. Supports different time frames for the chart data.',
+      'Get detailed influencer analytics including city presence, city distribution, daily active influencers time series, and niche distribution. Supports different time frames for the chart data. For custom date ranges, set timeFrame=custom and provide startDate and endDate.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -1376,6 +1398,8 @@ export class AdminController {
   async getInfluencerDashboardStats(@Query() requestDto: DashboardRequestDto) {
     return await this.dashboardStatsService.getInfluencerDashboardStats(
       requestDto.timeFrame || DashboardTimeFrame.LAST_7_DAYS,
+      requestDto.startDate,
+      requestDto.endDate,
     );
   }
 
@@ -1385,7 +1409,7 @@ export class AdminController {
   @ApiOperation({
     summary: 'Get brand dashboard statistics',
     description:
-      'Get detailed brand analytics including city presence, city distribution, daily active brands time series, and niche distribution. Supports different time frames for the chart data.',
+      'Get detailed brand analytics including city presence, city distribution, daily active brands time series, and niche distribution. Supports different time frames for the chart data. For custom date ranges, set timeFrame=custom and provide startDate and endDate.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -1398,6 +1422,90 @@ export class AdminController {
   async getBrandDashboardStats(@Query() requestDto: DashboardRequestDto) {
     return await this.dashboardStatsService.getBrandDashboardStats(
       requestDto.timeFrame || DashboardTimeFrame.LAST_7_DAYS,
+      requestDto.startDate,
+      requestDto.endDate,
     );
+  }
+
+  @Get('dashboard/campaigns')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get campaign dashboard statistics',
+    description:
+      'Get detailed campaign analytics with separate date ranges: chartTimeFrame (24h/3d/7d/15d/30d) for time series chart, and metricsStartDate/metricsEndDate (monthly range like Sep 2025-Oct 2025) for aggregate metrics (cards, city presence, categories).',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Campaign dashboard statistics retrieved successfully',
+    type: CampaignDashboardResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getCampaignDashboardStats(
+    @Query() requestDto: CampaignDashboardRequestDto,
+  ) {
+    return await this.dashboardStatsService.getCampaignDashboardStats(
+      requestDto.chartTimeFrame || DashboardTimeFrame.LAST_7_DAYS,
+      requestDto.chartStartDate,
+      requestDto.chartEndDate,
+      requestDto.metricsStartDate,
+      requestDto.metricsEndDate,
+    );
+  }
+
+  @Get('dashboard/date-range')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get available date range',
+    description:
+      'Get the earliest and latest dates where data exists in the system. Use this to populate date range dropdowns in the frontend.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Available date range retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        minDate: {
+          type: 'string',
+          description: 'Earliest date with data (YYYY-MM-DD)',
+          example: '2024-01-01',
+        },
+        maxDate: {
+          type: 'string',
+          description: 'Latest date with data (YYYY-MM-DD)',
+          example: '2025-11-01',
+        },
+        influencerMinDate: {
+          type: 'string',
+          description: 'Earliest influencer registration date (YYYY-MM-DD)',
+          example: '2024-01-15',
+        },
+        influencerMaxDate: {
+          type: 'string',
+          description: 'Latest influencer registration date (YYYY-MM-DD)',
+          example: '2025-11-01',
+        },
+        brandMinDate: {
+          type: 'string',
+          description: 'Earliest brand registration date (YYYY-MM-DD)',
+          example: '2024-01-01',
+        },
+        brandMaxDate: {
+          type: 'string',
+          description: 'Latest brand registration date (YYYY-MM-DD)',
+          example: '2025-10-31',
+        },
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getAvailableDateRange() {
+    return await this.dashboardStatsService.getAvailableDateRange();
   }
 }

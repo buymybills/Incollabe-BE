@@ -601,8 +601,7 @@ export class PostService {
   private getMediaType(url: string): 'video' | 'image' {
     // Check if URL is a video (contains /videos/ folder or video extensions)
     const isVideo =
-      url.includes('/posts/videos/') ||
-      url.match(/\.(mp4|mov|avi|webm|mkv)$/i);
+      url.includes('/posts/videos/') || url.match(/\.(mp4|mov|avi|webm|mkv)$/i);
 
     return isVideo ? 'video' : 'image';
   }

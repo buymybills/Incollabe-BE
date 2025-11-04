@@ -6,6 +6,7 @@ import { Brand } from '../../brand/model/brand.model';
 import { Campaign } from '../../campaign/models/campaign.model';
 import { CampaignApplication } from '../../campaign/models/campaign-application.model';
 import { CampaignDeliverable } from '../../campaign/models/campaign-deliverable.model';
+import { CampaignCity } from '../../campaign/models/campaign-city.model';
 import { City } from '../../shared/models/city.model';
 import { Niche } from '../../auth/model/niche.model';
 import { ProfileReview } from '../models/profile-review.model';
@@ -14,6 +15,7 @@ import {
   MainDashboardResponseDto,
   InfluencerDashboardResponseDto,
   BrandDashboardResponseDto,
+  CampaignDashboardResponseDto,
   DashboardTimeFrame,
 } from '../dto/admin-dashboard.dto';
 
@@ -30,6 +32,8 @@ export class DashboardStatsService {
     private readonly campaignApplicationModel: typeof CampaignApplication,
     @InjectModel(CampaignDeliverable)
     private readonly campaignDeliverableModel: typeof CampaignDeliverable,
+    @InjectModel(CampaignCity)
+    private readonly campaignCityModel: typeof CampaignCity,
     @InjectModel(City)
     private readonly cityModel: typeof City,
     @InjectModel(Niche)
@@ -329,27 +333,41 @@ export class DashboardStatsService {
 
   async getInfluencerDashboardStats(
     timeFrame: DashboardTimeFrame,
+    startDate?: string,
+    endDate?: string,
   ): Promise<InfluencerDashboardResponseDto> {
     const now = new Date();
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
     let chartStartDate: Date;
-    switch (timeFrame) {
-      case DashboardTimeFrame.LAST_24_HOURS:
-        chartStartDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        break;
-      case DashboardTimeFrame.LAST_3_DAYS:
-        chartStartDate = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
-        break;
-      case DashboardTimeFrame.LAST_7_DAYS:
-        chartStartDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        break;
-      case DashboardTimeFrame.LAST_30_DAYS:
-        chartStartDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        break;
-      default:
-        chartStartDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    let chartEndDate: Date = now;
+
+    // Handle custom date range
+    if (timeFrame === DashboardTimeFrame.CUSTOM && startDate && endDate) {
+      chartStartDate = new Date(startDate);
+      chartEndDate = new Date(endDate);
+    } else {
+      // Handle predefined time frames
+      switch (timeFrame) {
+        case DashboardTimeFrame.LAST_24_HOURS:
+          chartStartDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+          break;
+        case DashboardTimeFrame.LAST_3_DAYS:
+          chartStartDate = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+          break;
+        case DashboardTimeFrame.LAST_7_DAYS:
+          chartStartDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case DashboardTimeFrame.LAST_15_DAYS:
+          chartStartDate = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000);
+          break;
+        case DashboardTimeFrame.LAST_30_DAYS:
+          chartStartDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        default:
+          chartStartDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      }
     }
 
     // Get influencer metrics (reuse from main dashboard)
@@ -494,7 +512,7 @@ export class DashboardStatsService {
     // Daily Active Influencers Time Series
     const timeSeriesData = await this.generateTimeSeriesData(
       chartStartDate,
-      now,
+      chartEndDate,
     );
 
     // Niche Distribution
@@ -661,24 +679,38 @@ export class DashboardStatsService {
    */
   async getBrandDashboardStats(
     timeFrame: DashboardTimeFrame,
+    startDateStr?: string,
+    endDateStr?: string,
   ): Promise<BrandDashboardResponseDto> {
     // Calculate date range based on timeFrame
     let startDate: Date;
-    switch (timeFrame) {
-      case DashboardTimeFrame.LAST_24_HOURS:
-        startDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        break;
-      case DashboardTimeFrame.LAST_3_DAYS:
-        startDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-        break;
-      case DashboardTimeFrame.LAST_7_DAYS:
-        startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-        break;
-      case DashboardTimeFrame.LAST_30_DAYS:
-        startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-        break;
-      default:
-        startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    let endDate: Date = new Date();
+
+    // Handle custom date range
+    if (timeFrame === DashboardTimeFrame.CUSTOM && startDateStr && endDateStr) {
+      startDate = new Date(startDateStr);
+      endDate = new Date(endDateStr);
+    } else {
+      // Handle predefined time frames
+      switch (timeFrame) {
+        case DashboardTimeFrame.LAST_24_HOURS:
+          startDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+          break;
+        case DashboardTimeFrame.LAST_3_DAYS:
+          startDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+          break;
+        case DashboardTimeFrame.LAST_7_DAYS:
+          startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case DashboardTimeFrame.LAST_15_DAYS:
+          startDate = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000);
+          break;
+        case DashboardTimeFrame.LAST_30_DAYS:
+          startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        default:
+          startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      }
     }
 
     const currentDate = new Date();
@@ -769,7 +801,10 @@ export class DashboardStatsService {
     const cityDistribution = await this.getBrandCityDistribution();
 
     // Get daily active brands
-    const dailyActiveBrands = await this.getDailyActiveBrands(startDate);
+    const dailyActiveBrands = await this.getDailyActiveBrands(
+      startDate,
+      endDate,
+    );
 
     // Get niche distribution
     const nicheDistribution = await this.getBrandNicheDistribution();
@@ -877,8 +912,7 @@ export class DashboardStatsService {
     return distribution;
   }
 
-  private async getDailyActiveBrands(startDate: Date) {
-    const endDate = new Date();
+  private async getDailyActiveBrands(startDate: Date, endDate: Date) {
     const timeSeriesData: Array<{
       date: string;
       verifiedCount: number;
@@ -1009,6 +1043,537 @@ export class DashboardStatsService {
       nicheName,
       influencerCount: count,
       percentage: parseFloat(((count / totalBrands) * 100).toFixed(1)),
+    }));
+  }
+
+  /**
+   * Get available date range from the system
+   * Returns the earliest and latest dates where data exists
+   */
+  async getAvailableDateRange(): Promise<{
+    minDate: string;
+    maxDate: string;
+    influencerMinDate: string;
+    influencerMaxDate: string;
+    brandMinDate: string;
+    brandMaxDate: string;
+    campaignMinDate: string;
+    campaignMaxDate: string;
+  }> {
+    // Get min/max dates from influencers
+    const influencerDates = await this.influencerModel.findAll({
+      attributes: [
+        [
+          this.influencerModel.sequelize!.fn(
+            'MIN',
+            this.influencerModel.sequelize!.col('createdAt'),
+          ),
+          'minDate',
+        ],
+        [
+          this.influencerModel.sequelize!.fn(
+            'MAX',
+            this.influencerModel.sequelize!.col('createdAt'),
+          ),
+          'maxDate',
+        ],
+      ],
+      raw: true,
+    });
+
+    // Get min/max dates from brands
+    const brandDates = await this.brandModel.findAll({
+      attributes: [
+        [
+          this.brandModel.sequelize!.fn(
+            'MIN',
+            this.brandModel.sequelize!.col('createdAt'),
+          ),
+          'minDate',
+        ],
+        [
+          this.brandModel.sequelize!.fn(
+            'MAX',
+            this.brandModel.sequelize!.col('createdAt'),
+          ),
+          'maxDate',
+        ],
+      ],
+      raw: true,
+    });
+
+    // Get min/max dates from campaigns
+    const campaignDates = await this.campaignModel.findAll({
+      attributes: [
+        [
+          this.campaignModel.sequelize!.fn(
+            'MIN',
+            this.campaignModel.sequelize!.col('createdAt'),
+          ),
+          'minDate',
+        ],
+        [
+          this.campaignModel.sequelize!.fn(
+            'MAX',
+            this.campaignModel.sequelize!.col('createdAt'),
+          ),
+          'maxDate',
+        ],
+      ],
+      where: {
+        isActive: true,
+      },
+      raw: true,
+    });
+
+    const influencerMinDate = influencerDates[0]?.['minDate'] as Date;
+    const influencerMaxDate = influencerDates[0]?.['maxDate'] as Date;
+    const brandMinDate = brandDates[0]?.['minDate'] as Date;
+    const brandMaxDate = brandDates[0]?.['maxDate'] as Date;
+    const campaignMinDate = campaignDates[0]?.['minDate'] as Date;
+    const campaignMaxDate = campaignDates[0]?.['maxDate'] as Date;
+
+    // Get the overall min and max dates across all entities
+    const minDate = new Date(
+      Math.min(
+        influencerMinDate?.getTime() || Date.now(),
+        brandMinDate?.getTime() || Date.now(),
+        campaignMinDate?.getTime() || Date.now(),
+      ),
+    );
+    const maxDate = new Date(
+      Math.max(
+        influencerMaxDate?.getTime() || Date.now(),
+        brandMaxDate?.getTime() || Date.now(),
+        campaignMaxDate?.getTime() || Date.now(),
+      ),
+    );
+
+    return {
+      minDate: minDate.toISOString().split('T')[0],
+      maxDate: maxDate.toISOString().split('T')[0],
+      influencerMinDate: influencerMinDate
+        ? influencerMinDate.toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0],
+      influencerMaxDate: influencerMaxDate
+        ? influencerMaxDate.toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0],
+      brandMinDate: brandMinDate
+        ? brandMinDate.toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0],
+      brandMaxDate: brandMaxDate
+        ? brandMaxDate.toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0],
+      campaignMinDate: campaignMinDate
+        ? campaignMinDate.toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0],
+      campaignMaxDate: campaignMaxDate
+        ? campaignMaxDate.toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0],
+    };
+  }
+
+  /**
+   * Get campaign dashboard statistics
+   * Supports two separate date ranges:
+   * 1. Chart time frame (24h, 3d, 7d, 15d, 30d) for time series
+   * 2. Metrics date range (monthly: Sep 2025 - Oct 2025) for aggregate data
+   */
+  async getCampaignDashboardStats(
+    chartTimeFrame: DashboardTimeFrame,
+    chartStartDateStr?: string,
+    chartEndDateStr?: string,
+    metricsStartDateStr?: string,
+    metricsEndDateStr?: string,
+  ): Promise<CampaignDashboardResponseDto> {
+    // Calculate chart date range based on timeFrame
+    let chartStartDate: Date;
+    let chartEndDate: Date = new Date();
+
+    // Handle custom date range for chart
+    if (
+      chartTimeFrame === DashboardTimeFrame.CUSTOM &&
+      chartStartDateStr &&
+      chartEndDateStr
+    ) {
+      chartStartDate = new Date(chartStartDateStr);
+      chartEndDate = new Date(chartEndDateStr);
+    } else {
+      // Handle predefined time frames for chart
+      switch (chartTimeFrame) {
+        case DashboardTimeFrame.LAST_24_HOURS:
+          chartStartDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+          break;
+        case DashboardTimeFrame.LAST_3_DAYS:
+          chartStartDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+          break;
+        case DashboardTimeFrame.LAST_7_DAYS:
+          chartStartDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); 
+          break;
+        case DashboardTimeFrame.LAST_15_DAYS:
+          chartStartDate = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000);
+          break;
+        case DashboardTimeFrame.LAST_30_DAYS:
+          chartStartDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        default:
+          chartStartDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      }
+    }
+
+    // Calculate metrics date range (for aggregate data like cards, city presence, categories)
+    // If not provided, use current month
+    let metricsStartDate: Date;
+    let metricsEndDate: Date;
+
+    if (metricsStartDateStr && metricsEndDateStr) {
+      metricsStartDate = new Date(metricsStartDateStr);
+      metricsEndDate = new Date(metricsEndDateStr);
+    } else {
+      // Default to current month
+      const now = new Date();
+      metricsStartDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      metricsEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    }
+
+    // Calculate previous period for comparison (same duration as metrics range)
+    const metricsDuration =
+      metricsEndDate.getTime() - metricsStartDate.getTime();
+    const previousPeriodEnd = new Date(
+      metricsStartDate.getTime() - 24 * 60 * 60 * 1000,
+    ); // Day before metrics start
+    const previousPeriodStart = new Date(
+      previousPeriodEnd.getTime() - metricsDuration,
+    );
+
+    // Get campaign metrics (using metrics date range)
+    const [
+      totalCampaigns,
+      campaignsLive,
+      campaignsCompleted,
+      previousPeriodTotalCampaigns,
+      previousPeriodCampaignsLive,
+      previousPeriodCampaignsCompleted,
+      totalApplications,
+    ] = await Promise.all([
+      this.campaignModel.count({
+        where: {
+          isActive: true,
+          createdAt: { [Op.between]: [metricsStartDate, metricsEndDate] },
+        },
+      }),
+      this.campaignModel.count({
+        where: {
+          isActive: true,
+          status: 'active',
+          createdAt: { [Op.between]: [metricsStartDate, metricsEndDate] },
+        },
+      }),
+      this.campaignModel.count({
+        where: {
+          isActive: true,
+          status: 'completed',
+          createdAt: { [Op.between]: [metricsStartDate, metricsEndDate] },
+        },
+      }),
+      this.campaignModel.count({
+        where: {
+          isActive: true,
+          createdAt: {
+            [Op.between]: [previousPeriodStart, previousPeriodEnd],
+          },
+        },
+      }),
+      this.campaignModel.count({
+        where: {
+          isActive: true,
+          status: 'active',
+          createdAt: {
+            [Op.between]: [previousPeriodStart, previousPeriodEnd],
+          },
+        },
+      }),
+      this.campaignModel.count({
+        where: {
+          isActive: true,
+          status: 'completed',
+          createdAt: {
+            [Op.between]: [previousPeriodStart, previousPeriodEnd],
+          },
+        },
+      }),
+      this.campaignApplicationModel.count({
+        where: {
+          createdAt: { [Op.between]: [metricsStartDate, metricsEndDate] },
+        },
+      }),
+    ]);
+
+    const campaignMetrics = {
+      totalCampaigns: {
+        count: totalCampaigns,
+        percentageChange: this.calculatePercentageChange(
+          totalCampaigns,
+          previousPeriodTotalCampaigns,
+        ),
+      },
+      campaignsLive: {
+        count: campaignsLive,
+        percentageChange: this.calculatePercentageChange(
+          campaignsLive,
+          previousPeriodCampaignsLive,
+        ),
+      },
+      campaignsCompleted: {
+        count: campaignsCompleted,
+        percentageChange: this.calculatePercentageChange(
+          campaignsCompleted,
+          previousPeriodCampaignsCompleted,
+        ),
+      },
+      totalCampaignApplications: totalApplications,
+    };
+
+    // Get total city presence (using metrics date range)
+    const totalCityPresence = await this.getCampaignCityPresence(
+      metricsStartDate,
+      metricsEndDate,
+    );
+
+    // Get cities with most active campaigns (using metrics date range)
+    const citiesWithMostActiveCampaigns =
+      await this.getCitiesWithMostActiveCampaigns(
+        metricsStartDate,
+        metricsEndDate,
+      );
+
+    // Get campaign posted vs applications time series (using chart date range)
+    const campaignPostedVsApplications =
+      await this.getCampaignPostedVsApplications(chartStartDate, chartEndDate);
+
+    // Get campaign category distribution (using metrics date range)
+    const campaignCategoryDistribution =
+      await this.getCampaignCategoryDistribution(
+        metricsStartDate,
+        metricsEndDate,
+      );
+
+    return {
+      campaignMetrics,
+      totalCityPresence,
+      citiesWithMostActiveCampaigns,
+      campaignPostedVsApplications,
+      campaignCategoryDistribution,
+    };
+  }
+
+  private async getCampaignCityPresence(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<number> {
+    // Get unique cities with campaigns created in date range
+    const uniqueCities = await this.campaignCityModel.findAll({
+      attributes: ['cityId'],
+      include: [
+        {
+          model: Campaign,
+          as: 'campaign',
+          where: {
+            isActive: true,
+            createdAt: { [Op.between]: [startDate, endDate] },
+          },
+          attributes: [],
+        },
+      ],
+      group: ['cityId'],
+      raw: true,
+    });
+
+    return uniqueCities.length;
+  }
+
+  private async getCitiesWithMostActiveCampaigns(
+    startDate: Date,
+    endDate: Date,
+  ) {
+    // Get city counts from campaigns created in date range
+    const cityCounts = await this.campaignCityModel.findAll({
+      attributes: [
+        'cityId',
+        [
+          this.campaignCityModel.sequelize!.fn(
+            'COUNT',
+            this.campaignCityModel.sequelize!.col('CampaignCity.id'),
+          ),
+          'count',
+        ],
+      ],
+      include: [
+        {
+          model: Campaign,
+          as: 'campaign',
+          where: {
+            isActive: true,
+            createdAt: { [Op.between]: [startDate, endDate] },
+          },
+          attributes: [],
+        },
+        {
+          model: City,
+          as: 'city',
+          attributes: ['name'],
+        },
+      ],
+      group: ['CampaignCity.cityId', 'city.id', 'city.name'],
+      order: [[this.campaignCityModel.sequelize!.literal('count'), 'DESC']],
+      raw: true,
+    });
+
+    if (cityCounts.length === 0) {
+      return [];
+    }
+
+    // Calculate total entries
+    const totalCampaignCityEntries = cityCounts.reduce(
+      (sum: number, city: any) => sum + parseInt(city.count),
+      0,
+    );
+
+    // Get top 3 cities
+    const top3 = cityCounts.slice(0, 3);
+    const others = cityCounts.slice(3);
+
+    const distribution = top3.map((city: any) => ({
+      cityName: city['city.name'] || 'Unknown',
+      percentage: parseFloat(
+        ((parseInt(city.count) / totalCampaignCityEntries) * 100).toFixed(1),
+      ),
+    }));
+
+    // Add "Others" if there are more cities
+    if (others.length > 0) {
+      const othersCount = others.reduce(
+        (sum: number, city: any) => sum + parseInt(city.count),
+        0,
+      );
+      distribution.push({
+        cityName: 'Others',
+        percentage: parseFloat(
+          ((othersCount / totalCampaignCityEntries) * 100).toFixed(1),
+        ),
+      });
+    }
+
+    return distribution;
+  }
+
+  private async getCampaignPostedVsApplications(
+    startDate: Date,
+    endDate: Date,
+  ) {
+    // Get verified and unverified profile applicants
+    const [verifiedCount, unverifiedCount] = await Promise.all([
+      this.campaignApplicationModel.count({
+        include: [
+          {
+            model: Influencer,
+            as: 'influencer',
+            where: { isVerified: true },
+            attributes: [],
+          },
+        ],
+      }),
+      this.campaignApplicationModel.count({
+        include: [
+          {
+            model: Influencer,
+            as: 'influencer',
+            where: { isVerified: false },
+            attributes: [],
+          },
+        ],
+      }),
+    ]);
+
+    // Generate time series data
+    const timeSeriesData: Array<{
+      date: string;
+      campaignsPosted: number;
+      applicationsReceived: number;
+    }> = [];
+    const currentDate = new Date(startDate);
+
+    while (currentDate <= endDate) {
+      const nextDate = new Date(currentDate);
+      nextDate.setDate(nextDate.getDate() + 1);
+
+      const [campaignsPosted, applicationsReceived] = await Promise.all([
+        this.campaignModel.count({
+          where: {
+            createdAt: {
+              [Op.between]: [currentDate, nextDate],
+            },
+            isActive: true,
+          },
+        }),
+        this.campaignApplicationModel.count({
+          where: {
+            createdAt: {
+              [Op.between]: [currentDate, nextDate],
+            },
+          },
+        }),
+      ]);
+
+      timeSeriesData.push({
+        date: currentDate.toISOString().split('T')[0],
+        campaignsPosted,
+        applicationsReceived,
+      });
+
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return {
+      currentVerifiedProfileApplicants: verifiedCount,
+      currentUnverifiedProfileApplicants: unverifiedCount,
+      timeSeriesData,
+    };
+  }
+
+  /* 
+    * Get campaign category distribution
+  */
+  private async getCampaignCategoryDistribution(
+    startDate: Date,
+    endDate: Date,
+  ) {
+    // Get campaigns created in date range with categories
+    const campaigns = await this.campaignModel.findAll({
+      attributes: ['category'],
+      where: {
+        isActive: true,
+        category: { [Op.ne]: null as any },
+        createdAt: { [Op.between]: [startDate, endDate] },
+      },
+    });
+
+    const totalCampaigns = campaigns.length;
+    const categoryCounts: { [key: string]: number } = {};
+
+    campaigns.forEach((campaign) => {
+      const category = campaign.category || 'Other';
+      categoryCounts[category] = (categoryCounts[category] || 0) + 1;
+    });
+
+    // Sort by count (descending) and return all categories
+    const sortedCategories = Object.entries(categoryCounts)
+      .sort(([, a], [, b]) => b - a);
+
+    return sortedCategories.map(([categoryName, count]) => ({
+      categoryName,
+      campaignCount: count,
+      percentage: parseFloat(((count / totalCampaigns) * 100).toFixed(1)),
     }));
   }
 }

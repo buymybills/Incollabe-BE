@@ -1,17 +1,20 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsOptional, IsEnum } from 'class-validator';
+import { IsOptional, IsEnum, IsDateString } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export enum DashboardTimeFrame {
   LAST_24_HOURS = 'last_24_hours',
   LAST_3_DAYS = 'last_3_days',
   LAST_7_DAYS = 'last_7_days',
+  LAST_15_DAYS = 'last_15_days',
   LAST_30_DAYS = 'last_30_days',
+  CUSTOM = 'custom',
 }
 
 export class DashboardRequestDto {
   @ApiProperty({
-    description: 'Time frame for dashboard metrics',
+    description:
+      'Time frame for dashboard metrics. Use CUSTOM for custom date range.',
     enum: DashboardTimeFrame,
     required: false,
     default: DashboardTimeFrame.LAST_7_DAYS,
@@ -20,6 +23,80 @@ export class DashboardRequestDto {
   @IsEnum(DashboardTimeFrame)
   @Transform(({ value }) => value || DashboardTimeFrame.LAST_7_DAYS)
   timeFrame?: DashboardTimeFrame = DashboardTimeFrame.LAST_7_DAYS;
+
+  @ApiProperty({
+    description:
+      'Start date for custom date range (YYYY-MM-DD). Required when timeFrame is CUSTOM.',
+    example: '2024-01-01',
+    required: false,
+  })
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @ApiProperty({
+    description:
+      'End date for custom date range (YYYY-MM-DD). Required when timeFrame is CUSTOM.',
+    example: '2025-11-01',
+    required: false,
+  })
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
+}
+
+export class CampaignDashboardRequestDto {
+  @ApiProperty({
+    description:
+      'Time frame for time series chart (Campaign Posted vs Applications). Controls the chart date range.',
+    enum: DashboardTimeFrame,
+    required: false,
+    default: DashboardTimeFrame.LAST_7_DAYS,
+  })
+  @IsOptional()
+  @IsEnum(DashboardTimeFrame)
+  @Transform(({ value }) => value || DashboardTimeFrame.LAST_7_DAYS)
+  chartTimeFrame?: DashboardTimeFrame = DashboardTimeFrame.LAST_7_DAYS;
+
+  @ApiProperty({
+    description:
+      'Start date for chart custom range (YYYY-MM-DD). Required when chartTimeFrame is CUSTOM.',
+    example: '2025-10-01',
+    required: false,
+  })
+  @IsOptional()
+  @IsDateString()
+  chartStartDate?: string;
+
+  @ApiProperty({
+    description:
+      'End date for chart custom range (YYYY-MM-DD). Required when chartTimeFrame is CUSTOM.',
+    example: '2025-10-31',
+    required: false,
+  })
+  @IsOptional()
+  @IsDateString()
+  chartEndDate?: string;
+
+  @ApiProperty({
+    description:
+      'Start date for metrics/aggregate data (YYYY-MM-DD). Used for campaign counts, city presence, category distribution.',
+    example: '2025-09-01',
+    required: false,
+  })
+  @IsOptional()
+  @IsDateString()
+  metricsStartDate?: string;
+
+  @ApiProperty({
+    description:
+      'End date for metrics/aggregate data (YYYY-MM-DD). Used for campaign counts, city presence, category distribution.',
+    example: '2025-10-31',
+    required: false,
+  })
+  @IsOptional()
+  @IsDateString()
+  metricsEndDate?: string;
 }
 
 export class MetricDto {
@@ -304,4 +381,73 @@ export class BrandDashboardResponseDto {
     type: [NicheDistributionDto],
   })
   nicheDistribution: NicheDistributionDto[];
+}
+
+// Campaign Dashboard DTOs
+
+export class CampaignPostedVsApplicationsDataPointDto {
+  @ApiProperty({ description: 'Date' })
+  date: string;
+
+  @ApiProperty({ description: 'Number of campaigns posted' })
+  campaignsPosted: number;
+
+  @ApiProperty({ description: 'Number of applications received' })
+  applicationsReceived: number;
+}
+
+export class CampaignPostedVsApplicationsDto {
+  @ApiProperty({ description: 'Current verified profile applicants count' })
+  currentVerifiedProfileApplicants: number;
+
+  @ApiProperty({ description: 'Current unverified profile applicants count' })
+  currentUnverifiedProfileApplicants: number;
+
+  @ApiProperty({
+    description: 'Time series data for campaigns posted vs applications',
+    type: [CampaignPostedVsApplicationsDataPointDto],
+  })
+  timeSeriesData: CampaignPostedVsApplicationsDataPointDto[];
+}
+
+export class CampaignCategoryDto {
+  @ApiProperty({ description: 'Category name' })
+  categoryName: string;
+
+  @ApiProperty({ description: 'Number of campaigns' })
+  campaignCount: number;
+
+  @ApiProperty({ description: 'Percentage of total campaigns' })
+  percentage: number;
+}
+
+export class CityWithActiveCampaignsDto {
+  @ApiProperty({ description: 'City name' })
+  cityName: string;
+
+  @ApiProperty({ description: 'Percentage of active campaigns in this city' })
+  percentage: number;
+}
+
+export class CampaignDashboardResponseDto {
+  @ApiProperty({ description: 'Campaign metrics' })
+  campaignMetrics: CampaignMetricsDto;
+
+  @ApiProperty({ description: 'Total city presence for campaigns' })
+  totalCityPresence: number;
+
+  @ApiProperty({
+    description: 'Cities with most active campaigns',
+    type: [CityWithActiveCampaignsDto],
+  })
+  citiesWithMostActiveCampaigns: CityWithActiveCampaignsDto[];
+
+  @ApiProperty({ description: 'Campaign posted vs applications received' })
+  campaignPostedVsApplications: CampaignPostedVsApplicationsDto;
+
+  @ApiProperty({
+    description: 'Campaign category distribution',
+    type: [CampaignCategoryDto],
+  })
+  campaignCategoryDistribution: CampaignCategoryDto[];
 }

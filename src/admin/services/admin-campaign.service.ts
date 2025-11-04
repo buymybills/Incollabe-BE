@@ -349,4 +349,218 @@ export class AdminCampaignService {
         return applications;
     }
   }
+
+  /**
+   * Get campaigns with various filters similar to influencers/brands
+   */
+  async getCampaigns(filters: any): Promise<any> {
+    const {
+      campaignFilter,
+      searchQuery,
+      brandSearch,
+      locationSearch,
+      nicheSearch,
+      campaignType,
+      sortBy = 'createdAt',
+      page = 1,
+      limit = 20,
+    } = filters;
+
+    // Build base where conditions
+    const whereConditions: any = {};
+
+    // Apply campaign filter
+    switch (campaignFilter) {
+      case 'activeCampaigns':
+        whereConditions.status = CampaignStatus.ACTIVE;
+        break;
+      case 'draftCampaigns':
+        whereConditions.status = CampaignStatus.DRAFT;
+        break;
+      case 'completedCampaigns':
+        whereConditions.status = CampaignStatus.COMPLETED;
+        break;
+      case 'pausedCampaigns':
+        whereConditions.status = CampaignStatus.PAUSED;
+        break;
+      case 'cancelledCampaigns':
+        whereConditions.status = CampaignStatus.CANCELLED;
+        break;
+      case 'allCampaigns':
+      default:
+        // No status filter for all campaigns
+        break;
+    }
+
+    // Apply campaign name search
+    if (searchQuery && searchQuery.trim()) {
+      whereConditions.name = { [Op.iLike]: `%${searchQuery.trim()}%` };
+    }
+
+    // Apply campaign type filter
+    if (campaignType) {
+      whereConditions.type = campaignType;
+    }
+
+    // Note: Budget filters removed as Campaign model doesn't have budget field
+    // minBudget and maxBudget parameters kept for future use
+
+    // Build include for brand search
+    const brandInclude: any = {
+      association: 'brand',
+      attributes: ['id', 'brandName', 'username'],
+    };
+    if (brandSearch && brandSearch.trim()) {
+      brandInclude.where = {
+        [Op.or]: [
+          { brandName: { [Op.iLike]: `%${brandSearch.trim()}%` } },
+          { username: { [Op.iLike]: `%${brandSearch.trim()}%` } },
+        ],
+      };
+      brandInclude.required = true;
+    }
+
+    // Build include for cities (via CampaignCity join table)
+    const cityInclude: any = {
+      model: CampaignCity,
+      as: 'cities',
+      required: false,
+      include: [
+        {
+          model: City,
+          as: 'city',
+          attributes: ['id', 'name'],
+        },
+      ],
+    };
+    if (locationSearch && locationSearch.trim()) {
+      cityInclude.include[0].where = {
+        name: { [Op.iLike]: `%${locationSearch.trim()}%` },
+      };
+      cityInclude.required = true;
+    }
+
+    // Determine sort order
+    let order: any = [['createdAt', 'DESC']];
+    switch (sortBy) {
+      case 'createdAt':
+        order = [['createdAt', 'DESC']];
+        break;
+      case 'title':
+        order = [['name', 'ASC']];
+        break;
+      case 'applications':
+        // Will sort in application code after counting applications
+        order = [['createdAt', 'DESC']];
+        break;
+      // Note: budget, startDate, endDate sorts removed as Campaign model doesn't have these fields
+      default:
+        order = [['createdAt', 'DESC']];
+        break;
+    }
+
+    // Fetch campaigns with pagination
+    const { rows: campaigns, count: total } =
+      await this.campaignModel.findAndCountAll({
+        where: whereConditions,
+        include: [brandInclude, cityInclude],
+        order,
+        limit,
+        offset: (page - 1) * limit,
+        distinct: true,
+      });
+
+    // Filter campaigns by niche if nicheSearch is provided
+    let filteredCampaigns = campaigns;
+    if (nicheSearch && nicheSearch.trim()) {
+      // Fetch matching niche IDs
+      const matchingNiches = await this.nicheModel.findAll({
+        where: {
+          name: { [Op.iLike]: `%${nicheSearch.trim()}%` },
+        },
+        attributes: ['id'],
+      });
+      const matchingNicheIds = matchingNiches.map((n) => n.id);
+
+      // Filter campaigns that have at least one matching niche
+      filteredCampaigns = campaigns.filter((campaign) => {
+        if (!campaign.nicheIds || campaign.nicheIds.length === 0) return false;
+        return campaign.nicheIds.some((id) => matchingNicheIds.includes(id));
+      });
+    }
+
+    // Enrich campaigns with application counts and other metrics
+    const enrichedCampaigns = await Promise.all(
+      filteredCampaigns.map(async (campaign) => {
+        const applicationsCount = await this.campaignApplicationModel.count({
+          where: { campaignId: campaign.id },
+        });
+
+        const selectedCount = await this.campaignApplicationModel.count({
+          where: {
+            campaignId: campaign.id,
+            status: ApplicationStatus.SELECTED,
+          },
+        });
+
+        // Fetch niche names based on nicheIds
+        let nicheNames: string[] = [];
+        if (campaign.nicheIds && campaign.nicheIds.length > 0) {
+          const niches = await this.nicheModel.findAll({
+            where: {
+              id: { [Op.in]: campaign.nicheIds },
+            },
+            attributes: ['name'],
+          });
+          nicheNames = niches.map((n) => n.name);
+        }
+
+        // Extract city names from the cities association
+        const cityNames =
+          campaign.cities?.map((cc) => cc.city?.name).filter(Boolean) || [];
+
+        return {
+          id: campaign.id,
+          name: campaign.name,
+          description: campaign.description,
+          type: campaign.type,
+          status: campaign.status,
+          category: campaign.category,
+          isInviteOnly: campaign.isInviteOnly,
+          isPanIndia: campaign.isPanIndia,
+          createdAt: campaign.createdAt,
+          brand: campaign.brand
+            ? {
+                id: campaign.brand.id,
+                brandName: campaign.brand.brandName,
+                username: campaign.brand.username,
+              }
+            : null,
+          niches: nicheNames,
+          cities: cityNames,
+          applicationsCount,
+          selectedCount,
+        };
+      }),
+    );
+
+    // Sort by applications if requested
+    if (sortBy === 'applications') {
+      enrichedCampaigns.sort(
+        (a, b) => b.applicationsCount - a.applicationsCount,
+      );
+    }
+
+    // Update total count if niche filtering was applied
+    const finalTotal = nicheSearch ? filteredCampaigns.length : total;
+    const totalPages = Math.ceil(finalTotal / limit);
+
+    return {
+      campaigns: enrichedCampaigns,
+      total: finalTotal,
+      page,
+      limit,
+      totalPages,
+    };
+  }
 }

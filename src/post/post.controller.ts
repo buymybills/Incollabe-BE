@@ -90,13 +90,15 @@ export class PostController {
     // Validate file sizes (50MB limit per file)
     const maxFileSize = 50 * 1024 * 1024; // 50MB in bytes
     if (files && files.length > 0) {
-      const oversizedFiles = files.filter(file => file.size > maxFileSize);
+      const oversizedFiles = files.filter((file) => file.size > maxFileSize);
       if (oversizedFiles.length > 0) {
-        const filesInfo = oversizedFiles.map(f => 
-          `${f.originalname} (${(f.size / 1024 / 1024).toFixed(2)}MB)`
-        ).join(', ');
+        const filesInfo = oversizedFiles
+          .map(
+            (f) => `${f.originalname} (${(f.size / 1024 / 1024).toFixed(2)}MB)`,
+          )
+          .join(', ');
         throw new BadRequestException(
-          `The following files exceed the 50MB size limit: ${filesInfo}. Please reduce file size and try again.`
+          `The following files exceed the 50MB size limit: ${filesInfo}. Please reduce file size and try again.`,
         );
       }
     }
@@ -181,13 +183,15 @@ export class PostController {
     // Validate file sizes (50MB limit per file)
     const maxFileSize = 50 * 1024 * 1024; // 50MB in bytes
     if (files && files.length > 0) {
-      const oversizedFiles = files.filter(file => file.size > maxFileSize);
+      const oversizedFiles = files.filter((file) => file.size > maxFileSize);
       if (oversizedFiles.length > 0) {
-        const filesInfo = oversizedFiles.map(f => 
-          `${f.originalname} (${(f.size / 1024 / 1024).toFixed(2)}MB)`
-        ).join(', ');
+        const filesInfo = oversizedFiles
+          .map(
+            (f) => `${f.originalname} (${(f.size / 1024 / 1024).toFixed(2)}MB)`,
+          )
+          .join(', ');
         throw new BadRequestException(
-          `The following files exceed the 50MB size limit: ${filesInfo}. Please reduce file size and try again.`
+          `The following files exceed the 50MB size limit: ${filesInfo}. Please reduce file size and try again.`,
         );
       }
     }
