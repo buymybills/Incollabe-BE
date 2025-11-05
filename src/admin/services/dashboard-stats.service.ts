@@ -419,7 +419,7 @@ export class DashboardStatsService {
       }),
     ]);
 
-    // City Presence
+    // City Presence - count distinct cities from all active influencers
     const distinctCitiesNow = await this.influencerModel.findAll({
       attributes: [
         [
@@ -437,6 +437,8 @@ export class DashboardStatsService {
       raw: true,
     });
 
+    // Count distinct cities from influencers that existed at the end of last month
+    const lastMonthEndDate = new Date(now.getFullYear(), now.getMonth(), 0);
     const distinctCitiesLastMonth = await this.influencerModel.findAll({
       attributes: [
         [
@@ -453,7 +455,7 @@ export class DashboardStatsService {
       where: {
         cityId: { [Op.ne]: null },
         isActive: true,
-        createdAt: { [Op.between]: [lastMonthStart, lastMonthEnd] },
+        createdAt: { [Op.lte]: lastMonthEndDate },
       },
       raw: true,
     });
@@ -2172,5 +2174,48 @@ export class DashboardStatsService {
       categoryName,
       percentage: parseFloat(((count / totalPosts) * 100).toFixed(1)),
     }));
+  }
+
+  /**
+   * Get time frame options for dashboard dropdowns
+   */
+  getTimeFrameOptions() {
+    const timeFrameOptions = [
+      {
+        value: DashboardTimeFrame.LAST_24_HOURS,
+        label: 'Last 24 hours',
+        description: 'Shows data from the last 24 hours',
+      },
+      {
+        value: DashboardTimeFrame.LAST_3_DAYS,
+        label: 'Last 3 days',
+        description: 'Shows data from the last 3 days',
+      },
+      {
+        value: DashboardTimeFrame.LAST_7_DAYS,
+        label: 'Last 7 days',
+        description: 'Shows data from the last 7 days',
+      },
+      {
+        value: DashboardTimeFrame.LAST_15_DAYS,
+        label: 'Last 15 days',
+        description: 'Shows data from the last 15 days',
+      },
+      {
+        value: DashboardTimeFrame.LAST_30_DAYS,
+        label: 'Last 30 days',
+        description: 'Shows data from the last 30 days',
+      },
+      {
+        value: DashboardTimeFrame.CUSTOM,
+        label: 'Custom Range',
+        description: 'Select a custom date range',
+      },
+    ];
+
+    return {
+      timeFrameOptions,
+      defaultTimeFrame: DashboardTimeFrame.LAST_7_DAYS,
+    };
   }
 }

@@ -637,3 +637,38 @@ export class PostDashboardResponseDto {
   })
   contentCategoryDistribution: PostCategoryDto[];
 }
+
+// Time frame dropdown options DTOs
+export class TimeFrameOptionDto {
+  @ApiProperty({
+    description: 'Unique identifier for the time frame',
+    example: 'last_24_hours',
+  })
+  value: string;
+
+  @ApiProperty({
+    description: 'Display label for the dropdown',
+    example: 'Last 24 hours',
+  })
+  label: string;
+
+  @ApiProperty({
+    description: 'Descriptive text for the time frame',
+    example: 'Shows data from the last 24 hours',
+  })
+  description: string;
+}
+
+export class TimeFrameOptionsResponseDto {
+  @ApiProperty({
+    description: 'Available time frame options for chart dropdowns',
+    type: [TimeFrameOptionDto],
+  })
+  timeFrameOptions: TimeFrameOptionDto[];
+
+  @ApiProperty({
+    description: 'Default selected time frame',
+    example: 'last_7_days',
+  })
+  defaultTimeFrame: string;
+}

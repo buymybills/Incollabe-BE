@@ -82,6 +82,7 @@ import {
   CampaignDashboardResponseDto,
   PostDashboardResponseDto,
   DashboardTimeFrame,
+  TimeFrameOptionsResponseDto,
 } from './dto/admin-dashboard.dto';
 import { ForgotPasswordDto } from '../auth/dto/forgot-password.dto';
 import { ResetPasswordDto } from '../auth/dto/reset-password.dto';
@@ -1514,6 +1515,26 @@ export class AdminController {
         limit,
       },
     );
+  }
+
+  @Get('dashboard/timeframe-options')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get time frame options for dashboard dropdowns',
+    description:
+      'Returns available time frame options (Last 24 hours, Last 7 days, etc.) for chart filters with their values, labels, and descriptions.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Time frame options retrieved successfully',
+    type: TimeFrameOptionsResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getTimeFrameOptions() {
+    return await this.dashboardStatsService.getTimeFrameOptions();
   }
 
   @Get('dashboard/main')
