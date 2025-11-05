@@ -33,6 +33,8 @@ import {
 } from './models/profile-review.model';
 import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../shared/email.service';
+import { AuditLogService } from './services/audit-log.service';
+import { AuditActionType } from './models/audit-log.model';
 import { ForgotPasswordDto } from '../auth/dto/forgot-password.dto';
 import { ResetPasswordDto } from '../auth/dto/reset-password.dto';
 import {
@@ -228,6 +230,7 @@ export class AdminAuthService {
     private readonly configService: ConfigService,
     private readonly redisService: RedisService,
     private readonly emailService: EmailService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   // Redis key helpers
@@ -763,6 +766,21 @@ export class AdminAuthService {
     // Update the top influencer status
     await influencer.update({ isTopInfluencer });
 
+    // Log audit trail
+    const admin = await this.adminModel.findByPk(adminId);
+    if (admin) {
+      await this.auditLogService.logInfluencerAction(
+        {
+          id: admin.id,
+          name: admin.name,
+          email: admin.email,
+        },
+        AuditActionType.INFLUENCER_TOP_STATUS_CHANGED,
+        influencerId,
+        `${isTopInfluencer ? 'Marked' : 'Removed'} influencer "${influencer.name}" ${isTopInfluencer ? 'as' : 'from'} top influencer`,
+      );
+    }
+
     return {
       message: `Influencer ${isTopInfluencer ? 'marked as' : 'removed from'} top influencer`,
       influencerId,
@@ -785,6 +803,21 @@ export class AdminAuthService {
 
     // Update the top brand status
     await brand.update({ isTopBrand });
+
+    // Log audit trail
+    const admin = await this.adminModel.findByPk(adminId);
+    if (admin) {
+      await this.auditLogService.logBrandAction(
+        {
+          id: admin.id,
+          name: admin.name,
+          email: admin.email,
+        },
+        AuditActionType.BRAND_TOP_STATUS_CHANGED,
+        brandId,
+        `${isTopBrand ? 'Marked' : 'Removed'} brand "${brand.brandName}" ${isTopBrand ? 'as' : 'from'} top brand`,
+      );
+    }
 
     return {
       message: `Brand ${isTopBrand ? 'marked as' : 'removed from'} top brand`,

@@ -28,8 +28,11 @@ import {
 import { AdminAuthService } from './admin-auth.service';
 import { ProfileReviewService } from './profile-review.service';
 import { AdminCampaignService } from './services/admin-campaign.service';
+import { AdminPostService } from './services/admin-post.service';
 import { InfluencerScoringService } from './services/influencer-scoring.service';
 import { DashboardStatsService } from './services/dashboard-stats.service';
+import { BrandService } from '../brand/brand.service';
+import { InfluencerService } from '../influencer/influencer.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import type { RequestWithAdmin } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
@@ -66,14 +69,17 @@ import { GetTopInfluencersDto } from './dto/get-top-influencers.dto';
 import { GetInfluencersDto } from './dto/get-influencers.dto';
 import { GetBrandsDto } from './dto/get-brands.dto';
 import { GetCampaignsDto } from './dto/get-campaigns.dto';
+import { GetPostsDto } from './dto/get-posts.dto';
 import { TopInfluencersResponseDto } from './dto/top-influencer-response.dto';
 import {
   DashboardRequestDto,
   CampaignDashboardRequestDto,
+  PostDashboardRequestDto,
   MainDashboardResponseDto,
   InfluencerDashboardResponseDto,
   BrandDashboardResponseDto,
   CampaignDashboardResponseDto,
+  PostDashboardResponseDto,
   DashboardTimeFrame,
 } from './dto/admin-dashboard.dto';
 import { ForgotPasswordDto } from '../auth/dto/forgot-password.dto';
@@ -99,6 +105,11 @@ import {
   DeleteAccountResponseDto,
 } from './dto/admin-settings.dto';
 import { LogoutDto, LogoutResponseDto } from './dto/logout.dto';
+import {
+  GetAuditLogsDto,
+  AuditLogListResponseDto,
+} from './dto/audit-log.dto';
+import { AuditLogService } from './services/audit-log.service';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -107,8 +118,12 @@ export class AdminController {
     private readonly adminAuthService: AdminAuthService,
     private readonly profileReviewService: ProfileReviewService,
     private readonly adminCampaignService: AdminCampaignService,
+    private readonly adminPostService: AdminPostService,
     private readonly influencerScoringService: InfluencerScoringService,
     private readonly dashboardStatsService: DashboardStatsService,
+    private readonly auditLogService: AuditLogService,
+    private readonly brandService: BrandService,
+    private readonly influencerService: InfluencerService,
   ) {}
 
   @Post('login')
@@ -999,17 +1014,56 @@ export class AdminController {
   @ApiOperation({
     summary: 'Get campaigns with filters, search, and sorting',
     description:
-      'Get campaigns based on campaign filters: allCampaigns (all campaigns), activeCampaigns, draftCampaigns, completedCampaigns, pausedCampaigns, or cancelledCampaigns. Supports search by campaign name/title, brand name, location (city), and niche, and sorting by createdAt, applications, or title.',
+      'Get campaigns with multiple filters: campaignFilter (allCampaigns, openCampaigns, inviteCampaigns) controls invite type tabs, statusFilter (active, draft, completed, paused, cancelled) controls campaign status dropdown. Supports search by campaign name/title, brand name, location (city), and niche. Campaign type filter (paid/barter/hybrid) available via campaignType parameter. Sorting by createdAt, applications, or title supported.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Campaigns retrieved successfully based on selected filter',
+    description: 'Campaigns retrieved successfully with filters applied',
   })
   @ApiUnauthorizedResponse({
     description: 'Authentication required',
   })
   async getCampaigns(@Query() requestDto: GetCampaignsDto) {
     return await this.adminCampaignService.getCampaigns(requestDto);
+  }
+
+  @Get('posts')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get posts with filters, search, and sorting',
+    description:
+      'Get posts with multiple filters: postFilter (allPosts, influencerPosts, brandPosts) controls user type tabs. Supports search by post content, user name (influencer or brand), and location (city). Sorting by createdAt, likes, or engagement supported.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Posts retrieved successfully with filters applied',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getPosts(@Query() requestDto: GetPostsDto) {
+    return await this.adminPostService.getPosts(requestDto);
+  }
+
+  @Get('audit-logs')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get audit logs for admin actions',
+    description:
+      'Retrieve audit logs with filters: section (Auth, Campaigns, Notification Centre, etc.), action type, admin/employee ID, target type, date range, and search. Logs include employee name, email, audit section, audit type, details, IP address, user agent, and timestamp.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Audit logs retrieved successfully',
+    type: AuditLogListResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getAuditLogs(@Query() filters: GetAuditLogsDto) {
+    return await this.auditLogService.getAuditLogs(filters);
   }
 
   @Get('dashboard/top-influencers')
@@ -1175,6 +1229,56 @@ export class AdminController {
   })
   async getBrandDetails(@Param('brandId', ParseIntPipe) brandId: number) {
     return await this.adminAuthService.getBrandDetails(brandId);
+  }
+
+  @Get('brand/profile/:id')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get brand public profile (as seen by users)',
+    description:
+      'Get the complete public profile of a brand including bio, social links, platform metrics (followers, posts, campaigns), and recent campaigns list',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID of the brand',
+    type: 'number',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Brand public profile retrieved successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Brand not found',
+  })
+  async getBrandPublicProfile(@Param('id', ParseIntPipe) id: number) {
+    return await this.brandService.getBrandProfile(id);
+  }
+
+  @Get('influencer/profile/:id')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get influencer public profile (as seen by users)',
+    description:
+      'Get the complete public profile of an influencer including bio, social links, platform metrics (followers, posts, completed campaigns), niches, and experience',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID of the influencer',
+    type: 'number',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Influencer public profile retrieved successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Influencer not found',
+  })
+  async getInfluencerPublicProfile(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return await this.influencerService.getInfluencerProfile(id);
   }
 
   @Put('brands/:brandId/status')
@@ -1453,6 +1557,26 @@ export class AdminController {
       requestDto.metricsStartDate,
       requestDto.metricsEndDate,
     );
+  }
+
+  @Get('dashboard/posts')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get post/content dashboard statistics',
+    description:
+      'Get detailed content/post analytics with separate date ranges: chartTimeFrame (24h/3d/7d/15d/30d) for time series chart (Content Posted vs Engagement), and metricsStartDate/metricsEndDate (monthly range like Sep 2025-Oct 2025) for aggregate metrics (cards, city presence, categories).',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Post dashboard statistics retrieved successfully',
+    type: PostDashboardResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getPostDashboardStats(@Query() requestDto: PostDashboardRequestDto) {
+    return await this.dashboardStatsService.getPostDashboardStats(requestDto);
   }
 
   @Get('dashboard/date-range')

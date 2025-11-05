@@ -19,6 +19,7 @@ import { Post } from '../post/models/post.model';
 import { Follow } from '../post/models/follow.model';
 import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../shared/email.service';
+import { AuditLogService } from './services/audit-log.service';
 import { UnauthorizedException, BadRequestException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 
@@ -201,6 +202,15 @@ describe('AdminAuthService', () => {
           useValue: {
             sendAdminLoginOtp: jest.fn(),
             sendAdminPasswordResetEmail: jest.fn(),
+          },
+        },
+        {
+          provide: AuditLogService,
+          useValue: {
+            createLog: jest.fn(),
+            logAuth: jest.fn(),
+            logBrandAction: jest.fn(),
+            logInfluencerAction: jest.fn(),
           },
         },
       ],

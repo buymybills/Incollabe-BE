@@ -3,8 +3,12 @@ import { AdminController } from './admin.controller';
 import { AdminAuthService } from './admin-auth.service';
 import { ProfileReviewService } from './profile-review.service';
 import { AdminCampaignService } from './services/admin-campaign.service';
+import { AdminPostService } from './services/admin-post.service';
 import { InfluencerScoringService } from './services/influencer-scoring.service';
 import { DashboardStatsService } from './services/dashboard-stats.service';
+import { AuditLogService } from './services/audit-log.service';
+import { BrandService } from '../brand/brand.service';
+import { InfluencerService } from '../influencer/influencer.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { AdminLoginDto } from './dto/admin-login.dto';
@@ -42,6 +46,10 @@ const mockAdminCampaignService = {
   getCampaigns: jest.fn(),
 };
 
+const mockAdminPostService = {
+  getPosts: jest.fn(),
+};
+
 const mockInfluencerScoringService = {
   getTopInfluencers: jest.fn(),
   getInfluencers: jest.fn(),
@@ -51,6 +59,28 @@ const mockDashboardStatsService = {
   getMainDashboardStats: jest.fn(),
   getInfluencerDashboardStats: jest.fn(),
   getCampaignDashboardStats: jest.fn(),
+};
+
+const mockAuditLogService = {
+  createLog: jest.fn(),
+  getAuditLogs: jest.fn(),
+  logAuth: jest.fn(),
+  logCampaignAction: jest.fn(),
+  logNotificationAction: jest.fn(),
+  logBrandAction: jest.fn(),
+  logInfluencerAction: jest.fn(),
+  logProfileReviewAction: jest.fn(),
+  logAdminManagement: jest.fn(),
+  logPostAction: jest.fn(),
+  logSettingsChange: jest.fn(),
+};
+
+const mockBrandService = {
+  getBrandProfile: jest.fn(),
+};
+
+const mockInfluencerService = {
+  getInfluencerProfile: jest.fn(),
 };
 
 const mockAdminAuthGuard = {
@@ -83,12 +113,28 @@ describe('AdminController', () => {
           useValue: mockAdminCampaignService,
         },
         {
+          provide: AdminPostService,
+          useValue: mockAdminPostService,
+        },
+        {
           provide: InfluencerScoringService,
           useValue: mockInfluencerScoringService,
         },
         {
           provide: DashboardStatsService,
           useValue: mockDashboardStatsService,
+        },
+        {
+          provide: AuditLogService,
+          useValue: mockAuditLogService,
+        },
+        {
+          provide: BrandService,
+          useValue: mockBrandService,
+        },
+        {
+          provide: InfluencerService,
+          useValue: mockInfluencerService,
         },
       ],
     })
@@ -566,7 +612,7 @@ describe('AdminController', () => {
     describe('getCampaigns', () => {
       it('should return campaigns with filters', async () => {
         const requestDto = {
-          campaignFilter: CampaignFilter.ACTIVE_CAMPAIGNS,
+          campaignFilter: CampaignFilter.ALL_CAMPAIGNS,
           page: 1,
           limit: 20,
         };
@@ -766,3 +812,4 @@ describe('AdminController', () => {
     });
   });
 });
+ 

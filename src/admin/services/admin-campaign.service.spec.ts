@@ -180,9 +180,10 @@ describe('AdminCampaignService', () => {
       expect(result.page).toBe(1);
     });
 
-    it('should filter campaigns by status when activeCampaigns filter is applied', async () => {
+    it('should filter campaigns by status when statusFilter is provided', async () => {
       const filters = {
-        campaignFilter: 'activeCampaigns',
+        campaignFilter: 'allCampaigns',
+        statusFilter: CampaignStatus.ACTIVE,
         page: 1,
         limit: 20,
         sortBy: 'createdAt',
@@ -286,38 +287,6 @@ describe('AdminCampaignService', () => {
 
       expect(brandInclude.where).toBeDefined();
       expect(brandInclude.required).toBe(true);
-    });
-
-    it('should filter campaigns by niche search', async () => {
-      const filters = {
-        campaignFilter: 'allCampaigns',
-        nicheSearch: 'Fashion',
-        page: 1,
-        limit: 20,
-      };
-
-      mockCampaignModel.findAndCountAll.mockResolvedValue({
-        rows: [mockCampaign],
-        count: 1,
-      });
-
-      mockCampaignApplicationModel.count.mockResolvedValue(0);
-      mockNicheModel.findAll
-        .mockResolvedValueOnce([{ id: 1, name: 'Fashion' }]) // For filtering
-        .mockResolvedValueOnce([{ id: 1, name: 'Fashion' }]); // For enrichment
-
-      const result = await service.getCampaigns(filters);
-
-      expect(mockNicheModel.findAll).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            name: expect.objectContaining({
-              [Op.iLike]: '%Fashion%',
-            }),
-          }),
-        }),
-      );
-      expect(result.campaigns).toHaveLength(1);
     });
 
     it('should filter campaigns by location search', async () => {
@@ -501,50 +470,22 @@ describe('AdminCampaignService', () => {
       expect(result.campaigns[0].cities).toEqual([]);
     });
 
-    it('should filter out campaigns without matching niches when nicheSearch is provided', async () => {
-      const campaign1 = { ...mockCampaign, id: 1, nicheIds: [1, 2] };
-      const campaign2 = { ...mockCampaign, id: 2, nicheIds: [3, 4] };
-
-      const filters = {
-        campaignFilter: 'allCampaigns',
-        nicheSearch: 'Fashion',
-        page: 1,
-        limit: 20,
-      };
-
-      mockCampaignModel.findAndCountAll.mockResolvedValue({
-        rows: [campaign1, campaign2],
-        count: 2,
-      });
-
-      // First call: find matching niches for filtering
-      // Second and third calls: fetch niche names for enrichment
-      mockNicheModel.findAll
-        .mockResolvedValueOnce([{ id: 1, name: 'Fashion' }])
-        .mockResolvedValueOnce([
-          { id: 1, name: 'Fashion' },
-          { id: 2, name: 'Lifestyle' },
-        ]);
-
-      mockCampaignApplicationModel.count.mockResolvedValue(0);
-
-      const result = await service.getCampaigns(filters);
-
-      // Should only return campaign1 as it has niche ID 1 which matches "Fashion"
-      expect(result.campaigns).toHaveLength(1);
-      expect(result.campaigns[0].id).toBe(1);
-    });
-
-    it('should apply all status filters correctly', async () => {
+    it('should apply all status filters correctly via statusFilter', async () => {
       const testCases = [
-        { filter: 'draftCampaigns', expectedStatus: CampaignStatus.DRAFT },
         {
-          filter: 'completedCampaigns',
+          statusFilter: CampaignStatus.DRAFT,
+          expectedStatus: CampaignStatus.DRAFT,
+        },
+        {
+          statusFilter: CampaignStatus.COMPLETED,
           expectedStatus: CampaignStatus.COMPLETED,
         },
-        { filter: 'pausedCampaigns', expectedStatus: CampaignStatus.PAUSED },
         {
-          filter: 'cancelledCampaigns',
+          statusFilter: CampaignStatus.PAUSED,
+          expectedStatus: CampaignStatus.PAUSED,
+        },
+        {
+          statusFilter: CampaignStatus.CANCELLED,
           expectedStatus: CampaignStatus.CANCELLED,
         },
       ];
@@ -558,7 +499,8 @@ describe('AdminCampaignService', () => {
         });
 
         await service.getCampaigns({
-          campaignFilter: testCase.filter,
+          campaignFilter: 'allCampaigns',
+          statusFilter: testCase.statusFilter,
           page: 1,
           limit: 20,
         });
@@ -571,6 +513,58 @@ describe('AdminCampaignService', () => {
           }),
         );
       }
+    });
+
+    it('should filter campaigns by invite type (openCampaigns)', async () => {
+      const filters = {
+        campaignFilter: 'openCampaigns',
+        page: 1,
+        limit: 20,
+      };
+
+      mockCampaignModel.findAndCountAll.mockResolvedValue({
+        rows: [mockCampaign],
+        count: 1,
+      });
+
+      mockCampaignApplicationModel.count.mockResolvedValue(3);
+      mockNicheModel.findAll.mockResolvedValue([{ id: 1, name: 'Fashion' }]);
+
+      await service.getCampaigns(filters);
+
+      expect(mockCampaignModel.findAndCountAll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            isInviteOnly: false,
+          }),
+        }),
+      );
+    });
+
+    it('should filter campaigns by invite type (inviteCampaigns)', async () => {
+      const filters = {
+        campaignFilter: 'inviteCampaigns',
+        page: 1,
+        limit: 20,
+      };
+
+      mockCampaignModel.findAndCountAll.mockResolvedValue({
+        rows: [mockCampaign],
+        count: 1,
+      });
+
+      mockCampaignApplicationModel.count.mockResolvedValue(3);
+      mockNicheModel.findAll.mockResolvedValue([{ id: 1, name: 'Fashion' }]);
+
+      await service.getCampaigns(filters);
+
+      expect(mockCampaignModel.findAndCountAll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            isInviteOnly: true,
+          }),
+        }),
+      );
     });
   });
 });

@@ -451,3 +451,166 @@ export class CampaignDashboardResponseDto {
   })
   campaignCategoryDistribution: CampaignCategoryDto[];
 }
+
+// Post Dashboard DTOs
+export class PostDashboardRequestDto {
+  @ApiProperty({
+    description:
+      'Time frame for time series chart (Content Posted vs Engagement). Controls the chart date range.',
+    enum: DashboardTimeFrame,
+    required: false,
+    default: DashboardTimeFrame.LAST_7_DAYS,
+  })
+  @IsOptional()
+  @IsEnum(DashboardTimeFrame)
+  @Transform(({ value }) => value || DashboardTimeFrame.LAST_7_DAYS)
+  chartTimeFrame?: DashboardTimeFrame = DashboardTimeFrame.LAST_7_DAYS;
+
+  @ApiProperty({
+    description:
+      'Start date for chart custom range (YYYY-MM-DD). Required when chartTimeFrame is CUSTOM.',
+    example: '2025-10-01',
+    required: false,
+  })
+  @IsOptional()
+  @IsDateString()
+  chartStartDate?: string;
+
+  @ApiProperty({
+    description:
+      'End date for chart custom range (YYYY-MM-DD). Required when chartTimeFrame is CUSTOM.',
+    example: '2025-10-31',
+    required: false,
+  })
+  @IsOptional()
+  @IsDateString()
+  chartEndDate?: string;
+
+  @ApiProperty({
+    description:
+      'Start date for metrics/aggregate data (YYYY-MM-DD). Used for post counts, city presence, category distribution.',
+    example: '2025-09-01',
+    required: false,
+  })
+  @IsOptional()
+  @IsDateString()
+  metricsStartDate?: string;
+
+  @ApiProperty({
+    description:
+      'End date for metrics/aggregate data (YYYY-MM-DD). Used for post counts, city presence, category distribution.',
+    example: '2025-10-31',
+    required: false,
+  })
+  @IsOptional()
+  @IsDateString()
+  metricsEndDate?: string;
+}
+
+export class PostMetricsDto {
+  @ApiProperty({ description: 'Total content/posts count' })
+  totalPosts: number;
+
+  @ApiProperty({ description: 'Percentage change vs last period' })
+  totalPostsChange: number;
+
+  @ApiProperty({ description: 'Daily average content/posts' })
+  dailyAvgPosts: number;
+
+  @ApiProperty({ description: 'Percentage change vs last period' })
+  dailyAvgPostsChange: number;
+
+  @ApiProperty({ description: 'Total engagement count' })
+  totalEngagement: number;
+
+  @ApiProperty({ description: 'Percentage change vs last period' })
+  totalEngagementChange: number;
+
+  @ApiProperty({ description: 'Engagement rate percentage' })
+  engagementRate: number;
+
+  @ApiProperty({ description: 'Percentage change vs last period' })
+  engagementRateChange: number;
+
+  @ApiProperty({ description: 'Total likes count' })
+  totalLikes: number;
+
+  @ApiProperty({ description: 'Average likes per post' })
+  avgLikesPerPost: number;
+
+  @ApiProperty({ description: 'Percentage change vs last period' })
+  avgLikesPerPostChange: number;
+
+  @ApiProperty({ description: 'Total shares count' })
+  totalShares: number;
+
+  @ApiProperty({ description: 'Average shares per post' })
+  avgSharesPerPost: number;
+
+  @ApiProperty({ description: 'Percentage change vs last period' })
+  avgSharesPerPostChange: number;
+}
+
+export class PostCategoryDto {
+  @ApiProperty({ description: 'Category name' })
+  categoryName: string;
+
+  @ApiProperty({ description: 'Percentage of total posts' })
+  percentage: number;
+}
+
+export class CityWithMostPostsDto {
+  @ApiProperty({ description: 'City name' })
+  cityName: string;
+
+  @ApiProperty({ description: 'Percentage of posts in this city' })
+  percentage: number;
+}
+
+export class ContentPostedVsEngagementDataPointDto {
+  @ApiProperty({ description: 'Date for this data point' })
+  date: string;
+
+  @ApiProperty({ description: 'Number of posts on this date' })
+  postsCount: number;
+
+  @ApiProperty({ description: 'Total engagement on this date' })
+  engagementCount: number;
+}
+
+export class ContentPostedVsEngagementDto {
+  @ApiProperty({ description: 'Total posts count from verified profiles' })
+  verifiedProfilePosts: number;
+
+  @ApiProperty({ description: 'Total posts count from unverified profiles' })
+  unverifiedProfilePosts: number;
+
+  @ApiProperty({
+    description: 'Time series data for content posted vs engagement',
+    type: [ContentPostedVsEngagementDataPointDto],
+  })
+  timeSeriesData: ContentPostedVsEngagementDataPointDto[];
+}
+
+export class PostDashboardResponseDto {
+  @ApiProperty({ description: 'Post metrics' })
+  postMetrics: PostMetricsDto;
+
+  @ApiProperty({ description: 'Total city presence for posts' })
+  totalCityPresence: number;
+
+  @ApiProperty({
+    description: 'Cities with most posts',
+    type: [CityWithMostPostsDto],
+  })
+  citiesWithMostPosts: CityWithMostPostsDto[];
+
+  @ApiProperty({ description: 'Content posted vs engagement' })
+  contentPostedVsEngagement: ContentPostedVsEngagementDto;
+
+  @ApiProperty({
+    description: 'Content category distribution',
+    type: [PostCategoryDto],
+  })
+  contentCategoryDistribution: PostCategoryDto[];
+}

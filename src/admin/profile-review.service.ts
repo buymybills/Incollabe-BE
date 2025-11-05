@@ -18,6 +18,8 @@ import { Country } from '../shared/models/country.model';
 import { Campaign } from '../campaign/models/campaign.model';
 import { EmailService } from '../shared/email.service';
 import { WhatsAppService } from '../shared/whatsapp.service';
+import { AuditLogService } from './services/audit-log.service';
+import { AuditActionType } from './models/audit-log.model';
 import { ProfileReviewDto } from './dto/profile-review.dto';
 import { Op } from 'sequelize';
 
@@ -42,6 +44,7 @@ export class ProfileReviewService {
     private readonly adminModel: typeof Admin,
     private readonly emailService: EmailService,
     private readonly whatsAppService: WhatsAppService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   async createProfileReview(createData: any) {
@@ -312,6 +315,26 @@ export class ProfileReviewService {
       }
     }
 
+    // Log audit trail
+    const admin = await this.adminModel.findByPk(adminId);
+    if (admin) {
+      const profileName = review.profileType === ProfileType.BRAND 
+        ? (await this.brandModel.findByPk(review.profileId))?.brandName || 'Brand'
+        : (await this.influencerModel.findByPk(review.profileId))?.name || 'Influencer';
+      
+      await this.auditLogService.logProfileReviewAction(
+        {
+          id: admin.id,
+          name: admin.name,
+          email: admin.email,
+        },
+        AuditActionType.PROFILE_APPROVED,
+        review.profileId,
+        review.profileType,
+        `Approved ${review.profileType} profile: "${profileName}"`,
+      );
+    }
+
     return { message: 'Profile approved successfully', review };
   }
 
@@ -369,6 +392,26 @@ export class ProfileReviewService {
           );
         }
       }
+    }
+
+    // Log audit trail
+    const admin = await this.adminModel.findByPk(adminId);
+    if (admin) {
+      const profileName = review.profileType === ProfileType.BRAND 
+        ? (await this.brandModel.findByPk(review.profileId))?.brandName || 'Brand'
+        : (await this.influencerModel.findByPk(review.profileId))?.name || 'Influencer';
+      
+      await this.auditLogService.logProfileReviewAction(
+        {
+          id: admin.id,
+          name: admin.name,
+          email: admin.email,
+        },
+        AuditActionType.PROFILE_REJECTED,
+        review.profileId,
+        review.profileType,
+        `Rejected ${review.profileType} profile: "${profileName}" - Reason: ${reason}`,
+      );
     }
 
     return { message: 'Profile rejected successfully', review };

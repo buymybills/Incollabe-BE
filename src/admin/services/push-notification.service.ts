@@ -17,6 +17,8 @@ import { Influencer } from '../../auth/model/influencer.model';
 import { Brand } from '../../brand/model/brand.model';
 import { InfluencerNiche } from '../../auth/model/influencer-niche.model';
 import { NotificationService } from '../../shared/notification.service';
+import { AuditLogService } from './audit-log.service';
+import { AuditActionType } from '../models/audit-log.model';
 import {
   CreateNotificationDto,
   UpdateNotificationDto,
@@ -30,6 +32,8 @@ export class PushNotificationService {
   constructor(
     @InjectModel(PushNotification)
     private readonly pushNotificationModel: typeof PushNotification,
+    @InjectModel(Admin)
+    private readonly adminModel: typeof Admin,
     @InjectModel(Influencer)
     private readonly influencerModel: typeof Influencer,
     @InjectModel(Brand)
@@ -37,6 +41,7 @@ export class PushNotificationService {
     @InjectModel(InfluencerNiche)
     private readonly influencerNicheModel: typeof InfluencerNiche,
     private readonly notificationService: NotificationService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   async createNotification(
@@ -100,6 +105,21 @@ export class PushNotificationService {
 
     if (!createdNotification) {
       throw new NotFoundException('Failed to retrieve created notification');
+    }
+
+    // Log audit trail
+    const admin = await this.adminModel.findByPk(adminId);
+    if (admin) {
+      await this.auditLogService.logNotificationAction(
+        {
+          id: admin.id,
+          name: admin.name,
+          email: admin.email,
+        },
+        AuditActionType.NOTIFICATION_CREATED,
+        notification.id,
+        `Created notification: "${createDto.title}" (${createDto.receiverType})`,
+      );
     }
 
     return this.formatNotificationResponse(createdNotification);

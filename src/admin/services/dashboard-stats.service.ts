@@ -11,11 +11,13 @@ import { City } from '../../shared/models/city.model';
 import { Niche } from '../../auth/model/niche.model';
 import { ProfileReview } from '../models/profile-review.model';
 import { ProfileType, ReviewStatus } from '../models/profile-review.model';
+import { Post } from '../../post/models/post.model';
 import {
   MainDashboardResponseDto,
   InfluencerDashboardResponseDto,
   BrandDashboardResponseDto,
   CampaignDashboardResponseDto,
+  PostDashboardResponseDto,
   DashboardTimeFrame,
 } from '../dto/admin-dashboard.dto';
 
@@ -40,6 +42,8 @@ export class DashboardStatsService {
     private readonly nicheModel: typeof Niche,
     @InjectModel(ProfileReview)
     private readonly profileReviewModel: typeof ProfileReview,
+    @InjectModel(Post)
+    private readonly postModel: typeof Post,
   ) {}
 
   async getMainDashboardStats(): Promise<MainDashboardResponseDto> {
@@ -1059,6 +1063,8 @@ export class DashboardStatsService {
     brandMaxDate: string;
     campaignMinDate: string;
     campaignMaxDate: string;
+    postMinDate: string;
+    postMaxDate: string;
   }> {
     // Get min/max dates from influencers
     const influencerDates = await this.influencerModel.findAll({
@@ -1126,12 +1132,38 @@ export class DashboardStatsService {
       raw: true,
     });
 
+    // Get min/max dates from posts
+    const postDates = await this.postModel.findAll({
+      attributes: [
+        [
+          this.postModel.sequelize!.fn(
+            'MIN',
+            this.postModel.sequelize!.col('createdAt'),
+          ),
+          'minDate',
+        ],
+        [
+          this.postModel.sequelize!.fn(
+            'MAX',
+            this.postModel.sequelize!.col('createdAt'),
+          ),
+          'maxDate',
+        ],
+      ],
+      where: {
+        isActive: true,
+      },
+      raw: true,
+    });
+
     const influencerMinDate = influencerDates[0]?.['minDate'] as Date;
     const influencerMaxDate = influencerDates[0]?.['maxDate'] as Date;
     const brandMinDate = brandDates[0]?.['minDate'] as Date;
     const brandMaxDate = brandDates[0]?.['maxDate'] as Date;
     const campaignMinDate = campaignDates[0]?.['minDate'] as Date;
     const campaignMaxDate = campaignDates[0]?.['maxDate'] as Date;
+    const postMinDate = postDates[0]?.['minDate'] as Date;
+    const postMaxDate = postDates[0]?.['maxDate'] as Date;
 
     // Get the overall min and max dates across all entities
     const minDate = new Date(
@@ -1139,6 +1171,7 @@ export class DashboardStatsService {
         influencerMinDate?.getTime() || Date.now(),
         brandMinDate?.getTime() || Date.now(),
         campaignMinDate?.getTime() || Date.now(),
+        postMinDate?.getTime() || Date.now(),
       ),
     );
     const maxDate = new Date(
@@ -1146,6 +1179,7 @@ export class DashboardStatsService {
         influencerMaxDate?.getTime() || Date.now(),
         brandMaxDate?.getTime() || Date.now(),
         campaignMaxDate?.getTime() || Date.now(),
+        postMaxDate?.getTime() || Date.now(),
       ),
     );
 
@@ -1169,6 +1203,12 @@ export class DashboardStatsService {
         : new Date().toISOString().split('T')[0],
       campaignMaxDate: campaignMaxDate
         ? campaignMaxDate.toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0],
+      postMinDate: postMinDate
+        ? postMinDate.toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0],
+      postMaxDate: postMaxDate
+        ? postMaxDate.toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0],
     };
   }
@@ -1208,7 +1248,7 @@ export class DashboardStatsService {
           chartStartDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
           break;
         case DashboardTimeFrame.LAST_7_DAYS:
-          chartStartDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); 
+          chartStartDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
           break;
         case DashboardTimeFrame.LAST_15_DAYS:
           chartStartDate = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000);
@@ -1233,7 +1273,14 @@ export class DashboardStatsService {
       // Default to current month
       const now = new Date();
       metricsStartDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      metricsEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      metricsEndDate = new Date(
+        now.getFullYear(),
+        now.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+      );
     }
 
     // Calculate previous period for comparison (same duration as metrics range)
@@ -1541,9 +1588,9 @@ export class DashboardStatsService {
     };
   }
 
-  /* 
-    * Get campaign category distribution
-  */
+  /*
+   * Get campaign category distribution
+   */
   private async getCampaignCategoryDistribution(
     startDate: Date,
     endDate: Date,
@@ -1567,13 +1614,548 @@ export class DashboardStatsService {
     });
 
     // Sort by count (descending) and return all categories
-    const sortedCategories = Object.entries(categoryCounts)
-      .sort(([, a], [, b]) => b - a);
+    const sortedCategories = Object.entries(categoryCounts).sort(
+      ([, a], [, b]) => b - a,
+    );
 
     return sortedCategories.map(([categoryName, count]) => ({
       categoryName,
       campaignCount: count,
       percentage: parseFloat(((count / totalCampaigns) * 100).toFixed(1)),
+    }));
+  }
+
+  /**
+   * Get Post Dashboard Statistics
+   */
+  async getPostDashboardStats(filters: any): Promise<PostDashboardResponseDto> {
+    const {
+      chartTimeFrame = DashboardTimeFrame.LAST_7_DAYS,
+      chartStartDate: chartStartDateStr,
+      chartEndDate: chartEndDateStr,
+      metricsStartDate: metricsStartDateStr,
+      metricsEndDate: metricsEndDateStr,
+    } = filters;
+
+    // Calculate chart date range
+    let chartStartDate: Date;
+    let chartEndDate: Date = new Date();
+
+    if (
+      chartTimeFrame === DashboardTimeFrame.CUSTOM &&
+      chartStartDateStr &&
+      chartEndDateStr
+    ) {
+      chartStartDate = new Date(chartStartDateStr);
+      chartEndDate = new Date(chartEndDateStr);
+    } else {
+      // Handle predefined time frames for chart
+      switch (chartTimeFrame) {
+        case DashboardTimeFrame.LAST_24_HOURS:
+          chartStartDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+          break;
+        case DashboardTimeFrame.LAST_3_DAYS:
+          chartStartDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+          break;
+        case DashboardTimeFrame.LAST_7_DAYS:
+          chartStartDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case DashboardTimeFrame.LAST_15_DAYS:
+          chartStartDate = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000);
+          break;
+        case DashboardTimeFrame.LAST_30_DAYS:
+          chartStartDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        default:
+          chartStartDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      }
+    }
+
+    // Calculate date ranges for metrics
+    let metricsStart: Date;
+    let metricsEnd: Date;
+
+    if (metricsStartDateStr && metricsEndDateStr) {
+      metricsStart = new Date(metricsStartDateStr);
+      metricsEnd = new Date(metricsEndDateStr);
+    } else {
+      // Default to current month for metrics
+      const now = new Date();
+      metricsStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      metricsEnd = new Date(
+        now.getFullYear(),
+        now.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+      );
+    }
+
+    // Calculate previous period for comparison
+    const periodDuration = metricsEnd.getTime() - metricsStart.getTime();
+    const prevPeriodEnd = new Date(
+      metricsStart.getTime() - 24 * 60 * 60 * 1000,
+    );
+    const prevPeriodStart = new Date(prevPeriodEnd.getTime() - periodDuration);
+
+    // Get post metrics
+    const postMetrics = await this.getPostMetrics(
+      metricsStart,
+      metricsEnd,
+      prevPeriodStart,
+      prevPeriodEnd,
+    );
+
+    // Get city presence
+    const totalCityPresence = await this.getPostCityPresence(
+      metricsStart,
+      metricsEnd,
+    );
+
+    // Get cities with most posts
+    const citiesWithMostPosts = await this.getCitiesWithMostPosts(
+      metricsStart,
+      metricsEnd,
+    );
+
+    // Get content posted vs engagement
+    const contentPostedVsEngagement = await this.getContentPostedVsEngagement(
+      chartStartDate,
+      chartEndDate,
+    );
+
+    // Get content category distribution
+    const contentCategoryDistribution = await this.getPostCategoryDistribution(
+      metricsStart,
+      metricsEnd,
+    );
+
+    return {
+      postMetrics,
+      totalCityPresence,
+      citiesWithMostPosts,
+      contentPostedVsEngagement,
+      contentCategoryDistribution,
+    };
+  }
+
+  /**
+   * Calculate post metrics with comparison to previous period
+   */
+  private async getPostMetrics(
+    currentStart: Date,
+    currentEnd: Date,
+    prevStart: Date,
+    prevEnd: Date,
+  ) {
+    // Current period metrics
+    const currentPosts = await this.postModel.count({
+      where: {
+        isActive: true,
+        createdAt: { [Op.between]: [currentStart, currentEnd] },
+      },
+    });
+
+    const currentLikes = await this.postModel.sum('likesCount', {
+      where: {
+        isActive: true,
+        createdAt: { [Op.between]: [currentStart, currentEnd] },
+      },
+    });
+
+    // Previous period metrics
+    const prevPosts = await this.postModel.count({
+      where: {
+        isActive: true,
+        createdAt: { [Op.between]: [prevStart, prevEnd] },
+      },
+    });
+
+    const prevLikes = await this.postModel.sum('likesCount', {
+      where: {
+        isActive: true,
+        createdAt: { [Op.between]: [prevStart, prevEnd] },
+      },
+    });
+
+    // Calculate changes
+    const totalPostsChange = this.calculatePercentageChange(
+      currentPosts,
+      prevPosts,
+    );
+
+    // Calculate daily averages
+    const currentDays = Math.max(
+      1,
+      Math.ceil(
+        (currentEnd.getTime() - currentStart.getTime()) / (1000 * 60 * 60 * 24),
+      ),
+    );
+    const prevDays = Math.max(
+      1,
+      Math.ceil(
+        (prevEnd.getTime() - prevStart.getTime()) / (1000 * 60 * 60 * 24),
+      ),
+    );
+
+    const dailyAvgPosts = parseFloat((currentPosts / currentDays).toFixed(2));
+    const prevDailyAvgPosts = parseFloat((prevPosts / prevDays).toFixed(2));
+    const dailyAvgPostsChange = this.calculatePercentageChange(
+      dailyAvgPosts,
+      prevDailyAvgPosts,
+    );
+
+    // For now, engagement is likes (shares not in model yet)
+    const totalEngagement = currentLikes || 0;
+    const prevEngagement = prevLikes || 0;
+    const totalEngagementChange = this.calculatePercentageChange(
+      totalEngagement,
+      prevEngagement,
+    );
+
+    // Engagement rate (likes per post)
+    const engagementRate =
+      currentPosts > 0
+        ? parseFloat(((totalEngagement / currentPosts) * 100).toFixed(2))
+        : 0;
+    const prevEngagementRate =
+      prevPosts > 0
+        ? parseFloat(((prevEngagement / prevPosts) * 100).toFixed(2))
+        : 0;
+    const engagementRateChange = this.calculatePercentageChange(
+      engagementRate,
+      prevEngagementRate,
+    );
+
+    // Average likes per post
+    const avgLikesPerPost =
+      currentPosts > 0
+        ? parseFloat((totalEngagement / currentPosts).toFixed(2))
+        : 0;
+    const prevAvgLikesPerPost =
+      prevPosts > 0 ? parseFloat((prevEngagement / prevPosts).toFixed(2)) : 0;
+    const avgLikesPerPostChange = this.calculatePercentageChange(
+      avgLikesPerPost,
+      prevAvgLikesPerPost,
+    );
+
+    // Shares (placeholder - not in model yet, using 0)
+    const totalShares = 0;
+    const avgSharesPerPost = 0;
+    const avgSharesPerPostChange = 0;
+
+    return {
+      totalPosts: currentPosts,
+      totalPostsChange,
+      dailyAvgPosts,
+      dailyAvgPostsChange,
+      totalEngagement,
+      totalEngagementChange,
+      engagementRate,
+      engagementRateChange,
+      totalLikes: totalEngagement,
+      avgLikesPerPost,
+      avgLikesPerPostChange,
+      totalShares,
+      avgSharesPerPost,
+      avgSharesPerPostChange,
+    };
+  }
+
+  /**
+   * Get total city presence for posts
+   */
+  private async getPostCityPresence(startDate: Date, endDate: Date) {
+    // Get unique cities from influencers and brands who posted
+    const posts = await this.postModel.findAll({
+      attributes: ['influencerId', 'brandId', 'userType'],
+      where: {
+        isActive: true,
+        createdAt: { [Op.between]: [startDate, endDate] },
+      },
+      include: [
+        {
+          model: Influencer,
+          as: 'influencer',
+          attributes: ['cityId'],
+          required: false,
+          include: [
+            {
+              model: City,
+              as: 'city',
+              attributes: ['id', 'name'],
+            },
+          ],
+        },
+        {
+          model: Brand,
+          as: 'brand',
+          attributes: ['headquarterCityId'],
+          required: false,
+          include: [
+            {
+              model: City,
+              as: 'headquarterCity',
+              attributes: ['id', 'name'],
+            },
+          ],
+        },
+      ],
+    });
+
+    const uniqueCityIds = new Set<number>();
+    posts.forEach((post) => {
+      const cityId =
+        post.influencer?.city?.id || post.brand?.headquarterCity?.id;
+      if (cityId) {
+        uniqueCityIds.add(cityId);
+      }
+    });
+
+    return uniqueCityIds.size;
+  }
+
+  /**
+   * Get cities with most posts
+   */
+  private async getCitiesWithMostPosts(startDate: Date, endDate: Date) {
+    const posts = await this.postModel.findAll({
+      attributes: ['influencerId', 'brandId', 'userType'],
+      where: {
+        isActive: true,
+        createdAt: { [Op.between]: [startDate, endDate] },
+      },
+      include: [
+        {
+          model: Influencer,
+          as: 'influencer',
+          attributes: ['cityId'],
+          required: false,
+          include: [
+            {
+              model: City,
+              as: 'city',
+              attributes: ['id', 'name'],
+            },
+          ],
+        },
+        {
+          model: Brand,
+          as: 'brand',
+          attributes: ['headquarterCityId'],
+          required: false,
+          include: [
+            {
+              model: City,
+              as: 'headquarterCity',
+              attributes: ['id', 'name'],
+            },
+          ],
+        },
+      ],
+    });
+
+    const cityCounts: { [key: string]: number } = {};
+    let totalPosts = 0;
+
+    posts.forEach((post) => {
+      const cityName =
+        post.influencer?.city?.name || post.brand?.headquarterCity?.name;
+      if (cityName) {
+        cityCounts[cityName] = (cityCounts[cityName] || 0) + 1;
+        totalPosts++;
+      }
+    });
+
+    // Sort and get top 4 cities
+    const sortedCities = Object.entries(cityCounts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 4);
+
+    // Calculate "Others" percentage
+    const top4Count = sortedCities.reduce((sum, [, count]) => sum + count, 0);
+    const othersCount = totalPosts - top4Count;
+
+    const result = sortedCities.map(([cityName, count]) => ({
+      cityName,
+      percentage: parseFloat(((count / totalPosts) * 100).toFixed(1)),
+    }));
+
+    // Add "Others" if there are more cities
+    if (othersCount > 0) {
+      result.push({
+        cityName: 'Others',
+        percentage: parseFloat(((othersCount / totalPosts) * 100).toFixed(1)),
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Get content posted vs engagement time series
+   */
+  private async getContentPostedVsEngagement(startDate: Date, endDate: Date) {
+    // Get verified posts count
+    const verifiedPosts = await this.postModel.count({
+      where: {
+        isActive: true,
+        createdAt: { [Op.between]: [startDate, endDate] },
+      },
+      include: [
+        {
+          model: Influencer,
+          as: 'influencer',
+          attributes: [],
+          where: { isVerified: true },
+          required: false,
+        },
+        {
+          model: Brand,
+          as: 'brand',
+          attributes: [],
+          where: { isVerified: true },
+          required: false,
+        },
+      ],
+    });
+
+    // Get all posts in range
+    const totalPosts = await this.postModel.count({
+      where: {
+        isActive: true,
+        createdAt: { [Op.between]: [startDate, endDate] },
+      },
+    });
+
+    const unverifiedPosts = totalPosts - verifiedPosts;
+
+    // Get time series data (daily posts and engagement)
+    const timeSeriesData = await this.getPostTimeSeriesData(startDate, endDate);
+
+    return {
+      verifiedProfilePosts: verifiedPosts,
+      unverifiedProfilePosts: unverifiedPosts,
+      timeSeriesData,
+    };
+  }
+
+  /**
+   * Get daily time series data for posts and engagement
+   */
+  private async getPostTimeSeriesData(startDate: Date, endDate: Date) {
+    const posts = await this.postModel.findAll({
+      attributes: ['createdAt', 'likesCount'],
+      where: {
+        isActive: true,
+        createdAt: { [Op.between]: [startDate, endDate] },
+      },
+      order: [['createdAt', 'ASC']],
+    });
+
+    // Group by date
+    const dataByDate: {
+      [key: string]: { postsCount: number; engagementCount: number };
+    } = {};
+
+    posts.forEach((post) => {
+      const date = post.createdAt.toISOString().split('T')[0];
+      if (!dataByDate[date]) {
+        dataByDate[date] = { postsCount: 0, engagementCount: 0 };
+      }
+      dataByDate[date].postsCount++;
+      dataByDate[date].engagementCount += post.likesCount || 0;
+    });
+
+    // Fill in missing dates with zero values
+    const result: Array<{
+      date: string;
+      postsCount: number;
+      engagementCount: number;
+    }> = [];
+    const currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      result.push({
+        date: dateStr,
+        postsCount: dataByDate[dateStr]?.postsCount || 0,
+        engagementCount: dataByDate[dateStr]?.engagementCount || 0,
+      });
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return result;
+  }
+
+  /**
+   * Get post category distribution
+   */
+  private async getPostCategoryDistribution(startDate: Date, endDate: Date) {
+    // Get posts with user niches
+    const posts = await this.postModel.findAll({
+      attributes: ['influencerId', 'brandId', 'userType'],
+      where: {
+        isActive: true,
+        createdAt: { [Op.between]: [startDate, endDate] },
+      },
+      include: [
+        {
+          model: Influencer,
+          as: 'influencer',
+          attributes: ['id'],
+          required: false,
+          include: [
+            {
+              model: Niche,
+              as: 'niches',
+              attributes: ['id', 'name'],
+              through: { attributes: [] },
+            },
+          ],
+        },
+        {
+          model: Brand,
+          as: 'brand',
+          attributes: ['id'],
+          required: false,
+          include: [
+            {
+              model: Niche,
+              as: 'niches',
+              attributes: ['id', 'name'],
+              through: { attributes: [] },
+            },
+          ],
+        },
+      ],
+    });
+
+    const totalPosts = posts.length;
+    const nicheCounts: { [key: string]: number } = {};
+
+    // Count posts per niche
+    posts.forEach((post) => {
+      const niches = post.influencer?.niches || post.brand?.niches || [];
+      if (niches.length === 0) {
+        nicheCounts['Others + Custom'] =
+          (nicheCounts['Others + Custom'] || 0) + 1;
+      } else {
+        niches.forEach((niche: any) => {
+          const nicheName = niche.name || 'Others + Custom';
+          nicheCounts[nicheName] = (nicheCounts[nicheName] || 0) + 1;
+        });
+      }
+    });
+
+    // Sort by count and return all
+    const sortedNiches = Object.entries(nicheCounts).sort(
+      ([, a], [, b]) => b - a,
+    );
+
+    return sortedNiches.map(([categoryName, count]) => ({
+      categoryName,
+      percentage: parseFloat(((count / totalPosts) * 100).toFixed(1)),
     }));
   }
 }

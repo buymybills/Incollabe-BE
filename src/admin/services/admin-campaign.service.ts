@@ -356,10 +356,10 @@ export class AdminCampaignService {
   async getCampaigns(filters: any): Promise<any> {
     const {
       campaignFilter,
+      statusFilter,
       searchQuery,
       brandSearch,
       locationSearch,
-      nicheSearch,
       campaignType,
       sortBy = 'createdAt',
       page = 1,
@@ -369,27 +369,23 @@ export class AdminCampaignService {
     // Build base where conditions
     const whereConditions: any = {};
 
-    // Apply campaign filter
+    // Apply campaign filter (invite type: all, open, invite-only)
     switch (campaignFilter) {
-      case 'activeCampaigns':
-        whereConditions.status = CampaignStatus.ACTIVE;
+      case 'openCampaigns':
+        whereConditions.isInviteOnly = false;
         break;
-      case 'draftCampaigns':
-        whereConditions.status = CampaignStatus.DRAFT;
-        break;
-      case 'completedCampaigns':
-        whereConditions.status = CampaignStatus.COMPLETED;
-        break;
-      case 'pausedCampaigns':
-        whereConditions.status = CampaignStatus.PAUSED;
-        break;
-      case 'cancelledCampaigns':
-        whereConditions.status = CampaignStatus.CANCELLED;
+      case 'inviteCampaigns':
+        whereConditions.isInviteOnly = true;
         break;
       case 'allCampaigns':
       default:
-        // No status filter for all campaigns
+        // No invite filter for all campaigns
         break;
+    }
+
+    // Apply status filter (active, draft, completed, paused, cancelled)
+    if (statusFilter) {
+      whereConditions.status = statusFilter;
     }
 
     // Apply campaign name search
@@ -470,28 +466,9 @@ export class AdminCampaignService {
         distinct: true,
       });
 
-    // Filter campaigns by niche if nicheSearch is provided
-    let filteredCampaigns = campaigns;
-    if (nicheSearch && nicheSearch.trim()) {
-      // Fetch matching niche IDs
-      const matchingNiches = await this.nicheModel.findAll({
-        where: {
-          name: { [Op.iLike]: `%${nicheSearch.trim()}%` },
-        },
-        attributes: ['id'],
-      });
-      const matchingNicheIds = matchingNiches.map((n) => n.id);
-
-      // Filter campaigns that have at least one matching niche
-      filteredCampaigns = campaigns.filter((campaign) => {
-        if (!campaign.nicheIds || campaign.nicheIds.length === 0) return false;
-        return campaign.nicheIds.some((id) => matchingNicheIds.includes(id));
-      });
-    }
-
     // Enrich campaigns with application counts and other metrics
     const enrichedCampaigns = await Promise.all(
-      filteredCampaigns.map(async (campaign) => {
+      campaigns.map(async (campaign) => {
         const applicationsCount = await this.campaignApplicationModel.count({
           where: { campaignId: campaign.id },
         });
@@ -551,13 +528,11 @@ export class AdminCampaignService {
       );
     }
 
-    // Update total count if niche filtering was applied
-    const finalTotal = nicheSearch ? filteredCampaigns.length : total;
-    const totalPages = Math.ceil(finalTotal / limit);
+    const totalPages = Math.ceil(total / limit);
 
     return {
       campaigns: enrichedCampaigns,
-      total: finalTotal,
+      total,
       page,
       limit,
       totalPages,

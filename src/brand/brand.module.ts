@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { ConfigModule } from '@nestjs/config';
 import { BrandService } from './brand.service';
@@ -41,7 +41,7 @@ import { SharedModule } from '../shared/shared.module';
       Admin,
     ]),
     ConfigModule,
-    AdminModule,
+    forwardRef(() => AdminModule),
     SharedModule,
   ],
   controllers: [BrandController],

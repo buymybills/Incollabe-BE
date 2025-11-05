@@ -8,11 +8,8 @@ import {
 
 export enum CampaignFilter {
   ALL_CAMPAIGNS = 'allCampaigns',
-  ACTIVE_CAMPAIGNS = 'activeCampaigns',
-  DRAFT_CAMPAIGNS = 'draftCampaigns',
-  COMPLETED_CAMPAIGNS = 'completedCampaigns',
-  PAUSED_CAMPAIGNS = 'pausedCampaigns',
-  CANCELLED_CAMPAIGNS = 'cancelledCampaigns',
+  OPEN_CAMPAIGNS = 'openCampaigns', // isInviteOnly = false
+  INVITE_CAMPAIGNS = 'inviteCampaigns', // isInviteOnly = true
 }
 
 export enum CampaignSortBy {
@@ -22,14 +19,25 @@ export enum CampaignSortBy {
 }
 
 export class GetCampaignsDto {
+  @IsEnum(CampaignFilter)
   @ApiProperty({
-    description: 'Campaign filter type',
+    description:
+      'Filter campaigns by invite type (all campaigns, open campaigns, invite-only campaigns)',
     enum: CampaignFilter,
-    required: true,
     example: CampaignFilter.ALL_CAMPAIGNS,
   })
-  @IsEnum(CampaignFilter)
   campaignFilter: CampaignFilter;
+
+  @IsOptional()
+  @IsEnum(CampaignStatus)
+  @ApiProperty({
+    description:
+      'Filter by campaign status (active, draft, completed, paused, cancelled)',
+    enum: CampaignStatus,
+    required: false,
+    example: CampaignStatus.ACTIVE,
+  })
+  statusFilter?: CampaignStatus;
 
   @ApiProperty({
     description: 'Search query to filter campaigns by title',
@@ -57,15 +65,6 @@ export class GetCampaignsDto {
   @IsOptional()
   @IsString()
   locationSearch?: string;
-
-  @ApiProperty({
-    description: 'Search query to filter campaigns by niche name',
-    required: false,
-    example: 'Fashion',
-  })
-  @IsOptional()
-  @IsString()
-  nicheSearch?: string;
 
   @ApiProperty({
     description: 'Filter by campaign type (paid/barter)',
