@@ -867,6 +867,11 @@ export class DashboardStatsService {
   }
 
   private async getBrandCityDistribution() {
+    // Get total active brands count for percentage calculation
+    const totalActiveBrands = await this.brandModel.count({
+      where: { isActive: true },
+    });
+
     // Get all brands with city information
     const brands = await this.brandModel.findAll({
       attributes: ['id', 'headquarterCityId'],
@@ -879,15 +884,13 @@ export class DashboardStatsService {
       ],
       where: {
         isActive: true,
-        headquarterCityId: { [Op.ne]: null as any },
       },
     });
 
-    const totalBrands = brands.length;
     const cityCounts: { [key: string]: number } = {};
 
     brands.forEach((brand) => {
-      const cityName = brand.headquarterCity?.name || 'Unknown';
+      const cityName = brand.headquarterCity?.name || 'Not Specified';
       cityCounts[cityName] = (cityCounts[cityName] || 0) + 1;
     });
 
@@ -897,19 +900,19 @@ export class DashboardStatsService {
       .slice(0, 3);
 
     const top3Count = sortedCities.reduce((sum, [, count]) => sum + count, 0);
-    const othersCount = totalBrands - top3Count;
+    const othersCount = totalActiveBrands - top3Count;
 
     const distribution = sortedCities.map(([cityName, count]) => ({
       cityName,
       brandCount: count,
-      percentage: parseFloat(((count / totalBrands) * 100).toFixed(1)),
+      percentage: parseFloat(((count / totalActiveBrands) * 100).toFixed(1)),
     }));
 
     if (othersCount > 0) {
       distribution.push({
         cityName: 'Others',
         brandCount: othersCount,
-        percentage: parseFloat(((othersCount / totalBrands) * 100).toFixed(1)),
+        percentage: parseFloat(((othersCount / totalActiveBrands) * 100).toFixed(1)),
       });
     }
 
