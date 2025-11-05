@@ -35,6 +35,7 @@ import { Post } from '../post/models/post.model';
 import { SharedModule } from '../shared/shared.module';
 import { BrandModule } from '../brand/brand.module';
 import { InfluencerModule } from '../influencer/influencer.module';
+import { PostModule } from '../post/post.module';
 
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
@@ -64,6 +65,7 @@ import { RolesGuard } from './guards/roles.guard';
     SharedModule,
     forwardRef(() => BrandModule),
     forwardRef(() => InfluencerModule),
+    PostModule,
   ],
   controllers: [AdminController, PushNotificationController],
   providers: [

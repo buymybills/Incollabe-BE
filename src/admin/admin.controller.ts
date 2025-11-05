@@ -33,6 +33,7 @@ import { InfluencerScoringService } from './services/influencer-scoring.service'
 import { DashboardStatsService } from './services/dashboard-stats.service';
 import { BrandService } from '../brand/brand.service';
 import { InfluencerService } from '../influencer/influencer.service';
+import { PostService } from '../post/post.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import type { RequestWithAdmin } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
@@ -124,6 +125,7 @@ export class AdminController {
     private readonly auditLogService: AuditLogService,
     private readonly brandService: BrandService,
     private readonly influencerService: InfluencerService,
+    private readonly postService: PostService,
   ) {}
 
   @Post('login')
@@ -1044,6 +1046,36 @@ export class AdminController {
   })
   async getPosts(@Query() requestDto: GetPostsDto) {
     return await this.adminPostService.getPosts(requestDto);
+  }
+
+  @Get('posts/user/:userType/:userId')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get posts by specific user (Admin)',
+    description: 'Get all posts created by a specific influencer or brand user',
+  })
+  @ApiParam({
+    name: 'userType',
+    enum: ['influencer', 'brand'],
+    description: 'User type',
+  })
+  @ApiParam({ name: 'userId', description: 'User ID', type: Number })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'User posts retrieved successfully',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getUserPosts(
+    @Param('userType') userType: string,
+    @Param('userId', ParseIntPipe) userId: number,
+    @Query() query: any,
+  ) {
+    // Use the existing PostService.getPosts with userType and userId
+    const getPostsDto = { ...query, userType, userId };
+    return await this.postService.getPosts(getPostsDto);
   }
 
   @Get('audit-logs')
