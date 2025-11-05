@@ -938,25 +938,25 @@ export class DashboardStatsService {
       const dayEnd = new Date(date);
       dayEnd.setHours(23, 59, 59, 999);
 
-      // Count verified brands created on this day
+      // Count verified brands that existed and were active on this day
+      // (created before or on this day)
       const verifiedCount = await this.brandModel.count({
         where: {
           isVerified: true,
           isActive: true,
           createdAt: {
-            [Op.gte]: dayStart,
             [Op.lte]: dayEnd,
           },
         },
       });
 
-      // Count unverified brands created on this day
+      // Count unverified brands that existed and were active on this day
+      // (created before or on this day)
       const unverifiedCount = await this.brandModel.count({
         where: {
           isVerified: false,
           isActive: true,
           createdAt: {
-            [Op.gte]: dayStart,
             [Op.lte]: dayEnd,
           },
         },
@@ -970,13 +970,25 @@ export class DashboardStatsService {
       });
     }
 
-    // Get current totals
+    // Get current totals (as of endDate)
     const currentVerifiedCount = await this.brandModel.count({
-      where: { isVerified: true, isActive: true },
+      where: { 
+        isVerified: true, 
+        isActive: true,
+        createdAt: {
+          [Op.lte]: endDate,
+        },
+      },
     });
 
     const currentUnverifiedCount = await this.brandModel.count({
-      where: { isVerified: false, isActive: true },
+      where: { 
+        isVerified: false, 
+        isActive: true,
+        createdAt: {
+          [Op.lte]: endDate,
+        },
+      },
     });
 
     return {
