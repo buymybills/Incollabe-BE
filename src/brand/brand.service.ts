@@ -934,10 +934,11 @@ export class BrandService {
           },
         }),
 
-        // Count campaigns created by this brand
+        // Count all active campaigns (ongoing + completed, excluding closed/deleted)
         this.campaignModel.count({
           where: {
             brandId: brandId,
+            isActive: true,
           },
         }),
       ]);
@@ -954,7 +955,7 @@ export class BrandService {
     const campaigns = await this.campaignModel.findAll({
       where: {
         brandId: brandId,
-        isActive: true,
+        isActive: true, // Only show active campaigns (ongoing + completed, exclude closed/deleted)
       },
       attributes: [
         'id',
