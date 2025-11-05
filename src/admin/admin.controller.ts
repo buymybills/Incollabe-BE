@@ -1278,7 +1278,28 @@ export class AdminController {
   async getInfluencerPublicProfile(
     @Param('id', ParseIntPipe) id: number,
   ) {
-    return await this.influencerService.getInfluencerProfile(id);
+    const profile = await this.influencerService.getInfluencerProfile(
+      id,
+      true,
+    );
+
+    // Fetch experiences for the influencer
+    const experiences = await this.influencerService.getExperiences(
+      id,
+      undefined,
+      1,
+      100,
+    );
+
+    // Return public fields with experiences
+    return {
+      ...profile,
+      collaborationCosts: profile.collaborationCosts || {},
+      experiences:
+        typeof experiences === 'object' && 'experiences' in experiences
+          ? experiences.experiences
+          : [],
+    };
   }
 
   @Put('brands/:brandId/status')
