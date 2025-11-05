@@ -307,6 +307,29 @@ export class NicheDistributionDto {
   percentage: number;
 }
 
+// Brand-specific DTOs
+export class BrandCityDistributionDto {
+  @ApiProperty({ description: 'City name' })
+  cityName: string;
+
+  @ApiProperty({ description: 'Number of brands in this city' })
+  brandCount: number;
+
+  @ApiProperty({ description: 'Percentage of total brands' })
+  percentage: number;
+}
+
+export class BrandNicheDistributionDto {
+  @ApiProperty({ description: 'Niche category name' })
+  nicheName: string;
+
+  @ApiProperty({ description: 'Number of brands' })
+  brandCount: number;
+
+  @ApiProperty({ description: 'Percentage of total' })
+  percentage: number;
+}
+
 export class InfluencerDashboardResponseDto {
   @ApiProperty({ description: 'Influencer metrics' })
   influencerMetrics: InfluencerMetricsDto;
@@ -369,18 +392,18 @@ export class BrandDashboardResponseDto {
 
   @ApiProperty({
     description: 'City distribution',
-    type: [CityDistributionDto],
+    type: [BrandCityDistributionDto],
   })
-  cityDistribution: CityDistributionDto[];
+  cityDistribution: BrandCityDistributionDto[];
 
   @ApiProperty({ description: 'Daily active brands' })
   dailyActiveBrands: DailyActiveBrandsDto;
 
   @ApiProperty({
     description: 'Niche distribution',
-    type: [NicheDistributionDto],
+    type: [BrandNicheDistributionDto],
   })
-  nicheDistribution: NicheDistributionDto[];
+  nicheDistribution: BrandNicheDistributionDto[];
 }
 
 // Campaign Dashboard DTOs

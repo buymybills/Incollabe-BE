@@ -901,14 +901,14 @@ export class DashboardStatsService {
 
     const distribution = sortedCities.map(([cityName, count]) => ({
       cityName,
-      influencerCount: count,
+      brandCount: count,
       percentage: parseFloat(((count / totalBrands) * 100).toFixed(1)),
     }));
 
     if (othersCount > 0) {
       distribution.push({
         cityName: 'Others',
-        influencerCount: othersCount,
+        brandCount: othersCount,
         percentage: parseFloat(((othersCount / totalBrands) * 100).toFixed(1)),
       });
     }
@@ -1045,7 +1045,7 @@ export class DashboardStatsService {
 
     return Object.entries(nicheGroups).map(([nicheName, count]) => ({
       nicheName,
-      influencerCount: count,
+      brandCount: count,
       percentage: parseFloat(((count / totalBrands) * 100).toFixed(1)),
     }));
   }
