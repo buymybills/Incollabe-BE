@@ -1262,7 +1262,6 @@ export class AdminAuthService {
       where: {
         isVerified: true,
         isActive: true,
-        isProfileCompleted: true,
         isTopBrand: true,
       },
       attributes: [
@@ -1575,7 +1574,6 @@ export class AdminAuthService {
 
     // For other filters, build appropriate where conditions
     const whereConditions: any = {
-      isProfileCompleted: true,
       isActive: true,
     };
 
