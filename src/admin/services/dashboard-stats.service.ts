@@ -470,7 +470,13 @@ export class DashboardStatsService {
         : 0;
 
     // City Distribution
-    const cityDistribution = await this.influencerModel.findAll({
+    interface CityDistRecord {
+      cityId: number | null;
+      count: string;
+      'city.name'?: string;
+    }
+
+    const cityDistribution = (await this.influencerModel.findAll({
       attributes: [
         'cityId',
         [
@@ -491,29 +497,32 @@ export class DashboardStatsService {
       group: ['cityId', 'city.id'],
       order: [[this.influencerModel.sequelize!.literal('count'), 'DESC']],
       raw: true,
+    })) as unknown as CityDistRecord[];
+
+    // Count influencers without cities
+    const influencersWithoutCity = await this.influencerModel.count({
+      where: { cityId: null, isActive: true },
     });
 
-    const topCities = cityDistribution.slice(0, 3);
-    const otherCitiesCount = cityDistribution
-      .slice(3)
-      .reduce((sum, city: any) => sum + parseInt(city.count), 0);
+    // Map all cities to the response format
+    const cityDist = cityDistribution.map((city) => ({
+      cityName: city['city.name'] || 'Unknown',
+      influencerCount: parseInt(city.count),
+      percentage: parseFloat(
+        ((parseInt(city.count) / totalInfluencers) * 100).toFixed(1),
+      ),
+    }));
 
-    const cityDist = [
-      ...topCities.map((city: any) => ({
-        cityName: city['city.name'] || 'Unknown',
-        influencerCount: parseInt(city.count),
+    // Add "Not Specified" category for influencers without cities
+    if (influencersWithoutCity > 0) {
+      cityDist.push({
+        cityName: 'Not Specified',
+        influencerCount: influencersWithoutCity,
         percentage: parseFloat(
-          ((parseInt(city.count) / totalInfluencers) * 100).toFixed(1),
+          ((influencersWithoutCity / totalInfluencers) * 100).toFixed(1),
         ),
-      })),
-      {
-        cityName: 'Others',
-        influencerCount: otherCitiesCount,
-        percentage: parseFloat(
-          ((otherCitiesCount / totalInfluencers) * 100).toFixed(1),
-        ),
-      },
-    ];
+      });
+    }
 
     // Daily Active Influencers Time Series
     const timeSeriesData = await this.generateTimeSeriesData(
