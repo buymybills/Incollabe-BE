@@ -29,6 +29,19 @@ warn() {
     echo -e "${YELLOW}[$(date +'%Y-%m-%d %H:%M:%S')] WARNING: $1${NC}"
 }
 
+# Detect docker-compose command (v1 or v2)
+if command -v docker-compose &> /dev/null; then
+    DOCKER_COMPOSE="docker-compose"
+    log "Using docker-compose (v1)"
+elif docker compose version &> /dev/null; then
+    DOCKER_COMPOSE="docker compose"
+    log "Using docker compose (v2)"
+else
+    error "Neither 'docker-compose' nor 'docker compose' command found"
+    error "Please install Docker Compose"
+    exit 1
+fi
+
 # Function to check if Docker Hub credentials are set
 check_docker_credentials() {
     if [ -f "$ENV_FILE" ] && grep -q "DOCKERHUB_USERNAME" "$ENV_FILE"; then
@@ -46,11 +59,11 @@ stop_app_service() {
     log "Stopping incollab-app service..."
 
     if [ -f "$DOCKER_COMPOSE_FILE" ]; then
-        docker-compose -f "$DOCKER_COMPOSE_FILE" stop incollab-app
-        docker-compose -f "$DOCKER_COMPOSE_FILE" rm -f incollab-app
+        $DOCKER_COMPOSE -f "$DOCKER_COMPOSE_FILE" stop incollab-app
+        $DOCKER_COMPOSE -f "$DOCKER_COMPOSE_FILE" rm -f incollab-app
     else
-        docker-compose stop incollab-app
-        docker-compose rm -f incollab-app
+        $DOCKER_COMPOSE stop incollab-app
+        $DOCKER_COMPOSE rm -f incollab-app
     fi
 
     log "App service stopped"
@@ -61,9 +74,9 @@ stop_services() {
     log "Stopping all services..."
 
     if [ -f "$DOCKER_COMPOSE_FILE" ]; then
-        docker-compose -f "$DOCKER_COMPOSE_FILE" down --remove-orphans
+        $DOCKER_COMPOSE -f "$DOCKER_COMPOSE_FILE" down --remove-orphans
     else
-        docker-compose down --remove-orphans || true
+        $DOCKER_COMPOSE down --remove-orphans || true
     fi
 
     log "All services stopped"
@@ -77,9 +90,9 @@ pull_app_image() {
     export IMAGE_TAG="latest"
 
     if [ -f "$DOCKER_COMPOSE_FILE" ]; then
-        docker-compose -f "$DOCKER_COMPOSE_FILE" pull incollab-app
+        $DOCKER_COMPOSE -f "$DOCKER_COMPOSE_FILE" pull incollab-app
     else
-        docker-compose pull incollab-app
+        $DOCKER_COMPOSE pull incollab-app
     fi
 
     log "App image pulled successfully"
@@ -93,9 +106,9 @@ pull_images() {
     export IMAGE_TAG="latest"
 
     if [ -f "$DOCKER_COMPOSE_FILE" ]; then
-        docker-compose -f "$DOCKER_COMPOSE_FILE" pull
+        $DOCKER_COMPOSE -f "$DOCKER_COMPOSE_FILE" pull
     else
-        docker-compose pull
+        $DOCKER_COMPOSE pull
     fi
 
     log "All images pulled successfully"
@@ -109,9 +122,9 @@ start_app_service() {
     export IMAGE_TAG="latest"
 
     if [ -f "$DOCKER_COMPOSE_FILE" ]; then
-        docker-compose -f "$DOCKER_COMPOSE_FILE" up -d --no-deps incollab-app
+        $DOCKER_COMPOSE -f "$DOCKER_COMPOSE_FILE" up -d --no-deps incollab-app
     else
-        docker-compose up -d --no-deps incollab-app
+        $DOCKER_COMPOSE up -d --no-deps incollab-app
     fi
 
     log "App service started"
@@ -125,9 +138,9 @@ start_services() {
     export IMAGE_TAG="latest"
 
     if [ -f "$DOCKER_COMPOSE_FILE" ]; then
-        docker-compose -f "$DOCKER_COMPOSE_FILE" up -d
+        $DOCKER_COMPOSE -f "$DOCKER_COMPOSE_FILE" up -d
     else
-        docker-compose up -d
+        $DOCKER_COMPOSE up -d
     fi
 
     log "All services started"
@@ -139,9 +152,9 @@ check_health() {
     sleep 30
 
     if [ -f "$DOCKER_COMPOSE_FILE" ]; then
-        running_services=$(docker-compose -f "$DOCKER_COMPOSE_FILE" ps --services --filter "status=running")
+        running_services=$($DOCKER_COMPOSE -f "$DOCKER_COMPOSE_FILE" ps --services --filter "status=running")
     else
-        running_services=$(docker-compose ps --services --filter "status=running")
+        running_services=$($DOCKER_COMPOSE ps --services --filter "status=running")
     fi
 
     log "Running services: $running_services"
@@ -185,7 +198,7 @@ handle_nginx_config() {
             warn "Please check nginx.conf for errors"
             # Restart nginx container to pick up changes if test fails
             log "Restarting nginx container..."
-            docker-compose restart nginx
+            $DOCKER_COMPOSE restart nginx
         fi
     else
         warn "No nginx.conf file found in current directory"
@@ -255,12 +268,12 @@ case "${1:-deploy}" in
     start-app) log "Starting app service..."; cd "$APP_DIR" && start_app_service ;;
     restart) log "Restarting all services..."; cd "$APP_DIR" && stop_services && start_services ;;
     restart-app) log "Restarting app service..."; cd "$APP_DIR" && stop_app_service && pull_app_image && start_app_service ;;
-    status) log "Service status:"; cd "$APP_DIR" && docker-compose ps ;;
+    status) log "Service status:"; cd "$APP_DIR" && $DOCKER_COMPOSE ps ;;
     logs) service=${2:-}; cd "$APP_DIR";
           if [ -n "$service" ]; then
-              docker-compose logs -f "$service"
+              $DOCKER_COMPOSE logs -f "$service"
           else
-              docker-compose logs -f
+              $DOCKER_COMPOSE logs -f
           fi ;;
     *) echo "Usage: $0 {deploy|full-deploy|stop|stop-app|start|start-app|restart|restart-app|status|logs [service]}"; exit 1 ;;
 esac
