@@ -91,12 +91,12 @@ jobs:
   incollab-deploy-production:
     name: Deploy Incollab to Production
     if: github.ref == 'refs/heads/main'
-    needs: [detect-changes, incollab-deploy-staging]
+    needs: [detect-changes]
     uses: ./.github/workflows/deploy.yml
     with:
       service: "incollab"
       environment: "production"
-      image_tag: "latest"
+      image_tag: "dev"
     secrets:
       EC2_HOST: ${{ secrets.PROD_EC2_HOST }}
       EC2_USER: ${{ secrets.EC2_USER }}
