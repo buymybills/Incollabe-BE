@@ -96,7 +96,7 @@ jobs:
     with:
       service: "incollab"
       environment: "production"
-      image_tag: "latest"
+      image_tag: "dev"
     secrets:
       EC2_HOST: ${{ secrets.PROD_EC2_HOST }}
       EC2_USER: ${{ secrets.EC2_USER }}
