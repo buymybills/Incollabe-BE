@@ -12,6 +12,11 @@ on:
         required: false
         type: string
         default: 'production'
+      image_tag:
+        description: 'Docker image tag to deploy (dev, latest)'
+        required: false
+        type: string
+        default: 'latest'
       docker_compose_path:
         description: 'Path to docker-compose file on server'
         required: false
@@ -69,9 +74,9 @@ jobs:
             fi
 
             if grep -q "IMAGE_TAG" .env; then
-              sed -i "s/IMAGE_TAG=.*/IMAGE_TAG=latest/" .env
+              sed -i "s/IMAGE_TAG=.*/IMAGE_TAG=${{ inputs.image_tag }}/" .env
             else
-              echo "IMAGE_TAG=latest" >> .env
+              echo "IMAGE_TAG=${{ inputs.image_tag }}" >> .env
             fi
 
             # Run deployment script (app-only by default)
