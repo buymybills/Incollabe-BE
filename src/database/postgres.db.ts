@@ -56,7 +56,7 @@ import { CustomNiche } from '../auth/model/custom-niche.model';
                 rejectUnauthorized: false,
               },
             }
-          : {};
+          : undefined;
 
         console.log('Dialect Options:', JSON.stringify(dialectOptions, null, 2));
         console.log('==============================');
