@@ -1533,8 +1533,8 @@ export class AdminController {
   @ApiUnauthorizedResponse({
     description: 'Authentication required',
   })
-  async getTimeFrameOptions() {
-    return await this.dashboardStatsService.getTimeFrameOptions();
+  getTimeFrameOptions() {
+    return this.dashboardStatsService.getTimeFrameOptions();
   }
 
   @Get('dashboard/main')

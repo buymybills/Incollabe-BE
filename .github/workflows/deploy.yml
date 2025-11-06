@@ -49,11 +49,18 @@ jobs:
           # Create deployment directory on EC2 if it doesn't exist
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "mkdir -p /home/ubuntu/Incollabe-BE"
 
-          # Copy the 4 essential files
+          # Copy deployment files based on environment
           scp docker-compose.yml ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/
           scp deploy.sh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/
-          # scp .env ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/
-          scp nginx.conf ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/ || echo "nginx.conf not found, skipping"
+          
+          # Copy appropriate nginx config based on environment
+          if [ "${{ inputs.environment }}" == "production" ]; then
+            echo "Copying production nginx config (IP-based access)..."
+            scp nginx.prod.conf ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/nginx.conf
+          else
+            echo "Copying staging nginx config (domain-based access)..."
+            scp nginx.conf ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/nginx.conf
+          fi
 
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.0.3
