@@ -30,24 +30,34 @@ import { CustomNiche } from '../auth/model/custom-niche.model';
     SequelizeModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: async (config: ConfigService) => ({
-        dialect: 'postgres',
-        host: config.get<string>('POSTGRES_HOST') || 'localhost',
-        port: Number(config.get<string>('POSTGRES_PORT')) || 5432,
-        username: config.get<string>('POSTGRES_USER') || 'postgres',
-        password: config.get<string>('POSTGRES_PASSWORD') || 'root',
-        database: config.get<string>('POSTGRES_DB') || 'incollab_db',
-        dialectOptions:
-          config.get<string>('NODE_ENV') === 'production' ||
-          config.get<string>('POSTGRES_HOST')?.includes('rds.amazonaws.com')
+      useFactory: async (config: ConfigService) => {
+        const host = config.get<string>('POSTGRES_HOST') || 'localhost';
+        const nodeEnv = config.get<string>('NODE_ENV');
+        const useSSL =
+          nodeEnv === 'production' || host.includes('rds.amazonaws.com');
+
+        console.log('Database Configuration:', {
+          host,
+          nodeEnv,
+          useSSL,
+        });
+
+        return {
+          dialect: 'postgres',
+          host,
+          port: Number(config.get<string>('POSTGRES_PORT')) || 5432,
+          username: config.get<string>('POSTGRES_USER') || 'postgres',
+          password: config.get<string>('POSTGRES_PASSWORD') || 'root',
+          database: config.get<string>('POSTGRES_DB') || 'incollab_db',
+          dialectOptions: useSSL
             ? {
                 ssl: {
                   require: true,
-                  rejectUnauthorized: false, // For AWS RDS
+                  rejectUnauthorized: false,
                 },
               }
             : {},
-        models: [
+          models: [
           Influencer,
           Brand,
           Niche,
@@ -72,7 +82,8 @@ import { CustomNiche } from '../auth/model/custom-niche.model';
         autoLoadModels: true,
         synchronize: false, // Disabled to prevent index conflicts with existing database
         logging: false,
-      }),
+        };
+      },
     }),
   ],
   exports: [SequelizeModule],
