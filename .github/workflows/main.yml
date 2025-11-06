@@ -90,8 +90,8 @@ jobs:
 
   incollab-deploy-production:
     name: Deploy Incollab to Production
-    if: needs.detect-changes.outputs.incollab == 'true' && github.ref == 'refs/heads/main'
-    needs: [detect-changes, incollab-push]
+    if: github.ref == 'refs/heads/main'
+    needs: [detect-changes, incollab-deploy-staging]
     uses: ./.github/workflows/deploy.yml
     with:
       service: "incollab"
