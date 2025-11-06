@@ -36,6 +36,7 @@ jobs:
               - 'docker-compose.yml'
               - 'nginx.conf'
               - '.env'
+              - '.github/workflows/**'
 
 
   # Incollab Pipeline
@@ -73,18 +74,33 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
-  incollab-deploy:
-    name: Deploy Incollab
-    if: needs.detect-changes.outputs.incollab == 'true' && github.ref == 'refs/heads/main'
+  incollab-deploy-staging:
+    name: Deploy Incollab to Staging
+    if: needs.detect-changes.outputs.incollab == 'true' && github.ref == 'refs/heads/dev'
     needs: [detect-changes, incollab-push]
     uses: ./.github/workflows/deploy.yml
     with:
       service: "incollab"
-      environment: "production"
+      environment: "staging"
+      image_tag: "dev"
     secrets:
       EC2_HOST: ${{ secrets.EC2_HOST }}
       EC2_USER: ${{ secrets.EC2_USER }}
       EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+
+  incollab-deploy-production:
+    name: Deploy Incollab to Production
+    if: github.ref == 'refs/heads/main'
+    needs: [detect-changes, incollab-deploy-staging]
+    uses: ./.github/workflows/deploy.yml
+    with:
+      service: "incollab"
+      environment: "production"
+      image_tag: "latest"
+    secrets:
+      EC2_HOST: ${{ secrets.PROD_EC2_HOST }}
+      EC2_USER: ${{ secrets.EC2_USER }}
+      EC2_SSH_KEY: ${{ secrets.PROD_EC2_SSH_KEY }}
 
   # Summary job
   pipeline-summary:
@@ -95,7 +111,8 @@ jobs:
       incollab-build,
       incollab-test,
       incollab-push,
-      incollab-deploy
+      incollab-deploy-staging,
+      incollab-deploy-production
     ]
     runs-on: ubuntu-latest
     steps:
@@ -106,6 +123,6 @@ jobs:
           echo "- Incollab: ${{ needs.detect-changes.outputs.incollab }}" >> $GITHUB_STEP_SUMMARY
           
           echo "## Job Status" >> $GITHUB_STEP_SUMMARY
-          echo "| Service | Build | Test | Push | Deploy |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|-------|------|------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Incollab | ${{ needs.incollab-build.result || 'skipped' }} | ${{ needs.incollab-test.result || 'skipped' }} | ${{ needs.incollab-push.result || 'skipped' }} | ${{ needs.incollab-deploy.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Build | Test | Push | Deploy Staging | Deploy Prod |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------|------|------|---------------|-------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Incollab | ${{ needs.incollab-build.result || 'skipped' }} | ${{ needs.incollab-test.result || 'skipped' }} | ${{ needs.incollab-push.result || 'skipped' }} | ${{ needs.incollab-deploy-staging.result || 'skipped' }} | ${{ needs.incollab-deploy-production.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY

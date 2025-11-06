@@ -12,6 +12,11 @@ on:
         required: false
         type: string
         default: 'production'
+      image_tag:
+        description: 'Docker image tag to deploy (dev, latest)'
+        required: false
+        type: string
+        default: 'latest'
       docker_compose_path:
         description: 'Path to docker-compose file on server'
         required: false
@@ -41,11 +46,21 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-          # Copy the 4 essential files
+          # Create deployment directory on EC2 if it doesn't exist
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "mkdir -p /home/ubuntu/Incollabe-BE"
+
+          # Copy deployment files based on environment
           scp docker-compose.yml ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/
           scp deploy.sh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/
-          # scp .env ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/
-          scp nginx.conf ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/ || echo "nginx.conf not found, skipping"
+          
+          # Copy appropriate nginx config based on environment
+          if [ "${{ inputs.environment }}" == "production" ]; then
+            echo "Copying production nginx config (IP-based access)..."
+            scp nginx.prod.conf ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/nginx.conf
+          else
+            echo "Copying staging nginx config (domain-based access)..."
+            scp nginx.conf ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/nginx.conf
+          fi
 
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -69,9 +84,9 @@ jobs:
             fi
 
             if grep -q "IMAGE_TAG" .env; then
-              sed -i "s/IMAGE_TAG=.*/IMAGE_TAG=latest/" .env
+              sed -i "s/IMAGE_TAG=.*/IMAGE_TAG=${{ inputs.image_tag }}/" .env
             else
-              echo "IMAGE_TAG=latest" >> .env
+              echo "IMAGE_TAG=${{ inputs.image_tag }}" >> .env
             fi
 
             # Run deployment script (app-only by default)
