@@ -32,31 +32,43 @@ import { CustomNiche } from '../auth/model/custom-niche.model';
       inject: [ConfigService],
       useFactory: async (config: ConfigService) => {
         const host = config.get<string>('POSTGRES_HOST') || 'localhost';
-        const nodeEnv = config.get<string>('NODE_ENV');
-        const useSSL =
-          nodeEnv === 'production' || host.includes('rds.amazonaws.com');
+        const port = Number(config.get<string>('POSTGRES_PORT')) || 5432;
+        const username = config.get<string>('POSTGRES_USER') || 'postgres';
+        const password = config.get<string>('POSTGRES_PASSWORD') || 'root';
+        const database = config.get<string>('POSTGRES_DB') || 'incollab_db';
+        
+        // Check if SSL should be enabled (simple: just check POSTGRES_SSL env var)
+        const postgresSSL = config.get<string>('POSTGRES_SSL');
+        const useSSL = postgresSSL === 'true';
 
-        console.log('Database Configuration:', {
-          host,
-          nodeEnv,
-          useSSL,
-        });
+        console.log('=== Database Configuration ===');
+        console.log('Host:', host);
+        console.log('Port:', port);
+        console.log('Username:', username);
+        console.log('Database:', database);
+        console.log('POSTGRES_SSL env var:', postgresSSL);
+        console.log('useSSL:', useSSL);
+
+        const dialectOptions = useSSL
+          ? {
+              ssl: {
+                require: true,
+                rejectUnauthorized: false,
+              },
+            }
+          : {};
+
+        console.log('Dialect Options:', JSON.stringify(dialectOptions, null, 2));
+        console.log('==============================');
 
         return {
           dialect: 'postgres',
           host,
-          port: Number(config.get<string>('POSTGRES_PORT')) || 5432,
-          username: config.get<string>('POSTGRES_USER') || 'postgres',
-          password: config.get<string>('POSTGRES_PASSWORD') || 'root',
-          database: config.get<string>('POSTGRES_DB') || 'incollab_db',
-          dialectOptions: useSSL
-            ? {
-                ssl: {
-                  require: true,
-                  rejectUnauthorized: false,
-                },
-              }
-            : {},
+          port,
+          username,
+          password,
+          database,
+          dialectOptions,
           models: [
           Influencer,
           Brand,
