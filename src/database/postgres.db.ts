@@ -37,16 +37,16 @@ import { CustomNiche } from '../auth/model/custom-niche.model';
         username: config.get<string>('POSTGRES_USER') || 'postgres',
         password: config.get<string>('POSTGRES_PASSWORD') || 'root',
         database: config.get<string>('POSTGRES_DB') || 'incollab_db',
-        dialectOptions: {
-          ssl:
-            config.get<string>('NODE_ENV') === 'production' ||
-            config.get<string>('POSTGRES_HOST')?.includes('rds.amazonaws.com')
-              ? {
+        dialectOptions:
+          config.get<string>('NODE_ENV') === 'production' ||
+          config.get<string>('POSTGRES_HOST')?.includes('rds.amazonaws.com')
+            ? {
+                ssl: {
                   require: true,
                   rejectUnauthorized: false, // For AWS RDS
-                }
-              : false,
-        },
+                },
+              }
+            : {},
         models: [
           Influencer,
           Brand,
