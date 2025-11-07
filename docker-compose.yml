@@ -40,14 +40,8 @@ services:
     volumes:
       # Nginx configuration
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      # SSL certificates for production (api.collabkaroo.co.in)
-      - /etc/letsencrypt/live/api.collabkaroo.co.in:/etc/letsencrypt/live/api.collabkaroo.co.in:ro
-      - /etc/letsencrypt/archive/api.collabkaroo.co.in:/etc/letsencrypt/archive/api.collabkaroo.co.in:ro
-      # SSL certificates for incollab.buymybills.in
-      - /etc/letsencrypt/live/incollab.buymybills.in:/etc/ssl/certs:ro
-      - /etc/letsencrypt/archive/incollab.buymybills.in:/etc/ssl/private:ro
-      # SSL certificates for api.teamcollabkaroo.com (mount archive to resolve symlinks)
-      - /etc/letsencrypt/archive/api.teamcollabkaroo.com:/etc/ssl/admin-certs:ro
+      # Mount entire letsencrypt directory to preserve symlinks
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - incollab-app
     networks:
