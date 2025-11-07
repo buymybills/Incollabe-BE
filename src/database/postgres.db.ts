@@ -92,7 +92,7 @@ import { CustomNiche } from '../auth/model/custom-niche.model';
           CustomNiche,
         ],
         autoLoadModels: true,
-        synchronize: false, // Disabled to prevent index conflicts with existing database
+        synchronize: true, // Enabled to automatically create/update database schema
         logging: false,
         };
       },
