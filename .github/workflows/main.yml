@@ -89,44 +89,29 @@ jobs:
       EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
 
   # Incollab Pipeline - Main Branch (Production)
-  incollab-build-prod:
-    name: Build Incollab (Production)
-    if: needs.detect-changes.outputs.incollab == 'true' && github.ref == 'refs/heads/main'
-    needs: detect-changes
-    uses: ./.github/workflows/build.yml
-    with:
-      service: "incollab"
-      dockerfile_path: "./Dockerfile"
-      context_path: "."
+  # Strategy: Promote the dev image to production (retag dev → latest)
+  incollab-promote-prod:
+    name: Promote Image to Production
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-  incollab-test-prod:
-    name: Test Incollab (Production)
-    if: needs.detect-changes.outputs.incollab == 'true' && github.ref == 'refs/heads/main'
-    needs: [detect-changes, incollab-build-prod]
-    uses: ./.github/workflows/test.yml
-    with:
-      service: "incollab"
-      service_path: "."
-      node_version: "18"
-
-  incollab-push-prod:
-    name: Push Incollab (Production)
-    if: needs.detect-changes.outputs.incollab == 'true' && github.ref == 'refs/heads/main'
-    needs: [detect-changes, incollab-test-prod]
-    uses: ./.github/workflows/push.yml
-    with:
-      service: "incollab"
-      dockerfile_path: "./Dockerfile"
-      context_path: "."
-      image_tag: "latest"
-    secrets:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Pull dev image and retag as latest
+        run: |
+          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/incollab:dev
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/incollab:dev ${{ secrets.DOCKERHUB_USERNAME }}/incollab:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/incollab:latest
+          echo "✅ Promoted dev image to latest (production)"
 
   incollab-deploy-production:
     name: Deploy Incollab to Production
-    if: needs.detect-changes.outputs.incollab == 'true' && github.ref == 'refs/heads/main'
-    needs: [detect-changes, incollab-push-prod]
+    if: github.ref == 'refs/heads/main'
+    needs: [incollab-promote-prod]
     uses: ./.github/workflows/deploy.yml
     with:
       service: "incollab"
@@ -147,9 +132,7 @@ jobs:
       incollab-test-dev,
       incollab-push-dev,
       incollab-deploy-staging,
-      incollab-build-prod,
-      incollab-test-prod,
-      incollab-push-prod,
+      incollab-promote-prod,
       incollab-deploy-production
     ]
     runs-on: ubuntu-latest
@@ -169,8 +152,8 @@ jobs:
             echo "|---------|-------|------|------|--------|" >> $GITHUB_STEP_SUMMARY
             echo "| Incollab | ${{ needs.incollab-build-dev.result || 'skipped' }} | ${{ needs.incollab-test-dev.result || 'skipped' }} | ${{ needs.incollab-push-dev.result || 'skipped' }} | ${{ needs.incollab-deploy-staging.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
           elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "### Production Pipeline" >> $GITHUB_STEP_SUMMARY
-            echo "| Service | Build | Test | Push | Deploy |" >> $GITHUB_STEP_SUMMARY
-            echo "|---------|-------|------|------|--------|" >> $GITHUB_STEP_SUMMARY
-            echo "| Incollab | ${{ needs.incollab-build-prod.result || 'skipped' }} | ${{ needs.incollab-test-prod.result || 'skipped' }} | ${{ needs.incollab-push-prod.result || 'skipped' }} | ${{ needs.incollab-deploy-production.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+            echo "### Production Pipeline (Promote Strategy)" >> $GITHUB_STEP_SUMMARY
+            echo "| Service | Promote | Deploy |" >> $GITHUB_STEP_SUMMARY
+            echo "|---------|---------|--------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Incollab | ${{ needs.incollab-promote-prod.result || 'skipped' }} | ${{ needs.incollab-deploy-production.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
           fi
