@@ -187,7 +187,7 @@ cleanup() {
 # Function to handle nginx configuration
 handle_nginx_config() {
     if [ -f "nginx.conf" ]; then
-        log "Reloading nginx configuration..."
+        log "Checking nginx configuration..."
         # Test nginx configuration
         if docker exec incollab-nginx nginx -t 2>/dev/null; then
             # Reload nginx to apply changes
@@ -195,10 +195,13 @@ handle_nginx_config() {
             log "Nginx configuration reloaded successfully"
         else
             error "Nginx configuration test failed!"
-            warn "Please check nginx.conf for errors"
-            # Restart nginx container to pick up changes if test fails
-            log "Restarting nginx container..."
-            $DOCKER_COMPOSE restart nginx
+            warn "Nginx may need to be recreated with new volume mounts"
+            # Stop and remove nginx to recreate with updated docker-compose.yml
+            log "Recreating nginx container with updated configuration..."
+            $DOCKER_COMPOSE stop nginx
+            $DOCKER_COMPOSE rm -f nginx
+            $DOCKER_COMPOSE up -d nginx
+            log "Nginx container recreated"
         fi
     else
         warn "No nginx.conf file found in current directory"
