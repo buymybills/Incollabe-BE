@@ -325,14 +325,20 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
     }
 
     // Encrypt pocEmailId if it's new or been modified and not already encrypted
-    if ((isNewRecord || instance.changed('pocEmailId')) && instance.pocEmailId) {
+    if (
+      (isNewRecord || instance.changed('pocEmailId')) &&
+      instance.pocEmailId
+    ) {
       if (!instance.pocEmailId.includes(':')) {
         instance.pocEmailId = encryptionService.encrypt(instance.pocEmailId);
       }
     }
 
     // Encrypt pocContactNumber if it's new or been modified and not already encrypted
-    if ((isNewRecord || instance.changed('pocContactNumber')) && instance.pocContactNumber) {
+    if (
+      (isNewRecord || instance.changed('pocContactNumber')) &&
+      instance.pocContactNumber
+    ) {
       if (!instance.pocContactNumber.includes(':')) {
         instance.pocContactNumber = encryptionService.encrypt(
           instance.pocContactNumber,
@@ -353,14 +359,20 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
     }
 
     // Encrypt gstDocument if it's new or been modified and not already encrypted
-    if ((isNewRecord || instance.changed('gstDocument')) && instance.gstDocument) {
+    if (
+      (isNewRecord || instance.changed('gstDocument')) &&
+      instance.gstDocument
+    ) {
       if (!instance.gstDocument.includes(':')) {
         instance.gstDocument = encryptionService.encrypt(instance.gstDocument);
       }
     }
 
     // Encrypt panDocument if it's new or been modified and not already encrypted
-    if ((isNewRecord || instance.changed('panDocument')) && instance.panDocument) {
+    if (
+      (isNewRecord || instance.changed('panDocument')) &&
+      instance.panDocument
+    ) {
       if (!instance.panDocument.includes(':')) {
         instance.panDocument = encryptionService.encrypt(instance.panDocument);
       }

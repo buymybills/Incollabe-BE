@@ -946,41 +946,60 @@ export class AuthService {
   }
 
   private async uploadSignupFiles(files?: SignupFiles) {
+    // Upload profile images (no encryption needed - public assets)
+    const profileImage = files?.profileImage?.[0]
+      ? await this.s3Service.uploadFileToS3(
+          files.profileImage[0],
+          'profiles/brands',
+          'brand',
+        )
+      : undefined;
+
+    const profileBanner = files?.profileBanner?.[0]
+      ? await this.s3Service.uploadFileToS3(
+          files.profileBanner[0],
+          'profiles/brands',
+          'banner',
+        )
+      : undefined;
+
+    // Upload documents and encrypt URLs (sensitive data)
+    const incorporationDocumentUrl = files?.incorporationDocument?.[0]
+      ? await this.s3Service.uploadFileToS3(
+          files.incorporationDocument[0],
+          'documents/brands',
+          'incorporation',
+        )
+      : undefined;
+
+    const gstDocumentUrl = files?.gstDocument?.[0]
+      ? await this.s3Service.uploadFileToS3(
+          files.gstDocument[0],
+          'documents/brands',
+          'gst',
+        )
+      : undefined;
+
+    const panDocumentUrl = files?.panDocument?.[0]
+      ? await this.s3Service.uploadFileToS3(
+          files.panDocument[0],
+          'documents/brands',
+          'pan',
+        )
+      : undefined;
+
+    // Encrypt document URLs before returning
     return {
-      profileImage: files?.profileImage?.[0]
-        ? await this.s3Service.uploadFileToS3(
-            files.profileImage[0],
-            'profiles/brands',
-            'brand',
-          )
+      profileImage,
+      profileBanner,
+      incorporationDocument: incorporationDocumentUrl
+        ? this.encryptionService.encrypt(incorporationDocumentUrl)
         : undefined,
-      profileBanner: files?.profileBanner?.[0]
-        ? await this.s3Service.uploadFileToS3(
-            files.profileBanner[0],
-            'profiles/brands',
-            'banner',
-          )
+      gstDocument: gstDocumentUrl
+        ? this.encryptionService.encrypt(gstDocumentUrl)
         : undefined,
-      incorporationDocument: files?.incorporationDocument?.[0]
-        ? await this.s3Service.uploadFileToS3(
-            files.incorporationDocument[0],
-            'documents/brands',
-            'incorporation',
-          )
-        : undefined,
-      gstDocument: files?.gstDocument?.[0]
-        ? await this.s3Service.uploadFileToS3(
-            files.gstDocument[0],
-            'documents/brands',
-            'gst',
-          )
-        : undefined,
-      panDocument: files?.panDocument?.[0]
-        ? await this.s3Service.uploadFileToS3(
-            files.panDocument[0],
-            'documents/brands',
-            'pan',
-          )
+      panDocument: panDocumentUrl
+        ? this.encryptionService.encrypt(panDocumentUrl)
         : undefined,
     };
   }

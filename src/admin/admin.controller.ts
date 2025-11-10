@@ -107,10 +107,7 @@ import {
   DeleteAccountResponseDto,
 } from './dto/admin-settings.dto';
 import { LogoutDto, LogoutResponseDto } from './dto/logout.dto';
-import {
-  GetAuditLogsDto,
-  AuditLogListResponseDto,
-} from './dto/audit-log.dto';
+import { GetAuditLogsDto, AuditLogListResponseDto } from './dto/audit-log.dto';
 import { AuditLogService } from './services/audit-log.service';
 
 @ApiTags('Admin')
@@ -1308,13 +1305,8 @@ export class AdminController {
   @ApiNotFoundResponse({
     description: 'Influencer not found',
   })
-  async getInfluencerPublicProfile(
-    @Param('id', ParseIntPipe) id: number,
-  ) {
-    const profile = await this.influencerService.getInfluencerProfile(
-      id,
-      true,
-    );
+  async getInfluencerPublicProfile(@Param('id', ParseIntPipe) id: number) {
+    const profile = await this.influencerService.getInfluencerProfile(id, true);
 
     // Fetch experiences for the influencer
     const experiences = await this.influencerService.getExperiences(

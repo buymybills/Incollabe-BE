@@ -78,9 +78,15 @@ export class AdminPostService {
     };
 
     // Build include for brand
-    const brandInclude: any = { 
+    const brandInclude: any = {
       model: Brand,
-      attributes: ['id', 'brandName', 'username', 'profileImage', 'headquarterCityId'],
+      attributes: [
+        'id',
+        'brandName',
+        'username',
+        'profileImage',
+        'headquarterCityId',
+      ],
       required: false,
       include: [
         {
@@ -143,18 +149,16 @@ export class AdminPostService {
     }
 
     // Fetch posts with pagination
-    const { rows: posts, count: total } = await this.postModel.findAndCountAll(
-      {
-        where: whereConditions,
-        include: [influencerInclude, brandInclude],
-        order,
-        limit,
-        offset: (page - 1) * limit,
-        distinct: true,
-      },
-    );
+    const { rows: posts, count: total } = await this.postModel.findAndCountAll({
+      where: whereConditions,
+      include: [influencerInclude, brandInclude],
+      order,
+      limit,
+      offset: (page - 1) * limit,
+      distinct: true,
+    });
 
-    // Enrich posts with user and location data  
+    // Enrich posts with user and location data
     const enrichedPosts = posts.map((post) => {
       const postJson = post.toJSON();
       let userName: string | null = null;

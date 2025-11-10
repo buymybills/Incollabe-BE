@@ -318,10 +318,13 @@ export class ProfileReviewService {
     // Log audit trail
     const admin = await this.adminModel.findByPk(adminId);
     if (admin) {
-      const profileName = review.profileType === ProfileType.BRAND 
-        ? (await this.brandModel.findByPk(review.profileId))?.brandName || 'Brand'
-        : (await this.influencerModel.findByPk(review.profileId))?.name || 'Influencer';
-      
+      const profileName =
+        review.profileType === ProfileType.BRAND
+          ? (await this.brandModel.findByPk(review.profileId))?.brandName ||
+            'Brand'
+          : (await this.influencerModel.findByPk(review.profileId))?.name ||
+            'Influencer';
+
       await this.auditLogService.logProfileReviewAction(
         {
           id: admin.id,
@@ -397,10 +400,13 @@ export class ProfileReviewService {
     // Log audit trail
     const admin = await this.adminModel.findByPk(adminId);
     if (admin) {
-      const profileName = review.profileType === ProfileType.BRAND 
-        ? (await this.brandModel.findByPk(review.profileId))?.brandName || 'Brand'
-        : (await this.influencerModel.findByPk(review.profileId))?.name || 'Influencer';
-      
+      const profileName =
+        review.profileType === ProfileType.BRAND
+          ? (await this.brandModel.findByPk(review.profileId))?.brandName ||
+            'Brand'
+          : (await this.influencerModel.findByPk(review.profileId))?.name ||
+            'Influencer';
+
       await this.auditLogService.logProfileReviewAction(
         {
           id: admin.id,
