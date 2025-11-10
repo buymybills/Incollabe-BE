@@ -87,7 +87,9 @@ pull_app_image() {
     log "Pulling latest incollab-app Docker image..."
 
     export DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME}"
-    export IMAGE_TAG="latest"
+    export IMAGE_TAG="${IMAGE_TAG:-latest}"
+
+    log "Using image tag: $IMAGE_TAG"
 
     if [ -f "$DOCKER_COMPOSE_FILE" ]; then
         $DOCKER_COMPOSE -f "$DOCKER_COMPOSE_FILE" pull incollab-app
@@ -103,7 +105,9 @@ pull_images() {
     log "Pulling all Docker images..."
 
     export DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME}"
-    export IMAGE_TAG="latest"
+    export IMAGE_TAG="${IMAGE_TAG:-latest}"
+
+    log "Using image tag: $IMAGE_TAG"
 
     if [ -f "$DOCKER_COMPOSE_FILE" ]; then
         $DOCKER_COMPOSE -f "$DOCKER_COMPOSE_FILE" pull
@@ -119,7 +123,9 @@ start_app_service() {
     log "Starting incollab-app service..."
 
     export DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME}"
-    export IMAGE_TAG="latest"
+    export IMAGE_TAG="${IMAGE_TAG:-latest}"
+
+    log "Using image tag: $IMAGE_TAG"
 
     if [ -f "$DOCKER_COMPOSE_FILE" ]; then
         $DOCKER_COMPOSE -f "$DOCKER_COMPOSE_FILE" up -d --no-deps incollab-app
@@ -135,7 +141,9 @@ start_services() {
     log "Starting all services..."
 
     export DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME}"
-    export IMAGE_TAG="latest"
+    export IMAGE_TAG="${IMAGE_TAG:-latest}"
+
+    log "Using image tag: $IMAGE_TAG"
 
     if [ -f "$DOCKER_COMPOSE_FILE" ]; then
         $DOCKER_COMPOSE -f "$DOCKER_COMPOSE_FILE" up -d
