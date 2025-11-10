@@ -76,6 +76,13 @@ export class BrandController {
     description: 'Number of campaigns per page (default: 10)',
     example: 10,
   })
+  @ApiQuery({
+    name: 'campaignFilter',
+    required: false,
+    enum: ['invite', 'open'],
+    description: 'Filter campaigns by type: "invite" for invite-only campaigns, "open" for open campaigns. Omit to show all campaigns.',
+    example: 'open',
+  })
   @ApiResponse({
     status: 200,
     description: 'Brand profile retrieved successfully with all details',
@@ -94,6 +101,7 @@ export class BrandController {
     @Req() req: RequestWithUser,
     @Query('campaignPage') campaignPage?: number,
     @Query('campaignLimit') campaignLimit?: number,
+    @Query('campaignFilter') campaignFilter?: 'invite' | 'open',
   ): Promise<BrandProfileResponseDto> {
     if (req.user.userType !== 'brand') {
       throw new BadRequestException('Only brands can access this endpoint');
@@ -105,6 +113,7 @@ export class BrandController {
       undefined,
       campaignPage,
       campaignLimit,
+      campaignFilter,
     );
   }
 
@@ -290,6 +299,13 @@ export class BrandController {
     description: 'Number of campaigns per page (default: 10)',
     example: 10,
   })
+  @ApiQuery({
+    name: 'campaignFilter',
+    required: false,
+    enum: ['invite', 'open'],
+    description: 'Filter campaigns by type: "invite" for invite-only campaigns, "open" for open campaigns. Omit to show all campaigns.',
+    example: 'open',
+  })
   @ApiResponse({
     status: 200,
     description: 'Brand profile retrieved successfully',
@@ -300,6 +316,7 @@ export class BrandController {
     @Req() req?: RequestWithUser,
     @Query('campaignPage') campaignPage?: number,
     @Query('campaignLimit') campaignLimit?: number,
+    @Query('campaignFilter') campaignFilter?: 'invite' | 'open',
   ) {
     // Pass current user info if authenticated
     const currentUserId = req?.user?.id;
@@ -311,6 +328,7 @@ export class BrandController {
       currentUserType,
       campaignPage,
       campaignLimit,
+      campaignFilter,
     );
   }
 

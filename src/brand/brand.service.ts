@@ -76,6 +76,7 @@ export class BrandService {
     currentUserType?: 'influencer' | 'brand',
     campaignPage?: number,
     campaignLimit?: number,
+    campaignFilter?: 'invite' | 'open',
   ): Promise<BrandProfileResponseDto> {
     const brand = await this.brandModel.findByPk(brandId, {
       include: [
@@ -137,7 +138,12 @@ export class BrandService {
         this.calculateProfileCompletion(brand),
         this.calculatePlatformMetrics(brandId),
         this.getVerificationStatus(brandId),
-        this.getBrandCampaigns(brandId, campaignPage, campaignLimit),
+        this.getBrandCampaigns(
+          brandId,
+          campaignPage,
+          campaignLimit,
+          campaignFilter,
+        ),
       ]);
 
     // Build comprehensive response
@@ -979,15 +985,27 @@ export class BrandService {
     brandId: number,
     page: number = 1,
     limit: number = 10,
+    filter?: 'invite' | 'open',
   ) {
     const offset = (page - 1) * limit;
 
+    // Build where clause based on filter
+    const whereClause: any = {
+      brandId: brandId,
+      isActive: true, // Only show active campaigns (ongoing + completed, exclude closed/deleted)
+    };
+
+    // Apply campaign type filter if provided
+    if (filter === 'invite') {
+      whereClause.isInviteOnly = true;
+    } else if (filter === 'open') {
+      whereClause.isInviteOnly = false;
+    }
+    // If no filter provided, show all campaigns (both invite and open)
+
     const { count, rows: campaigns } = await this.campaignModel.findAndCountAll(
       {
-        where: {
-          brandId: brandId,
-          isActive: true, // Only show active campaigns (ongoing + completed, exclude closed/deleted)
-        },
+        where: whereClause,
         attributes: [
           'id',
           'name',

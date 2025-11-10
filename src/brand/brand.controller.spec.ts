@@ -231,6 +231,7 @@ describe('BrandController', () => {
         undefined,
         undefined,
         undefined,
+        undefined,
       );
     });
 
@@ -517,6 +518,7 @@ describe('BrandController', () => {
         undefined,
         undefined,
         undefined,
+        undefined,
       );
     });
 
@@ -633,6 +635,7 @@ describe('BrandController', () => {
         undefined,
         undefined,
         undefined,
+        undefined,
       );
     });
 
@@ -671,6 +674,7 @@ describe('BrandController', () => {
 
       expect(brandService.getBrandProfile).toHaveBeenCalledWith(
         999,
+        undefined,
         undefined,
         undefined,
         undefined,

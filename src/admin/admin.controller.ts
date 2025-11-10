@@ -20,6 +20,7 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiParam,
+  ApiQuery,
   ApiUnauthorizedResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
@@ -1267,12 +1268,33 @@ export class AdminController {
   @ApiOperation({
     summary: 'Get brand public profile (as seen by users)',
     description:
-      'Get the complete public profile of a brand including bio, social links, platform metrics (followers, posts, campaigns), and recent campaigns list',
+      'Get the complete public profile of a brand including bio, social links, platform metrics (followers, posts, campaigns), and recent campaigns list. Supports pagination and filtering for campaigns.',
   })
   @ApiParam({
     name: 'id',
     description: 'ID of the brand',
     type: 'number',
+  })
+  @ApiQuery({
+    name: 'campaignPage',
+    required: false,
+    type: Number,
+    description: 'Page number for campaign pagination (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'campaignLimit',
+    required: false,
+    type: Number,
+    description: 'Number of campaigns per page (default: 10)',
+    example: 10,
+  })
+  @ApiQuery({
+    name: 'campaignFilter',
+    required: false,
+    enum: ['invite', 'open'],
+    description: 'Filter campaigns by type: "invite" for invite-only campaigns, "open" for open campaigns. Omit to show all campaigns.',
+    example: 'open',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -1281,8 +1303,20 @@ export class AdminController {
   @ApiNotFoundResponse({
     description: 'Brand not found',
   })
-  async getBrandPublicProfile(@Param('id', ParseIntPipe) id: number) {
-    return await this.brandService.getBrandProfile(id);
+  async getBrandPublicProfile(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('campaignPage') campaignPage?: number,
+    @Query('campaignLimit') campaignLimit?: number,
+    @Query('campaignFilter') campaignFilter?: 'invite' | 'open',
+  ) {
+    return await this.brandService.getBrandProfile(
+      id,
+      undefined,
+      undefined,
+      campaignPage,
+      campaignLimit,
+      campaignFilter,
+    );
   }
 
   @Get('influencer/profile/:id')
