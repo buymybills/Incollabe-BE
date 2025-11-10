@@ -280,7 +280,7 @@ export class BrandProfileResponseDto {
   isTopBrand: boolean;
 
   @ApiProperty({
-    description: 'Latest campaigns created by this brand',
+    description: 'Latest campaigns created by this brand (limited to first 10)',
     type: [Object],
     example: [
       {
@@ -307,6 +307,12 @@ export class BrandProfileResponseDto {
     createdAt: string;
     updatedAt: string;
   }>;
+
+  @ApiProperty({
+    description: 'Total number of campaigns created by this brand',
+    example: 23,
+  })
+  totalCampaigns: number;
 
   @ApiProperty({ description: 'User type', example: 'brand' })
   userType: 'brand';

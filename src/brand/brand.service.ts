@@ -74,6 +74,9 @@ export class BrandService {
     brandId: number,
     currentUserId?: number,
     currentUserType?: 'influencer' | 'brand',
+    campaignPage?: number,
+    campaignLimit?: number,
+    campaignFilter?: 'invite' | 'open',
   ): Promise<BrandProfileResponseDto> {
     const brand = await this.brandModel.findByPk(brandId, {
       include: [
@@ -135,7 +138,12 @@ export class BrandService {
         this.calculateProfileCompletion(brand),
         this.calculatePlatformMetrics(brandId),
         this.getVerificationStatus(brandId),
-        this.getBrandCampaigns(brandId),
+        this.getBrandCampaigns(
+          brandId,
+          campaignPage,
+          campaignLimit,
+          campaignFilter,
+        ),
       ]);
 
     // Build comprehensive response
@@ -244,8 +252,9 @@ export class BrandService {
       // Top brand status
       isTopBrand: brand.isTopBrand,
 
-      // Campaigns created by this brand
-      campaigns,
+      // Campaigns created by this brand (with pagination)
+      campaigns: campaigns.campaigns,
+      totalCampaigns: campaigns.total,
 
       createdAt: brand.createdAt.toISOString(),
       updatedAt: brand.updatedAt.toISOString(),
@@ -972,38 +981,62 @@ export class BrandService {
     };
   }
 
-  private async getBrandCampaigns(brandId: number) {
-    const campaigns = await this.campaignModel.findAll({
-      where: {
-        brandId: brandId,
-        isActive: true, // Only show active campaigns (ongoing + completed, exclude closed/deleted)
-      },
-      attributes: [
-        'id',
-        'name',
-        'description',
-        'status',
-        'type',
-        'category',
-        'deliverableFormat',
-        'createdAt',
-        'updatedAt',
-      ],
-      order: [['createdAt', 'DESC']],
-      limit: 10, // Show latest 10 campaigns
-    });
+  private async getBrandCampaigns(
+    brandId: number,
+    page: number = 1,
+    limit: number = 10,
+    filter?: 'invite' | 'open',
+  ) {
+    const offset = (page - 1) * limit;
 
-    return campaigns.map((campaign) => ({
-      id: campaign.id,
-      name: campaign.name,
-      description: campaign.description,
-      status: campaign.status,
-      type: campaign.type,
-      category: campaign.category,
-      deliverableFormat: campaign.deliverableFormat,
-      createdAt: campaign.createdAt?.toISOString(),
-      updatedAt: campaign.updatedAt?.toISOString(),
-    }));
+    // Build where clause based on filter
+    const whereClause: any = {
+      brandId: brandId,
+      isActive: true, // Only show active campaigns (ongoing + completed, exclude closed/deleted)
+    };
+
+    // Apply campaign type filter if provided
+    if (filter === 'invite') {
+      whereClause.isInviteOnly = true;
+    } else if (filter === 'open') {
+      whereClause.isInviteOnly = false;
+    }
+    // If no filter provided, show all campaigns (both invite and open)
+
+    const { count, rows: campaigns } = await this.campaignModel.findAndCountAll(
+      {
+        where: whereClause,
+        attributes: [
+          'id',
+          'name',
+          'description',
+          'status',
+          'type',
+          'category',
+          'deliverableFormat',
+          'createdAt',
+          'updatedAt',
+        ],
+        order: [['createdAt', 'DESC']],
+        limit: limit,
+        offset: offset,
+      },
+    );
+
+    return {
+      total: count,
+      campaigns: campaigns.map((campaign) => ({
+        id: campaign.id,
+        name: campaign.name,
+        description: campaign.description,
+        status: campaign.status,
+        type: campaign.type,
+        category: campaign.category,
+        deliverableFormat: campaign.deliverableFormat,
+        createdAt: campaign.createdAt?.toISOString(),
+        updatedAt: campaign.updatedAt?.toISOString(),
+      })),
+    };
   }
 
   private async notifyAdminsOfPendingProfile(brandId: number) {
