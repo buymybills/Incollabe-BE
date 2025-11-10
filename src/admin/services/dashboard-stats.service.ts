@@ -923,7 +923,9 @@ export class DashboardStatsService {
       distribution.push({
         cityName: 'Others',
         brandCount: othersCount,
-        percentage: parseFloat(((othersCount / totalActiveBrands) * 100).toFixed(1)),
+        percentage: parseFloat(
+          ((othersCount / totalActiveBrands) * 100).toFixed(1),
+        ),
       });
     }
 
@@ -983,8 +985,8 @@ export class DashboardStatsService {
 
     // Get current totals (as of endDate)
     const currentVerifiedCount = await this.brandModel.count({
-      where: { 
-        isVerified: true, 
+      where: {
+        isVerified: true,
         isActive: true,
         createdAt: {
           [Op.lte]: endDate,
@@ -993,8 +995,8 @@ export class DashboardStatsService {
     });
 
     const currentUnverifiedCount = await this.brandModel.count({
-      where: { 
-        isVerified: false, 
+      where: {
+        isVerified: false,
         isActive: true,
         createdAt: {
           [Op.lte]: endDate,

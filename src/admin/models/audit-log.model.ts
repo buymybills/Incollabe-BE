@@ -161,7 +161,8 @@ export class AuditLog extends Model<AuditLog> {
     type: DataType.STRING(50),
     allowNull: true,
     field: 'target_type',
-    comment: 'Type of entity affected: campaign, brand, influencer, notification, etc.',
+    comment:
+      'Type of entity affected: campaign, brand, influencer, notification, etc.',
   })
   targetType: string | null;
 

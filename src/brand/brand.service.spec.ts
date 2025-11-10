@@ -19,6 +19,7 @@ import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../shared/email.service';
 import { MasterDataService } from '../shared/services/master-data.service';
 import { ProfileReviewService } from '../admin/profile-review.service';
+import { EncryptionService } from '../shared/services/encryption.service';
 import { ProfileType } from '../admin/models/profile-review.model';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { UpdateBrandProfileDto } from './dto/update-brand-profile.dto';
@@ -71,6 +72,13 @@ const mockProfileReviewService = {
   hasProfileReview: jest.fn().mockResolvedValue(false),
 };
 
+const mockEncryptionService = {
+  encrypt: jest.fn((text: string) => `encrypted:${text}`),
+  decrypt: jest.fn((text: string) => text.replace('encrypted:', '')),
+  encryptFields: jest.fn(),
+  decryptFields: jest.fn(),
+};
+
 describe('BrandService', () => {
   let service: BrandService;
   let brandModel: any;
@@ -85,6 +93,7 @@ describe('BrandService', () => {
   let emailService: any;
   let masterDataService: any;
   let profileReviewService: any;
+  let encryptionService: any;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -165,6 +174,10 @@ describe('BrandService', () => {
           provide: ProfileReviewService,
           useValue: mockProfileReviewService,
         },
+        {
+          provide: EncryptionService,
+          useValue: mockEncryptionService,
+        },
       ],
     }).compile();
 
@@ -181,6 +194,7 @@ describe('BrandService', () => {
     emailService = module.get(EmailService);
     masterDataService = module.get(MasterDataService);
     profileReviewService = module.get(ProfileReviewService);
+    encryptionService = module.get(EncryptionService);
   });
 
   afterEach(() => {

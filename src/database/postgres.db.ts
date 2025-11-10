@@ -36,7 +36,7 @@ import { CustomNiche } from '../auth/model/custom-niche.model';
         const username = config.get<string>('POSTGRES_USER') || 'postgres';
         const password = config.get<string>('POSTGRES_PASSWORD') || 'root';
         const database = config.get<string>('POSTGRES_DB') || 'incollab_db';
-        
+
         // Check if SSL should be enabled (simple: just check POSTGRES_SSL env var)
         const postgresSSL = config.get<string>('POSTGRES_SSL');
         const useSSL = postgresSSL === 'true';
@@ -58,7 +58,10 @@ import { CustomNiche } from '../auth/model/custom-niche.model';
             }
           : {};
 
-        console.log('Dialect Options:', JSON.stringify(dialectOptions, null, 2));
+        console.log(
+          'Dialect Options:',
+          JSON.stringify(dialectOptions, null, 2),
+        );
         console.log('==============================');
 
         return {
@@ -70,30 +73,30 @@ import { CustomNiche } from '../auth/model/custom-niche.model';
           database,
           dialectOptions,
           models: [
-          Influencer,
-          Brand,
-          Niche,
-          Otp,
-          InfluencerNiche,
-          BrandNiche,
-          Country,
-          City,
-          CompanyType,
-          Admin,
-          ProfileReview,
-          Post,
-          Like,
-          Follow,
-          Campaign,
-          CampaignCity,
-          CampaignDeliverable,
-          CampaignInvitation,
-          CampaignApplication,
-          CustomNiche,
-        ],
-        autoLoadModels: true,
-        synchronize: false, // Disabled to prevent index conflicts with existing database
-        logging: false,
+            Influencer,
+            Brand,
+            Niche,
+            Otp,
+            InfluencerNiche,
+            BrandNiche,
+            Country,
+            City,
+            CompanyType,
+            Admin,
+            ProfileReview,
+            Post,
+            Like,
+            Follow,
+            Campaign,
+            CampaignCity,
+            CampaignDeliverable,
+            CampaignInvitation,
+            CampaignApplication,
+            CustomNiche,
+          ],
+          autoLoadModels: true,
+          synchronize: false, // Disabled to prevent index conflicts with existing database
+          logging: false,
         };
       },
     }),

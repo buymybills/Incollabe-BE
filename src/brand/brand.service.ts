@@ -19,6 +19,7 @@ import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../shared/email.service';
 import { MasterDataService } from '../shared/services/master-data.service';
 import { ProfileReviewService } from '../admin/profile-review.service';
+import { EncryptionService } from '../shared/services/encryption.service';
 import {
   ProfileReview,
   ProfileType,
@@ -66,6 +67,7 @@ export class BrandService {
     private readonly emailService: EmailService,
     private readonly masterDataService: MasterDataService,
     private readonly profileReviewService: ProfileReviewService,
+    private readonly encryptionService: EncryptionService,
   ) {}
 
   async getBrandProfile(
@@ -767,25 +769,44 @@ export class BrandService {
       return undefined;
     };
 
+    // Upload profile images (no encryption needed - public assets)
+    const profileImage = files?.profileImage
+      ? await uploadFile(files.profileImage, 'profiles/brands', 'brand')
+      : undefined;
+
+    const profileBanner = files?.profileBanner
+      ? await uploadFile(files.profileBanner, 'profiles/brands', 'banner')
+      : undefined;
+
+    // Upload documents (will be encrypted)
+    const incorporationDocumentUrl = files?.incorporationDocument
+      ? await uploadFile(
+          files.incorporationDocument,
+          'documents/brands',
+          'incorporation',
+        )
+      : undefined;
+
+    const gstDocumentUrl = files?.gstDocument
+      ? await uploadFile(files.gstDocument, 'documents/brands', 'gst')
+      : undefined;
+
+    const panDocumentUrl = files?.panDocument
+      ? await uploadFile(files.panDocument, 'documents/brands', 'pan')
+      : undefined;
+
+    // Encrypt document URLs before returning
     return {
-      profileImage: files?.profileImage
-        ? await uploadFile(files.profileImage, 'profiles/brands', 'brand')
+      profileImage,
+      profileBanner,
+      incorporationDocument: incorporationDocumentUrl
+        ? this.encryptionService.encrypt(incorporationDocumentUrl)
         : undefined,
-      profileBanner: files?.profileBanner
-        ? await uploadFile(files.profileBanner, 'profiles/brands', 'banner')
+      gstDocument: gstDocumentUrl
+        ? this.encryptionService.encrypt(gstDocumentUrl)
         : undefined,
-      incorporationDocument: files?.incorporationDocument
-        ? await uploadFile(
-            files.incorporationDocument,
-            'documents/brands',
-            'incorporation',
-          )
-        : undefined,
-      gstDocument: files?.gstDocument
-        ? await uploadFile(files.gstDocument, 'documents/brands', 'gst')
-        : undefined,
-      panDocument: files?.panDocument
-        ? await uploadFile(files.panDocument, 'documents/brands', 'pan')
+      panDocument: panDocumentUrl
+        ? this.encryptionService.encrypt(panDocumentUrl)
         : undefined,
     };
   }

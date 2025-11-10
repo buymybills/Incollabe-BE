@@ -144,7 +144,10 @@ export class AuditLogResponseDto {
 }
 
 export class AuditLogListResponseDto {
-  @ApiProperty({ description: 'List of audit logs', type: [AuditLogResponseDto] })
+  @ApiProperty({
+    description: 'List of audit logs',
+    type: [AuditLogResponseDto],
+  })
   logs: AuditLogResponseDto[];
 
   @ApiProperty({ description: 'Current page number' })

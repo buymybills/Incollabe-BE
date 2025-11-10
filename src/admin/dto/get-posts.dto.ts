@@ -35,7 +35,8 @@ export class GetPostsDto {
   searchQuery?: string;
 
   @ApiProperty({
-    description: 'Search query to filter posts by user name (influencer or brand)',
+    description:
+      'Search query to filter posts by user name (influencer or brand)',
     required: false,
     example: 'Sneha Sharma',
   })

@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Op } from 'sequelize';
-import { AuditLog, AuditSection, AuditActionType } from '../models/audit-log.model';
+import {
+  AuditLog,
+  AuditSection,
+  AuditActionType,
+} from '../models/audit-log.model';
 import { Admin } from '../models/admin.model';
 import {
   GetAuditLogsDto,
@@ -70,7 +74,9 @@ export class AuditLogService {
   /**
    * Get audit logs with filters and pagination
    */
-  async getAuditLogs(filters: GetAuditLogsDto): Promise<AuditLogListResponseDto> {
+  async getAuditLogs(
+    filters: GetAuditLogsDto,
+  ): Promise<AuditLogListResponseDto> {
     const {
       section,
       actionType,
@@ -130,20 +136,21 @@ export class AuditLogService {
     const offset = (page - 1) * limit;
 
     // Get logs with pagination
-    const { rows: logs, count: total } = await this.auditLogModel.findAndCountAll({
-      where: whereClause,
-      order: [['createdAt', 'DESC']],
-      limit,
-      offset,
-      raw: false, // Ensure we get full model instances
-      include: [
-        {
-          model: Admin,
-          as: 'admin',
-          attributes: ['id', 'name', 'email', 'role'],
-        },
-      ],
-    });
+    const { rows: logs, count: total } =
+      await this.auditLogModel.findAndCountAll({
+        where: whereClause,
+        order: [['createdAt', 'DESC']],
+        limit,
+        offset,
+        raw: false, // Ensure we get full model instances
+        include: [
+          {
+            model: Admin,
+            as: 'admin',
+            attributes: ['id', 'name', 'email', 'role'],
+          },
+        ],
+      });
 
     // Get total admin users count
     const totalAdminUsers = await this.adminModel.count();
@@ -166,7 +173,7 @@ export class AuditLogService {
   private formatAuditLog(log: AuditLog): AuditLogResponseDto {
     // Get plain object to ensure all fields are included
     const logData = log.get({ plain: true }) as any;
-    
+
     return {
       id: logData.id,
       adminName: logData.adminName || logData.admin_name,
