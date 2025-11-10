@@ -20,6 +20,7 @@ import {
   ApiBearerAuth,
   ApiConsumes,
   ApiBody,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { BrandService } from './brand.service';
@@ -59,7 +60,21 @@ export class BrandController {
   @ApiOperation({
     summary: 'Get comprehensive brand profile',
     description:
-      'Returns complete brand profile with all fields pre-populated for form mapping. Includes profile completion status, document information, and social links.',
+      'Returns complete brand profile with all fields pre-populated for form mapping. Includes profile completion status, document information, and social links. Supports pagination for campaigns via query parameters.',
+  })
+  @ApiQuery({
+    name: 'campaignPage',
+    required: false,
+    type: Number,
+    description: 'Page number for campaign pagination (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'campaignLimit',
+    required: false,
+    type: Number,
+    description: 'Number of campaigns per page (default: 10)',
+    example: 10,
   })
   @ApiResponse({
     status: 200,
@@ -77,12 +92,20 @@ export class BrandController {
   })
   async getBrandProfile(
     @Req() req: RequestWithUser,
+    @Query('campaignPage') campaignPage?: number,
+    @Query('campaignLimit') campaignLimit?: number,
   ): Promise<BrandProfileResponseDto> {
     if (req.user.userType !== 'brand') {
       throw new BadRequestException('Only brands can access this endpoint');
     }
     const brandId = req.user.id;
-    return await this.brandService.getBrandProfile(brandId);
+    return await this.brandService.getBrandProfile(
+      brandId,
+      undefined,
+      undefined,
+      campaignPage,
+      campaignLimit,
+    );
   }
 
   @Put('profile')
@@ -251,7 +274,21 @@ export class BrandController {
   @Get('profile/:id')
   @ApiOperation({
     summary:
-      'Get brand profile by ID (public). If authenticated, includes isFollowing flag.',
+      'Get brand profile by ID (public). If authenticated, includes isFollowing flag. Supports campaign pagination via query parameters.',
+  })
+  @ApiQuery({
+    name: 'campaignPage',
+    required: false,
+    type: Number,
+    description: 'Page number for campaign pagination (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'campaignLimit',
+    required: false,
+    type: Number,
+    description: 'Number of campaigns per page (default: 10)',
+    example: 10,
   })
   @ApiResponse({
     status: 200,
@@ -261,6 +298,8 @@ export class BrandController {
   async getBrandProfileById(
     @Param('id', ParseIntPipe) brandId: number,
     @Req() req?: RequestWithUser,
+    @Query('campaignPage') campaignPage?: number,
+    @Query('campaignLimit') campaignLimit?: number,
   ) {
     // Pass current user info if authenticated
     const currentUserId = req?.user?.id;
@@ -270,6 +309,8 @@ export class BrandController {
       brandId,
       currentUserId,
       currentUserType,
+      campaignPage,
+      campaignLimit,
     );
   }
 

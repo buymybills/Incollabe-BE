@@ -225,7 +225,13 @@ describe('BrandController', () => {
       const result = await controller.getBrandProfile(mockRequest);
 
       expect(result).toEqual(mockProfile);
-      expect(brandService.getBrandProfile).toHaveBeenCalledWith(1);
+      expect(brandService.getBrandProfile).toHaveBeenCalledWith(
+        1,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
     });
 
     it('should throw NotFoundException for non-existent brand', async () => {
@@ -509,6 +515,8 @@ describe('BrandController', () => {
         1,
         undefined,
         undefined,
+        undefined,
+        undefined,
       );
     });
 
@@ -623,6 +631,8 @@ describe('BrandController', () => {
         123,
         undefined,
         undefined,
+        undefined,
+        undefined,
       );
     });
 
@@ -659,7 +669,13 @@ describe('BrandController', () => {
 
       await controller.getBrandProfile(mockRequest);
 
-      expect(brandService.getBrandProfile).toHaveBeenCalledWith(999);
+      expect(brandService.getBrandProfile).toHaveBeenCalledWith(
+        999,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
     });
 
     it('should reject influencers from accessing brand profile endpoint', async () => {

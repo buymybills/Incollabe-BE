@@ -140,6 +140,9 @@ describe('BrandService', () => {
           useValue: {
             count: jest.fn().mockResolvedValue(0),
             findAll: jest.fn().mockResolvedValue([]),
+            findAndCountAll: jest
+              .fn()
+              .mockResolvedValue({ count: 0, rows: [] }),
           },
         },
         {
