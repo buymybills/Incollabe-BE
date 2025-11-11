@@ -1452,7 +1452,7 @@ export class InfluencerService {
         },
         {
           model: CampaignCity,
-          attributes: [], // Exclude all attributes from the join table
+          attributes: ['id'], // Keep id to allow nested city data
           include: [
             {
               model: City,
