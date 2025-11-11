@@ -275,10 +275,12 @@ export class CampaignService {
     if (campaignData.cities && campaignData.cities.length > 0) {
       const citiesObject: Record<number, any> = {};
       campaignData.cities.forEach((cityRelation: any, index: number) => {
+        // Handle nested city structure from CampaignCity relation
+        const cityData = cityRelation.city || cityRelation;
         citiesObject[index] = {
-          id: cityRelation.city.id,
-          name: cityRelation.city.name,
-          tier: cityRelation.city.tier,
+          id: cityData.id,
+          name: cityData.name,
+          tier: cityData.tier,
         };
       });
       (campaignData as any).cities = citiesObject;
