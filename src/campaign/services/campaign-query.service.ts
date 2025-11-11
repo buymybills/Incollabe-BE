@@ -54,12 +54,12 @@ export class CampaignQueryService {
 
   /**
    * Fetch open campaigns for a brand
+   * Only returns active campaigns (status: ACTIVE, not invite-only, not finished/cancelled)
    */
   async fetchOpenCampaigns(brandId: number): Promise<Campaign[]> {
     return this.campaignModel.findAll({
       where: {
         brandId,
-        isActive: true,
         status: CampaignStatus.ACTIVE,
         isInviteOnly: false,
       },
@@ -70,12 +70,12 @@ export class CampaignQueryService {
 
   /**
    * Fetch invite-only campaigns for a brand
+   * Only returns active invite campaigns (status: ACTIVE, invite-only, not finished/cancelled)
    */
   async fetchInviteCampaigns(brandId: number): Promise<Campaign[]> {
     return this.campaignModel.findAll({
       where: {
         brandId,
-        isActive: true,
         status: CampaignStatus.ACTIVE,
         isInviteOnly: true,
       },
@@ -93,10 +93,17 @@ export class CampaignQueryService {
 
   /**
    * Fetch finished campaigns for a brand
+   * A campaign is finished when status is COMPLETED or CANCELLED
    */
   async fetchFinishedCampaigns(brandId: number): Promise<Campaign[]> {
+    const { Op } = require('sequelize');
     return this.campaignModel.findAll({
-      where: { brandId, isActive: false },
+      where: {
+        brandId,
+        status: {
+          [Op.in]: [CampaignStatus.COMPLETED, CampaignStatus.CANCELLED],
+        },
+      },
       include: this.getBaseIncludeOptions(),
       order: [['createdAt', 'DESC']],
     });
