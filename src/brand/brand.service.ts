@@ -521,7 +521,7 @@ export class BrandService {
       'pocEmailId',
       'pocContactNumber',
       'profileImage',
-      'profileBanner',
+      // 'profileBanner', // Optional - not required for 100% completion
       'incorporationDocument',
       'gstDocument',
       'panDocument',
@@ -671,7 +671,7 @@ export class BrandService {
       'panDocument',
     ];
 
-    const requiredImages = ['profileImage', 'profileBanner'];
+    const requiredImages = ['profileImage']; // profileBanner is optional
 
     const allFieldsFilled = requiredFields.every((field) => {
       const value = brand[field as keyof Brand];

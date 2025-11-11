@@ -646,7 +646,7 @@ export class InfluencerService {
       'username',
       'bio',
       'profileImage',
-      'profileBanner',
+      // 'profileBanner', // Optional - not required for 100% completion
       'profileHeadline',
       'countryId',
       'cityId',
