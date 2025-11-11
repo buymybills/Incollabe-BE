@@ -173,6 +173,7 @@ export class CampaignService {
           },
           {
             model: CampaignCity,
+            attributes: [], // Exclude all attributes from the join table
             include: [
               {
                 model: City,
@@ -195,9 +196,26 @@ export class CampaignService {
     const totalPages = Math.ceil(count / limit);
 
     // Transform each campaign in the list
-    const transformedCampaigns = campaigns.map(campaign => 
-      this.transformCampaignResponse(campaign.toJSON())
-    );
+    const transformedCampaigns = campaigns.map(campaign => {
+      const campaignData = campaign.toJSON();
+      
+      // Transform cities to object with numeric keys (0, 1, 2...)
+      if (campaignData.cities && campaignData.cities.length > 0) {
+        const citiesObject: Record<number, any> = {};
+        campaignData.cities.forEach((cityRelation: any, index: number) => {
+          // Handle nested city structure from CampaignCity relation
+          const cityData = cityRelation.city || cityRelation;
+          citiesObject[index] = {
+            id: cityData.id,
+            name: cityData.name,
+            tier: cityData.tier,
+          };
+        });
+        (campaignData as any).cities = citiesObject;
+      }
+
+      return this.transformCampaignResponse(campaignData);
+    });
 
     return {
       campaigns: transformedCampaigns,
@@ -223,10 +241,27 @@ export class CampaignService {
       type,
     );
 
-    // Transform field names for all campaigns
-    const transformedCampaigns = campaigns.map(campaign => 
-      this.transformCampaignResponse(campaign)
-    );
+    // Transform field names and cities for all campaigns
+    const transformedCampaigns = campaigns.map(campaign => {
+      const campaignData = typeof campaign.toJSON === 'function' ? campaign.toJSON() : campaign;
+      
+      // Transform cities to object with numeric keys (0, 1, 2...)
+      if (campaignData.cities && campaignData.cities.length > 0) {
+        const citiesObject: Record<number, any> = {};
+        campaignData.cities.forEach((cityRelation: any, index: number) => {
+          // Handle nested city structure from CampaignCity relation
+          const cityData = cityRelation.city || cityRelation;
+          citiesObject[index] = {
+            id: cityData.id,
+            name: cityData.name,
+            tier: cityData.tier,
+          };
+        });
+        (campaignData as any).cities = citiesObject;
+      }
+
+      return this.transformCampaignResponse(campaignData);
+    });
 
     return { campaigns: transformedCampaigns };
   }

@@ -1102,6 +1102,7 @@ export class InfluencerService {
       },
       {
         model: CampaignCity,
+        attributes: [], // Exclude all attributes from the join table
         include: [
           {
             model: City,
@@ -1176,12 +1177,31 @@ export class InfluencerService {
       countMap.set(count.campaignId, parseInt(count.count));
     });
 
-    const enrichedCampaigns = campaigns.map((campaign) => ({
-      ...campaign.toJSON(),
-      hasApplied: applicationMap.has(campaign.id),
-      applicationStatus: applicationMap.get(campaign.id) || null,
-      totalApplications: countMap.get(campaign.id) || 0,
-    }));
+    const enrichedCampaigns = campaigns.map((campaign) => {
+      const campaignData = campaign.toJSON();
+      
+      // Transform cities to object with numeric keys (0, 1, 2...)
+      if (campaignData.cities && campaignData.cities.length > 0) {
+        const citiesObject: Record<number, any> = {};
+        campaignData.cities.forEach((cityRelation: any, index: number) => {
+          // Handle nested city structure from CampaignCity relation
+          const cityData = cityRelation.city || cityRelation;
+          citiesObject[index] = {
+            id: cityData.id,
+            name: cityData.name,
+            tier: cityData.tier,
+          };
+        });
+        (campaignData as any).cities = citiesObject;
+      }
+
+      return {
+        ...campaignData,
+        hasApplied: applicationMap.has(campaign.id),
+        applicationStatus: applicationMap.get(campaign.id) || null,
+        totalApplications: countMap.get(campaign.id) || 0,
+      };
+    });
 
     const totalPages = Math.ceil(count / limit);
 
@@ -1401,8 +1421,6 @@ export class InfluencerService {
     const campaign = await this.campaignModel.findOne({
       where: {
         id: campaignId,
-        status: CampaignStatus.ACTIVE,
-        isActive: true,
       },
       attributes: [
         'id',
@@ -1434,6 +1452,7 @@ export class InfluencerService {
         },
         {
           model: CampaignCity,
+          attributes: [], // Exclude all attributes from the join table
           include: [
             {
               model: City,
@@ -1469,6 +1488,21 @@ export class InfluencerService {
       appliedAt: application?.createdAt || null,
       totalApplications,
     };
+
+    // Transform cities to object with numeric keys (0, 1, 2...)
+    if (campaignData.cities && campaignData.cities.length > 0) {
+      const citiesObject: Record<number, any> = {};
+      campaignData.cities.forEach((cityRelation: any, index: number) => {
+        // Handle nested city structure from CampaignCity relation
+        const cityData = cityRelation.city || cityRelation;
+        citiesObject[index] = {
+          id: cityData.id,
+          name: cityData.name,
+          tier: cityData.tier,
+        };
+      });
+      (campaignData as any).cities = citiesObject;
+    }
 
     // Transform field names for API response
     return {
