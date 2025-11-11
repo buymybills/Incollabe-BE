@@ -241,6 +241,7 @@ export class CampaignService {
         },
         {
           model: CampaignCity,
+          attributes: [], // Exclude all attributes from the join table (cityId, campaignId, etc.)
           include: [
             {
               model: City,
@@ -270,15 +271,17 @@ export class CampaignService {
     // Transform the response to clean up city structure
     const campaignData = campaign.toJSON();
 
-    // Transform cities to remove intermediate table data
+    // Transform cities to object with numeric keys (0, 1, 2...)
     if (campaignData.cities && campaignData.cities.length > 0) {
-      (campaignData as any).cities = campaignData.cities.map(
-        (cityRelation: any) => ({
+      const citiesObject: Record<number, any> = {};
+      campaignData.cities.forEach((cityRelation: any, index: number) => {
+        citiesObject[index] = {
           id: cityRelation.city.id,
           name: cityRelation.city.name,
           tier: cityRelation.city.tier,
-        }),
-      );
+        };
+      });
+      (campaignData as any).cities = citiesObject;
     }
 
     // Apply field renaming transformation

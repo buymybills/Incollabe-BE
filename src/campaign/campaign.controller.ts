@@ -674,22 +674,18 @@ export class CampaignController {
           profileImage: 'loreal-logo.jpg',
           websiteUrl: 'https://loreal.com',
         },
-        cities: [
-          {
-            city: {
-              id: 1,
-              name: 'Mumbai',
-              tier: 1,
-            },
+        cities: {
+          0: {
+            id: 1,
+            name: 'Mumbai',
+            tier: 1,
           },
-          {
-            city: {
-              id: 2,
-              name: 'Delhi',
-              tier: 1,
-            },
+          1: {
+            id: 2,
+            name: 'Delhi',
+            tier: 1,
           },
-        ],
+        },
         deliverables: [
           {
             platform: 'instagram',
