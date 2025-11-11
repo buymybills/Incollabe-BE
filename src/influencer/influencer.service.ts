@@ -1481,15 +1481,10 @@ export class InfluencerService {
       where: { campaignId },
     });
 
-    const campaignData = {
-      ...campaign.toJSON(),
-      hasApplied: !!application,
-      applicationStatus: application?.status || null,
-      appliedAt: application?.createdAt || null,
-      totalApplications,
-    };
+    const campaignData = campaign.toJSON();
 
     // Transform cities to object with numeric keys (0, 1, 2...)
+    let transformedCities: any = campaignData.cities;
     if (campaignData.cities && campaignData.cities.length > 0) {
       const citiesObject: Record<number, any> = {};
       campaignData.cities.forEach((cityRelation: any, index: number) => {
@@ -1501,12 +1496,17 @@ export class InfluencerService {
           tier: cityData.tier,
         };
       });
-      (campaignData as any).cities = citiesObject;
+      transformedCities = citiesObject;
     }
 
     // Transform field names for API response
     return {
       ...campaignData,
+      cities: transformedCities,
+      hasApplied: !!application,
+      applicationStatus: application?.status || null,
+      appliedAt: application?.createdAt || null,
+      totalApplications,
       deliverables: campaignData.deliverableFormat,
       collaborationCost: campaignData.deliverables,
       deliverableFormat: undefined,
