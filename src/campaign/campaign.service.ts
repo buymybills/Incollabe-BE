@@ -233,7 +233,7 @@ export class CampaignService {
 
   async getCampaignById(campaignId: number): Promise<CampaignResponseDto> {
     const campaign = await this.campaignModel.findOne({
-      where: { id: campaignId, isActive: true },
+      where: { id: campaignId },
       include: [
         {
           model: Brand,

@@ -398,7 +398,7 @@ describe('CampaignService', () => {
         invitations: [],
       });
       expect(campaignModel.findOne).toHaveBeenCalledWith({
-        where: { id: campaignId, isActive: true },
+        where: { id: campaignId },
         include: expect.any(Array),
       });
     });
