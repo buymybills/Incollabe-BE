@@ -73,8 +73,8 @@ import { CustomNiche } from '../auth/model/custom-niche.model';
           database,
           dialectOptions,
           pool: {
-            max: 80,        // Maximum 80 connections (RDS max: 189, 2 instances = 80×2=160)
-            min: 10,        // Minimum 10 idle connections
+            max: 30,        // Maximum 30 connections per instance (2 instances = 60 total, safe for RDS)
+            min: 5,         // Minimum 5 idle connections
             acquire: 60000, // 60 seconds timeout for acquiring connection
             idle: 10000,    // 10 seconds idle time before releasing
             evict: 1000,    // Run eviction every 1 second
