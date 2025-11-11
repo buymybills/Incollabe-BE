@@ -1102,7 +1102,7 @@ export class InfluencerService {
       },
       {
         model: CampaignCity,
-        attributes: [], // Exclude all attributes from the join table
+        attributes: ['id'], // Keep id to allow nested city data
         include: [
           {
             model: City,
@@ -1483,10 +1483,6 @@ export class InfluencerService {
 
     const campaignData = campaign.toJSON();
 
-    // Debug: Log the cities data
-    console.log('Campaign ID:', campaignId);
-    console.log('Cities data:', JSON.stringify(campaignData.cities, null, 2));
-
     // Transform cities to object with numeric keys (0, 1, 2...)
     let transformedCities: any = {};
     if (campaignData.cities && campaignData.cities.length > 0) {
@@ -1502,7 +1498,6 @@ export class InfluencerService {
       });
       transformedCities = citiesObject;
     }
-    console.log('Transformed cities:', JSON.stringify(transformedCities, null, 2));
 
     // Transform field names for API response
     return {

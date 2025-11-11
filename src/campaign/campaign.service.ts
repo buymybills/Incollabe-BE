@@ -173,7 +173,7 @@ export class CampaignService {
           },
           {
             model: CampaignCity,
-            attributes: [], // Exclude all attributes from the join table
+            attributes: ['id'], // Keep id to allow nested city data
             include: [
               {
                 model: City,
@@ -276,7 +276,7 @@ export class CampaignService {
         },
         {
           model: CampaignCity,
-          attributes: [], // Exclude all attributes from the join table (cityId, campaignId, etc.)
+          attributes: ['id'], // Keep id to allow nested city data
           include: [
             {
               model: City,
