@@ -189,6 +189,12 @@ export class BrandController {
           format: 'binary',
           description: 'Profile banner image file (JPG, PNG, etc.)',
         },
+        clearProfileBanner: {
+          type: 'boolean',
+          description:
+            'Set to true to clear/remove the profile banner. If false or not provided, existing banner is preserved unless a new file is uploaded.',
+          example: false,
+        },
         incorporationDocument: {
           type: 'string',
           format: 'binary',
