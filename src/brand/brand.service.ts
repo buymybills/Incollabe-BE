@@ -319,6 +319,16 @@ export class BrandService {
       fileUrls = await this.uploadBrandFiles(files);
     }
 
+    // Handle profile banner clearing
+    // If clearProfileBanner is true, set profileBanner to null
+    // File uploads take precedence over the clear flag
+    if (brandUpdateData.clearProfileBanner === true && !fileUrls['profileBanner']) {
+      fileUrls['profileBanner'] = null;
+    }
+
+    // Remove clearProfileBanner from update data as it's not a database field
+    delete brandUpdateData.clearProfileBanner;
+
     // Update brand data
     const updatedData = {
       ...brandUpdateData,

@@ -309,6 +309,16 @@ export class InfluencerService {
 
     // Handle date conversion if provided
     const processedData: any = { ...updateData };
+
+    // Handle profile banner clearing
+    // If clearProfileBanner is true, set profileBanner to null
+    // File uploads take precedence over the clear flag
+    if (processedData.clearProfileBanner === true && !fileUrls['profileBanner']) {
+      fileUrls['profileBanner'] = null;
+    }
+
+    // Remove clearProfileBanner from update data as it's not a database field
+    delete processedData.clearProfileBanner;
     if (processedData.dateOfBirth) {
       processedData.dateOfBirth = new Date(processedData.dateOfBirth);
     }

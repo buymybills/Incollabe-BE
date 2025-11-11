@@ -246,6 +246,20 @@ export class UpdateBrandProfileDto {
   fcmToken?: string;
 
   @ApiProperty({
+    description:
+      'Set to true to clear/remove the profile banner. If false or not provided, existing banner is preserved unless a new file is uploaded.',
+    required: false,
+    example: false,
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return undefined;
+  })
+  clearProfileBanner?: boolean;
+
+  @ApiProperty({
     description: 'Array of regular niche IDs (1-5 niches allowed)',
     type: [Number],
     example: [1, 2, 3],
