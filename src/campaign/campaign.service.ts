@@ -372,7 +372,11 @@ export class CampaignService {
       throw new NotFoundException('Campaign not found');
     }
 
-    await campaign.update({ isActive: false });
+    // When closing a campaign, mark it as completed
+    await campaign.update({ 
+      isActive: false,
+      status: CampaignStatus.COMPLETED,
+    });
 
     return { message: 'Campaign closed successfully' };
   }

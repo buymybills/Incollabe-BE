@@ -965,7 +965,7 @@ export class CampaignController {
   @ApiOperation({
     summary: 'Close campaign',
     description:
-      'Closes a campaign by setting isActive to false (only by the brand that owns it)',
+      'Closes a campaign by marking it as completed (sets status to COMPLETED and isActive to false). Only accessible by the brand that owns the campaign.',
   })
   @ApiParam({
     name: 'id',
