@@ -1462,12 +1462,20 @@ export class InfluencerService {
       where: { campaignId },
     });
 
-    return {
+    const campaignData = {
       ...campaign.toJSON(),
       hasApplied: !!application,
       applicationStatus: application?.status || null,
       appliedAt: application?.createdAt || null,
       totalApplications,
+    };
+
+    // Transform field names for API response
+    return {
+      ...campaignData,
+      deliverables: campaignData.deliverableFormat,
+      collaborationCost: campaignData.deliverables,
+      deliverableFormat: undefined,
     };
   }
 

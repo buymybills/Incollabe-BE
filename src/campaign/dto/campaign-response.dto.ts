@@ -38,7 +38,7 @@ export class CampaignResponseDto {
   name: string;
   description?: string;
   category?: string;
-  deliverableFormat?: string;
+  deliverables?: string; // Renamed from deliverableFormat
   status: CampaignStatus;
   type: CampaignType;
   startDate?: Date;
@@ -58,6 +58,6 @@ export class CampaignResponseDto {
   updatedAt?: Date;
   brand?: BrandDto;
   cities?: CityDto[];
-  deliverables?: CampaignDeliverableDto[];
+  collaborationCost?: CampaignDeliverableDto[]; // Renamed from deliverables
   invitations?: CampaignInvitationDto[];
 }

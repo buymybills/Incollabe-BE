@@ -63,6 +63,24 @@ export class CampaignService {
     private readonly campaignQueryService: CampaignQueryService,
   ) {}
 
+  /**
+   * Transform campaign data to rename fields for API response
+   * @param campaignData - Raw campaign data
+   * @returns Transformed campaign data with renamed fields
+   */
+  private transformCampaignResponse(campaignData: any): any {
+    const response: any = {
+      ...campaignData,
+      deliverables: campaignData.deliverableFormat, // Rename deliverableFormat to deliverables
+      collaborationCost: campaignData.deliverables, // Rename deliverables array to collaborationCost
+    };
+
+    // Remove old field names
+    delete response.deliverableFormat;
+
+    return response;
+  }
+
   async createCampaign(
     createCampaignDto: CreateCampaignDto,
     brandId: number,
@@ -176,8 +194,13 @@ export class CampaignService {
 
     const totalPages = Math.ceil(count / limit);
 
+    // Transform each campaign in the list
+    const transformedCampaigns = campaigns.map(campaign => 
+      this.transformCampaignResponse(campaign.toJSON())
+    );
+
     return {
-      campaigns,
+      campaigns: transformedCampaigns,
       total: count,
       page,
       limit,
@@ -200,7 +223,12 @@ export class CampaignService {
       type,
     );
 
-    return { campaigns };
+    // Transform field names for all campaigns
+    const transformedCampaigns = campaigns.map(campaign => 
+      this.transformCampaignResponse(campaign)
+    );
+
+    return { campaigns: transformedCampaigns };
   }
 
   async getCampaignById(campaignId: number): Promise<CampaignResponseDto> {
@@ -253,7 +281,8 @@ export class CampaignService {
       );
     }
 
-    return campaignData as unknown as CampaignResponseDto;
+    // Apply field renaming transformation
+    return this.transformCampaignResponse(campaignData) as CampaignResponseDto;
   }
 
   async updateCampaign(
@@ -593,12 +622,12 @@ export class CampaignService {
         offset,
       });
 
-    // Add application count to each campaign
+    // Add application count to each campaign and transform field names
     const campaignsWithStats = campaigns.map((campaign) => {
       const campaignData: Campaign & { totalApplications: number } =
         campaign.toJSON();
       campaignData.totalApplications = campaign.applications?.length ?? 0;
-      return campaignData;
+      return this.transformCampaignResponse(campaignData);
     });
 
     return {
