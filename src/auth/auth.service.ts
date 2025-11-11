@@ -178,8 +178,21 @@ export class AuthService {
     }
 
     // Generate OTP based on environment
-    const isStaging = this.configService.get<string>('NODE_ENV') === 'staging';
+    const nodeEnv = this.configService.get<string>('NODE_ENV');
+    console.log('========== OTP GENERATION DEBUG ==========');
+    console.log('NODE_ENV value:', nodeEnv);
+    console.log('NODE_ENV type:', typeof nodeEnv);
+    console.log('NODE_ENV length:', nodeEnv?.length);
+    console.log('NODE_ENV trimmed:', nodeEnv?.trim());
+    console.log('Checking if NODE_ENV === "staging":', nodeEnv === 'staging');
+    console.log('Checking if trimmed NODE_ENV === "staging":', nodeEnv?.trim() === 'staging');
+    console.log('==========================================');
+
+    const isStaging = nodeEnv === 'staging';
     const code = isStaging ? '123456' : randomInt(100000, 999999).toString();
+
+    console.log('isStaging:', isStaging);
+    console.log('Generated OTP:', code);
 
     // Set expiry timestamp for OTP (valid for 5 minutes)
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
@@ -1079,8 +1092,21 @@ export class AuthService {
       isExistingAccount?: boolean;
     },
   ) {
-    const isStaging = this.configService.get<string>('NODE_ENV') === 'staging';
+    const nodeEnv = this.configService.get<string>('NODE_ENV');
+    console.log('========== BRAND OTP GENERATION DEBUG ==========');
+    console.log('NODE_ENV value:', nodeEnv);
+    console.log('NODE_ENV type:', typeof nodeEnv);
+    console.log('NODE_ENV length:', nodeEnv?.length);
+    console.log('NODE_ENV trimmed:', nodeEnv?.trim());
+    console.log('Checking if NODE_ENV === "staging":', nodeEnv === 'staging');
+    console.log('Checking if trimmed NODE_ENV === "staging":', nodeEnv?.trim() === 'staging');
+    console.log('===============================================');
+
+    const isStaging = nodeEnv === 'staging';
     const otp = isStaging ? '123456' : randomInt(100000, 999999).toString();
+
+    console.log('isStaging:', isStaging);
+    console.log('Generated Brand OTP:', otp);
 
     // Set expiry timestamp for OTP (valid for 10 minutes)
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
