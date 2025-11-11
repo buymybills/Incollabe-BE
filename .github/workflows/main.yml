@@ -33,6 +33,8 @@ jobs:
               - 'src/**'
               - 'package.json'
               - 'Dockerfile'
+              - 'Dockerfile.pm2'
+              - 'ecosystem.config.js'
               - 'docker-compose.yml'
               - 'nginx.conf'
               - '.env'
@@ -47,7 +49,7 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       service: "incollab"
-      dockerfile_path: "./Dockerfile"
+      dockerfile_path: "./Dockerfile.pm2"  # Use PM2-optimized Dockerfile
       context_path: "."
 
   incollab-test-dev:
@@ -67,7 +69,7 @@ jobs:
     uses: ./.github/workflows/push.yml
     with:
       service: "incollab"
-      dockerfile_path: "./Dockerfile"
+      dockerfile_path: "./Dockerfile.pm2"  # Use PM2-optimized Dockerfile
       context_path: "."
       image_tag: "dev"
     secrets:
