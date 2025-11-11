@@ -319,6 +319,16 @@ export class BrandService {
       fileUrls = await this.uploadBrandFiles(files);
     }
 
+    // Handle profile banner clearing
+    // If clearProfileBanner is true, set profileBanner to null
+    // File uploads take precedence over the clear flag
+    if (brandUpdateData.clearProfileBanner === true && !fileUrls['profileBanner']) {
+      fileUrls['profileBanner'] = null;
+    }
+
+    // Remove clearProfileBanner from update data as it's not a database field
+    delete brandUpdateData.clearProfileBanner;
+
     // Update brand data
     const updatedData = {
       ...brandUpdateData,
@@ -511,7 +521,7 @@ export class BrandService {
       'pocEmailId',
       'pocContactNumber',
       'profileImage',
-      'profileBanner',
+      // 'profileBanner', // Optional - not required for 100% completion
       'incorporationDocument',
       'gstDocument',
       'panDocument',
@@ -661,7 +671,7 @@ export class BrandService {
       'panDocument',
     ];
 
-    const requiredImages = ['profileImage', 'profileBanner'];
+    const requiredImages = ['profileImage']; // profileBanner is optional
 
     const allFieldsFilled = requiredFields.every((field) => {
       const value = brand[field as keyof Brand];

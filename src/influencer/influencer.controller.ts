@@ -206,6 +206,12 @@ export class InfluencerController {
           format: 'binary',
           description: 'Profile banner image file - can update existing',
         },
+        clearProfileBanner: {
+          type: 'boolean',
+          description:
+            'Set to true to clear/remove the profile banner. If false or not provided, existing banner is preserved unless a new file is uploaded.',
+          example: false,
+        },
       },
       example: {
         bio: 'I am a fashion influencer creating amazing content',

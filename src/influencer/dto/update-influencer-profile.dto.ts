@@ -119,6 +119,20 @@ export class UpdateInfluencerProfileDto {
 
   @ApiProperty({
     description:
+      'Set to true to clear/remove the profile banner. If false or not provided, existing banner is preserved unless a new file is uploaded.',
+    required: false,
+    example: false,
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return undefined;
+  })
+  clearProfileBanner?: boolean;
+
+  @ApiProperty({
+    description:
       'Array of niche IDs. Accepts JSON array "[1,4,12]" or comma-separated "1,4,12"',
     example: '[1,4,12]',
     required: false,
