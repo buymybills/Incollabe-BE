@@ -72,6 +72,12 @@ import { CustomNiche } from '../auth/model/custom-niche.model';
           password,
           database,
           dialectOptions,
+          pool: {
+            max: 50,       // Maximum 50 connections (was default 5)
+            min: 5,        // Minimum 5 idle connections
+            acquire: 60000, // 60 seconds timeout for acquiring connection
+            idle: 10000,   // 10 seconds idle time before releasing
+          },
           models: [
             Influencer,
             Brand,
