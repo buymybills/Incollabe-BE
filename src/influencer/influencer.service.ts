@@ -1484,7 +1484,7 @@ export class InfluencerService {
     const campaignData = campaign.toJSON();
 
     // Transform cities to object with numeric keys (0, 1, 2...)
-    let transformedCities: any = campaignData.cities;
+    let transformedCities: any = {};
     if (campaignData.cities && campaignData.cities.length > 0) {
       const citiesObject: Record<number, any> = {};
       campaignData.cities.forEach((cityRelation: any, index: number) => {
