@@ -1180,19 +1180,20 @@ export class InfluencerService {
     const enrichedCampaigns = campaigns.map((campaign) => {
       const campaignData = campaign.toJSON();
       
-      // Transform cities to object with numeric keys (0, 1, 2...)
+      // Transform cities to array of objects
       if (campaignData.cities && campaignData.cities.length > 0) {
-        const citiesObject: Record<number, any> = {};
-        campaignData.cities.forEach((cityRelation: any, index: number) => {
+        const citiesArray = campaignData.cities.map((cityRelation: any) => {
           // Handle nested city structure from CampaignCity relation
           const cityData = cityRelation.city || cityRelation;
-          citiesObject[index] = {
+          return {
             id: cityData.id,
             name: cityData.name,
             tier: cityData.tier,
           };
         });
-        (campaignData as any).cities = citiesObject;
+        (campaignData as any).cities = citiesArray;
+      } else {
+        (campaignData as any).cities = [];
       }
 
       return {
@@ -1483,20 +1484,18 @@ export class InfluencerService {
 
     const campaignData = campaign.toJSON();
 
-    // Transform cities to object with numeric keys (0, 1, 2...)
-    let transformedCities: any = {};
+    // Transform cities to array of objects
+    let transformedCities: any = [];
     if (campaignData.cities && campaignData.cities.length > 0) {
-      const citiesObject: Record<number, any> = {};
-      campaignData.cities.forEach((cityRelation: any, index: number) => {
+      transformedCities = campaignData.cities.map((cityRelation: any) => {
         // Handle nested city structure from CampaignCity relation
         const cityData = cityRelation.city || cityRelation;
-        citiesObject[index] = {
+        return {
           id: cityData.id,
           name: cityData.name,
           tier: cityData.tier,
         };
       });
-      transformedCities = citiesObject;
     }
 
     // Transform field names for API response
