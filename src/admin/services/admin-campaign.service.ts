@@ -46,6 +46,17 @@ export class AdminCampaignService {
     private readonly aiScoringService: AIScoringService,
   ) {}
 
+  // Transform campaign response to match API requirements
+  private transformCampaignResponse(campaignData: any): any {
+    const response: any = {
+      ...campaignData,
+      deliverables: campaignData.deliverableFormat,
+      collaborationCost: campaignData.deliverables,
+    };
+    delete response.deliverableFormat;
+    return response;
+  }
+
   async getCampaignApplicationsWithAI(
     campaignId: number,
     options?: {
@@ -496,7 +507,7 @@ export class AdminCampaignService {
         const cityNames =
           campaign.cities?.map((cc) => cc.city?.name).filter(Boolean) || [];
 
-        return {
+        const campaignData = {
           id: campaign.id,
           name: campaign.name,
           description: campaign.description,
@@ -517,7 +528,11 @@ export class AdminCampaignService {
           cities: cityNames,
           applicationsCount,
           selectedCount,
+          deliverableFormat: campaign.deliverableFormat,
+          deliverables: campaign.deliverables,
         };
+
+        return this.transformCampaignResponse(campaignData);
       }),
     );
 

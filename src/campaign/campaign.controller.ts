@@ -674,22 +674,18 @@ export class CampaignController {
           profileImage: 'loreal-logo.jpg',
           websiteUrl: 'https://loreal.com',
         },
-        cities: [
-          {
-            city: {
-              id: 1,
-              name: 'Mumbai',
-              tier: 1,
-            },
+        cities: {
+          0: {
+            id: 1,
+            name: 'Mumbai',
+            tier: 1,
           },
-          {
-            city: {
-              id: 2,
-              name: 'Delhi',
-              tier: 1,
-            },
+          1: {
+            id: 2,
+            name: 'Delhi',
+            tier: 1,
           },
-        ],
+        },
         deliverables: [
           {
             platform: 'instagram',
@@ -965,7 +961,7 @@ export class CampaignController {
   @ApiOperation({
     summary: 'Close campaign',
     description:
-      'Closes a campaign by setting isActive to false (only by the brand that owns it)',
+      'Closes a campaign by marking it as completed (sets status to COMPLETED and isActive to false). Only accessible by the brand that owns the campaign.',
   })
   @ApiParam({
     name: 'id',

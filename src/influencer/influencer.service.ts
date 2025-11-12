@@ -1102,6 +1102,7 @@ export class InfluencerService {
       },
       {
         model: CampaignCity,
+        attributes: ['id'], // Keep id to allow nested city data
         include: [
           {
             model: City,
@@ -1176,12 +1177,32 @@ export class InfluencerService {
       countMap.set(count.campaignId, parseInt(count.count));
     });
 
-    const enrichedCampaigns = campaigns.map((campaign) => ({
-      ...campaign.toJSON(),
-      hasApplied: applicationMap.has(campaign.id),
-      applicationStatus: applicationMap.get(campaign.id) || null,
-      totalApplications: countMap.get(campaign.id) || 0,
-    }));
+    const enrichedCampaigns = campaigns.map((campaign) => {
+      const campaignData = campaign.toJSON();
+      
+      // Transform cities to array of objects
+      if (campaignData.cities && campaignData.cities.length > 0) {
+        const citiesArray = campaignData.cities.map((cityRelation: any) => {
+          // Handle nested city structure from CampaignCity relation
+          const cityData = cityRelation.city || cityRelation;
+          return {
+            id: cityData.id,
+            name: cityData.name,
+            tier: cityData.tier,
+          };
+        });
+        (campaignData as any).cities = citiesArray;
+      } else {
+        (campaignData as any).cities = [];
+      }
+
+      return {
+        ...campaignData,
+        hasApplied: applicationMap.has(campaign.id),
+        applicationStatus: applicationMap.get(campaign.id) || null,
+        totalApplications: countMap.get(campaign.id) || 0,
+      };
+    });
 
     const totalPages = Math.ceil(count / limit);
 
@@ -1401,8 +1422,6 @@ export class InfluencerService {
     const campaign = await this.campaignModel.findOne({
       where: {
         id: campaignId,
-        status: CampaignStatus.ACTIVE,
-        isActive: true,
       },
       attributes: [
         'id',
@@ -1434,6 +1453,7 @@ export class InfluencerService {
         },
         {
           model: CampaignCity,
+          attributes: ['id'], // Keep id to allow nested city data
           include: [
             {
               model: City,
@@ -1462,12 +1482,33 @@ export class InfluencerService {
       where: { campaignId },
     });
 
+    const campaignData = campaign.toJSON();
+
+    // Transform cities to array of objects
+    let transformedCities: any = [];
+    if (campaignData.cities && campaignData.cities.length > 0) {
+      transformedCities = campaignData.cities.map((cityRelation: any) => {
+        // Handle nested city structure from CampaignCity relation
+        const cityData = cityRelation.city || cityRelation;
+        return {
+          id: cityData.id,
+          name: cityData.name,
+          tier: cityData.tier,
+        };
+      });
+    }
+
+    // Transform field names for API response
     return {
-      ...campaign.toJSON(),
+      ...campaignData,
+      cities: transformedCities,
       hasApplied: !!application,
       applicationStatus: application?.status || null,
       appliedAt: application?.createdAt || null,
       totalApplications,
+      deliverables: campaignData.deliverableFormat,
+      collaborationCost: campaignData.deliverables,
+      deliverableFormat: undefined,
     };
   }
 

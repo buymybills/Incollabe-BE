@@ -63,6 +63,24 @@ export class CampaignService {
     private readonly campaignQueryService: CampaignQueryService,
   ) {}
 
+  /**
+   * Transform campaign data to rename fields for API response
+   * @param campaignData - Raw campaign data
+   * @returns Transformed campaign data with renamed fields
+   */
+  private transformCampaignResponse(campaignData: any): any {
+    const response: any = {
+      ...campaignData,
+      deliverables: campaignData.deliverableFormat, // Rename deliverableFormat to deliverables
+      collaborationCost: campaignData.deliverables, // Rename deliverables array to collaborationCost
+    };
+
+    // Remove old field names
+    delete response.deliverableFormat;
+
+    return response;
+  }
+
   async createCampaign(
     createCampaignDto: CreateCampaignDto,
     brandId: number,
@@ -155,6 +173,7 @@ export class CampaignService {
           },
           {
             model: CampaignCity,
+            attributes: ['id'], // Keep id to allow nested city data
             include: [
               {
                 model: City,
@@ -176,8 +195,31 @@ export class CampaignService {
 
     const totalPages = Math.ceil(count / limit);
 
+    // Transform each campaign in the list
+    const transformedCampaigns = campaigns.map(campaign => {
+      const campaignData = campaign.toJSON();
+      
+      // Transform cities to array of objects
+      if (campaignData.cities && campaignData.cities.length > 0) {
+        const citiesArray = campaignData.cities.map((cityRelation: any) => {
+          // Handle nested city structure from CampaignCity relation
+          const cityData = cityRelation.city || cityRelation;
+          return {
+            id: cityData.id,
+            name: cityData.name,
+            tier: cityData.tier,
+          };
+        });
+        (campaignData as any).cities = citiesArray;
+      } else {
+        (campaignData as any).cities = [];
+      }
+
+      return this.transformCampaignResponse(campaignData);
+    });
+
     return {
-      campaigns,
+      campaigns: transformedCampaigns,
       total: count,
       page,
       limit,
@@ -200,12 +242,35 @@ export class CampaignService {
       type,
     );
 
-    return { campaigns };
+    // Transform field names and cities for all campaigns
+    const transformedCampaigns = campaigns.map(campaign => {
+      const campaignData = typeof campaign.toJSON === 'function' ? campaign.toJSON() : campaign;
+      
+      // Transform cities to array of objects
+      if (campaignData.cities && campaignData.cities.length > 0) {
+        const citiesArray = campaignData.cities.map((cityRelation: any) => {
+          // Handle nested city structure from CampaignCity relation
+          const cityData = cityRelation.city || cityRelation;
+          return {
+            id: cityData.id,
+            name: cityData.name,
+            tier: cityData.tier,
+          };
+        });
+        (campaignData as any).cities = citiesArray;
+      } else {
+        (campaignData as any).cities = [];
+      }
+
+      return this.transformCampaignResponse(campaignData);
+    });
+
+    return { campaigns: transformedCampaigns };
   }
 
   async getCampaignById(campaignId: number): Promise<CampaignResponseDto> {
     const campaign = await this.campaignModel.findOne({
-      where: { id: campaignId, isActive: true },
+      where: { id: campaignId },
       include: [
         {
           model: Brand,
@@ -213,6 +278,7 @@ export class CampaignService {
         },
         {
           model: CampaignCity,
+          attributes: ['id'], // Keep id to allow nested city data
           include: [
             {
               model: City,
@@ -242,18 +308,24 @@ export class CampaignService {
     // Transform the response to clean up city structure
     const campaignData = campaign.toJSON();
 
-    // Transform cities to remove intermediate table data
+    // Transform cities to array of objects
     if (campaignData.cities && campaignData.cities.length > 0) {
-      (campaignData as any).cities = campaignData.cities.map(
-        (cityRelation: any) => ({
-          id: cityRelation.city.id,
-          name: cityRelation.city.name,
-          tier: cityRelation.city.tier,
-        }),
-      );
+      const citiesArray = campaignData.cities.map((cityRelation: any) => {
+        // Handle nested city structure from CampaignCity relation
+        const cityData = cityRelation.city || cityRelation;
+        return {
+          id: cityData.id,
+          name: cityData.name,
+          tier: cityData.tier,
+        };
+      });
+      (campaignData as any).cities = citiesArray;
+    } else {
+      (campaignData as any).cities = [];
     }
 
-    return campaignData as unknown as CampaignResponseDto;
+    // Apply field renaming transformation
+    return this.transformCampaignResponse(campaignData) as CampaignResponseDto;
   }
 
   async updateCampaign(
@@ -343,7 +415,11 @@ export class CampaignService {
       throw new NotFoundException('Campaign not found');
     }
 
-    await campaign.update({ isActive: false });
+    // When closing a campaign, mark it as completed
+    await campaign.update({ 
+      isActive: false,
+      status: CampaignStatus.COMPLETED,
+    });
 
     return { message: 'Campaign closed successfully' };
   }
@@ -593,12 +669,12 @@ export class CampaignService {
         offset,
       });
 
-    // Add application count to each campaign
+    // Add application count to each campaign and transform field names
     const campaignsWithStats = campaigns.map((campaign) => {
       const campaignData: Campaign & { totalApplications: number } =
         campaign.toJSON();
       campaignData.totalApplications = campaign.applications?.length ?? 0;
-      return campaignData;
+      return this.transformCampaignResponse(campaignData);
     });
 
     return {

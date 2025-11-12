@@ -267,6 +267,16 @@ describe('CampaignService', () => {
           brand: { id: brandId, brandName: 'Test Brand' },
           cities: [],
           deliverables: [],
+          deliverableFormat: 'Test Format',
+          toJSON: jest.fn().mockReturnValue({
+            id: 1,
+            name: 'Campaign 1',
+            brandId,
+            brand: { id: brandId, brandName: 'Test Brand' },
+            cities: [],
+            deliverables: [],
+            deliverableFormat: 'Test Format',
+          }),
         },
       ];
 
@@ -278,7 +288,15 @@ describe('CampaignService', () => {
       const result = await service.getCampaigns(getCampaignsDto, brandId);
 
       expect(result).toEqual({
-        campaigns: mockCampaigns,
+        campaigns: [{
+          id: 1,
+          name: 'Campaign 1',
+          brandId,
+          brand: { id: brandId, brandName: 'Test Brand' },
+          cities: [],
+          deliverables: 'Test Format',
+          collaborationCost: [],
+        }],
         total: 1,
         page: 1,
         limit: 10,
@@ -353,6 +371,7 @@ describe('CampaignService', () => {
         brand: { id: 1, brandName: 'Test Brand' },
         cities: [],
         deliverables: [],
+        deliverableFormat: 'Test Format',
         invitations: [],
         toJSON: jest.fn().mockReturnValue({
           id: campaignId,
@@ -360,6 +379,7 @@ describe('CampaignService', () => {
           brand: { id: 1, brandName: 'Test Brand' },
           cities: [],
           deliverables: [],
+          deliverableFormat: 'Test Format',
           invitations: [],
         }),
       };
@@ -373,11 +393,12 @@ describe('CampaignService', () => {
         name: 'Test Campaign',
         brand: { id: 1, brandName: 'Test Brand' },
         cities: [],
-        deliverables: [],
+        deliverables: 'Test Format',
+        collaborationCost: [],
         invitations: [],
       });
       expect(campaignModel.findOne).toHaveBeenCalledWith({
-        where: { id: campaignId, isActive: true },
+        where: { id: campaignId },
         include: expect.any(Array),
       });
     });
@@ -900,6 +921,7 @@ describe('CampaignService', () => {
           name: 'Campaign 1',
           brandId,
           deliverables: [],
+          deliverableFormat: 'Test Format',
           invitations: [],
           applications: [{ id: 1 }, { id: 2 }, { id: 3 }],
           toJSON: jest.fn().mockReturnValue({
@@ -907,6 +929,7 @@ describe('CampaignService', () => {
             name: 'Campaign 1',
             brandId,
             deliverables: [],
+            deliverableFormat: 'Test Format',
             invitations: [],
             applications: [{ id: 1 }, { id: 2 }, { id: 3 }],
           }),
@@ -926,7 +949,8 @@ describe('CampaignService', () => {
             id: 1,
             name: 'Campaign 1',
             brandId,
-            deliverables: [],
+            deliverables: 'Test Format',
+            collaborationCost: [],
             invitations: [],
             applications: [{ id: 1 }, { id: 2 }, { id: 3 }],
             totalApplications: 3,
