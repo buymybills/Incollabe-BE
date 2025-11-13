@@ -21,6 +21,7 @@ import { CampaignDeliverable } from '../campaign/models/campaign-deliverable.mod
 import { CampaignInvitation } from '../campaign/models/campaign-invitation.model';
 import { CampaignApplication } from '../campaign/models/campaign-application.model';
 import { CustomNiche } from '../auth/model/custom-niche.model';
+import { SupportTicket } from '../shared/models/support-ticket.model';
 
 @Module({
   imports: [
@@ -104,6 +105,7 @@ import { CustomNiche } from '../auth/model/custom-niche.model';
             CampaignInvitation,
             CampaignApplication,
             CustomNiche,
+            SupportTicket,
           ],
           autoLoadModels: true,
           synchronize: false, // Disabled to prevent index conflicts with existing database

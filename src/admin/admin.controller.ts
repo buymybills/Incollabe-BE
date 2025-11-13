@@ -110,6 +110,10 @@ import {
 import { LogoutDto, LogoutResponseDto } from './dto/logout.dto';
 import { GetAuditLogsDto, AuditLogListResponseDto } from './dto/audit-log.dto';
 import { AuditLogService } from './services/audit-log.service';
+import { SupportTicketService } from '../shared/support-ticket.service';
+import { CreateSupportTicketDto } from '../shared/dto/create-support-ticket.dto';
+import { GetSupportTicketsDto } from '../shared/dto/get-support-tickets.dto';
+import { UpdateSupportTicketDto } from '../shared/dto/update-support-ticket.dto';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -121,10 +125,11 @@ export class AdminController {
     private readonly adminPostService: AdminPostService,
     private readonly influencerScoringService: InfluencerScoringService,
     private readonly dashboardStatsService: DashboardStatsService,
-    private readonly auditLogService: AuditLogService,
     private readonly brandService: BrandService,
     private readonly influencerService: InfluencerService,
     private readonly postService: PostService,
+    private readonly auditLogService: AuditLogService,
+    private readonly supportTicketService: SupportTicketService,
   ) {}
 
   @Post('login')
@@ -1731,5 +1736,145 @@ export class AdminController {
   })
   async getAvailableDateRange() {
     return await this.dashboardStatsService.getAvailableDateRange();
+  }
+
+  // ============================================
+  // SUPPORT TICKETS
+  // ============================================
+
+  @Get('support-tickets')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get all support tickets',
+    description:
+      'Get all support tickets with filters for status, priority, report type, user type. Supports search and pagination.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Support tickets retrieved successfully',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getAllSupportTickets(@Query() filters: GetSupportTicketsDto) {
+    return await this.supportTicketService.getAllTickets(filters);
+  }
+
+  @Get('support-tickets/statistics')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get support ticket statistics',
+    description:
+      'Get statistics about support tickets including counts by status, type, and priority',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Statistics retrieved successfully',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getSupportTicketStatistics() {
+    return await this.supportTicketService.getTicketStatistics();
+  }
+
+  @Get('support-tickets/:id')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get support ticket details',
+    description: 'Get detailed information about a specific support ticket',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Support ticket ID',
+    type: 'number',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Ticket details retrieved successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Ticket not found',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getSupportTicketById(@Param('id', ParseIntPipe) id: number) {
+    return await this.supportTicketService.getTicketById(id);
+  }
+
+  @Put('support-tickets/:id')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update support ticket',
+    description:
+      'Update ticket status, priority, add admin notes, or provide resolution',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Support ticket ID',
+    type: 'number',
+  })
+  @ApiBody({
+    type: UpdateSupportTicketDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Ticket updated successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Ticket not found',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions',
+  })
+  async updateSupportTicket(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateDto: UpdateSupportTicketDto,
+    @Req() req: RequestWithAdmin,
+  ) {
+    return await this.supportTicketService.updateTicket(
+      id,
+      updateDto,
+      req.admin.id,
+    );
+  }
+
+  @Delete('support-tickets/:id')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Delete support ticket',
+    description: 'Permanently delete a support ticket (Super Admin only)',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Support ticket ID',
+    type: 'number',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Ticket deleted successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Ticket not found',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - Super Admin only',
+  })
+  async deleteSupportTicket(@Param('id', ParseIntPipe) id: number) {
+    return await this.supportTicketService.deleteTicket(id);
   }
 }

@@ -189,7 +189,7 @@ export class DashboardStatsService {
       where: { isActive: true, isTopBrand: true },
       limit: 10,
       order: [['createdAt', 'DESC']],
-      attributes: ['id', 'brandName', 'username', 'profileImage', 'isVerified'],
+      attributes: ['id', 'brandName', 'username', 'profileImage', 'isVerified', 'isTopBrand'],
     });
 
     // Top Campaigns (by applications)

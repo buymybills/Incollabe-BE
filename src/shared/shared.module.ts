@@ -13,6 +13,7 @@ import { LoggerService } from './services/logger.service';
 import { CustomNicheService } from './services/custom-niche.service';
 import { EncryptionService } from './services/encryption.service';
 import { SearchService } from './services/search.service';
+import { SupportTicketService } from './support-ticket.service';
 import { SearchController } from './controllers/search.controller';
 import { IsValidUsernameConstraint } from './validators/is-valid-username.validator';
 import { Otp } from '../auth/model/otp.model';
@@ -20,11 +21,12 @@ import { CustomNiche } from '../auth/model/custom-niche.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { Niche } from '../auth/model/niche.model';
+import { SupportTicket } from './models/support-ticket.model';
 
 @Module({
   imports: [
     ConfigModule,
-    SequelizeModule.forFeature([Otp, CustomNiche, Influencer, Brand, Niche]),
+    SequelizeModule.forFeature([Otp, CustomNiche, Influencer, Brand, Niche, SupportTicket]),
   ],
   controllers: [SearchController],
   providers: [
@@ -40,6 +42,7 @@ import { Niche } from '../auth/model/niche.model';
     CustomNicheService,
     EncryptionService,
     SearchService,
+    SupportTicketService,
     IsValidUsernameConstraint,
   ],
   exports: [
@@ -55,6 +58,7 @@ import { Niche } from '../auth/model/niche.model';
     SearchService,
     CustomNicheService,
     EncryptionService,
+    SupportTicketService,
     IsValidUsernameConstraint,
   ],
 })

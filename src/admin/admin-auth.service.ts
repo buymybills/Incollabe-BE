@@ -1273,6 +1273,7 @@ export class AdminAuthService {
         'brandBio',
         'websiteUrl',
         'isVerified',
+        'isTopBrand',
         'createdAt',
       ],
       include: [
@@ -1358,15 +1359,15 @@ export class AdminAuthService {
             averagePayout,
           },
         };
-      })
-      .filter((item) => {
-        // Apply minimum qualification filters - relaxed for better results
-        // At least 1 campaign to be considered
-        return item.metrics.totalCampaigns >= 1;
       });
+      // .filter((item) => {
+      //   // Apply minimum qualification filters - relaxed for better results
+      //   // At least 1 campaign to be considered
+      //   return item.metrics.totalCampaigns >= 1;
+      // });
 
     console.log(
-      `After filtering: ${brandsWithCalculatedMetrics.length} brands with at least 1 campaign`,
+      `After filtering: ${brandsWithCalculatedMetrics.length} brands`,
     );
 
     // If no brands meet criteria, return empty result
