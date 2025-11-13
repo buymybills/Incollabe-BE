@@ -109,6 +109,7 @@ import {
 } from './dto/admin-settings.dto';
 import { LogoutDto, LogoutResponseDto } from './dto/logout.dto';
 import { GetAuditLogsDto, AuditLogListResponseDto } from './dto/audit-log.dto';
+import { UpdateDisplayOrderDto } from './dto/update-display-order.dto';
 import { AuditLogService } from './services/audit-log.service';
 import { SupportTicketService } from '../shared/support-ticket.service';
 import { CreateSupportTicketDto } from '../shared/dto/create-support-ticket.dto';
@@ -1180,6 +1181,56 @@ export class AdminController {
     return await this.adminAuthService.updateTopInfluencerStatus(
       influencerId,
       body.isTopInfluencer,
+      req.admin.id,
+    );
+  }
+
+  @Put('influencer/:influencerId/display-order')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update influencer display order',
+    description:
+      'Update the display order of an influencer for manual positioning in admin lists. Lower numbers appear first.',
+  })
+  @ApiParam({
+    name: 'influencerId',
+    description: 'ID of the influencer',
+    type: 'number',
+  })
+  @ApiBody({
+    type: UpdateDisplayOrderDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Display order updated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        message: { type: 'string', example: 'Display order updated successfully' },
+        displayOrder: { type: 'number', example: 1 },
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions',
+  })
+  @ApiNotFoundResponse({
+    description: 'Influencer not found',
+  })
+  async updateInfluencerDisplayOrder(
+    @Param('influencerId', ParseIntPipe) influencerId: number,
+    @Body() body: UpdateDisplayOrderDto,
+    @Req() req: RequestWithAdmin,
+  ) {
+    return await this.adminAuthService.updateInfluencerDisplayOrder(
+      influencerId,
+      body.displayOrder,
       req.admin.id,
     );
   }

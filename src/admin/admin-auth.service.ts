@@ -790,6 +790,45 @@ export class AdminAuthService {
     };
   }
 
+  async updateInfluencerDisplayOrder(
+    influencerId: number,
+    displayOrder: number,
+    adminId: number,
+  ) {
+    // First check if influencer exists
+    const influencer = await this.influencerModel.findByPk(influencerId);
+    if (!influencer) {
+      throw new NotFoundException('Influencer not found');
+    }
+
+    // Update the display order
+    await influencer.update({ displayOrder });
+
+    // Log audit trail
+    const admin = await this.adminModel.findByPk(adminId);
+    if (admin) {
+      await this.auditLogService.logInfluencerAction(
+        {
+          id: admin.id,
+          name: admin.name,
+          email: admin.email,
+        },
+        AuditActionType.INFLUENCER_PROFILE_UPDATED,
+        influencerId,
+        `Updated influencer "${influencer.name}" display order to ${displayOrder}`,
+      );
+    }
+
+    return {
+      success: true,
+      message: 'Display order updated successfully',
+      influencerId,
+      displayOrder,
+      updatedBy: adminId,
+      updatedAt: new Date(),
+    };
+  }
+
   async updateTopBrandStatus(
     brandId: number,
     isTopBrand: boolean,
@@ -1668,7 +1707,7 @@ export class AdminAuthService {
           ],
         },
       ],
-      order: [['createdAt', 'ASC']], // Default order, will be re-sorted based on sortBy
+      order: [['displayOrder', 'ASC'], ['createdAt', 'ASC']], // Primary: displayOrder, Secondary: createdAt
     });
 
     // Map brands and calculate metrics (including posts, followers, following)

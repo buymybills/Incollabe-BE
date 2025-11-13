@@ -183,6 +183,10 @@ export class Influencer extends Model {
   declare isTopInfluencer: boolean;
 
   @AllowNull(true)
+  @Column(DataType.INTEGER)
+  declare displayOrder: number;
+
+  @AllowNull(true)
   @Column(DataType.DATE)
   declare lastLoginAt: Date;
 

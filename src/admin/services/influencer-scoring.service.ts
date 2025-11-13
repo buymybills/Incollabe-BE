@@ -318,7 +318,7 @@ export class InfluencerScoringService {
           as: 'country',
         },
       ],
-      order: [['createdAt', 'ASC']], // Default order, will be re-sorted based on sortBy
+      order: [['displayOrder', 'ASC'], ['createdAt', 'ASC']], // Primary: displayOrder, Secondary: createdAt
     });
 
     // Map influencers and apply follower filters
