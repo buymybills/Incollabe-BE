@@ -3,12 +3,47 @@ import {
   IsEnum,
   IsNumber,
   Min,
+  Max,
   IsString,
   IsIn,
+  ValidationArguments,
+  registerDecorator,
+  ValidationOptions,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApplicationStatus } from '../models/campaign-application.model';
 import { Gender } from '../../auth/types/gender.enum';
+
+// Custom validator to ensure ageMin is not greater than ageMax
+function IsValidAgeRange(validationOptions?: ValidationOptions) {
+  return function (object: Object, propertyName: string) {
+    registerDecorator({
+      name: 'isValidAgeRange',
+      target: object.constructor,
+      propertyName: propertyName,
+      constraints: [],
+      options: validationOptions,
+      validator: {
+        validate(_value: any, args: ValidationArguments) {
+          const obj = args.object as any;
+          const ageMin = obj.ageMin;
+          const ageMax = obj.ageMax;
+
+          // If both are provided, validate the range
+          if (ageMin !== undefined && ageMax !== undefined) {
+            return ageMin <= ageMax;
+          }
+
+          // If only one or neither is provided, validation passes
+          return true;
+        },
+        defaultMessage(_args: ValidationArguments) {
+          return 'ageMin must be less than or equal to ageMax';
+        },
+      },
+    });
+  };
+}
 
 export class GetCampaignApplicationsDto {
   @IsOptional()
@@ -30,11 +65,16 @@ export class GetCampaignApplicationsDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0, { message: 'ageMin must be a positive number' })
+  @Max(150, { message: 'ageMin must be less than or equal to 150' })
+  @IsValidAgeRange()
   ageMin?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
+  @Min(0, { message: 'ageMax must be a positive number' })
+  @Max(150, { message: 'ageMax must be less than or equal to 150' })
   ageMax?: number;
 
   @IsOptional()
