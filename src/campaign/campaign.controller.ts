@@ -1236,28 +1236,28 @@ export class CampaignController {
     example: 'Female',
   })
   @ApiQuery({
-    name: 'niche',
+    name: 'niches',
     required: false,
     type: String,
-    description: 'Filter by niche ID',
-    example: '1',
+    description: 'Filter by niche IDs (comma-separated for multiple)',
+    example: '1,2,3',
   })
   @ApiQuery({
-    name: 'location',
+    name: 'cities',
     required: false,
     type: String,
-    description: 'Filter by city ID',
-    example: '5',
+    description: 'Filter by city IDs (comma-separated for multiple)',
+    example: '2,5,8',
   })
   @ApiQuery({
-    name: 'ageMin',
+    name: 'minAge',
     required: false,
     type: Number,
     description: 'Minimum age filter',
     example: 18,
   })
   @ApiQuery({
-    name: 'ageMax',
+    name: 'maxAge',
     required: false,
     type: Number,
     description: 'Maximum age filter',

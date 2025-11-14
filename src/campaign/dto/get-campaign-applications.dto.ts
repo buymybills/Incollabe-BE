@@ -14,7 +14,7 @@ import { Type } from 'class-transformer';
 import { ApplicationStatus } from '../models/campaign-application.model';
 import { Gender } from '../../auth/types/gender.enum';
 
-// Custom validator to ensure ageMin is not greater than ageMax
+// Custom validator to ensure minAge is not greater than maxAge
 function IsValidAgeRange(validationOptions?: ValidationOptions) {
   return function (object: Object, propertyName: string) {
     registerDecorator({
@@ -26,19 +26,19 @@ function IsValidAgeRange(validationOptions?: ValidationOptions) {
       validator: {
         validate(_value: any, args: ValidationArguments) {
           const obj = args.object as any;
-          const ageMin = obj.ageMin;
-          const ageMax = obj.ageMax;
+          const minAge = obj.minAge;
+          const maxAge = obj.maxAge;
 
           // If both are provided, validate the range
-          if (ageMin !== undefined && ageMax !== undefined) {
-            return ageMin <= ageMax;
+          if (minAge !== undefined && maxAge !== undefined) {
+            return minAge <= maxAge;
           }
 
           // If only one or neither is provided, validation passes
           return true;
         },
         defaultMessage(_args: ValidationArguments) {
-          return 'ageMin must be less than or equal to ageMax';
+          return 'minAge must be less than or equal to maxAge';
         },
       },
     });
@@ -56,26 +56,26 @@ export class GetCampaignApplicationsDto {
 
   @IsOptional()
   @IsString()
-  niche?: string;
+  niches?: string;
 
   @IsOptional()
   @IsString()
-  location?: string;
+  cities?: string;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  @Min(0, { message: 'ageMin must be a positive number' })
-  @Max(150, { message: 'ageMin must be less than or equal to 150' })
+  @Min(0, { message: 'minAge must be a positive number' })
+  @Max(150, { message: 'minAge must be less than or equal to 150' })
   @IsValidAgeRange()
-  ageMin?: number;
+  minAge?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  @Min(0, { message: 'ageMax must be a positive number' })
-  @Max(150, { message: 'ageMax must be less than or equal to 150' })
-  ageMax?: number;
+  @Min(0, { message: 'maxAge must be a positive number' })
+  @Max(150, { message: 'maxAge must be less than or equal to 150' })
+  maxAge?: number;
 
   @IsOptional()
   @IsString()

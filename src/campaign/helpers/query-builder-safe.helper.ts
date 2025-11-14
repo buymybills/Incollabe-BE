@@ -18,18 +18,18 @@ export class QueryBuilderSafeHelper {
    * Build age filter using Sequelize functions (safer than raw SQL)
    * Uses fn() and col() for database-agnostic queries
    */
-  static buildAgeFilter(ageMin?: number, ageMax?: number): WhereOptions {
-    if (!ageMin && !ageMax) {
+  static buildAgeFilter(minAge?: number, maxAge?: number): WhereOptions {
+    if (!minAge && !maxAge) {
       return {};
     }
 
     const currentYear = new Date().getFullYear();
     const conditions: WhereOptions[] = [];
 
-    if (ageMin !== undefined && ageMax !== undefined) {
+    if (minAge !== undefined && maxAge !== undefined) {
       // Calculate date range for birth years
-      const maxBirthYear = currentYear - ageMin;
-      const minBirthYear = currentYear - ageMax;
+      const maxBirthYear = currentYear - minAge;
+      const minBirthYear = currentYear - maxAge;
 
       // Use Sequelize functions instead of raw SQL
       conditions.push(
@@ -37,15 +37,15 @@ export class QueryBuilderSafeHelper {
           [Op.between]: [minBirthYear, maxBirthYear],
         }),
       );
-    } else if (ageMin !== undefined) {
-      const maxBirthYear = currentYear - ageMin;
+    } else if (minAge !== undefined) {
+      const maxBirthYear = currentYear - minAge;
       conditions.push(
         where(fn('EXTRACT', fn('YEAR FROM', col('dateOfBirth'))), {
           [Op.lte]: maxBirthYear,
         }),
       );
-    } else if (ageMax !== undefined) {
-      const minBirthYear = currentYear - ageMax;
+    } else if (maxAge !== undefined) {
+      const minBirthYear = currentYear - maxAge;
       conditions.push(
         where(fn('EXTRACT', fn('YEAR FROM', col('dateOfBirth'))), {
           [Op.gte]: minBirthYear,

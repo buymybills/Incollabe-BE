@@ -997,10 +997,10 @@ export class CampaignService {
     const {
       status,
       gender,
-      niche,
-      location,
-      ageMin,
-      ageMax,
+      niches,
+      cities,
+      minAge,
+      maxAge,
       platform,
       experience,
       sortBy = 'application_new_old',
@@ -1008,6 +1008,14 @@ export class CampaignService {
       limit = 10,
     } = getApplicationsDto;
     const offset = (page - 1) * limit;
+
+    // Parse comma-separated strings into arrays
+    const nicheIds = niches
+      ? niches.split(',').map((id) => parseInt(id.trim())).filter((id) => !isNaN(id))
+      : [];
+    const cityIds = cities
+      ? cities.split(',').map((id) => parseInt(id.trim())).filter((id) => !isNaN(id))
+      : [];
 
     const whereCondition: any = { campaignId };
     let filteredInfluencerIds: number[] | undefined = undefined;
@@ -1020,7 +1028,9 @@ export class CampaignService {
     // Build influencer filter for age and niche
     const influencerFilter: any = {};
     if (gender) influencerFilter.gender = gender;
-    if (location) influencerFilter.cityId = location;
+    if (cityIds.length > 0) {
+      influencerFilter.cityId = { [Op.in]: cityIds };
+    }
     if (platform) {
       const platformLower = platform.toLowerCase();
       if (platformLower === 'instagram')
@@ -1036,20 +1046,20 @@ export class CampaignService {
     }
 
     // Age filter
-    if (ageMin !== undefined || ageMax !== undefined) {
+    if (minAge !== undefined || maxAge !== undefined) {
       const currentDate = new Date();
       const ageConditions: any = {};
-      if (ageMin !== undefined) {
+      if (minAge !== undefined) {
         const maxBirthDate = new Date(
-          currentDate.getFullYear() - ageMin,
+          currentDate.getFullYear() - minAge,
           currentDate.getMonth(),
           currentDate.getDate(),
         );
         ageConditions[Op.lte] = maxBirthDate;
       }
-      if (ageMax !== undefined) {
+      if (maxAge !== undefined) {
         const minBirthDate = new Date(
-          currentDate.getFullYear() - ageMax,
+          currentDate.getFullYear() - maxAge,
           currentDate.getMonth(),
           currentDate.getDate(),
         );
@@ -1059,13 +1069,13 @@ export class CampaignService {
     }
 
     // Niche filter
-    if (niche) {
-      // Find influencer IDs with the required niche
+    if (nicheIds.length > 0) {
+      // Find influencer IDs with any of the required niches
       const nicheInfluencers = await this.influencerModel.findAll({
         include: [
           {
             model: Niche,
-            where: { id: niche },
+            where: { id: { [Op.in]: nicheIds } },
             attributes: [],
             through: { attributes: [] },
             required: true,

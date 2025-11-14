@@ -12,25 +12,25 @@ export class QueryBuilderHelper {
   /**
    * Build age filter conditions based on min/max age
    */
-  static buildAgeFilter(ageMin?: number, ageMax?: number): any[] {
-    if (!ageMin && !ageMax) {
+  static buildAgeFilter(minAge?: number, maxAge?: number): any[] {
+    if (!minAge && !maxAge) {
       return [];
     }
 
     const currentYear = new Date().getFullYear();
     const conditions: any[] = [];
 
-    if (ageMin !== undefined && ageMax !== undefined) {
-      const maxBirthYear = currentYear - ageMin;
-      const minBirthYear = currentYear - ageMax;
+    if (minAge !== undefined && maxAge !== undefined) {
+      const maxBirthYear = currentYear - minAge;
+      const minBirthYear = currentYear - maxAge;
       conditions.push(
         literal(SUBQUERIES.AGE_FROM_DOB.BETWEEN(minBirthYear, maxBirthYear)),
       );
-    } else if (ageMin !== undefined) {
-      const maxBirthYear = currentYear - ageMin;
+    } else if (minAge !== undefined) {
+      const maxBirthYear = currentYear - minAge;
       conditions.push(literal(SUBQUERIES.AGE_FROM_DOB.MIN_AGE(maxBirthYear)));
-    } else if (ageMax !== undefined) {
-      const minBirthYear = currentYear - ageMax;
+    } else if (maxAge !== undefined) {
+      const minBirthYear = currentYear - maxAge;
       conditions.push(literal(SUBQUERIES.AGE_FROM_DOB.MAX_AGE(minBirthYear)));
     }
 
@@ -115,12 +115,12 @@ export class QueryBuilderHelper {
    * Combine all literal conditions for Op.and
    */
   static combineLiteralConditions(
-    ageMin?: number,
-    ageMax?: number,
+    minAge?: number,
+    maxAge?: number,
     experience?: string,
   ): WhereOptions {
     const literalConditions = [
-      ...this.buildAgeFilter(ageMin, ageMax),
+      ...this.buildAgeFilter(minAge, maxAge),
       ...this.buildExperienceFilter(experience),
     ];
 
