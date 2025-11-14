@@ -1209,7 +1209,10 @@ export class AdminController {
       type: 'object',
       properties: {
         success: { type: 'boolean', example: true },
-        message: { type: 'string', example: 'Display order updated successfully' },
+        message: {
+          type: 'string',
+          example: 'Display order updated successfully',
+        },
         displayOrder: { type: 'number', example: 1 },
       },
     },
@@ -1349,7 +1352,8 @@ export class AdminController {
     name: 'campaignFilter',
     required: false,
     enum: ['invite', 'open'],
-    description: 'Filter campaigns by type: "invite" for invite-only campaigns, "open" for open campaigns. Omit to show all campaigns.',
+    description:
+      'Filter campaigns by type: "invite" for invite-only campaigns, "open" for open campaigns. Omit to show all campaigns.',
     example: 'open',
   })
   @ApiResponse({

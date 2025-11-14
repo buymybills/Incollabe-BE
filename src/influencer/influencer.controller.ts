@@ -852,19 +852,29 @@ export class InfluencerController {
   // Support Ticket endpoints
   @Post('support-ticket')
   @ApiOperation({ summary: 'Create a support ticket' })
-  @ApiResponse({ status: 201, description: 'Support ticket created successfully' })
+  @ApiResponse({
+    status: 201,
+    description: 'Support ticket created successfully',
+  })
   @ApiResponse({ status: 400, description: 'Invalid input' })
   async createSupportTicket(
     @Req() req: RequestWithUser,
     @Body() createDto: CreateSupportTicketDto,
   ) {
     const userId = req.user.id;
-    return this.supportTicketService.createTicket(createDto, userId, UserType.INFLUENCER);
+    return this.supportTicketService.createTicket(
+      createDto,
+      userId,
+      UserType.INFLUENCER,
+    );
   }
 
   @Get('support-tickets')
   @ApiOperation({ summary: 'Get my support tickets' })
-  @ApiResponse({ status: 200, description: 'Support tickets fetched successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Support tickets fetched successfully',
+  })
   async getMySupportTickets(@Req() req: RequestWithUser) {
     const userId = req.user.id;
     return this.supportTicketService.getMyTickets(userId, UserType.INFLUENCER);

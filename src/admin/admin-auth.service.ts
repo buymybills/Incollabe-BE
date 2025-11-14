@@ -1351,59 +1351,58 @@ export class AdminAuthService {
     );
 
     // Calculate metrics for each brand
-    const brandsWithCalculatedMetrics = brandsWithMetrics
-      .map((brand) => {
-        const campaigns = (brand.get('campaigns') as any[]) || [];
+    const brandsWithCalculatedMetrics = brandsWithMetrics.map((brand) => {
+      const campaigns = (brand.get('campaigns') as any[]) || [];
 
-        // Metric 1: Total campaigns
-        const totalCampaigns = campaigns.length;
+      // Metric 1: Total campaigns
+      const totalCampaigns = campaigns.length;
 
-        // Metric 2: Unique niches count
-        const allNicheIds = campaigns
-          .flatMap((c) => c.nicheIds || [])
-          .filter((id) => id !== null && id !== undefined);
-        const uniqueNichesCount = new Set(allNicheIds).size;
+      // Metric 2: Unique niches count
+      const allNicheIds = campaigns
+        .flatMap((c) => c.nicheIds || [])
+        .filter((id) => id !== null && id !== undefined);
+      const uniqueNichesCount = new Set(allNicheIds).size;
 
-        // Metric 3: Selected influencers count
-        const selectedInfluencersCount = campaigns.reduce((sum, campaign) => {
-          const applications = campaign.applications || [];
-          return sum + applications.length;
-        }, 0);
+      // Metric 3: Selected influencers count
+      const selectedInfluencersCount = campaigns.reduce((sum, campaign) => {
+        const applications = campaign.applications || [];
+        return sum + applications.length;
+      }, 0);
 
-        // Metric 4: Average payout
-        let totalBudget = 0;
-        let campaignsWithBudget = 0;
-        campaigns.forEach((campaign) => {
-          const deliverables = campaign.deliverables || [];
-          if (deliverables.length > 0) {
-            const campaignBudget = deliverables.reduce(
-              (sum, d) => sum + (parseFloat(d.budget) || 0),
-              0,
-            );
-            if (campaignBudget > 0) {
-              totalBudget += campaignBudget;
-              campaignsWithBudget++;
-            }
+      // Metric 4: Average payout
+      let totalBudget = 0;
+      let campaignsWithBudget = 0;
+      campaigns.forEach((campaign) => {
+        const deliverables = campaign.deliverables || [];
+        if (deliverables.length > 0) {
+          const campaignBudget = deliverables.reduce(
+            (sum, d) => sum + (parseFloat(d.budget) || 0),
+            0,
+          );
+          if (campaignBudget > 0) {
+            totalBudget += campaignBudget;
+            campaignsWithBudget++;
           }
-        });
-        const averagePayout =
-          campaignsWithBudget > 0 ? totalBudget / campaignsWithBudget : 0;
-
-        return {
-          brand,
-          metrics: {
-            totalCampaigns,
-            uniqueNichesCount,
-            selectedInfluencersCount,
-            averagePayout,
-          },
-        };
+        }
       });
-      // .filter((item) => {
-      //   // Apply minimum qualification filters - relaxed for better results
-      //   // At least 1 campaign to be considered
-      //   return item.metrics.totalCampaigns >= 1;
-      // });
+      const averagePayout =
+        campaignsWithBudget > 0 ? totalBudget / campaignsWithBudget : 0;
+
+      return {
+        brand,
+        metrics: {
+          totalCampaigns,
+          uniqueNichesCount,
+          selectedInfluencersCount,
+          averagePayout,
+        },
+      };
+    });
+    // .filter((item) => {
+    //   // Apply minimum qualification filters - relaxed for better results
+    //   // At least 1 campaign to be considered
+    //   return item.metrics.totalCampaigns >= 1;
+    // });
 
     console.log(
       `After filtering: ${brandsWithCalculatedMetrics.length} brands`,
@@ -1707,7 +1706,10 @@ export class AdminAuthService {
           ],
         },
       ],
-      order: [['displayOrder', 'ASC'], ['createdAt', 'ASC']], // Primary: displayOrder, Secondary: createdAt
+      order: [
+        ['displayOrder', 'ASC'],
+        ['createdAt', 'ASC'],
+      ], // Primary: displayOrder, Secondary: createdAt
     });
 
     // Map brands and calculate metrics (including posts, followers, following)

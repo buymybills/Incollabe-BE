@@ -1,7 +1,6 @@
 import {
   Injectable,
   NotFoundException,
-  ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
@@ -30,6 +29,7 @@ import { InvitationStatus } from './models/campaign-invitation.model';
 import { WhatsAppService } from '../shared/whatsapp.service';
 import { NotificationService } from '../shared/notification.service';
 import { Follow } from '../post/models/follow.model';
+import { Experience } from '../influencer/models/experience.model';
 import { CampaignQueryService } from './services/campaign-query.service';
 import { QueryBuilderHelper } from './helpers/query-builder.helper';
 import {
@@ -58,6 +58,8 @@ export class CampaignService {
     private readonly influencerModel: typeof Influencer,
     @InjectModel(Follow)
     private readonly followModel: typeof Follow,
+    @InjectModel(Experience)
+    private readonly experienceModel: typeof Experience,
     private readonly whatsAppService: WhatsAppService,
     private readonly notificationService: NotificationService,
     private readonly campaignQueryService: CampaignQueryService,
@@ -196,9 +198,9 @@ export class CampaignService {
     const totalPages = Math.ceil(count / limit);
 
     // Transform each campaign in the list
-    const transformedCampaigns = campaigns.map(campaign => {
+    const transformedCampaigns = campaigns.map((campaign) => {
       const campaignData = campaign.toJSON();
-      
+
       // Transform cities to array of objects
       if (campaignData.cities && campaignData.cities.length > 0) {
         const citiesArray = campaignData.cities.map((cityRelation: any) => {
@@ -243,9 +245,10 @@ export class CampaignService {
     );
 
     // Transform field names and cities for all campaigns
-    const transformedCampaigns = campaigns.map(campaign => {
-      const campaignData = typeof campaign.toJSON === 'function' ? campaign.toJSON() : campaign;
-      
+    const transformedCampaigns = campaigns.map((campaign) => {
+      const campaignData =
+        typeof campaign.toJSON === 'function' ? campaign.toJSON() : campaign;
+
       // Transform cities to array of objects
       if (campaignData.cities && campaignData.cities.length > 0) {
         const citiesArray = campaignData.cities.map((cityRelation: any) => {
@@ -416,7 +419,7 @@ export class CampaignService {
     }
 
     // When closing a campaign, mark it as completed
-    await campaign.update({ 
+    await campaign.update({
       isActive: false,
       status: CampaignStatus.COMPLETED,
     });
@@ -1007,102 +1010,82 @@ export class CampaignService {
     const offset = (page - 1) * limit;
 
     const whereCondition: any = { campaignId };
-    const influencerWhere: any = {};
+    let filteredInfluencerIds: number[] | undefined = undefined;
 
+    // Apply status filter to campaign applications
     if (status) {
       whereCondition.status = status;
     }
 
-    // Filter by gender
-    if (gender) {
-      influencerWhere.gender = gender;
-    }
-
-    // Collect literal conditions for Op.and array
-    const literalConditions: any[] = [];
-
-    // Filter by age using dateOfBirth
-    if (ageMin !== undefined || ageMax !== undefined) {
-      const currentYear = new Date().getFullYear();
-
-      if (ageMin !== undefined && ageMax !== undefined) {
-        // Calculate date range for birth years
-        const maxBirthYear = currentYear - ageMin;
-        const minBirthYear = currentYear - ageMax;
-        literalConditions.push(
-          literal(
-            `EXTRACT(YEAR FROM "dateOfBirth") BETWEEN ${minBirthYear} AND ${maxBirthYear}`,
-          ),
-        );
-      } else if (ageMin !== undefined) {
-        // Only minimum age specified
-        const maxBirthYear = currentYear - ageMin;
-        literalConditions.push(
-          literal(`EXTRACT(YEAR FROM "dateOfBirth") <= ${maxBirthYear}`),
-        );
-      } else if (ageMax !== undefined) {
-        // Only maximum age specified
-        const minBirthYear = currentYear - ageMax;
-        literalConditions.push(
-          literal(`EXTRACT(YEAR FROM "dateOfBirth") >= ${minBirthYear}`),
-        );
-      }
-    }
-
-    // Filter by location (city)
-    if (location) {
-      influencerWhere.cityId = location;
-    }
-
-    // Filter by platform
+    // Build influencer filter for age and niche
+    const influencerFilter: any = {};
+    if (gender) influencerFilter.gender = gender;
+    if (location) influencerFilter.cityId = location;
     if (platform) {
       const platformLower = platform.toLowerCase();
-      if (platformLower === 'instagram') {
-        influencerWhere.instagramUrl = { [Op.ne]: null };
-      } else if (platformLower === 'youtube') {
-        influencerWhere.youtubeUrl = { [Op.ne]: null };
-      } else if (platformLower === 'facebook') {
-        influencerWhere.facebookUrl = { [Op.ne]: null };
-      } else if (platformLower === 'linkedin') {
-        influencerWhere.linkedinUrl = { [Op.ne]: null };
-      } else if (platformLower === 'x' || platformLower === 'twitter') {
-        influencerWhere.twitterUrl = { [Op.ne]: null };
-      }
+      if (platformLower === 'instagram')
+        influencerFilter.instagramUrl = { [Op.ne]: null };
+      else if (platformLower === 'youtube')
+        influencerFilter.youtubeUrl = { [Op.ne]: null };
+      else if (platformLower === 'facebook')
+        influencerFilter.facebookUrl = { [Op.ne]: null };
+      else if (platformLower === 'linkedin')
+        influencerFilter.linkedinUrl = { [Op.ne]: null };
+      else if (platformLower === 'x' || platformLower === 'twitter')
+        influencerFilter.twitterUrl = { [Op.ne]: null };
     }
 
-    // Filter by experience (campaign count: 0, 1+, 2+, 3+, 4+, 5+ Campaigns)
-    // Using subquery to count completed campaigns (selected status)
-    if (experience) {
-      const experienceValue = parseInt(experience);
-      if (!isNaN(experienceValue)) {
-        const subquery = `(SELECT COUNT(*) FROM campaign_applications WHERE campaign_applications."influencerId" = "id" AND campaign_applications.status = 'selected')`;
-
-        switch (experienceValue) {
-          case 0:
-            literalConditions.push(literal(`${subquery} = 0`));
-            break;
-          case 1:
-            literalConditions.push(literal(`${subquery} >= 1`));
-            break;
-          case 2:
-            literalConditions.push(literal(`${subquery} >= 2`));
-            break;
-          case 3:
-            literalConditions.push(literal(`${subquery} >= 3`));
-            break;
-          case 4:
-            literalConditions.push(literal(`${subquery} >= 4`));
-            break;
-          case 5:
-            literalConditions.push(literal(`${subquery} >= 5`));
-            break;
-        }
+    // Age filter
+    if (ageMin !== undefined || ageMax !== undefined) {
+      const currentDate = new Date();
+      const ageConditions: any = {};
+      if (ageMin !== undefined) {
+        const maxBirthDate = new Date(
+          currentDate.getFullYear() - ageMin,
+          currentDate.getMonth(),
+          currentDate.getDate(),
+        );
+        ageConditions[Op.lte] = maxBirthDate;
       }
+      if (ageMax !== undefined) {
+        const minBirthDate = new Date(
+          currentDate.getFullYear() - ageMax,
+          currentDate.getMonth(),
+          currentDate.getDate(),
+        );
+        ageConditions[Op.gte] = minBirthDate;
+      }
+      influencerFilter.dateOfBirth = ageConditions;
     }
 
-    // Apply all literal conditions using Op.and array
-    if (literalConditions.length > 0) {
-      influencerWhere[Op.and] = literalConditions;
+    // Niche filter
+    if (niche) {
+      // Find influencer IDs with the required niche
+      const nicheInfluencers = await this.influencerModel.findAll({
+        include: [
+          {
+            model: Niche,
+            where: { id: niche },
+            attributes: [],
+            through: { attributes: [] },
+            required: true,
+          },
+        ],
+        attributes: ['id'],
+        where: influencerFilter,
+      });
+      filteredInfluencerIds = nicheInfluencers.map((i) => i.id);
+    } else if (Object.keys(influencerFilter).length > 0) {
+      // If only age/location/platform/gender filter
+      const filteredInfluencers = await this.influencerModel.findAll({
+        where: influencerFilter,
+        attributes: ['id'],
+      });
+      filteredInfluencerIds = filteredInfluencers.map((i) => i.id);
+    }
+
+    if (filteredInfluencerIds) {
+      whereCondition.influencerId = { [Op.in]: filteredInfluencerIds };
     }
 
     // Determine sort order (followers sorting will be done in-memory)
@@ -1137,8 +1120,8 @@ export class CampaignService {
     const includeOptions: any = [
       {
         model: Influencer,
-        where:
-          Object.keys(influencerWhere).length > 0 ? influencerWhere : undefined,
+        // Note: influencerFilter already applied via filteredInfluencerIds above
+        // No need to apply where clause again here
         include: [
           {
             model: City,
@@ -1155,6 +1138,10 @@ export class CampaignService {
       },
     ];
 
+    // When filtering by experience, we need to fetch all applications first
+    // because experience count is calculated in-memory
+    const useInMemoryPagination = !!experience || sortInMemory;
+
     const { count, rows: applications } =
       await this.campaignApplicationModel.findAndCountAll({
         where: whereCondition,
@@ -1170,8 +1157,9 @@ export class CampaignService {
         ],
         include: includeOptions,
         order,
-        limit,
-        offset,
+        // Skip pagination if we need to filter/sort in-memory
+        limit: useInMemoryPagination ? undefined : limit,
+        offset: useInMemoryPagination ? undefined : offset,
         distinct: true,
       });
 
@@ -1181,19 +1169,25 @@ export class CampaignService {
         const appJson: any = app.toJSON();
 
         if (appJson.influencer) {
-          // Count completed campaigns
-          const completedCampaigns = await this.campaignApplicationModel.count({
-            where: {
-              influencerId: appJson.influencer.id,
-              status: ApplicationStatus.SELECTED,
-            },
-          });
-
           // Count followers (using Follow model)
           const totalFollowers = await this.followModel.count({
             where: {
               followingType: 'influencer',
               followingInfluencerId: appJson.influencer.id,
+            },
+          });
+
+          // Count completed experiences (only those with completionDate before today)
+          const today = new Date();
+          today.setHours(0, 0, 0, 0); // Start of today
+          const completedCampaigns = await this.experienceModel.count({
+            where: {
+              influencerId: appJson.influencer.id,
+              successfullyCompleted: true,
+              completionDate: {
+                [Op.ne]: null,
+                [Op.lt]: today, // Only count experiences completed before today
+              },
             },
           });
 
@@ -1205,10 +1199,38 @@ export class CampaignService {
       }),
     );
 
+    // Filter by experience if specified (experience is calculated in-memory)
+    let filteredApplications = applicationsWithStats;
+    if (experience !== undefined) {
+      const experienceValue = parseInt(experience);
+      if (!isNaN(experienceValue)) {
+        filteredApplications = applicationsWithStats.filter((app) => {
+          const completedCount = app.influencer?.completedCampaigns || 0;
+
+          switch (experienceValue) {
+            case 0:
+              return completedCount === 0;
+            case 1:
+              return completedCount >= 1;
+            case 2:
+              return completedCount >= 2;
+            case 3:
+              return completedCount >= 3;
+            case 4:
+              return completedCount >= 4;
+            case 5:
+              return completedCount >= 5;
+            default:
+              return true;
+          }
+        });
+      }
+    }
+
     // Sort in-memory if needed (for follower-based sorting)
-    let finalApplications = applicationsWithStats;
+    let finalApplications = filteredApplications;
     if (sortInMemory) {
-      finalApplications = applicationsWithStats.sort((a, b) => {
+      finalApplications = filteredApplications.sort((a, b) => {
         const aFollowers = a.influencer?.totalFollowers || 0;
         const bFollowers = b.influencer?.totalFollowers || 0;
         return sortDirection === 'desc'
@@ -1217,11 +1239,22 @@ export class CampaignService {
       });
     }
 
-    const totalPages = Math.ceil(count / limit);
+    // Apply pagination if we did in-memory filtering/sorting
+    let paginatedApplications = finalApplications;
+    let totalCount = count;
+
+    if (useInMemoryPagination) {
+      totalCount = finalApplications.length;
+      const startIndex = offset;
+      const endIndex = offset + limit;
+      paginatedApplications = finalApplications.slice(startIndex, endIndex);
+    }
+
+    const totalPages = Math.ceil(totalCount / limit);
 
     return {
-      applications: finalApplications,
-      total: count,
+      applications: paginatedApplications,
+      total: totalCount,
       page,
       limit,
       totalPages,

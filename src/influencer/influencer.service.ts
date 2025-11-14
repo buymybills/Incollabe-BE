@@ -313,7 +313,10 @@ export class InfluencerService {
     // Handle profile banner clearing
     // If clearProfileBanner is true, set profileBanner to null
     // File uploads take precedence over the clear flag
-    if (processedData.clearProfileBanner === true && !fileUrls['profileBanner']) {
+    if (
+      processedData.clearProfileBanner === true &&
+      !fileUrls['profileBanner']
+    ) {
       fileUrls['profileBanner'] = null;
     }
 
@@ -1179,7 +1182,7 @@ export class InfluencerService {
 
     const enrichedCampaigns = campaigns.map((campaign) => {
       const campaignData = campaign.toJSON();
-      
+
       // Transform cities to array of objects
       if (campaignData.cities && campaignData.cities.length > 0) {
         const citiesArray = campaignData.cities.map((cityRelation: any) => {

@@ -87,7 +87,8 @@ export class BrandController {
     name: 'campaignFilter',
     required: false,
     enum: ['invite', 'open'],
-    description: 'Filter campaigns by type: "invite" for invite-only campaigns, "open" for open campaigns. Omit to show all campaigns.',
+    description:
+      'Filter campaigns by type: "invite" for invite-only campaigns, "open" for open campaigns. Omit to show all campaigns.',
     example: 'open',
   })
   @ApiResponse({
@@ -316,7 +317,8 @@ export class BrandController {
     name: 'campaignFilter',
     required: false,
     enum: ['invite', 'open'],
-    description: 'Filter campaigns by type: "invite" for invite-only campaigns, "open" for open campaigns. Omit to show all campaigns.',
+    description:
+      'Filter campaigns by type: "invite" for invite-only campaigns, "open" for open campaigns. Omit to show all campaigns.',
     example: 'open',
   })
   @ApiResponse({
@@ -448,19 +450,29 @@ export class BrandController {
   // Support Ticket endpoints
   @Post('support-ticket')
   @ApiOperation({ summary: 'Create a support ticket' })
-  @ApiResponse({ status: 201, description: 'Support ticket created successfully' })
+  @ApiResponse({
+    status: 201,
+    description: 'Support ticket created successfully',
+  })
   @ApiResponse({ status: 400, description: 'Invalid input' })
   async createSupportTicket(
     @Req() req: RequestWithUser,
     @Body() createDto: CreateSupportTicketDto,
   ) {
     const userId = req.user.id;
-    return this.supportTicketService.createTicket(createDto, userId, UserType.BRAND);
+    return this.supportTicketService.createTicket(
+      createDto,
+      userId,
+      UserType.BRAND,
+    );
   }
 
   @Get('support-tickets')
   @ApiOperation({ summary: 'Get my support tickets' })
-  @ApiResponse({ status: 200, description: 'Support tickets fetched successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Support tickets fetched successfully',
+  })
   async getMySupportTickets(@Req() req: RequestWithUser) {
     const userId = req.user.id;
     return this.supportTicketService.getMyTickets(userId, UserType.BRAND);
