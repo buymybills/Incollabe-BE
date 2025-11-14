@@ -79,7 +79,7 @@ export class GetCampaignApplicationsDto {
 
   @IsOptional()
   @IsString()
-  platform?: string;
+  platforms?: string;
 
   @IsOptional()
   @IsString()

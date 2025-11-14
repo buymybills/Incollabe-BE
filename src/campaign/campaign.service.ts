@@ -1001,7 +1001,7 @@ export class CampaignService {
       cities,
       minAge,
       maxAge,
-      platform,
+      platforms,
       experience,
       sortBy = 'application_new_old',
       page = 1,
@@ -1015,6 +1015,9 @@ export class CampaignService {
       : [];
     const cityIds = cities
       ? cities.split(',').map((id) => parseInt(id.trim())).filter((id) => !isNaN(id))
+      : [];
+    const platformList = platforms
+      ? platforms.split(',').map((p) => p.trim().toLowerCase()).filter((p) => p.length > 0)
       : [];
 
     const whereCondition: any = { campaignId };
@@ -1031,18 +1034,46 @@ export class CampaignService {
     if (cityIds.length > 0) {
       influencerFilter.cityId = { [Op.in]: cityIds };
     }
-    if (platform) {
-      const platformLower = platform.toLowerCase();
-      if (platformLower === 'instagram')
-        influencerFilter.instagramUrl = { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] };
-      else if (platformLower === 'youtube')
-        influencerFilter.youtubeUrl = { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] };
-      else if (platformLower === 'facebook')
-        influencerFilter.facebookUrl = { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] };
-      else if (platformLower === 'linkedin')
-        influencerFilter.linkedinUrl = { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] };
-      else if (platformLower === 'x' || platformLower === 'twitter')
-        influencerFilter.twitterUrl = { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] };
+
+    // Platform filter - support multiple platforms
+    if (platformList.length > 0) {
+      const platformConditions: any[] = [];
+
+      platformList.forEach((platformLower) => {
+        switch (platformLower) {
+          case 'instagram':
+            platformConditions.push({
+              instagramUrl: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] },
+            });
+            break;
+          case 'youtube':
+            platformConditions.push({
+              youtubeUrl: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] },
+            });
+            break;
+          case 'facebook':
+            platformConditions.push({
+              facebookUrl: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] },
+            });
+            break;
+          case 'linkedin':
+            platformConditions.push({
+              linkedinUrl: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] },
+            });
+            break;
+          case 'x':
+          case 'twitter':
+            platformConditions.push({
+              twitterUrl: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] },
+            });
+            break;
+        }
+      });
+
+      // If influencer has ANY of the specified platforms
+      if (platformConditions.length > 0) {
+        influencerFilter[Op.or] = platformConditions;
+      }
     }
 
     // Age filter

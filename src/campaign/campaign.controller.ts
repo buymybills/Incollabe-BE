@@ -1264,12 +1264,12 @@ export class CampaignController {
     example: 35,
   })
   @ApiQuery({
-    name: 'platform',
+    name: 'platforms',
     required: false,
     type: String,
     description:
-      'Filter by platform (instagram, facebook, youtube, linkedin, x)',
-    example: 'instagram',
+      'Filter by platforms (comma-separated for multiple: instagram, facebook, youtube, linkedin, x)',
+    example: 'instagram,youtube',
   })
   @ApiQuery({
     name: 'experience',
