@@ -1120,7 +1120,7 @@ export class CampaignService {
     const includeOptions: any = [
       {
         model: Influencer,
-        // Note: influencerFilter already applied via filteredInfluencerIds above
+        // Note: influencerFilter AND niche already applied via filteredInfluencerIds above
         // No need to apply where clause again here
         include: [
           {
@@ -1129,10 +1129,10 @@ export class CampaignService {
           },
           {
             model: Niche,
-            where: niche ? { id: niche } : undefined,
+            // Don't filter here - already filtered above via influencer IDs
             attributes: ['id', 'name', 'logoNormal', 'logoDark'],
             through: { attributes: [] },
-            required: !!niche,
+            required: false, // Changed from !!niche to false
           },
         ],
       },
