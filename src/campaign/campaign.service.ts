@@ -1020,6 +1020,8 @@ export class CampaignService {
       ? platforms.split(',').map((p) => p.trim().toLowerCase()).filter((p) => p.length > 0)
       : [];
 
+    console.log('Platform filter - platformList:', platformList);
+
     const whereCondition: any = { campaignId };
     let filteredInfluencerIds: number[] | undefined = undefined;
 
@@ -1070,8 +1072,10 @@ export class CampaignService {
         }
       });
 
-      // If influencer has ANY of the specified platforms
-      if (platformConditions.length > 0) {
+      // If only one platform, add directly; if multiple, use Op.or
+      if (platformConditions.length === 1) {
+        Object.assign(influencerFilter, platformConditions[0]);
+      } else if (platformConditions.length > 1) {
         influencerFilter[Op.or] = platformConditions;
       }
     }
