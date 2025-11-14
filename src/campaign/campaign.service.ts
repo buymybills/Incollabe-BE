@@ -1024,15 +1024,15 @@ export class CampaignService {
     if (platform) {
       const platformLower = platform.toLowerCase();
       if (platformLower === 'instagram')
-        influencerFilter.instagramUrl = { [Op.ne]: null };
+        influencerFilter.instagramUrl = { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] };
       else if (platformLower === 'youtube')
-        influencerFilter.youtubeUrl = { [Op.ne]: null };
+        influencerFilter.youtubeUrl = { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] };
       else if (platformLower === 'facebook')
-        influencerFilter.facebookUrl = { [Op.ne]: null };
+        influencerFilter.facebookUrl = { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] };
       else if (platformLower === 'linkedin')
-        influencerFilter.linkedinUrl = { [Op.ne]: null };
+        influencerFilter.linkedinUrl = { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] };
       else if (platformLower === 'x' || platformLower === 'twitter')
-        influencerFilter.twitterUrl = { [Op.ne]: null };
+        influencerFilter.twitterUrl = { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] };
     }
 
     // Age filter
