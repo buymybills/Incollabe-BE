@@ -3,12 +3,47 @@ import {
   IsEnum,
   IsNumber,
   Min,
+  Max,
   IsString,
   IsIn,
+  ValidationArguments,
+  registerDecorator,
+  ValidationOptions,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApplicationStatus } from '../models/campaign-application.model';
 import { Gender } from '../../auth/types/gender.enum';
+
+// Custom validator to ensure minAge is not greater than maxAge
+function IsValidAgeRange(validationOptions?: ValidationOptions) {
+  return function (object: Object, propertyName: string) {
+    registerDecorator({
+      name: 'isValidAgeRange',
+      target: object.constructor,
+      propertyName: propertyName,
+      constraints: [],
+      options: validationOptions,
+      validator: {
+        validate(_value: any, args: ValidationArguments) {
+          const obj = args.object as any;
+          const minAge = obj.minAge;
+          const maxAge = obj.maxAge;
+
+          // If both are provided, validate the range
+          if (minAge !== undefined && maxAge !== undefined) {
+            return minAge <= maxAge;
+          }
+
+          // If only one or neither is provided, validation passes
+          return true;
+        },
+        defaultMessage(_args: ValidationArguments) {
+          return 'minAge must be less than or equal to maxAge';
+        },
+      },
+    });
+  };
+}
 
 export class GetCampaignApplicationsDto {
   @IsOptional()
@@ -21,25 +56,30 @@ export class GetCampaignApplicationsDto {
 
   @IsOptional()
   @IsString()
-  niche?: string;
+  niches?: string;
 
   @IsOptional()
   @IsString()
-  location?: string;
+  cities?: string;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  ageMin?: number;
+  @Min(0, { message: 'minAge must be a positive number' })
+  @Max(150, { message: 'minAge must be less than or equal to 150' })
+  @IsValidAgeRange()
+  minAge?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  ageMax?: number;
+  @Min(0, { message: 'maxAge must be a positive number' })
+  @Max(150, { message: 'maxAge must be less than or equal to 150' })
+  maxAge?: number;
 
   @IsOptional()
   @IsString()
-  platform?: string;
+  platforms?: string;
 
   @IsOptional()
   @IsString()

@@ -274,12 +274,6 @@ export class AuthService {
       .update(formattedPhone)
       .digest('hex');
 
-    console.log('Verifying OTP:');
-    console.log('Phone:', phone);
-    console.log('Formatted Phone:', formattedPhone);
-    console.log('OTP:', otp);
-    console.log('Identifier Hash:', identifierHash);
-
     const otpRecord = await this.otpModel.findOne({
       where: {
         identifierHash,
@@ -289,17 +283,6 @@ export class AuthService {
         expiresAt: { [Op.gt]: new Date() },
       },
     });
-
-    console.log('OTP Record found:', !!otpRecord);
-    if (otpRecord) {
-      console.log('OTP Record details:', {
-        id: otpRecord.id,
-        identifierHash: otpRecord.identifierHash,
-        otp: otpRecord.otp,
-        isUsed: otpRecord.isUsed,
-        expiresAt: otpRecord.expiresAt,
-      });
-    }
 
     if (!otpRecord) {
       // Track failed attempt

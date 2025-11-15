@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BrandController } from './brand.controller';
 import { BrandService } from './brand.service';
+import { SupportTicketService } from '../shared/support-ticket.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { UpdateBrandProfileDto } from './dto/update-brand-profile.dto';
 import { UpdateBrandNichesDto } from './dto/update-brand-niches.dto';
@@ -19,6 +20,16 @@ const mockBrandService = {
   getFoundedYearsList: jest.fn(),
 };
 
+const mockSupportTicketService = {
+  getAllTickets: jest.fn(),
+  getTicketStatistics: jest.fn(),
+  getTicketById: jest.fn(),
+  updateTicket: jest.fn(),
+  deleteTicket: jest.fn(),
+  createTicket: jest.fn(),
+  getMyTickets: jest.fn(),
+};
+
 const mockAuthGuard = {
   canActivate: jest.fn(() => true),
 };
@@ -34,6 +45,10 @@ describe('BrandController', () => {
         {
           provide: BrandService,
           useValue: mockBrandService,
+        },
+        {
+          provide: SupportTicketService,
+          useValue: mockSupportTicketService,
         },
       ],
     })
@@ -203,6 +218,8 @@ describe('BrandController', () => {
           posts: 0,
           campaigns: 0,
         },
+        isVerified: false,
+        totalCampaigns: 1,
         campaigns: [
           {
             id: 1,

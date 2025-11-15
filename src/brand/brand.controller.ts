@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Put,
+  Post,
   Body,
   Param,
   ParseIntPipe,
@@ -32,13 +33,19 @@ import { CompanyTypeDto } from './dto/company-type.dto';
 import { Public } from '../auth/decorators/public.decorator';
 import type { SignupFiles } from '../types/file-upload.types';
 import type { RequestWithUser } from '../types/request.types';
+import { SupportTicketService } from '../shared/support-ticket.service';
+import { CreateSupportTicketDto } from '../shared/dto/create-support-ticket.dto';
+import { UserType } from '../shared/models/support-ticket.model';
 
 @ApiTags('Brand Profile')
 @Controller('brand')
 @UseGuards(AuthGuard)
 @ApiBearerAuth()
 export class BrandController {
-  constructor(private readonly brandService: BrandService) {}
+  constructor(
+    private readonly brandService: BrandService,
+    private readonly supportTicketService: SupportTicketService,
+  ) {}
 
   @Get('company-types')
   @Public()
@@ -80,7 +87,8 @@ export class BrandController {
     name: 'campaignFilter',
     required: false,
     enum: ['invite', 'open'],
-    description: 'Filter campaigns by type: "invite" for invite-only campaigns, "open" for open campaigns. Omit to show all campaigns.',
+    description:
+      'Filter campaigns by type: "invite" for invite-only campaigns, "open" for open campaigns. Omit to show all campaigns.',
     example: 'open',
   })
   @ApiResponse({
@@ -309,7 +317,8 @@ export class BrandController {
     name: 'campaignFilter',
     required: false,
     enum: ['invite', 'open'],
-    description: 'Filter campaigns by type: "invite" for invite-only campaigns, "open" for open campaigns. Omit to show all campaigns.',
+    description:
+      'Filter campaigns by type: "invite" for invite-only campaigns, "open" for open campaigns. Omit to show all campaigns.',
     example: 'open',
   })
   @ApiResponse({
@@ -436,5 +445,36 @@ export class BrandController {
     const parsedLimit = limit ? parseInt(limit, 10) : 10;
     const parsedOffset = offset ? parseInt(offset, 10) : 0;
     return this.brandService.getTopBrands(parsedLimit, parsedOffset);
+  }
+
+  // Support Ticket endpoints
+  @Post('support-ticket')
+  @ApiOperation({ summary: 'Create a support ticket' })
+  @ApiResponse({
+    status: 201,
+    description: 'Support ticket created successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid input' })
+  async createSupportTicket(
+    @Req() req: RequestWithUser,
+    @Body() createDto: CreateSupportTicketDto,
+  ) {
+    const userId = req.user.id;
+    return this.supportTicketService.createTicket(
+      createDto,
+      userId,
+      UserType.BRAND,
+    );
+  }
+
+  @Get('support-tickets')
+  @ApiOperation({ summary: 'Get my support tickets' })
+  @ApiResponse({
+    status: 200,
+    description: 'Support tickets fetched successfully',
+  })
+  async getMySupportTickets(@Req() req: RequestWithUser) {
+    const userId = req.user.id;
+    return this.supportTicketService.getMyTickets(userId, UserType.BRAND);
   }
 }

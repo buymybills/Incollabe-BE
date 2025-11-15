@@ -27,6 +27,7 @@ import { InviteInfluencersDto } from './dto/invite-influencers.dto';
 import { Follow } from '../post/models/follow.model';
 import { CampaignQueryService } from './services/campaign-query.service';
 import { NotificationService } from '../shared/notification.service';
+import { Experience } from '../influencer/models/experience.model';
 
 const mockModel = () => ({
   findOne: jest.fn(),
@@ -70,6 +71,7 @@ describe('CampaignService', () => {
   let influencerModel: any;
   let followModel: any;
   let whatsAppService: any;
+  let experienceModel: any;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -109,6 +111,10 @@ describe('CampaignService', () => {
         },
         {
           provide: getModelToken(Follow),
+          useValue: mockModel(),
+        },
+        {
+          provide: getModelToken(Experience),
           useValue: mockModel(),
         },
         {
@@ -288,15 +294,17 @@ describe('CampaignService', () => {
       const result = await service.getCampaigns(getCampaignsDto, brandId);
 
       expect(result).toEqual({
-        campaigns: [{
-          id: 1,
-          name: 'Campaign 1',
-          brandId,
-          brand: { id: brandId, brandName: 'Test Brand' },
-          cities: [],
-          deliverables: 'Test Format',
-          collaborationCost: [],
-        }],
+        campaigns: [
+          {
+            id: 1,
+            name: 'Campaign 1',
+            brandId,
+            brand: { id: brandId, brandName: 'Test Brand' },
+            cities: [],
+            deliverables: 'Test Format',
+            collaborationCost: [],
+          },
+        ],
         total: 1,
         page: 1,
         limit: 10,

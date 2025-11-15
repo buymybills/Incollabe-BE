@@ -10,6 +10,7 @@ import { AuditLogService } from './services/audit-log.service';
 import { BrandService } from '../brand/brand.service';
 import { InfluencerService } from '../influencer/influencer.service';
 import { PostService } from '../post/post.service';
+import { SupportTicketService } from '../shared/support-ticket.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { AdminLoginDto } from './dto/admin-login.dto';
@@ -88,6 +89,16 @@ const mockPostService = {
   getPosts: jest.fn(),
 };
 
+const mockSupportTicketService = {
+  getAllTickets: jest.fn(),
+  getTicketStatistics: jest.fn(),
+  getTicketById: jest.fn(),
+  updateTicket: jest.fn(),
+  deleteTicket: jest.fn(),
+  createTicket: jest.fn(),
+  getMyTickets: jest.fn(),
+};
+
 const mockAdminAuthGuard = {
   canActivate: jest.fn(() => true),
 };
@@ -144,6 +155,10 @@ describe('AdminController', () => {
         {
           provide: PostService,
           useValue: mockPostService,
+        },
+        {
+          provide: SupportTicketService,
+          useValue: mockSupportTicketService,
         },
       ],
     })

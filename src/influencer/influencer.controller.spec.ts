@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { InfluencerController } from './influencer.controller';
 import { InfluencerService } from './influencer.service';
+import { SupportTicketService } from '../shared/support-ticket.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto';
 import { WhatsappVerificationDto } from './dto/whatsapp-verification.dto';
@@ -13,6 +14,16 @@ const mockInfluencerService = {
   sendWhatsAppVerificationOTP: jest.fn(),
   verifyWhatsAppOTP: jest.fn(),
   getExperiences: jest.fn(),
+};
+
+const mockSupportTicketService = {
+  getAllTickets: jest.fn(),
+  getTicketStatistics: jest.fn(),
+  getTicketById: jest.fn(),
+  updateTicket: jest.fn(),
+  deleteTicket: jest.fn(),
+  createTicket: jest.fn(),
+  getMyTickets: jest.fn(),
 };
 
 const mockAuthGuard = {
@@ -30,6 +41,10 @@ describe('InfluencerController', () => {
         {
           provide: InfluencerService,
           useValue: mockInfluencerService,
+        },
+        {
+          provide: SupportTicketService,
+          useValue: mockSupportTicketService,
         },
       ],
     })
