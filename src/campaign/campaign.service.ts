@@ -26,6 +26,7 @@ import { Brand } from '../brand/model/brand.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Niche } from '../auth/model/niche.model';
 import { InvitationStatus } from './models/campaign-invitation.model';
+import { Gender } from '../auth/types/gender.enum';
 import { WhatsAppService } from '../shared/whatsapp.service';
 import { NotificationService } from '../shared/notification.service';
 import { Follow } from '../post/models/follow.model';
@@ -1019,8 +1020,30 @@ export class CampaignService {
     const platformList = platforms
       ? platforms.split(',').map((p) => p.trim().toLowerCase()).filter((p) => p.length > 0)
       : [];
+    // Parse and validate gender values against Gender enum
+    const genderList: string[] = [];
+    if (gender) {
+      const validGenders = Object.values(Gender);
+      const inputGenders = gender.split(',').map((g) => g.trim()).filter((g) => g.length > 0);
+
+      for (const inputGender of inputGenders) {
+        // Find matching enum value (case-insensitive)
+        const matchedGender = validGenders.find(
+          (validGender) => validGender.toLowerCase() === inputGender.toLowerCase(),
+        );
+
+        if (!matchedGender) {
+          throw new BadRequestException(
+            `Invalid gender value: "${inputGender}". Valid values are: ${validGenders.join(', ')}`,
+          );
+        }
+
+        genderList.push(matchedGender);
+      }
+    }
 
     console.log('Platform filter - platformList:', platformList);
+    console.log('Gender filter - genderList:', genderList);
 
     const whereCondition: any = { campaignId };
     let filteredInfluencerIds: number[] | undefined = undefined;
@@ -1030,9 +1053,18 @@ export class CampaignService {
       whereCondition.status = status;
     }
 
-    // Build influencer filter for age and niche
+    // Build influencer filter for age, gender, and location
     const influencerFilter: any = {};
-    if (gender) influencerFilter.gender = gender;
+
+    // Gender filter - support multiple genders
+    if (genderList.length > 0) {
+      if (genderList.length === 1) {
+        influencerFilter.gender = genderList[0];
+      } else {
+        influencerFilter.gender = { [Op.in]: genderList };
+      }
+    }
+
     if (cityIds.length > 0) {
       influencerFilter.cityId = { [Op.in]: cityIds };
     }
