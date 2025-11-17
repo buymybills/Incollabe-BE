@@ -1232,7 +1232,8 @@ export class CampaignController {
     name: 'gender',
     required: false,
     type: String,
-    description: 'Filter by influencer gender (comma-separated for multiple: Male, Female, Others)',
+    description:
+      'Filter by influencer gender (comma-separated for multiple: Male, Female, Others)',
     example: 'Male,Female',
   })
   @ApiQuery({

@@ -17,7 +17,7 @@ import { Gender } from '../../auth/types/gender.enum';
 
 // Custom validator to ensure minAge is not greater than maxAge
 function IsValidAgeRange(validationOptions?: ValidationOptions) {
-  return function (object: Object, propertyName: string) {
+  return function (object: object, propertyName: string) {
     registerDecorator({
       name: 'isValidAgeRange',
       target: object.constructor,
@@ -48,7 +48,7 @@ function IsValidAgeRange(validationOptions?: ValidationOptions) {
 
 // Custom validator for comma-separated gender values
 function IsValidGenderList(validationOptions?: ValidationOptions) {
-  return function (object: Object, propertyName: string) {
+  return function (object: object, propertyName: string) {
     registerDecorator({
       name: 'isValidGenderList',
       target: object.constructor,
@@ -87,7 +87,8 @@ export class GetCampaignApplicationsDto {
   status?: ApplicationStatus;
 
   @ApiProperty({
-    description: 'Filter by gender (single or comma-separated values). Valid values: Male, Female, Others. Example: "Male,Female" or "Male"',
+    description:
+      'Filter by gender (single or comma-separated values). Valid values: Male, Female, Others. Example: "Male,Female" or "Male"',
     required: false,
     example: 'Male,Female',
     type: String,

@@ -22,6 +22,8 @@ import { CampaignInvitation } from '../campaign/models/campaign-invitation.model
 import { CampaignApplication } from '../campaign/models/campaign-application.model';
 import { CustomNiche } from '../auth/model/custom-niche.model';
 import { SupportTicket } from '../shared/models/support-ticket.model';
+import { Conversation } from '../shared/models/conversation.model';
+import { Message } from '../shared/models/message.model';
 
 @Module({
   imports: [
@@ -74,15 +76,15 @@ import { SupportTicket } from '../shared/models/support-ticket.model';
           database,
           dialectOptions,
           pool: {
-            max: 30,        // Maximum 30 connections per instance (2 instances = 60 total, safe for RDS)
-            min: 5,         // Minimum 5 idle connections
+            max: 30, // Maximum 30 connections per instance (2 instances = 60 total, safe for RDS)
+            min: 5, // Minimum 5 idle connections
             acquire: 60000, // 60 seconds timeout for acquiring connection
-            idle: 10000,    // 10 seconds idle time before releasing
-            evict: 1000,    // Run eviction every 1 second
+            idle: 10000, // 10 seconds idle time before releasing
+            evict: 1000, // Run eviction every 1 second
           },
           // Enable connection retry on transient failures
           retry: {
-            max: 3,         // Retry up to 3 times
+            max: 3, // Retry up to 3 times
           },
           models: [
             Influencer,
@@ -106,6 +108,8 @@ import { SupportTicket } from '../shared/models/support-ticket.model';
             CampaignApplication,
             CustomNiche,
             SupportTicket,
+            Conversation,
+            Message,
           ],
           autoLoadModels: true,
           synchronize: false, // Disabled to prevent index conflicts with existing database

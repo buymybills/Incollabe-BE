@@ -1,6 +1,15 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
-import { SupportTicket, TicketStatus, UserType, ReportType } from './models/support-ticket.model';
+import {
+  SupportTicket,
+  TicketStatus,
+  UserType,
+  ReportType,
+} from './models/support-ticket.model';
 import { CreateSupportTicketDto } from './dto/create-support-ticket.dto';
 import { GetSupportTicketsDto } from './dto/get-support-tickets.dto';
 import { UpdateSupportTicketDto } from './dto/update-support-ticket.dto';
@@ -48,22 +57,24 @@ export class SupportTicketService {
     creationDto.description = createDto.description;
     creationDto.reportType = createDto.reportType;
     creationDto.status = TicketStatus.UNRESOLVED;
-    
+
     if (userType === UserType.INFLUENCER) {
       creationDto.influencerId = userId;
     } else {
       creationDto.brandId = userId;
     }
-    
+
     if (createDto.reportedUserType) {
       creationDto.reportedUserType = createDto.reportedUserType;
     }
-    
+
     if (createDto.reportedUserId) {
       creationDto.reportedUserId = createDto.reportedUserId;
     }
 
-    const ticket = await this.supportTicketModel.create(creationDto as CreationAttributes<SupportTicket>);
+    const ticket = await this.supportTicketModel.create(
+      creationDto as CreationAttributes<SupportTicket>,
+    );
 
     return {
       message: 'Support ticket created successfully',
@@ -83,7 +94,7 @@ export class SupportTicketService {
     limit: number = 20,
   ) {
     const whereClause: any = { userType };
-    
+
     if (userType === UserType.INFLUENCER) {
       whereClause.influencerId = userId;
     } else {
@@ -92,22 +103,23 @@ export class SupportTicketService {
 
     const offset = (page - 1) * limit;
 
-    const { rows: tickets, count: total } = await this.supportTicketModel.findAndCountAll({
-      where: whereClause,
-      include: [
-        {
-          model: Admin,
-          as: 'assignedAdmin',
-          attributes: ['id', 'name', 'email'],
-        },
-      ],
-      order: [['createdAt', 'DESC']],
-      limit,
-      offset,
-    });
+    const { rows: tickets, count: total } =
+      await this.supportTicketModel.findAndCountAll({
+        where: whereClause,
+        include: [
+          {
+            model: Admin,
+            as: 'assignedAdmin',
+            attributes: ['id', 'name', 'email'],
+          },
+        ],
+        order: [['createdAt', 'DESC']],
+        limit,
+        offset,
+      });
 
     return {
-      tickets: tickets.map(ticket => ({
+      tickets: tickets.map((ticket) => ({
         id: ticket.id,
         subject: ticket.subject,
         description: ticket.description,
@@ -117,10 +129,12 @@ export class SupportTicketService {
         resolvedAt: ticket.resolvedAt,
         createdAt: ticket.createdAt,
         updatedAt: ticket.updatedAt,
-        assignedAdmin: ticket.assignedAdmin ? {
-          id: ticket.assignedAdmin.id,
-          name: ticket.assignedAdmin.name,
-        } : null,
+        assignedAdmin: ticket.assignedAdmin
+          ? {
+              id: ticket.assignedAdmin.id,
+              name: ticket.assignedAdmin.name,
+            }
+          : null,
       })),
       pagination: {
         total,
@@ -159,34 +173,49 @@ export class SupportTicketService {
 
     const offset = (page - 1) * limit;
 
-    const { rows: tickets, count: total } = await this.supportTicketModel.findAndCountAll({
-      where: whereClause,
-      include: [
-        {
-          model: Influencer,
-          as: 'influencer',
-          attributes: ['id', 'name', 'username', 'phone', 'whatsappNumber', 'profileImage'],
-        },
-        {
-          model: Brand,
-          as: 'brand',
-          attributes: ['id', 'brandName', 'username', 'email', 'pocContactNumber', 'profileImage'],
-        },
-        {
-          model: Admin,
-          as: 'assignedAdmin',
-          attributes: ['id', 'name', 'email'],
-        },
-      ],
-      order: [
-        ['createdAt', 'DESC'], // Newest first
-      ],
-      limit,
-      offset,
-    });
+    const { rows: tickets, count: total } =
+      await this.supportTicketModel.findAndCountAll({
+        where: whereClause,
+        include: [
+          {
+            model: Influencer,
+            as: 'influencer',
+            attributes: [
+              'id',
+              'name',
+              'username',
+              'phone',
+              'whatsappNumber',
+              'profileImage',
+            ],
+          },
+          {
+            model: Brand,
+            as: 'brand',
+            attributes: [
+              'id',
+              'brandName',
+              'username',
+              'email',
+              'pocContactNumber',
+              'profileImage',
+            ],
+          },
+          {
+            model: Admin,
+            as: 'assignedAdmin',
+            attributes: ['id', 'name', 'email'],
+          },
+        ],
+        order: [
+          ['createdAt', 'DESC'], // Newest first
+        ],
+        limit,
+        offset,
+      });
 
     return {
-      tickets: tickets.map(ticket => this.formatTicketResponse(ticket)),
+      tickets: tickets.map((ticket) => this.formatTicketResponse(ticket)),
       pagination: {
         total,
         page,
@@ -194,8 +223,12 @@ export class SupportTicketService {
         totalPages: Math.ceil(total / limit),
       },
       summary: {
-        unresolvedTickets: await this.supportTicketModel.count({ where: { status: TicketStatus.UNRESOLVED } }),
-        resolvedTickets: await this.supportTicketModel.count({ where: { status: TicketStatus.RESOLVED } }),
+        unresolvedTickets: await this.supportTicketModel.count({
+          where: { status: TicketStatus.UNRESOLVED },
+        }),
+        resolvedTickets: await this.supportTicketModel.count({
+          where: { status: TicketStatus.RESOLVED },
+        }),
       },
     };
   }
@@ -209,12 +242,26 @@ export class SupportTicketService {
         {
           model: Influencer,
           as: 'influencer',
-          attributes: ['id', 'name', 'username', 'phone', 'whatsappNumber', 'profileImage'],
+          attributes: [
+            'id',
+            'name',
+            'username',
+            'phone',
+            'whatsappNumber',
+            'profileImage',
+          ],
         },
         {
           model: Brand,
           as: 'brand',
-          attributes: ['id', 'brandName', 'username', 'email', 'pocContactNumber', 'profileImage'],
+          attributes: [
+            'id',
+            'brandName',
+            'username',
+            'email',
+            'pocContactNumber',
+            'profileImage',
+          ],
         },
         {
           model: Admin,
@@ -232,9 +279,19 @@ export class SupportTicketService {
     let reportedUser: ReportedUserDto = null;
     if (ticket.reportedUserId && ticket.reportedUserType) {
       if (ticket.reportedUserType === UserType.INFLUENCER) {
-        const influencer = await this.influencerModel.findByPk(ticket.reportedUserId, {
-          attributes: ['id', 'name', 'username', 'phone', 'whatsappNumber', 'profileImage'],
-        });
+        const influencer = await this.influencerModel.findByPk(
+          ticket.reportedUserId,
+          {
+            attributes: [
+              'id',
+              'name',
+              'username',
+              'phone',
+              'whatsappNumber',
+              'profileImage',
+            ],
+          },
+        );
         if (influencer) {
           reportedUser = {
             userType: UserType.INFLUENCER,
@@ -248,7 +305,14 @@ export class SupportTicketService {
         }
       } else {
         const brand = await this.brandModel.findByPk(ticket.reportedUserId, {
-          attributes: ['id', 'brandName', 'username', 'email', 'pocContactNumber', 'profileImage'],
+          attributes: [
+            'id',
+            'brandName',
+            'username',
+            'email',
+            'pocContactNumber',
+            'profileImage',
+          ],
         });
         if (brand) {
           reportedUser = {
@@ -289,7 +353,7 @@ export class SupportTicketService {
 
     if (updateDto.status) {
       updateData.status = updateDto.status;
-      
+
       // If marking as resolved, set resolvedAt
       if (updateDto.status === TicketStatus.RESOLVED) {
         updateData.resolvedAt = new Date();
@@ -340,13 +404,19 @@ export class SupportTicketService {
    */
   async getTicketStatistics() {
     const total = await this.supportTicketModel.count();
-    const unresolved = await this.supportTicketModel.count({ where: { status: TicketStatus.UNRESOLVED } });
-    const resolved = await this.supportTicketModel.count({ where: { status: TicketStatus.RESOLVED } });
+    const unresolved = await this.supportTicketModel.count({
+      where: { status: TicketStatus.UNRESOLVED },
+    });
+    const resolved = await this.supportTicketModel.count({
+      where: { status: TicketStatus.RESOLVED },
+    });
 
     const byType = await Promise.all(
       Object.values(ReportType).map(async (type) => ({
         type,
-        count: await this.supportTicketModel.count({ where: { reportType: type } }),
+        count: await this.supportTicketModel.count({
+          where: { reportType: type },
+        }),
       })),
     );
 
@@ -361,7 +431,10 @@ export class SupportTicketService {
   }
 
   // Helper methods
-  private async validateUser(userId: number, userType: UserType): Promise<boolean> {
+  private async validateUser(
+    userId: number,
+    userType: UserType,
+  ): Promise<boolean> {
     if (userType === UserType.INFLUENCER) {
       const influencer = await this.influencerModel.findByPk(userId);
       return !!influencer;
@@ -372,29 +445,30 @@ export class SupportTicketService {
   }
 
   private formatTicketResponse(ticket: SupportTicket) {
-    const reporter = ticket.userType === UserType.INFLUENCER
-      ? ticket.influencer
-        ? {
-            userType: UserType.INFLUENCER,
-            id: ticket.influencer.id,
-            name: ticket.influencer.name,
-            username: ticket.influencer.username,
-            phone: ticket.influencer.phone,
-            whatsappNumber: ticket.influencer.whatsappNumber,
-            profileImage: ticket.influencer.profileImage,
-          }
-        : null
-      : ticket.brand
-        ? {
-            userType: UserType.BRAND,
-            id: ticket.brand.id,
-            name: ticket.brand.brandName,
-            username: ticket.brand.username,
-            email: ticket.brand.email,
-            pocContactNumber: ticket.brand.pocContactNumber,
-            profileImage: ticket.brand.profileImage,
-          }
-        : null;
+    const reporter =
+      ticket.userType === UserType.INFLUENCER
+        ? ticket.influencer
+          ? {
+              userType: UserType.INFLUENCER,
+              id: ticket.influencer.id,
+              name: ticket.influencer.name,
+              username: ticket.influencer.username,
+              phone: ticket.influencer.phone,
+              whatsappNumber: ticket.influencer.whatsappNumber,
+              profileImage: ticket.influencer.profileImage,
+            }
+          : null
+        : ticket.brand
+          ? {
+              userType: UserType.BRAND,
+              id: ticket.brand.id,
+              name: ticket.brand.brandName,
+              username: ticket.brand.username,
+              email: ticket.brand.email,
+              pocContactNumber: ticket.brand.pocContactNumber,
+              profileImage: ticket.brand.profileImage,
+            }
+          : null;
 
     return {
       id: ticket.id,
@@ -409,11 +483,13 @@ export class SupportTicketService {
       resolvedAt: ticket.resolvedAt,
       createdAt: ticket.createdAt,
       updatedAt: ticket.updatedAt,
-      assignedAdmin: ticket.assignedAdmin ? {
-        id: ticket.assignedAdmin.id,
-        name: ticket.assignedAdmin.name,
-        email: ticket.assignedAdmin.email,
-      } : null,
+      assignedAdmin: ticket.assignedAdmin
+        ? {
+            id: ticket.assignedAdmin.id,
+            name: ticket.assignedAdmin.name,
+            email: ticket.assignedAdmin.email,
+          }
+        : null,
     };
   }
 }

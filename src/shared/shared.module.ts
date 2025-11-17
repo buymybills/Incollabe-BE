@@ -14,7 +14,10 @@ import { CustomNicheService } from './services/custom-niche.service';
 import { EncryptionService } from './services/encryption.service';
 import { SearchService } from './services/search.service';
 import { SupportTicketService } from './support-ticket.service';
+import { ChatService } from './chat.service';
+import { ChatGateway } from './chat.gateway';
 import { SearchController } from './controllers/search.controller';
+import { ChatController } from './chat.controller';
 import { IsValidUsernameConstraint } from './validators/is-valid-username.validator';
 import { Otp } from '../auth/model/otp.model';
 import { CustomNiche } from '../auth/model/custom-niche.model';
@@ -22,13 +25,24 @@ import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { Niche } from '../auth/model/niche.model';
 import { SupportTicket } from './models/support-ticket.model';
+import { Conversation } from './models/conversation.model';
+import { Message } from './models/message.model';
 
 @Module({
   imports: [
     ConfigModule,
-    SequelizeModule.forFeature([Otp, CustomNiche, Influencer, Brand, Niche, SupportTicket]),
+    SequelizeModule.forFeature([
+      Otp,
+      CustomNiche,
+      Influencer,
+      Brand,
+      Niche,
+      SupportTicket,
+      Conversation,
+      Message,
+    ]),
   ],
-  controllers: [SearchController],
+  controllers: [SearchController, ChatController],
   providers: [
     SmsService,
     S3Service,
@@ -43,6 +57,8 @@ import { SupportTicket } from './models/support-ticket.model';
     EncryptionService,
     SearchService,
     SupportTicketService,
+    ChatService,
+    ChatGateway,
     IsValidUsernameConstraint,
   ],
   exports: [
@@ -59,6 +75,7 @@ import { SupportTicket } from './models/support-ticket.model';
     CustomNicheService,
     EncryptionService,
     SupportTicketService,
+    ChatService,
     IsValidUsernameConstraint,
   ],
 })

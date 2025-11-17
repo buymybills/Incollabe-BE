@@ -92,6 +92,19 @@ export class Influencer extends Model {
   @Column(DataType.STRING)
   declare fcmToken: string;
 
+  // E2EE Public Key (for encrypted messaging)
+  @AllowNull(true)
+  @Column(DataType.TEXT)
+  declare publicKey: string;
+
+  @AllowNull(true)
+  @Column(DataType.DATE)
+  declare publicKeyCreatedAt: Date;
+
+  @AllowNull(true)
+  @Column(DataType.DATE)
+  declare publicKeyUpdatedAt: Date;
+
   @ForeignKey(() => Country)
   @AllowNull(true)
   @Column(DataType.INTEGER)

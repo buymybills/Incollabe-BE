@@ -1012,24 +1012,37 @@ export class CampaignService {
 
     // Parse comma-separated strings into arrays
     const nicheIds = niches
-      ? niches.split(',').map((id) => parseInt(id.trim())).filter((id) => !isNaN(id))
+      ? niches
+          .split(',')
+          .map((id) => parseInt(id.trim()))
+          .filter((id) => !isNaN(id))
       : [];
     const cityIds = cities
-      ? cities.split(',').map((id) => parseInt(id.trim())).filter((id) => !isNaN(id))
+      ? cities
+          .split(',')
+          .map((id) => parseInt(id.trim()))
+          .filter((id) => !isNaN(id))
       : [];
     const platformList = platforms
-      ? platforms.split(',').map((p) => p.trim().toLowerCase()).filter((p) => p.length > 0)
+      ? platforms
+          .split(',')
+          .map((p) => p.trim().toLowerCase())
+          .filter((p) => p.length > 0)
       : [];
     // Parse and validate gender values against Gender enum
     const genderList: string[] = [];
     if (gender) {
       const validGenders = Object.values(Gender);
-      const inputGenders = gender.split(',').map((g) => g.trim()).filter((g) => g.length > 0);
+      const inputGenders = gender
+        .split(',')
+        .map((g) => g.trim())
+        .filter((g) => g.length > 0);
 
       for (const inputGender of inputGenders) {
         // Find matching enum value (case-insensitive)
         const matchedGender = validGenders.find(
-          (validGender) => validGender.toLowerCase() === inputGender.toLowerCase(),
+          (validGender) =>
+            validGender.toLowerCase() === inputGender.toLowerCase(),
         );
 
         if (!matchedGender) {
