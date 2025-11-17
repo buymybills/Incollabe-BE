@@ -103,11 +103,12 @@ export class GetConversationsDto {
 }
 
 export class GetMessagesDto {
-  @ApiProperty({ description: 'Conversation ID' })
+  // conversationId comes from path parameter, not query
+  // Hidden from Swagger documentation
   @Type(() => Number)
   @IsInt()
-  @IsNotEmpty()
-  conversationId: number;
+  @IsOptional()
+  conversationId?: number;
 
   @ApiProperty({ description: 'Page number', required: false, default: 1 })
   @Type(() => Number)
@@ -126,7 +127,7 @@ export class GetMessagesDto {
   limit?: number;
 
   @ApiProperty({
-    description: 'Load messages before this message ID',
+    description: 'Load messages before this message ID (for pagination)',
     required: false,
   })
   @Type(() => Number)
