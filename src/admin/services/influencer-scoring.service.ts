@@ -196,22 +196,33 @@ export class InfluencerScoringService {
           instagramReelCost,
           scoreBreakdown,
           displayOrder: influencer.displayOrder || null, // Include displayOrder for sorting
+          updatedAt: influencer.updatedAt, // Include timestamp for tiebreaker
         };
 
         return topInfluencer;
       }),
     );
 
-    // Filter out null values and sort by displayOrder first, then overall score
+    // Filter out null values and sort by displayOrder first, then by timestamp, then by score
     const validInfluencers = scoredInfluencers
       .filter((inf): inf is TopInfluencerDto => inf !== null)
       .sort((a, b) => {
         const aOrder = a.displayOrder ?? null;
         const bOrder = b.displayOrder ?? null;
 
-        // If both have displayOrder, sort by displayOrder ASC
+        // If both have displayOrder
         if (aOrder !== null && bOrder !== null) {
-          return aOrder - bOrder;
+          // Primary sort: displayOrder ASC
+          const orderDiff = aOrder - bOrder;
+          if (orderDiff !== 0) {
+            return orderDiff;
+          }
+          // Tiebreaker: If same displayOrder, sort by updatedAt ASC (earliest first)
+          if (a.updatedAt && b.updatedAt) {
+            return new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+          }
+          // If no timestamps, use score as final tiebreaker
+          return b.scoreBreakdown.overallScore - a.scoreBreakdown.overallScore;
         }
         // If only 'a' has displayOrder, it comes first
         if (aOrder !== null && bOrder === null) {
