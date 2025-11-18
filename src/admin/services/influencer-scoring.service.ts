@@ -195,18 +195,35 @@ export class InfluencerScoringService {
           instagramPostCost,
           instagramReelCost,
           scoreBreakdown,
+          displayOrder: influencer.displayOrder || null, // Include displayOrder for sorting
         };
 
         return topInfluencer;
       }),
     );
 
-    // Filter out null values and sort by overall score
+    // Filter out null values and sort by displayOrder first, then overall score
     const validInfluencers = scoredInfluencers
       .filter((inf): inf is TopInfluencerDto => inf !== null)
-      .sort(
-        (a, b) => b.scoreBreakdown.overallScore - a.scoreBreakdown.overallScore,
-      );
+      .sort((a, b) => {
+        const aOrder = a.displayOrder ?? null;
+        const bOrder = b.displayOrder ?? null;
+
+        // If both have displayOrder, sort by displayOrder ASC
+        if (aOrder !== null && bOrder !== null) {
+          return aOrder - bOrder;
+        }
+        // If only 'a' has displayOrder, it comes first
+        if (aOrder !== null && bOrder === null) {
+          return -1;
+        }
+        // If only 'b' has displayOrder, it comes first
+        if (aOrder === null && bOrder !== null) {
+          return 1;
+        }
+        // If neither has displayOrder, sort by overall score DESC
+        return b.scoreBreakdown.overallScore - a.scoreBreakdown.overallScore;
+      });
 
     // Pagination
     const total = validInfluencers.length;

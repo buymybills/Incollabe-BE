@@ -430,6 +430,8 @@ export class ChatService {
     }
 
     // Create message
+    // For encrypted messages, DO NOT store attachmentUrl/attachmentName in plain text
+    // They should be included inside the encrypted content for E2EE security
     const message = await this.messageModel.create({
       conversationId: actualConversationId,
       senderType: userType as SenderType,
@@ -437,8 +439,8 @@ export class ChatService {
       brandId: userType === 'brand' ? userId : null,
       messageType,
       content: content || null,
-      attachmentUrl: attachmentUrl || null,
-      attachmentName: attachmentName || null,
+      attachmentUrl: isEncrypted ? null : (attachmentUrl || null),
+      attachmentName: isEncrypted ? null : (attachmentName || null),
       isRead: false,
       isEncrypted,
       encryptionVersion,
