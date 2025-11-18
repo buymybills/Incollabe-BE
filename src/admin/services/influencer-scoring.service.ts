@@ -203,7 +203,7 @@ export class InfluencerScoringService {
       }),
     );
 
-    // Filter out null values and sort by displayOrder first, then by timestamp, then by score
+    // Filter out null values and sort by displayOrder first, then by timestamp DESC (most recent first), then by score
     const validInfluencers = scoredInfluencers
       .filter((inf): inf is TopInfluencerDto => inf !== null)
       .sort((a, b) => {
@@ -217,9 +217,9 @@ export class InfluencerScoringService {
           if (orderDiff !== 0) {
             return orderDiff;
           }
-          // Tiebreaker: If same displayOrder, sort by updatedAt ASC (earliest first)
+          // Tiebreaker: If same displayOrder, sort by updatedAt DESC (most recent first)
           if (a.updatedAt && b.updatedAt) {
-            return new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+            return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
           }
           // If no timestamps, use score as final tiebreaker
           return b.scoreBreakdown.overallScore - a.scoreBreakdown.overallScore;
@@ -336,6 +336,7 @@ export class InfluencerScoringService {
     }
 
     // Fetch influencers ordered by createdAt asc
+    // Note: displayOrder is NOT used here - it only affects topProfile filter
     const allInfluencers = await this.influencerModel.findAll({
       where: whereConditions,
       include: [
@@ -347,9 +348,8 @@ export class InfluencerScoringService {
         },
       ],
       order: [
-        ['displayOrder', 'ASC'],
         ['createdAt', 'ASC'],
-      ], // Primary: displayOrder, Secondary: createdAt
+      ],
     });
 
     // Map influencers and apply follower filters
