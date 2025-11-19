@@ -402,6 +402,7 @@ export class InfluencerScoringService {
           country: influencer.country?.name || '',
           isVerified: influencer.isVerified || false,
           isTopInfluencer: influencer.isTopInfluencer || false,
+          displayOrder: influencer.isTopInfluencer ? influencer.displayOrder : null,
           followersCount,
           followingCount,
           engagementRate: 0, // Not calculated for non-top profiles

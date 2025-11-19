@@ -1883,6 +1883,7 @@ export class InfluencerService {
         isActive: true,
         isVerified: true,
       },
+      order: [['displayOrder', 'ASC']],
     });
 
     // Calculate metrics for each top influencer
