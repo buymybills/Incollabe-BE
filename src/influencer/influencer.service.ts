@@ -1899,6 +1899,12 @@ export class InfluencerService {
           this.getVerificationStatus(influencer.id),
         ]);
 
+        // Use overallScore if present, else default to 0
+        const overallScore =
+          platformMetrics && 'overallScore' in platformMetrics
+            ? ((platformMetrics as any).overallScore ?? 0)
+            : 0;
+
         return {
           id: influencer.id,
           name: influencer.name,
@@ -1940,6 +1946,7 @@ export class InfluencerService {
             logoDark: niche.logoDark,
           })),
           metrics: platformMetrics,
+          overallScore,
           isTopInfluencer: true,
           isVerified: influencer.isVerified,
           verificationStatus,
@@ -1949,7 +1956,29 @@ export class InfluencerService {
       }),
     );
 
-    // Already sorted by displayOrder DESC from DB, so just paginate
+    // Sort by displayOrder ASC, then updatedAt DESC, then overallScore DESC
+    influencersWithMetrics.sort((a, b) => {
+      const aOrder = a.displayOrder ?? null;
+      const bOrder = b.displayOrder ?? null;
+      if (aOrder !== null && bOrder !== null) {
+        const orderDiff = aOrder - bOrder;
+        if (orderDiff !== 0) return orderDiff;
+        // Tiebreaker: updatedAt DESC
+        if (a.updatedAt && b.updatedAt) {
+          const aTime = new Date(a.updatedAt).getTime();
+          const bTime = new Date(b.updatedAt).getTime();
+          if (bTime !== aTime) return bTime - aTime;
+        }
+        // Final tiebreaker: overallScore DESC
+        return (b.overallScore ?? 0) - (a.overallScore ?? 0);
+      }
+      if (aOrder !== null && bOrder === null) return -1;
+      if (aOrder === null && bOrder !== null) return 1;
+      // If neither has displayOrder, sort by overallScore DESC
+      return (b.overallScore ?? 0) - (a.overallScore ?? 0);
+    });
+
+    // Paginate after sorting
     const paginatedInfluencers = influencersWithMetrics.slice(
       offset,
       offset + limit,
