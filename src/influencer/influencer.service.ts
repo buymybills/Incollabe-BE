@@ -1880,7 +1880,7 @@ export class InfluencerService {
     };
   }
 
-  async getTopInfluencers(limit: number = 10, offset: number = 0) {
+  async getTopInfluencers(page: number = 1, limit: number = 10) {
     // Fetch all top influencers first (without limit/offset for proper sorting)
     const allTopInfluencers = await this.influencerRepository.findAll({
       where: {
@@ -1978,7 +1978,8 @@ export class InfluencerService {
       return (b.overallScore ?? 0) - (a.overallScore ?? 0);
     });
 
-    // Paginate after sorting
+    // Paginate after sorting using page and limit
+    const offset = (page - 1) * limit;
     const paginatedInfluencers = influencersWithMetrics.slice(
       offset,
       offset + limit,
@@ -1987,8 +1988,9 @@ export class InfluencerService {
     return {
       topInfluencers: paginatedInfluencers,
       total: influencersWithMetrics.length,
+      page,
       limit,
-      offset,
+      totalPages: Math.ceil(influencersWithMetrics.length / limit),
     };
   }
 }
