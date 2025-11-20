@@ -169,6 +169,18 @@ export class TopBrandsResponseDto {
   total: number;
 
   @ApiProperty({
+    description: 'Current page number',
+    example: 1,
+  })
+  page: number;
+
+  @ApiProperty({
+    description: 'Total number of pages',
+    example: 3,
+  })
+  totalPages: number;
+
+  @ApiProperty({
     description: 'Sort metric used',
     enum: TopBrandsSortBy,
     example: TopBrandsSortBy.COMPOSITE,

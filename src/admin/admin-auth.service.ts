@@ -775,7 +775,7 @@ export class AdminAuthService {
             isTopInfluencer: true,
             id: { [Op.ne]: influencerId },
           },
-        }
+        },
       );
     } else {
       // Remove from top influencer: set isTopInfluencer=false and displayOrder to null
@@ -842,7 +842,7 @@ export class AdminAuthService {
             displayOrder: { [Op.gt]: currentOrder, [Op.lte]: displayOrder },
             id: { [Op.ne]: influencerId },
           },
-        }
+        },
       );
     } else {
       // Moving up: increment displayOrder for those between displayOrder and currentOrder-1
@@ -854,7 +854,7 @@ export class AdminAuthService {
             displayOrder: { [Op.gte]: displayOrder, [Op.lt]: currentOrder },
             id: { [Op.ne]: influencerId },
           },
-        }
+        },
       );
     }
 
@@ -1471,6 +1471,8 @@ export class AdminAuthService {
       return {
         brands: [],
         total: 0,
+        page: 1,
+        totalPages: 0,
         sortBy: sortBy || TopBrandsSortBy.COMPOSITE,
         timeframe: timeframe || TopBrandsTimeframe.ALL_TIME,
         limit: limit ?? 10,
@@ -1560,6 +1562,9 @@ export class AdminAuthService {
     );
 
     // Get top N brands
+    const total = brandsWithScores.length;
+    const totalPages = Math.ceil(total / (limit ?? 10));
+    const page = 1;
     const topBrands = brandsWithScores.slice(0, limit).map((item) => ({
       id: item.id,
       brandName: item.brandName,
@@ -1576,7 +1581,9 @@ export class AdminAuthService {
 
     return {
       brands: topBrands,
-      total: brandsWithScores.length,
+      total,
+      page,
+      totalPages,
       sortBy: sortBy || TopBrandsSortBy.COMPOSITE,
       timeframe: timeframe || TopBrandsTimeframe.ALL_TIME,
       limit: limit ?? 10,
@@ -1659,12 +1666,14 @@ export class AdminAuthService {
       return {
         brands: paginatedBrands,
         total,
+        page,
+        limit: limit ?? 20,
+        totalPages,
         sortBy:
           sortBy === BrandSortBy.COMPOSITE
             ? TopBrandsSortBy.COMPOSITE
             : TopBrandsSortBy.CAMPAIGNS,
         timeframe: TopBrandsTimeframe.ALL_TIME,
-        limit: limit ?? 20,
       };
     }
 
@@ -1981,9 +1990,11 @@ export class AdminAuthService {
     return {
       brands: paginatedBrands,
       total,
+      page,
+      limit: limit ?? 20,
+      totalPages,
       sortBy: TopBrandsSortBy.COMPOSITE,
       timeframe: TopBrandsTimeframe.ALL_TIME,
-      limit: limit ?? 20,
     };
   }
 
