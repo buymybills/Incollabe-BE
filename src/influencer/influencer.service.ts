@@ -1888,7 +1888,7 @@ export class InfluencerService {
         isActive: true,
         isVerified: true,
       },
-      order: [['displayOrder', 'ASC']],
+      // DO NOT use order here, we will sort in-memory
     });
 
     // Calculate metrics for each top influencer
