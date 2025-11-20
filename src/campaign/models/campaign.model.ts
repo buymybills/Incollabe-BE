@@ -156,7 +156,7 @@ export class Campaign extends Model<Campaign, CampaignCreationAttributes> {
     type: DataType.JSON,
     allowNull: true,
   })
-  nicheIds: number[];
+  declare nicheIds: number[];
 
   @Column({
     type: DataType.TEXT,
