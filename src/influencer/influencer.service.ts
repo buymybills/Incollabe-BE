@@ -132,32 +132,37 @@ export class InfluencerService {
     const isActuallyComplete =
       this.checkInfluencerProfileCompletion(influencer);
     if (isActuallyComplete && !influencer.isProfileCompleted) {
-      // Profile is complete but flag is outdated - update it
-      await this.influencerRepository.updateInfluencer(influencerId, {
-        isProfileCompleted: true,
+      // Check latest review status
+      const latestReview = await this.profileReviewModel.findOne({
+        where: { profileId: influencerId, profileType: ProfileType.INFLUENCER },
+        order: [['createdAt', 'DESC']],
       });
-
-      // Check if profile has ever been submitted for review
-      const hasBeenSubmitted = await this.hasProfileReview(influencerId);
-
-      // If profile just became complete and hasn't been submitted, create review
-      if (!hasBeenSubmitted) {
-        await this.createProfileReview(influencerId);
-
-        // Send verification pending notification
-        if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-          await this.whatsAppService.sendProfileVerificationPending(
-            influencer.whatsappNumber,
-            influencer.name,
-          );
+      if (!latestReview || latestReview.status !== ReviewStatus.REJECTED) {
+        // Profile is complete but flag is outdated - update it
+        await this.influencerRepository.updateInfluencer(influencerId, {
+          isProfileCompleted: true,
+        });
+        // ...existing code...
+        // Check if profile has ever been submitted for review
+        const hasBeenSubmitted = await this.hasProfileReview(influencerId);
+        // If profile just became complete and hasn't been submitted, create review
+        if (!hasBeenSubmitted) {
+          await this.createProfileReview(influencerId);
+          // Send verification pending notification
+          if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
+            await this.whatsAppService.sendProfileVerificationPending(
+              influencer.whatsappNumber,
+              influencer.name,
+            );
+          }
+        }
+        // Refresh influencer data with updated flag
+        influencer = await this.influencerRepository.findById(influencerId);
+        if (!influencer) {
+          throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
         }
       }
-
-      // Refresh influencer data with updated flag
-      influencer = await this.influencerRepository.findById(influencerId);
-      if (!influencer) {
-        throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
-      }
+      // else: latest review is rejected, require explicit resubmission
     }
 
     // Check if current user follows this influencer
