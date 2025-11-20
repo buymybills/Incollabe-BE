@@ -66,7 +66,7 @@ export class Campaign extends Model<Campaign, CampaignCreationAttributes> {
     type: DataType.INTEGER,
     allowNull: false,
   })
-  brandId: number;
+  declare brandId: number;
 
   @Column({
     type: DataType.STRING,
@@ -78,19 +78,19 @@ export class Campaign extends Model<Campaign, CampaignCreationAttributes> {
     type: DataType.TEXT,
     allowNull: true,
   })
-  description: string;
+  declare description: string;
 
   @Column({
     type: DataType.STRING,
     allowNull: true,
   })
-  category: string;
+  declare category: string;
 
   @Column({
     type: DataType.TEXT,
     allowNull: true,
   })
-  deliverableFormat: string;
+  declare deliverableFormat: string;
 
   @Column({
     type: DataType.ENUM(...Object.values(CampaignStatus)),
@@ -111,46 +111,46 @@ export class Campaign extends Model<Campaign, CampaignCreationAttributes> {
     allowNull: false,
     defaultValue: false,
   })
-  isInviteOnly: boolean;
+  declare isInviteOnly: boolean;
 
   @Column({
     type: DataType.BOOLEAN,
     allowNull: false,
     defaultValue: false,
   })
-  isPanIndia: boolean;
+  declare isPanIndia: boolean;
 
   @Column({
     type: DataType.INTEGER,
     allowNull: true,
   })
-  minAge: number;
+  declare minAge: number;
 
   @Column({
     type: DataType.INTEGER,
     allowNull: true,
   })
-  maxAge: number;
+  declare maxAge: number;
 
   @Column({
     type: DataType.BOOLEAN,
     allowNull: false,
     defaultValue: false,
   })
-  isOpenToAllAges: boolean;
+  declare isOpenToAllAges: boolean;
 
   @Column({
     type: DataType.JSON,
     allowNull: true,
   })
-  genderPreferences: string[];
+  declare genderPreferences: string[];
 
   @Column({
     type: DataType.BOOLEAN,
     allowNull: false,
     defaultValue: false,
   })
-  isOpenToAllGenders: boolean;
+  declare isOpenToAllGenders: boolean;
 
   @Column({
     type: DataType.JSON,
@@ -162,26 +162,26 @@ export class Campaign extends Model<Campaign, CampaignCreationAttributes> {
     type: DataType.TEXT,
     allowNull: true,
   })
-  customInfluencerRequirements: string;
+  declare customInfluencerRequirements: string;
 
   @Column({
     type: DataType.TEXT,
     allowNull: true,
   })
-  performanceExpectations: string;
+  declare performanceExpectations: string;
 
   @Column({
     type: DataType.TEXT,
     allowNull: true,
   })
-  brandSupport: string;
+  declare brandSupport: string;
 
   @Column({
     type: DataType.BOOLEAN,
     allowNull: false,
     defaultValue: true,
   })
-  isActive: boolean;
+  declare isActive: boolean;
 
   // Associations
   @BelongsTo(() => Brand)
