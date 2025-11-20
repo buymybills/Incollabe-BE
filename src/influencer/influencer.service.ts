@@ -1908,7 +1908,7 @@ export class InfluencerService {
           profileBanner: influencer.profileBanner,
           profileHeadline: influencer.profileHeadline,
           userType: 'influencer' as const,
-
+          displayOrder: influencer.displayOrder,
           location: {
             country: influencer.country
               ? {
@@ -1925,7 +1925,6 @@ export class InfluencerService {
                 }
               : null,
           },
-
           socialLinks: {
             instagram: influencer.instagramUrl,
             youtube: influencer.youtubeUrl,
@@ -1933,7 +1932,6 @@ export class InfluencerService {
             linkedin: influencer.linkedinUrl,
             twitter: influencer.twitterUrl,
           },
-
           niches: (influencer.niches || []).map((niche) => ({
             id: niche.id,
             name: niche.name,
@@ -1941,32 +1939,25 @@ export class InfluencerService {
             logoNormal: niche.logoNormal,
             logoDark: niche.logoDark,
           })),
-
           metrics: platformMetrics,
           isTopInfluencer: true,
           isVerified: influencer.isVerified,
           verificationStatus,
-
           createdAt: influencer.createdAt?.toISOString(),
           updatedAt: influencer.updatedAt?.toISOString(),
         };
       }),
     );
 
-    // Sort by follower count (descending - most followers first)
-    const sortedInfluencers = influencersWithMetrics.sort(
-      (a, b) => b.metrics.followers - a.metrics.followers,
-    );
-
-    // Apply pagination after sorting
-    const paginatedInfluencers = sortedInfluencers.slice(
+    // Already sorted by displayOrder DESC from DB, so just paginate
+    const paginatedInfluencers = influencersWithMetrics.slice(
       offset,
       offset + limit,
     );
 
     return {
       topInfluencers: paginatedInfluencers,
-      total: sortedInfluencers.length,
+      total: influencersWithMetrics.length,
       limit,
       offset,
     };
