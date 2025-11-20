@@ -1,13 +1,11 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsEnum,
-  IsOptional,
-  IsInt,
-  IsString,
-  Min,
-} from 'class-validator';
+import { IsEnum, IsOptional, IsInt, IsString, Min } from 'class-validator';
 import { Type } from 'class-transformer';
-import { TicketStatus, UserType, ReportType } from '../models/support-ticket.model';
+import {
+  TicketStatus,
+  UserType,
+  ReportType,
+} from '../models/support-ticket.model';
 
 export class GetSupportTicketsDto {
   @ApiPropertyOptional({

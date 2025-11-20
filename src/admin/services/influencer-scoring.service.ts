@@ -195,18 +195,46 @@ export class InfluencerScoringService {
           instagramPostCost,
           instagramReelCost,
           scoreBreakdown,
+          displayOrder: influencer.displayOrder || null, // Include displayOrder for sorting
+          updatedAt: influencer.updatedAt, // Include timestamp for tiebreaker
         };
 
         return topInfluencer;
       }),
     );
 
-    // Filter out null values and sort by overall score
+    // Filter out null values and sort by displayOrder first, then by timestamp DESC (most recent first), then by score
     const validInfluencers = scoredInfluencers
       .filter((inf): inf is TopInfluencerDto => inf !== null)
-      .sort(
-        (a, b) => b.scoreBreakdown.overallScore - a.scoreBreakdown.overallScore,
-      );
+      .sort((a, b) => {
+        const aOrder = a.displayOrder ?? null;
+        const bOrder = b.displayOrder ?? null;
+
+        // If both have displayOrder
+        if (aOrder !== null && bOrder !== null) {
+          // Primary sort: displayOrder ASC
+          const orderDiff = aOrder - bOrder;
+          if (orderDiff !== 0) {
+            return orderDiff;
+          }
+          // Tiebreaker: If same displayOrder, sort by updatedAt DESC (most recent first)
+          if (a.updatedAt && b.updatedAt) {
+            return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+          }
+          // If no timestamps, use score as final tiebreaker
+          return b.scoreBreakdown.overallScore - a.scoreBreakdown.overallScore;
+        }
+        // If only 'a' has displayOrder, it comes first
+        if (aOrder !== null && bOrder === null) {
+          return -1;
+        }
+        // If only 'b' has displayOrder, it comes first
+        if (aOrder === null && bOrder !== null) {
+          return 1;
+        }
+        // If neither has displayOrder, sort by overall score DESC
+        return b.scoreBreakdown.overallScore - a.scoreBreakdown.overallScore;
+      });
 
     // Pagination
     const total = validInfluencers.length;
@@ -308,6 +336,7 @@ export class InfluencerScoringService {
     }
 
     // Fetch influencers ordered by createdAt asc
+    // Note: displayOrder is NOT used here - it only affects topProfile filter
     const allInfluencers = await this.influencerModel.findAll({
       where: whereConditions,
       include: [
@@ -319,9 +348,8 @@ export class InfluencerScoringService {
         },
       ],
       order: [
-        ['displayOrder', 'ASC'],
         ['createdAt', 'ASC'],
-      ], // Primary: displayOrder, Secondary: createdAt
+      ],
     });
 
     // Map influencers and apply follower filters
@@ -374,6 +402,7 @@ export class InfluencerScoringService {
           country: influencer.country?.name || '',
           isVerified: influencer.isVerified || false,
           isTopInfluencer: influencer.isTopInfluencer || false,
+          displayOrder: influencer.isTopInfluencer ? influencer.displayOrder : null,
           followersCount,
           followingCount,
           engagementRate: 0, // Not calculated for non-top profiles

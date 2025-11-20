@@ -174,7 +174,7 @@ describe('AdminCampaignService', () => {
       expect(result.campaigns).toHaveLength(1);
       expect(result.campaigns[0].name).toBe('Test Campaign');
       expect(result.campaigns[0].niches).toEqual(['Fashion', 'Lifestyle']);
-      expect(result.campaigns[0].cities).toEqual(['Mumbai']);
+      expect(result.campaigns[0].cities.map(c => c.name)).toEqual(['Mumbai']);
       expect(result.campaigns[0].applicationsCount).toBe(5);
       expect(result.total).toBe(1);
       expect(result.page).toBe(1);

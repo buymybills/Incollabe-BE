@@ -841,12 +841,12 @@ export class InfluencerController {
     description: 'Top influencers fetched successfully',
   })
   async getTopInfluencers(
+    @Query('page') page?: string,
     @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
   ) {
+    const parsedPage = page ? parseInt(page, 10) : 1;
     const parsedLimit = limit ? parseInt(limit, 10) : 10;
-    const parsedOffset = offset ? parseInt(offset, 10) : 0;
-    return this.influencerService.getTopInfluencers(parsedLimit, parsedOffset);
+    return this.influencerService.getTopInfluencers(parsedPage, parsedLimit);
   }
 
   // Support Ticket endpoints

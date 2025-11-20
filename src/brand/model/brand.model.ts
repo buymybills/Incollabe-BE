@@ -176,6 +176,25 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
   })
   declare fcmToken: string;
 
+  // E2EE Public Key (for encrypted messaging)
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+  })
+  declare publicKey: string;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare publicKeyCreatedAt: Date;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare publicKeyUpdatedAt: Date;
+
   @Column({
     type: DataType.STRING,
     allowNull: true,

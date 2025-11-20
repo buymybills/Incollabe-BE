@@ -763,8 +763,24 @@ export class AdminAuthService {
       throw new NotFoundException('Influencer not found');
     }
 
-    // Update the top influencer status
-    await influencer.update({ isTopInfluencer });
+    if (isTopInfluencer) {
+      // Promote to top influencer: set displayOrder=1
+      await influencer.update({ isTopInfluencer: true, displayOrder: 1 });
+
+      // Increment displayOrder for all other top influencers
+      await this.influencerModel.increment(
+        { displayOrder: 1 },
+        {
+          where: {
+            isTopInfluencer: true,
+            id: { [Op.ne]: influencerId },
+          },
+        },
+      );
+    } else {
+      // Remove from top influencer: set isTopInfluencer=false and displayOrder to null
+      await influencer.update({ isTopInfluencer: false, displayOrder: null });
+    }
 
     // Log audit trail
     const admin = await this.adminModel.findByPk(adminId);
@@ -801,7 +817,48 @@ export class AdminAuthService {
       throw new NotFoundException('Influencer not found');
     }
 
-    // Update the display order
+    // Get current displayOrder
+    const currentOrder = influencer.displayOrder;
+
+    if (currentOrder === displayOrder) {
+      // No change needed
+      return {
+        success: true,
+        message: 'Display order unchanged',
+        influencerId,
+        displayOrder,
+        updatedBy: adminId,
+        updatedAt: new Date(),
+      };
+    }
+
+    if (currentOrder < displayOrder) {
+      // Moving down: decrement displayOrder for those between currentOrder+1 and displayOrder
+      await this.influencerModel.decrement(
+        { displayOrder: 1 },
+        {
+          where: {
+            isTopInfluencer: true,
+            displayOrder: { [Op.gt]: currentOrder, [Op.lte]: displayOrder },
+            id: { [Op.ne]: influencerId },
+          },
+        },
+      );
+    } else {
+      // Moving up: increment displayOrder for those between displayOrder and currentOrder-1
+      await this.influencerModel.increment(
+        { displayOrder: 1 },
+        {
+          where: {
+            isTopInfluencer: true,
+            displayOrder: { [Op.gte]: displayOrder, [Op.lt]: currentOrder },
+            id: { [Op.ne]: influencerId },
+          },
+        },
+      );
+    }
+
+    // Set influencer to new displayOrder
     await influencer.update({ displayOrder });
 
     // Log audit trail
@@ -1414,6 +1471,8 @@ export class AdminAuthService {
       return {
         brands: [],
         total: 0,
+        page: 1,
+        totalPages: 0,
         sortBy: sortBy || TopBrandsSortBy.COMPOSITE,
         timeframe: timeframe || TopBrandsTimeframe.ALL_TIME,
         limit: limit ?? 10,
@@ -1503,6 +1562,9 @@ export class AdminAuthService {
     );
 
     // Get top N brands
+    const total = brandsWithScores.length;
+    const totalPages = Math.ceil(total / (limit ?? 10));
+    const page = 1;
     const topBrands = brandsWithScores.slice(0, limit).map((item) => ({
       id: item.id,
       brandName: item.brandName,
@@ -1519,7 +1581,9 @@ export class AdminAuthService {
 
     return {
       brands: topBrands,
-      total: brandsWithScores.length,
+      total,
+      page,
+      totalPages,
       sortBy: sortBy || TopBrandsSortBy.COMPOSITE,
       timeframe: timeframe || TopBrandsTimeframe.ALL_TIME,
       limit: limit ?? 10,
@@ -1602,12 +1666,14 @@ export class AdminAuthService {
       return {
         brands: paginatedBrands,
         total,
+        page,
+        limit: limit ?? 20,
+        totalPages,
         sortBy:
           sortBy === BrandSortBy.COMPOSITE
             ? TopBrandsSortBy.COMPOSITE
             : TopBrandsSortBy.CAMPAIGNS,
         timeframe: TopBrandsTimeframe.ALL_TIME,
-        limit: limit ?? 20,
       };
     }
 
@@ -1924,9 +1990,11 @@ export class AdminAuthService {
     return {
       brands: paginatedBrands,
       total,
+      page,
+      limit: limit ?? 20,
+      totalPages,
       sortBy: TopBrandsSortBy.COMPOSITE,
       timeframe: TopBrandsTimeframe.ALL_TIME,
-      limit: limit ?? 20,
     };
   }
 

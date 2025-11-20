@@ -132,32 +132,37 @@ export class InfluencerService {
     const isActuallyComplete =
       this.checkInfluencerProfileCompletion(influencer);
     if (isActuallyComplete && !influencer.isProfileCompleted) {
-      // Profile is complete but flag is outdated - update it
-      await this.influencerRepository.updateInfluencer(influencerId, {
-        isProfileCompleted: true,
+      // Check latest review status
+      const latestReview = await this.profileReviewModel.findOne({
+        where: { profileId: influencerId, profileType: ProfileType.INFLUENCER },
+        order: [['createdAt', 'DESC']],
       });
-
-      // Check if profile has ever been submitted for review
-      const hasBeenSubmitted = await this.hasProfileReview(influencerId);
-
-      // If profile just became complete and hasn't been submitted, create review
-      if (!hasBeenSubmitted) {
-        await this.createProfileReview(influencerId);
-
-        // Send verification pending notification
-        if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-          await this.whatsAppService.sendProfileVerificationPending(
-            influencer.whatsappNumber,
-            influencer.name,
-          );
+      if (!latestReview || latestReview.status !== ReviewStatus.REJECTED) {
+        // Profile is complete but flag is outdated - update it
+        await this.influencerRepository.updateInfluencer(influencerId, {
+          isProfileCompleted: true,
+        });
+        // ...existing code...
+        // Check if profile has ever been submitted for review
+        const hasBeenSubmitted = await this.hasProfileReview(influencerId);
+        // If profile just became complete and hasn't been submitted, create review
+        if (!hasBeenSubmitted) {
+          await this.createProfileReview(influencerId);
+          // Send verification pending notification
+          if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
+            await this.whatsAppService.sendProfileVerificationPending(
+              influencer.whatsappNumber,
+              influencer.name,
+            );
+          }
+        }
+        // Refresh influencer data with updated flag
+        influencer = await this.influencerRepository.findById(influencerId);
+        if (!influencer) {
+          throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
         }
       }
-
-      // Refresh influencer data with updated flag
-      influencer = await this.influencerRepository.findById(influencerId);
-      if (!influencer) {
-        throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
-      }
+      // else: latest review is rejected, require explicit resubmission
     }
 
     // Check if current user follows this influencer
@@ -1875,7 +1880,7 @@ export class InfluencerService {
     };
   }
 
-  async getTopInfluencers(limit: number = 10, offset: number = 0) {
+  async getTopInfluencers(page: number = 1, limit: number = 10) {
     // Fetch all top influencers first (without limit/offset for proper sorting)
     const allTopInfluencers = await this.influencerRepository.findAll({
       where: {
@@ -1883,6 +1888,7 @@ export class InfluencerService {
         isActive: true,
         isVerified: true,
       },
+      // DO NOT use order here, we will sort in-memory
     });
 
     // Calculate metrics for each top influencer
@@ -1893,6 +1899,12 @@ export class InfluencerService {
           this.getVerificationStatus(influencer.id),
         ]);
 
+        // Use overallScore if present, else default to 0
+        const overallScore =
+          platformMetrics && 'overallScore' in platformMetrics
+            ? ((platformMetrics as any).overallScore ?? 0)
+            : 0;
+
         return {
           id: influencer.id,
           name: influencer.name,
@@ -1902,7 +1914,7 @@ export class InfluencerService {
           profileBanner: influencer.profileBanner,
           profileHeadline: influencer.profileHeadline,
           userType: 'influencer' as const,
-
+          displayOrder: influencer.displayOrder,
           location: {
             country: influencer.country
               ? {
@@ -1919,7 +1931,6 @@ export class InfluencerService {
                 }
               : null,
           },
-
           socialLinks: {
             instagram: influencer.instagramUrl,
             youtube: influencer.youtubeUrl,
@@ -1927,7 +1938,6 @@ export class InfluencerService {
             linkedin: influencer.linkedinUrl,
             twitter: influencer.twitterUrl,
           },
-
           niches: (influencer.niches || []).map((niche) => ({
             id: niche.id,
             name: niche.name,
@@ -1935,34 +1945,52 @@ export class InfluencerService {
             logoNormal: niche.logoNormal,
             logoDark: niche.logoDark,
           })),
-
           metrics: platformMetrics,
+          overallScore,
           isTopInfluencer: true,
           isVerified: influencer.isVerified,
           verificationStatus,
-
           createdAt: influencer.createdAt?.toISOString(),
           updatedAt: influencer.updatedAt?.toISOString(),
         };
       }),
     );
 
-    // Sort by follower count (descending - most followers first)
-    const sortedInfluencers = influencersWithMetrics.sort(
-      (a, b) => b.metrics.followers - a.metrics.followers,
-    );
+    // Sort by displayOrder ASC, then updatedAt DESC, then overallScore DESC
+    influencersWithMetrics.sort((a, b) => {
+      const aOrder = a.displayOrder ?? null;
+      const bOrder = b.displayOrder ?? null;
+      if (aOrder !== null && bOrder !== null) {
+        const orderDiff = aOrder - bOrder;
+        if (orderDiff !== 0) return orderDiff;
+        // Tiebreaker: updatedAt DESC
+        if (a.updatedAt && b.updatedAt) {
+          const aTime = new Date(a.updatedAt).getTime();
+          const bTime = new Date(b.updatedAt).getTime();
+          if (bTime !== aTime) return bTime - aTime;
+        }
+        // Final tiebreaker: overallScore DESC
+        return (b.overallScore ?? 0) - (a.overallScore ?? 0);
+      }
+      if (aOrder !== null && bOrder === null) return -1;
+      if (aOrder === null && bOrder !== null) return 1;
+      // If neither has displayOrder, sort by overallScore DESC
+      return (b.overallScore ?? 0) - (a.overallScore ?? 0);
+    });
 
-    // Apply pagination after sorting
-    const paginatedInfluencers = sortedInfluencers.slice(
+    // Paginate after sorting using page and limit
+    const offset = (page - 1) * limit;
+    const paginatedInfluencers = influencersWithMetrics.slice(
       offset,
       offset + limit,
     );
 
     return {
       topInfluencers: paginatedInfluencers,
-      total: sortedInfluencers.length,
+      total: influencersWithMetrics.length,
+      page,
       limit,
-      offset,
+      totalPages: Math.ceil(influencersWithMetrics.length / limit),
     };
   }
 }

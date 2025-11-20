@@ -11,12 +11,13 @@ import {
   ValidationOptions,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ApiProperty } from '@nestjs/swagger';
 import { ApplicationStatus } from '../models/campaign-application.model';
 import { Gender } from '../../auth/types/gender.enum';
 
 // Custom validator to ensure minAge is not greater than maxAge
 function IsValidAgeRange(validationOptions?: ValidationOptions) {
-  return function (object: Object, propertyName: string) {
+  return function (object: object, propertyName: string) {
     registerDecorator({
       name: 'isValidAgeRange',
       target: object.constructor,
@@ -45,14 +46,57 @@ function IsValidAgeRange(validationOptions?: ValidationOptions) {
   };
 }
 
+// Custom validator for comma-separated gender values
+function IsValidGenderList(validationOptions?: ValidationOptions) {
+  return function (object: object, propertyName: string) {
+    registerDecorator({
+      name: 'isValidGenderList',
+      target: object.constructor,
+      propertyName: propertyName,
+      constraints: [],
+      options: validationOptions,
+      validator: {
+        validate(value: any, _args: ValidationArguments) {
+          if (!value || typeof value !== 'string') {
+            return true; // Let @IsString handle this
+          }
+
+          const validGenders = Object.values(Gender).map((g) =>
+            g.toLowerCase(),
+          );
+          const genderList = value
+            .split(',')
+            .map((g) => g.trim().toLowerCase())
+            .filter((g) => g.length > 0);
+
+          // Check if all values are valid gender enum values
+          return genderList.every((g) => validGenders.includes(g));
+        },
+        defaultMessage(_args: ValidationArguments) {
+          const validValues = Object.values(Gender).join(', ');
+          return `Gender must be one or more of: ${validValues} (comma-separated, case-insensitive)`;
+        },
+      },
+    });
+  };
+}
+
 export class GetCampaignApplicationsDto {
   @IsOptional()
   @IsEnum(ApplicationStatus)
   status?: ApplicationStatus;
 
+  @ApiProperty({
+    description:
+      'Filter by gender (single or comma-separated values). Valid values: Male, Female, Others. Example: "Male,Female" or "Male"',
+    required: false,
+    example: 'Male,Female',
+    type: String,
+  })
   @IsOptional()
-  @IsEnum(Gender)
-  gender?: Gender;
+  @IsString()
+  @IsValidGenderList()
+  gender?: string;
 
   @IsOptional()
   @IsString()

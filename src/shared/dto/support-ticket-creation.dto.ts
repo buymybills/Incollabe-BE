@@ -1,4 +1,8 @@
-import { UserType, ReportType, TicketStatus } from '../models/support-ticket.model';
+import {
+  UserType,
+  ReportType,
+  TicketStatus,
+} from '../models/support-ticket.model';
 
 export class SupportTicketCreationDto {
   userType: UserType;

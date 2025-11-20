@@ -104,6 +104,20 @@ export class TopInfluencerDto {
   isTopInfluencer: boolean;
 
   @ApiProperty({
+    description: 'Manual display order for top influencers (lower number = higher priority)',
+    example: 1,
+    required: false,
+  })
+  displayOrder?: number | null;
+
+  @ApiProperty({
+    description: 'Last updated timestamp (used as tiebreaker when displayOrder is same)',
+    example: '2025-11-18T08:37:09.558Z',
+    required: false,
+  })
+  updatedAt?: Date;
+
+  @ApiProperty({
     description: 'Total followers count',
     example: 150000,
   })

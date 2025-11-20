@@ -54,6 +54,7 @@ export class AdminCampaignService {
       collaborationCost: campaignData.deliverables,
     };
     delete response.deliverableFormat;
+    // Explicitly ensure 'type' is present
     return response;
   }
 
@@ -491,27 +492,40 @@ export class AdminCampaignService {
           },
         });
 
-        // Fetch niche names based on nicheIds
-        let nicheNames: string[] = [];
+        // Fetch full niche objects based on nicheIds
+        let nicheObjects: any[] = [];
         if (campaign.nicheIds && campaign.nicheIds.length > 0) {
           const niches = await this.nicheModel.findAll({
             where: {
               id: { [Op.in]: campaign.nicheIds },
             },
-            attributes: ['name'],
+            attributes: ['id', 'name', 'description', 'logoNormal', 'logoDark'],
           });
-          nicheNames = niches.map((n) => n.name);
+          nicheObjects = niches.map((n) => ({
+            id: n.id,
+            name: n.name,
+            description: n.description,
+            logoNormal: n.logoNormal,
+            logoDark: n.logoDark,
+          }));
         }
 
-        // Extract city names from the cities association
-        const cityNames =
-          campaign.cities?.map((cc) => cc.city?.name).filter(Boolean) || [];
+        // Extract full city objects from the cities association
+        const cityObjects =
+          campaign.cities?.map((cc) =>
+            cc.city
+              ? {
+                  id: cc.city.id,
+                  name: cc.city.name,
+                }
+              : null
+          ).filter(Boolean) || [];
 
         const campaignData = {
           id: campaign.id,
           name: campaign.name,
           description: campaign.description,
-          type: campaign.type,
+          type: campaign.type, // Only 'type' field
           status: campaign.status,
           category: campaign.category,
           isInviteOnly: campaign.isInviteOnly,
@@ -524,8 +538,8 @@ export class AdminCampaignService {
                 username: campaign.brand.username,
               }
             : null,
-          niches: nicheNames,
-          cities: cityNames,
+          niches: nicheObjects.map(n => n.name),
+          cities: cityObjects,
           applicationsCount,
           selectedCount,
           deliverableFormat: campaign.deliverableFormat,
