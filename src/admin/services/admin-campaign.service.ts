@@ -491,16 +491,22 @@ export class AdminCampaignService {
           },
         });
 
-        // Fetch niche names based on nicheIds
-        let nicheNames: string[] = [];
+        // Fetch full niche objects based on nicheIds
+        let nicheObjects: any[] = [];
         if (campaign.nicheIds && campaign.nicheIds.length > 0) {
           const niches = await this.nicheModel.findAll({
             where: {
               id: { [Op.in]: campaign.nicheIds },
             },
-            attributes: ['name'],
+            attributes: ['id', 'name', 'description', 'logoNormal', 'logoDark'],
           });
-          nicheNames = niches.map((n) => n.name);
+          nicheObjects = niches.map((n) => ({
+            id: n.id,
+            name: n.name,
+            description: n.description,
+            logoNormal: n.logoNormal,
+            logoDark: n.logoDark,
+          }));
         }
 
         // Extract city names from the cities association
@@ -524,7 +530,7 @@ export class AdminCampaignService {
                 username: campaign.brand.username,
               }
             : null,
-          niches: nicheNames,
+          niches: nicheObjects,
           cities: cityNames,
           applicationsCount,
           selectedCount,
