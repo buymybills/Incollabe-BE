@@ -518,6 +518,7 @@ export class AdminCampaignService {
           name: campaign.name,
           description: campaign.description,
           type: campaign.type,
+          campaignType: campaign.type, // Added campaignType field
           status: campaign.status,
           category: campaign.category,
           isInviteOnly: campaign.isInviteOnly,
@@ -530,7 +531,7 @@ export class AdminCampaignService {
                 username: campaign.brand.username,
               }
             : null,
-          niches: nicheObjects,
+          niches: nicheObjects.map(n => n.name),
           cities: cityNames,
           applicationsCount,
           selectedCount,
