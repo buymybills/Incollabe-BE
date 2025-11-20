@@ -54,6 +54,7 @@ export class AdminCampaignService {
       collaborationCost: campaignData.deliverables,
     };
     delete response.deliverableFormat;
+    // Explicitly ensure 'type' is present
     return response;
   }
 
@@ -509,16 +510,22 @@ export class AdminCampaignService {
           }));
         }
 
-        // Extract city names from the cities association
-        const cityNames =
-          campaign.cities?.map((cc) => cc.city?.name).filter(Boolean) || [];
+        // Extract full city objects from the cities association
+        const cityObjects =
+          campaign.cities?.map((cc) =>
+            cc.city
+              ? {
+                  id: cc.city.id,
+                  name: cc.city.name,
+                }
+              : null
+          ).filter(Boolean) || [];
 
         const campaignData = {
           id: campaign.id,
           name: campaign.name,
           description: campaign.description,
-          type: campaign.type,
-          campaignType: campaign.type, // Added campaignType field
+          type: campaign.type, // Only 'type' field
           status: campaign.status,
           category: campaign.category,
           isInviteOnly: campaign.isInviteOnly,
@@ -532,7 +539,7 @@ export class AdminCampaignService {
               }
             : null,
           niches: nicheObjects.map(n => n.name),
-          cities: cityNames,
+          cities: cityObjects,
           applicationsCount,
           selectedCount,
           deliverableFormat: campaign.deliverableFormat,

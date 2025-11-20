@@ -26,19 +26,19 @@ export class CampaignCity extends Model<CampaignCity> {
     type: DataType.INTEGER,
     allowNull: false,
   })
-  campaignId: number;
+  declare campaignId: number;
 
   @ForeignKey(() => City)
   @Column({
     type: DataType.INTEGER,
     allowNull: false,
   })
-  cityId: number;
+  declare cityId: number;
 
   // Associations
   @BelongsTo(() => Campaign)
-  campaign: Campaign;
+  declare campaign: Campaign;
 
   @BelongsTo(() => City)
-  city: City;
+  declare city: City;
 }
