@@ -1379,11 +1379,15 @@ export class CampaignController {
       );
     }
 
-    return this.campaignService.getCampaignApplications(
+    const response = await this.campaignService.getCampaignApplications(
       campaignId,
       getApplicationsDto,
       req.user.id,
     );
+
+    console.log('Campaign Applications Response:', JSON.stringify(response, null, 2));
+
+    return response;
   }
 
   @Get(':campaignId/applications/influencer/:influencerId')
