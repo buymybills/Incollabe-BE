@@ -12,6 +12,7 @@ import {
 import { Admin } from './models/admin.model';
 import { Brand } from '../brand/model/brand.model';
 import { Influencer } from '../auth/model/influencer.model';
+// import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
 import { Niche } from '../auth/model/niche.model';
 import { City } from '../shared/models/city.model';
 import { Country } from '../shared/models/country.model';
@@ -32,6 +33,8 @@ export class ProfileReviewService {
     private readonly brandModel: typeof Brand,
     @InjectModel(Influencer)
     private readonly influencerModel: typeof Influencer,
+    // @InjectModel(InfluencerReferralUsage)
+    // private readonly influencerReferralUsageModel: typeof InfluencerReferralUsage,
     @InjectModel(Niche)
     private readonly nicheModel: typeof Niche,
     @InjectModel(City)
@@ -116,6 +119,7 @@ export class ProfileReviewService {
               'email',
               'legalEntityName',
               'websiteUrl',
+              'profileImage',
               'isProfileCompleted',
               'username',
             ],
@@ -288,7 +292,9 @@ export class ProfileReviewService {
       }
     } else if (review.profileType === ProfileType.INFLUENCER) {
       await this.influencerModel.update(
-        { isVerified: true },
+        { isVerified: true, 
+          // verifiedAt: new Date() 
+        },
         { where: { id: review.profileId } },
       );
 
@@ -312,6 +318,57 @@ export class ProfileReviewService {
             isWhatsappVerified: influencer.isWhatsappVerified,
           });
         }
+
+        // Award referral credit if this influencer was referred by someone
+       /* const referralUsage = await this.influencerReferralUsageModel.findOne({
+          where: {
+            referredUserId: influencer.id,
+            creditAwarded: false,
+          },
+        });
+
+        if (referralUsage) {
+          // Update the referral usage record
+          await referralUsage.update({
+            creditAwarded: true,
+            creditAwardedAt: new Date(),
+          });
+
+          // Get the referrer influencer
+          const referrer = await this.influencerModel.findByPk(
+            referralUsage.influencerId,
+          );
+
+          if (referrer) {
+            // Update referrer's credits
+            const currentCredits = referrer.referralCredits || 0;
+            const newCredits = currentCredits + 100;
+
+            await this.influencerModel.update(
+              { referralCredits: newCredits },
+              { where: { id: referrer.id } },
+            );
+
+            // Send notification to referrer
+            let notificationMsg = `Congratulations! You have earned Rs 100 credit through the referral programme. Your total referral credits are now Rs ${newCredits}.`;
+
+            if (!referrer.upiId) {
+              notificationMsg +=
+                ' Please update your UPI ID in your profile to receive the amount. The credited amount will be transferred within 24 to 48 working hours.';
+            } else {
+              notificationMsg +=
+                ' The credited amount will be transferred to your UPI ID within 24 to 48 working hours.';
+            }
+
+            // Send WhatsApp notification if available
+            if (referrer.whatsappNumber && referrer.isWhatsappVerified) {
+              await this.whatsAppService.sendReferralCreditNotification(
+                referrer.whatsappNumber,
+                notificationMsg,
+              );
+            }
+          }
+        } */
       }
     }
 
