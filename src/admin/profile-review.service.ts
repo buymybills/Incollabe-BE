@@ -87,7 +87,12 @@ export class ProfileReviewService {
     };
   }
 
-  async getPendingProfiles(adminId: number, profileType?: ProfileType) {
+  async getPendingProfiles(
+    adminId: number,
+    profileType?: ProfileType,
+    page: number = 1,
+    limit: number = 20,
+  ) {
     const whereConditions: any = { status: ReviewStatus.PENDING };
 
     // Add profile type filter if provided
@@ -95,16 +100,22 @@ export class ProfileReviewService {
       whereConditions.profileType = profileType;
     }
 
-    const profiles = await this.profileReviewModel.findAll({
-      where: whereConditions,
-      include: [
-        {
-          model: Admin,
-          attributes: ['id', 'name', 'email'],
-        },
-      ],
-      order: [['submittedAt', 'ASC']],
-    });
+    // Calculate offset for pagination
+    const offset = (page - 1) * limit;
+
+    const { count, rows: profiles } =
+      await this.profileReviewModel.findAndCountAll({
+        where: whereConditions,
+        include: [
+          {
+            model: Admin,
+            attributes: ['id', 'name', 'email'],
+          },
+        ],
+        order: [['submittedAt', 'ASC']],
+        limit,
+        offset,
+      });
 
     // Fetch actual profile data
     const enrichedProfiles = await Promise.all(
@@ -219,7 +230,15 @@ export class ProfileReviewService {
       }),
     );
 
-    return enrichedProfiles;
+    return {
+      data: enrichedProfiles,
+      pagination: {
+        total: count,
+        page,
+        limit,
+        totalPages: Math.ceil(count / limit),
+      },
+    };
   }
 
   async getProfileDetails(profileId: number, profileType: ProfileType) {

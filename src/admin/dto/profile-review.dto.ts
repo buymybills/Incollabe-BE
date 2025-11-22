@@ -5,7 +5,9 @@ import {
   MinLength,
   IsEnum,
   IsNumber,
+  Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ProfileType, ReviewStatus } from '../models/profile-review.model';
 
 export class GetPendingProfilesDto {
@@ -20,6 +22,30 @@ export class GetPendingProfilesDto {
     message: 'profileType must be either "brand" or "influencer"',
   })
   profileType?: ProfileType;
+
+  @ApiProperty({
+    description: 'Page number for pagination',
+    required: false,
+    example: 1,
+    default: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  page?: number = 1;
+
+  @ApiProperty({
+    description: 'Number of items per page',
+    required: false,
+    example: 20,
+    default: 20,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  limit?: number = 20;
 }
 
 export class ApproveProfileDto {

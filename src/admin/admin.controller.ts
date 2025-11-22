@@ -639,33 +639,47 @@ export class AdminController {
   @ApiOperation({
     summary: 'Get pending profile reviews',
     description:
-      'Get brand and/or influencer profiles that are pending verification, ordered by submission time. Optionally filter by profileType to get only brands or only influencers.',
+      'Get brand and/or influencer profiles that are pending verification, ordered by submission time. Optionally filter by profileType to get only brands or only influencers. Supports pagination.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Pending profiles retrieved successfully',
     schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          id: { type: 'number', example: 1 },
-          profileId: { type: 'number', example: 123 },
-          profileType: {
-            type: 'string',
-            enum: ['brand', 'influencer'],
-            example: 'influencer',
-          },
-          status: { type: 'string', example: 'pending' },
-          submittedAt: { type: 'string', example: '2024-01-15T10:30:00Z' },
-          profile: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: {
             type: 'object',
             properties: {
-              id: { type: 'number', example: 123 },
-              name: { type: 'string', example: 'John Doe' },
-              email: { type: 'string', example: 'john@example.com' },
-              isProfileCompleted: { type: 'boolean', example: true },
+              id: { type: 'number', example: 1 },
+              profileId: { type: 'number', example: 123 },
+              profileType: {
+                type: 'string',
+                enum: ['brand', 'influencer'],
+                example: 'influencer',
+              },
+              status: { type: 'string', example: 'pending' },
+              submittedAt: { type: 'string', example: '2024-01-15T10:30:00Z' },
+              profile: {
+                type: 'object',
+                properties: {
+                  id: { type: 'number', example: 123 },
+                  name: { type: 'string', example: 'John Doe' },
+                  email: { type: 'string', example: 'john@example.com' },
+                  isProfileCompleted: { type: 'boolean', example: true },
+                },
+              },
             },
+          },
+        },
+        pagination: {
+          type: 'object',
+          properties: {
+            total: { type: 'number', example: 50 },
+            page: { type: 'number', example: 1 },
+            limit: { type: 'number', example: 20 },
+            totalPages: { type: 'number', example: 3 },
           },
         },
       },
@@ -685,6 +699,8 @@ export class AdminController {
     return await this.profileReviewService.getPendingProfiles(
       req.admin.id,
       filters.profileType,
+      filters.page || 1,
+      filters.limit || 20,
     );
   }
 
