@@ -328,6 +328,8 @@ describe('AdminController', () => {
       expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(
         1,
         undefined,
+        1,
+        20,
       );
     });
 
@@ -342,6 +344,8 @@ describe('AdminController', () => {
       expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(
         1,
         undefined,
+        1,
+        20,
       );
     });
 
@@ -356,6 +360,8 @@ describe('AdminController', () => {
       expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(
         3,
         undefined,
+        1,
+        20,
       );
     });
   });
@@ -581,6 +587,8 @@ describe('AdminController', () => {
       expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(
         2,
         undefined,
+        1,
+        20,
       );
     });
 
@@ -596,6 +604,8 @@ describe('AdminController', () => {
       expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(
         1,
         undefined,
+        1,
+        20,
       );
     });
   });

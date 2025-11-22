@@ -836,6 +836,20 @@ export class InfluencerController {
     description:
       'Fetch list of top influencers curated by admin (public endpoint)',
   })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    example: 1,
+    description: 'Page number for pagination',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    example: 10,
+    description: 'Number of items per page',
+  })
   @ApiResponse({
     status: 200,
     description: 'Top influencers fetched successfully',

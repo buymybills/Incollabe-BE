@@ -151,6 +151,11 @@ describe('PostService', () => {
         content: 'Test post content',
       };
 
+      const mockInfluencer = {
+        id: 1,
+        isVerified: true,
+      };
+
       const mockPost = {
         id: 1,
         content: 'Test post content',
@@ -162,6 +167,7 @@ describe('PostService', () => {
         likesCount: 0,
       };
 
+      influencerModel.findByPk.mockResolvedValue(mockInfluencer);
       postModel.create.mockResolvedValue(mockPost);
 
       const result = await service.createPost(
@@ -171,6 +177,7 @@ describe('PostService', () => {
       );
 
       expect(result).toEqual(mockPost);
+      expect(influencerModel.findByPk).toHaveBeenCalledWith(1);
       expect(postModel.create).toHaveBeenCalledWith({
         content: 'Test post content',
         mediaUrls: [],
@@ -207,6 +214,45 @@ describe('PostService', () => {
         userType: UserType.BRAND,
         brandId: 1,
       });
+    });
+
+    it('should throw ForbiddenException for unverified influencer', async () => {
+      const createPostDto: CreatePostDto = {
+        content: 'Test post content',
+      };
+
+      const mockUnverifiedInfluencer = {
+        id: 1,
+        isVerified: false,
+      };
+
+      influencerModel.findByPk.mockResolvedValue(mockUnverifiedInfluencer);
+
+      await expect(
+        service.createPost(createPostDto, UserType.INFLUENCER, 1),
+      ).rejects.toThrow(ForbiddenException);
+
+      await expect(
+        service.createPost(createPostDto, UserType.INFLUENCER, 1),
+      ).rejects.toThrow(
+        'Only verified influencers can create posts. Please complete your profile and wait for admin verification.',
+      );
+    });
+
+    it('should throw NotFoundException when influencer not found', async () => {
+      const createPostDto: CreatePostDto = {
+        content: 'Test post content',
+      };
+
+      influencerModel.findByPk.mockResolvedValue(null);
+
+      await expect(
+        service.createPost(createPostDto, UserType.INFLUENCER, 1),
+      ).rejects.toThrow(NotFoundException);
+
+      await expect(
+        service.createPost(createPostDto, UserType.INFLUENCER, 1),
+      ).rejects.toThrow('Influencer not found');
     });
   });
 
@@ -621,6 +667,12 @@ describe('PostService', () => {
         content: 'Test post',
       };
 
+      const mockInfluencer = {
+        id: 1,
+        isVerified: true,
+      };
+
+      influencerModel.findByPk.mockResolvedValue(mockInfluencer);
       postModel.create.mockRejectedValue(new Error('Database error'));
 
       await expect(
