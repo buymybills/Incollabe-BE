@@ -73,11 +73,16 @@ export class PostController {
   @ApiOperation({
     summary: 'Create a new post',
     description:
-      'Create a new post with text content and optional media files (up to 10 files, max 50MB each)',
+      'Create a new post with text content and optional media files (up to 10 files, max 50MB each). Only verified influencers can create posts.',
   })
   @ApiResponse({ status: 201, description: 'Post created successfully' })
   @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description:
+      'Forbidden - Only verified influencers can create posts',
+  })
   @ApiResponse({
     status: 413,
     description: 'File too large (max 50MB per file)',

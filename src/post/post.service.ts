@@ -56,6 +56,19 @@ export class PostService {
       );
     }
 
+    // Check if influencer is verified before allowing post creation
+    if (userType === UserType.INFLUENCER) {
+      const influencer = await this.influencerModel.findByPk(userId);
+      if (!influencer) {
+        throw new NotFoundException('Influencer not found');
+      }
+      if (!influencer.isVerified) {
+        throw new ForbiddenException(
+          'Only verified influencers can create posts. Please complete your profile and wait for admin verification.',
+        );
+      }
+    }
+
     // Upload files to S3 if provided
     const mediaUrls: string[] = [];
     if (files && files.length > 0) {
