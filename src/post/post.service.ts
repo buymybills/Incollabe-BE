@@ -502,13 +502,17 @@ export class PostService {
 
     const totalPages = Math.ceil(count / limit);
 
-    return {
+    const response = {
       posts: postsWithLikeStatus,
       total: count,
       page,
       limit,
       totalPages,
     };
+
+    console.log('getPosts API Response:', JSON.stringify(response, null, 2));
+
+    return response;
   }
 
   private async getUserNiches(
