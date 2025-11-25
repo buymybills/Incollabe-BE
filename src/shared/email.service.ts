@@ -83,18 +83,30 @@ export class EmailService {
       action: 'sendBrandOtp',
     });
 
-    await this.transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: subject,
-      html: html,
-    });
-
-    this.loggerService.logEmail('BRAND_OTP_EMAIL_SENT', {
-      to: email,
-      subject,
-      success: true,
-    });
+    // Send email asynchronously without blocking
+    this.transporter
+      .sendMail({
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: subject,
+        html: html,
+      })
+      .then(() => {
+        this.loggerService.logEmail('BRAND_OTP_EMAIL_SENT', {
+          to: email,
+          subject,
+          success: true,
+        });
+      })
+      .catch((error) => {
+        this.loggerService.logEmail('BRAND_OTP_EMAIL_FAILED', {
+          to: email,
+          subject,
+          success: false,
+          error: error.message,
+        });
+        console.error(`Failed to send brand OTP email to ${email}:`, error);
+      });
   }
 
   async sendWelcomeEmail(email: string, brandName: string): Promise<void> {
@@ -1054,13 +1066,19 @@ export class EmailService {
         </html>
       `;
 
-    await this.transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject,
-      html,
-    });
-
-    console.log(`Admin login OTP sent to: ${email}`);
+    // Send email asynchronously without blocking
+    this.transporter
+      .sendMail({
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject,
+        html,
+      })
+      .then(() => {
+        console.log(`Admin login OTP sent to: ${email}`);
+      })
+      .catch((error) => {
+        console.error(`Failed to send admin login OTP to ${email}:`, error);
+      });
   }
 }

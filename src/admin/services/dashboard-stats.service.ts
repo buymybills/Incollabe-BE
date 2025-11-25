@@ -581,49 +581,93 @@ export class DashboardStatsService {
   }
 
   private async generateTimeSeriesData(startDate: Date, endDate: Date) {
+    const daysDiff = Math.ceil(
+      (endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000),
+    );
+
+    // Get cumulative counts grouped by date using a single optimized query
+    const cumulativeCounts = await this.influencerModel.findAll({
+      attributes: [
+        [
+          this.influencerModel.sequelize!.fn(
+            'DATE',
+            this.influencerModel.sequelize!.col('createdAt'),
+          ),
+          'date',
+        ],
+        'isVerified',
+        [this.influencerModel.sequelize!.fn('COUNT', '*'), 'count'],
+      ],
+      where: {
+        isActive: true,
+        createdAt: { [Op.lte]: endDate },
+      },
+      group: [
+        this.influencerModel.sequelize!.fn(
+          'DATE',
+          this.influencerModel.sequelize!.col('createdAt'),
+        ),
+        'isVerified',
+      ],
+      order: [[this.influencerModel.sequelize!.fn('DATE', this.influencerModel.sequelize!.col('createdAt')), 'ASC']],
+      raw: true,
+    });
+
+    // Build cumulative counts map
+    const dailyCounts: Map<string, { verified: number; unverified: number }> = new Map();
+    let cumulativeVerified = 0;
+    let cumulativeUnverified = 0;
+
+    (cumulativeCounts as any[]).forEach((row) => {
+      const date = row.date;
+      const count = parseInt(row.count);
+      const isVerified = row.isVerified;
+
+      if (isVerified) {
+        cumulativeVerified += count;
+      } else {
+        cumulativeUnverified += count;
+      }
+
+      if (!dailyCounts.has(date)) {
+        dailyCounts.set(date, { verified: 0, unverified: 0 });
+      }
+
+      const existing = dailyCounts.get(date)!;
+      if (isVerified) {
+        existing.verified += count;
+      } else {
+        existing.unverified += count;
+      }
+    });
+
+    // Generate time series with cumulative counts
     const timeSeriesData: Array<{
       date: string;
       verifiedCount: number;
       unverifiedCount: number;
       totalCount: number;
     }> = [];
-    const daysDiff = Math.ceil(
-      (endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000),
-    );
+
+    let runningVerified = 0;
+    let runningUnverified = 0;
 
     for (let i = 0; i <= daysDiff; i++) {
       const date = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
-      const endOfDay = new Date(
-        date.getFullYear(),
-        date.getMonth(),
-        date.getDate(),
-        23,
-        59,
-        59,
-      );
+      const dateStr = date.toISOString().split('T')[0];
 
-      const [verifiedCount, unverifiedCount] = await Promise.all([
-        this.influencerModel.count({
-          where: {
-            isActive: true,
-            isVerified: true,
-            createdAt: { [Op.lte]: endOfDay },
-          },
-        }),
-        this.influencerModel.count({
-          where: {
-            isActive: true,
-            isVerified: false,
-            createdAt: { [Op.lte]: endOfDay },
-          },
-        }),
-      ]);
+      // Add counts for this date if any
+      const countsForDate = dailyCounts.get(dateStr);
+      if (countsForDate) {
+        runningVerified += countsForDate.verified;
+        runningUnverified += countsForDate.unverified;
+      }
 
       timeSeriesData.push({
-        date: date.toISOString().split('T')[0],
-        verifiedCount,
-        unverifiedCount,
-        totalCount: verifiedCount + unverifiedCount,
+        date: dateStr,
+        verifiedCount: runningVerified,
+        unverifiedCount: runningUnverified,
+        totalCount: runningVerified + runningUnverified,
       });
     }
 

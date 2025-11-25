@@ -529,17 +529,50 @@ export class InfluencerController {
     description: 'Filter applications by status',
     example: 'applied',
   })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20)',
+    example: 20,
+  })
   @ApiResponse({
     status: 200,
     description: 'Applications retrieved successfully',
-    type: [MyApplicationResponseDto],
+    schema: {
+      type: 'object',
+      properties: {
+        applications: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/MyApplicationResponseDto' },
+        },
+        total: { type: 'number', example: 25 },
+        page: { type: 'number', example: 1 },
+        limit: { type: 'number', example: 20 },
+        totalPages: { type: 'number', example: 2 },
+      },
+    },
   })
   async getMyApplications(
     @Req() req: RequestWithUser,
     @Query('status') status?: string,
+    @Query('page', new ParseIntPipe({ optional: true })) page: number = 1,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit: number = 20,
   ) {
     const influencerId = req.user.id;
-    return this.influencerService.getMyApplications(influencerId, status);
+    return this.influencerService.getMyApplications(
+      influencerId,
+      status,
+      page,
+      limit,
+    );
   }
 
   @Put('campaigns/applications/:applicationId/withdraw')

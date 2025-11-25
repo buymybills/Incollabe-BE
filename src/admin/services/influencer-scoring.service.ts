@@ -31,6 +31,13 @@ interface ScoringWeights {
   collaborationChargesWeight: number;
 }
 
+// Type for influencer with included associations
+type InfluencerWithAssociations = Influencer & {
+  niches?: Array<{ id: number; name: string }>;
+  city?: { id: number; name: string } | null;
+  country?: { id: number; name: string } | null;
+};
+
 @Injectable()
 export class InfluencerScoringService {
   constructor(
@@ -144,7 +151,8 @@ export class InfluencerScoringService {
 
     // Score each influencer
     const scoredInfluencers = await Promise.all(
-      influencers.map(async (influencer) => {
+      influencers.map(async (inf) => {
+        const influencer = inf as unknown as InfluencerWithAssociations;
         const scoreBreakdown = await this.calculateInfluencerScore(
           influencer,
           filters,
@@ -158,12 +166,11 @@ export class InfluencerScoringService {
         );
 
         // Get niche names
-        const niches =
-          (influencer as any).niches?.map((niche: any) => niche.name) || [];
+        const niches = influencer.niches?.map((niche) => niche.name) || [];
 
         // Get collaboration costs
         const instagramCosts =
-          (influencer.collaborationCosts as any)?.instagram || {};
+          (influencer.collaborationCosts as Record<string, any>)?.instagram || {};
         const instagramPostCost = instagramCosts.post || 0;
         const instagramReelCost = instagramCosts.reel || 0;
 
@@ -352,71 +359,77 @@ export class InfluencerScoringService {
       ],
     });
 
+    // Batch fetch all counts for all influencers (only 4 queries instead of N*4)
+    const influencerIds = allInfluencers.map((inf) => inf.id);
+    const [followersCounts, followingCounts, postsCounts, campaignsCounts] =
+      await Promise.all([
+        this.getBatchFollowersCounts(influencerIds),
+        this.getBatchFollowingCounts(influencerIds),
+        this.getBatchPostsCounts(influencerIds),
+        this.getBatchCompletedCampaignsCounts(influencerIds),
+      ]);
+
     // Map influencers and apply follower filters
-    const mappedInfluencers = await Promise.all(
-      allInfluencers.map(async (influencer) => {
-        const followersCount = await this.getFollowersCount(influencer.id);
-        const followingCount = await this.getFollowingCount(influencer.id);
-        const postsCount = await this.getPostsCount(influencer.id);
-        const completedCampaigns = await this.getCompletedCampaignsCount(
-          influencer.id,
-        );
+    const mappedInfluencers = allInfluencers.map((inf) => {
+      const influencer = inf as unknown as InfluencerWithAssociations;
+      const followersCount = followersCounts.get(influencer.id) || 0;
+      const followingCount = followingCounts.get(influencer.id) || 0;
+      const postsCount = postsCounts.get(influencer.id) || 0;
+      const completedCampaigns = campaignsCounts.get(influencer.id) || 0;
 
-        // Apply follower filters
-        if (filters.minFollowers && followersCount < filters.minFollowers)
-          return null;
-        if (filters.maxFollowers && followersCount > filters.maxFollowers)
-          return null;
+      // Apply follower filters
+      if (filters.minFollowers && followersCount < filters.minFollowers)
+        return null;
+      if (filters.maxFollowers && followersCount > filters.maxFollowers)
+        return null;
 
-        // Get niche names
-        const niches =
-          (influencer as any).niches?.map((niche: any) => niche.name) || [];
+      // Get niche names
+      const niches = influencer.niches?.map((niche) => niche.name) || [];
 
-        // Get collaboration costs
-        const instagramCosts =
-          (influencer.collaborationCosts as any)?.instagram || {};
-        const instagramPostCost = instagramCosts.post || 0;
-        const instagramReelCost = instagramCosts.reel || 0;
+      // Get collaboration costs
+      const instagramCosts =
+        (influencer.collaborationCosts as Record<string, any>)?.instagram || {};
+      const instagramPostCost = instagramCosts.post || 0;
+      const instagramReelCost = instagramCosts.reel || 0;
 
-        // For non-top profiles, we don't calculate scores
-        // But we still return the same structure with default/null scores
-        const scoreBreakdown: InfluencerScoreBreakdown = {
-          nicheMatchScore: 0,
-          engagementRateScore: 0,
-          audienceRelevanceScore: 0,
-          locationMatchScore: 0,
-          pastPerformanceScore: 0,
-          collaborationChargesScore: 0,
-          overallScore: 0,
-          recommendationLevel: 'not_recommended',
-        };
+      // For non-top profiles, we don't calculate scores
+      // But we still return the same structure with default/null scores
+      const scoreBreakdown: InfluencerScoreBreakdown = {
+        nicheMatchScore: 0,
+        engagementRateScore: 0,
+        audienceRelevanceScore: 0,
+        locationMatchScore: 0,
+        pastPerformanceScore: 0,
+        collaborationChargesScore: 0,
+        overallScore: 0,
+        recommendationLevel: 'not_recommended',
+      };
 
-        const topInfluencer: TopInfluencerDto & { followingCount: number } = {
-          id: influencer.id,
-          name: influencer.name,
-          username: influencer.username,
-          profileImage: influencer.profileImage || '',
-          bio: influencer.bio || '',
-          profileHeadline: influencer.profileHeadline || '',
-          city: influencer.city?.name || '',
-          country: influencer.country?.name || '',
-          isVerified: influencer.isVerified || false,
-          isTopInfluencer: influencer.isTopInfluencer || false,
-          displayOrder: influencer.isTopInfluencer ? influencer.displayOrder : null,
-          followersCount,
-          followingCount,
-          engagementRate: 0, // Not calculated for non-top profiles
-          postsCount,
-          completedCampaigns,
-          niches,
-          instagramPostCost,
-          instagramReelCost,
-          scoreBreakdown,
-        };
+      const topInfluencer: TopInfluencerDto & { followingCount: number } = {
+        id: influencer.id,
+        name: influencer.name,
+        username: influencer.username,
+        profileImage: influencer.profileImage || '',
+        bio: influencer.bio || '',
+        profileHeadline: influencer.profileHeadline || '',
+        city: influencer.city?.name || '',
+        country: influencer.country?.name || '',
+        isVerified: influencer.isVerified || false,
+        isTopInfluencer: influencer.isTopInfluencer || false,
+        displayOrder: influencer.isTopInfluencer ? influencer.displayOrder : null,
+        followersCount,
+        followingCount,
+        engagementRate: 0, // Not calculated for non-top profiles
+        postsCount,
+        completedCampaigns,
+        niches,
+        instagramPostCost,
+        instagramReelCost,
+        scoreBreakdown,
+      };
 
-        return topInfluencer;
-      }),
-    );
+      return topInfluencer;
+    });
 
     // Filter out null values
     const validInfluencers = mappedInfluencers.filter(
@@ -733,7 +746,7 @@ export class InfluencerScoringService {
     maxBudget?: number,
   ): number {
     const instagramCosts =
-      (influencer.collaborationCosts as any)?.instagram || {};
+      (influencer.collaborationCosts as Record<string, any>)?.instagram || {};
     const postCost = instagramCosts.post || 0;
 
     // If no budget specified or influencer hasn't set rates
@@ -805,5 +818,108 @@ export class InfluencerScoringService {
     return await this.experienceModel.count({
       where: { influencerId },
     });
+  }
+
+  /**
+   * Batch Helper: Get followers count for multiple influencers
+   */
+  private async getBatchFollowersCounts(
+    influencerIds: number[],
+  ): Promise<Map<number, number>> {
+    if (influencerIds.length === 0) return new Map();
+
+    const counts = await this.followModel.findAll({
+      attributes: [
+        'followingInfluencerId',
+        [this.followModel.sequelize!.fn('COUNT', '*'), 'count'],
+      ],
+      where: { followingInfluencerId: influencerIds },
+      group: ['followingInfluencerId'],
+      raw: true,
+    });
+
+    const countsMap = new Map<number, number>();
+    counts.forEach((row: any) => {
+      countsMap.set(row.followingInfluencerId, parseInt(row.count));
+    });
+    return countsMap;
+  }
+
+  /**
+   * Batch Helper: Get following count for multiple influencers
+   */
+  private async getBatchFollowingCounts(
+    influencerIds: number[],
+  ): Promise<Map<number, number>> {
+    if (influencerIds.length === 0) return new Map();
+
+    const counts = await this.followModel.findAll({
+      attributes: [
+        'followerInfluencerId',
+        [this.followModel.sequelize!.fn('COUNT', '*'), 'count'],
+      ],
+      where: {
+        followerInfluencerId: influencerIds,
+        followingInfluencerId: { [Op.not]: null },
+      },
+      group: ['followerInfluencerId'],
+      raw: true,
+    });
+
+    const countsMap = new Map<number, number>();
+    counts.forEach((row: any) => {
+      countsMap.set(row.followerInfluencerId, parseInt(row.count));
+    });
+    return countsMap;
+  }
+
+  /**
+   * Batch Helper: Get posts count for multiple influencers
+   */
+  private async getBatchPostsCounts(
+    influencerIds: number[],
+  ): Promise<Map<number, number>> {
+    if (influencerIds.length === 0) return new Map();
+
+    const counts = await this.postModel.findAll({
+      attributes: [
+        'influencerId',
+        [this.postModel.sequelize!.fn('COUNT', '*'), 'count'],
+      ],
+      where: { influencerId: influencerIds, isActive: true },
+      group: ['influencerId'],
+      raw: true,
+    });
+
+    const countsMap = new Map<number, number>();
+    counts.forEach((row: any) => {
+      countsMap.set(row.influencerId, parseInt(row.count));
+    });
+    return countsMap;
+  }
+
+  /**
+   * Batch Helper: Get completed campaigns count for multiple influencers
+   */
+  private async getBatchCompletedCampaignsCounts(
+    influencerIds: number[],
+  ): Promise<Map<number, number>> {
+    if (influencerIds.length === 0) return new Map();
+
+    const counts = await this.experienceModel.findAll({
+      attributes: [
+        'influencerId',
+        [this.experienceModel.sequelize!.fn('COUNT', '*'), 'count'],
+      ],
+      where: { influencerId: influencerIds },
+      group: ['influencerId'],
+      raw: true,
+    });
+
+    const countsMap = new Map<number, number>();
+    counts.forEach((row: any) => {
+      countsMap.set(row.influencerId, parseInt(row.count));
+    });
+    return countsMap;
   }
 }
