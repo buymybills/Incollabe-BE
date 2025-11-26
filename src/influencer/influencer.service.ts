@@ -1371,6 +1371,7 @@ export class InfluencerService {
               'status',
               'type',
               'category',
+              'deliverableFormat',
             ],
             include: [
               {
@@ -1391,22 +1392,33 @@ export class InfluencerService {
 
     const mappedApplications = applications.map((app) => {
       const appData = app.toJSON();
+
+      // Transform campaign field names to match API conventions
+      const transformedCampaign = {
+        ...appData.campaign,
+        deliverables: appData.campaign.deliverableFormat, // Rename deliverableFormat to deliverables
+        collaborationCost: appData.campaign.deliverables, // Rename deliverables array to collaborationCost
+      };
+
+      // Remove old field name (TypeScript workaround)
+      delete (transformedCampaign as any).deliverableFormat;
+
       return {
         id: appData.id,
         status: appData.status,
         coverLetter: appData.coverLetter,
-        proposalMessage: appData.proposalMessage,
+        proposalMessage: appData.proposalMessage, 
         createdAt: appData.createdAt,
         reviewedAt: appData.reviewedAt,
         reviewNotes: appData.reviewNotes,
-        campaign: appData.campaign,
+        campaign: transformedCampaign as any, // Type assertion to fix deliverables type mismatch
       };
     });
 
     const totalPages = Math.ceil(count / limit);
 
     return {
-      applications: mappedApplications,
+      applications: mappedApplications as MyApplicationResponseDto[],
       total: count,
       page,
       limit,
