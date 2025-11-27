@@ -38,6 +38,8 @@ import { SharedModule } from '../shared/shared.module';
 import { BrandModule } from '../brand/brand.module';
 import { InfluencerModule } from '../influencer/influencer.module';
 import { PostModule } from '../post/post.module';
+import { AuthModule } from '../auth/auth.module';
+import { CampaignModule } from '../campaign/campaign.module';
 
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
@@ -70,6 +72,8 @@ import { RolesGuard } from './guards/roles.guard';
     forwardRef(() => BrandModule),
     forwardRef(() => InfluencerModule),
     PostModule,
+    forwardRef(() => AuthModule),
+    forwardRef(() => CampaignModule),
   ],
   controllers: [AdminController, PushNotificationController],
   providers: [

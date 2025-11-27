@@ -424,6 +424,7 @@ export class AuthService {
 
       return {
         message: 'OTP verified successfully',
+        id: user.id,
         accessToken,
         refreshToken,
         phone: user.phone,
@@ -435,6 +436,7 @@ export class AuthService {
     // 🔹 Step 7: User exists but profile incomplete
     return {
       message: 'OTP verified successfully',
+      id: user.id,
       phone: formattedPhone,
       verified: true,
       requiresProfileCompletion: true,

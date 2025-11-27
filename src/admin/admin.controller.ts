@@ -35,6 +35,8 @@ import { DashboardStatsService } from './services/dashboard-stats.service';
 import { BrandService } from '../brand/brand.service';
 import { InfluencerService } from '../influencer/influencer.service';
 import { PostService } from '../post/post.service';
+import { AuthService } from '../auth/auth.service';
+import { CampaignService } from '../campaign/campaign.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import type { RequestWithAdmin } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
@@ -131,6 +133,8 @@ export class AdminController {
     private readonly postService: PostService,
     private readonly auditLogService: AuditLogService,
     private readonly supportTicketService: SupportTicketService,
+    private readonly authService: AuthService,
+    private readonly campaignService: CampaignService,
   ) {}
 
   @Post('login')
@@ -1946,6 +1950,37 @@ export class AdminController {
   })
   async deleteSupportTicket(@Param('id', ParseIntPipe) id: number) {
     return await this.supportTicketService.deleteTicket(id);
+  }
+
+  // Master Data Endpoints
+  @Get('niches')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get all niches',
+    description: 'Fetch all active niches that influencers and brands can choose from',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Niches fetched successfully',
+  })
+  async getNiches() {
+    return await this.authService.getNiches();
+  }
+
+  @Get('cities/popular')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get popular cities',
+    description: 'Get tier 1 and tier 2 cities commonly used for campaign targeting',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Popular cities retrieved successfully',
+  })
+  async getPopularCities() {
+    return await this.campaignService.getPopularCities();
   }
 
   // Credit Transaction Management Endpoints
