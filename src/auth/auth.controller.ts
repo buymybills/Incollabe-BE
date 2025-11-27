@@ -157,6 +157,12 @@ export class AuthController {
       'Create a new influencer account with optional profile image upload. Bio is optional. Requires x-verification-key header from OTP verification.',
   })
   @ApiFileFields(['profileImage'], {
+    referralCode: {
+      type: 'string',
+      description: 'Referral code of the influencer who referred you (optional). Enter the 8-character code you received.',
+      example: 'ABC12XYZ',
+      required: false,
+    },
     name: {
       type: 'string',
       description: 'Full name of the influencer',

@@ -23,12 +23,13 @@ import { IsValidUsername } from '../../shared/validators/is-valid-username.valid
 
 export class InfluencerSignupDto {
   @ApiProperty({
-    description: 'Referral code of the influencer (optional)',
+    description: 'Referral code of the influencer who referred you (optional). Enter the 8-character code you received.',
     required: false,
-    example: 'REF12345',
+    example: 'ABC12XYZ',
   })
   @IsOptional()
   @IsString()
+  @Length(8, 8, { message: 'Referral code must be exactly 8 characters' })
   referralCode?: string;
 
   @ApiProperty({
