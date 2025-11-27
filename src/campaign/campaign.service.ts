@@ -1357,7 +1357,7 @@ export class CampaignService {
     brandId: number | null,
   ) {
     // Build where condition for campaign based on user type
-    const campaignWhere: any = { id: campaignId, isActive: true };
+    const campaignWhere: any = { id: campaignId };
 
     // If brandId is provided (brand is viewing), verify campaign belongs to them
     if (brandId !== null) {
