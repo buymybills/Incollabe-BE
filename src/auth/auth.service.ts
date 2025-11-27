@@ -5,7 +5,9 @@ import {
   Injectable,
   NotFoundException,
   UnauthorizedException,
+  InternalServerErrorException,
 } from '@nestjs/common';
+import { WhatsAppService } from '../shared/whatsapp.service';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/sequelize';
@@ -47,7 +49,7 @@ import { CustomNiche } from './model/custom-niche.model';
 import { Gender } from './types/gender.enum';
 import { SearchUsersResult } from '../shared/services/search.service';
 import { isReservedUsername } from '../shared/constants/reserved-usernames';
-
+import { InfluencerReferralUsage } from './model/influencer-referral-usage.model';
 // Interfaces for token payload
 interface DecodedRefresh {
   id: number;
@@ -89,6 +91,9 @@ export class AuthService {
     private readonly sequelize: Sequelize,
     private readonly redisService: RedisService,
     private readonly uploadService: S3Service,
+    @InjectModel(InfluencerReferralUsage)
+    private readonly influencerReferralUsageModel: typeof InfluencerReferralUsage,
+    private readonly whatsappService: WhatsAppService,
   ) {}
 
   // Redis key helpers
@@ -266,7 +271,6 @@ export class AuthService {
         'Too many failed attempts. Try again later.',
       );
     }
-
     // 🔹 Step 2: Validate OTP against DB
     // Hash the phone number to search (since identifiers are encrypted in DB)
     const identifierHash = crypto
@@ -313,40 +317,50 @@ export class AuthService {
       .digest('hex');
 
     const user = await this.sequelize.transaction(async (t) => {
-      await this.otpModel.destroy({
-        where: { id: otpRecord.id },
-        transaction: t,
-      });
-
-      // Check for deleted account within 30 days
-      const deletedUser = await this.influencerModel.findOne({
-        where: { phoneHash },
-        paranoid: false,
-        transaction: t,
-      });
-
-      // If account was deleted within 30 days, restore it
-      if (deletedUser && deletedUser.deletedAt) {
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-        if (deletedUser.deletedAt > thirtyDaysAgo) {
-          await deletedUser.restore({ transaction: t });
-          await deletedUser.update({ isActive: true }, { transaction: t });
-          this.loggerService.info(
-            `Restored deleted account for influencer: ${deletedUser.id}`,
-          );
-          return deletedUser;
-        } else {
-          // Account deleted more than 30 days ago, treat as new user
-          return null;
-        }
+      try {
+        await this.otpModel.destroy({
+          where: { id: otpRecord.id },
+          transaction: t,
+        });
+      } catch (error) {
+        console.error('OTP destroy error:', error);
+        throw error;
       }
 
-      return await this.influencerModel.findOne({
-        where: { phoneHash },
-        transaction: t,
-      });
+      // Check for deleted account within 30 days
+      try {
+        const deletedUser = await this.influencerModel.findOne({
+          where: { phoneHash },
+          paranoid: false,
+          transaction: t,
+        });
+
+        // If account was deleted within 30 days, restore it
+        if (deletedUser && deletedUser.deletedAt) {
+          const thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+          if (deletedUser.deletedAt > thirtyDaysAgo) {
+            await deletedUser.restore({ transaction: t });
+            await deletedUser.update({ isActive: true }, { transaction: t });
+            this.loggerService.info(
+              `Restored deleted account for influencer: ${deletedUser.id}`,
+            );
+            return deletedUser;
+          } else {
+            // Account deleted more than 30 days ago, treat as new user
+            return null;
+          }
+        }
+
+        return await this.influencerModel.findOne({
+          where: { phoneHash },
+          transaction: t,
+        });
+      } catch (error) {
+        console.error('Influencer lookup error:', error);
+        throw error;
+      }
     });
 
     // 🔹 Step 5: Handle new users (OTP verified but signup required)
@@ -438,7 +452,13 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired verification key');
     }
 
-    const { username, nicheIds, customNiches, ...influencerData } = signupDto;
+    const {
+      username,
+      nicheIds,
+      customNiches,
+      referralCode,
+      ...influencerData
+    } = signupDto;
 
     // Handle gender mapping logic
     let finalGender: string | undefined;
@@ -448,17 +468,14 @@ export class AuthService {
       const genderValue = influencerData.gender;
       const standardGenders = [Gender.MALE, Gender.FEMALE];
       if (standardGenders.includes(genderValue as Gender)) {
-        // Standard gender options
         finalGender = genderValue;
         finalOthersGender = undefined;
       } else {
-        // Custom gender option - map to Others
         finalGender = Gender.OTHERS;
         finalOthersGender = genderValue;
       }
     }
 
-    // Update influencerData with mapped gender values
     if (finalGender) {
       influencerData.gender = finalGender as any;
       (influencerData as any).othersGender = finalOthersGender;
@@ -468,7 +485,6 @@ export class AuthService {
     const validNiches = await this.nicheModel.findAll({
       where: { id: nicheIds, isActive: true },
     });
-
     if (validNiches.length !== nicheIds.length) {
       throw new BadRequestException('One or more invalid niche IDs provided');
     }
@@ -503,12 +519,46 @@ export class AuthService {
       .createHash('sha256')
       .update(formattedPhone)
       .digest('hex');
-
     const existingPhone = await this.influencerModel.findOne({
       where: { phoneHash },
     });
     if (existingPhone) {
       throw new BadRequestException('Phone number already registered');
+    }
+
+    // Referral code logic (only allow influencer referral codes for influencer signups)
+    let referrerInfluencerId: number | undefined;
+    if (referralCode) {
+      const referrer = await this.influencerModel.findOne({
+        where: { referralCode },
+      });
+      if (!referrer) {
+        throw new BadRequestException('Invalid referral code');
+      }
+      // Check monthly usage limit (max 5 per calendar month)
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+      const endOfMonth = new Date(startOfMonth);
+      endOfMonth.setMonth(endOfMonth.getMonth() + 1);
+      endOfMonth.setDate(0);
+      endOfMonth.setHours(23, 59, 59, 999);
+      const usageCount = await this.influencerReferralUsageModel.count({
+        where: {
+          influencerId: referrer.id,
+          referralCode,
+          createdAt: {
+            [Op.gte]: startOfMonth,
+            [Op.lte]: endOfMonth,
+          },
+        },
+      });
+      if (usageCount >= 5) {
+        throw new BadRequestException(
+          'Referral code usage limit reached for this month',
+        );
+      }
+      referrerInfluencerId = referrer.id;
     }
 
     // Upload profile image to S3 if provided
@@ -521,9 +571,35 @@ export class AuthService {
       );
     }
 
+    // Generate unique referral code for the new influencer
+    const generateUniqueReferralCode = async (): Promise<string> => {
+      const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let code = '';
+      let isUnique = false;
+
+      while (!isUnique) {
+        code = '';
+        for (let i = 0; i < 8; i++) {
+          code += characters.charAt(
+            Math.floor(Math.random() * characters.length),
+          );
+        }
+        // Check if code already exists
+        const existing = await this.influencerModel.findOne({
+          where: { referralCode: code },
+        });
+        if (!existing) {
+          isUnique = true;
+        }
+      }
+      return code;
+    };
+
+    const newInfluencerReferralCode = await generateUniqueReferralCode();
+
     // Create influencer and associate niches in a transaction
     const influencer = await this.sequelize.transaction(async (transaction) => {
-      // Create influencer
+      // Create influencer with their own unique referral code
       const createdInfluencer = await this.influencerModel.create(
         {
           ...influencerData,
@@ -531,6 +607,7 @@ export class AuthService {
           username,
           profileImage: profileImageUrl,
           isPhoneVerified: true,
+          referralCode: newInfluencerReferralCode, // New influencer gets their own code
         },
         { transaction },
       );
@@ -540,7 +617,6 @@ export class AuthService {
         influencerId: createdInfluencer.id,
         nicheId,
       }));
-
       await this.influencerNicheModel.bulkCreate(nicheAssociations, {
         transaction,
       });
@@ -556,10 +632,23 @@ export class AuthService {
           description: '',
           isActive: true,
         }));
-
         await this.customNicheModel.bulkCreate(customNicheData, {
           transaction,
         });
+      }
+
+      // Log referral usage if referralCode is present
+      // Note: Credits will be awarded only when the referred influencer is verified by admin
+      if (referrerInfluencerId) {
+        await this.influencerReferralUsageModel.create(
+          {
+            influencerId: referrerInfluencerId,
+            referredUserId: createdInfluencer.id,
+            referralCode,
+            creditAwarded: false, // Will be set to true when referred influencer is verified
+          },
+          { transaction },
+        );
       }
 
       return createdInfluencer;
@@ -579,61 +668,47 @@ export class AuthService {
               'logoNormal',
               'logoDark',
               'isActive',
-            ], // Exclude timestamps
-            through: { attributes: [] }, // Exclude junction table data
+            ],
+            through: { attributes: [] },
           },
           {
             model: CustomNiche,
             attributes: ['id', 'name', 'description', 'isActive'],
             where: { isActive: true },
-            required: false, // LEFT JOIN to include influencers without custom niches
+            required: false,
           },
         ],
       },
     );
-
     if (!completeInfluencer) {
       throw new NotFoundException(
         'Influencer data not found after registration',
       );
     }
-
-    // Create clean response without timestamps
     const completeData = completeInfluencer.toJSON();
     const { createdAt, updatedAt, ...cleanInfluencer } = completeData;
-
-    // Update last login timestamp
     await completeInfluencer.update({ lastLoginAt: new Date() });
-
-    // Generate JWT tokens for auto-login using the existing token generation method
     const { accessToken, refreshToken, jti } = await this.generateTokens(
       completeInfluencer.id,
-      true, // profile is completed
+      true,
       'influencer',
     );
-
-    // Store session in Redis for multi-device support
     const sessionKey = this.sessionKey(completeInfluencer.id, jti);
     const sessionsSetKey = this.sessionsSetKey(completeInfluencer.id);
-
     const sessionPayload = JSON.stringify({
-      deviceId: null, // No device info available during signup
+      deviceId: null,
       userAgent: null,
       createdAt: new Date().toISOString(),
       userType: 'influencer',
     });
-
     await this.redisService
       .getClient()
       .multi()
-      .set(sessionKey, sessionPayload) // No expiry - session persists until logout
+      .set(sessionKey, sessionPayload)
       .sadd(sessionsSetKey, jti)
       .exec();
-
-    // Clear the phone verification key from Redis since it's no longer needed
     const phoneVerificationKey = this.phoneVerificationKey(verificationKey);
     await this.redisService.del(phoneVerificationKey);
-
     return {
       message: 'Influencer registered and logged in successfully',
       accessToken,

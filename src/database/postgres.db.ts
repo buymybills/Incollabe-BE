@@ -24,6 +24,7 @@ import { CustomNiche } from '../auth/model/custom-niche.model';
 import { SupportTicket } from '../shared/models/support-ticket.model';
 import { Conversation } from '../shared/models/conversation.model';
 import { Message } from '../shared/models/message.model';
+import { InfluencerReferralUsage } from 'src/auth/model/influencer-referral-usage.model';
 
 @Module({
   imports: [
@@ -110,6 +111,7 @@ import { Message } from '../shared/models/message.model';
             SupportTicket,
             Conversation,
             Message,
+            InfluencerReferralUsage,
           ],
           autoLoadModels: true,
           synchronize: false, // Disabled to prevent index conflicts with existing database

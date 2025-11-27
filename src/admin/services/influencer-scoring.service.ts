@@ -226,7 +226,9 @@ export class InfluencerScoringService {
           }
           // Tiebreaker: If same displayOrder, sort by updatedAt DESC (most recent first)
           if (a.updatedAt && b.updatedAt) {
-            return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+            return (
+              new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+            );
           }
           // If no timestamps, use score as final tiebreaker
           return b.scoreBreakdown.overallScore - a.scoreBreakdown.overallScore;
@@ -354,9 +356,7 @@ export class InfluencerScoringService {
           as: 'country',
         },
       ],
-      order: [
-        ['createdAt', 'ASC'],
-      ],
+      order: [['createdAt', 'ASC']],
     });
 
     // Batch fetch all counts for all influencers (only 4 queries instead of N*4)
@@ -405,28 +405,30 @@ export class InfluencerScoringService {
         recommendationLevel: 'not_recommended',
       };
 
-      const topInfluencer: TopInfluencerDto & { followingCount: number } = {
-        id: influencer.id,
-        name: influencer.name,
-        username: influencer.username,
-        profileImage: influencer.profileImage || '',
-        bio: influencer.bio || '',
-        profileHeadline: influencer.profileHeadline || '',
-        city: influencer.city?.name || '',
-        country: influencer.country?.name || '',
-        isVerified: influencer.isVerified || false,
-        isTopInfluencer: influencer.isTopInfluencer || false,
-        displayOrder: influencer.isTopInfluencer ? influencer.displayOrder : null,
-        followersCount,
-        followingCount,
-        engagementRate: 0, // Not calculated for non-top profiles
-        postsCount,
-        completedCampaigns,
-        niches,
-        instagramPostCost,
-        instagramReelCost,
-        scoreBreakdown,
-      };
+        const topInfluencer: TopInfluencerDto & { followingCount: number } = {
+          id: influencer.id,
+          name: influencer.name,
+          username: influencer.username,
+          profileImage: influencer.profileImage || '',
+          bio: influencer.bio || '',
+          profileHeadline: influencer.profileHeadline || '',
+          city: influencer.city?.name || '',
+          country: influencer.country?.name || '',
+          isVerified: influencer.isVerified || false,
+          isTopInfluencer: influencer.isTopInfluencer || false,
+          displayOrder: influencer.isTopInfluencer
+            ? influencer.displayOrder
+            : null,
+          followersCount,
+          followingCount,
+          engagementRate: 0, // Not calculated for non-top profiles
+          postsCount,
+          completedCampaigns,
+          niches,
+          instagramPostCost,
+          instagramReelCost,
+          scoreBreakdown,
+        };
 
       return topInfluencer;
     });

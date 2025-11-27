@@ -43,6 +43,12 @@ import type { RequestWithUser } from '../types/request.types';
 import { SupportTicketService } from '../shared/support-ticket.service';
 import { CreateSupportTicketDto } from '../shared/dto/create-support-ticket.dto';
 import { UserType } from '../shared/models/support-ticket.model';
+import { ProSubscriptionService } from './services/pro-subscription.service';
+import {
+  VerifySubscriptionPaymentDto,
+  CancelSubscriptionDto,
+} from './dto/pro-subscription.dto';
+import { RazorpayService } from '../shared/razorpay.service';
 
 @ApiTags('Influencer Profile')
 @Controller('influencer')
@@ -52,6 +58,8 @@ export class InfluencerController {
   constructor(
     private readonly influencerService: InfluencerService,
     private readonly supportTicketService: SupportTicketService,
+    private readonly proSubscriptionService: ProSubscriptionService,
+    private readonly razorpayService: RazorpayService,
   ) {}
 
   @Get('profile')
@@ -122,6 +130,13 @@ export class InfluencerController {
         whatsappNumber: {
           type: 'string',
           description: 'WhatsApp number for verification',
+        },
+
+        // Push Notifications
+        fcmToken: {
+          type: 'string',
+          description: 'Firebase Cloud Messaging token for push notifications',
+          example: 'dxyz123abc...',
         },
 
         // Niches
@@ -226,6 +241,7 @@ export class InfluencerController {
         countryId: '1',
         cityId: '3',
         whatsappNumber: '9870541151',
+        fcmToken: 'dxyz123abc456def789ghi...',
         nicheIds: '[1,4,12]',
         customNiches: '["Sustainable Fashion","Tech Reviews"]',
         instagramUrl: 'https://www.instagram.com/bharti.1',
@@ -925,5 +941,203 @@ export class InfluencerController {
   async getMySupportTickets(@Req() req: RequestWithUser) {
     const userId = req.user.id;
     return this.supportTicketService.getMyTickets(userId, UserType.INFLUENCER);
+  }
+
+  // Pro Subscription Endpoints
+  @Post('pro/subscribe')
+  @ApiOperation({
+    summary: 'Create Pro subscription payment order',
+    description: 'Subscribe to Pro Account (Rs 199/month) and get payment order details',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Payment order created successfully',
+    schema: {
+      example: {
+        subscription: {
+          id: 1,
+          status: 'payment_pending',
+          startDate: '2024-11-25T12:00:00Z',
+          endDate: '2024-12-25T12:00:00Z',
+          amount: 19900,
+        },
+        invoice: {
+          id: 1,
+          invoiceNumber: 'INV-202411-00001',
+          amount: 19900,
+        },
+        payment: {
+          orderId: 'order_MNpJx1234567890',
+          amount: 19900,
+          currency: 'INR',
+          keyId: 'rzp_test_...',
+        },
+      },
+    },
+  })
+  async createProSubscription(@Req() req: RequestWithUser) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can subscribe to Pro');
+    }
+    return await this.proSubscriptionService.createSubscriptionOrder(req.user.id);
+  }
+
+  @Post('pro/verify-payment')
+  @ApiOperation({
+    summary: 'Verify Pro subscription payment',
+    description: 'Verify Razorpay payment and activate Pro subscription',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment verified and Pro subscription activated',
+  })
+  async verifyProPayment(
+    @Req() req: RequestWithUser,
+    @Body() verifyDto: VerifySubscriptionPaymentDto,
+  ) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can verify Pro payment');
+    }
+    return await this.proSubscriptionService.verifyAndActivateSubscription(
+      verifyDto.subscriptionId,
+      verifyDto.paymentId,
+      verifyDto.orderId,
+      verifyDto.signature,
+    );
+  }
+
+  @Get('pro/subscription')
+  @ApiOperation({
+    summary: 'Get Pro subscription details',
+    description: 'Get current Pro subscription status and invoice history',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Subscription details retrieved successfully',
+  })
+  async getProSubscription(@Req() req: RequestWithUser) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can access Pro subscription');
+    }
+    return await this.proSubscriptionService.getSubscriptionDetails(req.user.id);
+  }
+
+  @Post('pro/cancel')
+  @ApiOperation({
+    summary: 'Cancel Pro subscription',
+    description: 'Cancel Pro subscription (remains active until end of billing period)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Subscription cancelled successfully',
+  })
+  async cancelProSubscription(
+    @Req() req: RequestWithUser,
+    @Body() cancelDto: CancelSubscriptionDto,
+  ) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can cancel Pro subscription');
+    }
+    return await this.proSubscriptionService.cancelSubscription(
+      req.user.id,
+      cancelDto.reason,
+    );
+  }
+
+  @Get('pro/invoices/:invoiceId')
+  @ApiOperation({
+    summary: 'Download Pro subscription invoice',
+    description: 'Download PDF invoice for a specific subscription payment',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Invoice details retrieved successfully',
+  })
+  async downloadInvoice(
+    @Req() req: RequestWithUser,
+    @Param('invoiceId', ParseIntPipe) invoiceId: number,
+  ) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can download invoices');
+    }
+    return await this.proSubscriptionService.getInvoiceDetails(
+      invoiceId,
+      req.user.id,
+    );
+  }
+
+  @Post('pro/invoices/:invoiceId/regenerate-pdf')
+  @ApiOperation({
+    summary: 'Regenerate PDF for Pro subscription invoice',
+    description: 'Regenerate and upload PDF for an existing invoice',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'PDF regenerated successfully',
+  })
+  async regenerateProInvoicePDF(
+    @Req() req: RequestWithUser,
+    @Param('invoiceId', ParseIntPipe) invoiceId: number,
+  ) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can regenerate invoices');
+    }
+    return await this.proSubscriptionService.regenerateInvoicePDF(
+      invoiceId,
+      req.user.id,
+    );
+  }
+
+  @Post('webhooks/razorpay')
+  @Public()
+  @ApiOperation({
+    summary: 'Razorpay webhook endpoint',
+    description:
+      'Receives webhook notifications from Razorpay for payment events. This endpoint stores all transaction data for audit purposes.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Webhook processed successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid webhook signature',
+  })
+  async handleRazorpayWebhook(@Req() req: any, @Body() body: any) {
+    try {
+      // Get signature from headers
+      const signature = req.headers['x-razorpay-signature'];
+
+      if (!signature) {
+        throw new BadRequestException('Missing webhook signature');
+      }
+
+      // Verify webhook signature
+      const rawBody = JSON.stringify(body);
+      const isValid = this.razorpayService.verifyWebhookSignature(
+        rawBody,
+        signature,
+      );
+
+      if (!isValid) {
+        console.error('Invalid webhook signature');
+        throw new BadRequestException('Invalid webhook signature');
+      }
+
+      // Extract event and payload
+      const event = body.event;
+      const payload = body.payload;
+
+      // Process webhook
+      const result = await this.proSubscriptionService.handleWebhook(
+        event,
+        payload,
+      );
+
+      return result;
+    } catch (error) {
+      console.error('Webhook processing error:', error);
+      throw error;
+    }
   }
 }

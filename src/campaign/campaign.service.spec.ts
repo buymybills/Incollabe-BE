@@ -28,6 +28,7 @@ import { Follow } from '../post/models/follow.model';
 import { CampaignQueryService } from './services/campaign-query.service';
 import { NotificationService } from '../shared/notification.service';
 import { Experience } from '../influencer/models/experience.model';
+import { CreditTransaction } from '../admin/models/credit-transaction.model';
 
 const mockModel = () => ({
   findOne: jest.fn(),
@@ -128,6 +129,10 @@ describe('CampaignService', () => {
         {
           provide: NotificationService,
           useValue: mockNotificationService,
+        },
+        {
+          provide: getModelToken(CreditTransaction),
+          useValue: mockModel(),
         },
       ],
     }).compile();

@@ -18,6 +18,8 @@ import { WhatsAppService } from '../shared/whatsapp.service';
 import { AuditLogService } from './services/audit-log.service';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { ProfileReviewDto } from './dto/profile-review.dto';
+import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
+import { CreditTransaction } from './models/credit-transaction.model';
 
 const mockProfileReviewModel = {
   findOne: jest.fn(),
@@ -79,6 +81,21 @@ const mockCampaignModel = {
 const mockWhatsAppService = {
   sendProfileApprovalNotification: jest.fn(),
   sendProfileRejectionNotification: jest.fn(),
+  sendReferralCreditNotification: jest.fn(),
+};
+
+const mockInfluencerReferralUsageModel = {
+  findOne: jest.fn(),
+  create: jest.fn(),
+  update: jest.fn(),
+};
+
+const mockCreditTransactionModel = {
+  create: jest.fn(),
+  findAll: jest.fn(),
+  findAndCountAll: jest.fn(),
+  findByPk: jest.fn(),
+  update: jest.fn(),
 };
 
 describe('ProfileReviewService', () => {
@@ -136,6 +153,14 @@ describe('ProfileReviewService', () => {
             createLog: jest.fn(),
             logProfileReviewAction: jest.fn(),
           },
+        },
+        {
+          provide: getModelToken(InfluencerReferralUsage),
+          useValue: mockInfluencerReferralUsageModel,
+        },
+        {
+          provide: getModelToken(CreditTransaction),
+          useValue: mockCreditTransactionModel,
         },
       ],
     }).compile();

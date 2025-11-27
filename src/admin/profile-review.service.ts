@@ -12,7 +12,8 @@ import {
 import { Admin } from './models/admin.model';
 import { Brand } from '../brand/model/brand.model';
 import { Influencer } from '../auth/model/influencer.model';
-// import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
+import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
+import { CreditTransaction, CreditTransactionType, PaymentStatus } from './models/credit-transaction.model';
 import { Niche } from '../auth/model/niche.model';
 import { City } from '../shared/models/city.model';
 import { Country } from '../shared/models/country.model';
@@ -40,8 +41,10 @@ export class ProfileReviewService {
     private readonly brandModel: typeof Brand,
     @InjectModel(Influencer)
     private readonly influencerModel: typeof Influencer,
-    // @InjectModel(InfluencerReferralUsage)
-    // private readonly influencerReferralUsageModel: typeof InfluencerReferralUsage,
+    @InjectModel(InfluencerReferralUsage)
+    private readonly influencerReferralUsageModel: typeof InfluencerReferralUsage,
+    @InjectModel(CreditTransaction)
+    private readonly creditTransactionModel: typeof CreditTransaction,
     @InjectModel(Niche)
     private readonly nicheModel: typeof Niche,
     @InjectModel(City)
@@ -55,7 +58,7 @@ export class ProfileReviewService {
     private readonly emailService: EmailService,
     private readonly whatsAppService: WhatsAppService,
     private readonly auditLogService: AuditLogService,
-  ) {}
+  ) { }
 
   async createProfileReview(createData: any) {
     const { profileId, profileType, submittedData } = createData;
@@ -95,7 +98,6 @@ export class ProfileReviewService {
   }
 
   async getPendingProfiles(
-    adminId: number,
     profileType?: ProfileType,
     page: number = 1,
     limit: number = 20,
@@ -342,8 +344,9 @@ export class ProfileReviewService {
       }
     } else if (review.profileType === ProfileType.INFLUENCER) {
       await this.influencerModel.update(
-        { isVerified: true, 
-          // verifiedAt: new Date() 
+        {
+          isVerified: true,
+          verifiedAt: new Date() 
         },
         { where: { id: review.profileId } },
       );
@@ -370,55 +373,81 @@ export class ProfileReviewService {
         }
 
         // Award referral credit if this influencer was referred by someone
-       /* const referralUsage = await this.influencerReferralUsageModel.findOne({
-          where: {
-            referredUserId: influencer.id,
-            creditAwarded: false,
-          },
-        });
-
-        if (referralUsage) {
-          // Update the referral usage record
-          await referralUsage.update({
-            creditAwarded: true,
-            creditAwardedAt: new Date(),
+        // Wrap in try-catch to prevent profile approval failure if referral fails
+        try {
+          const referralUsage = await this.influencerReferralUsageModel.findOne({
+            where: {
+              referredUserId: influencer.id,
+              creditAwarded: false,
+            },
           });
 
-          // Get the referrer influencer
-          const referrer = await this.influencerModel.findByPk(
-            referralUsage.influencerId,
-          );
+          if (referralUsage) {
+            // Update the referral usage record
+            await referralUsage.update({
+              creditAwarded: true,
+              creditAwardedAt: new Date(),
+            });
 
-          if (referrer) {
-            // Update referrer's credits
-            const currentCredits = referrer.referralCredits || 0;
-            const newCredits = currentCredits + 100;
-
-            await this.influencerModel.update(
-              { referralCredits: newCredits },
-              { where: { id: referrer.id } },
+            // Get the referrer influencer
+            const referrer = await this.influencerModel.findByPk(
+              referralUsage.influencerId,
             );
 
-            // Send notification to referrer
-            let notificationMsg = `Congratulations! You have earned Rs 100 credit through the referral programme. Your total referral credits are now Rs ${newCredits}.`;
+            if (referrer) {
+              // Update referrer's credits
+              const currentCredits = referrer.referralCredits || 0;
+              const newCredits = currentCredits + 100;
 
-            if (!referrer.upiId) {
-              notificationMsg +=
-                ' Please update your UPI ID in your profile to receive the amount. The credited amount will be transferred within 24 to 48 working hours.';
-            } else {
-              notificationMsg +=
-                ' The credited amount will be transferred to your UPI ID within 24 to 48 working hours.';
-            }
-
-            // Send WhatsApp notification if available
-            if (referrer.whatsappNumber && referrer.isWhatsappVerified) {
-              await this.whatsAppService.sendReferralCreditNotification(
-                referrer.whatsappNumber,
-                notificationMsg,
+              await this.influencerModel.update(
+                { referralCredits: newCredits },
+                { where: { id: referrer.id } },
               );
+
+              // Log credit transaction for admin records
+              await this.creditTransactionModel.create({
+                influencerId: referrer.id,
+                transactionType: CreditTransactionType.REFERRAL_BONUS,
+                amount: 100,
+                paymentStatus: PaymentStatus.PENDING,
+                description: `Referral bonus for referring user ID ${influencer.id}`,
+                referredUserId: influencer.id,
+                upiId: referrer.upiId || null,
+              });
+
+              console.log(
+                `Referral credit awarded: ${newCredits} credits to influencer ${referrer.id} for referring ${influencer.id}`,
+              );
+
+              // Send notification to referrer
+              let notificationMsg = `Congratulations! You have earned Rs 100 credit through the referral programme. Your total referral credits are now Rs ${newCredits}.`;
+
+              if (!referrer.upiId) {
+                notificationMsg +=
+                  ' Please update your UPI ID in your profile to receive the amount. The credited amount will be transferred within 24 to 48 working hours.';
+              } else {
+                notificationMsg +=
+                  ' The credited amount will be transferred to your UPI ID within 24 to 48 working hours.';
+              }
+
+              // Send WhatsApp notification asynchronously (fire-and-forget)
+              // Error handling is done internally by WhatsApp service
+              if (referrer.whatsappNumber && referrer.isWhatsappVerified) {
+                this.whatsAppService.sendReferralCreditNotification(
+                  referrer.whatsappNumber,
+                  notificationMsg,
+                );
+              }
             }
           }
-        } */
+        } catch (error) {
+          console.error(
+            'Failed to award referral credit for influencer:',
+            influencer.id,
+            error,
+          );
+          // Don't throw - allow profile approval to continue even if referral fails
+        }
       }
     }
 
@@ -428,9 +457,9 @@ export class ProfileReviewService {
       const profileName =
         review.profileType === ProfileType.BRAND
           ? (await this.brandModel.findByPk(review.profileId))?.brandName ||
-            'Brand'
+          'Brand'
           : (await this.influencerModel.findByPk(review.profileId))?.name ||
-            'Influencer';
+          'Influencer';
 
       await this.auditLogService.logProfileReviewAction(
         {
@@ -510,9 +539,9 @@ export class ProfileReviewService {
       const profileName =
         review.profileType === ProfileType.BRAND
           ? (await this.brandModel.findByPk(review.profileId))?.brandName ||
-            'Brand'
+          'Brand'
           : (await this.influencerModel.findByPk(review.profileId))?.name ||
-            'Influencer';
+          'Influencer';
 
       await this.auditLogService.logProfileReviewAction(
         {
@@ -722,5 +751,104 @@ export class ProfileReviewService {
       },
     });
     return !!review;
+  }
+
+  // Credit Transaction Management Methods
+  async getCreditTransactions(filters: {
+    paymentStatus?: string;
+    transactionType?: string;
+    influencerId?: number;
+    page: number;
+    limit: number;
+  }) {
+    const { paymentStatus, transactionType, influencerId, page, limit } =
+      filters;
+    const offset = (page - 1) * limit;
+
+    const whereConditions: any = {};
+
+    if (paymentStatus) {
+      whereConditions.paymentStatus = paymentStatus;
+    }
+
+    if (transactionType) {
+      whereConditions.transactionType = transactionType;
+    }
+
+    if (influencerId) {
+      whereConditions.influencerId = influencerId;
+    }
+
+    const { count, rows: transactions } =
+      await this.creditTransactionModel.findAndCountAll({
+        where: whereConditions,
+        include: [
+          {
+            model: Influencer,
+            attributes: [
+              'id',
+              'name',
+              'username',
+              'profileImage',
+              'phone',
+              'upiId',
+            ],
+          },
+        ],
+        order: [['createdAt', 'DESC']],
+        limit,
+        offset,
+      });
+
+    return {
+      transactions,
+      total: count,
+      page,
+      limit,
+      totalPages: Math.ceil(count / limit),
+    };
+  }
+
+  async updateCreditTransactionStatus(
+    transactionId: number,
+    updateData: {
+      paymentStatus: string;
+      paymentReferenceId?: string;
+      adminNotes?: string;
+    },
+    adminId: number,
+  ) {
+    const transaction = await this.creditTransactionModel.findByPk(
+      transactionId,
+    );
+
+    if (!transaction) {
+      throw new NotFoundException('Transaction not found');
+    }
+
+    const updateFields: any = {
+      paymentStatus: updateData.paymentStatus,
+      processedBy: adminId,
+    };
+
+    if (updateData.paymentReferenceId) {
+      updateFields.paymentReferenceId = updateData.paymentReferenceId;
+    }
+
+    if (updateData.adminNotes) {
+      updateFields.adminNotes = updateData.adminNotes;
+    }
+
+    // Set paidAt timestamp if marking as paid
+    if (updateData.paymentStatus === PaymentStatus.PAID) {
+      updateFields.paidAt = new Date();
+    }
+
+    await transaction.update(updateFields);
+
+    return {
+      message: 'Transaction status updated successfully',
+      transaction,
+    };
   }
 }

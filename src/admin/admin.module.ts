@@ -17,9 +17,11 @@ import { Admin } from './models/admin.model';
 import { ProfileReview } from './models/profile-review.model';
 import { PushNotification } from './models/push-notification.model';
 import { AuditLog } from './models/audit-log.model';
+import { CreditTransaction } from './models/credit-transaction.model';
 import { Brand } from '../brand/model/brand.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { InfluencerNiche } from '../auth/model/influencer-niche.model';
+import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
 import { Niche } from '../auth/model/niche.model';
 import { Country } from '../shared/models/country.model';
 import { City } from '../shared/models/city.model';
@@ -47,9 +49,11 @@ import { RolesGuard } from './guards/roles.guard';
       ProfileReview,
       PushNotification,
       AuditLog,
+      CreditTransaction,
       Brand,
       Influencer,
       InfluencerNiche,
+      InfluencerReferralUsage,
       Niche,
       Country,
       City,

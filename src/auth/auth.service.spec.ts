@@ -31,6 +31,8 @@ import { BrandLoginDto } from './dto/brand-login.dto';
 import { CheckUsernameDto } from './dto/check-username.dto';
 import { InfluencerSignupDto } from './dto/influencer-signup.dto';
 import { Gender } from './types/gender.enum';
+import { InfluencerReferralUsage } from './model/influencer-referral-usage.model';
+import { WhatsAppService } from '../shared/whatsapp.service';
 
 // Mock bcrypt at module level
 jest.mock('bcrypt', () => ({
@@ -124,6 +126,16 @@ const mockEncryptionService = {
   decrypt: jest.fn((text) => text.replace('encrypted_', '')),
 };
 
+const mockWhatsAppService = {
+  sendReferralCreditNotification: jest.fn(),
+  sendProfileVerificationPending: jest.fn(),
+  sendProfileVerified: jest.fn(),
+  sendProfileRejected: jest.fn(),
+  sendProfileIncomplete: jest.fn(),
+  sendOTP: jest.fn(),
+  sendCampaignApplicationConfirmation: jest.fn(),
+};
+
 describe('AuthService', () => {
   let service: AuthService;
   let influencerModel: any;
@@ -139,6 +151,8 @@ describe('AuthService', () => {
   let jwtService: any;
   let configService: any;
   let sequelize: any;
+
+  const mockInfluencerReferralUsageModel = mockModel();
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -175,6 +189,14 @@ describe('AuthService', () => {
         {
           provide: getModelToken(CompanyType),
           useValue: mockModel(),
+        },
+        {
+          provide: getModelToken(InfluencerReferralUsage),
+          useValue: mockInfluencerReferralUsageModel,
+        },
+        {
+          provide: WhatsAppService,
+          useValue: mockWhatsAppService,
         },
         {
           provide: RedisService,

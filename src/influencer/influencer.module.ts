@@ -20,6 +20,10 @@ import { CampaignApplication } from '../campaign/models/campaign-application.mod
 import { CampaignInvitation } from '../campaign/models/campaign-invitation.model';
 import { CustomNiche } from '../auth/model/custom-niche.model';
 import { SharedModule } from '../shared/shared.module';
+import { ProSubscription } from './models/pro-subscription.model';
+import { ProInvoice } from './models/pro-invoice.model';
+import { ProPaymentTransaction } from './models/pro-payment-transaction.model';
+import { ProSubscriptionService } from './services/pro-subscription.service';
 
 @Module({
   imports: [
@@ -39,6 +43,9 @@ import { SharedModule } from '../shared/shared.module';
       Campaign,
       CampaignApplication,
       CustomNiche,
+      ProSubscription,
+      ProInvoice,
+      ProPaymentTransaction,
     ]),
     SharedModule,
   ],
@@ -46,6 +53,7 @@ import { SharedModule } from '../shared/shared.module';
   providers: [
     InfluencerService,
     InfluencerRepository,
+    ProSubscriptionService,
     {
       provide: 'PROFILE_REVIEW_MODEL',
       useValue: ProfileReview,
@@ -95,6 +103,6 @@ import { SharedModule } from '../shared/shared.module';
       useValue: CustomNiche,
     },
   ],
-  exports: [InfluencerService, InfluencerRepository],
+  exports: [InfluencerService, InfluencerRepository, ProSubscriptionService],
 })
 export class InfluencerModule {}

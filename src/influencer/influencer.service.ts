@@ -279,6 +279,19 @@ export class InfluencerService {
 
     // Include private data only if not public view
     if (!isPublic) {
+      // Convert Pro subscription dates to IST if they exist
+      const proActivatedAtIST = influencer.proActivatedAt
+        ? new Date(influencer.proActivatedAt).toLocaleString('en-IN', {
+            timeZone: 'Asia/Kolkata',
+          })
+        : null;
+
+      const proExpiresAtIST = influencer.proExpiresAt
+        ? new Date(influencer.proExpiresAt).toLocaleString('en-IN', {
+            timeZone: 'Asia/Kolkata',
+          })
+        : null;
+
       return {
         ...baseProfile,
         phone: influencer.phone,
@@ -292,6 +305,12 @@ export class InfluencerService {
           isWhatsappVerified: influencer.isWhatsappVerified,
           isProfileCompleted: influencer.isProfileCompleted,
         },
+        proSubscription: {
+          isPro: influencer.isPro || false,
+          proActivatedAt: proActivatedAtIST,
+          proExpiresAt: proExpiresAtIST,
+        },
+        referralCode: influencer.referralCode || null,
         profileCompletion,
       };
     }
@@ -1264,6 +1283,24 @@ export class InfluencerService {
           'This is an invite-only campaign. You must be invited to apply.',
         );
       }
+    }
+
+    // Check Max Campaign 48-hour Pro-only window
+    if (campaign.isMaxCampaign) {
+      const now = new Date();
+      const campaignCreatedAt = new Date(campaign.createdAt);
+      const hoursSinceCreation = (now.getTime() - campaignCreatedAt.getTime()) / (1000 * 60 * 60);
+
+      // If within first 48 hours, only Pro influencers can apply
+      if (hoursSinceCreation <= 48) {
+        const influencer = await this.influencerRepository.findById(influencerId);
+        if (!influencer?.isPro) {
+          throw new ForbiddenException(
+            'This is a Max Campaign. Only Pro influencers can apply during the first 48 hours. Upgrade to Pro or wait until the campaign opens to all influencers.',
+          );
+        }
+      }
+      // After 48 hours, anyone can apply (no restriction)
     }
 
     // Check if influencer has already applied

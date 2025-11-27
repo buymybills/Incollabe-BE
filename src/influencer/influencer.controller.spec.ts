@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { InfluencerController } from './influencer.controller';
 import { InfluencerService } from './influencer.service';
 import { SupportTicketService } from '../shared/support-ticket.service';
+import { ProSubscriptionService } from './services/pro-subscription.service';
+import { RazorpayService } from '../shared/razorpay.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto';
 import { WhatsappVerificationDto } from './dto/whatsapp-verification.dto';
@@ -26,6 +28,19 @@ const mockSupportTicketService = {
   getMyTickets: jest.fn(),
 };
 
+const mockProSubscriptionService = {
+  createSubscription: jest.fn(),
+  verifyPayment: jest.fn(),
+  getSubscriptionStatus: jest.fn(),
+  cancelSubscription: jest.fn(),
+};
+
+const mockRazorpayService = {
+  createOrder: jest.fn(),
+  verifySignature: jest.fn(),
+  getPaymentDetails: jest.fn(),
+};
+
 const mockAuthGuard = {
   canActivate: jest.fn(() => true),
 };
@@ -45,6 +60,14 @@ describe('InfluencerController', () => {
         {
           provide: SupportTicketService,
           useValue: mockSupportTicketService,
+        },
+        {
+          provide: ProSubscriptionService,
+          useValue: mockProSubscriptionService,
+        },
+        {
+          provide: RazorpayService,
+          useValue: mockRazorpayService,
         },
       ],
     })

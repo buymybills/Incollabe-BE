@@ -25,6 +25,7 @@ import { InviteInfluencersDto } from './dto/invite-influencers.dto';
 import { Brand } from '../brand/model/brand.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Niche } from '../auth/model/niche.model';
+import { CreditTransaction, CreditTransactionType, PaymentStatus } from '../admin/models/credit-transaction.model';
 import { InvitationStatus } from './models/campaign-invitation.model';
 import { Gender } from '../auth/types/gender.enum';
 import { WhatsAppService } from '../shared/whatsapp.service';
@@ -61,6 +62,8 @@ export class CampaignService {
     private readonly followModel: typeof Follow,
     @InjectModel(Experience)
     private readonly experienceModel: typeof Experience,
+    @InjectModel(CreditTransaction)
+    private readonly creditTransactionModel: typeof CreditTransaction,
     private readonly whatsAppService: WhatsAppService,
     private readonly notificationService: NotificationService,
     private readonly campaignQueryService: CampaignQueryService,
@@ -998,6 +1001,7 @@ export class CampaignService {
     totalPages: number;
   }> {
     // Verify campaign exists and belongs to the brand
+    // Note: We allow viewing applications even for inactive/completed campaigns
     const campaign = await this.campaignModel.findOne({
       where: { id: campaignId, brandId },
     });
@@ -1521,6 +1525,106 @@ export class CampaignService {
       reviewNotes: updateStatusDto.reviewNotes,
       reviewedAt: new Date(),
     });
+
+    // Award early selection bonus if influencer gets selected within 36 hours of verification
+    if (updateStatusDto.status === ApplicationStatus.SELECTED && influencer) {
+      const fullInfluencer = await this.influencerModel.findByPk(influencer.id);
+      if (fullInfluencer && fullInfluencer.verifiedAt) {
+        const verificationTime = new Date(fullInfluencer.verifiedAt).getTime();
+        const currentTime = new Date().getTime();
+        const hoursSinceVerification =
+          (currentTime - verificationTime) / (1000 * 60 * 60);
+
+        // Check if within 36 hours of verification
+        if (hoursSinceVerification <= 36) {
+          const currentCredits = fullInfluencer.referralCredits || 0;
+          const newCredits = currentCredits + 100;
+
+          // Award Rs 100 credit
+          await this.influencerModel.update(
+            { referralCredits: newCredits },
+            { where: { id: fullInfluencer.id } },
+          );
+
+          // Log credit transaction for admin records
+          await this.creditTransactionModel.create({
+            influencerId: fullInfluencer.id,
+            transactionType: CreditTransactionType.EARLY_SELECTION_BONUS,
+            amount: 100,
+            paymentStatus: PaymentStatus.PENDING,
+            description: `Early selection bonus for campaign "${campaign.name}" (selected within 36 hours of verification)`,
+            campaignId: campaign.id,
+            upiId: fullInfluencer.upiId || null,
+          });
+
+          // Send notification about the early selection bonus
+          if (fullInfluencer.whatsappNumber) {
+            const bonusMessage = `🎉 Congratulations ${fullInfluencer.name}! You've been selected for the campaign "${campaign.name}" within 36 hours of your profile verification. You've earned an early bird bonus of Rs 100! Your total credits are now Rs ${newCredits}. Keep up the great work!`;
+            await this.whatsAppService.sendReferralCreditNotification(
+              fullInfluencer.whatsappNumber,
+              bonusMessage,
+            );
+          }
+
+          console.log('Early selection bonus awarded:', {
+            influencerId: fullInfluencer.id,
+            hoursSinceVerification: hoursSinceVerification.toFixed(2),
+            bonusAmount: 100,
+            newCredits,
+          });
+        }
+      }
+    }
+
+    // Award early selection bonus if influencer gets selected within 36 hours of verification
+    if (updateStatusDto.status === ApplicationStatus.SELECTED && influencer) {
+      const fullInfluencer = await this.influencerModel.findByPk(influencer.id);
+      if (fullInfluencer && fullInfluencer.verifiedAt) {
+        const verificationTime = new Date(fullInfluencer.verifiedAt).getTime();
+        const currentTime = new Date().getTime();
+        const hoursSinceVerification =
+          (currentTime - verificationTime) / (1000 * 60 * 60);
+
+        // Check if within 36 hours of verification
+        if (hoursSinceVerification <= 36) {
+          const currentCredits = fullInfluencer.referralCredits || 0;
+          const newCredits = currentCredits + 100;
+
+          // Award Rs 100 credit
+          await this.influencerModel.update(
+            { referralCredits: newCredits },
+            { where: { id: fullInfluencer.id } },
+          );
+
+          // Log credit transaction for admin records
+          await this.creditTransactionModel.create({
+            influencerId: fullInfluencer.id,
+            transactionType: CreditTransactionType.EARLY_SELECTION_BONUS,
+            amount: 100,
+            paymentStatus: PaymentStatus.PENDING,
+            description: `Early selection bonus for campaign "${campaign.name}" (selected within 36 hours of verification)`,
+            campaignId: campaign.id,
+            upiId: fullInfluencer.upiId || null,
+          });
+
+          // Send notification about the early selection bonus
+          if (fullInfluencer.whatsappNumber) {
+            const bonusMessage = `🎉 Congratulations ${fullInfluencer.name}! You've been selected for the campaign "${campaign.name}" within 36 hours of your profile verification. You've earned an early bird bonus of Rs 100! Your total credits are now Rs ${newCredits}. Keep up the great work!`;
+            await this.whatsAppService.sendReferralCreditNotification(
+              fullInfluencer.whatsappNumber,
+              bonusMessage,
+            );
+          }
+
+          console.log('Early selection bonus awarded:', {
+            influencerId: fullInfluencer.id,
+            hoursSinceVerification: hoursSinceVerification.toFixed(2),
+            bonusAmount: 100,
+            newCredits,
+          });
+        }
+      }
+    }
 
     // Send WhatsApp notifications asynchronously (fire-and-forget)
     if (influencer && influencer.whatsappNumber) {

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BrandController } from './brand.controller';
 import { BrandService } from './brand.service';
 import { SupportTicketService } from '../shared/support-ticket.service';
+import { MaxCampaignPaymentService } from '../campaign/services/max-campaign-payment.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { UpdateBrandProfileDto } from './dto/update-brand-profile.dto';
 import { UpdateBrandNichesDto } from './dto/update-brand-niches.dto';
@@ -30,6 +31,12 @@ const mockSupportTicketService = {
   getMyTickets: jest.fn(),
 };
 
+const mockMaxCampaignPaymentService = {
+  createPayment: jest.fn(),
+  verifyPayment: jest.fn(),
+  getPaymentStatus: jest.fn(),
+};
+
 const mockAuthGuard = {
   canActivate: jest.fn(() => true),
 };
@@ -49,6 +56,10 @@ describe('BrandController', () => {
         {
           provide: SupportTicketService,
           useValue: mockSupportTicketService,
+        },
+        {
+          provide: MaxCampaignPaymentService,
+          useValue: mockMaxCampaignPaymentService,
         },
       ],
     })

@@ -23,6 +23,15 @@ import { IsValidUsername } from '../../shared/validators/is-valid-username.valid
 
 export class InfluencerSignupDto {
   @ApiProperty({
+    description: 'Referral code of the influencer (optional)',
+    required: false,
+    example: 'REF12345',
+  })
+  @IsOptional()
+  @IsString()
+  referralCode?: string;
+
+  @ApiProperty({
     description: 'Full name of the influencer',
     example: 'Dhruv Bhatia',
   })

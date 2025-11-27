@@ -36,6 +36,8 @@ import type { RequestWithUser } from '../types/request.types';
 import { SupportTicketService } from '../shared/support-ticket.service';
 import { CreateSupportTicketDto } from '../shared/dto/create-support-ticket.dto';
 import { UserType } from '../shared/models/support-ticket.model';
+import { MaxCampaignPaymentService } from '../campaign/services/max-campaign-payment.service';
+import { VerifyMaxCampaignPaymentDto } from '../campaign/dto/max-campaign.dto';
 
 @ApiTags('Brand Profile')
 @Controller('brand')
@@ -45,6 +47,7 @@ export class BrandController {
   constructor(
     private readonly brandService: BrandService,
     private readonly supportTicketService: SupportTicketService,
+    private readonly maxCampaignPaymentService: MaxCampaignPaymentService,
   ) {}
 
   @Get('company-types')
@@ -173,6 +176,11 @@ export class BrandController {
           description: 'LinkedIn company page URL',
         },
         twitterUrl: { type: 'string', description: 'Twitter/X profile URL' },
+        fcmToken: {
+          type: 'string',
+          description: 'Firebase Cloud Messaging token for push notifications',
+          example: 'dxyz123abc...',
+        },
         nicheIds: {
           type: 'string',
           description:
@@ -476,5 +484,153 @@ export class BrandController {
   async getMySupportTickets(@Req() req: RequestWithUser) {
     const userId = req.user.id;
     return this.supportTicketService.getMyTickets(userId, UserType.BRAND);
+  }
+
+  // Max Campaign Payment Endpoints
+  @Post('campaigns/:campaignId/upgrade-to-max')
+  @ApiOperation({
+    summary: 'Upgrade campaign to Max Campaign',
+    description:
+      'Upgrade a campaign to Max Campaign for Rs 299. Max Campaigns are exclusive to Pro influencers only.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Payment order created successfully',
+    schema: {
+      example: {
+        campaign: {
+          id: 1,
+          name: 'Summer Fashion Campaign',
+          currentStatus: {
+            isMaxCampaign: false,
+            paymentStatus: 'pending',
+          },
+        },
+        payment: {
+          orderId: 'order_MNpJx1234567890',
+          amount: 29900,
+          currency: 'INR',
+          keyId: 'rzp_test_...',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Campaign not found' })
+  @ApiResponse({
+    status: 403,
+    description: 'You can only upgrade your own campaigns',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Campaign is already a Max Campaign or payment is pending',
+  })
+  async upgradeToMaxCampaign(
+    @Req() req: RequestWithUser,
+    @Param('campaignId', ParseIntPipe) campaignId: number,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new BadRequestException('Only brands can upgrade campaigns');
+    }
+    return await this.maxCampaignPaymentService.createMaxCampaignOrder(
+      campaignId,
+      req.user.id,
+    );
+  }
+
+  @Post('campaigns/:campaignId/verify-max-payment')
+  @ApiOperation({
+    summary: 'Verify Max Campaign payment',
+    description: 'Verify Razorpay payment and activate Max Campaign status',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Payment verified and campaign upgraded to Max Campaign successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Campaign not found' })
+  @ApiResponse({ status: 400, description: 'Invalid payment signature' })
+  async verifyMaxCampaignPayment(
+    @Req() req: RequestWithUser,
+    @Param('campaignId', ParseIntPipe) campaignId: number,
+    @Body() verifyDto: VerifyMaxCampaignPaymentDto,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new BadRequestException('Only brands can verify campaign payments');
+    }
+    return await this.maxCampaignPaymentService.verifyAndActivateMaxCampaign(
+      campaignId,
+      req.user.id,
+      verifyDto.paymentId,
+      verifyDto.orderId,
+      verifyDto.signature,
+    );
+  }
+
+  @Get('campaigns/:campaignId/max-status')
+  @ApiOperation({
+    summary: 'Get Max Campaign status',
+    description: 'Get Max Campaign payment status and details for a campaign',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Max Campaign status retrieved successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Campaign not found' })
+  async getMaxCampaignStatus(
+    @Req() req: RequestWithUser,
+    @Param('campaignId', ParseIntPipe) campaignId: number,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new BadRequestException('Only brands can view campaign status');
+    }
+    return await this.maxCampaignPaymentService.getMaxCampaignStatus(
+      campaignId,
+      req.user.id,
+    );
+  }
+
+  @Get('max-campaign/invoices/:invoiceId')
+  @ApiOperation({
+    summary: 'Get Max Campaign invoice',
+    description: 'Get invoice details for Max Campaign upgrade payment',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Invoice details retrieved successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Invoice not found' })
+  async getMaxCampaignInvoice(
+    @Req() req: RequestWithUser,
+    @Param('invoiceId', ParseIntPipe) invoiceId: number,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new BadRequestException('Only brands can view invoices');
+    }
+    return await this.maxCampaignPaymentService.getInvoiceDetails(
+      invoiceId,
+      req.user.id,
+    );
+  }
+
+  @Post('max-campaign/invoices/:invoiceId/regenerate-pdf')
+  @ApiOperation({
+    summary: 'Regenerate PDF for Max Campaign invoice',
+    description: 'Regenerate and upload PDF for an existing invoice',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'PDF regenerated successfully',
+  })
+  async regenerateInvoicePDF(
+    @Req() req: RequestWithUser,
+    @Param('invoiceId', ParseIntPipe) invoiceId: number,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new BadRequestException('Only brands can regenerate invoices');
+    }
+    return await this.maxCampaignPaymentService.regenerateInvoicePDF(
+      invoiceId,
+      req.user.id,
+    );
   }
 }

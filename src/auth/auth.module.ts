@@ -23,6 +23,7 @@ import { CompanyType } from '../shared/models/company-type.model';
 import { Admin } from '../admin/models/admin.model';
 import { CustomNiche } from './model/custom-niche.model';
 import { ProfileReview } from '../admin/models/profile-review.model';
+import { InfluencerReferralUsage } from './model/influencer-referral-usage.model';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { ProfileReview } from '../admin/models/profile-review.model';
       Admin,
       CustomNiche,
       ProfileReview,
+      InfluencerReferralUsage,
     ]),
     ScheduleModule.forRoot(),
     SharedModule,

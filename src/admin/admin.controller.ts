@@ -697,7 +697,6 @@ export class AdminController {
     @Query() filters: GetPendingProfilesDto,
   ) {
     return await this.profileReviewService.getPendingProfiles(
-      req.admin.id,
       filters.profileType,
       filters.page || 1,
       filters.limit || 20,
@@ -1947,5 +1946,122 @@ export class AdminController {
   })
   async deleteSupportTicket(@Param('id', ParseIntPipe) id: number) {
     return await this.supportTicketService.deleteTicket(id);
+  }
+
+  // Credit Transaction Management Endpoints
+  @Get('credit-transactions')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.PROFILE_REVIEWER)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get all credit transactions',
+    description:
+      'Retrieve all credit transactions with optional filters for payment status, transaction type, and influencer',
+  })
+  @ApiQuery({
+    name: 'paymentStatus',
+    required: false,
+    enum: ['pending', 'processing', 'paid', 'failed', 'cancelled'],
+    description: 'Filter by payment status',
+  })
+  @ApiQuery({
+    name: 'transactionType',
+    required: false,
+    enum: ['referral_bonus', 'early_selection_bonus'],
+    description: 'Filter by transaction type',
+  })
+  @ApiQuery({
+    name: 'influencerId',
+    required: false,
+    type: Number,
+    description: 'Filter by influencer ID',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Results per page',
+    example: 20,
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Credit transactions retrieved successfully',
+  })
+  async getCreditTransactions(
+    @Query('paymentStatus') paymentStatus?: string,
+    @Query('transactionType') transactionType?: string,
+    @Query('influencerId') influencerId?: number,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
+  ) {
+    return await this.profileReviewService.getCreditTransactions({
+      paymentStatus,
+      transactionType,
+      influencerId,
+      page,
+      limit,
+    });
+  }
+
+  @Put('credit-transactions/:id/status')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update credit transaction payment status',
+    description:
+      'Update the payment status of a credit transaction (mark as paid, failed, etc.)',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'Transaction ID',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        paymentStatus: {
+          type: 'string',
+          enum: ['pending', 'processing', 'paid', 'failed', 'cancelled'],
+        },
+        paymentReferenceId: {
+          type: 'string',
+          description: 'Payment reference/transaction ID',
+        },
+        adminNotes: {
+          type: 'string',
+          description: 'Admin notes about the payment',
+        },
+      },
+      required: ['paymentStatus'],
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Transaction status updated successfully',
+  })
+  async updateCreditTransactionStatus(
+    @Param('id', ParseIntPipe) transactionId: number,
+    @Body()
+    updateData: {
+      paymentStatus: string;
+      paymentReferenceId?: string;
+      adminNotes?: string;
+    },
+    @Req() req: RequestWithAdmin,
+  ) {
+    return await this.profileReviewService.updateCreditTransactionStatus(
+      transactionId,
+      updateData,
+      req.admin.id,
+    );
   }
 }

@@ -19,6 +19,7 @@ import { ChatGateway } from './chat.gateway';
 import { SearchController } from './controllers/search.controller';
 import { ChatController } from './chat.controller';
 import { IsValidUsernameConstraint } from './validators/is-valid-username.validator';
+import { RazorpayService } from './razorpay.service';
 import { Otp } from '../auth/model/otp.model';
 import { CustomNiche } from '../auth/model/custom-niche.model';
 import { Influencer } from '../auth/model/influencer.model';
@@ -60,6 +61,7 @@ import { Message } from './models/message.model';
     ChatService,
     ChatGateway,
     IsValidUsernameConstraint,
+    RazorpayService,
   ],
   exports: [
     SmsService,
@@ -77,6 +79,7 @@ import { Message } from './models/message.model';
     SupportTicketService,
     ChatService,
     IsValidUsernameConstraint,
+    RazorpayService,
   ],
 })
 export class SharedModule {}

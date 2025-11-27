@@ -330,4 +330,15 @@ export class WhatsAppService {
     // Return as is if we can't determine format
     return cleaned;
   }
+
+  async sendReferralCreditNotification(
+    to: string,
+    message: string,
+  ): Promise<void> {
+    // For now, use a generic template or send as plain text if supported
+    // You may want to create a dedicated WhatsApp template for referral credits
+    await this.sendTemplateMessage(to, 'referral_credit_notification', [
+      message,
+    ]);
+  }
 }

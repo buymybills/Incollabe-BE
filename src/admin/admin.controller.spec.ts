@@ -326,7 +326,6 @@ describe('AdminController', () => {
 
       expect(result).toEqual(mockPendingReviews);
       expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(
-        1,
         undefined,
         1,
         20,
@@ -342,7 +341,6 @@ describe('AdminController', () => {
       );
 
       expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(
-        1,
         undefined,
         1,
         20,
@@ -358,7 +356,6 @@ describe('AdminController', () => {
       );
 
       expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(
-        3,
         undefined,
         1,
         20,
@@ -585,7 +582,6 @@ describe('AdminController', () => {
       );
 
       expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(
-        2,
         undefined,
         1,
         20,
@@ -602,7 +598,6 @@ describe('AdminController', () => {
 
       // Should extract admin ID from request
       expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(
-        1,
         undefined,
         1,
         20,

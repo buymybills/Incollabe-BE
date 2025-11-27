@@ -32,6 +32,17 @@ import { EncryptionService } from '../../shared/services/encryption.service';
   paranoid: true,
 })
 export class Influencer extends Model {
+  @AllowNull(true)
+  @Column(DataType.INTEGER)
+  declare referralCredits: number;
+
+  @AllowNull(true)
+  @Column(DataType.STRING)
+  declare upiId: string;
+  @AllowNull(true)
+  @Unique
+  @Column(DataType.STRING)
+  declare referralCode: string;
   @PrimaryKey
   @AutoIncrement
   @Column(DataType.INTEGER)
@@ -188,6 +199,10 @@ export class Influencer extends Model {
   })
   declare isVerified: boolean;
 
+  @AllowNull(true)
+  @Column(DataType.DATE)
+  declare verifiedAt: Date;
+
   @AllowNull(false)
   @Column({
     type: DataType.BOOLEAN,
@@ -198,6 +213,22 @@ export class Influencer extends Model {
   @AllowNull(true)
   @Column(DataType.INTEGER)
   declare displayOrder: number;
+
+  // Pro Account Fields
+  @AllowNull(true)
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+  })
+  declare isPro: boolean;
+
+  @AllowNull(true)
+  @Column(DataType.DATE)
+  declare proActivatedAt: Date;
+
+  @AllowNull(true)
+  @Column(DataType.DATE)
+  declare proExpiresAt: Date;
 
   @AllowNull(true)
   @Column(DataType.DATE)
