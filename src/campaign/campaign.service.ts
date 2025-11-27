@@ -651,6 +651,16 @@ export class CampaignService {
   }> {
     const offset = (page - 1) * limit;
 
+    // Debug logging
+    console.log('getBrandCampaigns called with:', {
+      brandId,
+      page,
+      limit,
+      offset,
+      pageType: typeof page,
+      limitType: typeof limit,
+    });
+
     const { rows: campaigns, count: total } =
       await this.campaignModel.findAndCountAll({
         where: { brandId, isActive: true },
@@ -672,6 +682,14 @@ export class CampaignService {
         limit,
         offset,
       });
+
+    console.log('Query result:', {
+      campaignsReturned: campaigns.length,
+      total,
+      page,
+      limit,
+      offset,
+    });
 
     // Add application count to each campaign and transform field names
     const campaignsWithStats = campaigns.map((campaign) => {
@@ -933,22 +951,15 @@ export class CampaignService {
     );
 
     for (const influencer of influencersToNotify) {
-      // Send WhatsApp notification
-      try {
-        await this.whatsAppService.sendCampaignInvitation(
-          influencer.whatsappNumber,
-          influencer.name,
-          campaign.name,
-          brandName,
-          personalMessage,
-        );
-      } catch (error) {
-        console.error(
-          `Failed to send WhatsApp notification to influencer ${influencer.id}:`,
-          error,
-        );
-        // Continue with other influencers even if one fails
-      }
+      // Send WhatsApp notification asynchronously (fire-and-forget)
+      // Error handling is done internally by WhatsApp service
+      this.whatsAppService.sendCampaignInvitation(
+        influencer.whatsappNumber,
+        influencer.name,
+        campaign.name,
+        brandName,
+        personalMessage,
+      );
 
       // Send push notification
       if (influencer.fcmToken) {
@@ -988,7 +999,7 @@ export class CampaignService {
   }> {
     // Verify campaign exists and belongs to the brand
     const campaign = await this.campaignModel.findOne({
-      where: { id: campaignId, brandId, isActive: true },
+      where: { id: campaignId, brandId },
     });
 
     if (!campaign) {
@@ -1438,7 +1449,7 @@ export class CampaignService {
   ): Promise<CampaignApplication> {
     // Verify campaign exists and belongs to the brand
     const campaign = await this.campaignModel.findOne({
-      where: { id: campaignId, brandId, isActive: true },
+      where: { id: campaignId, brandId },
       include: [
         {
           model: Brand,
@@ -1511,86 +1522,78 @@ export class CampaignService {
       reviewedAt: new Date(),
     });
 
-    console.log('Attempting to send WhatsApp notification:', {
-      hasInfluencer: !!influencer,
-      hasWhatsappNumber: !!influencer?.whatsappNumber,
-      status: updateStatusDto.status,
-      influencerName: influencer?.name,
-      campaignName: campaign.name,
-      brandName,
-    });
-
-    // Send WhatsApp notifications
+    // Send WhatsApp notifications asynchronously (fire-and-forget)
     if (influencer && influencer.whatsappNumber) {
+      let whatsappPromise: Promise<void> | null = null;
+
       switch (updateStatusDto.status) {
         case ApplicationStatus.UNDER_REVIEW:
-          console.log('Sending UNDER_REVIEW notification...');
-          await this.whatsAppService.sendCampaignApplicationUnderReview(
-            influencer.whatsappNumber,
-            influencer.name,
-            campaign.name,
-            brandName,
-          );
+          whatsappPromise =
+            this.whatsAppService.sendCampaignApplicationUnderReview(
+              influencer.whatsappNumber,
+              influencer.name,
+              campaign.name,
+              brandName,
+            );
           break;
 
         case ApplicationStatus.SELECTED:
-          console.log('Sending SELECTED notification...');
-          await this.whatsAppService.sendCampaignApplicationSelected(
-            influencer.whatsappNumber,
-            influencer.name,
-            campaign.name,
-            brandName,
-            updateStatusDto.reviewNotes,
-          );
+          whatsappPromise =
+            this.whatsAppService.sendCampaignApplicationSelected(
+              influencer.whatsappNumber,
+              influencer.name,
+              campaign.name,
+              brandName,
+              updateStatusDto.reviewNotes,
+            );
           break;
 
         case ApplicationStatus.REJECTED:
-          console.log('Sending REJECTED notification...');
-          await this.whatsAppService.sendCampaignApplicationRejected(
-            influencer.whatsappNumber,
-            influencer.name,
-            campaign.name,
-            brandName,
-            updateStatusDto.reviewNotes,
-          );
+          whatsappPromise =
+            this.whatsAppService.sendCampaignApplicationRejected(
+              influencer.whatsappNumber,
+              influencer.name,
+              campaign.name,
+              brandName,
+              updateStatusDto.reviewNotes,
+            );
           break;
       }
-      console.log('WhatsApp notification sent successfully');
-    } else {
-      console.log(
-        'Skipping WhatsApp notification - missing influencer or phone number',
-      );
+
+      if (whatsappPromise) {
+        whatsappPromise.catch((error) => {
+          console.error('Failed to send WhatsApp notification:', error);
+        });
+      }
     }
 
-    // Send push notifications to influencer
+    // Send push notifications to influencer asynchronously (fire-and-forget)
     if (influencer && influencer.fcmToken) {
-      try {
-        let pushStatus: string;
-        switch (updateStatusDto.status) {
-          case ApplicationStatus.UNDER_REVIEW:
-            pushStatus = 'pending';
-            break;
-          case ApplicationStatus.SELECTED:
-            pushStatus = 'approved';
-            break;
-          case ApplicationStatus.REJECTED:
-            pushStatus = 'rejected';
-            break;
-          default:
-            pushStatus = updateStatusDto.status;
-        }
+      let pushStatus: string;
+      switch (updateStatusDto.status) {
+        case ApplicationStatus.UNDER_REVIEW:
+          pushStatus = 'pending';
+          break;
+        case ApplicationStatus.SELECTED:
+          pushStatus = 'approved';
+          break;
+        case ApplicationStatus.REJECTED:
+          pushStatus = 'rejected';
+          break;
+        default:
+          pushStatus = updateStatusDto.status;
+      }
 
-        await this.notificationService.sendCampaignStatusUpdate(
+      this.notificationService
+        .sendCampaignStatusUpdate(
           influencer.fcmToken,
           campaign.name,
           pushStatus,
           brandName,
-        );
-        console.log('Push notification sent successfully to influencer');
-      } catch (error) {
-        console.error('Failed to send push notification to influencer:', error);
-        // Don't fail the status update if notification fails
-      }
+        )
+        .catch((error) => {
+          console.error('Failed to send push notification to influencer:', error);
+        });
     }
 
     // Return updated application with influencer details

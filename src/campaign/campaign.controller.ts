@@ -453,8 +453,8 @@ export class CampaignController {
   })
   async getMyBrandCampaigns(
     @Req() req: RequestWithUser,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
+    @Query('page', new ParseIntPipe({ optional: true })) page: number = 1,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit: number = 10,
   ) {
     if (req.user.userType !== 'brand') {
       throw new ForbiddenException('Only brands can access this endpoint');
@@ -1379,15 +1379,11 @@ export class CampaignController {
       );
     }
 
-    const response = await this.campaignService.getCampaignApplications(
+    return await this.campaignService.getCampaignApplications(
       campaignId,
       getApplicationsDto,
       req.user.id,
     );
-
-    console.log('Campaign Applications Response:', JSON.stringify(response, null, 2));
-
-    return response;
   }
 
   @Get(':campaignId/applications/influencer/:influencerId')

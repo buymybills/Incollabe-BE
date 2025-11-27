@@ -24,6 +24,13 @@ import { AuditActionType } from './models/audit-log.model';
 import { ProfileReviewDto } from './dto/profile-review.dto';
 import { Op } from 'sequelize';
 
+interface CampaignCountResult {
+  brandId: number;
+  count: string;
+}
+
+type ProfileData = Record<string, unknown>;
+
 @Injectable()
 export class ProfileReviewService {
   constructor(
@@ -117,96 +124,122 @@ export class ProfileReviewService {
         offset,
       });
 
-    // Fetch actual profile data
-    const enrichedProfiles = await Promise.all(
-      profiles.map(async (review) => {
-        let profileData: any = null;
+    // Batch fetch profile data to avoid N+1 queries
+    const brandIds = profiles
+      .filter((r) => r.profileType === ProfileType.BRAND)
+      .map((r) => r.profileId);
+    const influencerIds = profiles
+      .filter((r) => r.profileType === ProfileType.INFLUENCER)
+      .map((r) => r.profileId);
 
-        if (review.profileType === ProfileType.BRAND) {
-          profileData = await this.brandModel.findByPk(review.profileId, {
-            attributes: [
-              'id',
-              'brandName',
-              'email',
-              'legalEntityName',
-              'websiteUrl',
-              'profileImage',
-              'isProfileCompleted',
-              'username',
-            ],
-            include: [
-              {
-                model: this.nicheModel,
-                as: 'niches',
-                attributes: [
-                  'id',
-                  'name',
-                  'description',
-                  'logoNormal',
-                  'logoDark',
-                ],
-                through: { attributes: [] },
-              },
-              {
-                model: this.cityModel,
-                as: 'headquarterCity',
-                attributes: ['id', 'name', 'state'],
-              },
-            ],
-          });
+    // Fetch all brands in one query
+    const brandsMap = new Map<number, Brand>();
+    if (brandIds.length > 0) {
+      const brands = await this.brandModel.findAll({
+        where: { id: brandIds },
+        attributes: [
+          'id',
+          'brandName',
+          'email',
+          'legalEntityName',
+          'websiteUrl',
+          'profileImage',
+          'isProfileCompleted',
+          'username',
+        ],
+        include: [
+          {
+            model: this.nicheModel,
+            as: 'niches',
+            attributes: ['id', 'name', 'description', 'logoNormal', 'logoDark'],
+            through: { attributes: [] },
+          },
+          {
+            model: this.cityModel,
+            as: 'headquarterCity',
+            attributes: ['id', 'name', 'state'],
+          },
+        ],
+      });
+      brands.forEach((b) => brandsMap.set(b.id, b));
+    }
 
-          // Get campaign count for the brand
-          if (profileData) {
-            const campaignCount = await this.campaignModel.count({
-              where: { brandId: review.profileId },
-            });
-            profileData = {
-              ...profileData.toJSON(),
-              campaignCount,
-            };
-          }
-        } else if (review.profileType === ProfileType.INFLUENCER) {
-          profileData = await this.influencerModel.findByPk(review.profileId, {
-            attributes: [
-              'id',
-              'name',
-              'phone',
-              'username',
-              'profileImage',
-              'isProfileCompleted',
-              'gender',
-              'dateOfBirth',
-            ],
-            include: [
-              {
-                model: this.nicheModel,
-                as: 'niches',
-                attributes: [
-                  'id',
-                  'name',
-                  'description',
-                  'logoNormal',
-                  'logoDark',
-                ],
-                through: { attributes: [] },
-              },
-              {
-                model: this.cityModel,
-                as: 'city',
-                attributes: ['id', 'name', 'state'],
-              },
-              {
-                model: this.countryModel,
-                as: 'country',
-                attributes: ['id', 'name', 'code'],
-              },
-            ],
-          });
+    // Fetch campaign counts for all brands in one query
+    const campaignCountsMap = new Map<number, number>();
+    if (brandIds.length > 0) {
+      const campaignCounts = (await this.campaignModel.findAll({
+        attributes: [
+          'brandId',
+          [this.campaignModel.sequelize!.fn('COUNT', '*'), 'count'],
+        ],
+        where: { brandId: brandIds },
+        group: ['brandId'],
+        raw: true,
+      })) as unknown as CampaignCountResult[];
+
+      campaignCounts.forEach((row) => {
+        campaignCountsMap.set(row.brandId, parseInt(row.count));
+      });
+    }
+
+    // Fetch all influencers in one query
+    const influencersMap = new Map<number, Influencer>();
+    if (influencerIds.length > 0) {
+      const influencers = await this.influencerModel.findAll({
+        where: { id: influencerIds },
+        attributes: [
+          'id',
+          'name',
+          'phone',
+          'username',
+          'profileImage',
+          'isProfileCompleted',
+          'gender',
+          'dateOfBirth',
+        ],
+        include: [
+          {
+            model: this.nicheModel,
+            as: 'niches',
+            attributes: ['id', 'name', 'description', 'logoNormal', 'logoDark'],
+            through: { attributes: [] },
+          },
+          {
+            model: this.cityModel,
+            as: 'city',
+            attributes: ['id', 'name', 'state'],
+          },
+          {
+            model: this.countryModel,
+            as: 'country',
+            attributes: ['id', 'name', 'code'],
+          },
+        ],
+      });
+      influencers.forEach((i) => influencersMap.set(i.id, i));
+    }
+
+    // Map profiles to enriched data
+    const enrichedProfiles = profiles.map((review) => {
+      let profileData: ProfileData | null = null;
+
+      if (review.profileType === ProfileType.BRAND) {
+        const brand = brandsMap.get(review.profileId);
+        if (brand) {
+          profileData = {
+            ...brand.toJSON(),
+            campaignCount: campaignCountsMap.get(review.profileId) || 0,
+          };
+        }
+      } else if (review.profileType === ProfileType.INFLUENCER) {
+        const influencer = influencersMap.get(review.profileId);
+        if (influencer) {
+          const influencerData = influencer.toJSON();
 
           // Calculate age from dateOfBirth if it exists
-          if (profileData && profileData.dateOfBirth) {
+          if (influencerData.dateOfBirth) {
             const today = new Date();
-            const birthDate = new Date(profileData.dateOfBirth);
+            const birthDate = new Date(influencerData.dateOfBirth as string | Date);
             let age = today.getFullYear() - birthDate.getFullYear();
             const monthDiff = today.getMonth() - birthDate.getMonth();
             if (
@@ -215,20 +248,18 @@ export class ProfileReviewService {
             ) {
               age--;
             }
-            // Add age to profileData
-            profileData = {
-              ...profileData.toJSON(),
-              age,
-            };
+            influencerData.age = age;
           }
-        }
 
-        return {
-          ...review.toJSON(),
-          profile: profileData,
-        };
-      }),
-    );
+          profileData = influencerData;
+        }
+      }
+
+      return {
+        ...review.toJSON(),
+        profile: profileData,
+      };
+    });
 
     return {
       data: enrichedProfiles,

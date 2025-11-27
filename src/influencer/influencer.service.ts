@@ -148,18 +148,21 @@ export class InfluencerService {
         // If profile just became complete and hasn't been submitted, create review
         if (!hasBeenSubmitted) {
           await this.createProfileReview(influencerId);
-          // Send verification pending notification
+          // Send verification pending notification asynchronously (fire-and-forget)
+          // Error handling is done internally by WhatsApp service
           if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-            await this.whatsAppService.sendProfileVerificationPending(
+            this.whatsAppService.sendProfileVerificationPending(
               influencer.whatsappNumber,
               influencer.name,
             );
           }
         }
-        // Refresh influencer data with updated flag
-        influencer = await this.influencerRepository.findById(influencerId);
-        if (!influencer) {
-          throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
+        // Refetch influencer to get updated state from database
+        const updatedInfluencer = await this.influencerRepository.findById(
+          influencerId,
+        );
+        if (updatedInfluencer) {
+          influencer = updatedInfluencer;
         }
       }
       // else: latest review is rejected, require explicit resubmission
@@ -840,7 +843,8 @@ export class InfluencerService {
       type: 'phone',
     });
 
-    // Send OTP via WhatsApp
+    // Send OTP via WhatsApp (wait for delivery confirmation)
+    // If this fails, error will be caught by global exception handler
     await this.whatsAppService.sendOTP(whatsappNumber, otp);
 
     return {
@@ -1292,28 +1296,28 @@ export class InfluencerService {
       status: ApplicationStatus.APPLIED,
     } as any);
 
-    // Send WhatsApp notification to influencer
-    await this.whatsAppService.sendCampaignApplicationConfirmation(
+    // Send WhatsApp notification to influencer asynchronously (fire-and-forget)
+    // Error handling is done internally by WhatsApp service
+    this.whatsAppService.sendCampaignApplicationConfirmation(
       influencer.whatsappNumber,
       influencer.name,
       campaign.name,
       campaign.brand?.brandName || 'Brand',
     );
 
-    // Send push notification to brand owner about new application
-    try {
-      const brand = campaign.brand;
-      if (brand?.fcmToken) {
-        await this.notificationService.sendNewApplicationNotification(
+    // Send push notification to brand owner about new application asynchronously (fire-and-forget)
+    const brand = campaign.brand;
+    if (brand?.fcmToken) {
+      this.notificationService
+        .sendNewApplicationNotification(
           brand.fcmToken,
           influencer.name,
           campaign.name,
           influencer.id.toString(),
-        );
-      }
-    } catch (error) {
-      console.error('Failed to send push notification to brand:', error);
-      // Don't fail the application if notification fails
+        )
+        .catch((error) => {
+          console.error('Failed to send push notification to brand:', error);
+        });
     }
 
     return {
@@ -1334,7 +1338,15 @@ export class InfluencerService {
   async getMyApplications(
     influencerId: number,
     status?: string,
-  ): Promise<MyApplicationResponseDto[]> {
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<{
+    applications: MyApplicationResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
     const whereClause: any = { influencerId };
 
     // Add status filter if provided
@@ -1342,47 +1354,76 @@ export class InfluencerService {
       whereClause.status = status;
     }
 
-    const applications = await this.campaignApplicationModel.findAll({
-      where: whereClause,
-      include: [
-        {
-          model: Campaign,
-          attributes: [
-            'id',
-            'name',
-            'description',
-            'status',
-            'type',
-            'category',
-          ],
-          include: [
-            {
-              model: Brand,
-              attributes: ['id', 'brandName', 'profileImage'],
-            },
-            {
-              model: CampaignDeliverable,
-              attributes: ['platform', 'type', 'budget', 'quantity'],
-            },
-          ],
-        },
-      ],
-      order: [['createdAt', 'DESC']],
-    });
+    // Calculate offset for pagination
+    const offset = (page - 1) * limit;
 
-    return applications.map((app) => {
+    // Get total count and applications with pagination
+    const { count, rows: applications } =
+      await this.campaignApplicationModel.findAndCountAll({
+        where: whereClause,
+        include: [
+          {
+            model: Campaign,
+            attributes: [
+              'id',
+              'name',
+              'description',
+              'status',
+              'type',
+              'category',
+              'deliverableFormat',
+            ],
+            include: [
+              {
+                model: Brand,
+                attributes: ['id', 'brandName', 'profileImage'],
+              },
+              {
+                model: CampaignDeliverable,
+                attributes: ['platform', 'type', 'budget', 'quantity'],
+              },
+            ],
+          },
+        ],
+        order: [['createdAt', 'DESC']],
+        limit,
+        offset,
+      });
+
+    const mappedApplications = applications.map((app) => {
       const appData = app.toJSON();
+
+      // Transform campaign field names to match API conventions
+      const transformedCampaign = {
+        ...appData.campaign,
+        deliverables: appData.campaign.deliverableFormat, // Rename deliverableFormat to deliverables
+        collaborationCost: appData.campaign.deliverables, // Rename deliverables array to collaborationCost
+      };
+
+      // Remove old field name (TypeScript workaround)
+      delete (transformedCampaign as any).deliverableFormat;
+
       return {
         id: appData.id,
         status: appData.status,
         coverLetter: appData.coverLetter,
-        proposalMessage: appData.proposalMessage,
+        proposalMessage: appData.proposalMessage, 
         createdAt: appData.createdAt,
         reviewedAt: appData.reviewedAt,
         reviewNotes: appData.reviewNotes,
-        campaign: appData.campaign,
+        campaign: transformedCampaign as any, // Type assertion to fix deliverables type mismatch
       };
     });
+
+    const totalPages = Math.ceil(count / limit);
+
+    return {
+      applications: mappedApplications as MyApplicationResponseDto[],
+      total: count,
+      page,
+      limit,
+      totalPages,
+    };
   }
 
   async withdrawApplication(

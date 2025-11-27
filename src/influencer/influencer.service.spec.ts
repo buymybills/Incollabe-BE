@@ -480,6 +480,7 @@ describe('InfluencerService', () => {
         mockUpdatedProfile,
       );
       mockProfileReview.create.mockResolvedValue({});
+      mockWhatsAppService.sendProfileVerificationPending.mockResolvedValue(true);
 
       // Mock admin data for notification
       mockAdminModel.findAll.mockResolvedValue([
@@ -585,7 +586,7 @@ describe('InfluencerService', () => {
 
       expect(result.message).toBe(SUCCESS_MESSAGES.WHATSAPP.OTP_SENT);
       expect(result.whatsappNumber).toBe(whatsappOtpRequest.whatsappNumber);
-      expect(result.otp).toBe(mockOtp);
+      expect(result.otp).toBe(mockOtp); // OTP is returned in response
       expect(whatsAppService.sendOTP).toHaveBeenCalledWith(
         whatsappOtpRequest.whatsappNumber,
         mockOtp,
@@ -602,7 +603,7 @@ describe('InfluencerService', () => {
       );
     });
 
-    it('should handle WhatsApp service failures', async () => {
+    it('should throw error when WhatsApp service fails', async () => {
       const mockInfluencer = { id: 1, name: 'Test Influencer' };
       const mockOtp = '123456';
 
@@ -614,6 +615,7 @@ describe('InfluencerService', () => {
         new Error('WhatsApp API error'),
       );
 
+      // Should throw error when WhatsApp delivery fails
       await expect(
         service.sendWhatsAppVerificationOTP(whatsappOtpRequest),
       ).rejects.toThrow('WhatsApp API error');
