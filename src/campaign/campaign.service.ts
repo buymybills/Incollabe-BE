@@ -999,7 +999,7 @@ export class CampaignService {
   }> {
     // Verify campaign exists and belongs to the brand
     const campaign = await this.campaignModel.findOne({
-      where: { id: campaignId, brandId, isActive: true },
+      where: { id: campaignId, brandId },
     });
 
     if (!campaign) {
