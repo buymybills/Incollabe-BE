@@ -1449,7 +1449,7 @@ export class CampaignService {
   ): Promise<CampaignApplication> {
     // Verify campaign exists and belongs to the brand
     const campaign = await this.campaignModel.findOne({
-      where: { id: campaignId, brandId, isActive: true },
+      where: { id: campaignId, brandId },
       include: [
         {
           model: Brand,
