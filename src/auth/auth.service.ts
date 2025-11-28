@@ -531,12 +531,15 @@ export class AuthService {
     // Referral code logic (only allow influencer referral codes for influencer signups)
     let referrerInfluencerId: number | undefined;
     if (referralCode) {
+      console.log(`🔍 Checking referral code: ${referralCode}`);
       const referrer = await this.influencerModel.findOne({
         where: { referralCode },
       });
       if (!referrer) {
+        console.log(`❌ Invalid referral code: ${referralCode} - No influencer found with this code`);
         throw new BadRequestException('Invalid referral code');
       }
+      console.log(`✅ Valid referral code found: ${referralCode} - Referrer ID: ${referrer.id}, Name: ${referrer.name}`);
       // Check monthly usage limit (max 5 per calendar month)
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
@@ -555,12 +558,16 @@ export class AuthService {
           },
         },
       });
+      console.log(`📊 Referral code monthly usage: ${usageCount}/5 for ${referralCode}`);
       if (usageCount >= 5) {
+        console.log(`⚠️ Referral code usage limit reached for ${referralCode}`);
         throw new BadRequestException(
           'Referral code usage limit reached for this month',
         );
       }
       referrerInfluencerId = referrer.id;
+    } else {
+      console.log(`ℹ️ No referral code provided during signup`);
     }
 
     // Upload profile image to S3 if provided
