@@ -270,6 +270,40 @@ export class MaxCampaignPaymentService {
   }
 
   /**
+   * Get all invoices for a brand (billing history)
+   */
+  async getBillingHistory(brandId: number) {
+    const invoices = await this.maxCampaignInvoiceModel.findAll({
+      where: { brandId },
+      include: [
+        {
+          model: Campaign,
+          as: 'campaign',
+          attributes: ['id', 'name'],
+        },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+
+    return {
+      invoices: invoices.map((invoice) => ({
+        id: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        campaignId: invoice.campaignId,
+        campaignName: invoice.campaign?.name,
+        amount: invoice.totalAmount / 100, // Convert paise to rupees
+        status: invoice.paymentStatus,
+        paymentMethod: invoice.paymentMethod,
+        razorpayOrderId: invoice.razorpayOrderId,
+        razorpayPaymentId: invoice.razorpayPaymentId,
+        paidAt: toIST(invoice.paidAt),
+        invoiceUrl: invoice.invoiceUrl,
+        createdAt: toIST(invoice.createdAt),
+      })),
+    };
+  }
+
+  /**
    * Get invoice details
    */
   async getInvoiceDetails(invoiceId: number, brandId: number) {
