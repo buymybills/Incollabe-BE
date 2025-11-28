@@ -54,6 +54,8 @@ import * as crypto from 'crypto';
 import { Gender } from '../auth/types/gender.enum';
 import { CustomNicheService } from '../shared/services/custom-niche.service';
 import { UserType as CustomNicheUserType } from '../auth/model/custom-niche.model';
+import { CreditTransaction } from 'src/admin/models/credit-transaction.model';
+import { InfluencerReferralUsage } from 'src/auth/model/influencer-referral-usage.model';
 
 // Private types for InfluencerService
 type WhatsAppOtpRequest = {
@@ -114,6 +116,10 @@ export class InfluencerService {
     @Inject('CUSTOM_NICHE_MODEL')
     private readonly customNicheModel: typeof CustomNiche,
     private readonly customNicheService: CustomNicheService,
+    @Inject('CREDIT_TRANSACTION_MODEL')
+    private readonly creditTransactionModel: typeof CreditTransaction,
+    @Inject('INFLUENCER_REFERRAL_USAGE_MODEL')
+    private readonly influencerReferralUsageModel: typeof InfluencerReferralUsage,
   ) {}
 
   async getInfluencerProfile(
@@ -1082,6 +1088,7 @@ export class InfluencerService {
     }
 
     // Add niche filter to WHERE condition if nicheIds are available
+    // This creates: campaign.nicheIds @> '[1]' OR campaign.nicheIds @> '[2]' OR ...
     if (nicheIdsToFilter.length > 0) {
       const nicheConditions = nicheIdsToFilter.map((nicheId) =>
         literal(`"Campaign"."nicheIds"::jsonb @> '[${nicheId}]'::jsonb`),
@@ -2072,6 +2079,101 @@ export class InfluencerService {
       page,
       limit,
       totalPages: Math.ceil(influencersWithMetrics.length / limit),
+    };
+  }
+
+  async getReferralRewards(influencerId: number, page: number = 1, limit: number = 10) {
+    // Get influencer to fetch total referral credits
+    const influencer = await this.influencerRepository.findById(influencerId);
+    if (!influencer) {
+      throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
+    }
+
+    const allTransactions = await this.creditTransactionModel.findAll({
+      where: { influencerId },
+      attributes: ['amount', 'paymentStatus'],
+      raw: true,
+    });
+
+    // Calculate summary
+    const lifetimeReward = allTransactions.reduce((sum: number, tx: any) => sum + tx.amount, 0);
+    const redeemed = allTransactions
+      .filter((tx: any) => tx.paymentStatus === 'paid')
+      .reduce((sum: number, tx: any) => sum + tx.amount, 0);
+    const redeemable = lifetimeReward - redeemed;
+
+    // Get paginated referral history
+    const offset = (page - 1) * limit;
+
+    // Get referrals with their details
+    const { count, rows: referralUsages } = await this.influencerReferralUsageModel.findAndCountAll({
+      where: { influencerId },
+      order: [['createdAt', 'DESC']],
+      limit,
+      offset,
+      raw: true,
+    });
+
+    // Get referred influencers details
+    const referredUserIds = referralUsages.map((r: any) => r.referredUserId);
+
+    // Use Influencer model directly to fetch multiple users
+    const referredInfluencers = referredUserIds.length > 0
+      ? await Influencer.findAll({
+          where: { id: { [Op.in]: referredUserIds } },
+          attributes: ['id', 'name', 'username', 'profileImage', 'isVerified'],
+          raw: true,
+        })
+      : [];
+
+    // Get credit transactions for these referrals
+    const creditTransactions = referredUserIds.length > 0
+      ? await this.creditTransactionModel.findAll({
+          where: {
+            influencerId,
+            referredUserId: { [Op.in]: referredUserIds },
+          },
+          raw: true,
+        })
+      : [];
+
+    // Create a map of referredUserId to transaction
+    const txMap = new Map();
+    creditTransactions.forEach((tx: any) => {
+      txMap.set(tx.referredUserId, tx);
+    });
+
+    // Build referral history
+    const referralHistory = referralUsages.map((usage: any) => {
+      const referredInfluencer = referredInfluencers.find((inf: any) => inf.id === usage.referredUserId);
+      const transaction = txMap.get(usage.referredUserId);
+
+      return {
+        id: referredInfluencer?.id || usage.referredUserId,
+        name: referredInfluencer?.name || 'Unknown',
+        username: referredInfluencer?.username || 'unknown',
+        profileImage: referredInfluencer?.profileImage || null,
+        isVerified: referredInfluencer?.isVerified || false,
+        joinedAt: usage.createdAt,
+        rewardEarned: transaction?.amount || 0,
+        rewardStatus: transaction?.paymentStatus || 'pending',
+        creditTransactionId: transaction?.id || null,
+      };
+    });
+
+    return {
+      summary: {
+        lifetimeReward,
+        redeemed,
+        redeemable,
+      },
+      referralHistory,
+      pagination: {
+        page,
+        limit,
+        total: count,
+        totalPages: Math.ceil(count / limit),
+      },
     };
   }
 }
