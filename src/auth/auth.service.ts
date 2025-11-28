@@ -651,6 +651,17 @@ export class AuthService {
           },
           { transaction },
         );
+        console.log(
+          `✅ Referral code used during signup:`,
+          JSON.stringify({
+            referralCode,
+            referrerInfluencerId,
+            newInfluencerId: createdInfluencer.id,
+            newInfluencerUsername: createdInfluencer.username,
+            newInfluencerName: createdInfluencer.name,
+            timestamp: new Date().toISOString(),
+          }),
+        );
       }
 
       return createdInfluencer;
