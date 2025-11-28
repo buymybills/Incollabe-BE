@@ -2394,4 +2394,22 @@ export class AuthService {
     results.totalPages = Math.ceil(results.total / limit);
     return results;
   }
+
+  /**
+   * Update FCM token for influencer
+   */
+  async updateFcmToken(userId: number, fcmToken: string) {
+    const influencer = await this.influencerModel.findByPk(userId);
+
+    if (!influencer) {
+      throw new NotFoundException('Influencer not found');
+    }
+
+    await influencer.update({ fcmToken });
+
+    return {
+      success: true,
+      message: 'FCM token updated successfully',
+    };
+  }
 }

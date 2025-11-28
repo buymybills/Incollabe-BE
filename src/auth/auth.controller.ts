@@ -28,6 +28,7 @@ import { AuthService } from './auth.service';
 import { RequestOtpDto } from './dto/request-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { InfluencerSignupDto } from './dto/influencer-signup.dto';
+import { UpdateFcmTokenDto } from './dto/update-fcm-token.dto';
 import { InfluencerSignupMultipartDto } from './dto/influencer-signup-multipart.dto';
 import { BrandSignupDto } from './dto/brand-signup.dto';
 import { BrandSignupMultipartDto } from './dto/brand-signup-multipart.dto';
@@ -1100,5 +1101,33 @@ export class AuthController {
     @Query('email') email?: string,
   ) {
     return this.authService.verifyAndDeleteAccount(userType, otp, phone, email);
+  }
+
+  @Post('influencer/update-fcm-token')
+  @ApiOperation({
+    summary: 'Update FCM token for influencer',
+    description:
+      'Update Firebase Cloud Messaging token for push notifications. No authentication required.',
+  })
+  @ApiBody({ type: UpdateFcmTokenDto })
+  @ApiResponse({
+    status: 200,
+    description: 'FCM token updated successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'FCM token updated successfully',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Influencer not found',
+  })
+  async updateFcmToken(@Body() updateFcmTokenDto: UpdateFcmTokenDto) {
+    return this.authService.updateFcmToken(
+      updateFcmTokenDto.userId,
+      updateFcmTokenDto.fcmToken,
+    );
   }
 }
