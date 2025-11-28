@@ -589,6 +589,42 @@ export class BrandController {
     );
   }
 
+  @Get('billing/history')
+  @ApiOperation({
+    summary: 'Get billing history',
+    description: 'Get all Max Campaign invoices and payment history for the brand',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Billing history retrieved successfully',
+    schema: {
+      example: {
+        invoices: [
+          {
+            id: 1,
+            invoiceNumber: 'MAXINV-202511-00001',
+            campaignId: 123,
+            campaignName: 'Summer Fashion Campaign',
+            amount: 299,
+            status: 'paid',
+            paymentMethod: 'razorpay',
+            razorpayOrderId: 'order_ABC123',
+            razorpayPaymentId: 'pay_XYZ789',
+            paidAt: '2025-11-04T10:30:00+05:30',
+            invoiceUrl: 'https://s3.amazonaws.com/invoices/...',
+            createdAt: '2025-11-04T10:25:00+05:30',
+          },
+        ],
+      },
+    },
+  })
+  async getBillingHistory(@Req() req: RequestWithUser) {
+    if (req.user.userType !== 'brand') {
+      throw new BadRequestException('Only brands can view billing history');
+    }
+    return await this.maxCampaignPaymentService.getBillingHistory(req.user.id);
+  }
+
   @Get('max-campaign/invoices/:invoiceId')
   @ApiOperation({
     summary: 'Get Max Campaign invoice',

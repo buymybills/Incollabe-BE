@@ -13,6 +13,7 @@ import { Influencer } from '../auth/model/influencer.model';
 import { Niche } from '../auth/model/niche.model';
 import { Brand } from '../brand/model/brand.model';
 import { CreditTransaction } from '../admin/models/credit-transaction.model';
+import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
 import { SharedModule } from '../shared/shared.module';
 import { Follow } from '../post/models/follow.model';
 import { Experience } from '../influencer/models/experience.model';
@@ -32,6 +33,7 @@ import { MaxCampaignInvoice } from './models/max-campaign-invoice.model';
       Influencer,
       Niche,
       CreditTransaction,
+      InfluencerReferralUsage,
       Follow,
       Experience,
       MaxCampaignInvoice,
