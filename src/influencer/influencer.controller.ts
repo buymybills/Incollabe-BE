@@ -1146,4 +1146,70 @@ export class InfluencerController {
       throw error;
     }
   }
+
+  // Referral Rewards Endpoints
+  @Get('referral-rewards')
+  @ApiOperation({
+    summary: 'Get referral rewards summary and history',
+    description:
+      'Fetch referral rewards summary (lifetime, redeemed, redeemable) and paginated list of referred influencers with reward details',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number for pagination (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Number of referrals per page (default: 10)',
+    example: 10,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Referral rewards retrieved successfully',
+    schema: {
+      example: {
+        summary: {
+          lifetimeReward: 2300,
+          redeemed: 1200,
+          redeemable: 1100,
+        },
+        referralHistory: [
+          {
+            id: 132,
+            name: 'Sneha Sharma',
+            username: 'sneha_s09',
+            profileImage: 'https://incollabstaging.s3.ap-south-1.amazonaws.com/...',
+            isVerified: true,
+            joinedAt: '2025-11-10T01:23:00.000Z',
+            rewardEarned: 100,
+            rewardStatus: 'paid',
+            creditTransactionId: 123,
+          },
+        ],
+        pagination: {
+          page: 1,
+          limit: 10,
+          total: 23,
+          totalPages: 3,
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Influencer not found' })
+  async getReferralRewards(
+    @Req() req: RequestWithUser,
+    @Query('page', new ParseIntPipe({ optional: true })) page: number = 1,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit: number = 10,
+  ) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can access referral rewards');
+    }
+    const influencerId = req.user.id;
+    return await this.influencerService.getReferralRewards(influencerId, page, limit);
+  }
 }

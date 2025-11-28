@@ -216,6 +216,22 @@ describe('InfluencerService', () => {
           provide: NotificationService,
           useValue: mockNotificationService,
         },
+        {
+          provide: 'CREDIT_TRANSACTION_MODEL',
+          useValue: {
+            findAll: jest.fn().mockResolvedValue([]),
+            findOne: jest.fn(),
+            create: jest.fn(),
+          },
+        },
+        {
+          provide: 'INFLUENCER_REFERRAL_USAGE_MODEL',
+          useValue: {
+            findAll: jest.fn().mockResolvedValue([]),
+            findOne: jest.fn(),
+            findAndCountAll: jest.fn().mockResolvedValue({ count: 0, rows: [] }),
+          },
+        },
       ],
     }).compile();
 

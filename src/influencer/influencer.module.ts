@@ -24,6 +24,8 @@ import { ProSubscription } from './models/pro-subscription.model';
 import { ProInvoice } from './models/pro-invoice.model';
 import { ProPaymentTransaction } from './models/pro-payment-transaction.model';
 import { ProSubscriptionService } from './services/pro-subscription.service';
+import { CreditTransaction } from '../admin/models/credit-transaction.model';
+import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
 
 @Module({
   imports: [
@@ -46,6 +48,8 @@ import { ProSubscriptionService } from './services/pro-subscription.service';
       ProSubscription,
       ProInvoice,
       ProPaymentTransaction,
+      CreditTransaction,
+      InfluencerReferralUsage,
     ]),
     SharedModule,
   ],
@@ -101,6 +105,14 @@ import { ProSubscriptionService } from './services/pro-subscription.service';
     {
       provide: 'CUSTOM_NICHE_MODEL',
       useValue: CustomNiche,
+    },
+    {
+      provide: 'CREDIT_TRANSACTION_MODEL',
+      useValue: CreditTransaction,
+    },
+    {
+      provide: 'INFLUENCER_REFERRAL_USAGE_MODEL',
+      useValue: InfluencerReferralUsage,
     },
   ],
   exports: [InfluencerService, InfluencerRepository, ProSubscriptionService],
