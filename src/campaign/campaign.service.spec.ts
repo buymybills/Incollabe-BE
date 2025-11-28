@@ -29,6 +29,7 @@ import { CampaignQueryService } from './services/campaign-query.service';
 import { NotificationService } from '../shared/notification.service';
 import { Experience } from '../influencer/models/experience.model';
 import { CreditTransaction } from '../admin/models/credit-transaction.model';
+import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
 
 const mockModel = () => ({
   findOne: jest.fn(),
@@ -132,6 +133,10 @@ describe('CampaignService', () => {
         },
         {
           provide: getModelToken(CreditTransaction),
+          useValue: mockModel(),
+        },
+        {
+          provide: getModelToken(InfluencerReferralUsage),
           useValue: mockModel(),
         },
       ],
