@@ -311,6 +311,8 @@ export class InfluencerService {
           proExpiresAt: proExpiresAtIST,
         },
         referralCode: influencer.referralCode || null,
+        referralCredits: influencer.referralCredits || 0,
+        upiId: influencer.upiId || null,
         profileCompletion,
       };
     }
@@ -407,17 +409,18 @@ export class InfluencerService {
       delete processedData.customNiches;
     }
 
-    // Handle social links - set to null only if explicitly provided as empty string
-    // This ensures that when a user removes a social link from their profile,
-    // it gets cleared, but when updating other fields, social links are preserved
-    const socialLinkFields = [
+    // Handle social links and upiId - set to null only if explicitly provided as empty string
+    // This ensures that when a user removes a social link or UPI ID from their profile,
+    // it gets cleared, but when updating other fields, these values are preserved
+    const clearableFields = [
       'instagramUrl',
       'youtubeUrl',
       'facebookUrl',
       'linkedinUrl',
       'twitterUrl',
+      'upiId',
     ];
-    socialLinkFields.forEach((field) => {
+    clearableFields.forEach((field) => {
       if (processedData[field] === '') {
         processedData[field] = null;
       } else if (processedData[field] === undefined) {

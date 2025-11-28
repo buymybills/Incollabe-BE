@@ -131,6 +131,11 @@ export class InfluencerController {
           type: 'string',
           description: 'WhatsApp number for verification',
         },
+        upiId: {
+          type: 'string',
+          description: 'UPI ID for receiving referral credits',
+          example: 'username@paytm',
+        },
 
         // Push Notifications
         fcmToken: {
@@ -241,6 +246,7 @@ export class InfluencerController {
         countryId: '1',
         cityId: '3',
         whatsappNumber: '9870541151',
+        upiId: 'username@paytm',
         fcmToken: 'dxyz123abc456def789ghi...',
         nicheIds: '[1,4,12]',
         customNiches: '["Sustainable Fashion","Tech Reviews"]',

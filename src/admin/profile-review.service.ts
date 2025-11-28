@@ -416,7 +416,22 @@ export class ProfileReviewService {
               });
 
               console.log(
-                `Referral credit awarded: ${newCredits} credits to influencer ${referrer.id} for referring ${influencer.id}`,
+                `✅ REFERRAL CREDIT AWARDED ✅`,
+              );
+              console.log(
+                `├─ Referrer ID: ${referrer.id} (${referrer.name})`,
+              );
+              console.log(
+                `├─ Referee ID: ${influencer.id} (${influencer.name})`,
+              );
+              console.log(
+                `├─ Amount Earned: Rs 100`,
+              );
+              console.log(
+                `├─ Total Credits Now: Rs ${newCredits}`,
+              );
+              console.log(
+                `└─ Timestamp: ${new Date().toISOString()}`,
               );
 
               // Send notification to referrer
