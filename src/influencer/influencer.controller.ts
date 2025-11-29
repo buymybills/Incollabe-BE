@@ -48,6 +48,12 @@ import {
   VerifySubscriptionPaymentDto,
   CancelSubscriptionDto,
 } from './dto/pro-subscription.dto';
+import { RedeemRewardsDto, RedeemRewardsResponseDto } from './dto/redeem-rewards.dto';
+import {
+  AddUpiIdDto,
+  SelectUpiIdDto,
+  GetUpiIdsResponseDto,
+} from './dto/upi-management.dto';
 import { RazorpayService } from '../shared/razorpay.service';
 
 @ApiTags('Influencer Profile')
@@ -1211,5 +1217,110 @@ export class InfluencerController {
     }
     const influencerId = req.user.id;
     return await this.influencerService.getReferralRewards(influencerId, page, limit);
+  }
+
+  @Post('redeem-rewards')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Redeem referral rewards',
+    description:
+      'Submit a redemption request for pending referral rewards. Optionally update UPI ID. Amount will be transferred within 24-48 hours.',
+  })
+  @ApiBody({ type: RedeemRewardsDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Redemption request submitted successfully',
+    type: RedeemRewardsResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request or no redeemable amount' })
+  @ApiResponse({ status: 404, description: 'Influencer not found' })
+  async redeemRewards(
+    @Req() req: RequestWithUser,
+    @Body() redeemRewardsDto: RedeemRewardsDto,
+  ) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can redeem rewards');
+    }
+    const influencerId = req.user.id;
+    return await this.influencerService.redeemRewards(influencerId, redeemRewardsDto.upiIdRecordId);
+  }
+
+  // ==================== UPI Management Endpoints ====================
+
+  @Get('upi-ids')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get all UPI IDs',
+    description: 'Fetch all UPI IDs for the influencer, ordered by selection status and last used',
+  })
+  @ApiResponse({ status: 200, description: 'List of UPI IDs', type: GetUpiIdsResponseDto })
+  async getUpiIds(@Req() req: RequestWithUser) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can access UPI IDs');
+    }
+    const influencerId = req.user.id;
+    return await this.influencerService.getInfluencerUpiIds(influencerId);
+  }
+
+  @Post('upi-ids')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Add new UPI ID',
+    description: 'Add a new UPI ID for the influencer. Optionally set it as selected for current transaction',
+  })
+  @ApiBody({ type: AddUpiIdDto })
+  @ApiResponse({ status: 201, description: 'UPI ID added successfully' })
+  @ApiResponse({ status: 400, description: 'UPI ID already exists' })
+  async addUpiId(@Req() req: RequestWithUser, @Body() addUpiIdDto: AddUpiIdDto) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can add UPI IDs');
+    }
+    const influencerId = req.user.id;
+    return await this.influencerService.addUpiId(
+      influencerId,
+      addUpiIdDto.upiId,
+      addUpiIdDto.setAsSelected,
+    );
+  }
+
+  @Put('upi-ids/select')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Select UPI ID for transaction',
+    description: 'Select a UPI ID to use for the current redemption transaction',
+  })
+  @ApiBody({ type: SelectUpiIdDto })
+  @ApiResponse({ status: 200, description: 'UPI ID selected successfully' })
+  @ApiResponse({ status: 404, description: 'UPI ID not found' })
+  async selectUpiId(@Req() req: RequestWithUser, @Body() selectUpiIdDto: SelectUpiIdDto) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can select UPI IDs');
+    }
+    const influencerId = req.user.id;
+    return await this.influencerService.selectUpiIdForTransaction(
+      influencerId,
+      selectUpiIdDto.upiIdRecordId,
+    );
+  }
+
+  @Delete('upi-ids/:upiIdRecordId')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Delete UPI ID',
+    description: 'Delete a UPI ID. Cannot delete if it is the only UPI ID and there are pending transactions',
+  })
+  @ApiParam({ name: 'upiIdRecordId', type: Number, description: 'UPI ID record ID' })
+  @ApiResponse({ status: 200, description: 'UPI ID deleted successfully' })
+  @ApiResponse({ status: 400, description: 'Cannot delete the only UPI ID with pending transactions' })
+  @ApiResponse({ status: 404, description: 'UPI ID not found' })
+  async deleteUpiId(
+    @Req() req: RequestWithUser,
+    @Param('upiIdRecordId', ParseIntPipe) upiIdRecordId: number,
+  ) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can delete UPI IDs');
+    }
+    const influencerId = req.user.id;
+    return await this.influencerService.deleteUpiId(influencerId, upiIdRecordId);
   }
 }

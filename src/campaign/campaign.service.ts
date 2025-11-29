@@ -25,8 +25,9 @@ import { InviteInfluencersDto } from './dto/invite-influencers.dto';
 import { Brand } from '../brand/model/brand.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Niche } from '../auth/model/niche.model';
-import { CreditTransaction, CreditTransactionType, PaymentStatus } from '../admin/models/credit-transaction.model';
-import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
+// REMOVED: Imports only needed for early selection bonus feature (now disabled)
+// import { CreditTransactionType, PaymentStatus } from '../admin/models/credit-transaction.model';
+// import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
 import { InvitationStatus } from './models/campaign-invitation.model';
 import { Gender } from '../auth/types/gender.enum';
 import { WhatsAppService } from '../shared/whatsapp.service';
@@ -63,10 +64,11 @@ export class CampaignService {
     private readonly followModel: typeof Follow,
     @InjectModel(Experience)
     private readonly experienceModel: typeof Experience,
-    @InjectModel(CreditTransaction)
-    private readonly creditTransactionModel: typeof CreditTransaction,
-    @InjectModel(InfluencerReferralUsage)
-    private readonly influencerReferralUsageModel: typeof InfluencerReferralUsage,
+    // REMOVED: Models only needed for early selection bonus feature (now disabled)
+    // @InjectModel(CreditTransaction)
+    // private readonly creditTransactionModel: typeof CreditTransaction,
+    // @InjectModel(InfluencerReferralUsage)
+    // private readonly influencerReferralUsageModel: typeof InfluencerReferralUsage,
     private readonly whatsAppService: WhatsAppService,
     private readonly notificationService: NotificationService,
     private readonly campaignQueryService: CampaignQueryService,
@@ -1529,185 +1531,187 @@ export class CampaignService {
       reviewedAt: new Date(),
     });
 
+    // COMMENTED OUT: Early selection bonus feature temporarily disabled
     // Award early selection bonus if influencer gets selected within 36 hours of verification
     // IMPORTANT: Only award to influencers who joined through referral
-    if (updateStatusDto.status === ApplicationStatus.SELECTED && influencer) {
-      const fullInfluencer = await this.influencerModel.findByPk(influencer.id);
-      if (fullInfluencer && fullInfluencer.verifiedAt) {
-        // Check if influencer joined through referral (regardless of credit status)
-        const referralUsage = await this.influencerReferralUsageModel.findOne({
-          where: {
-            referredUserId: fullInfluencer.id,
-          },
-        });
+    // if (updateStatusDto.status === ApplicationStatus.SELECTED && influencer) {
+    //   const fullInfluencer = await this.influencerModel.findByPk(influencer.id);
+    //   if (fullInfluencer && fullInfluencer.verifiedAt) {
+    //     // Check if influencer joined through referral (regardless of credit status)
+    //     const referralUsage = await this.influencerReferralUsageModel.findOne({
+    //       where: {
+    //         referredUserId: fullInfluencer.id,
+    //       },
+    //     });
 
-        // Only proceed if influencer joined through referral
-        if (referralUsage) {
-          const verificationTime = new Date(fullInfluencer.verifiedAt).getTime();
-          const currentTime = new Date().getTime();
-          const hoursSinceVerification =
-            (currentTime - verificationTime) / (1000 * 60 * 60);
+    //     // Only proceed if influencer joined through referral
+    //     if (referralUsage) {
+    //       const verificationTime = new Date(fullInfluencer.verifiedAt).getTime();
+    //       const currentTime = new Date().getTime();
+    //       const hoursSinceVerification =
+    //         (currentTime - verificationTime) / (1000 * 60 * 60);
 
-          // Check if within 36 hours of verification
-          if (hoursSinceVerification <= 36) {
-            // Check if bonus already awarded for this campaign
-            const existingBonus = await this.creditTransactionModel.findOne({
-              where: {
-                influencerId: fullInfluencer.id,
-                campaignId: campaign.id,
-                transactionType: CreditTransactionType.EARLY_SELECTION_BONUS,
-              },
-            });
+    //       // Check if within 36 hours of verification
+    //       if (hoursSinceVerification <= 36) {
+    //         // Check if bonus already awarded for this campaign
+    //         const existingBonus = await this.creditTransactionModel.findOne({
+    //           where: {
+    //             influencerId: fullInfluencer.id,
+    //             campaignId: campaign.id,
+    //             transactionType: CreditTransactionType.EARLY_SELECTION_BONUS,
+    //           },
+    //         });
 
-            if (!existingBonus) {
-              const currentCredits = fullInfluencer.referralCredits || 0;
-              const newCredits = currentCredits + 100;
+    //         if (!existingBonus) {
+    //           const currentCredits = fullInfluencer.referralCredits || 0;
+    //           const newCredits = currentCredits + 100;
 
-              // Award Rs 100 credit
-              await this.influencerModel.update(
-                { referralCredits: newCredits },
-                { where: { id: fullInfluencer.id } },
-              );
+    //           // Award Rs 100 credit
+    //           await this.influencerModel.update(
+    //             { referralCredits: newCredits },
+    //             { where: { id: fullInfluencer.id } },
+    //           );
 
-              // Log credit transaction for admin records
-              await this.creditTransactionModel.create({
-                influencerId: fullInfluencer.id,
-                transactionType: CreditTransactionType.EARLY_SELECTION_BONUS,
-                amount: 100,
-                paymentStatus: PaymentStatus.PENDING,
-                description: `Early selection bonus for campaign "${campaign.name}" (referred influencer selected within 36 hours of verification)`,
-                campaignId: campaign.id,
-                upiId: fullInfluencer.upiId || null,
-              });
+    //           // Log credit transaction for admin records
+    //           await this.creditTransactionModel.create({
+    //             influencerId: fullInfluencer.id,
+    //             transactionType: CreditTransactionType.EARLY_SELECTION_BONUS,
+    //             amount: 100,
+    //             paymentStatus: PaymentStatus.PENDING,
+    //             description: `Early selection bonus for campaign "${campaign.name}" (referred influencer selected within 36 hours of verification)`,
+    //             campaignId: campaign.id,
+    //             upiId: fullInfluencer.upiId || null,
+    //           });
 
-              // Send notification about the early selection bonus
-              if (fullInfluencer.whatsappNumber) {
-                const bonusMessage = `🎉 Congratulations ${fullInfluencer.name}! You've been selected for the campaign "${campaign.name}" within 36 hours of your profile verification. You've earned an early bird bonus of Rs 100! Your total credits are now Rs ${newCredits}. Keep up the great work!`;
-                await this.whatsAppService.sendReferralCreditNotification(
-                  fullInfluencer.whatsappNumber,
-                  bonusMessage,
-                );
-              }
+    //           // Send notification about the early selection bonus
+    //           if (fullInfluencer.whatsappNumber) {
+    //             const bonusMessage = `🎉 Congratulations ${fullInfluencer.name}! You've been selected for the campaign "${campaign.name}" within 36 hours of your profile verification. You've earned an early bird bonus of Rs 100! Your total credits are now Rs ${newCredits}. Keep up the great work!`;
+    //             await this.whatsAppService.sendReferralCreditNotification(
+    //               fullInfluencer.whatsappNumber,
+    //               bonusMessage,
+    //             );
+    //           }
 
-              console.log('✅ Early selection bonus awarded:', {
-                influencerId: fullInfluencer.id,
-                influencerName: fullInfluencer.name,
-                campaignId: campaign.id,
-                campaignName: campaign.name,
-                hoursSinceVerification: hoursSinceVerification.toFixed(2),
-                bonusAmount: 100,
-                newCredits,
-                referralCode: referralUsage.referralCode,
-              });
-            } else {
-              console.log('⚠️ Early selection bonus already awarded for this campaign:', {
-                influencerId: fullInfluencer.id,
-                campaignId: campaign.id,
-              });
-            }
-          } else {
-            console.log('⏰ Influencer not eligible for early selection bonus - beyond 36 hours:', {
-              influencerId: fullInfluencer.id,
-              hoursSinceVerification: hoursSinceVerification.toFixed(2),
-            });
-          }
-        } else {
-          console.log('ℹ️ Influencer not eligible for early selection bonus - did not join through referral:', {
-            influencerId: fullInfluencer.id,
-          });
-        }
-      }
-    }
+    //           console.log('✅ Early selection bonus awarded:', {
+    //             influencerId: fullInfluencer.id,
+    //             influencerName: fullInfluencer.name,
+    //             campaignId: campaign.id,
+    //             campaignName: campaign.name,
+    //             hoursSinceVerification: hoursSinceVerification.toFixed(2),
+    //             bonusAmount: 100,
+    //             newCredits,
+    //             referralCode: referralUsage.referralCode,
+    //           });
+    //         } else {
+    //           console.log('⚠️ Early selection bonus already awarded for this campaign:', {
+    //             influencerId: fullInfluencer.id,
+    //             campaignId: campaign.id,
+    //           });
+    //         }
+    //       } else {
+    //         console.log('⏰ Influencer not eligible for early selection bonus - beyond 36 hours:', {
+    //           influencerId: fullInfluencer.id,
+    //           hoursSinceVerification: hoursSinceVerification.toFixed(2),
+    //         });
+    //       }
+    //     } else {
+    //       console.log('ℹ️ Influencer not eligible for early selection bonus - did not join through referral:', {
+    //         influencerId: fullInfluencer.id,
+    //       });
+    //     }
+    //   }
+    // }
 
+    // COMMENTED OUT: Duplicate early selection bonus code (same as above)
     // Award early selection bonus if influencer gets selected within 36 hours of verification
     // IMPORTANT: Only award to influencers who joined through referral
-    if (updateStatusDto.status === ApplicationStatus.SELECTED && influencer) {
-      const fullInfluencer = await this.influencerModel.findByPk(influencer.id);
-      if (fullInfluencer && fullInfluencer.verifiedAt) {
-        // Check if influencer joined through referral (regardless of credit status)
-        const referralUsage = await this.influencerReferralUsageModel.findOne({
-          where: {
-            referredUserId: fullInfluencer.id,
-          },
-        });
+    // if (updateStatusDto.status === ApplicationStatus.SELECTED && influencer) {
+    //   const fullInfluencer = await this.influencerModel.findByPk(influencer.id);
+    //   if (fullInfluencer && fullInfluencer.verifiedAt) {
+    //     // Check if influencer joined through referral (regardless of credit status)
+    //     const referralUsage = await this.influencerReferralUsageModel.findOne({
+    //       where: {
+    //         referredUserId: fullInfluencer.id,
+    //       },
+    //     });
 
-        // Only proceed if influencer joined through referral
-        if (referralUsage) {
-          const verificationTime = new Date(fullInfluencer.verifiedAt).getTime();
-          const currentTime = new Date().getTime();
-          const hoursSinceVerification =
-            (currentTime - verificationTime) / (1000 * 60 * 60);
+    //     // Only proceed if influencer joined through referral
+    //     if (referralUsage) {
+    //       const verificationTime = new Date(fullInfluencer.verifiedAt).getTime();
+    //       const currentTime = new Date().getTime();
+    //       const hoursSinceVerification =
+    //         (currentTime - verificationTime) / (1000 * 60 * 60);
 
-          // Check if within 36 hours of verification
-          if (hoursSinceVerification <= 36) {
-            // Check if bonus already awarded for this campaign
-            const existingBonus = await this.creditTransactionModel.findOne({
-              where: {
-                influencerId: fullInfluencer.id,
-                campaignId: campaign.id,
-                transactionType: CreditTransactionType.EARLY_SELECTION_BONUS,
-              },
-            });
+    //       // Check if within 36 hours of verification
+    //       if (hoursSinceVerification <= 36) {
+    //         // Check if bonus already awarded for this campaign
+    //         const existingBonus = await this.creditTransactionModel.findOne({
+    //           where: {
+    //             influencerId: fullInfluencer.id,
+    //             campaignId: campaign.id,
+    //             transactionType: CreditTransactionType.EARLY_SELECTION_BONUS,
+    //           },
+    //         });
 
-            if (!existingBonus) {
-              const currentCredits = fullInfluencer.referralCredits || 0;
-              const newCredits = currentCredits + 100;
+    //         if (!existingBonus) {
+    //           const currentCredits = fullInfluencer.referralCredits || 0;
+    //           const newCredits = currentCredits + 100;
 
-              // Award Rs 100 credit
-              await this.influencerModel.update(
-                { referralCredits: newCredits },
-                { where: { id: fullInfluencer.id } },
-              );
+    //           // Award Rs 100 credit
+    //           await this.influencerModel.update(
+    //             { referralCredits: newCredits },
+    //             { where: { id: fullInfluencer.id } },
+    //           );
 
-              // Log credit transaction for admin records
-              await this.creditTransactionModel.create({
-                influencerId: fullInfluencer.id,
-                transactionType: CreditTransactionType.EARLY_SELECTION_BONUS,
-                amount: 100,
-                paymentStatus: PaymentStatus.PENDING,
-                description: `Early selection bonus for campaign "${campaign.name}" (referred influencer selected within 36 hours of verification)`,
-                campaignId: campaign.id,
-                upiId: fullInfluencer.upiId || null,
-              });
+    //           // Log credit transaction for admin records
+    //           await this.creditTransactionModel.create({
+    //             influencerId: fullInfluencer.id,
+    //             transactionType: CreditTransactionType.EARLY_SELECTION_BONUS,
+    //             amount: 100,
+    //             paymentStatus: PaymentStatus.PENDING,
+    //             description: `Early selection bonus for campaign "${campaign.name}" (referred influencer selected within 36 hours of verification)`,
+    //             campaignId: campaign.id,
+    //             upiId: fullInfluencer.upiId || null,
+    //           });
 
-              // Send notification about the early selection bonus
-              if (fullInfluencer.whatsappNumber) {
-                const bonusMessage = `🎉 Congratulations ${fullInfluencer.name}! You've been selected for the campaign "${campaign.name}" within 36 hours of your profile verification. You've earned an early bird bonus of Rs 100! Your total credits are now Rs ${newCredits}. Keep up the great work!`;
-                await this.whatsAppService.sendReferralCreditNotification(
-                  fullInfluencer.whatsappNumber,
-                  bonusMessage,
-                );
-              }
+    //           // Send notification about the early selection bonus
+    //           if (fullInfluencer.whatsappNumber) {
+    //             const bonusMessage = `🎉 Congratulations ${fullInfluencer.name}! You've been selected for the campaign "${campaign.name}" within 36 hours of your profile verification. You've earned an early bird bonus of Rs 100! Your total credits are now Rs ${newCredits}. Keep up the great work!`;
+    //             await this.whatsAppService.sendReferralCreditNotification(
+    //               fullInfluencer.whatsappNumber,
+    //               bonusMessage,
+    //             );
+    //           }
 
-              console.log('✅ Early selection bonus awarded:', {
-                influencerId: fullInfluencer.id,
-                influencerName: fullInfluencer.name,
-                campaignId: campaign.id,
-                campaignName: campaign.name,
-                hoursSinceVerification: hoursSinceVerification.toFixed(2),
-                bonusAmount: 100,
-                newCredits,
-                referralCode: referralUsage.referralCode,
-              });
-            } else {
-              console.log('⚠️ Early selection bonus already awarded for this campaign:', {
-                influencerId: fullInfluencer.id,
-                campaignId: campaign.id,
-              });
-            }
-          } else {
-            console.log('⏰ Influencer not eligible for early selection bonus - beyond 36 hours:', {
-              influencerId: fullInfluencer.id,
-              hoursSinceVerification: hoursSinceVerification.toFixed(2),
-            });
-          }
-        } else {
-          console.log('ℹ️ Influencer not eligible for early selection bonus - did not join through referral:', {
-            influencerId: fullInfluencer.id,
-          });
-        }
-      }
-    }
+    //           console.log('✅ Early selection bonus awarded:', {
+    //             influencerId: fullInfluencer.id,
+    //             influencerName: fullInfluencer.name,
+    //             campaignId: campaign.id,
+    //             campaignName: campaign.name,
+    //             hoursSinceVerification: hoursSinceVerification.toFixed(2),
+    //             bonusAmount: 100,
+    //             newCredits,
+    //             referralCode: referralUsage.referralCode,
+    //           });
+    //         } else {
+    //           console.log('⚠️ Early selection bonus already awarded for this campaign:', {
+    //             influencerId: fullInfluencer.id,
+    //             campaignId: campaign.id,
+    //           });
+    //         }
+    //       } else {
+    //         console.log('⏰ Influencer not eligible for early selection bonus - beyond 36 hours:', {
+    //           influencerId: fullInfluencer.id,
+    //           hoursSinceVerification: hoursSinceVerification.toFixed(2),
+    //         });
+    //       }
+    //     } else {
+    //       console.log('ℹ️ Influencer not eligible for early selection bonus - did not join through referral:', {
+    //         influencerId: fullInfluencer.id,
+    //       });
+    //     }
+    //   }
+    // }
 
     // Send WhatsApp notifications asynchronously (fire-and-forget)
     if (influencer && influencer.whatsappNumber) {

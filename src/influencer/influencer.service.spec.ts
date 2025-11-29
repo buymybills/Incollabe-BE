@@ -232,6 +232,16 @@ describe('InfluencerService', () => {
             findAndCountAll: jest.fn().mockResolvedValue({ count: 0, rows: [] }),
           },
         },
+        {
+          provide: 'INFLUENCER_UPI_MODEL',
+          useValue: {
+            findAll: jest.fn().mockResolvedValue([]),
+            findOne: jest.fn(),
+            create: jest.fn(),
+            update: jest.fn(),
+            count: jest.fn().mockResolvedValue(0),
+          },
+        },
       ],
     }).compile();
 

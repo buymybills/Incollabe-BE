@@ -49,22 +49,9 @@ export class UpdateInfluencerProfileDto {
   })
   whatsappNumber?: string;
 
-  @ApiProperty({
-    description: 'UPI ID for receiving referral credits',
-    required: false,
-    example: 'username@paytm',
-  })
-  @IsOptional()
-  @Transform(({ value }) => {
-    // Keep empty string to allow clearing the field
-    if (value === '') return '';
-    return value || undefined;
-  })
-  @IsString()
-  @Matches(/^$|^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$/, {
-    message: 'Please provide a valid UPI ID (e.g., username@paytm)',
-  })
-  upiId?: string;
+  // REMOVED: UPI ID is now managed via dedicated UPI management APIs
+  // Use POST /api/influencer/upi-ids to add UPI IDs
+  // Use PUT /api/influencer/upi-ids/select to select UPI for redemption
 
   @ApiProperty({ description: 'Instagram profile URL', required: false })
   @IsOptional()

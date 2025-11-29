@@ -26,6 +26,7 @@ import { ProPaymentTransaction } from './models/pro-payment-transaction.model';
 import { ProSubscriptionService } from './services/pro-subscription.service';
 import { CreditTransaction } from '../admin/models/credit-transaction.model';
 import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
+import { InfluencerUpi } from './models/influencer-upi.model';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage
       ProPaymentTransaction,
       CreditTransaction,
       InfluencerReferralUsage,
+      InfluencerUpi,
     ]),
     SharedModule,
   ],
@@ -113,6 +115,10 @@ import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage
     {
       provide: 'INFLUENCER_REFERRAL_USAGE_MODEL',
       useValue: InfluencerReferralUsage,
+    },
+    {
+      provide: 'INFLUENCER_UPI_MODEL',
+      useValue: InfluencerUpi,
     },
   ],
   exports: [InfluencerService, InfluencerRepository, ProSubscriptionService],
