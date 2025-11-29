@@ -53,6 +53,7 @@ import {
   AddUpiIdDto,
   SelectUpiIdDto,
   GetUpiIdsResponseDto,
+  SelectAndRedeemDto,
 } from './dto/upi-management.dto';
 import { RazorpayService } from '../shared/razorpay.service';
 
@@ -84,13 +85,9 @@ export class InfluencerController {
     description: 'Forbidden - Only influencers can access this endpoint',
   })
   async getInfluencerProfile(@Req() req: RequestWithUser) {
-    if (req.user.userType !== 'influencer') {
-      throw new BadRequestException(
-        'Only influencers can access this endpoint',
-      );
-    }
     const influencerId = req.user.id;
-    return await this.influencerService.getInfluencerProfile(influencerId);
+    const userType = req.user.userType;
+    return await this.influencerService.getInfluencerProfile(influencerId, false, influencerId, userType);
   }
 
   @Put('profile')
@@ -318,13 +315,6 @@ export class InfluencerController {
     @Body() updateData: UpdateInfluencerProfileDto,
     @UploadedFiles() files: any,
   ) {
-    // Check if user is an influencer
-    if (req.user.userType !== 'influencer') {
-      throw new BadRequestException(
-        'Only influencers can update influencer profiles',
-      );
-    }
-
     // Validate file sizes - 5MB for profile image and banner
     const maxImageSize = 5 * 1024 * 1024; // 5MB
 
@@ -340,10 +330,12 @@ export class InfluencerController {
     }
 
     const influencerId = req.user.id;
+    const userType = req.user.userType;
     return await this.influencerService.updateInfluencerProfile(
       influencerId,
       updateData,
       files,
+      userType,
     );
   }
 
@@ -1007,9 +999,6 @@ export class InfluencerController {
     @Req() req: RequestWithUser,
     @Body() verifyDto: VerifySubscriptionPaymentDto,
   ) {
-    if (req.user.userType !== 'influencer') {
-      throw new BadRequestException('Only influencers can verify Pro payment');
-    }
     return await this.proSubscriptionService.verifyAndActivateSubscription(
       verifyDto.subscriptionId,
       verifyDto.paymentId,
@@ -1219,31 +1208,29 @@ export class InfluencerController {
     return await this.influencerService.getReferralRewards(influencerId, page, limit);
   }
 
-  @Post('redeem-rewards')
-  @ApiBearerAuth()
-  @ApiOperation({
-    summary: 'Redeem referral rewards',
-    description:
-      'Submit a redemption request for pending referral rewards. Optionally update UPI ID. Amount will be transferred within 24-48 hours.',
-  })
-  @ApiBody({ type: RedeemRewardsDto })
-  @ApiResponse({
-    status: 200,
-    description: 'Redemption request submitted successfully',
-    type: RedeemRewardsResponseDto,
-  })
-  @ApiResponse({ status: 400, description: 'Invalid request or no redeemable amount' })
-  @ApiResponse({ status: 404, description: 'Influencer not found' })
-  async redeemRewards(
-    @Req() req: RequestWithUser,
-    @Body() redeemRewardsDto: RedeemRewardsDto,
-  ) {
-    if (req.user.userType !== 'influencer') {
-      throw new BadRequestException('Only influencers can redeem rewards');
-    }
-    const influencerId = req.user.id;
-    return await this.influencerService.redeemRewards(influencerId, redeemRewardsDto.upiIdRecordId);
-  }
+  // ==================== DEPRECATED: Use POST upi-ids/:upiIdRecordId/redeem-rewards instead ====================
+  // @Post('redeem-rewards')
+  // @ApiBearerAuth()
+  // @ApiOperation({
+  //   summary: 'Redeem referral rewards',
+  //   description:
+  //     'Submit a redemption request for pending referral rewards. Optionally update UPI ID. Amount will be transferred within 24-48 hours.',
+  // })
+  // @ApiBody({ type: RedeemRewardsDto })
+  // @ApiResponse({
+  //   status: 200,
+  //   description: 'Redemption request submitted successfully',
+  //   type: RedeemRewardsResponseDto,
+  // })
+  // @ApiResponse({ status: 400, description: 'Invalid request or no redeemable amount' })
+  // @ApiResponse({ status: 404, description: 'Influencer not found' })
+  // async redeemRewards(
+  //   @Req() req: RequestWithUser,
+  //   @Body() redeemRewardsDto: RedeemRewardsDto,
+  // ) {
+  //   const influencerId = req.user.id;
+  //   return await this.influencerService.redeemRewards(influencerId, redeemRewardsDto.upiIdRecordId);
+  // }
 
   // ==================== UPI Management Endpoints ====================
 
@@ -1283,25 +1270,23 @@ export class InfluencerController {
     );
   }
 
-  @Put('upi-ids/select')
-  @ApiBearerAuth()
-  @ApiOperation({
-    summary: 'Select UPI ID for transaction',
-    description: 'Select a UPI ID to use for the current redemption transaction',
-  })
-  @ApiBody({ type: SelectUpiIdDto })
-  @ApiResponse({ status: 200, description: 'UPI ID selected successfully' })
-  @ApiResponse({ status: 404, description: 'UPI ID not found' })
-  async selectUpiId(@Req() req: RequestWithUser, @Body() selectUpiIdDto: SelectUpiIdDto) {
-    if (req.user.userType !== 'influencer') {
-      throw new BadRequestException('Only influencers can select UPI IDs');
-    }
-    const influencerId = req.user.id;
-    return await this.influencerService.selectUpiIdForTransaction(
-      influencerId,
-      selectUpiIdDto.upiIdRecordId,
-    );
-  }
+  // ==================== DEPRECATED: Use POST upi-ids/:upiIdRecordId/redeem-rewards instead ====================
+  // @Put('upi-ids/select')
+  // @ApiBearerAuth()
+  // @ApiOperation({
+  //   summary: 'Select UPI ID for transaction',
+  //   description: 'Select a UPI ID to use for the current redemption transaction',
+  // })
+  // @ApiBody({ type: SelectUpiIdDto })
+  // @ApiResponse({ status: 200, description: 'UPI ID selected successfully' })
+  // @ApiResponse({ status: 404, description: 'UPI ID not found' })
+  // async selectUpiId(@Req() req: RequestWithUser, @Body() selectUpiIdDto: SelectUpiIdDto) {
+  //   const influencerId = req.user.id;
+  //   return await this.influencerService.selectUpiIdForTransaction(
+  //     influencerId,
+  //     selectUpiIdDto.upiIdRecordId,
+  //   );
+  // }
 
   @Delete('upi-ids/:upiIdRecordId')
   @ApiBearerAuth()
@@ -1322,5 +1307,36 @@ export class InfluencerController {
     }
     const influencerId = req.user.id;
     return await this.influencerService.deleteUpiId(influencerId, upiIdRecordId);
+  }
+
+
+  @Post('upi-ids/:upiIdRecordId/redeem-rewards')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Select UPI and redeem rewards (consolidated endpoint)',
+    description:
+      'Select a UPI ID and submit redemption request in a single atomic operation. This is the optimized endpoint combining UPI selection and reward redemption. Amount will be transferred within 24-48 hours.',
+  })
+  @ApiParam({
+    name: 'upiIdRecordId',
+    description: 'The ID of the UPI record to select and use for redemption',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'UPI selected and redemption request submitted successfully',
+    type: RedeemRewardsResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'No pending rewards or invalid UPI ID' })
+  @ApiResponse({ status: 404, description: 'Influencer or UPI ID not found' })
+  async selectUpiAndRedeem(
+    @Req() req: RequestWithUser,
+    @Param('upiIdRecordId', ParseIntPipe) upiIdRecordId: number,
+  ) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can redeem rewards');
+    }
+    const influencerId = req.user.id;
+    return await this.influencerService.selectUpiAndRedeemRewards(influencerId, upiIdRecordId);
   }
 }

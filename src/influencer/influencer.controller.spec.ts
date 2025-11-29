@@ -112,7 +112,12 @@ describe('InfluencerController', () => {
       const result = await controller.getInfluencerProfile(mockRequest);
 
       expect(result).toEqual(mockProfile);
-      expect(influencerService.getInfluencerProfile).toHaveBeenCalledWith(1);
+      expect(influencerService.getInfluencerProfile).toHaveBeenCalledWith(
+        1,
+        false,
+        1,
+        'influencer',
+      );
     });
 
     it('should handle service errors', async () => {
@@ -160,6 +165,7 @@ describe('InfluencerController', () => {
         1,
         updateDto,
         mockFiles,
+        'influencer',
       );
     });
 
@@ -184,6 +190,7 @@ describe('InfluencerController', () => {
         1,
         updateDto,
         undefined,
+        'influencer',
       );
     });
   });
@@ -376,7 +383,12 @@ describe('InfluencerController', () => {
 
       await controller.getInfluencerProfile(mockRequest);
 
-      expect(influencerService.getInfluencerProfile).toHaveBeenCalledWith(999);
+      expect(influencerService.getInfluencerProfile).toHaveBeenCalledWith(
+        999,
+        false,
+        999,
+        'influencer',
+      );
     });
   });
 
@@ -395,12 +407,13 @@ describe('InfluencerController', () => {
         },
       } as RequestWithUser;
 
+      mockInfluencerService.getInfluencerProfile.mockRejectedValue(
+        new BadRequestException('Only influencers can access this endpoint'),
+      );
+
       await expect(
         controller.getInfluencerProfile(brandRequest),
       ).rejects.toThrow(BadRequestException);
-      await expect(
-        controller.getInfluencerProfile(brandRequest),
-      ).rejects.toThrow('Only influencers can access this endpoint');
     });
 
     it('should reject brands from updating influencer profile', async () => {
@@ -417,12 +430,13 @@ describe('InfluencerController', () => {
         bio: 'Test bio with minimum required length',
       };
 
+      mockInfluencerService.updateInfluencerProfile.mockRejectedValue(
+        new BadRequestException('Only influencers can update influencer profiles'),
+      );
+
       await expect(
         controller.updateInfluencerProfile(brandRequest, updateDto, undefined),
       ).rejects.toThrow(BadRequestException);
-      await expect(
-        controller.updateInfluencerProfile(brandRequest, updateDto, undefined),
-      ).rejects.toThrow('Only influencers can update influencer profiles');
     });
   });
 

@@ -131,6 +131,11 @@ export class InfluencerService {
     currentUserId?: number,
     currentUserType?: 'influencer' | 'brand',
   ) {
+    // Validate that only influencers can access their own profile
+    if (influencerId === currentUserId && currentUserType === 'brand') {
+      throw new BadRequestException('Only influencers can access this endpoint');
+    }
+
     let influencer = await this.influencerRepository.findById(influencerId);
 
     if (!influencer) {
@@ -333,7 +338,13 @@ export class InfluencerService {
     influencerId: number,
     updateData: UpdateInfluencerProfileDto,
     files?: any,
+    userType?: 'influencer' | 'brand',
   ) {
+    // Validate that only influencers can update influencer profiles
+    if (userType && userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can update influencer profiles');
+    }
+
     const influencer = await this.influencerRepository.findById(influencerId);
     if (!influencer) {
       throw new NotFoundException('Influencer not found');
@@ -2103,7 +2114,12 @@ export class InfluencerService {
     const redeemed = allTransactions
       .filter((tx: any) => tx.paymentStatus === 'paid')
       .reduce((sum: number, tx: any) => sum + tx.amount, 0);
-    const redeemable = lifetimeReward - redeemed;
+    const processing = allTransactions
+      .filter((tx: any) => tx.paymentStatus === 'processing')
+      .reduce((sum: number, tx: any) => sum + tx.amount, 0);
+    const redeemable = allTransactions
+      .filter((tx: any) => tx.paymentStatus === 'pending')
+      .reduce((sum: number, tx: any) => sum + tx.amount, 0);
 
     // Get paginated referral history
     const offset = (page - 1) * limit;
@@ -2383,6 +2399,27 @@ export class InfluencerService {
       message: 'UPI ID selected successfully',
       upiId: upiRecord.upiId,
     };
+  }
+
+  async selectUpiAndRedeemRewards(influencerId: number, upiIdRecordId: number) {
+    // Reuse existing methods: Select UPI first, then redeem rewards
+    // Step 1: Select the UPI ID for transaction
+    await this.selectUpiIdForTransaction(influencerId, upiIdRecordId);
+
+    // Step 2: Redeem rewards with the selected UPI
+    // Pass upiIdRecordId to explicitly use this UPI
+    const result = await this.redeemRewards(influencerId, upiIdRecordId);
+
+    console.log('✅ UPI Selected & Redemption Processed:', {
+      influencerId,
+      upiIdRecordId,
+      amountRequested: result.amountRequested,
+      upiId: result.upiId,
+      transactionsProcessed: result.transactionsProcessed,
+      timestamp: new Date().toISOString(),
+    });
+
+    return result;
   }
 
   async deleteUpiId(influencerId: number, upiIdRecordId: number) {

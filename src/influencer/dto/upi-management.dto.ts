@@ -59,3 +59,13 @@ export class GetUpiIdsResponseDto {
   @ApiProperty({ example: 3 })
   total: number;
 }
+
+export class SelectAndRedeemDto {
+  @ApiProperty({
+    description: 'UPI ID record ID to select and use for redemption',
+    example: 1,
+  })
+  @IsNotEmpty()
+  @IsInt()
+  upiIdRecordId: number;
+}
