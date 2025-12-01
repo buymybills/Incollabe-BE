@@ -147,7 +147,7 @@ export class ChatGateway
       this.setupHeartbeat(client, userKey);
 
       // Setup ping-pong handlers
-      this.setupPingPong(client, userKey);
+      // this.setupPingPong(client, userKey);
 
       console.log('✅ CONNECTION SUCCESSFUL');
       console.log('Total Connected Users:', this.userSockets.size);
@@ -503,10 +503,10 @@ export class ChatGateway
   /**
    * Handle explicit ping from client
    */
-  @SubscribeMessage('ping')
-  handlePing(@ConnectedSocket() client: Socket) {
-    client.emit('pong', { timestamp: Date.now() });
-  }
+  // @SubscribeMessage('ping')
+  // handlePing(@ConnectedSocket() client: Socket) {
+  //   client.emit('pong', { timestamp: Date.now() });
+  // }
 
   /**
    * Helper: Extract user from token
@@ -635,15 +635,15 @@ export class ChatGateway
   /**
    * Setup ping-pong handlers for connection health
    */
-  private setupPingPong(client: Socket, userKey: string) {
-    client.on('ping', () => {
-      client.emit('pong', { timestamp: Date.now() });
-    });
+  // private setupPingPong(client: Socket, userKey: string) {
+  //   client.on('ping', () => {
+  //     client.emit('pong', { timestamp: Date.now() });
+  //   });
 
-    client.on('pong', () => {
-      this.logger.debug(`Pong received from ${userKey}`);
-    });
-  }
+  //   client.on('pong', () => {
+  //     this.logger.debug(`Pong received from ${userKey}`);
+  //   });
+  // }
 
   /**
    * Check rate limit for message sending
