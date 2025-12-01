@@ -46,11 +46,20 @@ export class ChatGateway
   constructor(private readonly chatService: ChatService) {}
 
   afterInit(server: Server) {
+    console.log('\n🚀 ===== WEBSOCKET GATEWAY INITIALIZED =====');
+    console.log('Namespace: /chat');
+    console.log('CORS: Enabled for all origins');
+    console.log('Transports: websocket, polling');
+    console.log('Ping Interval: 25 seconds');
+    console.log('Ping Timeout: 60 seconds');
+    console.log('===========================================\n');
+
     this.logger.log('WebSocket Gateway initialized');
 
     // Setup server-level error handling (if engine is available)
     if (server.engine) {
       server.engine.on('connection_error', (err) => {
+        console.error('🔴 Engine Connection Error:', err);
         this.logger.error('Connection error:', err);
       });
     }
@@ -69,13 +78,23 @@ export class ChatGateway
    */
   async handleConnection(client: Socket) {
     try {
+      console.log('=== NEW SOCKET CONNECTION ATTEMPT ===');
+      console.log('Client ID:', client.id);
+      console.log('Client IP:', client.handshake.address);
+      console.log('Client Headers:', JSON.stringify(client.handshake.headers, null, 2));
+      console.log('Client Auth:', JSON.stringify(client.handshake.auth, null, 2));
+      console.log('Client Query:', JSON.stringify(client.handshake.query, null, 2));
+
       this.logger.log(`Client attempting to connect: ${client.id}`);
 
       // Extract auth token from handshake
       const token =
         client.handshake.auth.token || client.handshake.headers.authorization;
 
+      console.log('Extracted Token:', token ? `${token.substring(0, 20)}...` : 'NULL');
+
       if (!token) {
+        console.error('❌ REJECTED: No token provided');
         this.logger.warn(`Client ${client.id} rejected: No token provided`);
         client.emit('error', { message: 'Authentication required' });
         client.disconnect(true);
@@ -88,12 +107,18 @@ export class ChatGateway
       // In production, properly validate JWT token
 
       const user = this.extractUserFromToken(token);
+
+      console.log('User Extraction Result:', user);
+
       if (!user) {
+        console.error('❌ REJECTED: Invalid token - could not extract user');
         this.logger.warn(`Client ${client.id} rejected: Invalid token`);
         client.emit('error', { message: 'Invalid authentication token' });
         client.disconnect(true);
         return;
       }
+
+      console.log('✅ Token Valid - User:', user.userId, 'Type:', user.userType);
 
       // Store user data in socket
       client.data.userId = user.userId;
@@ -101,6 +126,7 @@ export class ChatGateway
       client.data.connectedAt = Date.now();
 
       const userKey = `${user.userId}:${user.userType}`;
+      console.log('User Key:', userKey);
 
       // Disconnect previous connection if exists (single device policy)
       const existingSocket = this.userSockets.get(userKey);
@@ -123,6 +149,10 @@ export class ChatGateway
       // Setup ping-pong handlers
       this.setupPingPong(client, userKey);
 
+      console.log('✅ CONNECTION SUCCESSFUL');
+      console.log('Total Connected Users:', this.userSockets.size);
+      console.log('=====================================\n');
+
       this.logger.log(
         `Client connected: ${client.id} (User: ${user.userId}, Type: ${user.userType})`,
       );
@@ -133,6 +163,8 @@ export class ChatGateway
         userType: user.userType,
       });
 
+      console.log('Broadcasting user:online event for:', userKey);
+
       // Send connection success to client
       client.emit('connection:success', {
         userId: user.userId,
@@ -140,7 +172,14 @@ export class ChatGateway
         socketId: client.id,
         serverTime: Date.now(),
       });
+
+      console.log('Sent connection:success to client');
+
     } catch (error) {
+      console.error('❌ CONNECTION ERROR:', error.message);
+      console.error('Stack:', error.stack);
+      console.log('=====================================\n');
+
       this.logger.error(`Connection error: ${error.message}`, error.stack);
       client.emit('error', { message: 'Connection failed' });
       client.disconnect(true);
@@ -151,8 +190,14 @@ export class ChatGateway
    * Handle client disconnect
    */
   handleDisconnect(client: Socket) {
+    console.log('\n=== SOCKET DISCONNECTION ===');
+    console.log('Client ID:', client.id);
+
     const userId = client.data.userId;
     const userType = client.data.userType;
+
+    console.log('User ID:', userId);
+    console.log('User Type:', userType);
 
     if (userId && userType) {
       const userKey = `${userId}:${userType}`;
@@ -165,21 +210,33 @@ export class ChatGateway
       if (currentSocket?.id === client.id) {
         this.userSockets.delete(userKey);
 
+        console.log('✅ User removed from active connections');
+
         // Notify user is offline
         client.broadcast.emit('user:offline', {
           userId,
           userType,
         });
+
+        console.log('Broadcasting user:offline event');
+      } else {
+        console.log('⚠️  Socket was already replaced, not removing');
       }
 
       // Log connection duration
       const duration = Date.now() - (client.data.connectedAt || Date.now());
+      console.log('Connection Duration:', Math.round(duration / 1000), 'seconds');
+      console.log('Remaining Connected Users:', this.userSockets.size);
+
       this.logger.log(
         `Client disconnected: ${client.id} (User: ${userId}, Duration: ${Math.round(duration / 1000)}s)`,
       );
     } else {
+      console.log('⚠️  No user data found for this socket');
       this.logger.log(`Client disconnected: ${client.id}`);
     }
+
+    console.log('============================\n');
   }
 
   /**
@@ -246,10 +303,17 @@ export class ChatGateway
     @MessageBody() dto: SendMessageDto,
   ) {
     try {
+      console.log('\n📨 === INCOMING MESSAGE ===');
+      console.log('From Socket:', client.id);
+      console.log('Message DTO:', JSON.stringify(dto, null, 2));
+
       const userId = client.data.userId;
       const userType = client.data.userType;
 
+      console.log('Sender:', userId, '(' + userType + ')');
+
       if (!userId || !userType) {
+        console.error('❌ User not authenticated');
         throw new UnauthorizedException('User not authenticated');
       }
 
@@ -257,6 +321,7 @@ export class ChatGateway
 
       // Check rate limit
       if (!this.checkRateLimit(userKey)) {
+        console.warn('⚠️  Rate limit exceeded for:', userKey);
         client.emit('message:error', {
           error: 'Rate limit exceeded. Please slow down.',
           tempId: dto['tempId'],
@@ -266,16 +331,21 @@ export class ChatGateway
       }
 
       // Save message using existing chat service
+      console.log('💾 Saving message to database...');
       const message = await this.chatService.sendMessage(userId, userType, dto);
+      console.log('✅ Message saved:', message.id);
 
       // Get the actual conversationId from the message (in case it was auto-created)
       const conversationId = message.conversationId;
+      console.log('Conversation ID:', conversationId);
 
       // Emit to conversation room (both sender and receiver)
       const roomName = `conversation_${conversationId}`;
+      console.log('📡 Emitting to room:', roomName);
       this.server.to(roomName).emit('message:new', message);
 
       // Also send direct notification to the other user if they're not in the room
+      console.log('📬 Sending direct notification to recipient...');
       this.notifyUserDirectly(
         conversationId,
         userId,
@@ -292,11 +362,19 @@ export class ChatGateway
       );
 
       // Acknowledge to sender
+      console.log('✅ Acknowledging to sender');
       client.emit('message:sent', {
         tempId: dto['tempId'], // Frontend can send tempId for optimistic UI
         message,
       });
+
+      console.log('==========================\n');
+
     } catch (error) {
+      console.error('❌ MESSAGE SEND ERROR:', error.message);
+      console.error('Stack:', error.stack);
+      console.log('==========================\n');
+
       this.logger.error(`Send message error: ${error.message}`, error.stack);
       client.emit('message:error', {
         error: error.message,
