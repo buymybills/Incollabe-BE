@@ -25,6 +25,7 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { ChatService } from './chat.service';
+import { ChatGateway } from './chat.gateway';
 import { S3Service } from './s3.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import type { RequestWithUser } from '../types/request.types';
@@ -81,6 +82,7 @@ export class ChatController {
 
   constructor(
     private readonly chatService: ChatService,
+    private readonly chatGateway: ChatGateway,
     private readonly s3Service: S3Service,
   ) {}
 
@@ -334,6 +336,15 @@ export class ChatController {
       req.user.userType,
       dto,
     );
+
+    // Emit WebSocket events to notify connected users in real-time
+    this.chatGateway.emitNewMessage(
+      message.conversationId,
+      req.user.id,
+      req.user.userType,
+      message,
+    );
+
     return message; // Let interceptor wrap it
   }
 

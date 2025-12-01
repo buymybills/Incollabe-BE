@@ -689,4 +689,56 @@ export class ChatGateway
       `Cleaned up rate limits. Remaining: ${this.messageRateLimits.size}`,
     );
   }
+
+  /**
+   * Public method: Emit new message events to WebSocket clients
+   * Called by HTTP endpoints to notify connected users
+   */
+  public emitNewMessage(
+    conversationId: number,
+    senderId: number,
+    senderType: string,
+    message: any,
+  ) {
+    try {
+      console.log('\n📡 === EMITTING MESSAGE VIA HTTP ===');
+      console.log('Conversation ID:', conversationId);
+      console.log('Sender:', senderId, '(' + senderType + ')');
+      console.log('Message ID:', message.id);
+
+      // Emit to conversation room (both sender and receiver if they're in the room)
+      const roomName = `conversation_${conversationId}`;
+      console.log('📡 Emitting to room:', roomName);
+      this.server.to(roomName).emit('message:new', message);
+
+      // Also send direct notification to the other user if they're not in the room
+      console.log('📬 Sending direct notification to recipient...');
+      this.notifyUserDirectly(
+        conversationId,
+        senderId,
+        senderType,
+        'message:notification',
+        {
+          conversationId,
+          message,
+        },
+      );
+
+      console.log('✅ WebSocket events emitted successfully');
+      console.log('===================================\n');
+
+      this.logger.log(
+        `WebSocket events emitted for message ${message.id} in conversation ${conversationId}`,
+      );
+    } catch (error) {
+      console.error('❌ ERROR EMITTING WEBSOCKET EVENTS:', error.message);
+      console.error('Stack:', error.stack);
+      console.log('===================================\n');
+
+      this.logger.error(
+        `Failed to emit WebSocket events: ${error.message}`,
+        error.stack,
+      );
+    }
+  }
 }
