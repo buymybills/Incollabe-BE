@@ -13,6 +13,8 @@ import { Logger, UseGuards, UnauthorizedException } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { WsAuthGuard } from './guards/ws-auth.guard';
 import { SendMessageDto, MarkAsReadDto, TypingDto } from './dto/chat.dto';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 
 @WebSocketGateway({
   cors: {
@@ -28,22 +30,20 @@ import { SendMessageDto, MarkAsReadDto, TypingDto } from './dto/chat.dto';
   transports: ['websocket', 'polling'], // Allow both transports
 })
 export class ChatGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
-{
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
   private logger: Logger = new Logger('ChatGateway');
-  private userSockets: Map<string, Socket> = new Map(); // userId:userType -> socket
-
-  // Track connection health with heartbeat intervals
+  private userSockets: Map<string, Socket> = new Map();
   private heartbeats: Map<string, NodeJS.Timeout> = new Map();
-
-  // Rate limiting: userId:userType -> { count, resetTime }
   private messageRateLimits: Map<string, { count: number; resetTime: number }> =
     new Map();
 
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly jwtService: JwtService,
+  ) { }
 
   afterInit(server: Server) {
     console.log('\n🚀 ===== WEBSOCKET GATEWAY INITIALIZED =====');
@@ -512,34 +512,32 @@ export class ChatGateway
    * Helper: Extract user from token
    * TODO: Implement proper JWT validation
    */
-  private extractUserFromToken(token: string): {
-    userId: number;
-    userType: 'influencer' | 'brand';
-  } | null {
+  private extractUserFromToken(
+    token: string,
+  ): { userId: number; userType: 'influencer' | 'brand' } | null {
     try {
-      // Temporary implementation - replace with proper JWT validation
-      // Expected format: "Bearer userId:userType" or just the JWT token
+      // Remove 'Bearer ' prefix if present
+      const jwtToken = token.replace(/^Bearer\s+/, '');
 
-      // For now, assuming token format is "userId:userType" for testing
-      // In production, decode and validate JWT token properly
-      const tokenParts = token.replace('Bearer ', '').split(':');
-      if (tokenParts.length >= 2) {
-        return {
-          userId: parseInt(tokenParts[0]),
-          userType: tokenParts[1] as 'influencer' | 'brand',
-        };
+      // JwtModule.register({ secret: process.env.JWT_SECRET }) already set secret,
+      // so no need to pass secret again here
+      const payload = this.jwtService.verify(jwtToken) as any;
+
+      if (!payload?.id || !payload?.userType) {
+        return null;
       }
 
-      // TODO: Add proper JWT validation here
-      // const decoded = this.jwtService.verify(token);
-      // return { userId: decoded.sub, userType: decoded.userType };
-
-      return null;
+      return {
+        userId: payload.id,
+        userType: payload.userType,
+      };
     } catch (error) {
       this.logger.error(`Token extraction error: ${error.message}`);
       return null;
     }
   }
+
+
 
   /**
    * Helper: Notify a specific user directly

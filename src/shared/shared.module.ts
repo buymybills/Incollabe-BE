@@ -28,10 +28,12 @@ import { Niche } from '../auth/model/niche.model';
 import { SupportTicket } from './models/support-ticket.model';
 import { Conversation } from './models/conversation.model';
 import { Message } from './models/message.model';
+import { JwtAuthModule } from './jwt.module';
 
 @Module({
   imports: [
-    ConfigModule,
+    ConfigModule.forRoot(),
+    JwtAuthModule,
     SequelizeModule.forFeature([
       Otp,
       CustomNiche,
@@ -82,4 +84,4 @@ import { Message } from './models/message.model';
     RazorpayService,
   ],
 })
-export class SharedModule {}
+export class SharedModule { }
