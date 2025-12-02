@@ -11,6 +11,7 @@ import { AIScoringService } from './services/ai-scoring.service';
 import { InfluencerScoringService } from './services/influencer-scoring.service';
 import { DashboardStatsService } from './services/dashboard-stats.service';
 import { PushNotificationService } from './services/push-notification.service';
+import { NotificationSchedulerService } from './services/notification-scheduler.service';
 import { AuditLogService } from './services/audit-log.service';
 
 import { Admin } from './models/admin.model';
@@ -85,6 +86,7 @@ import { RolesGuard } from './guards/roles.guard';
     InfluencerScoringService,
     DashboardStatsService,
     PushNotificationService,
+    NotificationSchedulerService,
     AuditLogService,
     AdminAuthGuard,
     RolesGuard,

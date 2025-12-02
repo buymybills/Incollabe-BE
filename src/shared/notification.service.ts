@@ -316,10 +316,28 @@ export class NotificationService {
     title: string,
     body: string,
     data: Record<string, any> = {},
+    options?: {
+      imageUrl?: string;
+      actionUrl?: string;
+      androidChannelId?: string;
+      sound?: string;
+      priority?: string;
+      expirationHours?: number;
+      // iOS-specific options
+      badge?: number;
+      threadId?: string;
+      interruptionLevel?: 'passive' | 'active' | 'timeSensitive' | 'critical';
+    },
   ) {
-    return await this.firebaseService.sendNotification(fcmToken, title, body, {
-      ...data,
-      timestamp: Date.now().toString(),
-    });
+    return await this.firebaseService.sendNotification(
+      fcmToken,
+      title,
+      body,
+      {
+        ...data,
+        timestamp: Date.now().toString(),
+      },
+      options,
+    );
   }
 }

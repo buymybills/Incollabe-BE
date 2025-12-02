@@ -154,15 +154,102 @@ export class FirebaseService implements OnModuleInit {
     title: string,
     body: string,
     data?: { [key: string]: string },
+    options?: {
+      imageUrl?: string;
+      actionUrl?: string;
+      androidChannelId?: string;
+      sound?: string;
+      priority?: string;
+      expirationHours?: number;
+      // iOS-specific options
+      badge?: number;
+      threadId?: string;
+      interruptionLevel?: 'passive' | 'active' | 'timeSensitive' | 'critical';
+    },
   ): Promise<admin.messaging.BatchResponse | string> {
+    const notification: admin.messaging.Notification = {
+      title,
+      body,
+    };
+
+    // Add image URL for rich notifications
+    if (options?.imageUrl) {
+      notification.imageUrl = options.imageUrl;
+    }
+
+    // Firebase requires all data values to be strings
+    const stringifiedData: { [key: string]: string } = {};
+    const allData = {
+      ...(data || {}),
+      // Add deep link URL as data
+      ...(options?.actionUrl ? { actionUrl: options.actionUrl } : {}),
+    };
+
+    // Convert all values to strings
+    for (const [key, value] of Object.entries(allData)) {
+      if (value !== null && value !== undefined) {
+        stringifiedData[key] = typeof value === 'string' ? value : JSON.stringify(value);
+      }
+    }
+
     const message: admin.messaging.MulticastMessage = {
-      notification: {
-        title,
-        body,
-      },
-      data: data || {},
+      notification,
+      data: stringifiedData,
       tokens: Array.isArray(tokens) ? tokens : [tokens],
     };
+
+    // Android-specific configuration
+    if (options) {
+      message.android = {
+        priority: options.priority === 'high' ? 'high' : 'normal',
+        ttl: options.expirationHours
+          ? options.expirationHours * 60 * 60 * 1000
+          : undefined,
+        notification: {
+          channelId: options.androidChannelId || 'default',
+          sound: options.sound || 'default',
+          ...(options.imageUrl ? { imageUrl: options.imageUrl } : {}),
+          clickAction: options.actionUrl,
+        },
+      };
+    }
+
+    // iOS-specific configuration
+    if (options) {
+      const apsPayload: any = {
+        sound: options.sound || 'default',
+      };
+
+      // Badge count (red number on app icon)
+      if (options.badge !== undefined) {
+        apsPayload.badge = options.badge;
+      }
+
+      // Thread identifier for grouping related notifications
+      if (options.threadId) {
+        apsPayload['thread-id'] = options.threadId;
+      }
+
+      // Interruption level (iOS 15+)
+      // passive = silent, active = default, timeSensitive = bypasses Focus, critical = always plays sound
+      if (options.interruptionLevel) {
+        apsPayload['interruption-level'] = options.interruptionLevel;
+      }
+
+      // Category for deep linking
+      if (options.actionUrl) {
+        apsPayload.category = options.actionUrl;
+      }
+
+      message.apns = {
+        payload: {
+          aps: apsPayload,
+        },
+        fcmOptions: {
+          imageUrl: options.imageUrl,
+        },
+      };
+    }
 
     if (Array.isArray(tokens)) {
       return this.getMessaging().sendEachForMulticast(message);

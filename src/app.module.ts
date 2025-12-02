@@ -1,4 +1,5 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DatabaseModule } from './database/postgres.db';
@@ -16,6 +17,7 @@ import { LoggingMiddleware } from './shared/middleware/logging.middleware';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(), // Enable cron jobs
     DatabaseModule,
     RedisModule,
     SharedModule,
@@ -26,7 +28,7 @@ import { LoggingMiddleware } from './shared/middleware/logging.middleware';
     InfluencerModule,
     AdminModule,
     PostModule,
-    CampaignModule,
+    CampaignModule, 
   ],
   controllers: [AppController],
   providers: [AppService],

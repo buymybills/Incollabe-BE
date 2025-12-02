@@ -35,6 +35,13 @@ export enum GenderFilter {
   ALL = 'all',
 }
 
+export enum InterruptionLevel {
+  PASSIVE = 'passive',
+  ACTIVE = 'active',
+  TIME_SENSITIVE = 'timeSensitive',
+  CRITICAL = 'critical',
+}
+
 @Table({
   tableName: 'push_notifications',
   timestamps: true,
@@ -47,6 +54,10 @@ export class PushNotification extends Model<PushNotification> {
   })
   declare id: number;
 
+  @AllowNull(true)
+  @Column(DataType.STRING(255))
+  declare internalName: string | null; // Internal name for admin reference (not shown to users)
+
   @AllowNull(false)
   @Column(DataType.STRING(255))
   declare title: string;
@@ -54,6 +65,14 @@ export class PushNotification extends Model<PushNotification> {
   @AllowNull(false)
   @Column(DataType.TEXT)
   declare body: string;
+
+  @AllowNull(true)
+  @Column(DataType.TEXT)
+  declare imageUrl: string | null; // Banner/Big Picture URL for rich notifications
+
+  @AllowNull(true)
+  @Column(DataType.TEXT)
+  declare actionUrl: string | null; // Deep link URL (e.g., app://campaigns/123)
 
   @AllowNull(false)
   @Default(ReceiverType.ALL_USERS)
@@ -116,8 +135,49 @@ export class PushNotification extends Model<PushNotification> {
   declare failureCount: number | null;
 
   @AllowNull(true)
+  @Column(DataType.STRING(100))
+  declare androidChannelId: string | null; // Android notification channel ID
+
+  @AllowNull(true)
+  @Column(DataType.STRING(20))
+  declare sound: string | null; // 'default', 'custom', 'silent'
+
+  @AllowNull(true)
+  @Column(DataType.STRING(20))
+  declare priority: string | null; // 'high', 'normal', 'low'
+
+  @AllowNull(true)
+  @Column(DataType.INTEGER)
+  declare expirationHours: number | null; // Hours before notification expires (1-168)
+
+  @AllowNull(true)
+  @Column({
+    type: DataType.INTEGER,
+    field: 'badge',
+  })
+  declare badge: number | null; // iOS badge count (red number on app icon)
+
+  @AllowNull(true)
+  @Column({
+    type: DataType.STRING(255),
+    field: 'thread_id',
+  })
+  declare threadId: string | null; // iOS thread identifier for grouping related notifications
+
+  @AllowNull(true)
+  @Column({
+    type: DataType.STRING(20),
+    field: 'interruption_level',
+  })
+  declare interruptionLevel: InterruptionLevel | null; // iOS interruption level: 'passive', 'active', 'timeSensitive', 'critical'
+
+  @AllowNull(true)
   @Column(DataType.JSON)
-  declare metadata: Record<string, any> | null; // Additional data like image URL, action URL, etc.
+  declare customData: Record<string, any> | null; // Custom key-value data for deep linking
+
+  @AllowNull(true)
+  @Column(DataType.JSON)
+  declare metadata: Record<string, any> | null; // Additional metadata (deprecated, use customData)
 
   @ForeignKey(() => Admin)
   @AllowNull(false)
