@@ -346,15 +346,11 @@ export class ChatGateway
 
       // Also send direct notification to the other user if they're not in the room
       console.log('📬 Sending direct notification to recipient...');
-      this.notifyUserDirectly(
+      await this.notifyUserDirectlyWithConversation(
         conversationId,
         userId,
         userType,
-        'message:notification',
-        {
-          conversationId,
-          message,
-        },
+        message,
       );
 
       this.logger.log(
@@ -401,7 +397,7 @@ export class ChatGateway
 
       const result = await this.chatService.markAsRead(userId, userType, dto);
 
-      // Notify conversation room
+      // Notify conversation room (for read receipts)
       const roomName = `conversation_${dto.conversationId}`;
       this.server.to(roomName).emit('message:read', {
         conversationId: dto.conversationId,
@@ -412,7 +408,43 @@ export class ChatGateway
         },
       });
 
+      // Send confirmation to reader
       client.emit('message:read:success', result);
+
+      // Update conversation for the reader (reset unread count)
+      const conversation =
+        await this.chatService['conversationModel'].findByPk(dto.conversationId);
+
+      if (conversation) {
+        const otherParticipant =
+          conversation.participant1Type === userType &&
+          conversation.participant1Id === userId
+            ? {
+                type: conversation.participant2Type,
+                id: conversation.participant2Id,
+              }
+            : {
+                type: conversation.participant1Type,
+                id: conversation.participant1Id,
+              };
+
+        const otherPartyDetails = await this.chatService['getParticipantDetails'](
+          otherParticipant.type as any,
+          otherParticipant.id,
+        );
+
+        // Emit conversation update to reader (unread count is now 0)
+        client.emit('conversation:update', {
+          id: conversation.id,
+          lastMessage: conversation.lastMessage,
+          lastMessageAt: conversation.lastMessageAt,
+          lastMessageSenderType: conversation.lastMessageSenderType,
+          unreadCount: 0, // Just marked as read
+          otherParty: otherPartyDetails,
+          otherPartyType: otherParticipant.type,
+          updatedAt: conversation.updatedAt,
+        });
+      }
     } catch (error) {
       this.logger.error(`Mark as read error: ${error.message}`);
       client.emit('error', { message: error.message });
@@ -694,7 +726,7 @@ export class ChatGateway
    * Public method: Emit new message events to WebSocket clients
    * Called by HTTP endpoints to notify connected users
    */
-  public emitNewMessage(
+  public async emitNewMessage(
     conversationId: number,
     senderId: number,
     senderType: string,
@@ -713,15 +745,11 @@ export class ChatGateway
 
       // Also send direct notification to the other user if they're not in the room
       console.log('📬 Sending direct notification to recipient...');
-      this.notifyUserDirectly(
+      await this.notifyUserDirectlyWithConversation(
         conversationId,
         senderId,
         senderType,
-        'message:notification',
-        {
-          conversationId,
-          message,
-        },
+        message,
       );
 
       console.log('✅ WebSocket events emitted successfully');
@@ -739,6 +767,94 @@ export class ChatGateway
         `Failed to emit WebSocket events: ${error.message}`,
         error.stack,
       );
+    }
+  }
+
+  /**
+   * Helper: Notify a specific user with conversation update
+   * Sends both message notification and conversation list update
+   */
+  private async notifyUserDirectlyWithConversation(
+    conversationId: number,
+    senderUserId: number,
+    senderUserType: string,
+    message: any,
+  ) {
+    try {
+      // Get conversation to find the other user
+      const conversation =
+        await this.chatService['conversationModel'].findByPk(conversationId);
+
+      if (!conversation) return;
+
+      // Determine the recipient
+      let recipientUserId: number;
+      let recipientUserType: string;
+
+      if (
+        conversation.participant1Type === senderUserType &&
+        conversation.participant1Id === senderUserId
+      ) {
+        recipientUserId = conversation.participant2Id;
+        recipientUserType = conversation.participant2Type;
+      } else if (
+        conversation.participant2Type === senderUserType &&
+        conversation.participant2Id === senderUserId
+      ) {
+        recipientUserId = conversation.participant1Id;
+        recipientUserType = conversation.participant1Type;
+      } else {
+        this.logger.warn(
+          `Sender ${senderUserId}:${senderUserType} not in conversation ${conversationId}`,
+        );
+        return;
+      }
+
+      const userKey = `${recipientUserId}:${recipientUserType}`;
+      const recipientSocket = this.userSockets.get(userKey);
+
+      if (recipientSocket) {
+        // Send message notification
+        recipientSocket.emit('message:notification', {
+          conversationId,
+          message,
+        });
+
+        // Get recipient's unread count for this conversation
+        const recipientUnreadCount =
+          recipientUserType === conversation.participant1Type &&
+          recipientUserId === conversation.participant1Id
+            ? conversation.unreadCountParticipant1
+            : conversation.unreadCountParticipant2;
+
+        // Get sender details for conversation update
+        const senderDetails = await this.chatService['getParticipantDetails'](
+          senderUserType as any,
+          senderUserId,
+        );
+
+        // Send conversation update (for conversations list)
+        recipientSocket.emit('conversation:update', {
+          id: conversationId,
+          lastMessage: conversation.lastMessage,
+          lastMessageAt: conversation.lastMessageAt,
+          lastMessageSenderType: conversation.lastMessageSenderType,
+          unreadCount: recipientUnreadCount,
+          otherParty: senderDetails,
+          otherPartyType: senderUserType,
+          updatedAt: conversation.updatedAt,
+        });
+
+        this.logger.debug(
+          `Sent notifications to ${recipientUserId}:${recipientUserType}`,
+        );
+      } else {
+        this.logger.debug(
+          `Recipient ${recipientUserId}:${recipientUserType} not online`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(`Direct notification error: ${error.message}`);
     }
   }
 }
