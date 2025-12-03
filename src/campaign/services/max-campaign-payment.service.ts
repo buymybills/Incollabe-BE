@@ -6,6 +6,7 @@ import { MaxCampaignInvoice, InvoiceStatus, PaymentMethod } from '../models/max-
 import { RazorpayService } from '../../shared/razorpay.service';
 import { S3Service } from '../../shared/s3.service';
 import { createDatabaseDate, toIST } from '../../shared/utils/date.utils';
+import { Op } from 'sequelize';
 import PDFDocument from 'pdfkit';
 
 @Injectable()
@@ -574,17 +575,25 @@ export class MaxCampaignPaymentService {
   private async generateInvoiceNumber(): Promise<string> {
     const year = new Date().getFullYear();
     const month = String(new Date().getMonth() + 1).padStart(2, '0');
+    const prefix = `MAXINV-${year}${month}-`;
 
-    // Get count of invoices this month
-    const startOfMonth = new Date(year, new Date().getMonth(), 1);
-    const count = await this.maxCampaignInvoiceModel.count({
+    // Get the latest invoice number for this month
+    const latestInvoice = await this.maxCampaignInvoiceModel.findOne({
       where: {
-        createdAt: {
-          $gte: startOfMonth,
+        invoiceNumber: {
+          [Op.like]: `${prefix}%`,
         },
       },
+      order: [['createdAt', 'DESC']],
     });
 
-    return `MAXINV-${year}${month}-${String(count + 1).padStart(5, '0')}`;
+    let nextNumber = 1;
+    if (latestInvoice) {
+      // Extract the number from the latest invoice (e.g., "MAXINV-202512-00001" -> 1)
+      const lastNumber = parseInt(latestInvoice.invoiceNumber.split('-')[2], 10);
+      nextNumber = lastNumber + 1;
+    }
+
+    return `${prefix}${String(nextNumber).padStart(5, '0')}`;
   }
 }

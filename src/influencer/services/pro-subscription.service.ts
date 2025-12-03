@@ -14,6 +14,8 @@ import PDFDocument from 'pdfkit';
 export class ProSubscriptionService {
   private readonly PRO_SUBSCRIPTION_AMOUNT = 19900; // Rs 199 in paise
   private readonly SUBSCRIPTION_DURATION_DAYS = 30;
+  // private readonly USE_TEST_MODE = process.env.NODE_ENV !== 'production';
+  // private readonly TEST_PLAN_ID = 'plan_test_development'; // Dummy plan for testing
 
   constructor(
     @InjectModel(ProSubscription)
@@ -29,7 +31,7 @@ export class ProSubscriptionService {
   ) {}
 
   /**
-   * Create a payment order for Pro subscription
+   * Create a payment order for Pro subscription (supports test mode)
    */
   async createSubscriptionOrder(influencerId: number) {
     // Check if influencer exists
@@ -333,18 +335,26 @@ export class ProSubscriptionService {
   private async generateInvoiceNumber(): Promise<string> {
     const year = new Date().getFullYear();
     const month = String(new Date().getMonth() + 1).padStart(2, '0');
+    const prefix = `INV-${year}${month}-`;
 
-    // Get count of invoices this month
-    const startOfMonth = new Date(year, new Date().getMonth(), 1);
-    const count = await this.proInvoiceModel.count({
+    // Get the latest invoice number for this month
+    const latestInvoice = await this.proInvoiceModel.findOne({
       where: {
-        createdAt: {
-          $gte: startOfMonth,
+        invoiceNumber: {
+          [Op.like]: `${prefix}%`,
         },
       },
+      order: [['createdAt', 'DESC']],
     });
 
-    return `INV-${year}${month}-${String(count + 1).padStart(5, '0')}`;
+    let nextNumber = 1;
+    if (latestInvoice) {
+      // Extract the number from the latest invoice (e.g., "INV-202512-00001" -> 1)
+      const lastNumber = parseInt(latestInvoice.invoiceNumber.split('-')[2], 10);
+      nextNumber = lastNumber + 1;
+    }
+
+    return `${prefix}${String(nextNumber).padStart(5, '0')}`;
   }
 
   /**
@@ -679,6 +689,98 @@ export class ProSubscriptionService {
       return { success: false, error: error.message };
     }
   }
+
+  // /**
+  //  * [TEST MODE ONLY] Activate subscription without payment
+  //  * Use this for testing without real Razorpay plan
+  //  */
+  // async activateTestSubscription(influencerId: number) {
+  //   if (process.env.NODE_ENV === 'production') {
+  //     throw new BadRequestException('Test mode activation not allowed in production');
+  //   }
+
+  //   const influencer = await this.influencerModel.findByPk(influencerId);
+  //   if (!influencer) {
+  //     throw new NotFoundException('Influencer not found');
+  //   }
+
+  //   // Check if already has active subscription
+  //   const existingActiveSubscription = await this.proSubscriptionModel.findOne({
+  //     where: {
+  //       influencerId,
+  //       status: SubscriptionStatus.ACTIVE,
+  //     },
+  //   });
+
+  //   if (existingActiveSubscription) {
+  //     throw new BadRequestException('You already have an active Pro subscription');
+  //   }
+
+  //   // Create subscription record
+  //   const startDate = createDatabaseDate();
+  //   const endDate = addDaysForDatabase(startDate, this.SUBSCRIPTION_DURATION_DAYS);
+
+  //   const subscription = await this.proSubscriptionModel.create({
+  //     influencerId,
+  //     status: SubscriptionStatus.ACTIVE,
+  //     startDate,
+  //     currentPeriodStart: startDate,
+  //     currentPeriodEnd: endDate,
+  //     nextBillingDate: endDate,
+  //     subscriptionAmount: this.PRO_SUBSCRIPTION_AMOUNT,
+  //     paymentMethod: PaymentMethod.RAZORPAY,
+  //     autoRenew: true,
+  //     razorpaySubscriptionId: `test_sub_${Date.now()}`, // Dummy subscription ID
+  //   });
+
+  //   // Create test invoice
+  //   const invoiceNumber = await this.generateInvoiceNumber();
+  //   const invoice = await this.proInvoiceModel.create({
+  //     invoiceNumber,
+  //     subscriptionId: subscription.id,
+  //     influencerId,
+  //     amount: this.PRO_SUBSCRIPTION_AMOUNT,
+  //     tax: 0,
+  //     totalAmount: this.PRO_SUBSCRIPTION_AMOUNT,
+  //     billingPeriodStart: startDate,
+  //     billingPeriodEnd: endDate,
+  //     paymentStatus: InvoiceStatus.PAID,
+  //     paymentMethod: PaymentMethod.RAZORPAY,
+  //     razorpayPaymentId: `test_pay_${Date.now()}`,
+  //     razorpayOrderId: `test_order_${Date.now()}`,
+  //     paidAt: startDate,
+  //   });
+
+  //   // Update influencer isPro status
+  //   await this.influencerModel.update(
+  //     {
+  //       isPro: true,
+  //       proActivatedAt: startDate,
+  //       proExpiresAt: endDate,
+  //     },
+  //     {
+  //       where: { id: influencerId },
+  //     },
+  //   );
+
+  //   // Generate invoice PDF
+  //   await this.generateInvoicePDF(invoice.id);
+
+  //   return {
+  //     success: true,
+  //     message: '🧪 Test subscription activated (NO PAYMENT REQUIRED)',
+  //     subscription: {
+  //       id: subscription.id,
+  //       status: subscription.status,
+  //       validUntil: toIST(endDate),
+  //     },
+  //     invoice: {
+  //       id: invoice.id,
+  //       invoiceNumber: invoice.invoiceNumber,
+  //     },
+  //     warning: 'This is a TEST subscription. Use real payment in production.',
+  //   };
+  // }
 
   /**
    * Check and expire subscriptions (run this as a cron job)
