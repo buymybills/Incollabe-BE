@@ -28,6 +28,9 @@ import { Niche } from '../auth/model/niche.model';
 import { SupportTicket } from './models/support-ticket.model';
 import { Conversation } from './models/conversation.model';
 import { Message } from './models/message.model';
+import { KeyBackup } from './models/key-backup.model';
+import { KeyBackupService } from './services/key-backup.service';
+import { KeyBackupController } from './key-backup.controller';
 import { JwtAuthModule } from './jwt.module';
 
 @Module({
@@ -43,9 +46,10 @@ import { JwtAuthModule } from './jwt.module';
       SupportTicket,
       Conversation,
       Message,
+      KeyBackup,
     ]),
   ],
-  controllers: [SearchController, ChatController],
+  controllers: [SearchController, ChatController, KeyBackupController],
   providers: [
     SmsService,
     S3Service,
@@ -64,6 +68,7 @@ import { JwtAuthModule } from './jwt.module';
     ChatGateway,
     IsValidUsernameConstraint,
     RazorpayService,
+    KeyBackupService,
   ],
   exports: [
     SmsService,
