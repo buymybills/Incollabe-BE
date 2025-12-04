@@ -353,6 +353,15 @@ export class ChatGateway
         message,
       );
 
+      // 🆕 Send conversation update to SENDER as well
+      console.log('📤 Sending conversation update to sender...');
+      await this.sendConversationUpdateToSender(
+        conversationId,
+        userId,
+        userType,
+        client,
+      );
+
       this.logger.log(
         `Message sent by ${userId} (${userType}) in conversation ${conversationId}`,
       );
@@ -761,7 +770,7 @@ export class ChatGateway
     } catch (error) {
       console.error('❌ ERROR EMITTING WEBSOCKET EVENTS:', error.message);
       console.error('Stack:', error.stack);
-      console.log('===================================\n');
+      console.log('===================================\n'); 
 
       this.logger.error(
         `Failed to emit WebSocket events: ${error.message}`,
@@ -855,6 +864,81 @@ export class ChatGateway
       }
     } catch (error) {
       this.logger.error(`Direct notification error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Helper: Send conversation update to the sender
+   * Updates the sender's conversation list after they send a message
+   */
+  private async sendConversationUpdateToSender(
+    conversationId: number,
+    senderUserId: number,
+    senderUserType: string,
+    senderSocket: Socket,
+  ) {
+    try {
+      // Get conversation details
+      const conversation =
+        await this.chatService['conversationModel'].findByPk(conversationId);
+
+      if (!conversation) return;
+
+      // Determine the other participant (recipient)
+      let recipientUserId: number;
+      let recipientUserType: string;
+
+      if (
+        conversation.participant1Type === senderUserType &&
+        conversation.participant1Id === senderUserId
+      ) {
+        // Sender is participant1, so other party is participant2
+        recipientUserId = conversation.participant2Id;
+        recipientUserType = conversation.participant2Type;
+      } else if (
+        conversation.participant2Type === senderUserType &&
+        conversation.participant2Id === senderUserId
+      ) {
+        // Sender is participant2, so other party is participant1
+        recipientUserId = conversation.participant1Id;
+        recipientUserType = conversation.participant1Type;
+      } else {
+        this.logger.warn(
+          `Sender ${senderUserId}:${senderUserType} not in conversation ${conversationId}`,
+        );
+        return;
+      }
+
+      // Get sender's unread count (should be 0 since they just sent the message)
+      const senderUnreadCount =
+        senderUserType === conversation.participant1Type &&
+        senderUserId === conversation.participant1Id
+          ? conversation.unreadCountParticipant1
+          : conversation.unreadCountParticipant2;
+
+      // Get recipient details for conversation update
+      const recipientDetails = await this.chatService['getParticipantDetails'](
+        recipientUserType as any,
+        recipientUserId,
+      );
+
+      // Send conversation update to sender
+      senderSocket.emit('conversation:update', {
+        id: conversationId,
+        lastMessage: conversation.lastMessage,
+        lastMessageAt: conversation.lastMessageAt,
+        lastMessageSenderType: conversation.lastMessageSenderType,
+        unreadCount: senderUnreadCount, // Should be 0 for sender
+        otherParty: recipientDetails,
+        otherPartyType: recipientUserType,
+        updatedAt: conversation.updatedAt,
+      });
+
+      this.logger.debug(
+        `Sent conversation update to sender ${senderUserId}:${senderUserType}`,
+      );
+    } catch (error) {
+      this.logger.error(`Sender conversation update error: ${error.message}`);
     }
   }
 }
