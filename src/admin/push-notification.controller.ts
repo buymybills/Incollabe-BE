@@ -11,7 +11,13 @@ import {
   Req,
   HttpStatus,
   ParseIntPipe,
+  // UseInterceptors,
+  // UploadedFile,
+  // Res,
+  // BadRequestException,
 } from '@nestjs/common';
+// import { FileInterceptor } from '@nestjs/platform-express';
+// import type { Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -19,6 +25,8 @@ import {
   ApiBearerAuth,
   ApiParam,
   ApiQuery,
+  // ApiConsumes,
+  // ApiBody,
 } from '@nestjs/swagger';
 import { PushNotificationService } from './services/push-notification.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
@@ -33,6 +41,10 @@ import {
   NotificationResponseDto,
   NotificationListResponseDto,
   SendNotificationResponseDto,
+  // BulkNotificationUploadDto,
+  // BulkNotificationResponseDto,
+  // ParseExcelDto,
+  // ParseExcelResponseDto,
 } from './dto/push-notification.dto';
 import { NotificationStatus } from './models/push-notification.model';
 
@@ -161,4 +173,197 @@ export class PushNotificationController {
   ): Promise<SendNotificationResponseDto> {
     return await this.pushNotificationService.sendNotification(id);
   }
+
+  // @Post('parse-excel')
+  // @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  // @UseInterceptors(FileInterceptor('file'))
+  // @ApiOperation({
+  //   summary: 'Parse Excel and get user IDs',
+  //   description: 'Upload Excel file to parse and match users without creating notification. Use returned IDs with create/update notification APIs.',
+  // })
+  // @ApiConsumes('multipart/form-data')
+  // @ApiBody({
+  //   schema: {
+  //     type: 'object',
+  //     required: ['file', 'userType'],
+  //     properties: {
+  //       file: {
+  //         type: 'string',
+  //         format: 'binary',
+  //         description: 'Excel file (.xlsx) with columns: name, email, phone',
+  //       },
+  //       userType: {
+  //         type: 'string',
+  //         enum: ['influencer', 'brand'],
+  //         description: 'Type of users in the Excel file',
+  //       },
+  //     },
+  //   },
+  // })
+  // @ApiResponse({
+  //   status: HttpStatus.OK,
+  //   description: 'Excel parsed successfully, user IDs returned',
+  //   type: ParseExcelResponseDto,
+  // })
+  // async parseExcel(
+  //   @UploadedFile() file: Express.Multer.File,
+  //   @Body() parseDto: ParseExcelDto,
+  // ): Promise<ParseExcelResponseDto> {
+  //   if (!file) {
+  //     throw new BadRequestException('Excel file is required');
+  //   }
+
+  //   if (
+  //     !file.originalname.endsWith('.xlsx') &&
+  //     !file.originalname.endsWith('.xls')
+  //   ) {
+  //     throw new BadRequestException(
+  //       'Invalid file type. Please upload Excel file (.xlsx or .xls)',
+  //     );
+  //   }
+
+  //   return await this.pushNotificationService.parseExcelAndMatchUsers(
+  //     file,
+  //     parseDto.userType,
+  //   );
+  // }
+
+  // @Post('bulk-upload')
+  // @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  // @UseInterceptors(FileInterceptor('file'))
+  // @ApiOperation({
+  //   summary: 'Bulk notification upload',
+  //   description: 'Upload Excel file with user list and create notification',
+  // })
+  // @ApiConsumes('multipart/form-data')
+  // @ApiBody({
+  //   schema: {
+  //     type: 'object',
+  //     required: ['file', 'title', 'body', 'userType'],
+  //     properties: {
+  //       file: {
+  //         type: 'string',
+  //         format: 'binary',
+  //         description: 'Excel file (.xlsx) with columns: name, email, phone',
+  //       },
+  //       title: {
+  //         type: 'string',
+  //         description: 'Notification title',
+  //         example: 'Special Campaign Invitation',
+  //       },
+  //       body: {
+  //         type: 'string',
+  //         description: 'Notification body',
+  //         example: 'You have been selected for our exclusive campaign',
+  //       },
+  //       imageUrl: {
+  //         type: 'string',
+  //         description: 'Image URL for rich notification',
+  //       },
+  //       actionUrl: {
+  //         type: 'string',
+  //         description: 'Deep link action URL',
+  //       },
+  //       androidChannelId: {
+  //         type: 'string',
+  //         description: 'Android channel ID',
+  //       },
+  //       sound: {
+  //         type: 'string',
+  //         description: 'Sound (default/custom/silent)',
+  //       },
+  //       priority: {
+  //         type: 'string',
+  //         description: 'Priority (high/normal/low)',
+  //       },
+  //       badge: {
+  //         type: 'number',
+  //         description: 'iOS badge count',
+  //       },
+  //       threadId: {
+  //         type: 'string',
+  //         description: 'iOS thread ID for grouping',
+  //       },
+  //       interruptionLevel: {
+  //         type: 'string',
+  //         enum: ['passive', 'active', 'timeSensitive', 'critical'],
+  //         description: 'iOS interruption level',
+  //       },
+  //       userType: {
+  //         type: 'string',
+  //         enum: ['influencer', 'brand'],
+  //         description: 'Type of users in the Excel file',
+  //       },
+  //       sendImmediately: {
+  //         type: 'boolean',
+  //         description: 'Send immediately or save as draft',
+  //         default: false,
+  //       },
+  //     },
+  //   },
+  // })
+  // @ApiResponse({
+  //   status: HttpStatus.CREATED,
+  //   description: 'Bulk notification created successfully',
+  //   type: BulkNotificationResponseDto,
+  // })
+  // async bulkUploadNotification(
+  //   @UploadedFile() file: Express.Multer.File,
+  //   @Body() uploadDto: BulkNotificationUploadDto,
+  //   @Req() req: RequestWithAdmin,
+  // ): Promise<BulkNotificationResponseDto> {
+  //   if (!file) {
+  //     throw new BadRequestException('Excel file is required');
+  //   }
+
+  //   // Validate file type
+  //   if (
+  //     !file.originalname.endsWith('.xlsx') &&
+  //     !file.originalname.endsWith('.xls')
+  //   ) {
+  //     throw new BadRequestException(
+  //       'Invalid file type. Please upload Excel file (.xlsx or .xls)',
+  //     );
+  //   }
+
+  //   return await this.pushNotificationService.createBulkNotification(
+  //     file,
+  //     uploadDto,
+  //     req.admin.id,
+  //   );
+  // }
+
+  // @Get('template/:userType')
+  // @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  // @ApiOperation({
+  //   summary: 'Download Excel template',
+  //   description: 'Download Excel template for bulk notification upload',
+  // })
+  // @ApiParam({
+  //   name: 'userType',
+  //   enum: ['influencer', 'brand'],
+  //   description: 'Type of users',
+  // })
+  // @ApiResponse({
+  //   status: HttpStatus.OK,
+  //   description: 'Excel template file',
+  // })
+  // async downloadTemplate(
+  //   @Param('userType') userType: 'influencer' | 'brand',
+  //   @Res() res: Response,
+  // ): Promise<void> {
+  //   const buffer =
+  //     this.pushNotificationService.generateExcelTemplate(userType);
+
+  //   res.setHeader(
+  //     'Content-Type',
+  //     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  //   );
+  //   res.setHeader(
+  //     'Content-Disposition',
+  //     `attachment; filename=notification-${userType}s-template.xlsx`,
+  //   );
+
+  //   res.send(buffer);
+  // }
 }
