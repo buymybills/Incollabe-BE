@@ -1983,6 +1983,28 @@ export class AdminController {
     return await this.campaignService.getPopularCities();
   }
 
+  @Get('cities/search')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Search cities',
+    description: 'Search cities by name for campaign targeting. Returns popular cities if query is less than 2 characters.',
+  })
+  @ApiQuery({
+    name: 'q',
+    required: false,
+    type: String,
+    description: 'Search query for city name (minimum 2 characters)',
+    example: 'Mumb',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Cities retrieved successfully',
+  })
+  async searchCities(@Query('q') query: string) {
+    return await this.campaignService.searchCities(query);
+  }
+
   // Credit Transaction Management Endpoints
   @Get('credit-transactions')
   @UseGuards(AdminAuthGuard, RolesGuard)
