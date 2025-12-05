@@ -183,6 +183,8 @@ export class FirebaseService implements OnModuleInit {
       ...(data || {}),
       // Add deep link URL as data
       ...(options?.actionUrl ? { actionUrl: options.actionUrl } : {}),
+      // Add image URL as data (for easier mobile app access)
+      ...(options?.imageUrl ? { imageUrl: options.imageUrl } : {}),
     };
 
     // Convert all values to strings
@@ -197,6 +199,15 @@ export class FirebaseService implements OnModuleInit {
       data: stringifiedData,
       tokens: Array.isArray(tokens) ? tokens : [tokens],
     };
+
+    // Debug: Log the complete message structure
+    console.log('🚀 Sending FCM Message:');
+    console.log('📝 notification.title:', notification.title);
+    console.log('📝 notification.body:', notification.body);
+    console.log('🖼️ notification.imageUrl:', notification.imageUrl);
+    console.log('📊 data:', stringifiedData);
+    console.log('🤖 android.notification.imageUrl:', message.android?.notification?.imageUrl);
+    console.log('🍎 apns.fcmOptions.imageUrl:', message.apns?.fcmOptions?.imageUrl);
 
     // Android-specific configuration
     if (options) {
