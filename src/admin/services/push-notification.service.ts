@@ -451,16 +451,16 @@ export class PushNotificationService {
       commonWhere.gender = notification.genderFilter;
     }
 
-    // Add age filter if specified
-    if (notification.minAge || notification.maxAge) {
-      commonWhere.age = {};
-      if (notification.minAge) {
-        commonWhere.age[Op.gte] = notification.minAge;
-      }
-      if (notification.maxAge) {
-        commonWhere.age[Op.lte] = notification.maxAge;
-      }
-    }
+    // Note: Age filter disabled - Influencer/Brand models don't have age column
+    // if (notification.minAge || notification.maxAge) {
+    //   commonWhere.age = {};
+    //   if (notification.minAge) {
+    //     commonWhere.age[Op.gte] = notification.minAge;
+    //   }
+    //   if (notification.maxAge) {
+    //     commonWhere.age[Op.lte] = notification.maxAge;
+    //   }
+    // }
 
     let recipients: Array<{ id: number; fcmToken: string }> = [];
 
