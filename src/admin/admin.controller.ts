@@ -12,6 +12,9 @@ import {
   HttpStatus,
   Query,
   UnauthorizedException,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -25,7 +28,9 @@ import {
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiBadRequestResponse,
+  ApiConsumes,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { AdminAuthService } from './admin-auth.service';
 import { ProfileReviewService } from './profile-review.service';
 import { AdminCampaignService } from './services/admin-campaign.service';
@@ -37,6 +42,7 @@ import { InfluencerService } from '../influencer/influencer.service';
 import { PostService } from '../post/post.service';
 import { AuthService } from '../auth/auth.service';
 import { CampaignService } from '../campaign/campaign.service';
+import { S3Service } from '../shared/s3.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import type { RequestWithAdmin } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
@@ -135,6 +141,7 @@ export class AdminController {
     private readonly supportTicketService: SupportTicketService,
     private readonly authService: AuthService,
     private readonly campaignService: CampaignService,
+    private readonly s3Service: S3Service,
   ) {}
 
   @Post('login')
@@ -292,6 +299,133 @@ export class AdminController {
   })
   async logoutAll(@Req() req: RequestWithAdmin) {
     return await this.adminAuthService.logoutAll(req.admin.id);
+  }
+
+  @Post('upload')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB
+      },
+      fileFilter: (req, file, callback) => {
+        // Accept images only
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
+          return callback(
+            new Error('Only image files are allowed (jpg, jpeg, png, gif, webp)'),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  @ApiOperation({
+    summary: 'Upload file to S3',
+    description:
+      'Generic admin file upload endpoint. Upload images for various admin features. Domain parameter determines S3 folder structure.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiQuery({
+    name: 'domain',
+    required: true,
+    enum: [
+      'push_notification',
+      'campaigns',
+      'banners',
+      'profiles',
+      'posts',
+      'brands',
+      'influencers',
+    ],
+    description: 'Domain/folder name for S3 storage',
+    example: 'push_notification',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Image file to upload (max 10MB)',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    description: 'File uploaded successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        url: {
+          type: 'string',
+          example: 'https://bucket.s3.region.amazonaws.com/push_notification/image-123.jpg',
+        },
+        fileName: { type: 'string', example: 'banner.jpg' },
+        fileSize: { type: 'number', example: 2048576 },
+        fileType: { type: 'string', example: 'image/jpeg' },
+        domain: { type: 'string', example: 'push_notification' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Invalid file type, missing file, or invalid domain',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async uploadFile(
+    @UploadedFile() file: Express.Multer.File,
+    @Query('domain') domain: string,
+  ) {
+    // Validate file exists
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    // Validate domain parameter
+    if (!domain || typeof domain !== 'string') {
+      throw new BadRequestException('Domain parameter is required');
+    }
+
+    // Whitelist allowed domains
+    const allowedDomains = [
+      'push_notification',
+      'campaigns',
+      'banners',
+      'profiles',
+      'posts',
+      'brands',
+      'influencers',
+    ];
+
+    if (!allowedDomains.includes(domain)) {
+      throw new BadRequestException(
+        `Invalid domain. Allowed domains: ${allowedDomains.join(', ')}`,
+      );
+    }
+
+    // Upload to S3
+    const fileUrl = await this.s3Service.uploadFileToS3(
+      file,
+      domain,
+      'admin',
+    );
+
+    return {
+      success: true,
+      url: fileUrl,
+      fileName: file.originalname,
+      fileSize: file.size,
+      fileType: file.mimetype,
+      domain,
+    };
   }
 
   @Post('create')

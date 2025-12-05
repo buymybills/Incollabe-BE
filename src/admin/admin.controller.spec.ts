@@ -13,6 +13,7 @@ import { PostService } from '../post/post.service';
 import { SupportTicketService } from '../shared/support-ticket.service';
 import { AuthService } from '../auth/auth.service';
 import { CampaignService } from '../campaign/campaign.service';
+import { S3Service } from '../shared/s3.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { AdminLoginDto } from './dto/admin-login.dto';
@@ -107,6 +108,12 @@ const mockAuthService = {
 
 const mockCampaignService = {
   getPopularCities: jest.fn(),
+  searchCities: jest.fn(),
+};
+
+const mockS3Service = {
+  uploadFileToS3: jest.fn(),
+  deleteFileFromS3: jest.fn(),
 };
 
 const mockAdminAuthGuard = {
@@ -177,6 +184,10 @@ describe('AdminController', () => {
         {
           provide: CampaignService,
           useValue: mockCampaignService,
+        },
+        {
+          provide: S3Service,
+          useValue: mockS3Service,
         },
       ],
     })
