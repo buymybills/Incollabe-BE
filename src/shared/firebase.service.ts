@@ -172,10 +172,8 @@ export class FirebaseService implements OnModuleInit {
       body,
     };
 
-    // Add image URL for rich notifications
-    if (options?.imageUrl) {
-      notification.imageUrl = options.imageUrl;
-    }
+    // Note: Do NOT set imageUrl at notification level
+    // Images must be set in platform-specific configs (android/apns)
 
     // Firebase requires all data values to be strings
     const stringifiedData: { [key: string]: string } = {};
@@ -183,8 +181,7 @@ export class FirebaseService implements OnModuleInit {
       ...(data || {}),
       // Add deep link URL as data
       ...(options?.actionUrl ? { actionUrl: options.actionUrl } : {}),
-      // Add image URL as data (for easier mobile app access)
-      ...(options?.imageUrl ? { imageUrl: options.imageUrl } : {}),
+      // Note: imageUrl is NOT sent in data - it's in android/apns configs only
     };
 
     // Convert all values to strings
@@ -194,38 +191,24 @@ export class FirebaseService implements OnModuleInit {
       }
     }
 
-    const message: admin.messaging.MulticastMessage = {
-      notification,
-      data: stringifiedData,
-      tokens: Array.isArray(tokens) ? tokens : [tokens],
-    };
+    // Build Android-specific configuration
+    const androidConfig: admin.messaging.AndroidConfig | undefined = options
+      ? {
+          priority: options.priority === 'high' ? 'high' : 'normal',
+          ttl: options.expirationHours
+            ? options.expirationHours * 60 * 60 * 1000
+            : undefined,
+          notification: {
+            channelId: options.androidChannelId || 'default',
+            sound: options.sound || 'default',
+            imageUrl: options.imageUrl, // ← Image for Android
+            clickAction: options.actionUrl,
+          },
+        }
+      : undefined;
 
-    // Debug: Log the complete message structure
-    console.log('🚀 Sending FCM Message:');
-    console.log('📝 notification.title:', notification.title);
-    console.log('📝 notification.body:', notification.body);
-    console.log('🖼️ notification.imageUrl:', notification.imageUrl);
-    console.log('📊 data:', stringifiedData);
-    console.log('🤖 android.notification.imageUrl:', message.android?.notification?.imageUrl);
-    console.log('🍎 apns.fcmOptions.imageUrl:', message.apns?.fcmOptions?.imageUrl);
-
-    // Android-specific configuration
-    if (options) {
-      message.android = {
-        priority: options.priority === 'high' ? 'high' : 'normal',
-        ttl: options.expirationHours
-          ? options.expirationHours * 60 * 60 * 1000
-          : undefined,
-        notification: {
-          channelId: options.androidChannelId || 'default',
-          sound: options.sound || 'default',
-          ...(options.imageUrl ? { imageUrl: options.imageUrl } : {}),
-          clickAction: options.actionUrl,
-        },
-      };
-    }
-
-    // iOS-specific configuration
+    // Build iOS-specific configuration
+    let apnsConfig: admin.messaging.ApnsConfig | undefined;
     if (options) {
       const apsPayload: any = {
         sound: options.sound || 'default',
@@ -242,7 +225,6 @@ export class FirebaseService implements OnModuleInit {
       }
 
       // Interruption level (iOS 15+)
-      // passive = silent, active = default, timeSensitive = bypasses Focus, critical = always plays sound
       if (options.interruptionLevel) {
         apsPayload['interruption-level'] = options.interruptionLevel;
       }
@@ -252,15 +234,39 @@ export class FirebaseService implements OnModuleInit {
         apsPayload.category = options.actionUrl;
       }
 
-      message.apns = {
+      apnsConfig = {
         payload: {
           aps: apsPayload,
         },
         fcmOptions: {
-          imageUrl: options.imageUrl,
+          imageUrl: options.imageUrl, // ← Image for iOS
         },
       };
     }
+
+    // Create the complete message
+    const message: admin.messaging.MulticastMessage = {
+      notification,
+      data: stringifiedData,
+      android: androidConfig,
+      apns: apnsConfig,
+      tokens: Array.isArray(tokens) ? tokens : [tokens],
+    };
+
+    // Debug: Log the complete message structure
+    console.log('🚀 Sending FCM Message:');
+    console.log('📝 Notification:');
+    console.log('   - title:', notification.title);
+    console.log('   - body:', notification.body);
+    console.log('📊 Data:', stringifiedData);
+    console.log('🤖 Android Config:');
+    console.log('   - imageUrl:', androidConfig?.notification?.imageUrl);
+    console.log('   - channelId:', androidConfig?.notification?.channelId);
+    console.log('   - clickAction:', androidConfig?.notification?.clickAction);
+    console.log('🍎 iOS Config:');
+    console.log('   - imageUrl:', apnsConfig?.fcmOptions?.imageUrl);
+    console.log('   - badge:', apnsConfig?.payload?.aps?.badge);
+    console.log('   - interruption-level:', apnsConfig?.payload?.aps?.['interruption-level']);
 
     if (Array.isArray(tokens)) {
       return this.getMessaging().sendEachForMulticast(message);
