@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { SequelizeModule } from '@nestjs/sequelize';
+import { ScheduleModule } from '@nestjs/schedule';
 import { SmsService } from './sms.service';
 import { S3Service } from './s3.service';
 import { EmailService } from './email.service';
@@ -18,6 +19,9 @@ import { ChatService } from './chat.service';
 import { ChatGateway } from './chat.gateway';
 import { SearchController } from './controllers/search.controller';
 import { ChatController } from './chat.controller';
+import { InstagramController } from './controllers/instagram.controller';
+import { InstagramService } from './services/instagram.service';
+import { InstagramSyncCronService } from './services/instagram-sync.cron';
 import { IsValidUsernameConstraint } from './validators/is-valid-username.validator';
 import { RazorpayService } from './razorpay.service';
 import { Otp } from '../auth/model/otp.model';
@@ -36,6 +40,7 @@ import { JwtAuthModule } from './jwt.module';
 @Module({
   imports: [
     ConfigModule.forRoot(),
+    ScheduleModule.forRoot(),
     JwtAuthModule,
     SequelizeModule.forFeature([
       Otp,
@@ -49,7 +54,7 @@ import { JwtAuthModule } from './jwt.module';
       KeyBackup,
     ]),
   ],
-  controllers: [SearchController, ChatController, KeyBackupController],
+  controllers: [SearchController, ChatController, KeyBackupController, InstagramController],
   providers: [
     SmsService,
     S3Service,
@@ -69,6 +74,8 @@ import { JwtAuthModule } from './jwt.module';
     IsValidUsernameConstraint,
     RazorpayService,
     KeyBackupService,
+    InstagramService,
+    InstagramSyncCronService,
   ],
   exports: [
     SmsService,
@@ -87,6 +94,7 @@ import { JwtAuthModule } from './jwt.module';
     ChatService,
     IsValidUsernameConstraint,
     RazorpayService,
+    InstagramService,
   ],
 })
 export class SharedModule { }
