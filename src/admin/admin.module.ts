@@ -17,6 +17,7 @@ import { AuditLogService } from './services/audit-log.service';
 import { Admin } from './models/admin.model';
 import { ProfileReview } from './models/profile-review.model';
 import { PushNotification } from './models/push-notification.model';
+import { DeepLink } from './models/deep-link.model';
 import { AuditLog } from './models/audit-log.model';
 import { CreditTransaction } from './models/credit-transaction.model';
 import { Brand } from '../brand/model/brand.model';
@@ -51,6 +52,7 @@ import { RolesGuard } from './guards/roles.guard';
       Admin,
       ProfileReview,
       PushNotification,
+      DeepLink,
       AuditLog,
       CreditTransaction,
       Brand,

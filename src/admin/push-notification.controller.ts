@@ -47,6 +47,8 @@ import {
   // ParseExcelResponseDto,
 } from './dto/push-notification.dto';
 import { NotificationStatus } from './models/push-notification.model';
+import { DeepLink } from './models/deep-link.model';
+import { InjectModel } from '@nestjs/sequelize';
 
 @ApiTags('Admin - Push Notifications')
 @Controller('admin/notifications')
@@ -55,6 +57,8 @@ import { NotificationStatus } from './models/push-notification.model';
 export class PushNotificationController {
   constructor(
     private readonly pushNotificationService: PushNotificationService,
+    @InjectModel(DeepLink)
+    private readonly deepLinkModel: typeof DeepLink,
   ) {}
 
   @Post()
@@ -172,6 +176,79 @@ export class PushNotificationController {
     @Param('id', ParseIntPipe) id: number,
   ): Promise<SendNotificationResponseDto> {
     return await this.pushNotificationService.sendNotification(id);
+  }
+
+  @Get('deep-links/seed')
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiOperation({
+    summary: 'Get all deep links',
+    description: 'Get all available deep link URLs for actionUrl field in notifications',
+  })
+  @ApiQuery({
+    name: 'userType',
+    enum: ['influencer', 'brand', 'both'],
+    required: false,
+    description: 'Filter by user type',
+  })
+  @ApiQuery({
+    name: 'category',
+    required: false,
+    description: 'Filter by category (e.g., Home, Profile, Campaigns)',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Deep links retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        total: { type: 'number', example: 24 },
+        deepLinks: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              url: { type: 'string', example: 'app://influencers/me' },
+              description: { type: 'string', example: 'Redirecting the influencer to the influencer profile section' },
+              userType: { type: 'string', enum: ['influencer', 'brand', 'both'], example: 'influencer' },
+              category: { type: 'string', example: 'Profile' },
+            },
+          },
+        },
+      },
+    },
+  })
+  async getDeepLinks(
+    @Query('userType') userType?: 'influencer' | 'brand' | 'both',
+    @Query('category') category?: string,
+  ): Promise<{ total: number; deepLinks: DeepLink[] }> {
+    const whereClause: any = {
+      isActive: true,
+    };
+
+    // Filter by user type
+    if (userType) {
+      whereClause.userType = userType;
+    }
+
+    // Filter by category
+    if (category) {
+      whereClause.category = category;
+    }
+
+    const deepLinks = await this.deepLinkModel.findAll({
+      where: whereClause,
+      order: [
+        ['category', 'ASC'],
+        ['userType', 'ASC'],
+        ['url', 'ASC'],
+      ],
+      attributes: ['id', 'url', 'description', 'userType', 'category'],
+    });
+
+    return {
+      total: deepLinks.length,
+      deepLinks: deepLinks,
+    };
   }
 
   // @Post('parse-excel')
