@@ -149,6 +149,55 @@ export class Influencer extends Model {
   @Column(DataType.STRING)
   declare instagramUrl: string;
 
+  // Instagram OAuth Integration
+  @AllowNull(true)
+  @Column({ type: DataType.TEXT, field: 'instagram_access_token' })
+  declare instagramAccessToken: string;
+
+  @AllowNull(true)
+  @Column({ type: DataType.STRING, field: 'instagram_user_id' })
+  declare instagramUserId: string;
+
+  @AllowNull(true)
+  @Column({ type: DataType.STRING, field: 'instagram_username' })
+  declare instagramUsername: string;
+
+  @AllowNull(true)
+  @Column({ type: DataType.STRING, field: 'instagram_account_type' })
+  declare instagramAccountType: string;
+
+  @AllowNull(true)
+  @Column({ type: DataType.INTEGER, field: 'instagram_followers_count' })
+  declare instagramFollowersCount: number;
+
+  @AllowNull(true)
+  @Column({ type: DataType.INTEGER, field: 'instagram_follows_count' })
+  declare instagramFollowsCount: number;
+
+  @AllowNull(true)
+  @Column({ type: DataType.INTEGER, field: 'instagram_media_count' })
+  declare instagramMediaCount: number;
+
+  @AllowNull(true)
+  @Column({ type: DataType.TEXT, field: 'instagram_profile_picture_url' })
+  declare instagramProfilePictureUrl: string;
+
+  @AllowNull(true)
+  @Column({ type: DataType.TEXT, field: 'instagram_bio' })
+  declare instagramBio: string;
+
+  @AllowNull(true)
+  @Column({ type: DataType.DATE, field: 'instagram_token_expires_at' })
+  declare instagramTokenExpiresAt: Date;
+
+  @AllowNull(true)
+  @Column({ type: DataType.DATE, field: 'instagram_connected_at' })
+  declare instagramConnectedAt: Date;
+
+  @AllowNull(true)
+  @Column({ type: DataType.STRING, field: 'instagram_access_token_hash' })
+  declare instagramAccessTokenHash: string;
+
   @AllowNull(true)
   @Column(DataType.STRING)
   declare youtubeUrl: string;
@@ -290,6 +339,21 @@ export class Influencer extends Model {
         );
       }
     }
+
+    // Encrypt instagramAccessToken if it's been modified and not already encrypted
+    if (instance.changed('instagramAccessToken') && instance.instagramAccessToken) {
+      if (!instance.instagramAccessToken.includes(':')) {
+        const crypto = require('crypto');
+        // Create hash for searching
+        instance.instagramAccessTokenHash = crypto
+          .createHash('sha256')
+          .update(instance.instagramAccessToken)
+          .digest('hex');
+        instance.instagramAccessToken = encryptionService.encrypt(
+          instance.instagramAccessToken,
+        );
+      }
+    }
   }
 
   @AfterFind
@@ -309,6 +373,11 @@ export class Influencer extends Model {
       if (instance.whatsappNumber) {
         instance.whatsappNumber = encryptionService.decrypt(
           instance.whatsappNumber,
+        );
+      }
+      if (instance.instagramAccessToken) {
+        instance.instagramAccessToken = encryptionService.decrypt(
+          instance.instagramAccessToken,
         );
       }
     };

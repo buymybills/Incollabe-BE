@@ -245,6 +245,91 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
   })
   declare instagramUrl: string;
 
+  // Instagram OAuth Integration
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+    field: 'instagram_access_token',
+  })
+  declare instagramAccessToken: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+    field: 'instagram_user_id',
+  })
+  declare instagramUserId: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+    field: 'instagram_username',
+  })
+  declare instagramUsername: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+    field: 'instagram_account_type',
+  })
+  declare instagramAccountType: string;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    field: 'instagram_followers_count',
+  })
+  declare instagramFollowersCount: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    field: 'instagram_follows_count',
+  })
+  declare instagramFollowsCount: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    field: 'instagram_media_count',
+  })
+  declare instagramMediaCount: number;
+
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+    field: 'instagram_profile_picture_url',
+  })
+  declare instagramProfilePictureUrl: string;
+
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+    field: 'instagram_bio',
+  })
+  declare instagramBio: string;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+    field: 'instagram_token_expires_at',
+  })
+  declare instagramTokenExpiresAt: Date;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+    field: 'instagram_connected_at',
+  })
+  declare instagramConnectedAt: Date;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+    field: 'instagram_access_token_hash',
+  })
+  declare instagramAccessTokenHash: string;
+
   @Column({
     type: DataType.STRING,
     allowNull: true,
@@ -396,6 +481,24 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
         instance.panDocument = encryptionService.encrypt(instance.panDocument);
       }
     }
+
+    // Encrypt instagramAccessToken if it's new or been modified and not already encrypted
+    if (
+      (isNewRecord || instance.changed('instagramAccessToken')) &&
+      instance.instagramAccessToken
+    ) {
+      if (!instance.instagramAccessToken.includes(':')) {
+        const crypto = require('crypto');
+        // Create hash for searching
+        instance.instagramAccessTokenHash = crypto
+          .createHash('sha256')
+          .update(instance.instagramAccessToken)
+          .digest('hex');
+        instance.instagramAccessToken = encryptionService.encrypt(
+          instance.instagramAccessToken,
+        );
+      }
+    }
   }
 
   @AfterFind
@@ -428,6 +531,11 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
       }
       if (instance.panDocument) {
         instance.panDocument = encryptionService.decrypt(instance.panDocument);
+      }
+      if (instance.instagramAccessToken) {
+        instance.instagramAccessToken = encryptionService.decrypt(
+          instance.instagramAccessToken,
+        );
       }
     };
 

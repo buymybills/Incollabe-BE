@@ -268,23 +268,30 @@ export class InstagramController {
   }
 
   /**
-   * Sync authenticated user's Instagram profile data
+   * Sync Instagram profile data for a user
    * POST /instagram/sync-profile
    */
   @Public()
   @Post('sync-profile')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Sync authenticated user\'s Instagram profile data',
-    description: 'Fetches and updates Instagram profile data for the currently authenticated user'
+    summary: 'Sync Instagram profile data',
+    description: 'Fetches and updates Instagram profile data for a user. Requires user_id and user_type parameters.'
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'User ID (influencer or brand ID)'
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    enum: ['influencer', 'brand'],
+    description: 'User type: influencer or brand'
   })
   @ApiResponse({
     status: 200,
     description: 'Profile synced successfully'
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - no valid JWT token'
   })
   @ApiResponse({
     status: 404,
@@ -292,16 +299,23 @@ export class InstagramController {
   })
   @ApiResponse({
     status: 400,
-    description: 'No Instagram account connected'
+    description: 'No Instagram account connected or invalid parameters'
   })
   async syncProfile(
-    @Req() req: RequestWithUser,
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
   ) {
-    const { id, userType } = req.user;
+    if (!userId || !userType) {
+      throw new BadRequestException('user_id and user_type are required');
+    }
+
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException('user_type must be either "influencer" or "brand"');
+    }
 
     const user = await this.instagramService.syncInstagramProfile(
-      id,
-      userType,
+      Number(userId),
+      userType as 'influencer' | 'brand',
     );
 
     return {
@@ -317,7 +331,7 @@ export class InstagramController {
   }
 
   /**
-   * Disconnect Instagram account from authenticated user
+   * Disconnect Instagram account from a user
    * POST /instagram/disconnect
    */
   @Public()
@@ -325,28 +339,46 @@ export class InstagramController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Disconnect Instagram account',
-    description: 'Removes Instagram connection and clears all Instagram data from the database for the currently authenticated user'
+    description: 'Removes Instagram connection and clears all Instagram data from the database for a user. Requires user_id and user_type parameters.'
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'User ID (influencer or brand ID)'
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    enum: ['influencer', 'brand'],
+    description: 'User type: influencer or brand'
   })
   @ApiResponse({
     status: 200,
     description: 'Instagram account disconnected successfully'
   })
   @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - no valid JWT token'
-  })
-  @ApiResponse({
     status: 404,
     description: 'User not found'
   })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid parameters'
+  })
   async disconnectAccount(
-    @Req() req: RequestWithUser,
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
   ) {
-    const { id, userType } = req.user;
+    if (!userId || !userType) {
+      throw new BadRequestException('user_id and user_type are required');
+    }
+
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException('user_type must be either "influencer" or "brand"');
+    }
 
     await this.instagramService.disconnectInstagramAccount(
-      id,
-      userType,
+      Number(userId),
+      userType as 'influencer' | 'brand',
     );
 
     return {
