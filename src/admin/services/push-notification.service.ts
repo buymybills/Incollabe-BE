@@ -104,7 +104,6 @@ export class PushNotificationService {
       scheduledAt: createDto.scheduledAt
         ? new Date(createDto.scheduledAt)
         : null,
-      metadata: createDto.metadata || null,
       createdBy: adminId,
     } as any);
 
