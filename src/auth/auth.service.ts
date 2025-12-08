@@ -528,43 +528,21 @@ export class AuthService {
       throw new BadRequestException('Phone number already registered');
     }
 
-    // Referral code logic (only allow influencer referral codes for influencer signups)
+    // Referral code logic
+    // Note: Referral code should be validated using /validate-referral-code endpoint before signup
+    // This is a basic check to ensure the referrer exists
     let referrerInfluencerId: number | undefined;
     if (referralCode) {
-      console.log(`🔍 Checking referral code: ${referralCode}`);
+      console.log(`🔍 Processing referral code during signup: ${referralCode}`);
       const referrer = await this.influencerModel.findOne({
         where: { referralCode },
+        attributes: ['id', 'name'],
       });
       if (!referrer) {
-        console.log(`❌ Invalid referral code: ${referralCode} - No influencer found with this code`);
-        throw new BadRequestException('Invalid referral code');
+        console.log(`❌ Invalid referral code: ${referralCode} - No influencer found`);
+        throw new BadRequestException('Invalid referral code. Please validate the code before signup.');
       }
-      console.log(`✅ Valid referral code found: ${referralCode} - Referrer ID: ${referrer.id}, Name: ${referrer.name}`);
-      // Check monthly usage limit (max 5 per calendar month)
-      const startOfMonth = new Date();
-      startOfMonth.setDate(1);
-      startOfMonth.setHours(0, 0, 0, 0);
-      const endOfMonth = new Date(startOfMonth);
-      endOfMonth.setMonth(endOfMonth.getMonth() + 1);
-      endOfMonth.setDate(0);
-      endOfMonth.setHours(23, 59, 59, 999);
-      const usageCount = await this.influencerReferralUsageModel.count({
-        where: {
-          influencerId: referrer.id,
-          referralCode,
-          createdAt: {
-            [Op.gte]: startOfMonth,
-            [Op.lte]: endOfMonth,
-          },
-        },
-      });
-      console.log(`📊 Referral code monthly usage: ${usageCount}/5 for ${referralCode}`);
-      if (usageCount >= 5) {
-        console.log(`⚠️ Referral code usage limit reached for ${referralCode}`);
-        throw new BadRequestException(
-          'Referral code usage limit reached for this month',
-        );
-      }
+      console.log(`✅ Referral code accepted: ${referralCode} - Referrer ID: ${referrer.id}, Name: ${referrer.name}`);
       referrerInfluencerId = referrer.id;
     } else {
       console.log(`ℹ️ No referral code provided during signup`);
@@ -2428,6 +2406,72 @@ export class AuthService {
     return {
       success: true,
       message: 'FCM token updated successfully',
+    };
+  }
+
+  /**
+   * Validate referral code
+   * Checks if referral code exists and is within monthly usage limit
+   */
+  async validateReferralCode(referralCode: string) {
+    console.log(`🔍 Validating referral code: ${referralCode}`);
+
+    // Find influencer with this referral code
+    const referrer = await this.influencerModel.findOne({
+      where: { referralCode },
+      attributes: ['id', 'name', 'username', 'profileImage'],
+    });
+
+    if (!referrer) {
+      console.log(`❌ Invalid referral code: ${referralCode} - No influencer found with this code`);
+      return {
+        valid: false,
+        message: 'Invalid referral code',
+      };
+    }
+
+    console.log(`✅ Referral code found: ${referralCode} - Referrer ID: ${referrer.id}, Name: ${referrer.name}`);
+
+    // Check monthly usage limit (max 5 per calendar month)
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const endOfMonth = new Date(startOfMonth);
+    endOfMonth.setMonth(endOfMonth.getMonth() + 1);
+    endOfMonth.setDate(0);
+    endOfMonth.setHours(23, 59, 59, 999);
+
+    const usageCount = await this.influencerReferralUsageModel.count({
+      where: {
+        influencerId: referrer.id,
+        referralCode,
+        createdAt: {
+          [Op.gte]: startOfMonth,
+          [Op.lte]: endOfMonth,
+        },
+      },
+    });
+
+    console.log(`📊 Referral code monthly usage: ${usageCount}/5 for ${referralCode}`);
+
+    if (usageCount >= 5) {
+      console.log(`⚠️ Referral code usage limit reached for ${referralCode}`);
+      return {
+        valid: false,
+        message: 'Referral code usage limit reached for this month',
+      };
+    }
+
+    return {
+      valid: true,
+      message: 'Referral code is valid',
+      details: {
+        referrerName: referrer.name,
+        referrerUsername: referrer.username,
+        usageCount,
+        monthlyLimit: 5,
+      },
     };
   }
 }

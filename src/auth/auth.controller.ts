@@ -1130,4 +1130,74 @@ export class AuthController {
       updateFcmTokenDto.fcmToken,
     );
   }
+
+  @Post('validate-referral-code')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Validate referral code',
+    description:
+      'Check if a referral code is valid and within monthly usage limit. This endpoint can be called before signup to validate the referral code.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        referralCode: {
+          type: 'string',
+          description: 'Referral code to validate (8-character alphanumeric code)',
+          example: 'ABC12XYZ',
+          minLength: 8,
+          maxLength: 8,
+        },
+      },
+      required: ['referralCode'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Referral code validation result',
+    schema: {
+      oneOf: [
+        {
+          type: 'object',
+          properties: {
+            valid: { type: 'boolean', example: true },
+            message: { type: 'string', example: 'Referral code is valid' },
+            details: {
+              type: 'object',
+              properties: {
+                referrerName: { type: 'string', example: 'Dhruv Bhatia' },
+                referrerUsername: { type: 'string', example: 'dhruv_1109' },
+                usageCount: { type: 'number', example: 2 },
+                monthlyLimit: { type: 'number', example: 5 },
+              },
+            },
+          },
+        },
+        {
+          type: 'object',
+          properties: {
+            valid: { type: 'boolean', example: false },
+            message: {
+              type: 'string',
+              example: 'Invalid referral code',
+            },
+          },
+        },
+      ],
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid referral code format',
+  })
+  async validateReferralCode(@Body() body: { referralCode: string }) {
+    const { referralCode } = body;
+
+    if (!referralCode || referralCode.length !== 8) {
+      throw new BadRequestException('Referral code must be exactly 8 characters');
+    }
+
+    return this.authService.validateReferralCode(referralCode.toUpperCase());
+  }
 }
