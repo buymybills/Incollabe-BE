@@ -36,6 +36,15 @@ export class Influencer extends Model {
   @Column(DataType.INTEGER)
   declare referralCredits: number;
 
+  // Weekly Credits System
+  @AllowNull(true)
+  @Column({ type: DataType.INTEGER, defaultValue: 5, field: 'weekly_credits' })
+  declare weeklyCredits: number;
+
+  @AllowNull(true)
+  @Column({ type: DataType.DATE, field: 'weekly_credits_reset_date' })
+  declare weeklyCreditsResetDate: Date;
+
   @AllowNull(true)
   @Column(DataType.STRING)
   declare upiId: string;
