@@ -189,6 +189,9 @@ export class InfluencerService {
       isFollowing = !!followRecord;
     }
 
+    // Check and reset weekly credits if needed
+    influencer = await this.checkAndResetWeeklyCredits(influencer);
+
     // Calculate profile completion, platform metrics, and get verification status
     const [profileCompletion, platformMetrics, verificationStatus] =
       await Promise.all([
@@ -291,6 +294,12 @@ export class InfluencerService {
           isPhoneVerified: influencer.isPhoneVerified,
           isWhatsappVerified: influencer.isWhatsappVerified,
           isProfileCompleted: influencer.isProfileCompleted,
+        },
+        weeklyCredits: {
+          remaining: influencer.weeklyCredits || 0,
+          resetDate: influencer.weeklyCreditsResetDate
+            ? new Date(influencer.weeklyCreditsResetDate).toISOString()
+            : this.getNextMondayResetDate().toISOString(),
         },
         profileCompletion,
       };
@@ -1289,6 +1298,9 @@ export class InfluencerService {
       );
     }
 
+    // Deduct weekly credit before creating application
+    await this.deductWeeklyCredit(influencerId);
+
     // Create application
     const application = await this.campaignApplicationModel.create({
       campaignId,
@@ -2032,6 +2044,137 @@ export class InfluencerService {
       page,
       limit,
       totalPages: Math.ceil(influencersWithMetrics.length / limit),
+    };
+  }
+
+  // ==================== Weekly Credits System ====================
+
+  /**
+   * Calculate the next Monday at 00:00:00
+   */
+  private getNextMondayResetDate(): Date {
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+
+    // Calculate days until next Monday
+    const daysUntilMonday = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
+
+    const nextMonday = new Date(now);
+    nextMonday.setDate(now.getDate() + daysUntilMonday);
+    nextMonday.setHours(0, 0, 0, 0);
+
+    return nextMonday;
+  }
+
+  /**
+   * Check if credits need to be reset and reset them if necessary
+   * Returns the updated influencer with current credits
+   */
+  private async checkAndResetWeeklyCredits(
+    influencer: Influencer,
+  ): Promise<Influencer> {
+    const now = new Date();
+
+    // If no reset date is set, initialize it
+    if (!influencer.weeklyCreditsResetDate) {
+      const nextMonday = this.getNextMondayResetDate();
+      await this.influencerRepository.updateInfluencer(influencer.id, {
+        weeklyCredits: 5,
+        weeklyCreditsResetDate: nextMonday,
+      });
+
+      // Refetch to get updated data
+      const updatedInfluencer = await this.influencerRepository.findById(influencer.id);
+      return updatedInfluencer || influencer;
+    }
+
+    // Check if reset date has passed
+    const resetDate = new Date(influencer.weeklyCreditsResetDate);
+    if (now >= resetDate) {
+      // Reset credits and calculate next Monday
+      const nextMonday = this.getNextMondayResetDate();
+      await this.influencerRepository.updateInfluencer(influencer.id, {
+        weeklyCredits: 5,
+        weeklyCreditsResetDate: nextMonday,
+      });
+
+      console.log('✅ Weekly credits reset for influencer:', {
+        influencerId: influencer.id,
+        newCredits: 5,
+        nextResetDate: nextMonday.toISOString(),
+      });
+
+      // Refetch to get updated data
+      const updatedInfluencer = await this.influencerRepository.findById(influencer.id);
+      return updatedInfluencer || influencer;
+    }
+
+    return influencer;
+  }
+
+  /**
+   * Deduct one weekly credit from the influencer
+   * Throws error if no credits available
+   */
+  private async deductWeeklyCredit(influencerId: number): Promise<void> {
+    let influencer = await this.influencerRepository.findById(influencerId);
+
+    if (!influencer) {
+      throw new NotFoundException('Influencer not found');
+    }
+
+    // Check and reset credits if needed
+    influencer = await this.checkAndResetWeeklyCredits(influencer);
+
+    // Check if credits are available
+    if (!influencer.weeklyCredits || influencer.weeklyCredits <= 0) {
+      const resetDate = influencer.weeklyCreditsResetDate
+        ? new Date(influencer.weeklyCreditsResetDate).toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          })
+        : 'next Monday';
+
+      throw new BadRequestException(
+        `You have used all your weekly credits. Credits will reset on ${resetDate}.`,
+      );
+    }
+
+    // Deduct one credit
+    const newCreditCount = influencer.weeklyCredits - 1;
+    await this.influencerRepository.updateInfluencer(influencerId, {
+      weeklyCredits: newCreditCount,
+    });
+
+    console.log('✅ Weekly credit deducted:', {
+      influencerId,
+      remainingCredits: newCreditCount,
+      resetDate: influencer.weeklyCreditsResetDate,
+    });
+  }
+
+  /**
+   * Get current weekly credits info for an influencer
+   * Returns credits and reset date
+   */
+  async getWeeklyCreditsInfo(influencerId: number): Promise<{
+    weeklyCredits: number;
+    weeklyCreditsResetDate: Date;
+  }> {
+    let influencer = await this.influencerRepository.findById(influencerId);
+
+    if (!influencer) {
+      throw new NotFoundException('Influencer not found');
+    }
+
+    // Check and reset credits if needed
+    influencer = await this.checkAndResetWeeklyCredits(influencer);
+
+    return {
+      weeklyCredits: influencer.weeklyCredits || 0,
+      weeklyCreditsResetDate: influencer.weeklyCreditsResetDate || this.getNextMondayResetDate(),
     };
   }
 }

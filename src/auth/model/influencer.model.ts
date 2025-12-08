@@ -32,6 +32,16 @@ import { EncryptionService } from '../../shared/services/encryption.service';
   paranoid: true,
 })
 export class Influencer extends Model {
+
+  // Weekly Credits System
+  @AllowNull(true)
+  @Column({ type: DataType.INTEGER, defaultValue: 5, field: 'weekly_credits' })
+  declare weeklyCredits: number;
+
+  @AllowNull(true)
+  @Column({ type: DataType.DATE, field: 'weekly_credits_reset_date' })
+  declare weeklyCreditsResetDate: Date;
+
   @PrimaryKey
   @AutoIncrement
   @Column(DataType.INTEGER)
