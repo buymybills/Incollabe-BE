@@ -74,6 +74,9 @@ export class Message extends Model<Message> {
     type: DataType.TEXT,
     allowNull: true,
   })
+  // For encrypted messages, stores JSON with dual encryption:
+  // { encryptedKeyForSender, encryptedKeyForRecipient, iv, ciphertext, version }
+  // Both sender and recipient can decrypt using their own private keys
   declare content: string;
 
   @Column({

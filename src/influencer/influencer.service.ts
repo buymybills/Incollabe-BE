@@ -2145,7 +2145,7 @@ export class InfluencerService {
 
     // Calculate summary
     const lifetimeReward = allTransactions.reduce((sum: number, tx: any) => sum + tx.amount, 0);
-    const redeemed = allTransactions
+    const paid = allTransactions
       .filter((tx: any) => tx.paymentStatus === 'paid')
       .reduce((sum: number, tx: any) => sum + tx.amount, 0);
     const processing = allTransactions
@@ -2154,6 +2154,9 @@ export class InfluencerService {
     const redeemable = allTransactions
       .filter((tx: any) => tx.paymentStatus === 'pending')
       .reduce((sum: number, tx: any) => sum + tx.amount, 0);
+
+    // Include processing amounts in redeemed (since redemption is already requested)
+    const redeemed = paid + processing;
 
     // Get paginated referral history
     const offset = (page - 1) * limit;
