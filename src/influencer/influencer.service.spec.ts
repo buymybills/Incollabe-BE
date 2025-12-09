@@ -230,6 +230,7 @@ describe('InfluencerService', () => {
             findAll: jest.fn().mockResolvedValue([]),
             findOne: jest.fn(),
             findAndCountAll: jest.fn().mockResolvedValue({ count: 0, rows: [] }),
+            count: jest.fn().mockResolvedValue(0),
           },
         },
         {
