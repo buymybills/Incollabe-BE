@@ -309,6 +309,27 @@ export class InfluencerService {
           })
         : null;
 
+      // Calculate monthly referral usage count
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const endOfMonth = new Date(startOfMonth);
+      endOfMonth.setMonth(endOfMonth.getMonth() + 1);
+      endOfMonth.setDate(0);
+      endOfMonth.setHours(23, 59, 59, 999);
+
+      const monthlyReferralUsageCount = await this.influencerReferralUsageModel.count({
+        where: {
+          influencerId: influencer.id,
+          referralCode: influencer.referralCode || '',
+          createdAt: {
+            [Op.gte]: startOfMonth,
+            [Op.lte]: endOfMonth,
+          },
+        },
+      });
+
       return {
         ...baseProfile,
         phone: influencer.phone,
@@ -335,6 +356,7 @@ export class InfluencerService {
         },
         referralCode: influencer.referralCode || null,
         referralCredits: influencer.referralCredits || 0,
+        monthlyReferralUsageCount,
         upiId: influencer.upiId || null,
         profileCompletion,
       };
