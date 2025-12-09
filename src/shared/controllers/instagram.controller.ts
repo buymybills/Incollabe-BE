@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Query, HttpCode, HttpStatus, UseGuards, Req, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Body, Query, Param, HttpCode, HttpStatus, UseGuards, Req, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { InstagramService } from '../services/instagram.service';
 import { InstagramSyncCronService } from '../services/instagram-sync.cron';
@@ -145,6 +145,78 @@ export class InstagramController {
 
     return {
       message: 'Instagram profile retrieved and connected successfully',
+      profile: {
+        id: user.instagramUserId,
+        username: user.instagramUsername,
+        accountType: user.instagramAccountType,
+        followersCount: user.instagramFollowersCount,
+        followsCount: user.instagramFollowsCount,
+        mediaCount: user.instagramMediaCount,
+        profilePictureUrl: user.instagramProfilePictureUrl,
+        bio: user.instagramBio,
+      },
+    };
+  }
+
+  /**
+   * Connect Instagram using Facebook access token (Graph API)
+   * GET /instagram/connect-facebook
+   */
+  @Public()
+  @Get('connect-facebook')
+  @ApiOperation({
+    summary: 'Connect Instagram using Facebook token',
+    description: 'Connects Instagram Business account using Facebook access token (Graph API). Requires facebook_access_token, user_id and user_type parameters.'
+  })
+  @ApiQuery({
+    name: 'facebook_access_token',
+    required: true,
+    description: 'Facebook access token from OAuth flow'
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'User ID (influencer or brand ID)'
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    enum: ['influencer', 'brand'],
+    description: 'User type: influencer or brand'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Instagram connected successfully'
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'No Facebook Pages found or Instagram not connected to page'
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found'
+  })
+  async connectFacebook(
+    @Query('facebook_access_token') facebookAccessToken: string,
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
+  ) {
+    if (!userId || !userType || !facebookAccessToken) {
+      throw new BadRequestException('facebook_access_token, user_id and user_type are required');
+    }
+
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException('user_type must be either "influencer" or "brand"');
+    }
+
+    const user = await this.instagramService.connectWithFacebookToken(
+      Number(userId),
+      userType as 'influencer' | 'brand',
+      facebookAccessToken,
+    );
+
+    return {
+      message: 'Instagram account connected successfully using Facebook',
       profile: {
         id: user.instagramUserId,
         username: user.instagramUsername,
@@ -407,4 +479,251 @@ export class InstagramController {
       message: 'Instagram sync triggered successfully. Check server logs for details.',
     };
   }
+
+  /**
+   * Get Instagram media/posts for a user
+   * GET /instagram/media
+   */
+  @Public()
+  @Get('media')
+  @ApiOperation({
+    summary: 'Get Instagram media/posts',
+    description: 'Fetches all Instagram posts for a user. Requires user_id and user_type parameters.'
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'User ID (influencer or brand ID)'
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    enum: ['influencer', 'brand'],
+    description: 'User type: influencer or brand'
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of posts to fetch (default: 25)',
+    type: Number
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Media fetched successfully'
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found'
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'No Instagram account connected or invalid parameters'
+  })
+  async getMedia(
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
+    @Query('limit') limit?: string,
+  ) {
+    if (!userId || !userType) {
+      throw new BadRequestException('user_id and user_type are required');
+    }
+
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException('user_type must be either "influencer" or "brand"');
+    }
+
+    const mediaLimit = limit ? parseInt(limit, 10) : 25;
+
+    const media = await this.instagramService.getInstagramMedia(
+      Number(userId),
+      userType as 'influencer' | 'brand',
+      mediaLimit,
+    );
+
+    return {
+      message: 'Instagram media fetched successfully',
+      ...media,
+    };
+  }
+
+  /**
+   * Check if user has insights permissions
+   * GET /instagram/check-insights-permissions
+   */
+  @Public()
+  @Get('check-insights-permissions')
+  @ApiOperation({
+    summary: 'Check insights permissions',
+    description: 'Checks if the Instagram account has the necessary permissions and account type to access insights. Requires user_id and user_type parameters.'
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'User ID (influencer or brand ID)'
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    enum: ['influencer', 'brand'],
+    description: 'User type: influencer or brand'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Permission check completed'
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found'
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'No Instagram account connected or invalid parameters'
+  })
+  async checkInsightsPermissions(
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
+  ) {
+    if (!userId || !userType) {
+      throw new BadRequestException('user_id and user_type are required');
+    }
+
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException('user_type must be either "influencer" or "brand"');
+    }
+
+    const result = await this.instagramService.checkInsightsPermissions(
+      Number(userId),
+      userType as 'influencer' | 'brand',
+    );
+
+    return result;
+  }
+
+  /**
+   * Get insights for a specific Instagram post
+   * GET /instagram/media/:mediaId/insights
+   */
+  @Public()
+  @Get('media/:mediaId/insights')
+  @ApiOperation({
+    summary: 'Get Instagram post insights',
+    description: 'Fetches insights for a specific Instagram post from Instagram API and stores them. Requires user_id and user_type parameters.'
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'User ID (influencer or brand ID)'
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    enum: ['influencer', 'brand'],
+    description: 'User type: influencer or brand'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Post insights fetched successfully'
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found'
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'No Instagram account connected or invalid parameters'
+  })
+  async getPostInsights(
+    @Param('mediaId') mediaId: string,
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
+  ) {
+    if (!userId || !userType) {
+      throw new BadRequestException('user_id and user_type are required');
+    }
+
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException('user_type must be either "influencer" or "brand"');
+    }
+
+    const insights = await this.instagramService.getMediaInsights(
+      Number(userId),
+      userType as 'influencer' | 'brand',
+      mediaId,
+    );
+
+    return {
+      message: 'Post insights fetched and stored successfully',
+      ...insights,
+    };
+  }
+
+  /**
+   * Get stored Instagram media insights from database
+   * GET /instagram/stored-insights
+   */
+  @Public()
+  @Get('stored-insights')
+  @ApiOperation({
+    summary: 'Get stored Instagram insights',
+    description: 'Retrieves stored Instagram media insights from database. Requires user_id and user_type parameters.'
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'User ID (influencer or brand ID)'
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    enum: ['influencer', 'brand'],
+    description: 'User type: influencer or brand'
+  })
+  @ApiQuery({
+    name: 'media_id',
+    required: false,
+    description: 'Optional: Filter by specific media ID'
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of records to return (default: 100)',
+    type: Number
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Stored insights retrieved successfully'
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid parameters'
+  })
+  async getStoredInsights(
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
+    @Query('media_id') mediaId?: string,
+    @Query('limit') limit?: string,
+  ) {
+    if (!userId || !userType) {
+      throw new BadRequestException('user_id and user_type are required');
+    }
+
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException('user_type must be either "influencer" or "brand"');
+    }
+
+    const limitNum = limit ? parseInt(limit, 10) : 100;
+
+    const result = await this.instagramService.getStoredMediaInsights(
+      Number(userId),
+      userType as 'influencer' | 'brand',
+      mediaId,
+      limitNum,
+    );
+
+    return {
+      message: 'Stored insights retrieved successfully',
+      ...result,
+    };
+  }
+
 }

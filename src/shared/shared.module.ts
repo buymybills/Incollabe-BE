@@ -33,6 +33,8 @@ import { SupportTicket } from './models/support-ticket.model';
 import { Conversation } from './models/conversation.model';
 import { Message } from './models/message.model';
 import { KeyBackup } from './models/key-backup.model';
+import { InstagramMedia } from './models/instagram-media.model';
+import { InstagramMediaInsight } from './models/instagram-media-insight.model';
 import { KeyBackupService } from './services/key-backup.service';
 import { KeyBackupController } from './key-backup.controller';
 import { JwtAuthModule } from './jwt.module';
@@ -52,6 +54,8 @@ import { JwtAuthModule } from './jwt.module';
       Conversation,
       Message,
       KeyBackup,
+      InstagramMedia,
+      InstagramMediaInsight,
     ]),
   ],
   controllers: [SearchController, ChatController, KeyBackupController, InstagramController],

@@ -86,3 +86,89 @@ export class InstagramUserProfileDto {
   @IsOptional()
   name?: string;
 }
+
+export class InstagramMediaDto {
+  @ApiProperty({ description: 'Media ID' })
+  id: string;
+
+  @ApiProperty({ description: 'Media caption/text', required: false })
+  @IsOptional()
+  caption?: string;
+
+  @ApiProperty({ description: 'Media type (IMAGE, VIDEO, CAROUSEL_ALBUM)', required: false })
+  @IsOptional()
+  media_type?: string;
+
+  @ApiProperty({ description: 'Media URL', required: false })
+  @IsOptional()
+  media_url?: string;
+
+  @ApiProperty({ description: 'Thumbnail URL (for videos)', required: false })
+  @IsOptional()
+  thumbnail_url?: string;
+
+  @ApiProperty({ description: 'Permalink/URL to the post', required: false })
+  @IsOptional()
+  permalink?: string;
+
+  @ApiProperty({ description: 'Timestamp when posted', required: false })
+  @IsOptional()
+  timestamp?: string;
+
+  @ApiProperty({ description: 'Like count', required: false })
+  @IsOptional()
+  like_count?: number;
+
+  @ApiProperty({ description: 'Comments count', required: false })
+  @IsOptional()
+  comments_count?: number;
+}
+
+export class InstagramMediaListResponseDto {
+  @ApiProperty({ description: 'List of media items', type: [InstagramMediaDto] })
+  data: InstagramMediaDto[];
+
+  @ApiProperty({ description: 'Pagination info', required: false })
+  @IsOptional()
+  paging?: {
+    cursors?: {
+      before?: string;
+      after?: string;
+    };
+    next?: string;
+    previous?: string;
+  };
+}
+
+export class InstagramInsightValueDto {
+  @ApiProperty({ description: 'Metric value' })
+  value: number;
+}
+
+export class InstagramInsightDto {
+  @ApiProperty({ description: 'Metric name' })
+  name: string;
+
+  @ApiProperty({ description: 'Time period (lifetime, day, etc.)' })
+  period: string;
+
+  @ApiProperty({ description: 'Metric values', type: [InstagramInsightValueDto] })
+  values: InstagramInsightValueDto[];
+
+  @ApiProperty({ description: 'Metric title', required: false })
+  @IsOptional()
+  title?: string;
+
+  @ApiProperty({ description: 'Metric description', required: false })
+  @IsOptional()
+  description?: string;
+
+  @ApiProperty({ description: 'Metric ID', required: false })
+  @IsOptional()
+  id?: string;
+}
+
+export class InstagramMediaInsightsResponseDto {
+  @ApiProperty({ description: 'List of insights', type: [InstagramInsightDto] })
+  data: InstagramInsightDto[];
+}
