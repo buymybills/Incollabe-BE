@@ -442,7 +442,8 @@ export class PushNotificationService {
       cityIds = cities.map((city) => city.id);
     }
 
-    // Add gender filter if specified and not 'all'
+    // Prepare gender filter for influencers only (brands don't have gender column)
+    const influencerGenderFilter: any = {};
     if (
       notification.genderFilter &&
       notification.genderFilter !== GenderFilter.ALL
@@ -453,7 +454,7 @@ export class PushNotificationService {
         [GenderFilter.FEMALE]: 'Female',
         [GenderFilter.OTHERS]: 'Others',
       };
-      commonWhere.gender = genderMap[notification.genderFilter];
+      influencerGenderFilter.gender = genderMap[notification.genderFilter];
     }
 
     // Note: Age filter disabled - Influencer/Brand models don't have age column
@@ -474,6 +475,7 @@ export class PushNotificationService {
         // Get both influencers and brands
         const influencerWhere: any = {
           ...commonWhere,
+          ...influencerGenderFilter,
           fcmToken: { [Op.ne]: null },
           ...(cityIds.length > 0 ? { cityId: { [Op.in]: cityIds } } : {}),
         };
@@ -527,6 +529,7 @@ export class PushNotificationService {
       case ReceiverType.INFLUENCERS: {
         const influencerWhere: any = {
           ...commonWhere,
+          ...influencerGenderFilter,
           fcmToken: { [Op.ne]: null },
           ...(cityIds.length > 0 ? { cityId: { [Op.in]: cityIds } } : {}),
           ...(notification.receiverType === ReceiverType.INFLUENCERS &&
@@ -606,6 +609,7 @@ export class PushNotificationService {
         const specificInfluencers = await this.influencerModel.findAll({
           where: {
             ...commonWhere,
+            ...influencerGenderFilter,
             id: { [Op.in]: notification.specificReceivers || [] },
             fcmToken: { [Op.ne]: null },
             ...(cityIds.length > 0 ? { cityId: { [Op.in]: cityIds } } : {}),
