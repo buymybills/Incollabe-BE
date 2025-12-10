@@ -447,7 +447,13 @@ export class PushNotificationService {
       notification.genderFilter &&
       notification.genderFilter !== GenderFilter.ALL
     ) {
-      commonWhere.gender = notification.genderFilter;
+      // Map GenderFilter enum (lowercase) to Gender enum (capitalized)
+      const genderMap: Record<string, string> = {
+        [GenderFilter.MALE]: 'Male',
+        [GenderFilter.FEMALE]: 'Female',
+        [GenderFilter.OTHERS]: 'Others',
+      };
+      commonWhere.gender = genderMap[notification.genderFilter];
     }
 
     // Note: Age filter disabled - Influencer/Brand models don't have age column
