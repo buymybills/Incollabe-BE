@@ -56,6 +56,7 @@ import {
   SelectAndRedeemDto,
 } from './dto/upi-management.dto';
 import { RazorpayService } from '../shared/razorpay.service';
+import { ConfigService } from '@nestjs/config';
 
 @ApiTags('Influencer Profile')
 @Controller('influencer')
@@ -67,6 +68,7 @@ export class InfluencerController {
     private readonly supportTicketService: SupportTicketService,
     private readonly proSubscriptionService: ProSubscriptionService,
     private readonly razorpayService: RazorpayService,
+    private readonly configService: ConfigService,
   ) {}
 
   @Get('profile')
@@ -1447,20 +1449,25 @@ export class InfluencerController {
       // Get signature from headers
       const signature = req.headers['x-razorpay-signature'];
 
-      if (!signature) {
-        throw new BadRequestException('Missing webhook signature');
-      }
+      // Only verify webhook signature in production
+      if (this.configService.get<string>('NODE_ENV') === 'production') {
+        if (!signature) {
+          throw new BadRequestException('Missing webhook signature');
+        }
 
-      // Verify webhook signature
-      const rawBody = JSON.stringify(body);
-      const isValid = this.razorpayService.verifyWebhookSignature(
-        rawBody,
-        signature,
-      );
+        // Verify webhook signature
+        const rawBody = JSON.stringify(body);
+        const isValid = this.razorpayService.verifyWebhookSignature(
+          rawBody,
+          signature,
+        );
 
-      if (!isValid) {
-        console.error('Invalid webhook signature');
-        throw new BadRequestException('Invalid webhook signature');
+        if (!isValid) {
+          console.error('Invalid webhook signature');
+          throw new BadRequestException('Invalid webhook signature');
+        }
+      } else {
+        console.log('⚠️ Skipping webhook signature verification (not production)');
       }
 
       // Extract event and payload

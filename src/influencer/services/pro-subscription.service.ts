@@ -781,6 +781,17 @@ export class ProSubscriptionService {
     console.log(`Processing subscription event ${event} for subscription ${subscription.id}`);
 
     switch (event) {
+      case 'subscription.authenticated':
+        // UPI mandate authenticated but payment delayed (when start_at is in future)
+        await subscription.update({
+          status: SubscriptionStatus.ACTIVE,
+          upiMandateStatus: 'authenticated',
+          mandateAuthenticatedAt: createDatabaseDate(),
+        });
+
+        console.log(`✅ Subscription ${subscription.id} authenticated - first charge scheduled for future date`);
+        break;
+
       case 'subscription.activated':
         // UPI mandate authenticated and first payment successful
         await subscription.update({
@@ -799,61 +810,94 @@ export class ProSubscriptionService {
           { where: { id: subscription.influencerId } },
         );
 
-        // Create invoice for first payment
-        const activationAmount = subscriptionEntity.amount || this.PRO_SUBSCRIPTION_AMOUNT;
-        const activationInvoiceNumber = await this.generateInvoiceNumber();
-
-        const activationInvoice = await this.proInvoiceModel.create({
-          invoiceNumber: activationInvoiceNumber,
-          subscriptionId: subscription.id,
-          influencerId: subscription.influencerId,
-          amount: activationAmount,
-          tax: 0,
-          totalAmount: activationAmount,
-          billingPeriodStart: subscription.currentPeriodStart,
-          billingPeriodEnd: subscription.currentPeriodEnd,
-          paymentStatus: 'paid',
-          paymentMethod: 'razorpay',
-          razorpayPaymentId: subscriptionEntity.notes?.razorpay_payment_id || subscriptionEntity.id,
-          paidAt: createDatabaseDate(),
+        // Check if invoice already exists for this billing period (prevent duplicates)
+        const existingActivationInvoice = await this.proInvoiceModel.findOne({
+          where: {
+            subscriptionId: subscription.id,
+            billingPeriodStart: subscription.currentPeriodStart,
+            billingPeriodEnd: subscription.currentPeriodEnd,
+          },
         });
 
-        // Generate PDF for invoice
-        try {
-          await this.generateInvoicePDF(activationInvoice.id);
-          console.log(`📄 Invoice PDF generated for activation: ${activationInvoice.invoiceNumber}`);
-        } catch (pdfError) {
-          console.error('Failed to generate activation invoice PDF:', pdfError);
-        }
+        if (existingActivationInvoice) {
+          console.log(`✅ Invoice already exists for this period: ${existingActivationInvoice.invoiceNumber}`);
+        } else {
+          // Create invoice for first payment
+          const activationAmount = subscriptionEntity.amount || this.PRO_SUBSCRIPTION_AMOUNT;
+          const activationInvoiceNumber = await this.generateInvoiceNumber();
 
-        console.log(`✅ Subscription ${subscription.id} activated with invoice ${activationInvoice.invoiceNumber}`);
+          const activationInvoice = await this.proInvoiceModel.create({
+            invoiceNumber: activationInvoiceNumber,
+            subscriptionId: subscription.id,
+            influencerId: subscription.influencerId,
+            amount: activationAmount,
+            tax: 0,
+            totalAmount: activationAmount,
+            billingPeriodStart: subscription.currentPeriodStart,
+            billingPeriodEnd: subscription.currentPeriodEnd,
+            paymentStatus: 'paid',
+            paymentMethod: 'razorpay',
+            razorpayPaymentId: subscriptionEntity.notes?.razorpay_payment_id || subscriptionEntity.id,
+            paidAt: createDatabaseDate(),
+          });
+
+          console.log(`✅ Subscription ${subscription.id} activated with invoice ${activationInvoice.invoiceNumber}`);
+
+          // Generate PDF for newly created invoice
+          try {
+            await this.generateInvoicePDF(activationInvoice.id);
+            console.log(`📄 Invoice PDF generated for activation: ${activationInvoice.invoiceNumber}`);
+          } catch (pdfError) {
+            console.error('Failed to generate activation invoice PDF:', pdfError);
+          } 
+        }
         break;
 
       case 'subscription.charged':
         // Recurring payment successful
         console.log(`💰 Subscription ${subscription.id} charged successfully`);
 
-        // Create invoice for this charge
-        const chargeAmount = subscriptionEntity.amount || this.PRO_SUBSCRIPTION_AMOUNT;
-        const invoiceNumber = await this.generateInvoiceNumber();
-
-        const newInvoice = await this.proInvoiceModel.create({
-          invoiceNumber,
-          subscriptionId: subscription.id,
-          influencerId: subscription.influencerId,
-          amount: chargeAmount,
-          tax: 0,
-          totalAmount: chargeAmount,
-          billingPeriodStart: subscription.currentPeriodStart,
-          billingPeriodEnd: subscription.currentPeriodEnd,
-          paymentStatus: 'paid',
-          paymentMethod: 'razorpay',
-          razorpayPaymentId: subscriptionEntity.payment_id,
-          paidAt: createDatabaseDate(),
+        // Check if invoice already exists for this billing period (prevent duplicates)
+        const existingChargeInvoice = await this.proInvoiceModel.findOne({
+          where: {
+            subscriptionId: subscription.id,
+            billingPeriodStart: subscription.currentPeriodStart,
+            billingPeriodEnd: subscription.currentPeriodEnd,
+          },
         });
 
-        // Generate invoice PDF
-        await this.generateInvoicePDF(newInvoice.id);
+        if (existingChargeInvoice) {
+          console.log(`✅ Invoice already exists for this period: ${existingChargeInvoice.invoiceNumber}`);
+        } else {
+          // Create invoice for this charge
+          const chargeAmount = subscriptionEntity.amount || this.PRO_SUBSCRIPTION_AMOUNT;
+          const invoiceNumber = await this.generateInvoiceNumber();
+
+          const newInvoice = await this.proInvoiceModel.create({
+            invoiceNumber,
+            subscriptionId: subscription.id,
+            influencerId: subscription.influencerId,
+            amount: chargeAmount,
+            tax: 0,
+            totalAmount: chargeAmount,
+            billingPeriodStart: subscription.currentPeriodStart,
+            billingPeriodEnd: subscription.currentPeriodEnd,
+            paymentStatus: 'paid',
+            paymentMethod: 'razorpay',
+            razorpayPaymentId: subscriptionEntity.payment_id,
+            paidAt: createDatabaseDate(),
+          });
+
+          console.log(`✅ Recurring charge invoice created: ${newInvoice.invoiceNumber}`);
+
+          // Generate invoice PDF
+          try {
+            await this.generateInvoicePDF(newInvoice.id);
+            console.log(`📄 Invoice PDF generated for recurring charge: ${newInvoice.invoiceNumber}`);
+          } catch (pdfError) {
+            console.error('Failed to generate recurring charge invoice PDF:', pdfError);
+          }
+        }
 
         // Update subscription period
         const newPeriodStart = createDatabaseDate();
@@ -1175,8 +1219,23 @@ export class ProSubscriptionService {
 
     const planId = planResult.planId;
 
+    // Check if influencer still has active Pro access from previous subscription
+    const influencerData = await this.influencerModel.findByPk(influencerId);
+    const now = createDatabaseDate();
+    const hasActivePro = influencerData?.isPro && influencerData?.proExpiresAt && influencerData.proExpiresAt > now;
+
     // Create Autopay subscription in Razorpay (supports all payment methods)
     const influencerEmail = (influencer as any).email || `influencer${influencerId}@collabkaroo.com`;
+
+    // Calculate start_at timestamp to delay first charge if user has active Pro
+    let startAtTimestamp: number | undefined;
+    if (hasActivePro && existingSubscription) {
+      // Convert endDate to Unix timestamp (seconds, not milliseconds)
+      const endDateTime = existingSubscription.currentPeriodEnd.getTime();
+      startAtTimestamp = Math.floor(endDateTime / 1000);
+      console.log(`⏰ Delaying first charge until current period ends: ${toIST(existingSubscription.currentPeriodEnd)}`);
+    }
+
     const subscriptionResult = await this.razorpayService.createAutopaySubscription(
       planId,
       influencerId,
@@ -1187,15 +1246,40 @@ export class ProSubscriptionService {
         influencerId,
         subscriptionType: 'pro_account',
       },
+      startAtTimestamp,
     );
 
     if (!subscriptionResult.success) {
       throw new BadRequestException(`Failed to create autopay subscription: ${subscriptionResult.error}`);
     }
 
-    // Create or update subscription record
-    const startDate = createDatabaseDate();
-    const endDate = addDaysForDatabase(startDate, this.SUBSCRIPTION_DURATION_DAYS);
+    console.log('🔍 DEBUG - Double payment prevention check:', {
+      influencerId,
+      isPro: influencerData?.isPro,
+      proExpiresAt: influencerData?.proExpiresAt ? toIST(influencerData.proExpiresAt) : null,
+      currentTime: toIST(now),
+      hasActivePro,
+      hasExistingSubscription: !!existingSubscription,
+      existingPeriodStart: existingSubscription ? toIST(existingSubscription.currentPeriodStart) : null,
+      existingPeriodEnd: existingSubscription ? toIST(existingSubscription.currentPeriodEnd) : null,
+    });
+
+    // If user has active Pro, use existing period dates to avoid double charging
+    // Otherwise, start a new billing period
+    let startDate: Date;
+    let endDate: Date;
+
+    if (hasActivePro && existingSubscription) {
+      // User already paid for current period - use existing period dates
+      startDate = existingSubscription.currentPeriodStart;
+      endDate = existingSubscription.currentPeriodEnd;
+      console.log(`✅ Reusing existing billing period to avoid double charging (ends: ${toIST(endDate)})`);
+    } else {
+      // New billing period starts now
+      startDate = now;
+      endDate = addDaysForDatabase(startDate, this.SUBSCRIPTION_DURATION_DAYS);
+      console.log(`📅 Starting new billing period (ends: ${toIST(endDate)})`);
+    }
 
     let subscription;
     if (existingSubscription) {
@@ -1203,13 +1287,14 @@ export class ProSubscriptionService {
       subscription = await existingSubscription.update({
         razorpaySubscriptionId: subscriptionResult.subscriptionId,
         upiMandateStatus: 'pending',
-        mandateCreatedAt: startDate,
+        mandateCreatedAt: now,
         autoRenew: true,
         currentPeriodStart: startDate,
         currentPeriodEnd: endDate,
         nextBillingDate: endDate,
         cancelledAt: null,
         cancelReason: null,
+        status: hasActivePro ? SubscriptionStatus.ACTIVE : SubscriptionStatus.PAYMENT_PENDING,
       });
     } else {
       // Create new subscription
@@ -1224,14 +1309,16 @@ export class ProSubscriptionService {
         paymentMethod: 'razorpay',
         razorpaySubscriptionId: subscriptionResult.subscriptionId,
         upiMandateStatus: 'pending',
-        mandateCreatedAt: startDate,
+        mandateCreatedAt: now,
         autoRenew: true,
       });
     }
 
     return {
       success: true,
-      message: 'Autopay setup initiated. Choose your preferred payment method (UPI, Card, etc.) to complete setup.',
+      message: hasActivePro
+        ? 'Autopay setup initiated. You will NOT be charged again for the current period. Next payment will be charged after your current Pro access expires.'
+        : 'Autopay setup initiated. Choose your preferred payment method (UPI, Card, etc.) to complete setup.',
       subscription: {
         id: subscription.id,
         razorpaySubscriptionId: subscriptionResult.subscriptionId,
@@ -1239,14 +1326,25 @@ export class ProSubscriptionService {
         mandateStatus: subscription.upiMandateStatus,
       },
       paymentLink: subscriptionResult.paymentLink,
-      instructions: [
-        '1. Click on the payment link',
-        '2. Choose your preferred payment method (UPI, Card, NetBanking, etc.)',
-        '3. Complete the payment authentication',
-        '4. First payment will be charged immediately',
-        '5. Subsequent payments will be auto-charged every 30 days',
-        '6. You can pause or cancel anytime',
-      ],
+      currentPeriodEnd: hasActivePro ? toIST(endDate) : undefined,
+      nextBillingDate: toIST(endDate),
+      instructions: hasActivePro
+        ? [
+            '1. Click on the payment link',
+            '2. Choose your preferred payment method (UPI, Card, NetBanking, etc.)',
+            '3. Complete the payment authentication to setup autopay',
+            '4. No charge now - your existing Pro access will continue',
+            `5. Next payment will be auto-charged on ${toIST(endDate)}`,
+            '6. You can pause or cancel anytime',
+          ]
+        : [
+            '1. Click on the payment link',
+            '2. Choose your preferred payment method (UPI, Card, NetBanking, etc.)',
+            '3. Complete the payment authentication',
+            '4. First payment will be charged immediately',
+            '5. Subsequent payments will be auto-charged every 30 days',
+            '6. You can pause or cancel anytime',
+          ],
     };
   }
 
@@ -1394,6 +1492,7 @@ export class ProSubscriptionService {
 
   /**
    * Cancel autopay (but keep subscription active until period end)
+   * Actually PAUSES the subscription instead of cancelling to allow easy restart without double charging
    */
   async cancelAutopay(influencerId: number, reason?: string) {
     const subscription = await this.proSubscriptionModel.findOne({
@@ -1409,36 +1508,37 @@ export class ProSubscriptionService {
       throw new NotFoundException('No active subscription found');
     }
 
-    // Cancel in Razorpay
+    // PAUSE in Razorpay instead of cancelling (allows restart without double charge)
     if (subscription.razorpaySubscriptionId) {
-      const cancelResult = await this.razorpayService.cancelSubscription(
+      const pauseResult = await this.razorpayService.pauseSubscription(
         subscription.razorpaySubscriptionId,
-        true, // Cancel at cycle end
+        'end_of_cycle',
       );
 
-      if (!cancelResult.success) {
+      if (!pauseResult.success) {
         console.error(
-          'Failed to cancel in Razorpay:',
-          cancelResult.error,
-          cancelResult.errorCode ? `(${cancelResult.errorCode})` : '',
+          'Failed to pause in Razorpay:',
+          pauseResult.error,
         );
         // Continue anyway to update local DB
+      } else {
+        console.log('✅ Razorpay subscription paused (not cancelled) - can be restarted easily');
       }
     }
 
-    // Update subscription
+    // Update subscription - mark as "autopay disabled" but keep mandate alive
     await subscription.update({
       autoRenew: false,
       cancelledAt: createDatabaseDate(),
       cancelReason: reason,
-      upiMandateStatus: 'cancelled',
+      upiMandateStatus: 'paused', // Changed from 'cancelled' to 'paused'
     });
 
     return {
       success: true,
-      message: 'Autopay cancelled. Your Pro access will remain active until the end of current billing period.',
+      message: 'Autopay disabled. Your Pro access will remain active until the end of current billing period.',
       validUntil: toIST(subscription.currentPeriodEnd),
-      note: 'You can setup autopay again anytime to continue Pro benefits.',
+      note: 'You can restart autopay anytime without being charged again for the current period.',
     };
   }
 

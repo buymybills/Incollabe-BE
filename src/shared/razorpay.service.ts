@@ -374,6 +374,7 @@ export class RazorpayService {
   /**
    * Create Autopay subscription (supports all payment methods)
    * This creates a subscription that allows user to choose any payment method at checkout
+   * @param startAt - Optional Unix timestamp for when to start billing (to avoid double charging)
    */
   async createAutopaySubscription(
     planId: string,
@@ -382,17 +383,19 @@ export class RazorpayService {
     influencerPhone: string,
     influencerEmail: string,
     notes?: Record<string, any>,
+    startAt?: number,
   ) {
     try {
       console.log('💳 Creating Autopay subscription with:', {
         planId,
         influencerId,
         influencerName,
+        startAt: startAt ? new Date(startAt * 1000).toISOString() : 'immediate',
       });
 
       const subscriptionData: any = {
         plan_id: planId,
-        total_count: 360, // 360 months = 30 years (UPI maximum limit)
+        total_count: 12, // 12 months = 1 year (auto-renews for another year after)
         quantity: 1,
         customer_notify: 1,
         notes: {
@@ -406,6 +409,12 @@ export class RazorpayService {
           notify_email: influencerEmail,
         },
       };
+
+      // If startAt is provided, delay the first charge until that date
+      if (startAt) {
+        subscriptionData.start_at = startAt;
+        console.log(`⏰ First charge will be delayed until: ${new Date(startAt * 1000).toISOString()}`);
+      }
 
       const subscription = await this.razorpay.subscriptions.create(subscriptionData);
 
