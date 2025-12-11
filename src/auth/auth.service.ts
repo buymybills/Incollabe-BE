@@ -2423,7 +2423,7 @@ export class AuthService {
     });
 
     if (!referrer) {
-      console.log(`❌ Invalid referral code: ${referralCode} - No influencer found with this code`);
+      console.log(`Invalid referral code: ${referralCode} - No influencer found with this code`);
       return {
         valid: false,
         message: 'Invalid referral code',
@@ -2459,7 +2459,7 @@ export class AuthService {
       console.log(`⚠️ Referral code usage limit reached for ${referralCode}`);
       return {
         valid: false,
-        message: 'Referral code usage limit reached for this month',
+        message: 'Referral code is inactive',
       };
     }
 
