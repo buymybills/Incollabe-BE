@@ -9,6 +9,7 @@ import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto'
 import { WhatsappVerificationDto } from './dto/whatsapp-verification.dto';
 import { RequestWithUser } from '../types/request.types';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 const mockInfluencerService = {
   getInfluencerProfile: jest.fn(),
@@ -68,6 +69,15 @@ describe('InfluencerController', () => {
         {
           provide: RazorpayService,
           useValue: mockRazorpayService,
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string) => {
+              if (key === 'NODE_ENV') return 'test';
+              return null;
+            }),
+          },
         },
       ],
     })
