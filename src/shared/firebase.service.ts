@@ -179,8 +179,12 @@ export class FirebaseService implements OnModuleInit {
     const stringifiedData: { [key: string]: string } = {};
     const allData = {
       ...(data || {}),
-      // Add deep link URL as data
-      ...(options?.actionUrl ? { actionUrl: options.actionUrl } : {}),
+      // Add deep link URL as data (critical for background/killed state)
+      ...(options?.actionUrl ? {
+        actionUrl: options.actionUrl,
+        click_action: 'FLUTTER_NOTIFICATION_CLICK', // Required for Flutter/React Native deep linking
+        link: options.actionUrl, // Alternative key some apps check for
+      } : {}),
       // Note: imageUrl is NOT sent in data - it's in android/apns configs only
     };
 
@@ -202,8 +206,15 @@ export class FirebaseService implements OnModuleInit {
             channelId: options.androidChannelId || 'default',
             sound: options.sound || 'default',
             imageUrl: options.imageUrl, // ← Image for Android
-            clickAction: options.actionUrl,
+            // NOTE: clickAction is deprecated - deep link is in data payload instead
+            // The Android app handles actionUrl/click_action from data when notification is tapped
           },
+          // Add FCM options for deep linking
+          ...(options.actionUrl ? {
+            fcmOptions: {
+              analyticsLabel: 'notification_click',
+            },
+          } : {}),
         }
       : undefined;
 
@@ -259,10 +270,14 @@ export class FirebaseService implements OnModuleInit {
     console.log('   - title:', notification.title);
     console.log('   - body:', notification.body);
     console.log('📊 Data:', stringifiedData);
+    console.log('🔗 Deep Link Data:');
+    console.log('   - actionUrl:', stringifiedData.actionUrl);
+    console.log('   - click_action:', stringifiedData.click_action);
+    console.log('   - link:', stringifiedData.link);
     console.log('🤖 Android Config:');
     console.log('   - imageUrl:', androidConfig?.notification?.imageUrl);
     console.log('   - channelId:', androidConfig?.notification?.channelId);
-    console.log('   - clickAction:', androidConfig?.notification?.clickAction);
+    console.log('   - priority:', androidConfig?.priority);
     console.log('🍎 iOS Config:');
     console.log('   - imageUrl:', apnsConfig?.fcmOptions?.imageUrl);
     console.log('   - badge:', apnsConfig?.payload?.aps?.badge);
