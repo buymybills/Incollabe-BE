@@ -301,6 +301,116 @@ export class ProSubscriptionService {
   }
 
   /**
+   * Get all invoices for an influencer
+   */
+  async getAllInvoices(influencerId: number) {
+    const subscription = await this.proSubscriptionModel.findOne({
+      where: { influencerId },
+      order: [['createdAt', 'DESC']],
+      include: [
+        {
+          model: ProInvoice,
+          as: 'invoices',
+          order: [['createdAt', 'DESC']],
+        },
+      ],
+    });
+
+    if (!subscription || !subscription.invoices || subscription.invoices.length === 0) {
+      return {
+        invoices: [],
+        totalInvoices: 0,
+      };
+    }
+
+    return {
+      invoices: subscription.invoices.map((inv) => ({
+        id: inv.id,
+        invoiceNumber: inv.invoiceNumber,
+        amount: inv.totalAmount / 100, // Convert to Rs
+        status: inv.paymentStatus,
+        billingPeriod: {
+          start: toIST(inv.billingPeriodStart),
+          end: toIST(inv.billingPeriodEnd),
+        },
+        paidAt: toIST(inv.paidAt),
+        invoiceUrl: inv.invoiceUrl,
+        createdAt: toIST(inv.createdAt),
+      })),
+      totalInvoices: subscription.invoices.length,
+    };
+  }
+
+  /**
+   * Create invoice for existing subscription (for testing/manual creation)
+   */
+  async createInvoiceForSubscription(influencerId: number) {
+    const subscription = await this.proSubscriptionModel.findOne({
+      where: { influencerId },
+      order: [['createdAt', 'DESC']],
+    });
+
+    if (!subscription) {
+      throw new NotFoundException('No subscription found');
+    }
+
+    // Check if invoice already exists for current period
+    const existingInvoice = await this.proInvoiceModel.findOne({
+      where: {
+        subscriptionId: subscription.id,
+        billingPeriodStart: subscription.currentPeriodStart,
+        billingPeriodEnd: subscription.currentPeriodEnd,
+      },
+    });
+
+    if (existingInvoice) {
+      return {
+        success: false,
+        message: 'Invoice already exists for current billing period',
+        invoice: {
+          id: existingInvoice.id,
+          invoiceNumber: existingInvoice.invoiceNumber,
+        },
+      };
+    }
+
+    // Create invoice
+    const invoiceNumber = await this.generateInvoiceNumber();
+    const invoice = await this.proInvoiceModel.create({
+      invoiceNumber,
+      subscriptionId: subscription.id,
+      influencerId,
+      amount: subscription.subscriptionAmount,
+      tax: 0,
+      totalAmount: subscription.subscriptionAmount,
+      billingPeriodStart: subscription.currentPeriodStart,
+      billingPeriodEnd: subscription.currentPeriodEnd,
+      paymentStatus: InvoiceStatus.PAID,
+      paymentMethod: PaymentMethod.RAZORPAY,
+      razorpayPaymentId: subscription.razorpaySubscriptionId || `manual_${Date.now()}`,
+      paidAt: createDatabaseDate(),
+    });
+
+    // Generate PDF
+    try {
+      await this.generateInvoicePDF(invoice.id);
+    } catch (error) {
+      console.error('Failed to generate PDF:', error);
+    }
+
+    return {
+      success: true,
+      message: 'Invoice created successfully',
+      invoice: {
+        id: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        amount: invoice.totalAmount / 100,
+        status: invoice.paymentStatus,
+      },
+    };
+  }
+
+  /**
    * Cancel subscription
    */
   async cancelSubscription(influencerId: number, reason?: string) {
@@ -623,164 +733,359 @@ export class ProSubscriptionService {
   }
 
   /**
-   * Handle Razorpay webhook for payment events
+   * Handle Razorpay webhook for payment and subscription events
    */
   async handleWebhook(event: string, payload: any) {
     try {
       console.log(`Razorpay webhook received: ${event}`, payload);
 
-      // Find the invoice by razorpayPaymentId or razorpayOrderId
-      const invoice = await this.proInvoiceModel.findOne({
-        where: {
-          [Op.or]: [
-            { razorpayPaymentId: payload.payment?.entity?.id },
-            { razorpayOrderId: payload.payment?.entity?.order_id },
-          ],
-        },
-      });
-
-      if (!invoice) {
-        console.log('Invoice not found for webhook payload');
-        return { success: false, message: 'Invoice not found' };
+      // Handle subscription events
+      if (event.startsWith('subscription.')) {
+        return await this.handleSubscriptionWebhook(event, payload);
       }
 
-      // Store transaction record
-      await this.proPaymentTransactionModel.create({
-        invoiceId: invoice.id,
-        subscriptionId: invoice.subscriptionId,
-        influencerId: invoice.influencerId,
-        transactionType: event,
-        amount: payload.payment?.entity?.amount || 0,
-        status: payload.payment?.entity?.status || 'unknown',
-        razorpayPaymentId: payload.payment?.entity?.id,
-        razorpayOrderId: payload.payment?.entity?.order_id,
-        paymentMethod: payload.payment?.entity?.method || 'unknown',
-        webhookData: payload,
-        webhookEvent: event,
-        processedAt: new Date(),
-      } as any);
-
-      // Handle different events
-      switch (event) {
-        case 'payment.captured':
-          // Payment successful - already handled in verifyAndActivateSubscription
-          console.log(`Payment captured for invoice ${invoice.id}`);
-          break;
-
-        case 'payment.failed':
-          await invoice.update({ paymentStatus: 'failed' });
-          await this.proSubscriptionModel.update(
-            { status: SubscriptionStatus.PAYMENT_FAILED },
-            { where: { id: invoice.subscriptionId } },
-          );
-          break;
-
-        case 'payment.authorized':
-          console.log(`Payment authorized for invoice ${invoice.id}`);
-          break;
-
-        default:
-          console.log(`Unhandled webhook event: ${event}`);
+      // Handle payment events
+      if (event.startsWith('payment.')) {
+        return await this.handlePaymentWebhook(event, payload);
       }
 
-      return { success: true, message: 'Webhook processed' };
+      console.log(`Unhandled webhook event type: ${event}`);
+      return { success: true, message: 'Event type not handled' };
     } catch (error) {
       console.error('Error processing webhook:', error);
       return { success: false, error: error.message };
     }
   }
 
-  // /**
-  //  * [TEST MODE ONLY] Activate subscription without payment
-  //  * Use this for testing without real Razorpay plan
-  //  */
-  // async activateTestSubscription(influencerId: number) {
-  //   if (process.env.NODE_ENV === 'production') {
-  //     throw new BadRequestException('Test mode activation not allowed in production');
-  //   }
+  /**
+   * Handle subscription-specific webhooks
+   */
+  private async handleSubscriptionWebhook(event: string, payload: any) {
+    const subscriptionEntity = payload.subscription?.entity;
+    if (!subscriptionEntity) {
+      return { success: false, message: 'No subscription data in payload' };
+    }
 
-  //   const influencer = await this.influencerModel.findByPk(influencerId);
-  //   if (!influencer) {
-  //     throw new NotFoundException('Influencer not found');
-  //   }
+    const razorpaySubscriptionId = subscriptionEntity.id;
 
-  //   // Check if already has active subscription
-  //   const existingActiveSubscription = await this.proSubscriptionModel.findOne({
-  //     where: {
-  //       influencerId,
-  //       status: SubscriptionStatus.ACTIVE,
-  //     },
-  //   });
+    // Find subscription by Razorpay subscription ID
+    const subscription = await this.proSubscriptionModel.findOne({
+      where: { razorpaySubscriptionId },
+    });
 
-  //   if (existingActiveSubscription) {
-  //     throw new BadRequestException('You already have an active Pro subscription');
-  //   }
+    if (!subscription) {
+      console.log(`Subscription not found for Razorpay ID: ${razorpaySubscriptionId}`);
+      return { success: false, message: 'Subscription not found' };
+    }
 
-  //   // Create subscription record
-  //   const startDate = createDatabaseDate();
-  //   const endDate = addDaysForDatabase(startDate, this.SUBSCRIPTION_DURATION_DAYS);
+    console.log(`Processing subscription event ${event} for subscription ${subscription.id}`);
 
-  //   const subscription = await this.proSubscriptionModel.create({
-  //     influencerId,
-  //     status: SubscriptionStatus.ACTIVE,
-  //     startDate,
-  //     currentPeriodStart: startDate,
-  //     currentPeriodEnd: endDate,
-  //     nextBillingDate: endDate,
-  //     subscriptionAmount: this.PRO_SUBSCRIPTION_AMOUNT,
-  //     paymentMethod: PaymentMethod.RAZORPAY,
-  //     autoRenew: true,
-  //     razorpaySubscriptionId: `test_sub_${Date.now()}`, // Dummy subscription ID
-  //   });
+    switch (event) {
+      case 'subscription.activated':
+        // UPI mandate authenticated and first payment successful
+        await subscription.update({
+          status: SubscriptionStatus.ACTIVE,
+          upiMandateStatus: 'authenticated',
+          mandateAuthenticatedAt: createDatabaseDate(),
+        });
 
-  //   // Create test invoice
-  //   const invoiceNumber = await this.generateInvoiceNumber();
-  //   const invoice = await this.proInvoiceModel.create({
-  //     invoiceNumber,
-  //     subscriptionId: subscription.id,
-  //     influencerId,
-  //     amount: this.PRO_SUBSCRIPTION_AMOUNT,
-  //     tax: 0,
-  //     totalAmount: this.PRO_SUBSCRIPTION_AMOUNT,
-  //     billingPeriodStart: startDate,
-  //     billingPeriodEnd: endDate,
-  //     paymentStatus: InvoiceStatus.PAID,
-  //     paymentMethod: PaymentMethod.RAZORPAY,
-  //     razorpayPaymentId: `test_pay_${Date.now()}`,
-  //     razorpayOrderId: `test_order_${Date.now()}`,
-  //     paidAt: startDate,
-  //   });
+        // Update influencer's pro status
+        await this.influencerModel.update(
+          {
+            isPro: true,
+            proActivatedAt: createDatabaseDate(),
+            proExpiresAt: subscription.currentPeriodEnd,
+          },
+          { where: { id: subscription.influencerId } },
+        );
 
-  //   // Update influencer isPro status
-  //   await this.influencerModel.update(
-  //     {
-  //       isPro: true,
-  //       proActivatedAt: startDate,
-  //       proExpiresAt: endDate,
-  //     },
-  //     {
-  //       where: { id: influencerId },
-  //     },
-  //   );
+        // Create invoice for first payment
+        const activationAmount = subscriptionEntity.amount || this.PRO_SUBSCRIPTION_AMOUNT;
+        const activationInvoiceNumber = await this.generateInvoiceNumber();
 
-  //   // Generate invoice PDF
-  //   await this.generateInvoicePDF(invoice.id);
+        const activationInvoice = await this.proInvoiceModel.create({
+          invoiceNumber: activationInvoiceNumber,
+          subscriptionId: subscription.id,
+          influencerId: subscription.influencerId,
+          amount: activationAmount,
+          tax: 0,
+          totalAmount: activationAmount,
+          billingPeriodStart: subscription.currentPeriodStart,
+          billingPeriodEnd: subscription.currentPeriodEnd,
+          paymentStatus: 'paid',
+          paymentMethod: 'razorpay',
+          razorpayPaymentId: subscriptionEntity.notes?.razorpay_payment_id || subscriptionEntity.id,
+          paidAt: createDatabaseDate(),
+        });
 
-  //   return {
-  //     success: true,
-  //     message: '🧪 Test subscription activated (NO PAYMENT REQUIRED)',
-  //     subscription: {
-  //       id: subscription.id,
-  //       status: subscription.status,
-  //       validUntil: toIST(endDate),
-  //     },
-  //     invoice: {
-  //       id: invoice.id,
-  //       invoiceNumber: invoice.invoiceNumber,
-  //     },
-  //     warning: 'This is a TEST subscription. Use real payment in production.',
-  //   };
-  // }
+        // Generate PDF for invoice
+        try {
+          await this.generateInvoicePDF(activationInvoice.id);
+          console.log(`📄 Invoice PDF generated for activation: ${activationInvoice.invoiceNumber}`);
+        } catch (pdfError) {
+          console.error('Failed to generate activation invoice PDF:', pdfError);
+        }
+
+        console.log(`✅ Subscription ${subscription.id} activated with invoice ${activationInvoice.invoiceNumber}`);
+        break;
+
+      case 'subscription.charged':
+        // Recurring payment successful
+        console.log(`💰 Subscription ${subscription.id} charged successfully`);
+
+        // Create invoice for this charge
+        const chargeAmount = subscriptionEntity.amount || this.PRO_SUBSCRIPTION_AMOUNT;
+        const invoiceNumber = await this.generateInvoiceNumber();
+
+        const newInvoice = await this.proInvoiceModel.create({
+          invoiceNumber,
+          subscriptionId: subscription.id,
+          influencerId: subscription.influencerId,
+          amount: chargeAmount,
+          tax: 0,
+          totalAmount: chargeAmount,
+          billingPeriodStart: subscription.currentPeriodStart,
+          billingPeriodEnd: subscription.currentPeriodEnd,
+          paymentStatus: 'paid',
+          paymentMethod: 'razorpay',
+          razorpayPaymentId: subscriptionEntity.payment_id,
+          paidAt: createDatabaseDate(),
+        });
+
+        // Generate invoice PDF
+        await this.generateInvoicePDF(newInvoice.id);
+
+        // Update subscription period
+        const newPeriodStart = createDatabaseDate();
+        const newPeriodEnd = addDaysForDatabase(newPeriodStart, this.SUBSCRIPTION_DURATION_DAYS);
+
+        await subscription.update({
+          currentPeriodStart: newPeriodStart,
+          currentPeriodEnd: newPeriodEnd,
+          nextBillingDate: newPeriodEnd,
+          lastAutoChargeAttempt: createDatabaseDate(),
+          autoChargeFailures: 0, // Reset failures on success
+        });
+
+        // Update influencer expiry
+        await this.influencerModel.update(
+          { proExpiresAt: newPeriodEnd },
+          { where: { id: subscription.influencerId } },
+        );
+
+        break;
+
+      case 'subscription.paused':
+        await subscription.update({
+          status: SubscriptionStatus.PAUSED,
+          upiMandateStatus: 'paused',
+        });
+        console.log(`⏸️ Subscription ${subscription.id} paused via webhook`);
+        break;
+
+      case 'subscription.resumed':
+        await subscription.update({
+          status: SubscriptionStatus.ACTIVE,
+          upiMandateStatus: 'authenticated',
+        });
+        console.log(`▶️ Subscription ${subscription.id} resumed via webhook`);
+        break;
+
+      case 'subscription.cancelled':
+        await subscription.update({
+          status: SubscriptionStatus.CANCELLED,
+          upiMandateStatus: 'cancelled',
+          autoRenew: false,
+          cancelledAt: createDatabaseDate(),
+        });
+        console.log(`❌ Subscription ${subscription.id} cancelled via webhook`);
+        break;
+
+      case 'subscription.pending':
+        // Mandate created but not yet authenticated
+        console.log(`⏳ Subscription ${subscription.id} pending authentication`);
+        break;
+
+      case 'subscription.halted':
+        // Subscription halted due to payment failures
+        await subscription.update({
+          upiMandateStatus: 'paused',
+        });
+        console.log(`⚠️ Subscription ${subscription.id} halted due to payment issues`);
+        break;
+
+      default:
+        console.log(`Unhandled subscription event: ${event}`);
+    }
+
+    return { success: true, message: 'Subscription webhook processed' };
+  }
+
+  /**
+   * Handle payment-specific webhooks
+   */
+  private async handlePaymentWebhook(event: string, payload: any) {
+    // Find the invoice by razorpayPaymentId or razorpayOrderId
+    const invoice = await this.proInvoiceModel.findOne({
+      where: {
+        [Op.or]: [
+          { razorpayPaymentId: payload.payment?.entity?.id },
+          { razorpayOrderId: payload.payment?.entity?.order_id },
+        ],
+      },
+    });
+
+    if (!invoice) {
+      console.log('Invoice not found for webhook payload');
+      return { success: false, message: 'Invoice not found' };
+    }
+
+    // Store transaction record
+    await this.proPaymentTransactionModel.create({
+      invoiceId: invoice.id,
+      subscriptionId: invoice.subscriptionId,
+      influencerId: invoice.influencerId,
+      transactionType: event,
+      amount: payload.payment?.entity?.amount || 0,
+      status: payload.payment?.entity?.status || 'unknown',
+      razorpayPaymentId: payload.payment?.entity?.id,
+      razorpayOrderId: payload.payment?.entity?.order_id,
+      paymentMethod: payload.payment?.entity?.method || 'unknown',
+      webhookData: payload,
+      webhookEvent: event,
+      processedAt: new Date(),
+    } as any);
+
+    // Handle different payment events
+    switch (event) {
+      case 'payment.captured':
+        // Payment successful - already handled in verifyAndActivateSubscription
+        console.log(`✅ Payment captured for invoice ${invoice.id}`);
+        break;
+
+      case 'payment.failed':
+        await invoice.update({ paymentStatus: 'failed' });
+
+        // Increment failure count for subscription
+        const subscription = await this.proSubscriptionModel.findByPk(invoice.subscriptionId);
+        if (subscription) {
+          await subscription.update({
+            status: SubscriptionStatus.PAYMENT_FAILED,
+            lastAutoChargeAttempt: createDatabaseDate(),
+            autoChargeFailures: subscription.autoChargeFailures + 1,
+          });
+
+          // If too many failures, pause the subscription
+          if (subscription.autoChargeFailures >= 3) {
+            console.error(`⚠️ Subscription ${subscription.id} has ${subscription.autoChargeFailures} failures, consider manual intervention`);
+          }
+        }
+
+        console.log(`❌ Payment failed for invoice ${invoice.id}`);
+        break;
+
+      case 'payment.authorized':
+        console.log(`🔓 Payment authorized for invoice ${invoice.id}`);
+        break;
+
+      default:
+        console.log(`Unhandled payment event: ${event}`);
+    }
+
+    return { success: true, message: 'Payment webhook processed' };
+  }
+
+  /**
+   * [TEST MODE ONLY] Activate subscription without payment
+   * Use this for testing without real Razorpay plan
+   */
+  async activateTestSubscription(influencerId: number) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new BadRequestException('Test mode activation not allowed in production');
+    }
+
+    const influencer = await this.influencerModel.findByPk(influencerId); 
+    if (!influencer) {
+      throw new NotFoundException('Influencer not found');
+    }
+
+    // Check if already has active subscription
+    const existingActiveSubscription = await this.proSubscriptionModel.findOne({
+      where: {
+        influencerId,
+        status: SubscriptionStatus.ACTIVE,
+      },
+    });
+
+    if (existingActiveSubscription) {
+      throw new BadRequestException('You already have an active Pro subscription');
+    }
+
+    // Create subscription record
+    const startDate = createDatabaseDate();
+    const endDate = addDaysForDatabase(startDate, this.SUBSCRIPTION_DURATION_DAYS);
+
+    const subscription = await this.proSubscriptionModel.create({
+      influencerId,
+      status: SubscriptionStatus.ACTIVE,
+      startDate,
+      currentPeriodStart: startDate,
+      currentPeriodEnd: endDate,
+      nextBillingDate: endDate,
+      subscriptionAmount: this.PRO_SUBSCRIPTION_AMOUNT,
+      paymentMethod: PaymentMethod.RAZORPAY,
+      autoRenew: true,
+      razorpaySubscriptionId: `test_sub_${Date.now()}`, // Dummy subscription ID
+    });
+
+    // Create test invoice
+    const invoiceNumber = await this.generateInvoiceNumber();
+    const invoice = await this.proInvoiceModel.create({
+      invoiceNumber,
+      subscriptionId: subscription.id,
+      influencerId,
+      amount: this.PRO_SUBSCRIPTION_AMOUNT,
+      tax: 0,
+      totalAmount: this.PRO_SUBSCRIPTION_AMOUNT,
+      billingPeriodStart: startDate,
+      billingPeriodEnd: endDate,
+      paymentStatus: InvoiceStatus.PAID,
+      paymentMethod: PaymentMethod.RAZORPAY,
+      razorpayPaymentId: `test_pay_${Date.now()}`,
+      razorpayOrderId: `test_order_${Date.now()}`,
+      paidAt: startDate,
+    });
+
+    // Update influencer isPro status
+    await this.influencerModel.update(
+      {
+        isPro: true,
+        proActivatedAt: startDate,
+        proExpiresAt: endDate,
+      },
+      {
+        where: { id: influencerId },
+      },
+    );
+
+    // Generate invoice PDF
+    await this.generateInvoicePDF(invoice.id);
+
+    return {
+      success: true,
+      message: '🧪 Test subscription activated (NO PAYMENT REQUIRED)',
+      subscription: {
+        id: subscription.id,
+        status: subscription.status,
+        validUntil: toIST(endDate),
+      },
+      invoice: {
+        id: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+      },
+      warning: 'This is a TEST subscription. Use real payment in production.',
+    };
+  }
 
   /**
    * Check and expire subscriptions (run this as a cron job)
@@ -817,6 +1122,373 @@ export class ProSubscriptionService {
 
     return {
       expiredCount: expiredSubscriptions.length,
+    };
+  }
+
+  /**
+   * Setup Autopay for Pro subscription (supports all payment methods)
+   * User can choose UPI, Card, or any other available payment method at checkout
+   */
+  async setupAutopay(influencerId: number) {
+    // Get influencer details
+    const influencer = await this.influencerModel.findByPk(influencerId);
+    if (!influencer) {
+      throw new NotFoundException('Influencer not found');
+    }
+
+    // Check if already has active subscription with autopay
+    const existingSubscription = await this.proSubscriptionModel.findOne({
+      where: {
+        influencerId,
+        status: {
+          [Op.in]: [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAYMENT_PENDING],
+        },
+      },
+    });
+
+    // Allow restarting autopay if:
+    // 1. Mandate is cancelled, OR
+    // 2. autoRenew is false (autopay was cancelled)
+    if (
+      existingSubscription &&
+      existingSubscription.razorpaySubscriptionId &&
+      existingSubscription.upiMandateStatus !== 'cancelled' &&
+      existingSubscription.autoRenew === true
+    ) {
+      throw new BadRequestException('You already have an active autopay subscription');
+    }
+
+    // Create or get the Razorpay plan
+    const planResult = await this.razorpayService.createPlan(
+      'monthly',
+      1,
+      199,
+      'INR',
+      'CollabKaroo Pro - Monthly Subscription',
+      'Pro account subscription with unlimited campaigns and features',
+      { subscriptionType: 'pro_account' },
+    );
+
+    if (!planResult.success) {
+      throw new BadRequestException(`Failed to create plan: ${planResult.error}`);
+    }
+
+    const planId = planResult.planId;
+
+    // Create Autopay subscription in Razorpay (supports all payment methods)
+    const influencerEmail = (influencer as any).email || `influencer${influencerId}@collabkaroo.com`;
+    const subscriptionResult = await this.razorpayService.createAutopaySubscription(
+      planId,
+      influencerId,
+      influencer.name,
+      influencer.phone,
+      influencerEmail,
+      {
+        influencerId,
+        subscriptionType: 'pro_account',
+      },
+    );
+
+    if (!subscriptionResult.success) {
+      throw new BadRequestException(`Failed to create autopay subscription: ${subscriptionResult.error}`);
+    }
+
+    // Create or update subscription record
+    const startDate = createDatabaseDate();
+    const endDate = addDaysForDatabase(startDate, this.SUBSCRIPTION_DURATION_DAYS);
+
+    let subscription;
+    if (existingSubscription) {
+      // Update existing subscription (clear old cancellation data if restarting)
+      subscription = await existingSubscription.update({
+        razorpaySubscriptionId: subscriptionResult.subscriptionId,
+        upiMandateStatus: 'pending',
+        mandateCreatedAt: startDate,
+        autoRenew: true,
+        currentPeriodStart: startDate,
+        currentPeriodEnd: endDate,
+        nextBillingDate: endDate,
+        cancelledAt: null,
+        cancelReason: null,
+      });
+    } else {
+      // Create new subscription
+      subscription = await this.proSubscriptionModel.create({
+        influencerId,
+        status: SubscriptionStatus.PAYMENT_PENDING,
+        startDate,
+        currentPeriodStart: startDate,
+        currentPeriodEnd: endDate,
+        nextBillingDate: endDate,
+        subscriptionAmount: this.PRO_SUBSCRIPTION_AMOUNT,
+        paymentMethod: 'razorpay',
+        razorpaySubscriptionId: subscriptionResult.subscriptionId,
+        upiMandateStatus: 'pending',
+        mandateCreatedAt: startDate,
+        autoRenew: true,
+      });
+    }
+
+    return {
+      success: true,
+      message: 'Autopay setup initiated. Choose your preferred payment method (UPI, Card, etc.) to complete setup.',
+      subscription: {
+        id: subscription.id,
+        razorpaySubscriptionId: subscriptionResult.subscriptionId,
+        status: subscription.status,
+        mandateStatus: subscription.upiMandateStatus,
+      },
+      paymentLink: subscriptionResult.paymentLink,
+      instructions: [
+        '1. Click on the payment link',
+        '2. Choose your preferred payment method (UPI, Card, NetBanking, etc.)',
+        '3. Complete the payment authentication',
+        '4. First payment will be charged immediately',
+        '5. Subsequent payments will be auto-charged every 30 days',
+        '6. You can pause or cancel anytime',
+      ],
+    };
+  }
+
+  /**
+   * Pause subscription
+   * Pauses after current billing cycle ends, then resumes after specified days
+   */
+  async pauseSubscription(influencerId: number, pauseDurationDays: number, reason?: string) {
+    if (pauseDurationDays < 1 || pauseDurationDays > 365) {
+      throw new BadRequestException('Pause duration must be between 1 and 365 days');
+    }
+
+    const subscription = await this.proSubscriptionModel.findOne({
+      where: {
+        influencerId,
+        status: SubscriptionStatus.ACTIVE,
+      },
+    });
+
+    if (!subscription) {
+      throw new NotFoundException('No active subscription found');
+    }
+
+    if (subscription.isPaused) {
+      throw new BadRequestException('Subscription is already paused');
+    }
+
+    // Calculate resume date: current period end + pause duration
+    const pauseStartDate = subscription.currentPeriodEnd;
+    const resumeDate = addDaysForDatabase(pauseStartDate, pauseDurationDays);
+
+    // If using Razorpay subscription, pause it there too
+    if (subscription.razorpaySubscriptionId) {
+      const pauseResult = await this.razorpayService.pauseSubscription(
+        subscription.razorpaySubscriptionId,
+        'end_of_cycle',
+      );
+
+      if (!pauseResult.success) {
+        throw new BadRequestException(`Failed to pause in Razorpay: ${pauseResult.error}`);
+      }
+    }
+
+    // Update subscription with pause details
+    await subscription.update({
+      isPaused: true,
+      pausedAt: createDatabaseDate(),
+      pauseDurationDays,
+      resumeDate,
+      pauseReason: reason,
+      pauseCount: subscription.pauseCount + 1,
+      totalPausedDays: subscription.totalPausedDays + pauseDurationDays,
+    });
+
+    return {
+      success: true,
+      message: `Subscription will pause after current billing cycle ends on ${toIST(pauseStartDate)}`,
+      details: {
+        currentPeriodEnds: toIST(subscription.currentPeriodEnd),
+        pauseStartsOn: toIST(pauseStartDate),
+        pauseDurationDays,
+        autoResumeOn: toIST(resumeDate),
+        nextBillingAfterResume: toIST(resumeDate),
+      },
+    };
+  }
+
+  /**
+   * Resume paused subscription
+   * Can be called manually or automatically by cron job
+   */
+  async resumeSubscription(influencerId: number, isAutoResume: boolean = false) {
+    const subscription = await this.proSubscriptionModel.findOne({
+      where: {
+        influencerId,
+        isPaused: true,
+      },
+    });
+
+    if (!subscription) {
+      throw new NotFoundException('No paused subscription found');
+    }
+
+    // If manual resume, allow anytime
+    // If auto resume, only resume if resume date has passed
+    if (isAutoResume) {
+      const now = createDatabaseDate();
+      if (subscription.resumeDate && subscription.resumeDate > now) {
+        throw new BadRequestException('Auto-resume date has not arrived yet');
+      }
+    }
+
+    const now = createDatabaseDate();
+    const newPeriodEnd = addDaysForDatabase(now, this.SUBSCRIPTION_DURATION_DAYS);
+
+    // Resume in Razorpay if using autopay
+    if (subscription.razorpaySubscriptionId) {
+      const resumeResult = await this.razorpayService.resumeSubscription(
+        subscription.razorpaySubscriptionId,
+        'now',
+      );
+
+      if (!resumeResult.success) {
+        throw new BadRequestException(`Failed to resume in Razorpay: ${resumeResult.error}`);
+      }
+    }
+
+    // Update subscription
+    await subscription.update({
+      isPaused: false,
+      pausedAt: null,
+      pauseDurationDays: null,
+      resumeDate: null,
+      pauseReason: null,
+      currentPeriodStart: now,
+      currentPeriodEnd: newPeriodEnd,
+      nextBillingDate: newPeriodEnd,
+      status: SubscriptionStatus.ACTIVE,
+    });
+
+    // Update influencer's pro status
+    await this.influencerModel.update(
+      {
+        isPro: true,
+        proActivatedAt: now,
+        proExpiresAt: newPeriodEnd,
+      },
+      {
+        where: { id: influencerId },
+      },
+    );
+
+    return {
+      success: true,
+      message: 'Subscription resumed successfully!',
+      subscription: {
+        id: subscription.id,
+        status: subscription.status,
+        currentPeriodStart: toIST(now),
+        currentPeriodEnd: toIST(newPeriodEnd),
+        nextBillingDate: toIST(newPeriodEnd),
+      },
+    };
+  }
+
+  /**
+   * Cancel autopay (but keep subscription active until period end)
+   */
+  async cancelAutopay(influencerId: number, reason?: string) {
+    const subscription = await this.proSubscriptionModel.findOne({
+      where: {
+        influencerId,
+        status: {
+          [Op.in]: [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAUSED],
+        },
+      },
+    });
+
+    if (!subscription) {
+      throw new NotFoundException('No active subscription found');
+    }
+
+    // Cancel in Razorpay
+    if (subscription.razorpaySubscriptionId) {
+      const cancelResult = await this.razorpayService.cancelSubscription(
+        subscription.razorpaySubscriptionId,
+        true, // Cancel at cycle end
+      );
+
+      if (!cancelResult.success) {
+        console.error(
+          'Failed to cancel in Razorpay:',
+          cancelResult.error,
+          cancelResult.errorCode ? `(${cancelResult.errorCode})` : '',
+        );
+        // Continue anyway to update local DB
+      }
+    }
+
+    // Update subscription
+    await subscription.update({
+      autoRenew: false,
+      cancelledAt: createDatabaseDate(),
+      cancelReason: reason,
+      upiMandateStatus: 'cancelled',
+    });
+
+    return {
+      success: true,
+      message: 'Autopay cancelled. Your Pro access will remain active until the end of current billing period.',
+      validUntil: toIST(subscription.currentPeriodEnd),
+      note: 'You can setup autopay again anytime to continue Pro benefits.',
+    };
+  }
+
+  /**
+   * Check and auto-resume paused subscriptions (run as cron job)
+   */
+  async checkAndAutoResumeSubscriptions() {
+    const now = createDatabaseDate();
+
+    const subscriptionsToResume = await this.proSubscriptionModel.findAll({
+      where: {
+        isPaused: true,
+        resumeDate: {
+          [Op.lte]: now,
+        },
+      },
+    });
+
+    const results: Array<{
+      subscriptionId: number;
+      influencerId: number;
+      success: boolean;
+      message?: string;
+      error?: string;
+    }> = [];
+
+    for (const subscription of subscriptionsToResume) {
+      try {
+        const result = await this.resumeSubscription(subscription.influencerId, true);
+        results.push({
+          subscriptionId: subscription.id,
+          influencerId: subscription.influencerId,
+          success: true,
+          message: result.message,
+        });
+      } catch (error) {
+        console.error(`Failed to auto-resume subscription ${subscription.id}:`, error);
+        results.push({
+          subscriptionId: subscription.id,
+          influencerId: subscription.influencerId,
+          success: false,
+          error: error.message,
+        });
+      }
+    }
+
+    return {
+      resumedCount: results.filter((r) => r.success).length,
+      failedCount: results.filter((r) => !r.success).length,
+      results,
     };
   }
 }

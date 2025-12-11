@@ -9,10 +9,10 @@ import {
 } from 'sequelize-typescript';
 import { Influencer } from '../../auth/model/influencer.model';
 import { ProInvoice } from './pro-invoice.model';
-import { SubscriptionStatus, PaymentMethod } from './payment-enums';
+import { SubscriptionStatus, PaymentMethod, UpiMandateStatus } from './payment-enums';
 
 // Re-export for backward compatibility
-export { SubscriptionStatus, PaymentMethod };
+export { SubscriptionStatus, PaymentMethod, UpiMandateStatus };
 
 @Table({
   tableName: 'pro_subscriptions',
@@ -101,6 +101,95 @@ export class ProSubscription extends Model {
     allowNull: true,
   })
   declare cancelReason: string;
+
+  // UPI Autopay fields
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare upiMandateId: string;
+
+  @Column({
+    type: DataType.ENUM(...Object.values(UpiMandateStatus)),
+    allowNull: false,
+    defaultValue: UpiMandateStatus.NOT_CREATED,
+  })
+  declare upiMandateStatus: UpiMandateStatus;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare mandateCreatedAt: Date;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare mandateAuthenticatedAt: Date;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 19900,
+  })
+  declare mandateMaxAmount: number;
+
+  // Pause/Resume fields
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+  })
+  declare isPaused: boolean;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare pausedAt: Date;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  declare pauseDurationDays: number;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare resumeDate: Date;
+
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+  })
+  declare pauseReason: string;
+
+  // Tracking fields
+  @Column({
+    type: DataType.INTEGER,
+    defaultValue: 0,
+  })
+  declare pauseCount: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    defaultValue: 0,
+  })
+  declare totalPausedDays: number;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare lastAutoChargeAttempt: Date;
+
+  @Column({
+    type: DataType.INTEGER,
+    defaultValue: 0,
+  })
+  declare autoChargeFailures: number;
 
   @BelongsTo(() => Influencer)
   declare influencer: Influencer;

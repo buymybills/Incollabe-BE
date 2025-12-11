@@ -1,5 +1,6 @@
 export enum SubscriptionStatus {
   ACTIVE = 'active',
+  PAUSED = 'paused',
   EXPIRED = 'expired',
   CANCELLED = 'cancelled',
   PAYMENT_PENDING = 'payment_pending',
@@ -30,4 +31,14 @@ export enum TransactionStatus {
   SUCCESS = 'success',
   FAILED = 'failed',
   PENDING = 'pending',
+}
+
+export enum UpiMandateStatus {
+  NOT_CREATED = 'not_created',
+  PENDING = 'pending',
+  AUTHENTICATED = 'authenticated',
+  PAUSED = 'paused',
+  CANCELLED = 'cancelled',
+  REJECTED = 'rejected',
+  REVOKED = 'revoked',
 }

@@ -24,6 +24,7 @@ import { ProSubscription } from './models/pro-subscription.model';
 import { ProInvoice } from './models/pro-invoice.model';
 import { ProPaymentTransaction } from './models/pro-payment-transaction.model';
 import { ProSubscriptionService } from './services/pro-subscription.service';
+import { SubscriptionSchedulerService } from './services/subscription-scheduler.service';
 import { CreditTransaction } from '../admin/models/credit-transaction.model';
 import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
 import { InfluencerUpi } from './models/influencer-upi.model';
@@ -60,6 +61,7 @@ import { InfluencerUpi } from './models/influencer-upi.model';
     InfluencerService,
     InfluencerRepository,
     ProSubscriptionService,
+    SubscriptionSchedulerService,
     {
       provide: 'PROFILE_REVIEW_MODEL',
       useValue: ProfileReview,
