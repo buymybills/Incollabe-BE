@@ -106,25 +106,29 @@ export class ProSubscription extends Model {
   @Column({
     type: DataType.STRING,
     allowNull: true,
+    field: 'upi_mandate_id',
   })
   declare upiMandateId: string;
 
   @Column({
-    type: DataType.ENUM(...Object.values(UpiMandateStatus)),
+    type: DataType.STRING,
     allowNull: false,
     defaultValue: UpiMandateStatus.NOT_CREATED,
+    field: 'upi_mandate_status',
   })
   declare upiMandateStatus: UpiMandateStatus;
 
   @Column({
     type: DataType.DATE,
     allowNull: true,
+    field: 'mandate_created_at',
   })
   declare mandateCreatedAt: Date;
 
   @Column({
     type: DataType.DATE,
     allowNull: true,
+    field: 'mandate_authenticated_at',
   })
   declare mandateAuthenticatedAt: Date;
 
@@ -132,6 +136,7 @@ export class ProSubscription extends Model {
     type: DataType.INTEGER,
     allowNull: false,
     defaultValue: 19900,
+    field: 'mandate_max_amount',
   })
   declare mandateMaxAmount: number;
 
@@ -139,30 +144,35 @@ export class ProSubscription extends Model {
   @Column({
     type: DataType.BOOLEAN,
     defaultValue: false,
+    field: 'is_paused',
   })
   declare isPaused: boolean;
 
   @Column({
     type: DataType.DATE,
     allowNull: true,
+    field: 'paused_at',
   })
   declare pausedAt: Date;
 
   @Column({
     type: DataType.INTEGER,
     allowNull: true,
+    field: 'pause_duration_days',
   })
   declare pauseDurationDays: number;
 
   @Column({
     type: DataType.DATE,
     allowNull: true,
+    field: 'resume_date',
   })
   declare resumeDate: Date;
 
   @Column({
     type: DataType.TEXT,
     allowNull: true,
+    field: 'pause_reason',
   })
   declare pauseReason: string;
 
@@ -170,24 +180,28 @@ export class ProSubscription extends Model {
   @Column({
     type: DataType.INTEGER,
     defaultValue: 0,
+    field: 'pause_count',
   })
   declare pauseCount: number;
 
   @Column({
     type: DataType.INTEGER,
     defaultValue: 0,
+    field: 'total_paused_days',
   })
   declare totalPausedDays: number;
 
   @Column({
     type: DataType.DATE,
     allowNull: true,
+    field: 'last_auto_charge_attempt',
   })
   declare lastAutoChargeAttempt: Date;
 
   @Column({
     type: DataType.INTEGER,
     defaultValue: 0,
+    field: 'auto_charge_failures',
   })
   declare autoChargeFailures: number;
 
