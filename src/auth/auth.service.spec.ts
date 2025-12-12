@@ -33,6 +33,7 @@ import { InfluencerSignupDto } from './dto/influencer-signup.dto';
 import { Gender } from './types/gender.enum';
 import { InfluencerReferralUsage } from './model/influencer-referral-usage.model';
 import { WhatsAppService } from '../shared/whatsapp.service';
+import { DeviceTokenService } from '../shared/device-token.service';
 
 // Mock bcrypt at module level
 jest.mock('bcrypt', () => ({
@@ -136,6 +137,16 @@ const mockWhatsAppService = {
   sendCampaignApplicationConfirmation: jest.fn(),
 };
 
+const mockDeviceTokenService = {
+  addOrUpdateDeviceToken: jest.fn(),
+  getAllUserTokens: jest.fn().mockResolvedValue([]),
+  getUserDevices: jest.fn().mockResolvedValue([]),
+  removeDeviceToken: jest.fn().mockResolvedValue(true),
+  removeAllUserDevices: jest.fn().mockResolvedValue(0),
+  cleanupOldTokens: jest.fn().mockResolvedValue(0),
+  getUserDeviceCount: jest.fn().mockResolvedValue(0),
+};
+
 describe('AuthService', () => {
   let service: AuthService;
   let influencerModel: any;
@@ -197,6 +208,10 @@ describe('AuthService', () => {
         {
           provide: WhatsAppService,
           useValue: mockWhatsAppService,
+        },
+        {
+          provide: DeviceTokenService,
+          useValue: mockDeviceTokenService,
         },
         {
           provide: RedisService,

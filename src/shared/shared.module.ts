@@ -38,6 +38,8 @@ import { InstagramMediaInsight } from './models/instagram-media-insight.model';
 import { KeyBackupService } from './services/key-backup.service';
 import { KeyBackupController } from './key-backup.controller';
 import { JwtAuthModule } from './jwt.module';
+import { DeviceToken } from './models/device-token.model';
+import { DeviceTokenService } from './device-token.service';
 
 @Module({
   imports: [
@@ -56,6 +58,7 @@ import { JwtAuthModule } from './jwt.module';
       KeyBackup,
       InstagramMedia,
       InstagramMediaInsight,
+      DeviceToken,
     ]),
   ],
   controllers: [SearchController, ChatController, KeyBackupController, InstagramController],
@@ -80,6 +83,7 @@ import { JwtAuthModule } from './jwt.module';
     KeyBackupService,
     InstagramService,
     InstagramSyncCronService,
+    DeviceTokenService,
   ],
   exports: [
     SmsService,
@@ -99,6 +103,7 @@ import { JwtAuthModule } from './jwt.module';
     IsValidUsernameConstraint,
     RazorpayService,
     InstagramService,
+    DeviceTokenService,
   ],
 })
 export class SharedModule { }
