@@ -1128,6 +1128,10 @@ export class AuthController {
     return this.authService.updateFcmToken(
       updateFcmTokenDto.userId,
       updateFcmTokenDto.fcmToken,
+      updateFcmTokenDto.deviceId,
+      updateFcmTokenDto.deviceName,
+      updateFcmTokenDto.deviceOs,
+      updateFcmTokenDto.appVersion,
     );
   }
 

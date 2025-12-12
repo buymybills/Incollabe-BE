@@ -79,7 +79,7 @@ export class ProSubscriptionService {
     });
 
     // Generate invoice number
-    const invoiceNumber = await this.generateInvoiceNumber();
+    const invoiceNumber = await this.generateInvoiceNumber(influencerId);
 
     // Create invoice
     let invoice;
@@ -382,7 +382,7 @@ export class ProSubscriptionService {
     }
 
     // Create invoice
-    const invoiceNumber = await this.generateInvoiceNumber();
+    const invoiceNumber = await this.generateInvoiceNumber(influencerId);
     const invoice = await this.proInvoiceModel.create({
       invoiceNumber,
       subscriptionId: subscription.id,
@@ -447,16 +447,19 @@ export class ProSubscriptionService {
   }
 
   /**
-   * Generate unique invoice number
+   * Generate unique invoice number with influencer ID
+   * Format: INV-YYYYMM-INFLUENCERID-SEQ
+   * Example: INV-202512-7-001 (User 7's 1st invoice in Dec 2025)
    */
-  private async generateInvoiceNumber(): Promise<string> {
+  private async generateInvoiceNumber(influencerId: number): Promise<string> {
     const year = new Date().getFullYear();
     const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    const prefix = `INV-${year}${month}-`;
+    const prefix = `INV-${year}${month}-${influencerId}-`;
 
-    // Get the latest invoice number for this month
+    // Get the latest invoice number for this user in this month
     const latestInvoice = await this.proInvoiceModel.findOne({
       where: {
+        influencerId,
         invoiceNumber: {
           [Op.like]: `${prefix}%`,
         },
@@ -466,12 +469,13 @@ export class ProSubscriptionService {
 
     let nextNumber = 1;
     if (latestInvoice) {
-      // Extract the number from the latest invoice (e.g., "INV-202512-00001" -> 1)
-      const lastNumber = parseInt(latestInvoice.invoiceNumber.split('-')[2], 10);
+      // Extract the sequence number (e.g., "INV-202512-7-001" -> 1)
+      const parts = latestInvoice.invoiceNumber.split('-');
+      const lastNumber = parseInt(parts[3], 10);
       nextNumber = lastNumber + 1;
     }
 
-    return `${prefix}${String(nextNumber).padStart(5, '0')}`;
+    return `${prefix}${String(nextNumber).padStart(3, '0')}`;
   }
 
   /**
@@ -744,7 +748,12 @@ export class ProSubscriptionService {
    */
   async handleWebhook(event: string, payload: any) {
     try {
-      console.log(`Razorpay webhook received: ${event}`, payload);
+      console.log('==========================================');
+      console.log('🔔 RAZORPAY WEBHOOK RECEIVED!');
+      console.log('Event:', event);
+      console.log('Timestamp:', new Date().toISOString());
+      console.log('Payload:', JSON.stringify(payload, null, 2));
+      console.log('==========================================');
 
       // Handle subscription events
       if (event.startsWith('subscription.')) {
@@ -820,11 +829,22 @@ export class ProSubscriptionService {
         );
 
         // Check if invoice already exists for this billing period (prevent duplicates)
+        // Use date range check to handle slight timestamp differences
+        const periodStartBuffer = new Date(subscription.currentPeriodStart);
+        periodStartBuffer.setMinutes(periodStartBuffer.getMinutes() - 5);
+        const periodEndBuffer = new Date(subscription.currentPeriodEnd);
+        periodEndBuffer.setMinutes(periodEndBuffer.getMinutes() + 5);
+
         const existingActivationInvoice = await this.proInvoiceModel.findOne({
           where: {
             subscriptionId: subscription.id,
-            billingPeriodStart: subscription.currentPeriodStart,
-            billingPeriodEnd: subscription.currentPeriodEnd,
+            paymentStatus: 'paid',
+            billingPeriodStart: {
+              [Op.between]: [periodStartBuffer, new Date(subscription.currentPeriodStart)],
+            },
+            billingPeriodEnd: {
+              [Op.between]: [new Date(subscription.currentPeriodEnd), periodEndBuffer],
+            },
           },
         });
 
@@ -833,7 +853,7 @@ export class ProSubscriptionService {
         } else {
           // Create invoice for first payment
           const activationAmount = subscriptionEntity.amount || this.PRO_SUBSCRIPTION_AMOUNT;
-          const activationInvoiceNumber = await this.generateInvoiceNumber();
+          const activationInvoiceNumber = await this.generateInvoiceNumber(subscription.influencerId);
 
           const activationInvoice = await this.proInvoiceModel.create({
             invoiceNumber: activationInvoiceNumber,
@@ -867,11 +887,22 @@ export class ProSubscriptionService {
         console.log(`💰 Subscription ${subscription.id} charged successfully`);
 
         // Check if invoice already exists for this billing period (prevent duplicates)
+        // Use date range check to handle slight timestamp differences
+        const chargePeriodStartBuffer = new Date(subscription.currentPeriodStart);
+        chargePeriodStartBuffer.setMinutes(chargePeriodStartBuffer.getMinutes() - 5);
+        const chargePeriodEndBuffer = new Date(subscription.currentPeriodEnd);
+        chargePeriodEndBuffer.setMinutes(chargePeriodEndBuffer.getMinutes() + 5);
+
         const existingChargeInvoice = await this.proInvoiceModel.findOne({
           where: {
             subscriptionId: subscription.id,
-            billingPeriodStart: subscription.currentPeriodStart,
-            billingPeriodEnd: subscription.currentPeriodEnd,
+            paymentStatus: 'paid',
+            billingPeriodStart: {
+              [Op.between]: [chargePeriodStartBuffer, new Date(subscription.currentPeriodStart)],
+            },
+            billingPeriodEnd: {
+              [Op.between]: [new Date(subscription.currentPeriodEnd), chargePeriodEndBuffer],
+            },
           },
         });
 
@@ -880,7 +911,7 @@ export class ProSubscriptionService {
         } else {
           // Create invoice for this charge
           const chargeAmount = subscriptionEntity.amount || this.PRO_SUBSCRIPTION_AMOUNT;
-          const invoiceNumber = await this.generateInvoiceNumber();
+          const invoiceNumber = await this.generateInvoiceNumber(subscription.influencerId);
 
           const newInvoice = await this.proInvoiceModel.create({
             invoiceNumber,
@@ -1092,7 +1123,7 @@ export class ProSubscriptionService {
     });
 
     // Create test invoice
-    const invoiceNumber = await this.generateInvoiceNumber();
+    const invoiceNumber = await this.generateInvoiceNumber(influencerId);
     const invoice = await this.proInvoiceModel.create({
       invoiceNumber,
       subscriptionId: subscription.id,

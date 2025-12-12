@@ -1446,6 +1446,9 @@ export class InfluencerController {
   })
   async handleRazorpayWebhook(@Req() req: any, @Body() body: any) {
     try {
+      console.log('Webhook endpoint hit at /webhooks/razorpay');
+      console.log('Time:', new Date().toISOString());
+
       // Get signature from headers
       const signature = req.headers['x-razorpay-signature'];
 
