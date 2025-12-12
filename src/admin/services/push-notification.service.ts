@@ -18,6 +18,8 @@ import { Brand } from '../../brand/model/brand.model';
 import { InfluencerNiche } from '../../auth/model/influencer-niche.model';
 import { City } from '../../shared/models/city.model';
 import { NotificationService } from '../../shared/notification.service';
+import { DeviceTokenService } from '../../shared/device-token.service';
+import { UserType as DeviceUserType } from '../../shared/models/device-token.model';
 import { AuditLogService } from './audit-log.service';
 import { AuditActionType } from '../models/audit-log.model';
 import {
@@ -48,6 +50,7 @@ export class PushNotificationService {
     @InjectModel(City)
     private readonly cityModel: typeof City,
     private readonly notificationService: NotificationService,
+    private readonly deviceTokenService: DeviceTokenService,
     private readonly auditLogService: AuditLogService,
   ) {}
 
@@ -349,15 +352,30 @@ export class PushNotificationService {
       totalRecipients: recipients.length,
     });
 
-    // Send notifications to all recipients
+    // Send notifications to all recipients (across all their devices)
     let successCount = 0;
     let failureCount = 0;
+    let totalDevicesSent = 0;
 
     for (const recipient of recipients) {
       try {
-        if (recipient.fcmToken) {
+        // Map recipient userType to DeviceUserType
+        const userType = recipient.userType === 'influencer'
+          ? DeviceUserType.INFLUENCER
+          : DeviceUserType.BRAND;
+
+        // Get all device tokens for this user
+        const deviceTokens = await this.deviceTokenService.getAllUserTokens(
+          recipient.id,
+          userType,
+        );
+
+        if (deviceTokens.length > 0) {
+          console.log(`📱 Sending to ${deviceTokens.length} device(s) for ${userType} ${recipient.id}`);
+
+          // Send to all devices for this user
           await this.notificationService.sendCustomNotification(
-            recipient.fcmToken,
+            deviceTokens, // Send to all devices
             notification.title,
             notification.body,
             {
@@ -376,13 +394,21 @@ export class PushNotificationService {
               interruptionLevel: notification.interruptionLevel || undefined,
             },
           );
+
           successCount++;
+          totalDevicesSent += deviceTokens.length;
+        } else {
+          console.warn(`⚠️  No device tokens found for ${userType} ${recipient.id}`);
+          failureCount++;
         }
       } catch (error) {
-        console.error(`Failed to send notification to ${recipient.id}:`, error);
+        console.error(`❌ Failed to send notification to user ${recipient.id}:`, error);
         failureCount++;
       }
     }
+
+    console.log(`✅ Notification sent to ${successCount} users across ${totalDevicesSent} devices`);
+    console.log(`❌ Failed to send to ${failureCount} users`);
 
     // Update notification with results
     await notification.update({
@@ -421,7 +447,7 @@ export class PushNotificationService {
 
   private async getRecipients(
     notification: PushNotification,
-  ): Promise<Array<{ id: number; fcmToken: string }>> {
+  ): Promise<Array<{ id: number; fcmToken: string; userType: 'influencer' | 'brand' }>> {
     const commonWhere: any = {};
     let cityIds: number[] = [];
 
@@ -468,7 +494,7 @@ export class PushNotificationService {
     //   }
     // }
 
-    let recipients: Array<{ id: number; fcmToken: string }> = [];
+    let recipients: Array<{ id: number; fcmToken: string; userType: 'influencer' | 'brand' }> = [];
 
     switch (notification.receiverType) {
       case ReceiverType.ALL_USERS: {
@@ -519,8 +545,8 @@ export class PushNotificationService {
           attributes: ['id', 'fcmToken'],
         });
         recipients = [
-          ...influencers.map((i) => ({ id: i.id, fcmToken: i.fcmToken })),
-          ...brands.map((b) => ({ id: b.id, fcmToken: b.fcmToken })),
+          ...influencers.map((i) => ({ id: i.id, fcmToken: i.fcmToken, userType: 'influencer' as const })),
+          ...brands.map((b) => ({ id: b.id, fcmToken: b.fcmToken, userType: 'brand' as const })),
         ];
         break;
       }
@@ -578,6 +604,7 @@ export class PushNotificationService {
         recipients = targetInfluencers.map((i) => ({
           id: i.id,
           fcmToken: i.fcmToken,
+          userType: 'influencer' as const,
         }));
         break;
       }
@@ -599,6 +626,7 @@ export class PushNotificationService {
         recipients = targetBrands.map((b) => ({
           id: b.id,
           fcmToken: b.fcmToken,
+          userType: 'brand' as const,
         }));
         break;
       }
@@ -629,8 +657,9 @@ export class PushNotificationService {
           ...specificInfluencers.map((i) => ({
             id: i.id,
             fcmToken: i.fcmToken,
+            userType: 'influencer' as const,
           })),
-          ...specificBrands.map((b) => ({ id: b.id, fcmToken: b.fcmToken })),
+          ...specificBrands.map((b) => ({ id: b.id, fcmToken: b.fcmToken, userType: 'brand' as const })),
         ];
         break;
       }

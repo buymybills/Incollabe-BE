@@ -97,16 +97,26 @@ export class DeviceTokenService {
    * Returns array of token strings for sending notifications
    */
   async getAllUserTokens(userId: number, userType: UserType): Promise<string[]> {
+    console.log(`🔍 Fetching device tokens for ${userType} ${userId}`);
+
     const tokens = await this.deviceTokenModel.findAll({
       where: {
         userId,
         userType,
       },
-      attributes: ['fcmToken'],
+      attributes: ['fcmToken', 'deviceName', 'lastUsedAt'],
       order: [['lastUsedAt', 'DESC']],
     });
 
-    return tokens.map((t) => t.fcmToken);
+    const tokenStrings = tokens.map((t) => t.fcmToken);
+
+    console.log(`📱 Found ${tokens.length} device(s) for ${userType} ${userId}:`);
+    tokens.forEach((t, index) => {
+      console.log(`   Device ${index + 1}: ${t.deviceName || 'Unknown'} (Last used: ${t.lastUsedAt})`);
+    });
+    console.log(`✅ Returning ${tokenStrings.length} token(s)`);
+
+    return tokenStrings;
   }
 
   /**
