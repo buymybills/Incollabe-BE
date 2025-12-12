@@ -75,7 +75,7 @@ export class ProSubscriptionService {
       nextBillingDate: endDate,
       subscriptionAmount: this.PRO_SUBSCRIPTION_AMOUNT,
       paymentMethod: PaymentMethod.RAZORPAY,
-      autoRenew: true,
+      autoRenew: false, // Only enable after first payment is successful
     });
 
     // Generate invoice number
@@ -794,6 +794,7 @@ export class ProSubscriptionService {
           status: SubscriptionStatus.ACTIVE,
           upiMandateStatus: 'authenticated',
           mandateAuthenticatedAt: createDatabaseDate(),
+          autoRenew: true, // Enable auto-renewal after authentication
         });
 
         console.log(`✅ Subscription ${subscription.id} authenticated - first charge scheduled for future date`);
@@ -805,6 +806,7 @@ export class ProSubscriptionService {
           status: SubscriptionStatus.ACTIVE,
           upiMandateStatus: 'authenticated',
           mandateAuthenticatedAt: createDatabaseDate(),
+          autoRenew: true, // Enable auto-renewal after first payment
         });
 
         // Update influencer's pro status
@@ -1317,7 +1319,7 @@ export class ProSubscriptionService {
         razorpaySubscriptionId: subscriptionResult.subscriptionId,
         upiMandateStatus: 'pending',
         mandateCreatedAt: now,
-        autoRenew: true,
+        autoRenew: false, // Only enable after first payment is successful
       });
     }
 
