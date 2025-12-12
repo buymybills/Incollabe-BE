@@ -330,6 +330,10 @@ export class InfluencerService {
         },
       });
 
+      // Calculate isPro dynamically based on actual subscription status
+      const now = new Date();
+      const isPro = influencer.isPro && influencer.proExpiresAt && influencer.proExpiresAt > now;
+
       return {
         ...baseProfile,
         phone: influencer.phone,
@@ -344,7 +348,7 @@ export class InfluencerService {
           isProfileCompleted: influencer.isProfileCompleted,
         },
         proSubscription: {
-          isPro: influencer.isPro || false,
+          isPro,
           proActivatedAt: proActivatedAtIST,
           proExpiresAt: proExpiresAtIST,
         },
