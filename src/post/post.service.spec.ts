@@ -9,6 +9,7 @@ import { Brand } from '../brand/model/brand.model';
 import { InfluencerNiche } from '../auth/model/influencer-niche.model';
 import { BrandNiche } from '../brand/model/brand-niche.model';
 import { NotificationService } from '../shared/notification.service';
+import { DeviceTokenService } from '../shared/device-token.service';
 import { S3Service } from '../shared/s3.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
@@ -65,6 +66,14 @@ const mockNotificationService = {
   sendPostLikeNotification: jest.fn(),
   sendFollowNotification: jest.fn(),
   sendMentionNotification: jest.fn(),
+  sendNewFollowerNotification: jest.fn(),
+};
+
+const mockDeviceTokenService = {
+  getAllUserTokens: jest.fn().mockResolvedValue(['mock-token-1', 'mock-token-2']),
+  addOrUpdateDeviceToken: jest.fn(),
+  removeDeviceToken: jest.fn(),
+  getUserDevices: jest.fn(),
 };
 
 const mockS3Service = {
@@ -115,6 +124,10 @@ describe('PostService', () => {
         {
           provide: NotificationService,
           useValue: mockNotificationService,
+        },
+        {
+          provide: DeviceTokenService,
+          useValue: mockDeviceTokenService,
         },
         {
           provide: S3Service,

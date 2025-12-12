@@ -6,6 +6,7 @@ import { WhatsAppService } from '../shared/whatsapp.service';
 import { OtpService } from '../shared/services/otp.service';
 import { CustomNicheService } from '../shared/services/custom-niche.service';
 import { NotificationService } from '../shared/notification.service';
+import { DeviceTokenService } from '../shared/device-token.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import {
   ProfileReview,
@@ -92,6 +93,13 @@ const mockAdminModel = {
 
 const mockNotificationService = {
   sendNewApplicationNotification: jest.fn(),
+};
+
+const mockDeviceTokenService = {
+  getAllUserTokens: jest.fn().mockResolvedValue(['mock-token-1', 'mock-token-2']),
+  addOrUpdateDeviceToken: jest.fn(),
+  removeDeviceToken: jest.fn(),
+  getUserDevices: jest.fn(),
 };
 
 describe('InfluencerService', () => {
@@ -215,6 +223,10 @@ describe('InfluencerService', () => {
         {
           provide: NotificationService,
           useValue: mockNotificationService,
+        },
+        {
+          provide: DeviceTokenService,
+          useValue: mockDeviceTokenService,
         },
         {
           provide: 'CREDIT_TRANSACTION_MODEL',

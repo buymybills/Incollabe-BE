@@ -19,6 +19,8 @@ import { Brand } from '../brand/model/brand.model';
 import { InfluencerNiche } from '../auth/model/influencer-niche.model';
 import { BrandNiche } from '../brand/model/brand-niche.model';
 import { NotificationService } from '../shared/notification.service';
+import { DeviceTokenService } from '../shared/device-token.service';
+import { UserType as DeviceUserType } from '../shared/models/device-token.model';
 import { S3Service } from '../shared/s3.service';
 import { Op, Sequelize } from 'sequelize';
 
@@ -36,6 +38,7 @@ export class PostService {
     @InjectModel(Brand)
     private readonly brandModel: typeof Brand,
     private readonly notificationService: NotificationService,
+    private readonly deviceTokenService: DeviceTokenService,
     private readonly s3Service: S3Service,
   ) {}
 
@@ -244,8 +247,8 @@ export class PostService {
         liker = await this.brandModel.findByPk(userId);
       }
 
-      // Only send notification if we have both users and post author has FCM token
-      if (postAuthor && liker && postAuthor.fcmToken) {
+      // Only send notification if we have both users and post author has device tokens
+      if (postAuthor && liker && postAuthor.id) {
         // Don't send notification if user likes their own post
         const isOwnPost =
           (post.userType === UserType.INFLUENCER &&
@@ -266,14 +269,32 @@ export class PostService {
               (post.content.length > 50 ? '...' : '')
             : 'your post';
 
-          await this.notificationService.sendPostLikeNotification(
-            postAuthor.fcmToken,
-            likerName,
-            postTitle,
-            postId.toString(),
-            liker.username,
-            (liker as Influencer | Brand).profileImage,
-          );
+          // Send notifications asynchronously (fire-and-forget)
+          const postAuthorUserType = post.userType === UserType.INFLUENCER
+            ? DeviceUserType.INFLUENCER
+            : DeviceUserType.BRAND;
+
+          this.deviceTokenService
+            .getAllUserTokens(postAuthor.id, postAuthorUserType)
+            .then((deviceTokens: string[]) => {
+              if (deviceTokens.length > 0) {
+                // Send to all devices in parallel
+                const notificationPromises = deviceTokens.map((token) =>
+                  this.notificationService.sendPostLikeNotification(
+                    token,
+                    likerName,
+                    postTitle,
+                    postId.toString(),
+                    liker.username,
+                    (liker as Influencer | Brand).profileImage,
+                  ),
+                );
+                return Promise.allSettled(notificationPromises);
+              }
+            })
+            .catch((error: any) => {
+              console.error('Error sending post like notification:', error);
+            });
         }
       }
 
@@ -816,11 +837,11 @@ export class PostService {
 
     if (followedUserType === FollowUserType.INFLUENCER) {
       followedUser = await this.influencerModel.findByPk(followedUserId, {
-        attributes: ['fcmToken', 'name', 'username'],
+        attributes: ['id', 'name', 'username'],
       });
     } else {
       followedUser = await this.brandModel.findByPk(followedUserId, {
-        attributes: ['fcmToken', 'brandName', 'username'],
+        attributes: ['id', 'brandName', 'username'],
       });
     }
 
@@ -835,23 +856,36 @@ export class PostService {
       });
     }
 
-    if (followedUser?.fcmToken && followerUser) {
+    if (followedUser?.id && followerUser) {
       const followerName =
         followerUserType === UserType.INFLUENCER
           ? (followerUser as Influencer).name
           : (followerUser as Brand).brandName;
 
-      try {
-        await this.notificationService.sendNewFollowerNotification(
-          followedUser.fcmToken,
-          followerName,
-          followerUser.username,
-          (followerUser as any).profileImage,
-        );
-      } catch (error) {
-        console.error('Error sending follower notification:', error);
-        // Don't throw - notification failure shouldn't break the follow action
-      }
+      // Send notifications asynchronously (fire-and-forget)
+      const followedDeviceUserType = followedUserType === FollowUserType.INFLUENCER
+        ? DeviceUserType.INFLUENCER
+        : DeviceUserType.BRAND;
+
+      this.deviceTokenService
+        .getAllUserTokens(followedUser.id, followedDeviceUserType)
+        .then((deviceTokens: string[]) => {
+          if (deviceTokens.length > 0) {
+            // Send to all devices in parallel
+            const notificationPromises = deviceTokens.map((token) =>
+              this.notificationService.sendNewFollowerNotification(
+                token,
+                followerName,
+                followerUser.username,
+                (followerUser as any).profileImage,
+              ),
+            );
+            return Promise.allSettled(notificationPromises);
+          }
+        })
+        .catch((error: any) => {
+          console.error('Error sending follower notification:', error);
+        });
     }
   }
 }

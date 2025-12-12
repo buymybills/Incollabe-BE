@@ -36,7 +36,7 @@ export class NotificationService {
   }
 
   async sendCampaignStatusUpdate(
-    fcmToken: string,
+    fcmTokens: string | string[],
     campaignName: string,
     status: string,
     brandName?: string,
@@ -54,7 +54,7 @@ export class NotificationService {
     };
 
     return await this.firebaseService.sendNotification(
-      fcmToken,
+      fcmTokens,
       `Campaign Update: ${campaignName}`,
       statusMessages[status] || `Campaign status updated to: ${status}`,
       {
@@ -198,13 +198,13 @@ export class NotificationService {
 
   // Brand-specific notifications
   async sendNewApplicationNotification(
-    fcmToken: string,
+    fcmTokens: string | string[],
     influencerName: string,
     campaignName: string,
     influencerId: string,
   ) {
     return await this.firebaseService.sendNotification(
-      fcmToken,
+      fcmTokens,
       'New Campaign Application! 📝',
       `${influencerName} applied for your campaign "${campaignName}". Review their profile.`,
       {

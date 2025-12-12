@@ -27,6 +27,7 @@ import { InviteInfluencersDto } from './dto/invite-influencers.dto';
 import { Follow } from '../post/models/follow.model';
 import { CampaignQueryService } from './services/campaign-query.service';
 import { NotificationService } from '../shared/notification.service';
+import { DeviceTokenService } from '../shared/device-token.service';
 import { Experience } from '../influencer/models/experience.model';
 import { CreditTransaction } from '../admin/models/credit-transaction.model';
 import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
@@ -59,6 +60,13 @@ const mockNotificationService = {
   sendCampaignStatusUpdate: jest.fn(),
   sendCampaignInviteNotification: jest.fn(),
   sendNewApplicationNotification: jest.fn(),
+};
+
+const mockDeviceTokenService = {
+  getAllUserTokens: jest.fn().mockResolvedValue(['mock-token-1', 'mock-token-2']),
+  addOrUpdateDeviceToken: jest.fn(),
+  removeDeviceToken: jest.fn(),
+  getUserDevices: jest.fn(),
 };
 
 describe('CampaignService', () => {
@@ -130,6 +138,10 @@ describe('CampaignService', () => {
         {
           provide: NotificationService,
           useValue: mockNotificationService,
+        },
+        {
+          provide: DeviceTokenService,
+          useValue: mockDeviceTokenService,
         },
         {
           provide: getModelToken(CreditTransaction),

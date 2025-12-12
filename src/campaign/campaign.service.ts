@@ -32,6 +32,8 @@ import { InvitationStatus } from './models/campaign-invitation.model';
 import { Gender } from '../auth/types/gender.enum';
 import { WhatsAppService } from '../shared/whatsapp.service';
 import { NotificationService } from '../shared/notification.service';
+import { DeviceTokenService } from '../shared/device-token.service';
+import { UserType } from '../shared/models/device-token.model';
 import { Follow } from '../post/models/follow.model';
 import { Experience } from '../influencer/models/experience.model';
 import { CampaignQueryService } from './services/campaign-query.service';
@@ -71,6 +73,7 @@ export class CampaignService {
     // private readonly influencerReferralUsageModel: typeof InfluencerReferralUsage,
     private readonly whatsAppService: WhatsAppService,
     private readonly notificationService: NotificationService,
+    private readonly deviceTokenService: DeviceTokenService,
     private readonly campaignQueryService: CampaignQueryService,
   ) {}
 
@@ -474,7 +477,7 @@ export class CampaignService {
             include: [
               {
                 model: Influencer,
-                attributes: ['id', 'name', 'fcmToken'],
+                attributes: ['id', 'name'],
               },
             ],
           });
@@ -482,14 +485,22 @@ export class CampaignService {
         // Send push notifications to all selected influencers
         const brandName = campaign.brand?.brandName || 'Brand';
         for (const application of selectedApplications) {
-          if (application.influencer?.fcmToken) {
+          if (application.influencer?.id) {
             try {
-              await this.notificationService.sendCampaignStatusUpdate(
-                application.influencer.fcmToken,
-                campaign.name,
-                'completed',
-                brandName,
+              // Get all device tokens for this influencer
+              const deviceTokens = await this.deviceTokenService.getAllUserTokens(
+                application.influencer.id,
+                UserType.INFLUENCER,
               );
+
+              if (deviceTokens.length > 0) {
+                await this.notificationService.sendCampaignStatusUpdate(
+                  deviceTokens,
+                  campaign.name,
+                  'completed',
+                  brandName,
+                );
+              }
             } catch (error) {
               console.error(
                 `Failed to send completion notification to influencer ${application.influencer.id}:`,
@@ -893,7 +904,7 @@ export class CampaignService {
         isProfileCompleted: true,
         isWhatsappVerified: true,
       },
-      attributes: ['id', 'name', 'whatsappNumber', 'fcmToken'],
+      attributes: ['id', 'name', 'whatsappNumber'],
     });
 
     if (influencers.length !== influencerIds.length) {
@@ -969,21 +980,26 @@ export class CampaignService {
         personalMessage,
       );
 
-      // Send push notification
-      if (influencer.fcmToken) {
-        try {
+      // Send push notification to all devices
+      try {
+        const deviceTokens = await this.deviceTokenService.getAllUserTokens(
+          influencer.id,
+          UserType.INFLUENCER,
+        );
+
+        if (deviceTokens.length > 0) {
           await this.notificationService.sendCampaignInviteNotification(
-            [influencer.fcmToken],
+            deviceTokens,
             campaign.name,
             brandName,
           );
-        } catch (error) {
-          console.error(
-            `Failed to send push notification to influencer ${influencer.id}:`,
-            error,
-          );
-          // Continue with other influencers even if one fails
         }
+      } catch (error) {
+        console.error(
+          `Failed to send push notification to influencer ${influencer.id}:`,
+          error,
+        );
+        // Continue with other influencers even if one fails
       }
     }
 
@@ -1759,7 +1775,7 @@ export class CampaignService {
     }
 
     // Send push notifications to influencer asynchronously (fire-and-forget)
-    if (influencer && influencer.fcmToken) {
+    if (influencer && influencer.id) {
       let pushStatus: string;
       switch (updateStatusDto.status) {
         case ApplicationStatus.UNDER_REVIEW:
@@ -1775,14 +1791,20 @@ export class CampaignService {
           pushStatus = updateStatusDto.status;
       }
 
-      this.notificationService
-        .sendCampaignStatusUpdate(
-          influencer.fcmToken,
-          campaign.name,
-          pushStatus,
-          brandName,
-        )
-        .catch((error) => {
+      // Get all device tokens and send to all devices
+      this.deviceTokenService
+        .getAllUserTokens(influencer.id, UserType.INFLUENCER)
+        .then((deviceTokens: string[]) => {
+          if (deviceTokens.length > 0) {
+            return this.notificationService.sendCampaignStatusUpdate(
+              deviceTokens,
+              campaign.name,
+              pushStatus,
+              brandName,
+            );
+          }
+        })
+        .catch((error: any) => {
           console.error('Failed to send push notification to influencer:', error);
         });
     }

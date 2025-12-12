@@ -9,6 +9,8 @@ import { S3Service } from '../shared/s3.service';
 import { EmailService } from '../shared/email.service';
 import { WhatsAppService } from '../shared/whatsapp.service';
 import { NotificationService } from '../shared/notification.service';
+import { DeviceTokenService } from '../shared/device-token.service';
+import { UserType as DeviceUserType } from '../shared/models/device-token.model';
 import { OtpService } from '../shared/services/otp.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto';
@@ -92,6 +94,7 @@ export class InfluencerService {
     private readonly emailService: EmailService,
     private readonly whatsAppService: WhatsAppService,
     private readonly notificationService: NotificationService,
+    private readonly deviceTokenService: DeviceTokenService,
     @Inject('PROFILE_REVIEW_MODEL')
     private readonly profileReviewModel: typeof ProfileReview,
     @Inject('CAMPAIGN_MODEL')
@@ -1321,7 +1324,7 @@ export class InfluencerService {
         status: CampaignStatus.ACTIVE,
         isActive: true,
       },
-      include: [{ model: Brand, attributes: ['brandName'] }],
+      include: [{ model: Brand, attributes: ['id', 'brandName'] }],
     } as any);
 
     if (!campaign) {
@@ -1406,15 +1409,20 @@ export class InfluencerService {
 
     // Send push notification to brand owner about new application asynchronously (fire-and-forget)
     const brand = campaign.brand;
-    if (brand?.fcmToken) {
-      this.notificationService
-        .sendNewApplicationNotification(
-          brand.fcmToken,
-          influencer.name,
-          campaign.name,
-          influencer.id.toString(),
-        )
-        .catch((error) => {
+    if (brand?.id) {
+      this.deviceTokenService
+        .getAllUserTokens(brand.id, DeviceUserType.BRAND)
+        .then((deviceTokens: string[]) => {
+          if (deviceTokens.length > 0) {
+            return this.notificationService.sendNewApplicationNotification(
+              deviceTokens,
+              influencer.name,
+              campaign.name,
+              influencer.id.toString(),
+            );
+          }
+        })
+        .catch((error: any) => {
           console.error('Failed to send push notification to brand:', error);
         });
     }
