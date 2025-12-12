@@ -8,6 +8,8 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { WhatsAppService } from '../shared/whatsapp.service';
+import { DeviceTokenService } from '../shared/device-token.service';
+import { UserType } from '../shared/models/device-token.model';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/sequelize';
@@ -94,6 +96,7 @@ export class AuthService {
     @InjectModel(InfluencerReferralUsage)
     private readonly influencerReferralUsageModel: typeof InfluencerReferralUsage,
     private readonly whatsappService: WhatsAppService,
+    private readonly deviceTokenService: DeviceTokenService,
   ) {}
 
   // Redis key helpers
@@ -2392,20 +2395,49 @@ export class AuthService {
   }
 
   /**
-   * Update FCM token for influencer
+   * Update FCM token for influencer (supports multiple devices, max 5)
    */
-  async updateFcmToken(userId: number, fcmToken: string) {
+  async updateFcmToken(
+    userId: number,
+    fcmToken: string,
+    deviceId?: string,
+    deviceName?: string,
+    deviceOs?: 'ios' | 'android',
+    appVersion?: string,
+  ) {
     const influencer = await this.influencerModel.findByPk(userId);
 
     if (!influencer) {
       throw new NotFoundException('Influencer not found');
     }
 
+    // Add or update device token (enforces 5-device limit, auto-removes oldest)
+    await this.deviceTokenService.addOrUpdateDeviceToken({
+      userId,
+      userType: UserType.INFLUENCER,
+      fcmToken,
+      deviceId,
+      deviceName,
+      deviceOs,
+      appVersion,
+    });
+
+    // Still update the main fcmToken field for backward compatibility
     await influencer.update({ fcmToken });
+
+    // Get current device count
+    const deviceCount = await this.deviceTokenService.getUserDeviceCount(
+      userId,
+      UserType.INFLUENCER,
+    );
+
+    console.log(`✅ FCM token updated for influencer ${userId} (${deviceCount}/5 devices)`);
 
     return {
       success: true,
       message: 'FCM token updated successfully',
+      deviceCount,
+      maxDevices: 5,
     };
   }
 
