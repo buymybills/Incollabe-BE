@@ -272,9 +272,16 @@ export class ProSubscriptionService {
       };
     }
 
+    // User has Pro access if:
+    // 1. Subscription is ACTIVE, OR
+    // 2. Subscription is CANCELLED but current period hasn't ended yet
+    const now = createDatabaseDate();
+    const isPro = subscription.status === SubscriptionStatus.ACTIVE ||
+      (subscription.status === SubscriptionStatus.CANCELLED && subscription.currentPeriodEnd > now);
+
     return {
       hasSubscription: true,
-      isPro: subscription.status === SubscriptionStatus.ACTIVE,
+      isPro,
       subscription: {
         id: subscription.id,
         status: subscription.status,
@@ -1372,15 +1379,55 @@ export class ProSubscriptionService {
       throw new BadRequestException('Subscription is already paused');
     }
 
+    // Don't allow pausing if subscription was cancelled (even if status was manually changed to active)
+    if (subscription.cancelledAt) {
+      throw new BadRequestException(
+        'Cannot pause a subscription that was cancelled. Please create a new subscription instead.',
+      );
+    }
+
+    // Don't allow pausing if autoRenew is disabled
+    if (!subscription.autoRenew) {
+      throw new BadRequestException(
+        'Cannot pause a subscription with auto-renewal disabled. Enable auto-renewal first.',
+      );
+    }
+
     // Calculate resume date: current period end + pause duration
     const pauseStartDate = subscription.currentPeriodEnd;
     const resumeDate = addDaysForDatabase(pauseStartDate, pauseDurationDays);
 
     // If using Razorpay subscription, pause it there too
     if (subscription.razorpaySubscriptionId) {
+      // First, fetch the subscription status from Razorpay
+      const subscriptionDetails = await this.razorpayService.getSubscription(
+        subscription.razorpaySubscriptionId,
+      );
+
+      if (!subscriptionDetails.success) {
+        throw new BadRequestException(
+          `Failed to fetch subscription details from Razorpay: ${subscriptionDetails.error}`,
+        );
+      }
+
+      const razorpayStatus = subscriptionDetails.data?.status;
+
+      // Check if subscription is in a state that can be paused
+      if (razorpayStatus === 'created') {
+        throw new BadRequestException(
+          'Cannot pause subscription yet. The first payment is pending. Please complete the first payment before pausing.',
+        );
+      }
+
+      if (razorpayStatus !== 'active' && razorpayStatus !== 'authenticated') {
+        throw new BadRequestException(
+          `Cannot pause subscription. Current status: ${razorpayStatus}. Only active subscriptions can be paused.`,
+        );
+      }
+
+      // Now attempt to pause
       const pauseResult = await this.razorpayService.pauseSubscription(
         subscription.razorpaySubscriptionId,
-        'end_of_cycle',
       );
 
       if (!pauseResult.success) {
@@ -1391,7 +1438,7 @@ export class ProSubscriptionService {
     // Update subscription with pause details
     await subscription.update({
       isPaused: true,
-      pausedAt: createDatabaseDate(),
+      pausedAt: createDatabaseDate(), 
       pauseDurationDays,
       resumeDate,
       pauseReason: reason,
@@ -1442,23 +1489,52 @@ export class ProSubscriptionService {
 
     // Resume in Razorpay if using autopay
     if (subscription.razorpaySubscriptionId) {
-      const resumeResult = await this.razorpayService.resumeSubscription(
+      // First, fetch the subscription status from Razorpay
+      const subscriptionDetails = await this.razorpayService.getSubscription(
         subscription.razorpaySubscriptionId,
-        'now',
       );
 
-      if (!resumeResult.success) {
-        throw new BadRequestException(`Failed to resume in Razorpay: ${resumeResult.error}`);
+      if (!subscriptionDetails.success) {
+        console.warn(
+          `Failed to fetch Razorpay subscription details: ${subscriptionDetails.error}. Proceeding with local-only resume.`,
+        );
+      } else {
+        const razorpayStatus = subscriptionDetails.data?.status;
+
+        // If Razorpay subscription is cancelled or doesn't exist, just update local state
+        if (razorpayStatus === 'cancelled' || razorpayStatus === 'completed') {
+          console.warn(
+            `Razorpay subscription is ${razorpayStatus}. Resuming locally only. User may need to create new subscription for future billing.`,
+          );
+          // Don't throw error - allow local resume
+        } else if (razorpayStatus === 'paused') {
+          // Now attempt to resume in Razorpay
+          const resumeResult = await this.razorpayService.resumeSubscription(
+            subscription.razorpaySubscriptionId,
+          );
+
+          if (!resumeResult.success) {
+            throw new BadRequestException(`Failed to resume in Razorpay: ${resumeResult.error}`);
+          }
+        } else {
+          // For other statuses (active, authenticated, etc), just update local state
+          console.warn(
+            `Razorpay subscription status is ${razorpayStatus}. Resuming locally.`,
+          );
+        }
       }
     }
 
-    // Update subscription
+    // Update subscription - clear all pause AND cancellation data
     await subscription.update({
       isPaused: false,
       pausedAt: null,
       pauseDurationDays: null,
       resumeDate: null,
       pauseReason: null,
+      cancelledAt: null, // Clear cancellation when resuming
+      cancelReason: null, // Clear cancel reason
+      autoRenew: true, // Re-enable auto-renewal
       currentPeriodStart: now,
       currentPeriodEnd: newPeriodEnd,
       nextBillingDate: newPeriodEnd,
@@ -1512,7 +1588,6 @@ export class ProSubscriptionService {
     if (subscription.razorpaySubscriptionId) {
       const pauseResult = await this.razorpayService.pauseSubscription(
         subscription.razorpaySubscriptionId,
-        'end_of_cycle',
       );
 
       if (!pauseResult.success) {

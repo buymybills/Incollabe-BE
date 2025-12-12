@@ -364,9 +364,10 @@ export class RazorpayService {
       };
     } catch (error) {
       console.error('Error fetching subscription:', error);
+      const errorMessage = error?.message || error?.error?.description || JSON.stringify(error) || 'Unknown error occurred';
       return {
         success: false,
-        error: error.message,
+        error: errorMessage,
       };
     }
   }
@@ -443,12 +444,11 @@ export class RazorpayService {
    * Pause UPI Autopay subscription
    * Note: Razorpay pauses from next billing cycle automatically
    */
-  async pauseSubscription(subscriptionId: string, pauseAt?: 'now' | 'end_of_cycle') {
+  async pauseSubscription(subscriptionId: string) {
     try {
-      // For Razorpay, pause always happens at end of cycle
-      const subscription = await this.razorpay.subscriptions.pause(subscriptionId, {
-        pause_at: pauseAt || 'end_of_cycle', // 'now' or 'end_of_cycle'
-      });
+      // For Razorpay subscriptions, pause() doesn't accept parameters
+      // It automatically pauses at the end of current billing cycle
+      const subscription = await this.razorpay.subscriptions.pause(subscriptionId);
 
       return {
         success: true,
@@ -457,9 +457,10 @@ export class RazorpayService {
       };
     } catch (error) {
       console.error('Razorpay subscription pause error:', error);
+      const errorMessage = error?.message || error?.error?.description || JSON.stringify(error) || 'Unknown error occurred';
       return {
         success: false,
-        error: error.message,
+        error: errorMessage,
       };
     }
   }
@@ -467,11 +468,10 @@ export class RazorpayService {
   /**
    * Resume paused UPI Autopay subscription
    */
-  async resumeSubscription(subscriptionId: string, resumeAt?: 'now') {
+  async resumeSubscription(subscriptionId: string) {
     try {
-      const subscription = await this.razorpay.subscriptions.resume(subscriptionId, {
-        resume_at: resumeAt || 'now',
-      });
+      // For Razorpay subscriptions, resume() doesn't accept parameters
+      const subscription = await this.razorpay.subscriptions.resume(subscriptionId);
 
       return {
         success: true,
@@ -480,9 +480,10 @@ export class RazorpayService {
       };
     } catch (error) {
       console.error('Razorpay subscription resume error:', error);
+      const errorMessage = error?.message || error?.error?.description || JSON.stringify(error) || 'Unknown error occurred';
       return {
         success: false,
-        error: error.message,
+        error: errorMessage,
       };
     }
   }
