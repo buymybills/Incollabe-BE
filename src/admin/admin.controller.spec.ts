@@ -7,6 +7,7 @@ import { AdminPostService } from './services/admin-post.service';
 import { InfluencerScoringService } from './services/influencer-scoring.service';
 import { DashboardStatsService } from './services/dashboard-stats.service';
 import { AuditLogService } from './services/audit-log.service';
+import { ReferralProgramService } from './services/referral-program.service';
 import { BrandService } from '../brand/brand.service';
 import { InfluencerService } from '../influencer/influencer.service';
 import { PostService } from '../post/post.service';
@@ -64,6 +65,13 @@ const mockDashboardStatsService = {
   getMainDashboardStats: jest.fn(),
   getInfluencerDashboardStats: jest.fn(),
   getCampaignDashboardStats: jest.fn(),
+};
+
+const mockReferralProgramService = {
+  getReferralStatistics: jest.fn(),
+  getNewAccountsWithReferral: jest.fn(),
+  getAccountReferrers: jest.fn(),
+  getReferralTransactions: jest.fn(),
 };
 
 const mockAuditLogService = {
@@ -156,6 +164,10 @@ describe('AdminController', () => {
         {
           provide: DashboardStatsService,
           useValue: mockDashboardStatsService,
+        },
+        {
+          provide: ReferralProgramService,
+          useValue: mockReferralProgramService,
         },
         {
           provide: AuditLogService,
