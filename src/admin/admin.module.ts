@@ -13,6 +13,7 @@ import { DashboardStatsService } from './services/dashboard-stats.service';
 import { PushNotificationService } from './services/push-notification.service';
 import { NotificationSchedulerService } from './services/notification-scheduler.service';
 import { AuditLogService } from './services/audit-log.service';
+import { ReferralProgramService } from './services/referral-program.service';
 
 import { Admin } from './models/admin.model';
 import { ProfileReview } from './models/profile-review.model';
@@ -90,6 +91,7 @@ import { RolesGuard } from './guards/roles.guard';
     PushNotificationService,
     NotificationSchedulerService,
     AuditLogService,
+    ReferralProgramService,
     AdminAuthGuard,
     RolesGuard,
   ],

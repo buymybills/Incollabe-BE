@@ -119,10 +119,20 @@ import { LogoutDto, LogoutResponseDto } from './dto/logout.dto';
 import { GetAuditLogsDto, AuditLogListResponseDto } from './dto/audit-log.dto';
 import { UpdateDisplayOrderDto } from './dto/update-display-order.dto';
 import { AuditLogService } from './services/audit-log.service';
+import { ReferralProgramService } from './services/referral-program.service';
 import { SupportTicketService } from '../shared/support-ticket.service';
 import { CreateSupportTicketDto } from '../shared/dto/create-support-ticket.dto';
 import { GetSupportTicketsDto } from '../shared/dto/get-support-tickets.dto';
 import { UpdateSupportTicketDto } from '../shared/dto/update-support-ticket.dto';
+import {
+  GetNewAccountsWithReferralDto,
+  NewAccountsWithReferralResponseDto,
+  GetAccountReferrersDto,
+  AccountReferrersResponseDto,
+  GetReferralTransactionsDto,
+  ReferralTransactionsResponseDto,
+  ReferralProgramStatisticsDto,
+} from './dto/referral-program.dto';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -134,6 +144,7 @@ export class AdminController {
     private readonly adminPostService: AdminPostService,
     private readonly influencerScoringService: InfluencerScoringService,
     private readonly dashboardStatsService: DashboardStatsService,
+    private readonly referralProgramService: ReferralProgramService,
     private readonly brandService: BrandService,
     private readonly influencerService: InfluencerService,
     private readonly postService: PostService,
@@ -1944,6 +1955,90 @@ export class AdminController {
   })
   async getAvailableDateRange() {
     return await this.dashboardStatsService.getAvailableDateRange();
+  }
+
+  // ============================================
+  // REFERRAL PROGRAM
+  // ============================================
+
+  @Get('referral-program/statistics')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get referral program statistics',
+    description:
+      'Get comprehensive referral program statistics including total referral codes generated, accounts created with referral, amount spent, and redeem requests with month-over-month growth percentages',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Referral program statistics retrieved successfully',
+    type: ReferralProgramStatisticsDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getReferralProgramStatistics() {
+    return await this.referralProgramService.getReferralStatistics();
+  }
+
+  @Get('referral-program/new-accounts')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get new accounts created with referral codes',
+    description:
+      'Get paginated list of new accounts (influencers) that were created using referral codes. Supports filtering by verification status, search, and date range.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'New accounts with referral retrieved successfully',
+    type: NewAccountsWithReferralResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getNewAccountsWithReferral(@Query() filters: GetNewAccountsWithReferralDto) {
+    return await this.referralProgramService.getNewAccountsWithReferral(filters);
+  }
+
+  @Get('referral-program/account-referrers')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get list of influencers who have referred others',
+    description:
+      'Get paginated list of influencers who have referral codes and have referred other users. Includes total referrals count, earnings, redeemed and pending amounts. Supports search and sorting.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Account referrers retrieved successfully',
+    type: AccountReferrersResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getAccountReferrers(@Query() filters: GetAccountReferrersDto) {
+    return await this.referralProgramService.getAccountReferrers(filters);
+  }
+
+  @Get('referral-program/transactions')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get referral transaction history',
+    description:
+      'Get paginated list of all referral bonus transactions. Supports filtering by payment status, search by influencer, and date range.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Referral transactions retrieved successfully',
+    type: ReferralTransactionsResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getReferralTransactions(@Query() filters: GetReferralTransactionsDto) {
+    return await this.referralProgramService.getReferralTransactions(filters);
   }
 
   // ============================================
