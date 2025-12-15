@@ -8,6 +8,7 @@ import { InfluencerScoringService } from './services/influencer-scoring.service'
 import { DashboardStatsService } from './services/dashboard-stats.service';
 import { AuditLogService } from './services/audit-log.service';
 import { ReferralProgramService } from './services/referral-program.service';
+import { MaxxSubscriptionAdminService } from './services/maxx-subscription-admin.service';
 import { BrandService } from '../brand/brand.service';
 import { InfluencerService } from '../influencer/influencer.service';
 import { PostService } from '../post/post.service';
@@ -72,6 +73,15 @@ const mockReferralProgramService = {
   getNewAccountsWithReferral: jest.fn(),
   getAccountReferrers: jest.fn(),
   getReferralTransactions: jest.fn(),
+};
+
+const mockMaxxSubscriptionAdminService = {
+  getMaxxSubscriptionStatistics: jest.fn(),
+  getMaxxSubscriptions: jest.fn(),
+  getSubscriptionDetails: jest.fn(),
+  pauseSubscription: jest.fn(),
+  resumeSubscription: jest.fn(),
+  cancelSubscription: jest.fn(),
 };
 
 const mockAuditLogService = {
@@ -168,6 +178,10 @@ describe('AdminController', () => {
         {
           provide: ReferralProgramService,
           useValue: mockReferralProgramService,
+        },
+        {
+          provide: MaxxSubscriptionAdminService,
+          useValue: mockMaxxSubscriptionAdminService,
         },
         {
           provide: AuditLogService,

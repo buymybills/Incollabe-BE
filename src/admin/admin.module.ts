@@ -14,6 +14,7 @@ import { PushNotificationService } from './services/push-notification.service';
 import { NotificationSchedulerService } from './services/notification-scheduler.service';
 import { AuditLogService } from './services/audit-log.service';
 import { ReferralProgramService } from './services/referral-program.service';
+import { MaxxSubscriptionAdminService } from './services/maxx-subscription-admin.service';
 
 import { Admin } from './models/admin.model';
 import { ProfileReview } from './models/profile-review.model';
@@ -36,6 +37,8 @@ import { CampaignDeliverable } from '../campaign/models/campaign-deliverable.mod
 import { Experience } from '../influencer/models/experience.model';
 import { Follow } from '../post/models/follow.model';
 import { Post } from '../post/models/post.model';
+import { ProSubscription } from '../influencer/models/pro-subscription.model';
+import { ProInvoice } from '../influencer/models/pro-invoice.model';
 
 import { SharedModule } from '../shared/shared.module';
 import { BrandModule } from '../brand/brand.module';
@@ -71,6 +74,8 @@ import { RolesGuard } from './guards/roles.guard';
       Experience,
       Follow,
       Post,
+      ProSubscription,
+      ProInvoice,
     ]),
     SharedModule,
     forwardRef(() => BrandModule),
@@ -92,6 +97,7 @@ import { RolesGuard } from './guards/roles.guard';
     NotificationSchedulerService,
     AuditLogService,
     ReferralProgramService,
+    MaxxSubscriptionAdminService,
     AdminAuthGuard,
     RolesGuard,
   ],

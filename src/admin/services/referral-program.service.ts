@@ -1,10 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Op, fn, col, literal } from 'sequelize';
 import { Influencer } from '../../auth/model/influencer.model';
 import { InfluencerReferralUsage } from '../../auth/model/influencer-referral-usage.model';
-import { CreditTransaction } from '../models/credit-transaction.model';
+import { CreditTransaction, PaymentStatus } from '../models/credit-transaction.model';
 import { City } from '../../shared/models/city.model';
+import { DeviceTokenService } from '../../shared/device-token.service';
+import { FirebaseService } from '../../shared/firebase.service';
+import { UserType } from '../../shared/models/device-token.model';
 import {
   GetNewAccountsWithReferralDto,
   ProfileStatusFilter,
@@ -17,6 +20,12 @@ import {
   ReferralTransactionsResponseDto,
   ReferralTransactionItemDto,
   ReferralProgramStatisticsDto,
+  GetRedemptionRequestsDto,
+  RedemptionStatusFilter,
+  RedemptionRequestsResponseDto,
+  RedemptionRequestItemDto,
+  ProcessRedemptionDto,
+  ProcessRedemptionResponseDto,
 } from '../dto/referral-program.dto';
 
 @Injectable()
@@ -28,6 +37,8 @@ export class ReferralProgramService {
     private readonly referralUsageModel: typeof InfluencerReferralUsage,
     @InjectModel(CreditTransaction)
     private readonly creditTransactionModel: typeof CreditTransaction,
+    private readonly deviceTokenService: DeviceTokenService,
+    private readonly firebaseService: FirebaseService,
   ) {}
 
   /**
@@ -426,6 +437,7 @@ export class ReferralProgramService {
 
   /**
    * Get referral transaction history
+   * Only shows processed (paid) transactions by default
    */
   async getReferralTransactions(
     filters: GetReferralTransactionsDto,
@@ -446,8 +458,13 @@ export class ReferralProgramService {
       transactionType: 'referral_bonus',
     };
 
+    // Only show processed/paid transactions by default
+    // Pending/processing transactions should be viewed in redemption requests
     if (paymentStatus) {
       whereClause.paymentStatus = paymentStatus;
+    } else {
+      // Default: only show paid (processed) transactions
+      whereClause.paymentStatus = PaymentStatus.PAID;
     }
 
     if (startDate || endDate) {
@@ -480,7 +497,7 @@ export class ReferralProgramService {
           {
             model: Influencer,
             as: 'influencer',
-            attributes: ['id', 'name', 'username', 'referralCode'],
+            attributes: ['id', 'name', 'username', 'referralCode', 'upiId'],
             where: Object.keys(influencerWhereClause).length > 0
               ? influencerWhereClause
               : undefined,
@@ -505,7 +522,7 @@ export class ReferralProgramService {
         transactionType: transaction.transactionType,
         amount: transaction.amount,
         paymentStatus: transaction.paymentStatus,
-        upiId: transaction.upiId,
+        upiId: influencer?.upiId || transaction.upiId || null,
         paymentReferenceId: transaction.paymentReferenceId,
         createdAt: transaction.createdAt,
         paidAt: transaction.paidAt,
@@ -521,6 +538,202 @@ export class ReferralProgramService {
         total: count,
         totalPages: Math.ceil(count / limit),
       },
+    };
+  }
+
+  /**
+   * Get redemption requests with pagination and filtering
+   */
+  async getRedemptionRequests(
+    filters: GetRedemptionRequestsDto,
+  ): Promise<RedemptionRequestsResponseDto> {
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      search,
+      sortBy = 'createdAt',
+      sortOrder = 'DESC',
+      startDate,
+      endDate,
+    } = filters;
+
+    const offset = (page - 1) * limit;
+
+    // Build where clause for transactions
+    const whereClause: any = {
+      transactionType: 'referral_bonus',
+    };
+
+    // Filter by status
+    if (status && status !== RedemptionStatusFilter.ALL) {
+      whereClause.paymentStatus = status;
+    }
+
+    // Date filtering
+    if (startDate || endDate) {
+      whereClause.createdAt = {};
+      if (startDate) {
+        whereClause.createdAt[Op.gte] = new Date(startDate);
+      }
+      if (endDate) {
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(23, 59, 59, 999);
+        whereClause.createdAt[Op.lte] = endDateTime;
+      }
+    }
+
+    // Build influencer search clause
+    const influencerWhereClause: any = {};
+    if (search) {
+      influencerWhereClause[Op.or] = [
+        { name: { [Op.iLike]: `%${search}%` } },
+        { username: { [Op.iLike]: `%${search}%` } },
+      ];
+    }
+
+    // Determine sort field
+    const orderField = sortBy === 'amount' ? 'amount' : 'createdAt';
+
+    // Get transactions with influencer details
+    const { count, rows: transactions } =
+      await this.creditTransactionModel.findAndCountAll({
+        where: whereClause,
+        include: [
+          {
+            model: Influencer,
+            as: 'influencer',
+            attributes: ['id', 'name', 'username', 'profileImage', 'upiId'],
+            where: Object.keys(influencerWhereClause).length > 0
+              ? influencerWhereClause
+              : undefined,
+            required: true, // Inner join to ensure influencer exists
+          },
+        ],
+        limit,
+        offset,
+        order: [[orderField, sortOrder]],
+      });
+
+    // Build response data
+    const data: RedemptionRequestItemDto[] = transactions.map((transaction) => {
+      const influencer = transaction.influencer;
+
+      // Format date as "Nov 10, 2025 at 01:23 AM"
+      const requestedAt = new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      }).format(new Date(transaction.createdAt));
+
+      return {
+        id: transaction.id,
+        influencerId: transaction.influencerId,
+        influencerName: influencer?.name || 'N/A',
+        username: influencer?.username || 'N/A',
+        upiId: influencer?.upiId || transaction.upiId || 'N/A',
+        amount: transaction.amount,
+        status: transaction.paymentStatus,
+        requestedAt,
+        profileImage: influencer?.profileImage || null,
+        paymentReferenceId: transaction.paymentReferenceId,
+      };
+    });
+
+    return {
+      data,
+      pagination: {
+        page,
+        limit,
+        total: count,
+        totalPages: Math.ceil(count / limit),
+      },
+    };
+  }
+
+  /**
+   * Process a redemption request - mark as paid and send notification
+   */
+  async processRedemption(
+    transactionId: number,
+    adminId: number,
+    dto: ProcessRedemptionDto,
+  ): Promise<ProcessRedemptionResponseDto> {
+    // Find the transaction
+    const transaction = await this.creditTransactionModel.findOne({
+      where: {
+        id: transactionId,
+        transactionType: 'referral_bonus',
+      },
+      include: [
+        {
+          model: Influencer,
+          as: 'influencer',
+          attributes: ['id', 'name', 'username', 'fcmToken'],
+        },
+      ],
+    });
+
+    if (!transaction) {
+      throw new NotFoundException('Redemption request not found');
+    }
+
+    // Check if already processed
+    if (transaction.paymentStatus === PaymentStatus.PAID) {
+      throw new BadRequestException('Redemption request already processed');
+    }
+
+    if (transaction.paymentStatus === PaymentStatus.CANCELLED) {
+      throw new BadRequestException('Cannot process a cancelled redemption request');
+    }
+
+    // Update transaction status
+    const now = new Date();
+    await transaction.update({
+      paymentStatus: PaymentStatus.PAID,
+      processedBy: adminId,
+      paidAt: now,
+      paymentReferenceId: dto.paymentReferenceId || transaction.paymentReferenceId,
+      adminNotes: dto.adminNotes || transaction.adminNotes,
+    });
+
+    // Send push notification to the influencer
+    try {
+      const influencer = transaction.influencer;
+      if (influencer) {
+        // Get all device tokens for the influencer
+        const fcmTokens = await this.deviceTokenService.getAllUserTokens(
+          influencer.id,
+          UserType.INFLUENCER,
+        );
+
+        if (fcmTokens.length > 0) {
+          await this.firebaseService.sendNotification(
+            fcmTokens,
+            'Congratulations! 🎉',
+            `Your redemption request of ₹${transaction.amount} has been successfully processed and the amount has been credited to your UPI account.`,
+            {
+              type: 'redemption_processed',
+              transactionId: transaction.id.toString(),
+              amount: transaction.amount.toString(),
+            },
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Failed to send redemption notification:', error);
+      // Don't fail the entire operation if notification fails
+    }
+
+    return {
+      success: true,
+      message: 'Redemption processed successfully',
+      transactionId: transaction.id,
+      status: PaymentStatus.PAID,
+      processedAt: now,
     };
   }
 

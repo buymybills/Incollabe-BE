@@ -5,6 +5,7 @@ export enum SubscriptionStatus {
   CANCELLED = 'cancelled',
   PAYMENT_PENDING = 'payment_pending',
   PAYMENT_FAILED = 'payment_failed',
+  INACTIVE = 'inactive',
 }
 
 export enum PaymentMethod {

@@ -120,6 +120,7 @@ import { GetAuditLogsDto, AuditLogListResponseDto } from './dto/audit-log.dto';
 import { UpdateDisplayOrderDto } from './dto/update-display-order.dto';
 import { AuditLogService } from './services/audit-log.service';
 import { ReferralProgramService } from './services/referral-program.service';
+import { MaxxSubscriptionAdminService } from './services/maxx-subscription-admin.service';
 import { SupportTicketService } from '../shared/support-ticket.service';
 import { CreateSupportTicketDto } from '../shared/dto/create-support-ticket.dto';
 import { GetSupportTicketsDto } from '../shared/dto/get-support-tickets.dto';
@@ -132,7 +133,21 @@ import {
   GetReferralTransactionsDto,
   ReferralTransactionsResponseDto,
   ReferralProgramStatisticsDto,
+  GetRedemptionRequestsDto,
+  RedemptionRequestsResponseDto,
+  ProcessRedemptionDto,
+  ProcessRedemptionResponseDto,
 } from './dto/referral-program.dto';
+import {
+  GetMaxxSubscriptionsDto,
+  MaxxSubscriptionStatisticsDto,
+  MaxxSubscriptionsResponseDto,
+  SubscriptionDetailsDto,
+  PauseSubscriptionDto,
+  ResumeSubscriptionDto,
+  CancelSubscriptionDto,
+  SubscriptionActionResponseDto,
+} from './dto/maxx-subscription.dto';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -145,6 +160,7 @@ export class AdminController {
     private readonly influencerScoringService: InfluencerScoringService,
     private readonly dashboardStatsService: DashboardStatsService,
     private readonly referralProgramService: ReferralProgramService,
+    private readonly maxxSubscriptionAdminService: MaxxSubscriptionAdminService,
     private readonly brandService: BrandService,
     private readonly influencerService: InfluencerService,
     private readonly postService: PostService,
@@ -2039,6 +2055,250 @@ export class AdminController {
   })
   async getReferralTransactions(@Query() filters: GetReferralTransactionsDto) {
     return await this.referralProgramService.getReferralTransactions(filters);
+  }
+
+  @Get('referral-program/redemption-requests')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get redemption requests',
+    description:
+      'Get paginated list of credit redemption requests from influencers. Supports filtering by status, search by influencer, sorting, and date range.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Redemption requests retrieved successfully',
+    type: RedemptionRequestsResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getRedemptionRequests(@Query() filters: GetRedemptionRequestsDto) {
+    return await this.referralProgramService.getRedemptionRequests(filters);
+  }
+
+  @Put('referral-program/redemption-requests/:id/process')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Process a redemption request',
+    description:
+      'Mark a redemption request as processed (paid). Sends a push notification to the influencer confirming the payment. Requires SUPER_ADMIN or CONTENT_MODERATOR role.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Redemption processed successfully',
+    type: ProcessRedemptionResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - requires SUPER_ADMIN or CONTENT_MODERATOR role',
+  })
+  @ApiNotFoundResponse({
+    description: 'Redemption request not found',
+  })
+  @ApiBadRequestResponse({
+    description: 'Redemption request already processed or cancelled',
+  })
+  async processRedemption(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ProcessRedemptionDto,
+    @Req() req: any,
+  ) {
+    const adminId = req.user.adminId;
+    return await this.referralProgramService.processRedemption(id, adminId, dto);
+  }
+
+  // ============================================
+  // MAXX SUBSCRIPTION
+  // ============================================
+
+  @Get('maxx-subscription/statistics')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get Maxx subscription statistics',
+    description:
+      'Get comprehensive statistics for Maxx (Pro) subscriptions including total profiles, active/inactive counts, average usage duration, and autopay subscriptions with month-over-month growth percentages',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Maxx subscription statistics retrieved successfully',
+    type: MaxxSubscriptionStatisticsDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getMaxxSubscriptionStatistics() {
+    return await this.maxxSubscriptionAdminService.getMaxxSubscriptionStatistics();
+  }
+
+  @Get('maxx-subscription/subscriptions')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get Maxx subscriptions list',
+    description:
+      'Get paginated list of Maxx (Pro) subscriptions with filters for status, payment type, search, and date range. Supports sorting by usage months or valid till date.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Maxx subscriptions retrieved successfully',
+    type: MaxxSubscriptionsResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getMaxxSubscriptions(@Query() filters: GetMaxxSubscriptionsDto) {
+    return await this.maxxSubscriptionAdminService.getMaxxSubscriptions(filters);
+  }
+
+  @Get('maxx-subscription/subscriptions/:id')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get Maxx subscription details',
+    description:
+      'Get detailed information about a specific Maxx (Pro) subscription including influencer details, payment history, pause information, and subscription status.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Subscription ID',
+    example: 123,
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Subscription details retrieved successfully',
+    type: SubscriptionDetailsDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Subscription not found',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getMaxxSubscriptionDetails(@Param('id', ParseIntPipe) id: number) {
+    return await this.maxxSubscriptionAdminService.getSubscriptionDetails(id);
+  }
+
+  @Put('maxx-subscription/subscriptions/:id/pause')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Pause a Maxx subscription',
+    description:
+      'Admin action to pause a Maxx (Pro) subscription. Requires Super Admin or Content Moderator role.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Subscription ID',
+    example: 123,
+  })
+  @ApiBody({ type: PauseSubscriptionDto })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Subscription paused successfully',
+    type: SubscriptionActionResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Subscription not found',
+  })
+  @ApiBadRequestResponse({
+    description: 'Cannot pause this subscription (already paused or cancelled)',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions',
+  })
+  async pauseMaxxSubscription(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: PauseSubscriptionDto,
+  ) {
+    return await this.maxxSubscriptionAdminService.pauseSubscription(id, dto);
+  }
+
+  @Put('maxx-subscription/subscriptions/:id/resume')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Resume a paused Maxx subscription',
+    description:
+      'Admin action to resume a paused Maxx (Pro) subscription. Adjusts billing dates based on pause duration. Requires Super Admin or Content Moderator role.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Subscription ID',
+    example: 123,
+  })
+  @ApiBody({ type: ResumeSubscriptionDto })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Subscription resumed successfully',
+    type: SubscriptionActionResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Subscription not found',
+  })
+  @ApiBadRequestResponse({
+    description: 'Subscription is not paused',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions',
+  })
+  async resumeMaxxSubscription(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ResumeSubscriptionDto,
+  ) {
+    return await this.maxxSubscriptionAdminService.resumeSubscription(id, dto);
+  }
+
+  @Put('maxx-subscription/subscriptions/:id/cancel')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Cancel a Maxx subscription',
+    description:
+      'Admin action to cancel a Maxx (Pro) subscription. Can cancel immediately or at period end. Requires Super Admin role only.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Subscription ID',
+    example: 123,
+  })
+  @ApiBody({ type: CancelSubscriptionDto })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Subscription cancelled successfully',
+    type: SubscriptionActionResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Subscription not found',
+  })
+  @ApiBadRequestResponse({
+    description: 'Subscription is already cancelled',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - Super Admin only',
+  })
+  async cancelMaxxSubscription(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CancelSubscriptionDto,
+  ) {
+    return await this.maxxSubscriptionAdminService.cancelSubscription(id, dto);
   }
 
   // ============================================
