@@ -162,7 +162,7 @@ async function bootstrap() {
   await app.listen(port);
 
   // Use our custom logger for startup message
-  loggerService.info(`Collabkaroo server started successfully!!`, {
+  loggerService.info(`Collabkaroo server started successfully!`, {
     port,
     environment: process.env.NODE_ENV || 'development',
     apiDocs: `http://localhost:${port}/api/docs`,
