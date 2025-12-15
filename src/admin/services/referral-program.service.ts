@@ -226,7 +226,9 @@ export class ReferralProgramService {
       where: {
         referralCode: { [Op.in]: referrerCodes },
       },
-      attributes: ['id', 'username', 'referralCode'],
+      attributes: ['id', 'username', 'referralCode', 
+        //'referralInviteClickCount'
+      ],
     });
 
     // Create lookup maps
@@ -249,6 +251,7 @@ export class ReferralProgramService {
           profileStatus: referredUser.isVerified ? 'verified' : 'unverified',
           referredBy: referrer?.username || 'N/A',
           referralCode: usage.referralCode,
+          //referrerInviteClickCount: referrer?.referralInviteClickCount || 0,
           referralDate: usage.createdAt,
           profileImage: referredUser.profileImage,
         };
@@ -282,10 +285,32 @@ export class ReferralProgramService {
 
     const offset = (page - 1) * limit;
 
-    // Build where clause for influencers with referral codes
+    // First, get all unique referral codes that have been used
+    // const usedReferralCodes = await this.referralUsageModel.findAll({
+    //   attributes: [[fn('DISTINCT', col('referralCode')), 'referralCode']],
+    //   raw: true,
+    // });
+
+    // const usedCodes = usedReferralCodes.map((r: any) => r.referralCode).filter(Boolean);
+
+    // if (usedCodes.length === 0) {
+    //   // No referrals yet, return empty result
+    //   return {
+    //     data: [],
+    //     pagination: {
+    //       page,
+    //       limit,
+    //       total: 0,
+    //       totalPages: 0,
+    //     },
+    //   };
+    // }
+
+    // Build where clause for influencers whose referral codes have been used
     const whereClause: any = {
       referralCode: {
         [Op.ne]: null,
+        // [Op.in]: usedCodes,
       },
     };
 
@@ -297,7 +322,7 @@ export class ReferralProgramService {
       ];
     }
 
-    // Get influencers with referral codes
+    // Get influencers whose referral codes have been used
     const { count, rows: influencers } =
       await this.influencerModel.findAndCountAll({
         where: whereClause,
@@ -401,6 +426,8 @@ export class ReferralProgramService {
         profileStatus: influencer.isVerified ? 'verified' : 'unverified',
         referralCode: influencer.referralCode || '',
         totalReferrals,
+        inviteClickCount: 0,
+        // influencer.referralInviteClickCount || 0,
         totalEarnings: earnings.totalEarnings,
         redeemed: earnings.redeemed,
         pending: earnings.pending,
@@ -561,8 +588,12 @@ export class ReferralProgramService {
     const offset = (page - 1) * limit;
 
     // Build where clause for transactions
+    // Only show consolidated redemption transactions, not individual credit transactions
     const whereClause: any = {
       transactionType: 'referral_bonus',
+      description: {
+        [Op.like]: 'Redemption request%',
+      },
     };
 
     // Filter by status

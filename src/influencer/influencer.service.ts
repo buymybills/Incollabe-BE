@@ -2149,8 +2149,14 @@ export class InfluencerService {
       throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
     }
 
+    // Only get individual credit transactions, exclude consolidated redemption requests
     const allTransactions = await this.creditTransactionModel.findAll({
-      where: { influencerId },
+      where: {
+        influencerId,
+        description: {
+          [Op.notLike]: 'Redemption request%',
+        },
+      },
       attributes: ['amount', 'paymentStatus'],
       raw: true,
     });
@@ -2244,6 +2250,31 @@ export class InfluencerService {
       },
     };
   }
+
+  // async trackReferralInviteClick(influencerId: number) {
+  //   // Verify influencer exists
+  //   const influencer = await this.influencerRepository.findById(influencerId);
+  //   if (!influencer) {
+  //     throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
+  //   }
+
+  //   // Increment the click count atomically
+  //   await Influencer.increment('referralInviteClickCount', {
+  //     where: { id: influencerId },
+  //   });
+
+  //   // Fetch the updated count
+  //   const updated = await this.influencerRepository.findById(influencerId);
+  //   if (!updated) {
+  //     throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
+  //   }
+
+  //   return {
+  //     success: true,
+  //     message: 'Invite click tracked successfully',
+  //     totalClicks: updated.referralInviteClickCount || 0,
+  //   };
+  // }
 
   async redeemRewards(influencerId: number, upiIdRecordId?: number) {
     // Get influencer
