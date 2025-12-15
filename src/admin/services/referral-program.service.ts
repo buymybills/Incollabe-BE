@@ -690,7 +690,7 @@ export class ReferralProgramService {
       throw new BadRequestException('Cannot process a cancelled redemption request');
     }
 
-    // Update transaction status
+    // Update redemption transaction status to PAID
     const now = new Date();
     await transaction.update({
       paymentStatus: PaymentStatus.PAID,
@@ -699,6 +699,41 @@ export class ReferralProgramService {
       paymentReferenceId: dto.paymentReferenceId || transaction.paymentReferenceId,
       adminNotes: dto.adminNotes || transaction.adminNotes,
     });
+
+    // Also mark all the underlying credit transactions as PAID
+    // Extract transaction IDs from the description (format: "Redemption request for X referral bonuses (IDs: 1, 2, 3)")
+    if (transaction.description && transaction.description.includes('IDs:')) {
+      try {
+        const idsMatch = transaction.description.match(/IDs:\s*([\d,\s]+)\)/);
+        if (idsMatch && idsMatch[1]) {
+          const creditTransactionIds = idsMatch[1]
+            .split(',')
+            .map((id) => parseInt(id.trim()))
+            .filter((id) => !isNaN(id));
+
+          if (creditTransactionIds.length > 0) {
+            await this.creditTransactionModel.update(
+              {
+                paymentStatus: PaymentStatus.PAID,
+                paidAt: now,
+              },
+              {
+                where: {
+                  id: { [Op.in]: creditTransactionIds },
+                  influencerId: transaction.influencerId,
+                },
+              },
+            );
+            console.log(
+              `✅ Marked ${creditTransactionIds.length} underlying credit transactions as PAID`,
+            );
+          }
+        }
+      } catch (error) {
+        console.error('Error updating underlying credit transactions:', error);
+        // Don't fail the redemption if this fails
+      }
+    }
 
     // Send push notification to the influencer
     try {

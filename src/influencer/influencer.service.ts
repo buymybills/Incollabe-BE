@@ -2280,7 +2280,7 @@ export class InfluencerService {
 
     const finalUpiId = selectedUpiRecord.upiId;
 
-    // Get all pending transactions
+    // Get all pending (earned but not redeemed) transactions
     const pendingTransactions = await this.creditTransactionModel.findAll({
       where: {
         influencerId,
@@ -2300,12 +2300,11 @@ export class InfluencerService {
       throw new BadRequestException('No redeemable amount available.');
     }
 
-    // Update all pending transactions to processing status
+    // Mark all pending credit transactions as 'processing' since they're being redeemed
     const transactionIds = pendingTransactions.map((tx: any) => tx.id);
     await this.creditTransactionModel.update(
       {
-        paymentStatus: 'processing',
-        upiId: finalUpiId,
+        paymentStatus: 'processing', // Mark as being processed for redemption
       },
       {
         where: {
@@ -2313,6 +2312,16 @@ export class InfluencerService {
         },
       },
     );
+
+    // Create ONE consolidated redemption request transaction
+    const redemptionTransaction = await this.creditTransactionModel.create({
+      influencerId,
+      transactionType: 'referral_bonus',
+      amount: totalAmount,
+      paymentStatus: 'processing', // Waiting for admin to process
+      upiId: finalUpiId,
+      description: `Redemption request for ${transactionIds.length} referral bonuses (IDs: ${transactionIds.join(', ')})`,
+    });
 
     // Update the UPI ID's lastUsedAt timestamp
     await selectedUpiRecord.update({ lastUsedAt: new Date() });
