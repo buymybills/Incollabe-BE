@@ -92,12 +92,16 @@ export class ReferralProgramService {
     );
 
     // 3. Amount Spent in Referral (total paid/processing transactions)
+    // Exclude consolidated redemption transactions to prevent double-counting
     const amountSpentResult = await this.creditTransactionModel.findOne({
       attributes: [[fn('SUM', col('amount')), 'total']],
       where: {
         transactionType: 'referral_bonus',
         paymentStatus: {
           [Op.in]: ['paid', 'processing'],
+        },
+        description: {
+          [Op.notLike]: 'Redemption request%',
         },
       },
       raw: true,
@@ -111,6 +115,9 @@ export class ReferralProgramService {
         transactionType: 'referral_bonus',
         paymentStatus: {
           [Op.in]: ['paid', 'processing'],
+        },
+        description: {
+          [Op.notLike]: 'Redemption request%',
         },
         paidAt: {
           [Op.lt]: currentMonthStart,
@@ -467,6 +474,7 @@ export class ReferralProgramService {
 
   /**
    * Get referral transaction history
+   * Shows only consolidated redemption transactions (actual payouts), not individual credits
    * Only shows processed (paid) transactions by default
    */
   async getReferralTransactions(
@@ -484,8 +492,12 @@ export class ReferralProgramService {
     const offset = (page - 1) * limit;
 
     // Build where clause for transactions
+    // Only show consolidated redemption transactions (actual payouts), not individual credits
     const whereClause: any = {
       transactionType: 'referral_bonus',
+      description: {
+        [Op.like]: 'Redemption request%',
+      },
     };
 
     // Only show processed/paid transactions by default
