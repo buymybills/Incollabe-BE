@@ -27,26 +27,26 @@ export class InfluencerUpi extends Model<InfluencerUpi> {
     type: DataType.INTEGER,
     allowNull: false,
   })
-  influencerId: number;
+  declare influencerId: number;
 
   @Column({
     type: DataType.STRING,
     allowNull: false,
   })
-  upiId: string;
+  declare upiId: string;
 
   @Column({
     type: DataType.BOOLEAN,
     defaultValue: false,
     allowNull: false,
   })
-  isSelectedForCurrentTransaction: boolean;
+  declare isSelectedForCurrentTransaction: boolean;
 
   @Column({
     type: DataType.DATE,
     allowNull: true,
   })
-  lastUsedAt: Date;
+  declare lastUsedAt: Date;
 
   @CreatedAt
   @Column({
@@ -63,5 +63,5 @@ export class InfluencerUpi extends Model<InfluencerUpi> {
   declare updatedAt: Date;
 
   @BelongsTo(() => Influencer)
-  influencer: Influencer;
+  declare influencer: Influencer;
 }
