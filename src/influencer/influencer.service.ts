@@ -333,6 +333,10 @@ export class InfluencerService {
         },
       });
 
+      // Calculate next reset date (1st of next month at 00:00:00)
+      const nextResetDate = new Date(startOfMonth);
+      nextResetDate.setMonth(nextResetDate.getMonth() + 1);
+
       // Calculate isPro dynamically based on actual subscription status
       const now = new Date();
       const isPro = influencer.isPro && influencer.proExpiresAt && influencer.proExpiresAt > now;
@@ -364,6 +368,9 @@ export class InfluencerService {
         referralCode: influencer.referralCode || null,
         referralCredits: influencer.referralCredits || 0,
         monthlyReferralUsageCount,
+        monthlyReferralLimit: 5,
+        monthlyReferralRemainingSlots: 5 - monthlyReferralUsageCount,
+        monthlyReferralResetDate: nextResetDate.toISOString(),
         upiId: influencer.upiId || null,
         profileCompletion,
       };
