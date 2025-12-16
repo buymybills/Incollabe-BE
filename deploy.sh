@@ -232,35 +232,6 @@ show_summary() {
     log "Deployment completed successfully!"
 }
 
-# Function to pull latest code from git
-pull_git_changes() {
-    # Check if we're in a git repository
-    if [ -d ".git" ]; then
-        log "Pulling latest code from git..."
-
-        # Stash any local changes to avoid conflicts
-        git stash
-
-        # Pull latest changes
-        if git pull origin dev; then
-            log "Git pull completed successfully"
-        else
-            error "Git pull failed"
-            exit 1
-        fi
-    else
-        log "Not a git repository - skipping git pull (CI/CD will handle file sync)"
-    fi
-
-    # Verify public directory exists
-    if [ -d "public/.well-known" ]; then
-        log "Deep linking files found in public/.well-known/"
-        ls -la public/.well-known/
-    else
-        warn "public/.well-known/ directory not found - deep linking may not work"
-    fi
-}
-
 # Main deployment function (app-only)
 main() {
     log "Starting Incollab app deployment..."
@@ -270,7 +241,6 @@ main() {
         exit 1
     }
 
-    pull_git_changes
     check_docker_credentials
     stop_app_service
     pull_app_image
@@ -290,7 +260,6 @@ full_deploy() {
         exit 1
     }
 
-    pull_git_changes
     check_docker_credentials
     stop_services
     pull_images

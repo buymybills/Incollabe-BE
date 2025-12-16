@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Push Notification Tester</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        h1 { color: #333; }
+        .section {
+            background: #f5f5f5;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        label {
+            display: block;
+            margin: 10px 0 5px 0;
+            font-weight: bold;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            min-height: 80px;
+            font-family: monospace;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        button:hover { background: #45a049; }
+        button.send { background: #2196F3; }
+        button.send:hover { background: #0b7dda; }
+        button.danger { background: #f44336; }
+        button.danger:hover { background: #da190b; }
+        #output {
+            background: #fff;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-top: 20px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>🔔 Push Notification Tester</h1>
+
+    <div class="section">
+        <h2>1. Configuration</h2>
+        <label>Environment:</label>
+        <select id="environment" onchange="updateServerUrl()">
+            <option value="localhost">Localhost</option>
+            <option value="dev">Dev Server</option>
+        </select>
+
+        <label>Server URL:</label>
+        <input type="text" id="serverUrl" value="https://incollab.buymybills.in/api/admin/notifications">
+
+        <label>Admin JWT Token:</label>
+        <input type="text" id="token" placeholder="Bearer token from admin login">
+    </div>
+
+    <div class="section">
+        <h2>2. Notification Details</h2>
+
+        <label>Internal Name (for reference):</label>
+        <input type="text" id="internalName" value="Test Deep Link Notification">
+
+        <label>Title:</label>
+        <input type="text" id="title" value="🎉 New Top Influencers Available!">
+
+        <label>Body:</label>
+        <textarea id="body">Check out this week's top influencers and get inspired!</textarea>
+
+        <label>Image URL (HTTPS, 2:1 ratio recommended):</label>
+        <input type="text" id="imageUrl" placeholder="https://example.com/banner.jpg">
+
+        <label>Deep Link URL:</label>
+        <input type="text" id="actionUrl" value="app://top-influencers">
+
+        <label>Android Channel ID:</label>
+        <select id="androidChannelId">
+            <option value="default">default</option>
+            <option value="promotions">promotions</option>
+            <option value="campaigns">campaigns</option>
+            <option value="alerts">alerts</option>
+        </select>
+
+        <label>Sound:</label>
+        <select id="sound">
+            <option value="default">default</option>
+            <option value="custom">custom</option>
+            <option value="silent">silent</option>
+        </select>
+
+        <label>Priority:</label>
+        <select id="priority">
+            <option value="high">high</option>
+            <option value="normal">normal</option>
+            <option value="low">low</option>
+        </select>
+
+        <label>Expiration Hours (1-168):</label>
+        <input type="number" id="expirationHours" value="24" min="1" max="168">
+
+        <label>Custom Data (JSON):</label>
+        <textarea id="customData">{"screen": "top-influencers", "tab": "featured", "refresh": true}</textarea>
+
+        <label>Receiver Type:</label>
+        <select id="receiverType">
+            <option value="all_users">All Users</option>
+            <option value="all_influencers">All Influencers</option>
+            <option value="all_brands">All Brands</option>
+            <option value="influencers">Specific Influencers</option>
+            <option value="brands">Specific Brands</option>
+        </select>
+
+        <label>Specific Receiver IDs (comma separated, required for specific receiver types):</label>
+        <input type="text" id="specificReceivers" placeholder="1,2,3">
+    </div>
+
+    <div class="section">
+        <h2>3. Actions</h2>
+        <button onclick="createNotification()">📝 Create Notification</button>
+        <button onclick="listNotifications()">📋 List All Notifications</button>
+        <button onclick="clearOutput()">🗑️ Clear Output</button>
+    </div>
+
+    <div class="section" id="sendSection" style="display: none;">
+        <h2>4. Send Notification</h2>
+        <label>Notification ID:</label>
+        <input type="text" id="notificationId" placeholder="ID from created notification">
+        <button class="send" onclick="sendNotification()">🚀 Send Notification</button>
+        <button onclick="getNotificationDetails()">📄 Get Details</button>
+        <button class="danger" onclick="deleteNotification()">🗑️ Delete Notification</button>
+    </div>
+
+    <div class="section">
+        <h2>Output:</h2>
+        <div id="output">Ready to test push notifications...</div>
+    </div>
+
+    <script>
+        function updateServerUrl() {
+            const env = document.getElementById('environment').value;
+            const serverUrlInput = document.getElementById('serverUrl');
+            if (env === 'localhost') {
+                serverUrlInput.value = 'http://localhost:3002/api/admin/notifications';
+            } else {
+                serverUrlInput.value = 'https://incollab.buymybills.in/api/admin/notifications';
+            }
+        }
+
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+            output.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function clearOutput() {
+            document.getElementById('output').innerHTML = '';
+        }
+
+        function getHeaders() {
+            const token = document.getElementById('token').value;
+            if (!token) {
+                throw new Error('Please provide admin JWT token');
+            }
+            return {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            };
+        }
+
+        async function createNotification() {
+            try {
+                log('Creating notification...', 'info');
+
+                const customDataText = document.getElementById('customData').value.trim();
+                let customData = null;
+                if (customDataText) {
+                    try {
+                        customData = JSON.parse(customDataText);
+                    } catch (e) {
+                        throw new Error('Invalid JSON in Custom Data field');
+                    }
+                }
+
+                const receiverType = document.getElementById('receiverType').value;
+                const specificReceiversText = document.getElementById('specificReceivers').value.trim();
+                let specificReceivers = null;
+
+                if (['influencers', 'brands', 'specific_users'].includes(receiverType)) {
+                    if (!specificReceiversText) {
+                        throw new Error('Specific Receiver IDs are required for this receiver type');
+                    }
+                    specificReceivers = specificReceiversText.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+                }
+
+                const payload = {
+                    internalName: document.getElementById('internalName').value,
+                    title: document.getElementById('title').value,
+                    body: document.getElementById('body').value,
+                    imageUrl: document.getElementById('imageUrl').value || undefined,
+                    actionUrl: document.getElementById('actionUrl').value,
+                    androidChannelId: document.getElementById('androidChannelId').value,
+                    sound: document.getElementById('sound').value,
+                    priority: document.getElementById('priority').value,
+                    expirationHours: parseInt(document.getElementById('expirationHours').value),
+                    customData: customData,
+                    receiverType: receiverType,
+                    specificReceivers: specificReceivers
+                };
+
+                log('Payload: ' + JSON.stringify(payload, null, 2), 'info');
+
+                const response = await fetch(document.getElementById('serverUrl').value, {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(JSON.stringify(data, null, 2));
+                }
+
+                log('✅ Notification created successfully!', 'success');
+                log('Response: ' + JSON.stringify(data, null, 2), 'success');
+
+                // Show send section and populate ID
+                document.getElementById('sendSection').style.display = 'block';
+                document.getElementById('notificationId').value = data.id;
+
+            } catch (error) {
+                log('❌ Error: ' + error.message, 'error');
+            }
+        }
+
+        async function listNotifications() {
+            try {
+                log('Fetching notifications...', 'info');
+
+                const response = await fetch(document.getElementById('serverUrl').value, {
+                    method: 'GET',
+                    headers: getHeaders()
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(JSON.stringify(data, null, 2));
+                }
+
+                log('✅ Notifications retrieved:', 'success');
+                log(JSON.stringify(data, null, 2), 'info');
+
+                if (data.notifications && data.notifications.length > 0) {
+                    document.getElementById('sendSection').style.display = 'block';
+                }
+
+            } catch (error) {
+                log('❌ Error: ' + error.message, 'error');
+            }
+        }
+
+        async function sendNotification() {
+            try {
+                const notificationId = document.getElementById('notificationId').value;
+                if (!notificationId) {
+                    throw new Error('Please provide notification ID');
+                }
+
+                log(`Sending notification ${notificationId}...`, 'info');
+
+                const serverUrl = document.getElementById('serverUrl').value;
+                const sendUrl = `${serverUrl}/${notificationId}/send`;
+
+                const response = await fetch(sendUrl, {
+                    method: 'POST',
+                    headers: getHeaders()
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(JSON.stringify(data, null, 2));
+                }
+
+                log('🚀 Notification sent successfully!', 'success');
+                log('Response: ' + JSON.stringify(data, null, 2), 'success');
+
+            } catch (error) {
+                log('❌ Error: ' + error.message, 'error');
+            }
+        }
+
+        async function getNotificationDetails() {
+            try {
+                const notificationId = document.getElementById('notificationId').value;
+                if (!notificationId) {
+                    throw new Error('Please provide notification ID');
+                }
+
+                log(`Getting details for notification ${notificationId}...`, 'info');
+
+                const serverUrl = document.getElementById('serverUrl').value;
+                const detailsUrl = `${serverUrl}/${notificationId}`;
+
+                const response = await fetch(detailsUrl, {
+                    method: 'GET',
+                    headers: getHeaders()
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(JSON.stringify(data, null, 2));
+                }
+
+                log('✅ Notification details:', 'success');
+                log(JSON.stringify(data, null, 2), 'info');
+
+            } catch (error) {
+                log('❌ Error: ' + error.message, 'error');
+            }
+        }
+
+        async function deleteNotification() {
+            try {
+                const notificationId = document.getElementById('notificationId').value;
+                if (!notificationId) {
+                    throw new Error('Please provide notification ID');
+                }
+
+                if (!confirm(`Are you sure you want to delete notification ${notificationId}?`)) {
+                    return;
+                }
+
+                log(`Deleting notification ${notificationId}...`, 'info');
+
+                const serverUrl = document.getElementById('serverUrl').value;
+                const deleteUrl = `${serverUrl}/${notificationId}`;
+
+                const response = await fetch(deleteUrl, {
+                    method: 'DELETE',
+                    headers: getHeaders()
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(JSON.stringify(data, null, 2));
+                }
+
+                log('✅ Notification deleted successfully!', 'success');
+                log('Response: ' + JSON.stringify(data, null, 2), 'success');
+
+                document.getElementById('notificationId').value = '';
+
+            } catch (error) {
+                log('❌ Error: ' + error.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

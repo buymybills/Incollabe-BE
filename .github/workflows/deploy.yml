@@ -46,15 +46,12 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-          # Create deployment directory and fix ownership
-          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "sudo mkdir -p /home/ubuntu/Incollabe-BE/public/.well-known && sudo chown -R ubuntu:ubuntu /home/ubuntu/Incollabe-BE"
+          # Create deployment directory on EC2 if it doesn't exist
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "mkdir -p /home/ubuntu/Incollabe-BE"
 
           # Copy deployment files based on environment
           scp docker-compose.yml ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/
           scp deploy.sh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/
-
-          # Copy deep linking files (copy contents, not directory)
-          scp public/.well-known/* ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/Incollabe-BE/public/.well-known/
 
           # Copy appropriate nginx config and rename to nginx.conf on server
           # Docker compose always mounts ./nginx.conf (same file name, different content per env)

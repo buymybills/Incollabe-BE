@@ -1,0 +1,50 @@
+config:
+  target: "https://api.collabkaroo.co.in"
+  phases:
+    # Quick test with 10 users for 30 seconds
+    - duration: 30
+      arrivalRate: 10
+      name: "Quick test - 10 users"
+
+  http:
+    timeout: 30
+
+scenarios:
+  # Test Swagger docs (public endpoint)
+  - name: "Access Swagger Documentation"
+    weight: 40
+    flow:
+      - get:
+          url: "/api/docs"
+          expect:
+            - statusCode: 200
+
+  # Test OTP request (public endpoint but expects 400 without valid phone)
+  - name: "Test OTP Endpoint Accessibility"
+    weight: 30
+    flow:
+      - post:
+          url: "/api/auth/influencer/request-otp"
+          json:
+            phone: "9876543210"
+          expect:
+            - statusCode:
+                - 200
+                - 201
+                - 400
+                - 429  # Rate limiting expected
+
+  # Test brand OTP
+  - name: "Test Brand OTP Endpoint"
+    weight: 30
+    flow:
+      - post:
+          url: "/api/auth/brand/request-otp"
+          json:
+            phone: "9876543210"
+          expect:
+            - statusCode:
+                - 200
+                - 201
+                - 400
+                - 429

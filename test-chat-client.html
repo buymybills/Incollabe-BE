@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Chat Test Client</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .chat-container { display: flex; gap: 20px; }
+        .chat-box { flex: 1; background: white; border-radius: 8px; padding: 20px; }
+        .chat-box h2 { margin-bottom: 15px; color: #333; }
+        .status { padding: 10px; background: #e3f2fd; border-radius: 4px; margin-bottom: 15px; }
+        .status.connected { background: #c8e6c9; }
+        .status.disconnected { background: #ffcdd2; }
+        .messages { height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 4px; background: #fafafa; }
+        .message { padding: 8px 12px; margin-bottom: 8px; border-radius: 6px; max-width: 80%; word-wrap: break-word; }
+        .message.sent { background: #e3f2fd; margin-left: auto; text-align: right; }
+        .message.received { background: #f1f1f1; margin-right: auto; }
+        .message-meta { font-size: 0.75em; color: #666; margin-top: 4px; }
+        .input-group { display: flex; gap: 10px; margin-bottom: 10px; }
+        input, select { padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        input[type="text"], input[type="number"] { flex: 1; }
+        button { padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        button:hover { background: #1976D2; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .typing { font-style: italic; color: #666; font-size: 0.9em; padding: 8px; min-height: 24px; }
+        .event-log { height: 150px; overflow-y: auto; background: #263238; color: #4CAF50; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 12px; margin-top: 15px; }
+        .event-log div { margin-bottom: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔥 Real-time Chat Test Client</h1>
+            <p>Test WebSocket chat between Brand and Influencer</p>
+            <p style="font-size: 0.9em; margin-top: 10px; color: #666;">
+                <strong>Instructions:</strong>
+                1) (Optional) Paste JWT tokens to load message history
+                2) Click "Connect" to establish WebSocket
+                3) Click "Join Conv." to join a conversation
+                4) Start chatting in real-time!
+            </p>
+        </div>
+
+        <div class="chat-container">
+            <!-- Brand Chat -->
+            <div class="chat-box">
+                <h2>👔 Brand (ID: 32)</h2>
+                <div id="brand-status" class="status disconnected">Disconnected</div>
+
+                <div class="input-group">
+                    <input type="text" id="brand-token" placeholder="JWT Token (optional - for loading history)" style="flex: 2; font-size: 11px;">
+                </div>
+
+                <div class="input-group">
+                    <button id="brand-connect" onclick="connectBrand()">Connect</button>
+                    <button id="brand-disconnect" onclick="disconnectBrand()" disabled>Disconnect</button>
+                </div>
+
+                <div class="input-group">
+                    <input type="number" id="brand-conv-id" placeholder="Conversation ID" value="1">
+                    <button onclick="joinConversation('brand')">Join Conv.</button>
+                </div>
+
+                <div class="messages" id="brand-messages"></div>
+                <div class="typing" id="brand-typing"></div>
+
+                <div class="input-group">
+                    <input type="text" id="brand-message" placeholder="Type a message..." onkeypress="handleBrandKeyPress(event)">
+                    <button onclick="sendMessage('brand')">Send</button>
+                </div>
+
+                <div class="input-group">
+                    <button onclick="startTyping('brand')">Start Typing</button>
+                    <button onclick="stopTyping('brand')">Stop Typing</button>
+                    <button onclick="markAsRead('brand')">Mark Read</button>
+                </div>
+            </div>
+
+            <!-- Influencer Chat -->
+            <div class="chat-box">
+                <h2>⭐ Influencer (ID: 11)</h2>
+                <div id="influencer-status" class="status disconnected">Disconnected</div>
+
+                <div class="input-group">
+                    <input type="text" id="influencer-token" placeholder="JWT Token (optional - for loading history)" style="flex: 2; font-size: 11px;">
+                </div>
+
+                <div class="input-group">
+                    <button id="influencer-connect" onclick="connectInfluencer()">Connect</button>
+                    <button id="influencer-disconnect" onclick="disconnectInfluencer()" disabled>Disconnect</button>
+                </div>
+
+                <div class="input-group">
+                    <input type="number" id="influencer-conv-id" placeholder="Conversation ID" value="1">
+                    <button onclick="joinConversation('influencer')">Join Conv.</button>
+                </div>
+
+                <div class="messages" id="influencer-messages"></div>
+                <div class="typing" id="influencer-typing"></div>
+
+                <div class="input-group">
+                    <input type="text" id="influencer-message" placeholder="Type a message..." onkeypress="handleInfluencerKeyPress(event)">
+                    <button onclick="sendMessage('influencer')">Send</button>
+                </div>
+
+                <div class="input-group">
+                    <button onclick="startTyping('influencer')">Start Typing</button>
+                    <button onclick="stopTyping('influencer')">Stop Typing</button>
+                    <button onclick="markAsRead('influencer')">Mark Read</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="header" style="margin-top: 20px;">
+            <h3>📡 Event Log</h3>
+            <div class="event-log" id="event-log"></div>
+        </div>
+    </div>
+
+    <script>
+        let brandSocket = null;
+        let influencerSocket = null;
+        const SERVER_URL = 'http://localhost:3002'; // Change if needed
+
+        function log(message, userType = 'system') {
+            const logDiv = document.getElementById('event-log');
+            const time = new Date().toLocaleTimeString();
+            const color = userType === 'brand' ? '#2196F3' : userType === 'influencer' ? '#FF9800' : '#4CAF50';
+            logDiv.innerHTML += `<div style="color: ${color}">[${time}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function connectBrand() {
+            // Using simplified auth format: "userId:userType"
+            brandSocket = io(`${SERVER_URL}/chat`, {
+                auth: {
+                    token: '32:brand' // Temporary format for testing
+                }
+            });
+
+            setupSocketListeners(brandSocket, 'brand');
+            document.getElementById('brand-connect').disabled = true;
+            document.getElementById('brand-disconnect').disabled = false;
+        }
+
+        function connectInfluencer() {
+            // Using simplified auth format: "userId:userType"
+            influencerSocket = io(`${SERVER_URL}/chat`, {
+                auth: {
+                    token: '11:influencer' // Temporary format for testing
+                }
+            });
+
+            setupSocketListeners(influencerSocket, 'influencer');
+            document.getElementById('influencer-connect').disabled = true;
+            document.getElementById('influencer-disconnect').disabled = false;
+        }
+
+        function disconnectBrand() {
+            if (brandSocket) {
+                brandSocket.disconnect();
+                document.getElementById('brand-connect').disabled = false;
+                document.getElementById('brand-disconnect').disabled = true;
+            }
+        }
+
+        function disconnectInfluencer() {
+            if (influencerSocket) {
+                influencerSocket.disconnect();
+                document.getElementById('influencer-connect').disabled = false;
+                document.getElementById('influencer-disconnect').disabled = true;
+            }
+        }
+
+        function setupSocketListeners(socket, userType) {
+            socket.on('connect', () => {
+                log(`${userType.toUpperCase()} connected`, userType);
+                document.getElementById(`${userType}-status`).textContent = 'Connected';
+                document.getElementById(`${userType}-status`).className = 'status connected';
+            });
+
+            socket.on('disconnect', () => {
+                log(`${userType.toUpperCase()} disconnected`, userType);
+                document.getElementById(`${userType}-status`).textContent = 'Disconnected';
+                document.getElementById(`${userType}-status`).className = 'status disconnected';
+            });
+
+            socket.on('connection:success', (data) => {
+                log(`${userType.toUpperCase()} authenticated successfully`, userType);
+            });
+
+            socket.on('conversation:joined', (data) => {
+                log(`${userType.toUpperCase()} joined conversation ${data.conversationId}`, userType);
+                // Load previous messages when joining
+                loadPreviousMessages(userType, data.conversationId);
+            });
+
+            socket.on('message:new', (message) => {
+                // Only display if message is from the other party
+                const isOwnMessage = message.senderType === userType;
+                if (!isOwnMessage) {
+                    log(`${userType.toUpperCase()} received message: "${message.content}"`, userType);
+                    displayMessage(userType, message, false);
+                }
+            });
+
+            socket.on('message:sent', (data) => {
+                log(`${userType.toUpperCase()} message sent successfully`, userType);
+                // Display own sent message
+                if (data.message) {
+                    displayMessage(userType, data.message, true);
+                }
+            });
+
+            socket.on('typing:start', (data) => {
+                document.getElementById(`${userType}-typing`).textContent = `Other user is typing...`;
+            });
+
+            socket.on('typing:stop', (data) => {
+                document.getElementById(`${userType}-typing`).textContent = '';
+            });
+
+            socket.on('message:read', (data) => {
+                log(`${userType.toUpperCase()} messages marked as read`, userType);
+            });
+
+            socket.on('error', (error) => {
+                log(`${userType.toUpperCase()} ERROR: ${error.message}`, userType);
+            });
+
+            socket.on('message:error', (error) => {
+                log(`${userType.toUpperCase()} MESSAGE ERROR: ${error.error}`, userType);
+            });
+        }
+
+        function joinConversation(userType) {
+            const socket = userType === 'brand' ? brandSocket : influencerSocket;
+            const conversationId = parseInt(document.getElementById(`${userType}-conv-id`).value);
+
+            if (socket && socket.connected) {
+                socket.emit('conversation:join', { conversationId });
+            } else {
+                alert(`Please connect ${userType} first!`);
+            }
+        }
+
+        async function loadPreviousMessages(userType, conversationId) {
+            try {
+                // Get JWT token from input field
+                const tokenInput = document.getElementById(`${userType}-token`);
+                const token = tokenInput?.value?.trim();
+
+                if (!token) {
+                    log(`${userType.toUpperCase()} no JWT token provided - skipping message history load`, userType);
+                    return;
+                }
+
+                log(`${userType.toUpperCase()} loading previous messages...`, userType);
+
+                const response = await fetch(`${SERVER_URL}/api/chat/conversations/${conversationId}/messages?limit=50`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    log(`${userType.toUpperCase()} failed to load messages: ${response.status}`, userType);
+                    return;
+                }
+
+                const result = await response.json();
+                const messages = result.data.messages || [];
+
+                log(`${userType.toUpperCase()} loaded ${messages.length} previous messages`, userType);
+
+                // Clear existing messages
+                const messagesDiv = document.getElementById(`${userType}-messages`);
+                messagesDiv.innerHTML = '';
+
+                // Display all messages
+                messages.forEach(msg => {
+                    const isSent = msg.senderType === userType;
+                    displayMessage(userType, msg, isSent);
+                });
+            } catch (error) {
+                log(`${userType.toUpperCase()} error loading messages: ${error.message}`, userType);
+            }
+        }
+
+        function sendMessage(userType) {
+            const socket = userType === 'brand' ? brandSocket : influencerSocket;
+            const input = document.getElementById(`${userType}-message`);
+            const conversationId = parseInt(document.getElementById(`${userType}-conv-id`).value);
+            const content = input.value.trim();
+
+            if (!content) return;
+            if (!socket || !socket.connected) {
+                alert(`Please connect ${userType} first!`);
+                return;
+            }
+
+            socket.emit('message:send', {
+                conversationId,
+                content,
+                messageType: 'text'
+            });
+
+            // Message will be displayed via message:sent event
+            input.value = '';
+        }
+
+        function displayMessage(userType, message, isSent) {
+            const messagesDiv = document.getElementById(`${userType}-messages`);
+
+            // Check for duplicate messages (prevent showing same message twice)
+            if (message.id && messagesDiv.querySelector(`[data-message-id="${message.id}"]`)) {
+                return; // Message already displayed
+            }
+
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+            if (message.id) {
+                msgDiv.dataset.messageId = message.id;
+            }
+
+            // Format timestamp
+            const timestamp = message.createdAt ? new Date(message.createdAt) : new Date();
+            const time = timestamp.toLocaleTimeString();
+
+            msgDiv.innerHTML = `
+                <div>${message.content || '[No content]'}</div>
+                <div class="message-meta">${time}</div>
+            `;
+
+            messagesDiv.appendChild(msgDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function startTyping(userType) {
+            const socket = userType === 'brand' ? brandSocket : influencerSocket;
+            const conversationId = parseInt(document.getElementById(`${userType}-conv-id`).value);
+
+            if (socket && socket.connected) {
+                socket.emit('typing:start', { conversationId });
+            }
+        }
+
+        function stopTyping(userType) {
+            const socket = userType === 'brand' ? brandSocket : influencerSocket;
+            const conversationId = parseInt(document.getElementById(`${userType}-conv-id`).value);
+
+            if (socket && socket.connected) {
+                socket.emit('typing:stop', { conversationId });
+            }
+        }
+
+        function markAsRead(userType) {
+            const socket = userType === 'brand' ? brandSocket : influencerSocket;
+            const conversationId = parseInt(document.getElementById(`${userType}-conv-id`).value);
+
+            if (socket && socket.connected) {
+                socket.emit('message:read', { conversationId });
+            }
+        }
+
+        function handleBrandKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage('brand');
+            }
+        }
+
+        function handleInfluencerKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage('influencer');
+            }
+        }
+
+        log('Chat test client loaded. Click Connect to start!');
+    </script>
+</body>
+</html>

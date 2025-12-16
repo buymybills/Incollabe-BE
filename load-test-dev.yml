@@ -1,0 +1,98 @@
+config:
+  target: "https://api.collabkaroo.co.in"
+  phases:
+    # Phase 1: Warm up - gradually increase to 50 users
+    - duration: 60
+      arrivalRate: 5
+      name: "Warm up phase"
+
+    # Phase 2: Ramp up to 100 users
+    - duration: 60
+      arrivalRate: 10
+      name: "Ramp up to 100 users/sec"
+
+    # Phase 3: Full load - 200 concurrent users
+    - duration: 180
+      arrivalRate: 200
+      name: "Full load - 200 users/sec for 3 minutes"
+
+    # Phase 4: Sustained load
+    - duration: 120
+      arrivalRate: 150
+      name: "Sustained load - 150 users/sec"
+
+    # Phase 5: Cool down
+    - duration: 60
+      arrivalRate: 50
+      name: "Cool down phase"
+
+  http:
+    timeout: 30
+
+  # Performance thresholds - test fails if these are not met
+  ensure:
+    maxErrorRate: 1        # Maximum 1% error rate
+    p95: 2000              # 95% of requests should complete under 2 seconds
+    p99: 3000              # 99% of requests should complete under 3 seconds
+
+scenarios:
+  # Scenario 1: Health Check (20% of traffic)
+  - name: "Health Check"
+    weight: 20
+    flow:
+      - get:
+          url: "/health"
+          capture:
+            - json: "$.status"
+              as: "health_status"
+      - think: 1
+
+  # Scenario 2: Browse Campaigns (30% of traffic)
+  - name: "Browse Campaigns"
+    weight: 30
+    flow:
+      - get:
+          url: "/api/campaign"
+          expect:
+            - statusCode: 200
+      - think: 2
+      - get:
+          url: "/api/campaign?page=1&limit=10"
+      - think: 1
+
+  # Scenario 3: View Single Campaign (25% of traffic)
+  - name: "View Campaign Details"
+    weight: 25
+    flow:
+      - get:
+          url: "/api/campaign"
+      - think: 1
+      - get:
+          url: "/api/campaign/{{ $randomNumber(1, 50) }}"
+      - think: 2
+
+  # Scenario 4: Search & Filter Campaigns (15% of traffic)
+  - name: "Search and Filter"
+    weight: 15
+    flow:
+      - get:
+          url: "/api/campaign?status=active"
+      - think: 1
+      - get:
+          url: "/api/campaign?type=paid"
+      - think: 1
+
+  # Scenario 5: OTP Request Flow (10% of traffic)
+  - name: "Request OTP"
+    weight: 10
+    flow:
+      - post:
+          url: "/api/auth/influencer/request-otp"
+          json:
+            phoneNumber: "9{{ $randomNumber(100000000, 999999999) }}"
+          expect:
+            - statusCode:
+                - 200
+                - 201
+                - 429  # Rate limiting expected
+      - think: 3

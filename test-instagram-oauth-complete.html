@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instagram OAuth Test - Complete Flow</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .step {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .step h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            color: #555;
+            margin-bottom: 5px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        input[type="text"],
+        input[type="number"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 14px 28px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .code-display {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin-top: 10px;
+            word-break: break-all;
+        }
+
+        .success {
+            background: #d4edda;
+            border-left-color: #28a745;
+        }
+
+        .error {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+            color: #721c24;
+        }
+
+        .info {
+            background: #d1ecf1;
+            border-left-color: #17a2b8;
+            color: #0c5460;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            border-left: 4px solid #17a2b8;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .response-section {
+            margin-top: 20px;
+        }
+
+        .copy-btn {
+            background: #28a745;
+            padding: 8px 16px;
+            font-size: 14px;
+            margin-top: 10px;
+            width: auto;
+        }
+
+        .copy-btn:hover {
+            background: #218838;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 Instagram OAuth Test</h1>
+        <p class="subtitle">Complete OAuth Flow for Instagram Basic Display API</p>
+
+        <div class="info">
+            <strong>📝 Setup Required:</strong><br>
+            1. Go to <a href="https://developers.facebook.com/" target="_blank">Meta for Developers</a><br>
+            2. Create an app and add "Instagram Basic Display"<br>
+            3. Add your redirect URI in OAuth Redirect URIs<br>
+            4. Copy your Client ID and Client Secret below
+        </div>
+
+        <!-- Step 1: Configuration -->
+        <div class="step">
+            <h3>Step 1: Configure OAuth Settings</h3>
+
+            <div class="input-group">
+                <label>Instagram Client ID (App ID)</label>
+                <input type="text" id="clientId" placeholder="Enter your Instagram App ID">
+            </div>
+
+            <div class="input-group">
+                <label>Instagram Client Secret</label>
+                <input type="text" id="clientSecret" placeholder="Enter your Instagram App Secret">
+            </div>
+
+            <div class="input-group">
+                <label>Redirect URI</label>
+                <input type="text" id="redirectUri" placeholder="e.g., https://your-ngrok-url.ngrok-free.dev/callback">
+                <small style="color: #666; display: block; margin-top: 5px;">
+                    ⚠️ This MUST exactly match what's configured in Meta Dashboard (including trailing slash!)
+                </small>
+            </div>
+
+            <div class="input-group">
+                <label>Backend API URL</label>
+                <input type="text" id="apiUrl" value="http://localhost:3002/api" placeholder="e.g., http://localhost:3002/api">
+            </div>
+
+            <div class="input-group">
+                <label>User ID (for connecting account)</label>
+                <input type="number" id="userId" placeholder="Enter user ID" value="1">
+            </div>
+
+            <div class="input-group">
+                <label>User Type</label>
+                <select id="userType" style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px;">
+                    <option value="influencer">Influencer</option>
+                    <option value="brand">Brand</option>
+                </select>
+            </div>
+
+            <button onclick="saveConfig()">💾 Save Configuration</button>
+        </div>
+
+        <!-- Step 2: Start OAuth -->
+        <div class="step hidden" id="step2">
+            <h3>Step 2: Start Instagram Login</h3>
+            <p style="margin-bottom: 15px; color: #666;">Click the button below to redirect to Instagram for authorization.</p>
+
+            <div class="code-display" id="authUrlDisplay"></div>
+
+            <button onclick="startOAuth()">🚀 Login with Instagram</button>
+        </div>
+
+        <!-- Step 3: Handle Callback -->
+        <div class="step hidden" id="step3">
+            <h3>Step 3: Authorization Code Received</h3>
+            <p style="margin-bottom: 15px; color: #666;">Code received from Instagram. Click to exchange for access token.</p>
+
+            <div class="code-display" id="codeDisplay"></div>
+
+            <button onclick="exchangeToken()" id="exchangeBtn">🔄 Exchange for Access Token</button>
+
+            <div class="response-section hidden" id="tokenResponse"></div>
+        </div>
+
+        <!-- Step 4: Get Profile -->
+        <div class="step hidden" id="step4">
+            <h3>Step 4: Connect Instagram Account</h3>
+            <p style="margin-bottom: 15px; color: #666;">Access token received! Now connecting to your backend...</p>
+
+            <button onclick="connectAccount()" id="connectBtn">👤 Connect Instagram Account</button>
+
+            <div class="response-section hidden" id="profileResponse"></div>
+        </div>
+    </div>
+
+    <script>
+        let config = {};
+        let authCode = '';
+        let accessToken = '';
+
+        // Check for OAuth callback on page load
+        window.onload = function() {
+            // Check if we're coming back from Instagram OAuth
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            const error = urlParams.get('error');
+
+            if (error) {
+                alert('❌ OAuth Error: ' + error + '\nReason: ' + (urlParams.get('error_reason') || 'Unknown') + '\nDescription: ' + (urlParams.get('error_description') || 'No description'));
+                return;
+            }
+
+            if (code) {
+                // Load saved config
+                const savedConfig = localStorage.getItem('instagramOAuthConfig');
+                if (savedConfig) {
+                    config = JSON.parse(savedConfig);
+                    populateFields();
+                }
+
+                authCode = code;
+                showStep3(code);
+            } else {
+                // Load saved config if exists
+                const savedConfig = localStorage.getItem('instagramOAuthConfig');
+                if (savedConfig) {
+                    config = JSON.parse(savedConfig);
+                    populateFields();
+                    document.getElementById('step2').classList.remove('hidden');
+                    updateAuthUrlDisplay();
+                }
+            }
+        };
+
+        function saveConfig() {
+            config = {
+                clientId: document.getElementById('clientId').value.trim(),
+                clientSecret: document.getElementById('clientSecret').value.trim(),
+                redirectUri: document.getElementById('redirectUri').value.trim(),
+                apiUrl: document.getElementById('apiUrl').value.trim(),
+                userId: document.getElementById('userId').value.trim(),
+                userType: document.getElementById('userType').value
+            };
+
+            if (!config.clientId || !config.clientSecret || !config.redirectUri) {
+                alert('❌ Please fill in all required fields!');
+                return;
+            }
+
+            // Save to localStorage
+            localStorage.setItem('instagramOAuthConfig', JSON.stringify(config));
+
+            alert('✅ Configuration saved!');
+            document.getElementById('step2').classList.remove('hidden');
+            updateAuthUrlDisplay();
+        }
+
+        function populateFields() {
+            document.getElementById('clientId').value = config.clientId || '';
+            document.getElementById('clientSecret').value = config.clientSecret || '';
+            document.getElementById('redirectUri').value = config.redirectUri || '';
+            document.getElementById('apiUrl').value = config.apiUrl || 'http://localhost:3002/api';
+            document.getElementById('userId').value = config.userId || '1';
+            document.getElementById('userType').value = config.userType || 'influencer';
+        }
+
+        function updateAuthUrlDisplay() {
+            const authUrl = `https://api.instagram.com/oauth/authorize?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(config.redirectUri)}&scope=user_profile,user_media&response_type=code`;
+
+            document.getElementById('authUrlDisplay').innerHTML = `<pre>${authUrl}</pre>`;
+        }
+
+        function startOAuth() {
+            // Construct Instagram OAuth URL
+            const authUrl = `https://api.instagram.com/oauth/authorize?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(config.redirectUri)}&scope=user_profile,user_media&response_type=code`;
+
+            // Redirect to Instagram
+            window.location.href = authUrl;
+        }
+
+        function showStep3(code) {
+            document.getElementById('step3').classList.remove('hidden');
+            document.getElementById('codeDisplay').innerHTML = `<pre>Code: ${code}\n\nRedirect URI: ${config.redirectUri}</pre>`;
+
+            // Auto-scroll to step 3
+            document.getElementById('step3').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        async function exchangeToken() {
+            const btn = document.getElementById('exchangeBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loading"></span>Exchanging...';
+
+            try {
+                const response = await fetch(`${config.apiUrl}/instagram/token`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        code: authCode,
+                        redirect_uri: config.redirectUri // MUST match exactly!
+                    })
+                });
+
+                const data = await response.json();
+
+                const responseDiv = document.getElementById('tokenResponse');
+                responseDiv.classList.remove('hidden');
+
+                if (response.ok) {
+                    accessToken = data.access_token;
+
+                    responseDiv.innerHTML = `
+                        <div class="step success">
+                            <h3>✅ Token Exchange Successful!</h3>
+                            <div class="code-display">
+                                <pre>${JSON.stringify(data, null, 2)}</pre>
+                            </div>
+                            <button class="copy-btn" onclick="copyToClipboard('${data.access_token}')">
+                                📋 Copy Access Token
+                            </button>
+                        </div>
+                    `;
+
+                    // Show step 4
+                    document.getElementById('step4').classList.remove('hidden');
+                    document.getElementById('step4').scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    responseDiv.innerHTML = `
+                        <div class="step error">
+                            <h3>❌ Token Exchange Failed</h3>
+                            <div class="code-display">
+                                <pre>${JSON.stringify(data, null, 2)}</pre>
+                            </div>
+                            <p style="margin-top: 15px;">
+                                <strong>Common Fixes:</strong><br>
+                                • Make sure redirect_uri exactly matches (including trailing slash)<br>
+                                • Check if code has expired (codes expire quickly)<br>
+                                • Verify Client ID and Secret are correct
+                            </p>
+                        </div>
+                    `;
+                }
+
+                btn.disabled = false;
+                btn.innerHTML = '🔄 Exchange for Access Token';
+            } catch (error) {
+                document.getElementById('tokenResponse').innerHTML = `
+                    <div class="step error">
+                        <h3>❌ Network Error</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+                btn.disabled = false;
+                btn.innerHTML = '🔄 Exchange for Access Token';
+            }
+        }
+
+        async function connectAccount() {
+            const btn = document.getElementById('connectBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loading"></span>Connecting...';
+
+            try {
+                const response = await fetch(`${config.apiUrl}/instagram/me?access_token=${accessToken}&user_id=${config.userId}&user_type=${config.userType}`, {
+                    method: 'GET',
+                });
+
+                const data = await response.json();
+
+                const responseDiv = document.getElementById('profileResponse');
+                responseDiv.classList.remove('hidden');
+
+                if (response.ok) {
+                    responseDiv.innerHTML = `
+                        <div class="step success">
+                            <h3>✅ Account Connected Successfully!</h3>
+                            <div class="code-display">
+                                <pre>${JSON.stringify(data, null, 2)}</pre>
+                            </div>
+                            <p style="margin-top: 15px; color: #155724;">
+                                <strong>🎉 Success!</strong> Your Instagram account has been connected to User ID ${config.userId}.
+                            </p>
+                        </div>
+                    `;
+                } else {
+                    responseDiv.innerHTML = `
+                        <div class="step error">
+                            <h3>❌ Connection Failed</h3>
+                            <div class="code-display">
+                                <pre>${JSON.stringify(data, null, 2)}</pre>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                btn.disabled = false;
+                btn.innerHTML = '👤 Connect Instagram Account';
+            } catch (error) {
+                document.getElementById('profileResponse').innerHTML = `
+                    <div class="step error">
+                        <h3>❌ Network Error</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+                btn.disabled = false;
+                btn.innerHTML = '👤 Connect Instagram Account';
+            }
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('✅ Access token copied to clipboard!');
+            }).catch(err => {
+                alert('❌ Failed to copy: ' + err);
+            });
+        }
+    </script>
+</body>
+</html>

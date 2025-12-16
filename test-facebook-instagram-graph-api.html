@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Instagram Graph API - For Advanced Access</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #1877f2;
+            border-bottom: 3px solid #1877f2;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #333;
+            margin-top: 30px;
+        }
+        .config-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        button {
+            background-color: #1877f2;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #166fe5;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border: 1px solid #bee5eb;
+        }
+        .result {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #1877f2;
+        }
+        pre {
+            background: #282c34;
+            color: #61dafb;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 13px;
+        }
+        .step {
+            background: #e7f3ff;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+            border-left: 4px solid #1877f2;
+        }
+        .step-number {
+            background: #1877f2;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Instagram Graph API Test - Get Advanced Access</h1>
+
+        <div class="info">
+            <strong>📝 Purpose:</strong> This page helps you make successful test API calls to unlock the "Request Advanced Access" button for:<br>
+            ✅ instagram_business_basic<br>
+            ✅ read_insights (instagram_manage_insights)
+        </div>
+
+        <div class="config-section">
+            <h2>⚙️ Configuration</h2>
+
+            <label for="appId">Facebook App ID:</label>
+            <input type="text" id="appId" placeholder="Your Facebook App ID (e.g., 123456789012345)" value="1184243446532549">
+
+            <label for="redirectUri">Redirect URI:</label>
+            <input type="text" id="redirectUri" placeholder="Must match Facebook App Settings" value="https://unleft-unthinning-danielle.ngrok-free.dev/test-facebook-instagram-graph-api.html">
+
+            <div class="info">
+                <strong>⚠️ Important:</strong> Make sure this redirect URI is added to your Facebook App Settings:<br>
+                Facebook App → Settings → Basic → Add Platform → Website → Site URL
+            </div>
+        </div>
+
+        <div class="step">
+            <span class="step-number">1</span>
+            <strong>Authorize with Facebook</strong>
+            <p>This will request permissions: instagram_basic, instagram_manage_insights, pages_show_list, pages_read_engagement</p>
+            <button onclick="startOAuth()">🔐 Connect Facebook Account</button>
+        </div>
+
+        <div id="step2" style="display: none;" class="step">
+            <span class="step-number">2</span>
+            <strong>Exchange Code for Access Token</strong>
+            <p>Code received from Facebook OAuth</p>
+            <button onclick="getAccessToken()">🔄 Get Access Token</button>
+        </div>
+
+        <div id="step3" style="display: none;" class="step">
+            <span class="step-number">3</span>
+            <strong>Get Facebook Pages & Instagram Accounts</strong>
+            <p>This uses the <code>instagram_business_basic</code> permission</p>
+            <button onclick="getPages()">📄 Fetch Pages & Instagram Accounts</button>
+        </div>
+
+        <div id="step4" style="display: none;" class="step">
+            <span class="step-number">4</span>
+            <strong>Get Instagram Profile Data</strong>
+            <p>This uses the <code>instagram_business_basic</code> permission</p>
+            <button onclick="getInstagramProfile()">👤 Fetch Instagram Profile</button>
+        </div>
+
+        <div id="step5" style="display: none;" class="step">
+            <span class="step-number">5</span>
+            <strong>Get Instagram Insights</strong>
+            <p>This uses the <code>read_insights</code> permission</p>
+            <button onclick="getInstagramInsights()">📊 Fetch Instagram Insights</button>
+        </div>
+
+        <div id="results" style="margin-top: 30px;"></div>
+    </div>
+
+    <script>
+        let accessToken = '';
+        let instagramAccountId = '';
+        let pageAccessToken = '';
+
+        // Check if we're returning from OAuth
+        window.onload = function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+
+            if (code) {
+                showResult('success', '✅ Authorization successful! Code received.');
+                document.getElementById('step2').style.display = 'block';
+
+                // Store code for token exchange
+                window.authCode = code;
+            }
+        };
+
+        function startOAuth() {
+            const appId = document.getElementById('appId').value;
+            const redirectUri = encodeURIComponent(document.getElementById('redirectUri').value);
+
+            if (!appId) {
+                showResult('error', '❌ Please enter your Facebook App ID');
+                return;
+            }
+
+            const scopes = 'instagram_basic,instagram_manage_insights,pages_show_list,pages_read_engagement';
+            const authUrl = `https://www.facebook.com/v18.0/dialog/oauth?client_id=${appId}&redirect_uri=${redirectUri}&scope=${scopes}&response_type=code`;
+
+            showResult('info', '🔄 Redirecting to Facebook for authorization...');
+            window.location.href = authUrl;
+        }
+
+        async function getAccessToken() {
+            const appId = document.getElementById('appId').value;
+            const appSecret = prompt('Enter your Facebook App Secret (from .env file):');
+
+            if (!appSecret) {
+                showResult('error', '❌ App Secret is required to exchange code for token.');
+                return;
+            }
+
+            const redirectUri = document.getElementById('redirectUri').value;
+            const code = window.authCode;
+
+            if (!code) {
+                showResult('error', '❌ No authorization code found. Please authorize first.');
+                return;
+            }
+
+            showResult('info', '🔄 Exchanging code for access token...');
+
+            try {
+                // Call Facebook API directly
+                const tokenUrl = `https://graph.facebook.com/v18.0/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`;
+
+                const response = await fetch(tokenUrl);
+                const data = await response.json();
+
+                if (data.access_token) {
+                    accessToken = data.access_token;
+                    showResult('success', '✅ Access token received!');
+                    showResult('result', `<strong>Access Token:</strong><br><pre>${accessToken.substring(0, 50)}...</pre>`);
+
+                    document.getElementById('step3').style.display = 'block';
+                } else {
+                    showResult('error', `❌ Error: ${JSON.stringify(data, null, 2)}`);
+                }
+            } catch (error) {
+                showResult('error', `❌ Error: ${error.message}`);
+            }
+        }
+
+        async function getPages() {
+            if (!accessToken) {
+                showResult('error', '❌ No access token. Please complete previous steps.');
+                return;
+            }
+
+            showResult('info', '🔄 Fetching Facebook Pages and Instagram accounts...');
+
+            try {
+                const response = await fetch(
+                    `https://graph.facebook.com/v18.0/me/accounts?fields=id,name,access_token,instagram_business_account&access_token=${accessToken}`
+                );
+
+                const data = await response.json();
+
+                if (data.data && data.data.length > 0) {
+                    showResult('success', '✅ Pages fetched successfully!');
+
+                    let resultHtml = '<strong>Your Facebook Pages:</strong><br><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+
+                    // Find first page with Instagram account
+                    const pageWithIG = data.data.find(page => page.instagram_business_account);
+                    if (pageWithIG) {
+                        instagramAccountId = pageWithIG.instagram_business_account.id;
+                        pageAccessToken = pageWithIG.access_token;
+                        resultHtml += `<br><strong>✅ Instagram Business Account found!</strong><br>Instagram Account ID: ${instagramAccountId}`;
+
+                        document.getElementById('step4').style.display = 'block';
+                    } else {
+                        resultHtml += '<br><strong>⚠️ No Instagram Business Account found on your pages.</strong><br>Make sure your Instagram account is connected to a Facebook Page and is a Business or Creator account.';
+                    }
+
+                    showResult('result', resultHtml);
+                } else {
+                    showResult('error', '❌ No pages found or error: ' + JSON.stringify(data, null, 2));
+                }
+            } catch (error) {
+                showResult('error', `❌ Error: ${error.message}`);
+            }
+        }
+
+        async function getInstagramProfile() {
+            if (!instagramAccountId) {
+                showResult('error', '❌ No Instagram account ID. Please complete previous steps.');
+                return;
+            }
+
+            showResult('info', '🔄 Fetching Instagram profile data...');
+
+            try {
+                const fields = 'id,username,name,biography,website,followers_count,follows_count,media_count,profile_picture_url';
+                const response = await fetch(
+                    `https://graph.facebook.com/v18.0/${instagramAccountId}?fields=${fields}&access_token=${pageAccessToken}`
+                );
+
+                const data = await response.json();
+
+                if (data.id) {
+                    showResult('success', '✅ Instagram profile fetched successfully! This confirms instagram_business_basic permission works!');
+                    showResult('result', '<strong>Instagram Profile:</strong><br><pre>' + JSON.stringify(data, null, 2) + '</pre>');
+
+                    document.getElementById('step5').style.display = 'block';
+                } else {
+                    showResult('error', '❌ Error fetching profile: ' + JSON.stringify(data, null, 2));
+                }
+            } catch (error) {
+                showResult('error', `❌ Error: ${error.message}`);
+            }
+        }
+
+        async function getInstagramInsights() {
+            if (!instagramAccountId) {
+                showResult('error', '❌ No Instagram account ID. Please complete previous steps.');
+                return;
+            }
+
+            showResult('info', '🔄 Fetching Instagram insights...');
+
+            try {
+                // Fetch account insights for last 30 days
+                const metrics = 'impressions,reach,profile_views';
+                const period = 'day';
+                const since = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60); // 30 days ago
+                const until = Math.floor(Date.now() / 1000);
+
+                const response = await fetch(
+                    `https://graph.facebook.com/v18.0/${instagramAccountId}/insights?metric=${metrics}&period=${period}&since=${since}&until=${until}&access_token=${pageAccessToken}`
+                );
+
+                const data = await response.json();
+
+                if (data.data) {
+                    showResult('success', '✅ Instagram insights fetched successfully! This confirms read_insights permission works!');
+                    showResult('result', '<strong>Instagram Insights:</strong><br><pre>' + JSON.stringify(data, null, 2) + '</pre>');
+
+                    showResult('success', `
+                        <h3>🎉 Success! You've made successful API calls!</h3>
+                        <p><strong>Next steps:</strong></p>
+                        <ol>
+                            <li>Wait up to 24 hours</li>
+                            <li>Go to Facebook App → App Review → Permissions and Features</li>
+                            <li>Click "Request Advanced Access" for instagram_business_basic and read_insights</li>
+                            <li>Fill out the App Review form with screenshots and description</li>
+                        </ol>
+                    `);
+                } else {
+                    showResult('error', '❌ Error fetching insights: ' + JSON.stringify(data, null, 2));
+                }
+            } catch (error) {
+                showResult('error', `❌ Error: ${error.message}`);
+            }
+        }
+
+        function showResult(type, message) {
+            const resultsDiv = document.getElementById('results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = type;
+            resultDiv.innerHTML = message;
+            resultsDiv.appendChild(resultDiv);
+            resultDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    </script>
+</body>
+</html>

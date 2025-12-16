@@ -1,0 +1,1 @@
+ALTER TABLE influencers ADD COLUMN "referralCode" VARCHAR(255) UNIQUE;

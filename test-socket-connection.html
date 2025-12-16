@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Socket.IO Connection Test</title>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        #logs {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #ccc;
+            padding-left: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔌 Socket.IO Connection Test</h1>
+
+    <div>
+        <label>Server URL:</label>
+        <input type="text" id="serverUrl" value="http://localhost:3002/chat" style="width: 400px;">
+    </div>
+
+    <div style="margin-top: 10px;">
+        <label>JWT Token:</label>
+        <input type="text" id="token" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MTUsInByb2ZpbGVDb21wbGV0ZWQiOnRydWUsInVzZXJUeXBlIjoiaW5mbHVlbmNlciIsImlhdCI6MTc2NDIyOTc1MSwiZXhwIjoxNzY0ODM0NTUxLCJqdGkiOiI5MTEyNDc5Ni02YTI2LTQ1ZTctOWE5OC0yY2Y1NzYwMzliZDYifQ.SJe7GIOhKiY09Y6oOjf0OBHHDCaFrVYO4UzbFfVXsOQ" style="width: 500px;">
+    </div>
+
+    <div style="margin-top: 20px;">
+        <button onclick="connect()">🔗 Connect</button>
+        <button onclick="disconnect()">🔌 Disconnect</button>
+        <button onclick="clearLogs()">🗑️ Clear Logs</button>
+    </div>
+
+    <div id="status" style="margin-top: 20px; font-size: 18px; font-weight: bold;">
+        Status: <span id="statusText">Disconnected</span>
+    </div>
+
+    <div id="logs"></div>
+
+    <script>
+        let socket = null;
+
+        function log(message, type = 'info') {
+            const logs = document.getElementById('logs');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logs.insertBefore(entry, logs.firstChild);
+        }
+
+        function updateStatus(text, color) {
+            const statusText = document.getElementById('statusText');
+            statusText.textContent = text;
+            statusText.style.color = color;
+        }
+
+        function connect() {
+            const serverUrl = document.getElementById('serverUrl').value;
+            const token = document.getElementById('token').value;
+
+            log(`Attempting to connect to: ${serverUrl}`, 'info');
+            log(`Using JWT token: ${token.substring(0, 25)}...`, 'info');
+
+            socket = io(serverUrl, {
+                transports: ['polling', 'websocket'],
+                // extraHeaders: {
+                //     Authorization: "Bearer " + token
+                // },
+                auth: {
+                    token: "Bearer " + token
+                },
+                reconnection: true,
+                reconnectionDelay: 1000,
+                reconnectionAttempts: 5
+            });
+
+            socket.on('connect', () => {
+                log('✅ CONNECTED! Socket ID: ' + socket.id, 'success');
+                updateStatus('Connected', 'green');
+            });
+
+            socket.on('connection:success', (data) => {
+                log('✅ Connection Success: ' + JSON.stringify(data), 'success');
+            });
+
+            socket.on('connection:replaced', (data) => {
+                log('⚠️ Connection Replaced: ' + JSON.stringify(data), 'error');
+            });
+
+            socket.on('disconnect', (reason) => {
+                log('❌ Disconnected: ' + reason, 'error');
+                updateStatus('Disconnected', 'red');
+            });
+
+            socket.on('connect_error', (error) => {
+                log('❌ Connection Error: ' + error.message, 'error');
+                updateStatus('Error', 'red');
+            });
+
+            socket.on('error', (error) => {
+                log('❌ Socket Error: ' + JSON.stringify(error), 'error');
+            });
+
+            socket.on('user:online', (data) => {
+                log('👤 User Online: ' + JSON.stringify(data), 'info');
+            });
+
+            socket.on('user:offline', (data) => {
+                log('👤 User Offline: ' + JSON.stringify(data), 'info');
+            });
+
+            socket.on('message:new', (data) => {
+                log('📨 New Message: ' + JSON.stringify(data), 'info');
+            });
+
+            log('Connection initiated...', 'info');
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+                log('Disconnecting...', 'info');
+            }
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+    </script>
+</body>
+</html>

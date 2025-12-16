@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Instagram Direct Login Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #fafafa;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 { color: #262626; margin-bottom: 10px; }
+    .subtitle { color: #8e8e8e; margin-bottom: 30px; }
+    button {
+      background: linear-gradient(45deg, #f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    button:hover { opacity: 0.9; }
+    button:disabled { background: #b2dffc; cursor: not-allowed; }
+    .status {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 8px;
+      background: #f0f0f0;
+    }
+    .success {
+      background: #d4edda;
+      border-left: 4px solid #28a745;
+      color: #155724;
+    }
+    .error {
+      background: #f8d7da;
+      border-left: 4px solid #dc3545;
+      color: #721c24;
+    }
+    .info {
+      background: #d1ecf1;
+      border-left: 4px solid #17a2b8;
+      color: #0c5460;
+    }
+    .warning {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+    pre {
+      background: #f5f5f5;
+      padding: 15px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 12px;
+    }
+    .profile {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-top: 20px;
+      padding: 20px;
+      background: #fafafa;
+      border-radius: 8px;
+    }
+    .profile img {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      border: 2px solid #dbdbdb;
+    }
+    .profile-info h3 {
+      margin: 0 0 5px 0;
+      color: #262626;
+    }
+    .profile-info p {
+      margin: 5px 0;
+      color: #8e8e8e;
+      font-size: 14px;
+    }
+    .step {
+      margin: 20px 0;
+      padding: 15px;
+      border: 1px solid #dbdbdb;
+      border-radius: 8px;
+    }
+    .step h3 {
+      margin-top: 0;
+      color: #262626;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #dbdbdb;
+      border-radius: 4px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📱 Instagram Direct Login</h1>
+    <p class="subtitle">Login with your Instagram Business account</p>
+
+    <div class="warning">
+      <strong>⚠️ Requirements:</strong>
+      <ul style="margin: 10px 0;">
+        <li>Instagram Professional (Business or Creator) account</li>
+        <li><strong>NO Facebook Page needed!</strong></li>
+        <li>App must have "Instagram API with Instagram Login" enabled</li>
+      </ul>
+    </div>
+
+    <div class="step">
+      <h3>Configuration</h3>
+      <div style="margin-bottom: 10px;">
+        <label><strong>Instagram App ID:</strong></label>
+        <!-- Old App IDs: 3465383796947612, 9258828604161618 -->
+        <input type="text" id="appId" value="4227258287486425" placeholder="Instagram App ID">
+        <small style="color: #8e8e8e;">From Meta Dashboard → Instagram → API setup</small>
+      </div>
+      <div style="margin-bottom: 10px;">
+        <label><strong>Redirect URI:</strong></label>
+        <input type="text" id="redirectUri" value="" placeholder="Current page URL">
+        <small style="color: #8e8e8e;">Must match the one configured in Meta Dashboard</small>
+      </div>
+    </div>
+
+    <div class="step">
+      <h3>Login with Instagram</h3>
+      <p>Click the button below to login with your Instagram Business account.</p>
+      <button onclick="loginWithInstagram()">
+        📸 Login with Instagram
+      </button>
+    </div>
+
+    <div id="statusDiv"></div>
+    <div id="profileDiv"></div>
+  </div>
+
+  <script>
+    // Set redirect URI to current page on load
+    document.getElementById('redirectUri').value = window.location.origin + window.location.pathname;
+
+    // Login with Instagram directly
+    function loginWithInstagram() {
+      const appId = document.getElementById('appId').value.trim();
+      const redirectUri = document.getElementById('redirectUri').value.trim();
+
+      if (!appId || !redirectUri) {
+        showStatus('❌ Please enter App ID and Redirect URI', 'error');
+        return;
+      }
+
+      // Build Instagram OAuth URL
+      const authUrl = 'https://www.instagram.com/oauth/authorize';
+      const params = new URLSearchParams({
+        client_id: appId,
+        redirect_uri: redirectUri,
+        scope: 'instagram_business_basic,instagram_business_content_publish,instagram_business_manage_insights,instagram_business_manage_messages,instagram_business_manage_comments',
+        response_type: 'code'
+      });
+
+      const loginUrl = `${authUrl}?${params.toString()}`;
+      console.log('Redirecting to:', loginUrl);
+
+      // Redirect to Instagram OAuth
+      window.location.href = loginUrl;
+    }
+
+    // Handle OAuth callback
+    function handleCallback() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+      const error = urlParams.get('error');
+      const errorReason = urlParams.get('error_reason');
+      const errorDescription = urlParams.get('error_description');
+
+      if (error) {
+        showStatus(`
+          <h4>❌ OAuth Error</h4>
+          <p><strong>Error:</strong> ${error}</p>
+          <p><strong>Reason:</strong> ${errorReason || 'N/A'}</p>
+          <p><strong>Description:</strong> ${errorDescription || 'N/A'}</p>
+        `, 'error');
+        return;
+      }
+
+      if (code) {
+        showStatus(`
+          <h4>✅ Authorization Code Received!</h4>
+          <p><strong>Code:</strong> <code>${code.substring(0, 30)}...</code></p>
+          <p>Now you need to exchange this code for an access token on your backend.</p>
+          <details style="margin-top: 10px;">
+            <summary style="cursor: pointer; color: #0095f6;">Show Backend Implementation</summary>
+            <pre>// Backend endpoint (Node.js/Express example)
+app.post('/api/auth/instagram/token', async (req, res) => {
+  const { code, redirect_uri } = req.body;
+
+  const response = await fetch(
+    'https://api.instagram.com/oauth/access_token',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: process.env.INSTAGRAM_APP_ID,
+        client_secret: process.env.INSTAGRAM_APP_SECRET,
+        grant_type: 'authorization_code',
+        redirect_uri: redirect_uri,
+        code: code
+      })
+    }
+  );
+
+  const data = await response.json();
+  res.json(data);
+});</pre>
+          </details>
+        `, 'success');
+
+        // Show code for copy
+        document.getElementById('profileDiv').innerHTML = `
+          <div class="info" style="margin-top: 20px;">
+            <h4>📋 Next Steps:</h4>
+            <ol>
+              <li>Copy the authorization code above</li>
+              <li>Send it to your backend endpoint</li>
+              <li>Exchange it for an access token</li>
+              <li>Use the token to call Instagram API</li>
+            </ol>
+            <p><strong>Authorization Code:</strong></p>
+            <pre>${code}</pre>
+          </div>
+        `;
+      }
+    }
+
+    // Helper functions
+    function showStatus(message, type = 'info') {
+      const statusDiv = document.getElementById('statusDiv');
+      statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+    }
+
+    // Check for OAuth callback on page load
+    window.onload = function() {
+      handleCallback();
+    };
+  </script>
+
+  <div style="margin-top: 40px; padding: 20px; background: white; border-radius: 8px;">
+    <h3>📋 Setup Checklist</h3>
+    <ol>
+      <li><strong>Instagram App Setup:</strong>
+        <ul>
+          <li>Go to Meta Dashboard → Instagram → API setup with Instagram login</li>
+          <li>Add redirect URI to allowed list</li>
+          <li>Get your Instagram App ID (not Facebook App ID)</li>
+        </ul>
+      </li>
+      <li><strong>Instagram Account:</strong> Convert to Business/Creator (no Facebook Page needed!)</li>
+      <li><strong>Backend:</strong> Create endpoint to exchange code for token</li>
+    </ol>
+
+    <h3>📝 Important Notes</h3>
+    <ul>
+      <li>Use <strong>Instagram App ID</strong> (3465383796947612), not Facebook App ID</li>
+      <li>Scopes: instagram_business_basic, instagram_business_content_publish, instagram_business_manage_messages, instagram_business_manage_comments</li>
+      <li>The authorization code must be exchanged on your backend (requires APP_SECRET)</li>
+    </ul>
+  </div>
+</body>
+</html>

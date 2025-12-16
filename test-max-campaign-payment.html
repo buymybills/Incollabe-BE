@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Max Campaign Payment</title>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+</head>
+<body>
+  <h1>Test Max Campaign Payment (Rs 299)</h1>
+
+  <div>
+    <h3>Campaign Details</h3>
+    <pre id="orderData">{
+  "campaignId": 35,
+  "campaignName": "Binge watch Wednesday",
+  "invoiceId": 1,
+  "invoiceNumber": "MAXINV-202511-00001",
+  "orderId": "order_Rkg04075SEFJeQ",
+  "amount": 29900,
+  "currency": "INR",
+  "keyId": "rzp_test_spyovD2YYBpW4s"
+}</pre>
+
+    <button onclick="makePayment()">Pay Rs 299 - Upgrade to Max Campaign</button>
+
+    <h3>Payment Result</h3>
+    <div id="result"></div>
+  </div>
+
+  <script>
+    const orderData = {
+      campaignId: 35,
+      orderId: "order_Rkg04075SEFJeQ",
+      amount: 29900,
+      currency: "INR",
+      keyId: "rzp_test_spyovD2YYBpW4s"
+    };
+
+    const brandJwtToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MzIsInByb2ZpbGVDb21wbGV0ZWQiOnRydWUsInVzZXJUeXBlIjoiYnJhbmQiLCJpYXQiOjE3NjQyMjQzMzIsImV4cCI6MTc2NDgyOTEzMiwianRpIjoiYWNkZWM3YjUtNzQyZi00YjYyLTg1OWMtNjA2ZGRhYjc1ZTBjIn0.cHcomx0v_naJzT2of6cPD12pGw0PNaFzgo9NHcaQW3w";
+
+    function makePayment() {
+      const options = {
+        key: orderData.keyId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        order_id: orderData.orderId,
+        name: "InCollab",
+        description: "Upgrade to Max Campaign - Rs 299",
+        image: "https://your-logo-url.com/logo.png",
+        handler: function (response) {
+          console.log("Payment Success!", response);
+
+          document.getElementById('result').innerHTML = `
+            <h4 style="color: green;">✅ Payment Successful!</h4>
+            <p><strong>Payment ID:</strong> ${response.razorpay_payment_id}</p>
+            <p><strong>Order ID:</strong> ${response.razorpay_order_id}</p>
+            <p><strong>Signature:</strong> ${response.razorpay_signature}</p>
+
+            <h4>Now verify the payment:</h4>
+            <pre>${JSON.stringify({
+              paymentId: response.razorpay_payment_id,
+              orderId: response.razorpay_order_id,
+              signature: response.razorpay_signature
+            }, null, 2)}</pre>
+
+            <button onclick="verifyPayment('${response.razorpay_payment_id}', '${response.razorpay_order_id}', '${response.razorpay_signature}')">
+              Verify Payment & Activate Max Campaign
+            </button>
+          `;
+        },
+        prefill: {
+          name: "Brand User",
+          email: "brand@example.com",
+          contact: "9999999999"
+        },
+        theme: {
+          color: "#3399cc"
+        }
+      };
+
+      const rzp = new Razorpay(options);
+
+      rzp.on('payment.failed', function (response) {
+        console.error("Payment Failed", response);
+        document.getElementById('result').innerHTML = `
+          <h4 style="color: red;">❌ Payment Failed</h4>
+          <pre>${JSON.stringify(response.error, null, 2)}</pre>
+        `;
+      });
+
+      rzp.open();
+    }
+
+    async function verifyPayment(paymentId, orderId, signature) {
+      try {
+        document.getElementById('result').innerHTML += '<p>Verifying payment...</p>';
+
+        const response = await fetch(`http://localhost:3002/api/brand/campaigns/${orderData.campaignId}/verify-max-payment`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${brandJwtToken}`
+          },
+          body: JSON.stringify({
+            paymentId: paymentId,
+            orderId: orderId,
+            signature: signature
+          })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          document.getElementById('result').innerHTML += `
+            <h4 style="color: green;">✅ Payment Verified Successfully!</h4>
+            <pre>${JSON.stringify(result, null, 2)}</pre>
+            <p><strong>Campaign is now a MAX CAMPAIGN! 🎉</strong></p>
+            <p><em>Only Pro influencers can apply to this campaign.</em></p>
+          `;
+        } else {
+          document.getElementById('result').innerHTML += `
+            <h4 style="color: red;">❌ Verification Failed</h4>
+            <pre>${JSON.stringify(result, null, 2)}</pre>
+          `;
+        }
+      } catch (error) {
+        document.getElementById('result').innerHTML += `
+          <h4 style="color: red;">❌ Error</h4>
+          <pre>${error.message}</pre>
+        `;
+      }
+    }
+  </script>
+
+  <hr>
+  <h3>💳 Test Card Details</h3>
+  <ul>
+    <li><strong>Card Number:</strong> 4111 1111 1111 1111</li>
+    <li><strong>CVV:</strong> 123</li>
+    <li><strong>Expiry:</strong> 12/25</li>
+    <li><strong>OTP:</strong> 123456</li>
+  </ul>
+
+  <h3>📝 Instructions</h3>
+  <ol>
+    <li>Click "Pay Rs 299"</li>
+    <li>Use test card: <code>4111 1111 1111 1111</code></li>
+    <li>Enter OTP: <code>123456</code></li>
+    <li>Click "Verify Payment & Activate Max Campaign"</li>
+    <li>Check the <code>upgradedAt</code> date is in IST format!</li>
+  </ol>
+</body>
+</html>

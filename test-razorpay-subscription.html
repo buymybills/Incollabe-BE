@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Razorpay Pro Subscription</title>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      text-align: center;
+    }
+    .section {
+      margin: 20px 0;
+      padding: 15px;
+      background: #f9f9f9;
+      border-radius: 5px;
+    }
+    .section h3 {
+      margin-top: 0;
+      color: #555;
+    }
+    button {
+      background: #528FF0;
+      color: white;
+      border: none;
+      padding: 15px 30px;
+      font-size: 16px;
+      border-radius: 5px;
+      cursor: pointer;
+      width: 100%;
+      margin: 10px 0;
+    }
+    button:hover {
+      background: #3F7DD4;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    pre {
+      background: #f0f0f0;
+      padding: 10px;
+      border-radius: 5px;
+      overflow-x: auto;
+      font-size: 12px;
+    }
+    .success {
+      color: green;
+      font-weight: bold;
+    }
+    .error {
+      color: red;
+      font-weight: bold;
+    }
+    .info {
+      background: #e3f2fd;
+      padding: 15px;
+      border-radius: 5px;
+      border-left: 4px solid #2196f3;
+      margin: 15px 0;
+    }
+    .card-details {
+      background: #fff3cd;
+      padding: 15px;
+      border-radius: 5px;
+      border-left: 4px solid #ffc107;
+      margin: 15px 0;
+    }
+    .card-details h4 {
+      margin-top: 0;
+    }
+    .card-details ul {
+      margin: 5px 0;
+      padding-left: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Test Razorpay Pro Subscription</h1>
+    <p style="text-align: center; color: #666;">
+      Rs 199/month for 12 months (1 year)
+    </p>
+
+    <div class="info">
+      <strong>⚠️ Important:</strong> This uses Razorpay Checkout SDK which properly accepts test cards.<br><br>
+      <strong>Subscription Details:</strong><br>
+      <strong>Plan:</strong> Pro Influencer Annual Subscription<br>
+      <strong>Amount:</strong> Rs 199 per month<br>
+      <strong>Duration:</strong> 12 monthly payments (1 year)<br>
+      <strong>Total Amount:</strong> Rs 2,388 (over 1 year)
+    </div>
+
+    <div class="card-details">
+      <h4>💳 Test Cards for SUBSCRIPTIONS - Try These:</h4>
+      <p style="font-size: 14px; margin-bottom: 10px;"><strong>Option 1 (Recommended):</strong></p>
+      <ul>
+        <li><strong>Card Number:</strong> 5267 3181 8797 5449 (MasterCard with 3DS)</li>
+        <li><strong>CVV:</strong> 123</li>
+        <li><strong>Expiry:</strong> Any future date (e.g., 12/28)</li>
+        <li><strong>Name:</strong> Test User</li>
+      </ul>
+      <p style="font-size: 14px; margin: 10px 0;"><strong>Option 2 (Alternative):</strong></p>
+      <ul>
+        <li><strong>Card Number:</strong> 4000 0000 0000 0077 (Visa - recurring)</li>
+        <li><strong>CVV:</strong> 123</li>
+        <li><strong>Expiry:</strong> 12/28</li>
+      </ul>
+      <p style="font-size: 12px; color: #ff6b6b; margin: 10px 0 0 0; background: #fff5f5; padding: 10px; border-radius: 5px;">
+        <strong>⚠️ Note:</strong> If cards still don't work, your Razorpay test account may need recurring payments enabled.
+        Contact Razorpay support or check Dashboard → Settings → Payment Methods → Subscriptions
+      </p>
+    </div>
+
+    <div class="section">
+      <h3>Step 1: Subscription Details</h3>
+      <p style="color: #666; font-size: 14px;">Using pre-created subscription (to avoid CORS issues)</p>
+      <pre id="subscriptionData">{
+  "subscriptionId": "sub_Rp6GGjid6kMyRQ",
+  "planId": "plan_Rn9wcW67Olk7Ar",
+  "status": "created",
+  "totalCount": 12,
+  "remainingCount": 11,
+  "amount": 19900,
+  "currency": "INR"
+}</pre>
+    </div>
+
+    <div class="section" id="paymentSection">
+      <h3>Step 2: Make First Payment</h3>
+      <p style="color: #666; font-size: 14px;">
+        Click below to open Razorpay Checkout and pay with test card
+      </p>
+      <button onclick="makeSubscriptionPayment()" id="payButton">
+        Pay Rs 199 - Start Subscription
+      </button>
+      <p style="font-size: 12px; color: #999; text-align: center;">
+        After first payment, Rs 199 will be charged automatically every month for 12 months
+      </p>
+    </div>
+
+    <div class="section" id="resultSection" style="display: none;">
+      <h3>Step 3: Payment Result</h3>
+      <div id="result"></div>
+    </div>
+
+    <div class="section">
+      <h3>📋 How This Works:</h3>
+      <ol>
+        <li>We're using a pre-created subscription (to avoid browser CORS issues)</li>
+        <li>Click "Pay Rs 199 - Start Subscription" button</li>
+        <li>Enter test card <code>5104 0155 5555 5558</code> in Razorpay checkout</li>
+        <li>Complete the payment</li>
+        <li>Subscription will become ACTIVE</li>
+        <li>Razorpay will automatically charge Rs 199 every month for 12 months</li>
+      </ol>
+    </div>
+  </div>
+
+  <script>
+    // Configuration
+    const config = {
+      keyId: "rzp_test_spyovD2YYBpW4s",
+      keySecret: "2DJmS8Xk2QBeGLDXgqXXrioE",
+      planId: "plan_Rn9wcW67Olk7Ar",
+      subscriptionId: "sub_Rp6GGjid6kMyRQ" // Fresh subscription created for testing
+    };
+
+    let currentSubscription = {
+      id: config.subscriptionId,
+      plan_id: config.planId,
+      status: "created",
+      total_count: 12,
+      remaining_count: 11
+    };
+
+    function makeSubscriptionPayment() {
+
+      const options = {
+        key: config.keyId,
+        subscription_id: currentSubscription.id,
+        name: "CollabKaroo",
+        description: "Pro Subscription - Rs 199/month for 12 months",
+        image: "https://cdn-icons-png.flaticon.com/512/8296/8296388.png",
+        handler: function (response) {
+          console.log("✅ Payment Success!", response);
+
+          document.getElementById('resultSection').style.display = 'block';
+          document.getElementById('result').innerHTML = `
+            <h4 class="success">✅ Payment Successful!</h4>
+            <p><strong>Payment ID:</strong> ${response.razorpay_payment_id}</p>
+            <p><strong>Subscription ID:</strong> ${response.razorpay_subscription_id}</p>
+            <p><strong>Signature:</strong> ${response.razorpay_signature}</p>
+
+            <div class="info">
+              <strong>🎉 Subscription is now ACTIVE!</strong><br><br>
+              <strong>What happens next?</strong><br>
+              Razorpay will automatically charge Rs 199 every month for the next 12 months.<br><br>
+              <strong>Payment Schedule:</strong><br>
+              • <strong>Today:</strong> Rs 199 (Paid ✓ - 1st month)<br>
+              • <strong>Next 11 months:</strong> Rs 199 each month (Auto-charged)<br>
+              • <strong>Total:</strong> Rs 2,388 over 1 year
+            </div>
+
+            <button onclick="checkSubscriptionStatus()">Check Subscription Status</button>
+
+            <pre>${JSON.stringify(response, null, 2)}</pre>
+          `;
+
+          document.getElementById('payButton').disabled = true;
+          document.getElementById('payButton').textContent = '✓ Payment Completed';
+        },
+        prefill: {
+          name: "Test User",
+          email: "test@example.com",
+          contact: "9999999999"
+        },
+        notes: {
+          test_mode: "true",
+          influencer_id: "7"
+        },
+        theme: {
+          color: "#528FF0"
+        },
+        modal: {
+          ondismiss: function() {
+            console.log('Checkout form closed');
+          }
+        }
+      };
+
+      const rzp = new Razorpay(options);
+
+      rzp.on('payment.failed', function (response) {
+        console.error("❌ Payment Failed", response);
+        document.getElementById('resultSection').style.display = 'block';
+        document.getElementById('result').innerHTML = `
+          <h4 class="error">❌ Payment Failed</h4>
+          <p><strong>Error Code:</strong> ${response.error.code}</p>
+          <p><strong>Error Description:</strong> ${response.error.description}</p>
+          <p><strong>Reason:</strong> ${response.error.reason}</p>
+          <pre>${JSON.stringify(response.error, null, 2)}</pre>
+        `;
+      });
+
+      rzp.open();
+    }
+
+    async function checkSubscriptionStatus() {
+      if (!currentSubscription) {
+        alert('No subscription to check!');
+        return;
+      }
+
+      try {
+        const response = await fetch(`https://api.razorpay.com/v1/subscriptions/${currentSubscription.id}`, {
+          headers: {
+            'Authorization': 'Basic ' + btoa(config.keyId + ':' + config.keySecret)
+          }
+        });
+
+        const subscription = await response.json();
+
+        alert(`
+Subscription Status: ${subscription.status.toUpperCase()}
+
+Total Payments: ${subscription.total_count}
+Paid Payments: ${subscription.paid_count}
+Remaining Payments: ${subscription.remaining_count}
+
+Next Billing: ${subscription.current_end ? new Date(subscription.current_end * 1000).toLocaleString() : 'N/A'}
+        `);
+
+        console.log('Subscription details:', subscription);
+      } catch (error) {
+        alert('Error checking status: ' + error.message);
+      }
+    }
+
+    // Initial load
+    window.onload = function() {
+      console.log('🚀 Razorpay Subscription Test Page Loaded');
+      console.log('Test Mode: Enabled');
+      console.log('Plan ID:', config.planId);
+      console.log('Subscription ID:', config.subscriptionId);
+      console.log('⚠️ Use test card for SUBSCRIPTIONS: 5104 0155 5555 5558');
+      console.log('(Regular card 4111... does NOT support recurring payments)');
+    };
+  </script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+config:
+  target: "https://api.collabkaroo.co.in"
+  phases:
+    # Test with 100 concurrent users for 3 minutes
+    - duration: 30
+      arrivalRate: 20
+      name: "Ramp up to 20 users"
+    - duration: 180
+      arrivalRate: 100
+      name: "100 concurrent users - 3 minutes"
+    - duration: 30
+      arrivalRate: 10
+      name: "Cool down"
+
+  http:
+    timeout: 30
+
+  ensure:
+    maxErrorRate: 5        # Accept up to 5% error rate
+    p95: 2000              # 95% requests under 2 seconds
+    p99: 5000              # 99% requests under 5 seconds
+
+scenarios:
+  # ONLY PUBLIC READ-ONLY ENDPOINTS - NO DATA CREATION
+  - name: "Safe Public Endpoints Only"
+    weight: 100
+    flow:
+      # 1. Swagger documentation (100% safe, no auth, no writes)
+      - get:
+          url: "/api/docs"
+      - think: 1
+
+      # 2. Swagger JSON (100% safe, no auth, no writes)
+      - get:
+          url: "/api/docs-json"
+      - think: 2

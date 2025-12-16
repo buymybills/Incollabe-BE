@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E2EE Chat Test - Two Users</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .users-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .user-panel {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .user-panel h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+        .user-panel.influencer h2 {
+            color: #e74c3c;
+            border-bottom-color: #e74c3c;
+        }
+        .user-panel.brand h2 {
+            color: #3498db;
+            border-bottom-color: #3498db;
+        }
+        .section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .section h3 {
+            font-size: 1.1em;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        input[type="text"], input[type="password"], textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            margin-bottom: 10px;
+            font-family: monospace;
+        }
+        input[type="text"]:focus, input[type="password"]:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .success {
+            background: #27ae60;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        .error {
+            background: #e74c3c;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        .info {
+            background: #3498db;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+        .key-display {
+            background: #2c3e50;
+            color: #2ecc71;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 11px;
+            word-break: break-all;
+            max-height: 100px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+        }
+        .message-box {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            margin-bottom: 20px;
+        }
+        .message-box h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        .encrypted-display {
+            background: #34495e;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            word-break: break-all;
+            margin: 10px 0;
+            border-left: 4px solid #e74c3c;
+        }
+        .decrypted-display {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 16px;
+            margin: 10px 0;
+            border-left: 4px solid #28a745;
+        }
+        .status {
+            font-size: 12px;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .badge.success {
+            background: #27ae60;
+            color: white;
+        }
+        .badge.pending {
+            background: #f39c12;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 End-to-End Encryption Test (Two Users)</h1>
+
+        <div class="users-container">
+            <!-- User 1: Influencer -->
+            <div class="user-panel influencer">
+                <h2>👤 User 1: Influencer</h2>
+
+                <div class="section">
+                    <h3>Step 1: Authentication</h3>
+                    <input type="text" id="influencer-token" placeholder="Paste influencer JWT token here">
+                    <button onclick="setInfluencerToken()">Set Token</button>
+                    <div id="influencer-token-status" class="status"></div>
+                </div>
+
+                <div class="section">
+                    <h3>Step 2: Generate Keys</h3>
+                    <button onclick="generateInfluencerKeys()">Generate RSA Key Pair</button>
+                    <div id="influencer-key-status" class="status"></div>
+                    <div id="influencer-public-key" class="key-display" style="display:none;"></div>
+                </div>
+
+                <div class="section">
+                    <h3>Step 3: Upload Public Key</h3>
+                    <button onclick="uploadInfluencerPublicKey()" id="influencer-upload-btn" disabled>Upload to Server</button>
+                    <div id="influencer-upload-status"></div>
+                </div>
+
+                <div class="section">
+                    <h3>Step 4: Fetch Brand's Public Key</h3>
+                    <input type="text" id="brand-user-id" placeholder="Brand User ID (e.g., 1)">
+                    <button onclick="fetchBrandPublicKey()">Fetch Brand's Public Key</button>
+                    <div id="brand-public-key-status"></div>
+                </div>
+
+                <div class="section">
+                    <h3>Step 5: Send Encrypted Message</h3>
+                    <textarea id="influencer-message" rows="3" placeholder="Type your message to brand..."></textarea>
+                    <button onclick="encryptAndSendToBrand()" id="influencer-send-btn" disabled>Encrypt & Send to Brand</button>
+                    <div id="influencer-send-status"></div>
+                </div>
+            </div>
+
+            <!-- User 2: Brand -->
+            <div class="user-panel brand">
+                <h2>🏢 User 2: Brand</h2>
+
+                <div class="section">
+                    <h3>Step 1: Authentication</h3>
+                    <input type="text" id="brand-token" placeholder="Paste brand JWT token here">
+                    <button onclick="setBrandToken()">Set Token</button>
+                    <div id="brand-token-status" class="status"></div>
+                </div>
+
+                <div class="section">
+                    <h3>Step 2: Generate Keys</h3>
+                    <button onclick="generateBrandKeys()">Generate RSA Key Pair</button>
+                    <div id="brand-key-status" class="status"></div>
+                    <div id="brand-public-key" class="key-display" style="display:none;"></div>
+                </div>
+
+                <div class="section">
+                    <h3>Step 3: Upload Public Key</h3>
+                    <button onclick="uploadBrandPublicKey()" id="brand-upload-btn" disabled>Upload to Server</button>
+                    <div id="brand-upload-status"></div>
+                </div>
+
+                <div class="section">
+                    <h3>Step 4: Fetch Influencer's Public Key</h3>
+                    <input type="text" id="influencer-user-id" placeholder="Influencer User ID (e.g., 1)">
+                    <button onclick="fetchInfluencerPublicKey()">Fetch Influencer's Public Key</button>
+                    <div id="influencer-public-key-status"></div>
+                </div>
+
+                <div class="section">
+                    <h3>Step 5: Send Encrypted Message</h3>
+                    <textarea id="brand-message" rows="3" placeholder="Type your message to influencer..."></textarea>
+                    <button onclick="encryptAndSendToInfluencer()" id="brand-send-btn" disabled>Encrypt & Send to Influencer</button>
+                    <div id="brand-send-status"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Message Display Area -->
+        <div class="message-box">
+            <h2>📬 Encrypted Messages & Decryption</h2>
+            <div class="info">
+                This section shows the encrypted message (what travels over the network) and the decrypted message (what the recipient sees).
+            </div>
+            <div id="messages-area"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3002/api'; // Change to your API URL
+
+        // User data storage
+        let influencerData = {
+            token: null,
+            publicKey: null,
+            privateKey: null,
+            otherUserPublicKey: null
+        };
+
+        let brandData = {
+            token: null,
+            publicKey: null,
+            privateKey: null,
+            otherUserPublicKey: null
+        };
+
+        // Utility functions
+        function arrayBufferToBase64(buffer) {
+            return btoa(String.fromCharCode(...new Uint8Array(buffer)));
+        }
+
+        function base64ToArrayBuffer(base64) {
+            const binaryString = atob(base64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        function arrayBufferToPem(buffer, type) {
+            const base64 = arrayBufferToBase64(buffer);
+            const pem = `-----BEGIN ${type}-----\n${base64.match(/.{1,64}/g).join('\n')}\n-----END ${type}-----`;
+            return pem;
+        }
+
+        function pemToArrayBuffer(pem) {
+            const pemContents = pem
+                .replace(/-----BEGIN .*-----/, '')
+                .replace(/-----END .*-----/, '')
+                .replace(/\s/g, '');
+            return base64ToArrayBuffer(pemContents);
+        }
+
+        // Influencer functions
+        function setInfluencerToken() {
+            const token = document.getElementById('influencer-token').value.trim();
+            if (!token) {
+                document.getElementById('influencer-token-status').innerHTML = '<span style="color: red;">Please enter a token</span>';
+                return;
+            }
+            influencerData.token = token;
+            document.getElementById('influencer-token-status').innerHTML = '<span style="color: green;">✓ Token set</span>';
+        }
+
+        async function generateInfluencerKeys() {
+            try {
+                document.getElementById('influencer-key-status').innerHTML = 'Generating keys...';
+
+                const keyPair = await window.crypto.subtle.generateKey(
+                    {
+                        name: "RSA-OAEP",
+                        modulusLength: 2048,
+                        publicExponent: new Uint8Array([1, 0, 1]),
+                        hash: "SHA-256",
+                    },
+                    true,
+                    ["encrypt", "decrypt"]
+                );
+
+                const publicKey = await window.crypto.subtle.exportKey("spki", keyPair.publicKey);
+                const privateKey = await window.crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
+
+                influencerData.publicKey = arrayBufferToPem(publicKey, 'PUBLIC KEY');
+                influencerData.privateKey = arrayBufferToPem(privateKey, 'PRIVATE KEY');
+
+                document.getElementById('influencer-public-key').style.display = 'block';
+                document.getElementById('influencer-public-key').textContent = influencerData.publicKey;
+                document.getElementById('influencer-key-status').innerHTML = '<span style="color: green;">✓ Keys generated successfully!</span>';
+                document.getElementById('influencer-upload-btn').disabled = false;
+            } catch (error) {
+                document.getElementById('influencer-key-status').innerHTML = `<span style="color: red;">Error: ${error.message}</span>`;
+            }
+        }
+
+        async function uploadInfluencerPublicKey() {
+            if (!influencerData.token) {
+                alert('Please set token first');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/e2ee/public-key`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${influencerData.token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ publicKey: influencerData.publicKey })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('influencer-upload-status').innerHTML = '<div class="success">✓ Public key uploaded successfully!</div>';
+                } else {
+                    document.getElementById('influencer-upload-status').innerHTML = `<div class="error">Error: ${data.message}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('influencer-upload-status').innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function fetchBrandPublicKey() {
+            const brandUserId = document.getElementById('brand-user-id').value.trim();
+            if (!brandUserId) {
+                alert('Please enter Brand User ID');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/e2ee/public-key/brand/${brandUserId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${influencerData.token}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Handle nested response structure
+                    const publicKey = data.data?.data?.publicKey || data.data?.publicKey;
+                    if (!publicKey) {
+                        throw new Error('Public key not found in response');
+                    }
+                    influencerData.otherUserPublicKey = publicKey;
+                    console.log('Brand public key fetched:', publicKey.substring(0, 50) + '...');
+                    document.getElementById('brand-public-key-status').innerHTML = '<div class="success">✓ Brand\'s public key fetched!</div>';
+                    document.getElementById('influencer-send-btn').disabled = false;
+                } else {
+                    document.getElementById('brand-public-key-status').innerHTML = `<div class="error">Error: ${data.message}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('brand-public-key-status').innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        // Brand functions
+        function setBrandToken() {
+            const token = document.getElementById('brand-token').value.trim();
+            if (!token) {
+                document.getElementById('brand-token-status').innerHTML = '<span style="color: red;">Please enter a token</span>';
+                return;
+            }
+            brandData.token = token;
+            document.getElementById('brand-token-status').innerHTML = '<span style="color: green;">✓ Token set</span>';
+        }
+
+        async function generateBrandKeys() {
+            try {
+                document.getElementById('brand-key-status').innerHTML = 'Generating keys...';
+
+                const keyPair = await window.crypto.subtle.generateKey(
+                    {
+                        name: "RSA-OAEP",
+                        modulusLength: 2048,
+                        publicExponent: new Uint8Array([1, 0, 1]),
+                        hash: "SHA-256",
+                    },
+                    true,
+                    ["encrypt", "decrypt"]
+                );
+
+                const publicKey = await window.crypto.subtle.exportKey("spki", keyPair.publicKey);
+                const privateKey = await window.crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
+
+                brandData.publicKey = arrayBufferToPem(publicKey, 'PUBLIC KEY');
+                brandData.privateKey = arrayBufferToPem(privateKey, 'PRIVATE KEY');
+
+                document.getElementById('brand-public-key').style.display = 'block';
+                document.getElementById('brand-public-key').textContent = brandData.publicKey;
+                document.getElementById('brand-key-status').innerHTML = '<span style="color: green;">✓ Keys generated successfully!</span>';
+                document.getElementById('brand-upload-btn').disabled = false;
+            } catch (error) {
+                document.getElementById('brand-key-status').innerHTML = `<span style="color: red;">Error: ${error.message}</span>`;
+            }
+        }
+
+        async function uploadBrandPublicKey() {
+            if (!brandData.token) {
+                alert('Please set token first');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/e2ee/public-key`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${brandData.token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ publicKey: brandData.publicKey })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('brand-upload-status').innerHTML = '<div class="success">✓ Public key uploaded successfully!</div>';
+                } else {
+                    document.getElementById('brand-upload-status').innerHTML = `<div class="error">Error: ${data.message}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('brand-upload-status').innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function fetchInfluencerPublicKey() {
+            const influencerUserId = document.getElementById('influencer-user-id').value.trim();
+            if (!influencerUserId) {
+                alert('Please enter Influencer User ID');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/e2ee/public-key/influencer/${influencerUserId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${brandData.token}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Handle nested response structure
+                    const publicKey = data.data?.data?.publicKey || data.data?.publicKey;
+                    if (!publicKey) {
+                        throw new Error('Public key not found in response');
+                    }
+                    brandData.otherUserPublicKey = publicKey;
+                    console.log('Influencer public key fetched:', publicKey.substring(0, 50) + '...');
+                    document.getElementById('influencer-public-key-status').innerHTML = '<div class="success">✓ Influencer\'s public key fetched!</div>';
+                    document.getElementById('brand-send-btn').disabled = false;
+                } else {
+                    document.getElementById('influencer-public-key-status').innerHTML = `<div class="error">Error: ${data.message}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('influencer-public-key-status').innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        // Encryption/Decryption functions
+        async function encryptMessage(plaintext, recipientPublicKeyPem, attachmentUrl = null, attachmentName = null) {
+            // 1. Prepare payload (include attachmentUrl and attachmentName if present)
+            const payload = {
+                message: plaintext
+            };
+            if (attachmentUrl) {
+                payload.attachmentUrl = attachmentUrl;
+            }
+            if (attachmentName) {
+                payload.attachmentName = attachmentName;
+            }
+            const payloadString = JSON.stringify(payload);
+
+            // 2. Generate random AES key
+            const aesKey = await window.crypto.subtle.generateKey(
+                { name: "AES-GCM", length: 256 },
+                true,
+                ["encrypt", "decrypt"]
+            );
+
+            // 3. Encrypt payload with AES
+            const iv = window.crypto.getRandomValues(new Uint8Array(12));
+            const encodedMessage = new TextEncoder().encode(payloadString);
+
+            const encryptedContent = await window.crypto.subtle.encrypt(
+                { name: "AES-GCM", iv: iv },
+                aesKey,
+                encodedMessage
+            );
+
+            // 4. Export AES key
+            const exportedAesKey = await window.crypto.subtle.exportKey("raw", aesKey);
+
+            // 5. Import recipient's RSA public key
+            const pemContents = recipientPublicKeyPem
+                .replace('-----BEGIN PUBLIC KEY-----', '')
+                .replace('-----END PUBLIC KEY-----', '')
+                .replace(/\s/g, '');
+            const binaryDer = base64ToArrayBuffer(pemContents);
+
+            const recipientPublicKey = await window.crypto.subtle.importKey(
+                "spki",
+                binaryDer,
+                { name: "RSA-OAEP", hash: "SHA-256" },
+                false,
+                ["encrypt"]
+            );
+
+            // 6. Encrypt AES key with RSA
+            const encryptedAesKey = await window.crypto.subtle.encrypt(
+                { name: "RSA-OAEP" },
+                recipientPublicKey,
+                exportedAesKey
+            );
+
+            // 7. Return encrypted message
+            return JSON.stringify({
+                encryptedKey: arrayBufferToBase64(encryptedAesKey),
+                iv: arrayBufferToBase64(iv),
+                ciphertext: arrayBufferToBase64(encryptedContent),
+                version: 'v1'
+            });
+        }
+
+        async function decryptMessage(encryptedMessage, privateKeyPem) {
+            const parsed = JSON.parse(encryptedMessage);
+            const { encryptedKey, iv, ciphertext } = parsed;
+
+            // 1. Import private key
+            const pemContents = privateKeyPem
+                .replace('-----BEGIN PRIVATE KEY-----', '')
+                .replace('-----END PRIVATE KEY-----', '')
+                .replace(/\s/g, '');
+            const binaryDer = base64ToArrayBuffer(pemContents);
+
+            const privateKey = await window.crypto.subtle.importKey(
+                "pkcs8",
+                binaryDer,
+                { name: "RSA-OAEP", hash: "SHA-256" },
+                false,
+                ["decrypt"]
+            );
+
+            // 2. Decrypt AES key
+            const encryptedAesKeyBuffer = base64ToArrayBuffer(encryptedKey);
+            const aesKeyBuffer = await window.crypto.subtle.decrypt(
+                { name: "RSA-OAEP" },
+                privateKey,
+                encryptedAesKeyBuffer
+            );
+
+            // 3. Import AES key
+            const aesKey = await window.crypto.subtle.importKey(
+                "raw",
+                aesKeyBuffer,
+                { name: "AES-GCM" },
+                false,
+                ["decrypt"]
+            );
+
+            // 4. Decrypt message
+            const ivBuffer = base64ToArrayBuffer(iv);
+            const ciphertextBuffer = base64ToArrayBuffer(ciphertext);
+
+            const decryptedContent = await window.crypto.subtle.decrypt(
+                { name: "AES-GCM", iv: ivBuffer },
+                aesKey,
+                ciphertextBuffer
+            );
+
+            // 5. Convert to string and parse payload
+            const decryptedString = new TextDecoder().decode(decryptedContent);
+
+            // Try to parse as JSON payload (new format with attachmentUrl)
+            try {
+                const payload = JSON.parse(decryptedString);
+                // If it has message property, it's the new format
+                if (payload.message !== undefined) {
+                    return {
+                        message: payload.message,
+                        attachmentUrl: payload.attachmentUrl || null,
+                        attachmentName: payload.attachmentName || null
+                    };
+                }
+            } catch (e) {
+                // Not JSON, treat as plain text (backward compatibility)
+            }
+
+            // Old format: just plain text
+            return {
+                message: decryptedString,
+                attachmentUrl: null,
+                attachmentName: null
+            };
+        }
+
+        async function encryptAndSendToBrand() {
+            const message = document.getElementById('influencer-message').value;
+            const brandUserId = document.getElementById('brand-user-id').value.trim();
+
+            if (!message) {
+                alert('Please enter a message');
+                return;
+            }
+
+            if (!brandUserId) {
+                alert('Please enter Brand User ID first');
+                return;
+            }
+
+            if (!influencerData.otherUserPublicKey) {
+                alert('Please fetch Brand\'s public key first (Step 4)');
+                return;
+            }
+
+            try {
+                document.getElementById('influencer-send-status').innerHTML = '<div class="info">Encrypting and sending...</div>';
+
+                // 1. Encrypt the message
+                const encrypted = await encryptMessage(message, influencerData.otherUserPublicKey);
+
+                // 2. Send encrypted message to API (conversation will be auto-created)
+                const msgResponse = await fetch(`${API_BASE}/chat/messages`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${influencerData.token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        otherPartyId: parseInt(brandUserId),
+                        otherPartyType: 'brand',
+                        content: encrypted,
+                        messageType: 'text'
+                    })
+                });
+
+                if (!msgResponse.ok) {
+                    throw new Error('Failed to send message');
+                }
+
+                const msgData = await msgResponse.json();
+                const conversationId = msgData.data.conversationId;
+
+                // Display result
+                const messagesArea = document.getElementById('messages-area');
+                const messageDiv = document.createElement('div');
+                messageDiv.innerHTML = `
+                    <h3>✅ Influencer → Brand (Sent to Database)</h3>
+                    <p><strong>Original message:</strong> "${message}"</p>
+                    <div class="encrypted-display">
+                        <strong>🔒 Encrypted in database:</strong><br>
+                        ${encrypted.substring(0, 200)}...
+                    </div>
+                    <div class="info">
+                        Message ID: ${msgData.data.id}<br>
+                        isEncrypted: ${msgData.data.isEncrypted ? 'true ✅' : 'false ❌'}<br>
+                        Conversation ID: ${conversationId}
+                    </div>
+                    <button onclick="decryptForBrand('${encrypted.replace(/'/g, "\\'")}')">🔓 Decrypt as Brand</button>
+                    <div id="brand-decrypt-result"></div>
+                    <hr style="margin: 20px 0;">
+                `;
+                messagesArea.insertBefore(messageDiv, messagesArea.firstChild);
+
+                document.getElementById('influencer-send-status').innerHTML = '<div class="success">✓ Encrypted message sent to database!</div>';
+                document.getElementById('influencer-message').value = '';
+            } catch (error) {
+                document.getElementById('influencer-send-status').innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function encryptAndSendToInfluencer() {
+            const message = document.getElementById('brand-message').value;
+            const influencerUserId = document.getElementById('influencer-user-id').value.trim();
+
+            if (!message) {
+                alert('Please enter a message');
+                return;
+            }
+
+            if (!influencerUserId) {
+                alert('Please enter Influencer User ID first');
+                return;
+            }
+
+            if (!brandData.otherUserPublicKey) {
+                alert('Please fetch Influencer\'s public key first (Step 4)');
+                return;
+            }
+
+            try {
+                document.getElementById('brand-send-status').innerHTML = '<div class="info">Encrypting and sending...</div>';
+
+                // 1. Encrypt the message
+                const encrypted = await encryptMessage(message, brandData.otherUserPublicKey);
+
+                // 2. Send encrypted message to API (conversation will be auto-created)
+                const msgResponse = await fetch(`${API_BASE}/chat/messages`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${brandData.token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        otherPartyId: parseInt(influencerUserId),
+                        otherPartyType: 'influencer',
+                        content: encrypted,
+                        messageType: 'text'
+                    })
+                });
+
+                if (!msgResponse.ok) {
+                    throw new Error('Failed to send message');
+                }
+
+                const msgData = await msgResponse.json();
+                const conversationId = msgData.data.conversationId;
+
+                // Display result
+                const messagesArea = document.getElementById('messages-area');
+                const messageDiv = document.createElement('div');
+                messageDiv.innerHTML = `
+                    <h3>✅ Brand → Influencer (Sent to Database)</h3>
+                    <p><strong>Original message:</strong> "${message}"</p>
+                    <div class="encrypted-display">
+                        <strong>🔒 Encrypted in database:</strong><br>
+                        ${encrypted.substring(0, 200)}...
+                    </div>
+                    <div class="info">
+                        Message ID: ${msgData.data.id}<br>
+                        isEncrypted: ${msgData.data.isEncrypted ? 'true ✅' : 'false ❌'}<br>
+                        Conversation ID: ${conversationId}
+                    </div>
+                    <button onclick="decryptForInfluencer('${encrypted.replace(/'/g, "\\'")}')">🔓 Decrypt as Influencer</button>
+                    <div id="influencer-decrypt-result"></div>
+                    <hr style="margin: 20px 0;">
+                `;
+                messagesArea.insertBefore(messageDiv, messagesArea.firstChild);
+
+                document.getElementById('brand-send-status').innerHTML = '<div class="success">✓ Encrypted message sent to database!</div>';
+                document.getElementById('brand-message').value = '';
+            } catch (error) {
+                document.getElementById('brand-send-status').innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function decryptForBrand(encryptedMessage) {
+            try {
+                const decrypted = await decryptMessage(encryptedMessage, brandData.privateKey);
+                const resultDiv = document.getElementById('brand-decrypt-result') || event.target.nextElementSibling;
+                resultDiv.innerHTML = `
+                    <div class="decrypted-display">
+                        <strong>✅ Decrypted by Brand:</strong><br>
+                        "${decrypted}"
+                    </div>
+                `;
+            } catch (error) {
+                alert('Decryption failed: ' + error.message);
+            }
+        }
+
+        async function decryptForInfluencer(encryptedMessage) {
+            try {
+                const decrypted = await decryptMessage(encryptedMessage, influencerData.privateKey);
+                const resultDiv = document.getElementById('influencer-decrypt-result') || event.target.nextElementSibling;
+                resultDiv.innerHTML = `
+                    <div class="decrypted-display">
+                        <strong>✅ Decrypted by Influencer:</strong><br>
+                        "${decrypted}"
+                    </div>
+                `;
+            } catch (error) {
+                alert('Decryption failed: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,158 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Instagram OAuth Test (Client)</title>
+  <style>
+    body { font-family: system-ui, Arial; max-width: 900px; margin: 40px auto; padding: 16px; }
+    button { background:#E4405F; color:white; border:0; padding:10px 16px; border-radius:8px; cursor:pointer }
+    .result{ background:#f5f5f5; padding:12px; border-radius:6px; margin-top:12px }
+    .error{ background:#ffe6e6; padding:12px; border-radius:6px; margin-top:12px; color:#900 }
+    pre{ background:#111; color:#eee; padding:12px; border-radius:6px; overflow:auto }
+  </style>
+</head>
+<body>
+  <h1>Instagram OAuth Test — Client</h1>
+  <p>Client-only page — <strong>no APP_SECRET here</strong>. Uses server endpoint to exchange code.</p>
+
+  <div>
+    <label>App ID (client_id):</label>
+    <input id="appId" style="width:100%;" value="" placeholder="Paste your Instagram App ID (e.g. 441...)" />
+  </div>
+
+  <div style="margin-top:8px">
+    <label>Redirect URI (registered in Meta):</label>
+    <input id="redirectUri" style="width:100%;" value="http://localhost:3000/api/auth/instagram/callback" />
+  </div>
+
+  <div style="margin-top:12px;">
+    <button id="loginBtn">🔐 Login with Instagram</button>
+    <button id="clearBtn" style="margin-left:8px; background:#777">Clear</button>
+  </div>
+
+  <div id="status" class="result" style="display:none"></div>
+  <div id="profile" style="margin-top:12px;"></div>
+
+  <script>
+    // ***** CONFIG (client side only - no secrets) *****
+    // If your token exchange endpoint is on another host, change TOKEN_EXCHANGE_ENDPOINT to full URL:
+    // e.g. "https://incollab.buymybills.in/api/auth/instagram/token"
+    const TOKEN_EXCHANGE_ENDPOINT = '/api/auth/instagram/token'; // relative to same origin
+
+    // Helper to read/set cookie
+    function setCookie(name, value, secs=600) {
+      const expires = new Date(Date.now() + secs*1000).toUTCString();
+      document.cookie = `${name}=${encodeURIComponent(value)}; path=/; SameSite=Lax; expires=${expires}`;
+    }
+    function getCookie(name){
+      return (document.cookie.split('; ').find(row => row.startsWith(name+'=')) || '').split('=')[1] || '';
+    }
+    function delCookie(name){
+      document.cookie = name + '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    }
+
+    const loginBtn = document.getElementById('loginBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const status = document.getElementById('status');
+    const profile = document.getElementById('profile');
+
+    function showStatus(html) { status.style.display='block'; status.innerHTML = html; }
+    function showError(msg) { status.style.display='block'; status.className='error'; status.innerText = msg; }
+    function clearUI() { status.style.display='none'; status.className=''; status.innerHTML=''; profile.innerHTML=''; }
+
+    // Build Instagram Authorization URL and redirect
+    loginBtn.addEventListener('click', () => {
+      clearUI();
+      const clientId = document.getElementById('appId').value.trim();
+      const redirectUri = document.getElementById('redirectUri').value.trim();
+      if (!clientId || !redirectUri) { showError('Please enter App ID and Redirect URI'); return; }
+
+      const state = Math.random().toString(36).slice(2);
+      setCookie('ig_oauth_state', state, 600);
+
+      const params = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        scope: 'user_profile,user_media',
+        response_type: 'code',
+        state
+      });
+      const url = `https://api.instagram.com/oauth/authorize?${params.toString()}`;
+      // redirect to Instagram
+      window.location.href = url;
+    });
+
+    clearBtn.addEventListener('click', () => {
+      delCookie('ig_oauth_state');
+      document.getElementById('appId').value = '';
+      profile.innerHTML = '';
+      clearUI();
+    });
+
+    // On page load: handle if redirected back with ?code=
+    (function handleCallback() {
+      const sp = new URLSearchParams(window.location.search);
+      const code = sp.get('code');
+      const state = sp.get('state');
+      const error = sp.get('error');
+      if (error) {
+        showError(`OAuth error: ${error} - ${sp.get('error_description') || ''}`);
+        return;
+      }
+      if (!code) return; // nothing to do
+
+      const savedState = decodeURIComponent(getCookie('ig_oauth_state') || '');
+      if (!state || state !== savedState) {
+        showError('State mismatch or missing. Possible CSRF. Aborting.');
+        return;
+      }
+      // Clear the state cookie
+      delCookie('ig_oauth_state');
+
+      showStatus('Received authorization code — exchanging for token on server...');
+      // POST to backend to exchange code for token
+      const redirectUri = document.getElementById('redirectUri').value.trim() || window.location.origin + '/api/auth/instagram/callback';
+      fetch(TOKEN_EXCHANGE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, redirect_uri: redirectUri })
+      })
+      .then(async res => {
+        if (!res.ok) {
+          const t = await res.text().catch(()=>null);
+          throw new Error(`Server error ${res.status}: ${t || res.statusText}`);
+        }
+        return res.json();
+      })
+      .then(async data => {
+        // data should include access_token (long-lived) and user_id and expires_in
+        if (!data || !data.access_token) throw new Error('No access_token in server response');
+        showStatus('Access token received. Fetching /me...');
+        // Fetch profile
+        const fields = 'id,username,account_type,media_count';
+        const meResp = await fetch(`https://graph.instagram.com/me?fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(data.access_token)}`);
+        if (!meResp.ok) {
+          const ed = await meResp.json().catch(()=>null);
+          throw new Error('Failed to fetch profile: ' + (ed?.error?.message || meResp.statusText));
+        }
+        const profileJson = await meResp.json();
+        profile.innerHTML = `
+          <div class="result">
+            <p><strong>ID:</strong> ${profileJson.id}</p>
+            <p><strong>Username:</strong> @${profileJson.username}</p>
+            <p><strong>Account Type:</strong> ${profileJson.account_type}</p>
+            <p><strong>Media Count:</strong> ${profileJson.media_count ?? 'N/A'}</p>
+            <h4>Raw response</h4>
+            <pre>${JSON.stringify(profileJson, null, 2)}</pre>
+          </div>
+        `;
+        showStatus('Profile loaded successfully.');
+        // Optionally: redirect user to app page, set your session, etc.
+      })
+      .catch(err => {
+        showError('Exchange failed: ' + err.message);
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebSocket Improvements Test</title>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1200px;
+      margin: 20px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 { color: #333; }
+    h2 { color: #666; margin-top: 0; }
+    .status {
+      display: inline-block;
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-weight: bold;
+      margin-left: 10px;
+    }
+    .connected { background: #4CAF50; color: white; }
+    .disconnected { background: #f44336; color: white; }
+    .reconnecting { background: #FF9800; color: white; }
+    button {
+      background: #2196F3;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:hover { background: #0b7dda; }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .log {
+      background: #f5f5f5;
+      padding: 10px;
+      border-radius: 4px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+    }
+    .log-entry {
+      margin: 5px 0;
+      padding: 5px;
+      border-left: 3px solid #ccc;
+      padding-left: 10px;
+    }
+    .log-info { border-left-color: #2196F3; }
+    .log-success { border-left-color: #4CAF50; }
+    .log-error { border-left-color: #f44336; }
+    .log-warning { border-left-color: #FF9800; }
+    input, select {
+      padding: 8px;
+      margin: 5px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .metric {
+      background: #f5f5f5;
+      padding: 15px;
+      border-radius: 4px;
+      text-align: center;
+    }
+    .metric-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #2196F3;
+    }
+    .metric-label {
+      font-size: 12px;
+      color: #666;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🚀 WebSocket Improvements Test Suite</h1>
+
+  <!-- Connection Status -->
+  <div class="container">
+    <h2>Connection Status</h2>
+    <div>
+      Status: <span id="status" class="status disconnected">Disconnected</span>
+    </div>
+    <div style="margin-top: 10px;">
+      <label>User ID: <input type="number" id="userId" value="11" /></label>
+      <label>User Type:
+        <select id="userType">
+          <option value="influencer">Influencer</option>
+          <option value="brand">Brand</option>
+        </select>
+      </label>
+    </div>
+    <div style="margin-top: 10px;">
+      <button onclick="connect()">Connect</button>
+      <button onclick="disconnect()">Disconnect</button>
+      <button onclick="clearLogs()">Clear Logs</button>
+    </div>
+  </div>
+
+  <!-- Metrics -->
+  <div class="container">
+    <h2>Real-Time Metrics</h2>
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-value" id="heartbeatCount">0</div>
+        <div class="metric-label">Heartbeats Received</div>
+      </div>
+      <div class="metric">
+        <div class="metric-value" id="pongCount">0</div>
+        <div class="metric-label">Pongs Received</div>
+      </div>
+      <div class="metric">
+        <div class="metric-value" id="latency">0ms</div>
+        <div class="metric-label">Latency</div>
+      </div>
+      <div class="metric">
+        <div class="metric-value" id="messagesSent">0</div>
+        <div class="metric-label">Messages Sent</div>
+      </div>
+      <div class="metric">
+        <div class="metric-value" id="rateLimitHits">0</div>
+        <div class="metric-label">Rate Limit Hits</div>
+      </div>
+      <div class="metric">
+        <div class="metric-value" id="uptime">0s</div>
+        <div class="metric-label">Connection Uptime</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Test 1: Heartbeat & Ping-Pong -->
+  <div class="container">
+    <h2>Test 1: Heartbeat & Ping-Pong</h2>
+    <p>This test monitors automatic heartbeat and ping-pong messages.</p>
+    <button onclick="sendPing()">Send Manual Ping</button>
+    <div id="heartbeatLog" class="log"></div>
+  </div>
+
+  <!-- Test 2: Rate Limiting -->
+  <div class="container">
+    <h2>Test 2: Rate Limiting</h2>
+    <p>Sends 15 messages rapidly. Expect first 10 to succeed, then rate limit errors.</p>
+    <label>Recipient ID: <input type="number" id="recipientId" value="32" /></label>
+    <label>Recipient Type:
+      <select id="recipientType">
+        <option value="brand">Brand</option>
+        <option value="influencer">Influencer</option>
+      </select>
+    </label>
+    <button onclick="testRateLimit()">Run Rate Limit Test</button>
+    <div id="rateLimitLog" class="log"></div>
+  </div>
+
+  <!-- Test 3: Single Device Policy -->
+  <div class="container">
+    <h2>Test 3: Single Device Policy</h2>
+    <p>Open this page in two tabs with same credentials. First tab should be disconnected.</p>
+    <button onclick="testSingleDevice()">Test in New Window</button>
+    <div id="singleDeviceLog" class="log"></div>
+  </div>
+
+  <!-- Test 4: Connection Events -->
+  <div class="container">
+    <h2>Test 4: Connection Events</h2>
+    <div id="connectionLog" class="log"></div>
+  </div>
+
+  <!-- All Logs -->
+  <div class="container">
+    <h2>All Logs</h2>
+    <div id="allLogs" class="log"></div>
+  </div>
+
+  <script>
+    let socket = null;
+    let heartbeatCount = 0;
+    let pongCount = 0;
+    let messagesSent = 0;
+    let rateLimitHits = 0;
+    let connectedAt = null;
+    let uptimeInterval = null;
+
+    // Logging
+    function log(message, type = 'info', target = 'allLogs') {
+      const timestamp = new Date().toLocaleTimeString();
+      const entry = document.createElement('div');
+      entry.className = `log-entry log-${type}`;
+      entry.textContent = `[${timestamp}] ${message}`;
+
+      const logElement = document.getElementById(target);
+      logElement.appendChild(entry);
+      logElement.scrollTop = logElement.scrollHeight;
+
+      // Also log to all logs if not already
+      if (target !== 'allLogs') {
+        log(message, type, 'allLogs');
+      }
+    }
+
+    function clearLogs() {
+      document.getElementById('allLogs').innerHTML = '';
+      document.getElementById('heartbeatLog').innerHTML = '';
+      document.getElementById('rateLimitLog').innerHTML = '';
+      document.getElementById('singleDeviceLog').innerHTML = '';
+      document.getElementById('connectionLog').innerHTML = '';
+    }
+
+    function updateMetric(id, value) {
+      document.getElementById(id).textContent = value;
+    }
+
+    function updateStatus(status, className) {
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = status;
+      statusEl.className = `status ${className}`;
+    }
+
+    // Connection
+    function connect() {
+      if (socket?.connected) {
+        log('Already connected', 'warning');
+        return;
+      }
+
+      const userId = document.getElementById('userId').value;
+      const userType = document.getElementById('userType').value;
+      const token = `${userId}:${userType}`;
+
+      log(`Connecting with userId=${userId}, userType=${userType}...`, 'info', 'connectionLog');
+
+      socket = io('http://localhost:3002/chat', {
+        auth: { token },
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 10000,
+        timeout: 20000
+      });
+
+      setupEventHandlers();
+    }
+
+    function disconnect() {
+      if (socket) {
+        socket.disconnect();
+        log('Disconnected manually', 'info', 'connectionLog');
+      }
+    }
+
+    function setupEventHandlers() {
+      // Connection events
+      socket.on('connect', () => {
+        updateStatus('Connected', 'connected');
+        connectedAt = Date.now();
+        startUptimeCounter();
+        log('✅ Connected to server', 'success', 'connectionLog');
+      });
+
+      socket.on('disconnect', (reason) => {
+        updateStatus('Disconnected', 'disconnected');
+        stopUptimeCounter();
+        log(`❌ Disconnected: ${reason}`, 'error', 'connectionLog');
+      });
+
+      socket.on('connect_error', (error) => {
+        log(`Connection error: ${error.message}`, 'error', 'connectionLog');
+      });
+
+      socket.on('reconnect', (attemptNumber) => {
+        log(`Reconnected after ${attemptNumber} attempts`, 'success', 'connectionLog');
+      });
+
+      socket.on('reconnect_attempt', (attemptNumber) => {
+        updateStatus(`Reconnecting (${attemptNumber})`, 'reconnecting');
+        log(`Reconnection attempt ${attemptNumber}...`, 'warning', 'connectionLog');
+      });
+
+      // Connection success
+      socket.on('connection:success', (data) => {
+        log(`Connection success: ${JSON.stringify(data)}`, 'success', 'connectionLog');
+      });
+
+      // Connection replaced
+      socket.on('connection:replaced', (data) => {
+        log(`⚠️ ${data.message}`, 'warning', 'singleDeviceLog');
+        log(`⚠️ ${data.message}`, 'warning', 'connectionLog');
+      });
+
+      // Heartbeat
+      socket.on('heartbeat', (data) => {
+        heartbeatCount++;
+        updateMetric('heartbeatCount', heartbeatCount);
+        socket.emit('heartbeat:response', data);
+
+        const latency = Date.now() - data.timestamp;
+        updateMetric('latency', `${latency}ms`);
+        log(`💓 Heartbeat received (latency: ${latency}ms)`, 'info', 'heartbeatLog');
+      });
+
+      // Pong
+      socket.on('pong', (data) => {
+        pongCount++;
+        updateMetric('pongCount', pongCount);
+        const latency = Date.now() - data.timestamp;
+        log(`🏓 Pong received (latency: ${latency}ms)`, 'info', 'heartbeatLog');
+      });
+
+      // Messages
+      socket.on('message:sent', (data) => {
+        log(`✅ Message sent successfully`, 'success', 'rateLimitLog');
+      });
+
+      socket.on('message:error', (error) => {
+        if (error.error.includes('Rate limit')) {
+          rateLimitHits++;
+          updateMetric('rateLimitHits', rateLimitHits);
+          log(`⚠️ ${error.error}`, 'warning', 'rateLimitLog');
+        } else {
+          log(`❌ Message error: ${error.error}`, 'error', 'rateLimitLog');
+        }
+      });
+
+      // Errors
+      socket.on('error', (error) => {
+        log(`Error: ${error.message}`, 'error', 'connectionLog');
+      });
+    }
+
+    function startUptimeCounter() {
+      uptimeInterval = setInterval(() => {
+        if (connectedAt) {
+          const seconds = Math.floor((Date.now() - connectedAt) / 1000);
+          updateMetric('uptime', `${seconds}s`);
+        }
+      }, 1000);
+    }
+
+    function stopUptimeCounter() {
+      if (uptimeInterval) {
+        clearInterval(uptimeInterval);
+        uptimeInterval = null;
+      }
+      connectedAt = null;
+      updateMetric('uptime', '0s');
+    }
+
+    // Tests
+    function sendPing() {
+      if (!socket?.connected) {
+        log('Not connected', 'error', 'heartbeatLog');
+        return;
+      }
+
+      const timestamp = Date.now();
+      socket.emit('ping');
+      log('🏓 Sent manual ping', 'info', 'heartbeatLog');
+    }
+
+    function testRateLimit() {
+      if (!socket?.connected) {
+        log('Not connected', 'error', 'rateLimitLog');
+        return;
+      }
+
+      const recipientId = parseInt(document.getElementById('recipientId').value);
+      const recipientType = document.getElementById('recipientType').value;
+
+      log('Starting rate limit test - sending 15 messages...', 'info', 'rateLimitLog');
+
+      for (let i = 0; i < 15; i++) {
+        setTimeout(() => {
+          socket.emit('message:send', {
+            otherPartyId: recipientId,
+            otherPartyType: recipientType,
+            content: `Rate limit test message ${i + 1}`,
+            messageType: 'text',
+            tempId: `test_${i}`
+          });
+          messagesSent++;
+          updateMetric('messagesSent', messagesSent);
+          log(`📤 Sent message ${i + 1}/15`, 'info', 'rateLimitLog');
+        }, i * 100); // Small delay to ensure order
+      }
+    }
+
+    function testSingleDevice() {
+      const userId = document.getElementById('userId').value;
+      const userType = document.getElementById('userType').value;
+
+      log('Opening new window with same credentials...', 'info', 'singleDeviceLog');
+      log('Watch for "connection:replaced" event', 'info', 'singleDeviceLog');
+
+      window.open(window.location.href, '_blank');
+    }
+
+    // Instructions on load
+    window.onload = () => {
+      log('WebSocket Improvements Test Suite loaded', 'success');
+      log('Click "Connect" to start testing', 'info');
+    };
+  </script>
+</body>
+</html>

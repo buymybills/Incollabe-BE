@@ -1,0 +1,1300 @@
+
+> incollab@0.0.1 test
+> jest
+
+PASS src/campaign/campaign.service.spec.ts
+  ● Console
+
+    console.log
+      getBrandCampaigns called with: {
+        brandId: 1,
+        page: 1,
+        limit: 10,
+        offset: 0,
+        pageType: 'number',
+        limitType: 'number'
+      }
+
+      at CampaignService.getBrandCampaigns (campaign/campaign.service.ts:674:13)
+
+    console.log
+      Query result: { campaignsReturned: 1, total: 1, page: 1, limit: 10, offset: 0 }
+
+      at CampaignService.getBrandCampaigns (campaign/campaign.service.ts:705:13)
+
+(node:33726) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS src/post/post.service.spec.ts
+PASS src/auth/auth.controller.spec.ts
+(node:33725) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:33724) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS src/influencer/influencer.service.spec.ts
+  ● Console
+
+    console.log
+      Profile incomplete notification check: {
+        influencerId: 1,
+        name: 'Test Influencer',
+        whatsappNumber: undefined,
+        isWhatsappVerified: undefined,
+        missingFieldsCount: 6,
+        missingFields: [
+          'Profile Image',
+          'Profile Banner',
+          'Profile Headline',
+          'Country',
+          'City',
+          'WhatsApp Number'
+        ]
+      }
+
+      at InfluencerService.updateInfluencerProfile (influencer/influencer.service.ts:595:17)
+
+    console.log
+      Profile incomplete WhatsApp notification not sent. Reason: { hasWhatsappNumber: false, isWhatsappVerified: undefined }
+
+      at InfluencerService.updateInfluencerProfile (influencer/influencer.service.ts:615:19)
+
+PASS src/influencer/influencer.controller.spec.ts
+(node:33723) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:33722) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS src/brand/brand.controller.spec.ts
+(node:33721) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+(Use `node --trace-warnings ...` to show where the warning was created)
+FAIL src/admin/admin.controller.spec.ts
+  ● AdminController › Controller Initialization › should be defined
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › login › should login admin successfully
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › login › should throw UnauthorizedException for invalid credentials
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › login › should handle service errors
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › createAdmin › should create admin successfully
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › createAdmin › should throw BadRequestException for duplicate email
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › createAdmin › should handle validation errors
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › getPendingProfiles › should return pending profile reviews with pagination
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › getPendingProfiles › should handle request without pagination
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › getPendingProfiles › should extract admin ID from request
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › approveProfile › should approve profile successfully
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › approveProfile › should throw NotFoundException for non-existent review
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › rejectProfile › should reject profile successfully
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › rejectProfile › should throw NotFoundException for non-existent review
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › getDashboardStats › should return review statistics
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › getDashboardStats › should handle zero statistics
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › getDashboardStats › should handle service errors
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › Authentication and Authorization › should require admin authentication for all routes
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › Authentication and Authorization › should check roles for restricted endpoints
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › Authentication and Authorization › should extract admin ID from request correctly
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › Parameter Validation and Conversion › should parse integer parameters correctly
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › Parameter Validation and Conversion › should handle different admin IDs
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › Parameter Validation and Conversion › should handle invalid number strings gracefully
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › Error Handling › should propagate all service errors
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › Error Handling › should handle concurrent operations gracefully
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › Campaign Admin APIs › getCampaigns › should return campaigns with filters
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › Campaign Admin APIs › getCampaigns › should handle search and filter combinations
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › Campaign Admin APIs › getCampaignDashboardStats › should return campaign dashboard stats with default timeframe
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › Campaign Admin APIs › getCampaignDashboardStats › should handle custom date range
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+  ● AdminController › Campaign Admin APIs › getCampaignDashboardStats › should handle last_15_days timeframe
+
+    Nest can't resolve dependencies of the AdminController (AdminAuthService, ProfileReviewService, AdminCampaignService, AdminPostService, InfluencerScoringService, DashboardStatsService, ?, BrandService, InfluencerService, PostService, AuditLogService, SupportTicketService, AuthService, CampaignService, S3Service). Please make sure that the argument ReferralProgramService at index [6] is available in the RootTestModule context.
+
+    Potential solutions:
+    - Is RootTestModule a valid NestJS module?
+    - If ReferralProgramService is a provider, is it part of the current RootTestModule?
+    - If ReferralProgramService is exported from a separate @Module, is that module imported within RootTestModule?
+      @Module({
+        imports: [ /* the Module containing ReferralProgramService */ ]
+      })
+
+      131 |
+      132 |   beforeEach(async () => {
+    > 133 |     const module: TestingModule = await Test.createTestingModule({
+          |                                   ^
+      134 |       controllers: [AdminController],
+      135 |       providers: [
+      136 |         {
+
+      at TestingInjector.lookupComponentInParentModules (../node_modules/@nestjs/core/injector/injector.js:286:19)
+      at TestingInjector.resolveComponentWrapper (../node_modules/@nestjs/testing/testing-injector.js:19:45)
+      at resolveParam (../node_modules/@nestjs/core/injector/injector.js:141:38)
+          at async Promise.all (index 6)
+      at TestingInjector.resolveConstructorParams (../node_modules/@nestjs/core/injector/injector.js:169:27)
+      at TestingInjector.loadInstance (../node_modules/@nestjs/core/injector/injector.js:75:13)
+      at TestingInjector.loadController (../node_modules/@nestjs/core/injector/injector.js:94:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:68:13
+          at async Promise.all (index 0)
+      at TestingInstanceLoader.createInstancesOfControllers (../node_modules/@nestjs/core/injector/instance-loader.js:67:9)
+      at ../node_modules/@nestjs/core/injector/instance-loader.js:42:13
+          at async Promise.all (index 1)
+      at TestingInstanceLoader.createInstances (../node_modules/@nestjs/core/injector/instance-loader.js:39:9)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/core/injector/instance-loader.js:22:13)
+      at TestingInstanceLoader.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-instance-loader.js:9:9)
+      at TestingModuleBuilder.createInstancesOfDependencies (../node_modules/@nestjs/testing/testing-module.builder.js:118:9)
+      at TestingModuleBuilder.compile (../node_modules/@nestjs/testing/testing-module.builder.js:74:9)
+      at Object.<anonymous> (admin/admin.controller.spec.ts:133:35)
+
+PASS src/admin/admin-auth.service.spec.ts
+(node:33727) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS src/auth/auth.service.spec.ts
+  ● Console
+
+    console.log
+      ℹ️ No referral code provided during signup
+
+      at AuthService.influencerSignup (auth/auth.service.ts:551:15)
+
+PASS src/admin/profile-review.service.spec.ts
+PASS src/campaign/campaign.controller.spec.ts
+PASS src/brand/brand.service.spec.ts
+(node:33724) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+(node:33726) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+PASS src/post/post.controller.spec.ts
+PASS src/shared/services/search.service.spec.ts
+PASS src/app.controller.spec.ts
+PASS src/admin/services/admin-campaign.service.spec.ts
+
+Test Suites: 1 failed, 15 passed, 16 total
+Tests:       30 failed, 314 passed, 344 total
+Snapshots:   0 total
+Time:        3.19 s
+Ran all test suites.

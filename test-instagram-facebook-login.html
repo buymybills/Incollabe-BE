@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Instagram Login via Facebook</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #fafafa;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #262626;
+      margin-bottom: 10px;
+    }
+    .subtitle {
+      color: #8e8e8e;
+      margin-bottom: 30px;
+    }
+    button {
+      background: #0095f6;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #0081d4;
+    }
+    button:disabled {
+      background: #b2dffc;
+      cursor: not-allowed;
+    }
+    .status {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 8px;
+      background: #f0f0f0;
+    }
+    .success {
+      background: #d4edda;
+      border-left: 4px solid #28a745;
+      color: #155724;
+    }
+    .error {
+      background: #f8d7da;
+      border-left: 4px solid #dc3545;
+      color: #721c24;
+    }
+    .info {
+      background: #d1ecf1;
+      border-left: 4px solid #17a2b8;
+      color: #0c5460;
+    }
+    pre {
+      background: #f5f5f5;
+      padding: 15px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 12px;
+    }
+    .profile {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-top: 20px;
+      padding: 20px;
+      background: #fafafa;
+      border-radius: 8px;
+    }
+    .profile img {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      border: 2px solid #dbdbdb;
+    }
+    .profile-info h3 {
+      margin: 0 0 5px 0;
+      color: #262626;
+    }
+    .profile-info p {
+      margin: 5px 0;
+      color: #8e8e8e;
+      font-size: 14px;
+    }
+    .step {
+      margin: 20px 0;
+      padding: 15px;
+      border: 1px solid #dbdbdb;
+      border-radius: 8px;
+    }
+    .step h3 {
+      margin-top: 0;
+      color: #262626;
+    }
+    .warning {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📱 Instagram Login via Facebook</h1>
+    <p class="subtitle">Login with Facebook to access Instagram Business accounts</p>
+
+    <div class="warning">
+      <strong>⚠️ Requirements:</strong>
+      <ul style="margin: 10px 0;">
+        <li>Instagram Business or Creator account</li>
+        <li>Connected to a Facebook Page</li>
+        <li>You must be admin of that Facebook Page</li>
+      </ul>
+    </div>
+
+    <div class="step">
+      <h3>Step 1: Configure Your App</h3>
+      <label>
+        <strong>App ID:</strong>
+        <input type="text" id="appId" value="4141731562742113" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #dbdbdb; border-radius: 4px;">
+      </label>
+    </div>
+
+    <div class="step">
+      <h3>Step 2: Login with Facebook</h3>
+      <p>Click the button below to login with Facebook and grant Instagram permissions.</p>
+      <button id="loginBtn" onclick="loginWithFacebook()">
+        🔐 Login with Facebook
+      </button>
+      <button id="logoutBtn" onclick="logout()" style="display: none; background: #ed4956; margin-left: 10px;">
+        Logout
+      </button>
+    </div>
+
+    <div id="statusDiv"></div>
+    <div id="profileDiv"></div>
+    <div id="instagramDiv"></div>
+  </div>
+
+  <script>
+    let accessToken = null;
+    let userID = null;
+
+    // Initialize Facebook SDK
+    window.fbAsyncInit = function() {
+      const appId = document.getElementById('appId').value || '4410780369145909';
+
+      FB.init({
+        appId      : appId,
+        cookie     : true,
+        xfbml      : true,
+        version    : 'v18.0'
+      });
+
+      // Check if user is already logged in
+      FB.getLoginStatus(function(response) {
+        statusChangeCallback(response);
+      });
+    };
+
+    // Load Facebook SDK
+    (function(d, s, id){
+      var js, fjs = d.getElementsByTagName(s)[0];
+      if (d.getElementById(id)) return;
+      js = d.createElement(s); js.id = id;
+      js.src = "https://connect.facebook.net/en_US/sdk.js";
+      fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+
+    // Handle login status changes
+    function statusChangeCallback(response) {
+      console.log('Login status:', response);
+
+      if (response.status === 'connected') {
+        accessToken = response.authResponse.accessToken;
+        userID = response.authResponse.userID;
+
+        showStatus('✅ Connected to Facebook!', 'success');
+        document.getElementById('loginBtn').style.display = 'none';
+        document.getElementById('logoutBtn').style.display = 'inline-block';
+
+        // Get user info
+        getFacebookProfile();
+
+        // Get Instagram accounts
+        getInstagramAccounts();
+
+      } else {
+        showStatus('ℹ️ Not logged in. Click the button above to login.', 'info');
+        document.getElementById('loginBtn').style.display = 'inline-block';
+        document.getElementById('logoutBtn').style.display = 'none';
+      }
+    }
+
+    // Login with Facebook and request Instagram permissions
+    function loginWithFacebook() {
+      // Check if we should try Instagram scopes
+      const tryInstagram = confirm(
+        'Do you want to try Instagram permissions?\n\n' +
+        'Click OK to try Instagram scopes (will fail if Instagram product not added)\n' +
+        'Click Cancel for basic Facebook login only'
+      );
+
+      const scopes = tryInstagram
+        ? 'public_profile,email,instagram_basic,pages_show_list'
+        : 'public_profile,email';
+
+      FB.login(function(response) {
+        statusChangeCallback(response);
+      }, {
+        scope: scopes,
+        return_scopes: true
+      });
+    }
+
+    // Logout
+    function logout() {
+      FB.logout(function(response) {
+        accessToken = null;
+        userID = null;
+        document.getElementById('profileDiv').innerHTML = '';
+        document.getElementById('instagramDiv').innerHTML = '';
+        showStatus('👋 Logged out successfully', 'info');
+        statusChangeCallback(response);
+      });
+    }
+
+    // Get Facebook profile
+    function getFacebookProfile() {
+      FB.api('/me', { fields: 'id,name,email' }, function(response) {
+        console.log('Facebook profile:', response);
+
+        const profileHtml = `
+          <div class="status success">
+            <h3>✅ Facebook Profile</h3>
+            <p><strong>Name:</strong> ${response.name}</p>
+            <p><strong>ID:</strong> ${response.id}</p>
+            ${response.email ? `<p><strong>Email:</strong> ${response.email}</p>` : ''}
+          </div>
+        `;
+
+        document.getElementById('profileDiv').innerHTML = profileHtml;
+      });
+    }
+
+    // Get Instagram Business Accounts (with Instagram Login - no Page needed)
+    function getInstagramAccounts() {
+      showInstagramStatus('⏳ Fetching Instagram accounts...', 'info');
+
+      // With Instagram API with Instagram Login, we can access Instagram accounts directly
+      FB.api('/me/accounts', { fields: 'id,name,access_token,instagram_business_account' }, function(response) {
+        console.log('Response from /me/accounts:', response);
+
+        // Also try direct Instagram access if available
+        FB.api('/me', { fields: 'id,name,instagram_business_account' }, function(meResponse) {
+          console.log('Response from /me with instagram_business_account:', meResponse);
+
+          if (meResponse.instagram_business_account) {
+            // User has Instagram Business account linked directly
+            const igAccountId = meResponse.instagram_business_account.id;
+
+            FB.api(`/${igAccountId}`, {
+              fields: 'id,username,name,profile_picture_url,followers_count,follows_count,media_count'
+            }, function(igResponse) {
+              console.log('Instagram account:', igResponse);
+
+              let instagramHtml = '<div class="status success"><h3>✅ Instagram Account Found</h3>';
+              instagramHtml += `
+                <div class="profile">
+                  ${igResponse.profile_picture_url ? `<img src="${igResponse.profile_picture_url}" alt="${igResponse.username}">` : ''}
+                  <div class="profile-info">
+                    <h3>@${igResponse.username}</h3>
+                    ${igResponse.name ? `<p><strong>Name:</strong> ${igResponse.name}</p>` : ''}
+                    <p><strong>ID:</strong> ${igResponse.id}</p>
+                    ${igResponse.followers_count ? `<p><strong>Followers:</strong> ${igResponse.followers_count.toLocaleString()}</p>` : ''}
+                    ${igResponse.media_count ? `<p><strong>Posts:</strong> ${igResponse.media_count}</p>` : ''}
+                  </div>
+                </div>
+                <details style="margin-top: 10px;">
+                  <summary style="cursor: pointer; color: #0095f6;">Show Access Token & Raw Data</summary>
+                  <pre>${JSON.stringify({
+                    instagram_user_id: igResponse.id,
+                    username: igResponse.username,
+                    access_token: accessToken.substring(0, 50) + '...'
+                  }, null, 2)}</pre>
+                </details>
+              `;
+              instagramHtml += '</div>';
+              document.getElementById('instagramDiv').innerHTML = instagramHtml;
+            });
+
+          } else if (response.data && response.data.length > 0) {
+            // Fallback: Check if Pages have Instagram accounts
+            const pagesWithInstagram = response.data.filter(page => page.instagram_business_account);
+
+            if (pagesWithInstagram.length === 0) {
+              showInstagramStatus('❌ No Instagram Business account found. Make sure you have:<br>1. Instagram Professional (Business/Creator) account<br>2. Added "Instagram API with Instagram Login" product to your app<br>3. Requested instagram_business_basic permission', 'error');
+              return;
+            }
+
+            // Show Instagram accounts from Pages
+            let instagramHtml = '<div class="status success"><h3>✅ Instagram Accounts Found (via Pages)</h3>';
+            pagesWithInstagram.forEach((page, index) => {
+              const igAccountId = page.instagram_business_account.id;
+
+              FB.api(`/${igAccountId}`, {
+                fields: 'id,username,name,profile_picture_url,followers_count,follows_count,media_count',
+                access_token: page.access_token
+              }, function(igResponse) {
+                instagramHtml += `
+                  <div class="profile">
+                    ${igResponse.profile_picture_url ? `<img src="${igResponse.profile_picture_url}" alt="${igResponse.username}">` : ''}
+                    <div class="profile-info">
+                      <h3>@${igResponse.username}</h3>
+                      <p><strong>Connected Page:</strong> ${page.name}</p>
+                    </div>
+                  </div>
+                `;
+
+                if (index === pagesWithInstagram.length - 1) {
+                  instagramHtml += '</div>';
+                  document.getElementById('instagramDiv').innerHTML = instagramHtml;
+                }
+              });
+            });
+
+          } else {
+            showInstagramStatus('❌ No Instagram Business account found. Make sure you have:<br>1. Instagram Professional (Business/Creator) account<br>2. Added "Instagram API with Instagram Login" product to your app<br>3. Granted instagram_business_basic permission', 'error');
+          }
+        });
+      });
+    }
+
+    // Helper functions
+    function showStatus(message, type = 'info') {
+      const statusDiv = document.getElementById('statusDiv');
+      statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+    }
+
+    function showInstagramStatus(message, type = 'info') {
+      const instagramDiv = document.getElementById('instagramDiv');
+      instagramDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+    }
+  </script>
+
+  <div style="margin-top: 40px; padding: 20px; background: white; border-radius: 8px;">
+    <h3>📋 Setup Checklist</h3>
+    <ol>
+      <li>
+        <strong>Facebook App Settings:</strong> Add <code id="currentDomain"></code> to:
+        <ul>
+          <li>App Domains (Settings → Basic)</li>
+          <li>Valid OAuth Redirect URIs (Facebook Login → Settings)</li>
+        </ul>
+      </li>
+      <li><strong>Facebook Page:</strong> Create a Facebook Page (if you don't have one)</li>
+      <li><strong>Instagram Account:</strong> Convert to Business/Creator and connect to the Page</li>
+      <li><strong>Permissions:</strong> Request permissions in App Review if needed (for production)</li>
+    </ol>
+
+    <h3>🔗 Useful Links</h3>
+    <ul>
+      <li><a href="https://developers.facebook.com/apps/4410780369145909/settings/basic/" target="_blank">App Settings</a></li>
+      <li><a href="https://developers.facebook.com/apps/4410780369145909/fb-login/settings/" target="_blank">Facebook Login Settings</a></li>
+      <li><a href="https://developers.facebook.com/docs/instagram-api/getting-started" target="_blank">Instagram Graph API Docs</a></li>
+    </ul>
+  </div>
+
+  <script>
+    // Display current domain for setup instructions
+    document.getElementById('currentDomain').textContent = window.location.hostname;
+  </script>
+</body>
+</html>

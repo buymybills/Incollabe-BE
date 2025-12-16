@@ -37,8 +37,6 @@ jobs:
               - 'ecosystem.config.js'
               - 'docker-compose.yml'
               - 'nginx.conf'
-              - 'public/**'
-              - 'deploy.sh'
               - '.env'
               - '.github/workflows/**'
 

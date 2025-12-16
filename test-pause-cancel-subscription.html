@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UPI Autopay - Pause vs Cancel Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 32px;
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .option-card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .option-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+        }
+
+        .pause-card::before {
+            background: linear-gradient(90deg, #4CAF50, #8BC34A);
+        }
+
+        .cancel-card::before {
+            background: linear-gradient(90deg, #f44336, #e91e63);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .card-icon {
+            font-size: 36px;
+        }
+
+        .card-title {
+            flex: 1;
+        }
+
+        .card-title h2 {
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+
+        .card-title .subtitle {
+            font-size: 14px;
+            opacity: 0.6;
+        }
+
+        .badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-recommended {
+            background: #E8F5E9;
+            color: #2E7D32;
+        }
+
+        .badge-warning {
+            background: #FFEBEE;
+            color: #C62828;
+        }
+
+        .feature-list {
+            list-style: none;
+            margin-bottom: 25px;
+        }
+
+        .feature-list li {
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .feature-list li:last-child {
+            border-bottom: none;
+        }
+
+        .feature-icon {
+            font-size: 20px;
+            margin-top: 2px;
+        }
+
+        .use-case {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .use-case-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .use-case-list {
+            list-style: disc;
+            margin-left: 30px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .action-section {
+            margin-top: 25px;
+            padding-top: 25px;
+            border-top: 2px solid #f0f0f0;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-pause {
+            background: linear-gradient(135deg, #4CAF50, #8BC34A);
+            color: white;
+        }
+
+        .btn-pause:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+        }
+
+        .btn-cancel {
+            background: linear-gradient(135deg, #f44336, #e91e63);
+            color: white;
+        }
+
+        .btn-cancel:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(244, 67, 54, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status-section {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .status-item {
+            text-align: center;
+        }
+
+        .status-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            opacity: 0.6;
+            margin-bottom: 8px;
+        }
+
+        .status-value {
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .response-section {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-top: 20px;
+        }
+
+        .response-content {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .error {
+            color: #f44336;
+        }
+
+        .success {
+            color: #4CAF50;
+        }
+
+        .info-banner {
+            background: linear-gradient(135deg, #2196F3, #00BCD4);
+            color: white;
+            padding: 20px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .info-banner h3 {
+            margin-bottom: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .comparison-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Pro Subscription Autopay Management</h1>
+
+        <div class="info-banner">
+            <h3>✨ Smart Subscription Management</h3>
+            <p>Setup autopay with UPI or Card, then manage with Pause/Resume/Cancel. Pause keeps things flexible, Cancel is permanent but compliant.</p>
+        </div>
+
+        <!-- Setup Section -->
+        <div class="status-section">
+            <h3 style="margin-bottom: 20px;">🚀 Setup Autopay</h3>
+            <div class="comparison-grid">
+                <div>
+                    <h4 style="margin-bottom: 10px;">📱 UPI Autopay</h4>
+                    <p style="font-size: 14px; opacity: 0.7; margin-bottom: 15px;">Setup automatic payments via UPI apps (Google Pay, PhonePe, Paytm, etc.)</p>
+                    <button class="btn btn-pause" onclick="setupUpiAutopay()">
+                        <span>📱</span>
+                        <span>Setup UPI Autopay</span>
+                    </button>
+                </div>
+                <div>
+                    <h4 style="margin-bottom: 10px;">💳 Card Autopay</h4>
+                    <p style="font-size: 14px; opacity: 0.7; margin-bottom: 15px;">Setup automatic payments via Credit/Debit cards</p>
+                    <button class="btn btn-pause" onclick="setupCardAutopay()">
+                        <span>💳</span>
+                        <span>Setup Card Autopay</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Subscription Status -->
+        <div class="status-section">
+            <h3 style="margin-bottom: 20px;">📊 Current Subscription Status</h3>
+            <div class="status-grid">
+                <div class="status-item">
+                    <div class="status-label">Status</div>
+                    <div class="status-value" id="currentStatus">-</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Valid Until</div>
+                    <div class="status-value" id="validUntil">-</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Mandate Status</div>
+                    <div class="status-value" id="mandateStatus">-</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Auto Renew</div>
+                    <div class="status-value" id="autoRenew">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Comparison Grid -->
+        <div class="comparison-grid">
+            <!-- PAUSE CARD -->
+            <div class="option-card pause-card">
+                <div class="card-header">
+                    <div class="card-icon">⏸️</div>
+                    <div class="card-title">
+                        <h2>Pause Subscription</h2>
+                        <div class="subtitle">Temporary break, easy restart</div>
+                    </div>
+                    <span class="badge badge-recommended">RECOMMENDED</span>
+                </div>
+
+                <div class="feature-list">
+                    <li>
+                        <span class="feature-icon">✅</span>
+                        <span><strong>Payment mandate stays active</strong> - No fresh approval needed (works for both UPI & Card)</span>
+                    </li>
+                    <li>
+                        <span class="feature-icon">✅</span>
+                        <span><strong>Easy restart</strong> - Just click resume, no authentication</span>
+                    </li>
+                    <li>
+                        <span class="feature-icon">✅</span>
+                        <span><strong>Auto-resume</strong> - Automatically restarts after pause duration</span>
+                    </li>
+                    <li>
+                        <span class="feature-icon">✅</span>
+                        <span><strong>No friction</strong> - Resume in seconds, not minutes</span>
+                    </li>
+                    <li>
+                        <span class="feature-icon">⏱️</span>
+                        <span><strong>Flexible duration</strong> - Choose 1-365 days</span>
+                    </li>
+                </div>
+
+                <div class="use-case">
+                    <div class="use-case-title">
+                        <span>💡</span>
+                        <span>Best for:</span>
+                    </div>
+                    <ul class="use-case-list">
+                        <li>Going on vacation</li>
+                        <li>Short break from content creation</li>
+                        <li>Temporary budget constraints</li>
+                        <li>Testing the waters (try pausing first!)</li>
+                    </ul>
+                </div>
+
+                <div class="action-section">
+                    <h4 style="margin-bottom: 15px;">Pause Your Subscription</h4>
+                    <div class="form-group">
+                        <label for="pauseDuration">Pause Duration (days)</label>
+                        <input type="number" id="pauseDuration" min="1" max="365" value="10" placeholder="Enter days (1-365)">
+                    </div>
+                    <div class="form-group">
+                        <label for="pauseReason">Reason (optional)</label>
+                        <textarea id="pauseReason" placeholder="e.g., Going on vacation"></textarea>
+                    </div>
+                    <button class="btn btn-pause" onclick="pauseSubscription()">
+                        <span>⏸️</span>
+                        <span>Pause Subscription</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- CANCEL CARD -->
+            <div class="option-card cancel-card">
+                <div class="card-header">
+                    <div class="card-icon">❌</div>
+                    <div class="card-title">
+                        <h2>Cancel Autopay</h2>
+                        <div class="subtitle">Permanent, requires fresh approval</div>
+                    </div>
+                    <span class="badge badge-warning">PERMANENT</span>
+                </div>
+
+                <div class="feature-list">
+                    <li>
+                        <span class="feature-icon">⚠️</span>
+                        <span><strong>Payment mandate cancelled</strong> - Complies with RBI regulations (works for both UPI & Card)</span>
+                    </li>
+                    <li>
+                        <span class="feature-icon">⚠️</span>
+                        <span><strong>Fresh approval required</strong> - Must re-authenticate (UPI app or card details)</span>
+                    </li>
+                    <li>
+                        <span class="feature-icon">⚠️</span>
+                        <span><strong>More friction to restart</strong> - Full setup process again</span>
+                    </li>
+                    <li>
+                        <span class="feature-icon">✅</span>
+                        <span><strong>Pro access remains</strong> - Until end of current billing period</span>
+                    </li>
+                    <li>
+                        <span class="feature-icon">🔒</span>
+                        <span><strong>Legally compliant</strong> - Required by law for mandate cancellation</span>
+                    </li>
+                </div>
+
+                <div class="use-case">
+                    <div class="use-case-title">
+                        <span>💡</span>
+                        <span>Best for:</span>
+                    </div>
+                    <ul class="use-case-list">
+                        <li>Permanently stopping subscription</li>
+                        <li>Switching to manual payments</li>
+                        <li>Compliance or security requirements</li>
+                        <li>Absolutely sure you're done (think twice!)</li>
+                    </ul>
+                </div>
+
+                <div class="action-section">
+                    <h4 style="margin-bottom: 15px;">Cancel Autopay</h4>
+                    <div class="form-group">
+                        <label for="cancelReason">Reason (optional)</label>
+                        <textarea id="cancelReason" placeholder="e.g., Switching to manual payment"></textarea>
+                    </div>
+                    <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 15px; font-size: 14px;">
+                        <strong>⚠️ Warning:</strong> This will cancel your UPI mandate. You'll need fresh approval to restart. Consider pausing instead!
+                    </div>
+                    <button class="btn btn-cancel" onclick="cancelAutopay()">
+                        <span>❌</span>
+                        <span>Cancel Autopay</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resume Section (shown when paused) -->
+        <div class="status-section" id="resumeSection" style="display: none;">
+            <h3 style="margin-bottom: 15px;">▶️ Resume Subscription</h3>
+            <p style="margin-bottom: 20px; opacity: 0.7;">Your subscription is currently paused. Resume anytime!</p>
+            <button class="btn btn-pause" onclick="resumeSubscription()" style="max-width: 300px;">
+                <span>▶️</span>
+                <span>Resume Now</span>
+            </button>
+        </div>
+
+        <!-- Response Section -->
+        <div class="response-section">
+            <h3 style="margin-bottom: 15px;">📡 API Response</h3>
+            <div class="response-content" id="response">
+                Waiting for action...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3002/api'; // API uses /api prefix
+        let authToken = ''; // Will be set from login or hardcoded for testing
+
+        // Set your test token here
+        authToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MTUsInByb2ZpbGVDb21wbGV0ZWQiOnRydWUsInVzZXJUeXBlIjoiaW5mbHVlbmNlciIsImlhdCI6MTc2NTE5OTk5NywiZXhwIjoxNzY1ODA0Nzk3LCJqdGkiOiIxM2QwY2I3NC1mZTFjLTQzODItOWFkZC04ZjgzZmMwNDJkZGUifQ.wjD80L1vcrKB6m_KL8-fIg94y4XxWNZlJerFqlJ0D4k';
+
+        // Load subscription status on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            loadSubscriptionStatus();
+        });
+
+        async function loadSubscriptionStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/influencer/pro/subscription`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.subscription) {
+                    document.getElementById('currentStatus').textContent = data.subscription.status;
+                    document.getElementById('validUntil').textContent = new Date(data.subscription.currentPeriodEnd).toLocaleDateString();
+                    document.getElementById('mandateStatus').textContent = data.subscription.mandateStatus || 'N/A';
+                    document.getElementById('autoRenew').textContent = data.subscription.autoRenew ? 'Yes' : 'No';
+
+                    // Show resume section if paused
+                    if (data.subscription.status === 'paused' || data.subscription.isPaused) {
+                        document.getElementById('resumeSection').style.display = 'block';
+                    }
+                } else {
+                    document.getElementById('currentStatus').textContent = 'No subscription';
+                }
+
+                displayResponse(data, 'info');
+            } catch (error) {
+                displayResponse({ error: error.message }, 'error');
+            }
+        }
+
+        async function setupUpiAutopay() {
+            try {
+                const response = await fetch(`${API_BASE}/influencer/pro/setup-upi-autopay`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+                displayResponse(data, response.ok ? 'success' : 'error');
+
+                if (response.ok && data.autopayLink) {
+                    alert('✅ UPI Autopay setup initiated!\n\nOpening UPI autopay link...');
+                    window.open(data.autopayLink, '_blank');
+                    setTimeout(loadSubscriptionStatus, 2000);
+                }
+            } catch (error) {
+                displayResponse({ error: error.message }, 'error');
+            }
+        }
+
+        async function setupCardAutopay() {
+            try {
+                const response = await fetch(`${API_BASE}/influencer/pro/setup-card-autopay`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+                displayResponse(data, response.ok ? 'success' : 'error');
+
+                if (response.ok && data.checkoutUrl) {
+                    alert('✅ Card Autopay setup initiated!\n\nOpening Razorpay checkout page...');
+                    window.open(data.checkoutUrl, '_blank');
+                    setTimeout(loadSubscriptionStatus, 2000);
+                }
+            } catch (error) {
+                displayResponse({ error: error.message }, 'error');
+            }
+        }
+
+        async function pauseSubscription() {
+            const pauseDurationDays = parseInt(document.getElementById('pauseDuration').value);
+            const reason = document.getElementById('pauseReason').value;
+
+            if (!pauseDurationDays || pauseDurationDays < 1 || pauseDurationDays > 365) {
+                alert('Please enter a valid pause duration (1-365 days)');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/influencer/pro/pause`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        pauseDurationDays,
+                        reason: reason || undefined
+                    })
+                });
+
+                const data = await response.json();
+                displayResponse(data, response.ok ? 'success' : 'error');
+
+                if (response.ok) {
+                    setTimeout(loadSubscriptionStatus, 1000);
+                }
+            } catch (error) {
+                displayResponse({ error: error.message }, 'error');
+            }
+        }
+
+        async function resumeSubscription() {
+            try {
+                const response = await fetch(`${API_BASE}/influencer/pro/resume`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+                displayResponse(data, response.ok ? 'success' : 'error');
+
+                if (response.ok) {
+                    setTimeout(loadSubscriptionStatus, 1000);
+                    document.getElementById('resumeSection').style.display = 'none';
+                }
+            } catch (error) {
+                displayResponse({ error: error.message }, 'error');
+            }
+        }
+
+        async function cancelAutopay() {
+            const reason = document.getElementById('cancelReason').value;
+
+            const confirmed = confirm(
+                '⚠️ WARNING: This will cancel your UPI mandate!\n\n' +
+                'You will need fresh approval to restart.\n\n' +
+                'Consider using PAUSE instead for easier restart.\n\n' +
+                'Are you sure you want to cancel?'
+            );
+
+            if (!confirmed) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/influencer/pro/cancel-autopay`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        reason: reason || undefined
+                    })
+                });
+
+                const data = await response.json();
+                displayResponse(data, response.ok ? 'success' : 'error');
+
+                if (response.ok) {
+                    setTimeout(loadSubscriptionStatus, 1000);
+                }
+            } catch (error) {
+                displayResponse({ error: error.message }, 'error');
+            }
+        }
+
+        function displayResponse(data, type) {
+            const responseDiv = document.getElementById('response');
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : '';
+            responseDiv.className = `response-content ${className}`;
+            responseDiv.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+        }
+    </script>
+</body>
+</html>

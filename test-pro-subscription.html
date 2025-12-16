@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Pro Subscription Payment</title>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+</head>
+<body>
+  <h1>Test Pro Subscription Payment</h1>
+
+  <div>
+    <h3>Step 1: Get Order from Backend</h3>
+    <p>Already done! Use the response from your API:</p>
+    <pre id="orderData">{
+  "subscriptionId": 35,
+  "invoiceId": 42,
+  "invoiceNumber": "INV-202512-00001",
+  "orderId": "order_Rn6Ddr66AREkhK",
+  "amount": 19900,
+  "currency": "INR",
+  "keyId": "rzp_test_spyovD2YYBpW4s"
+}</pre>
+
+    <h3>Step 2: Make Payment</h3>
+    <button onclick="makePayment()">Pay Rs 199 with Razorpay</button>
+
+    <h3>Step 3: Verify Payment</h3>
+    <div id="result"></div>
+  </div>
+
+  <script>
+    // UPDATE THESE VALUES: Paste your latest subscription order details here
+    const orderData = {
+      orderId: "order_Rn6Ddr66AREkhK", // From your latest subscription response
+      amount: 19900,
+      currency: "INR",
+      keyId: "rzp_test_spyovD2YYBpW4s",
+      subscriptionId: 35, // Latest subscription ID
+      invoiceId: 42,
+      invoiceNumber: "INV-202512-00001"
+    };
+
+    // UPDATE THIS: Paste your JWT token here (get from login response)
+    const jwtToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NywicHJvZmlsZUNvbXBsZXRlZCI6dHJ1ZSwidXNlclR5cGUiOiJpbmZsdWVuY2VyIiwiaWF0IjoxNzY0NzU1ODkwLCJleHAiOjE3NjUzNjA2OTAsImp0aSI6IjFhZWM1OTg4LTc0NmEtNDcyNS1hYWI5LTU1MDdjMWQ0ODA4MSJ9.9k2DKLuq3TDKuZbeS1tNWPI_Cn_CwpWN1hWtm6fUVRg";
+
+    function makePayment() {
+      const options = {
+        key: orderData.keyId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        order_id: orderData.orderId,
+        name: "CollabKaroo",
+        description: "Pro Subscription - Rs 199/month",
+        image: "https://your-logo-url.com/logo.png",
+        config: {
+          display: {
+            hide: [
+              {
+                method: "paylater"
+              }
+            ],
+            preferences: {
+              show_default_blocks: true
+            }
+          }
+        },
+        handler: function (response) {
+          console.log("Payment Success!", response);
+
+          // Show the response
+          document.getElementById('result').innerHTML = `
+            <h4 style="color: green;">✅ Payment Successful!</h4>
+            <p><strong>Payment ID:</strong> ${response.razorpay_payment_id}</p>
+            <p><strong>Order ID:</strong> ${response.razorpay_order_id}</p>
+            <p><strong>Signature:</strong> ${response.razorpay_signature}</p>
+
+            <h4>Now verify the payment:</h4>
+            <pre>${JSON.stringify({
+              subscriptionId: orderData.subscriptionId,
+              paymentId: response.razorpay_payment_id,
+              orderId: response.razorpay_order_id,
+              signature: response.razorpay_signature
+            }, null, 2)}</pre>
+
+            <button onclick="verifyPayment('${response.razorpay_payment_id}', '${response.razorpay_order_id}', '${response.razorpay_signature}')">
+              Verify Payment Now
+            </button>
+          `;
+        },
+        prefill: {
+          name: "Test User",
+          email: "test@example.com",
+          contact: "9999999999"
+        },
+        theme: {
+          color: "#3399cc"
+        }
+      };
+
+      const rzp = new Razorpay(options);
+
+      rzp.on('payment.failed', function (response) {
+        console.error("Payment Failed", response);
+        document.getElementById('result').innerHTML = `
+          <h4 style="color: red;">❌ Payment Failed</h4>
+          <pre>${JSON.stringify(response.error, null, 2)}</pre>
+        `;
+      });
+
+      rzp.open();
+    }
+
+    async function verifyPayment(paymentId, orderId, signature) {
+      try {
+        document.getElementById('result').innerHTML += '<p>Verifying payment...</p>';
+
+        const response = await fetch('http://localhost:3002/api/influencer/pro/verify-payment', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${jwtToken}`
+          },
+          body: JSON.stringify({
+            subscriptionId: orderData.subscriptionId,
+            paymentId: paymentId,
+            orderId: orderId,
+            signature: signature
+          })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          document.getElementById('result').innerHTML += `
+            <h4 style="color: green;">✅ Payment Verified Successfully!</h4>
+            <pre>${JSON.stringify(result, null, 2)}</pre>
+            <p><strong>You are now a Pro Influencer! 🎉</strong></p>
+          `;
+        } else {
+          document.getElementById('result').innerHTML += `
+            <h4 style="color: red;">❌ Verification Failed</h4>
+            <pre>${JSON.stringify(result, null, 2)}</pre>
+          `;
+        }
+      } catch (error) {
+        document.getElementById('result').innerHTML += `
+          <h4 style="color: red;">❌ Error</h4>
+          <pre>${error.message}</pre>
+        `;
+      }
+    }
+  </script>
+
+  <hr>
+  <h3>💳 Test Card Details</h3>
+  <ul>
+    <li><strong>Card Number:</strong> 4111 1111 1111 1111</li>
+    <li><strong>CVV:</strong> Any 3 digits (e.g., 123)</li>
+    <li><strong>Expiry:</strong> Any future date (e.g., 12/25)</li>
+    <li><strong>Name:</strong> Any name</li>
+  </ul>
+
+  <h3>📝 Instructions</h3>
+  <ol>
+    <li>Open this file in a browser</li>
+    <li>Click "Pay Rs 199 with Razorpay"</li>
+    <li>Use test card: <code>4111 1111 1111 1111</code></li>
+    <li>Complete payment</li>
+    <li>Click "Verify Payment Now" button</li>
+    <li>Check if Pro status is activated!</li>
+  </ol>
+</body>
+</html>
