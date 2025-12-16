@@ -52,7 +52,7 @@ export class ReferralProgramService {
 
     // 1. Total Referral Codes Generated (sum of all invite button clicks)
     const totalReferralCodesResult = await this.influencerModel.findOne({
-      attributes: [[fn('SUM', col('referralInviteClickCount')), 'total']],
+      attributes: [[fn('SUM', col('referral_invite_click_count')), 'total']],
       where: {
         referralCode: {
           [Op.ne]: null,
@@ -64,7 +64,7 @@ export class ReferralProgramService {
     const totalReferralCodes = Number(totalReferralCodesResult?.['total'] || 0);
 
     const lastMonthReferralCodesResult = await this.influencerModel.findOne({
-      attributes: [[fn('SUM', col('referralInviteClickCount')), 'total']],
+      attributes: [[fn('SUM', col('referral_invite_click_count')), 'total']],
       where: {
         referralCode: {
           [Op.ne]: null,
