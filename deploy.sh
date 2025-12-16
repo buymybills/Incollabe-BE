@@ -234,17 +234,22 @@ show_summary() {
 
 # Function to pull latest code from git
 pull_git_changes() {
-    log "Pulling latest code from git..."
+    # Check if we're in a git repository
+    if [ -d ".git" ]; then
+        log "Pulling latest code from git..."
 
-    # Stash any local changes to avoid conflicts
-    git stash
+        # Stash any local changes to avoid conflicts
+        git stash
 
-    # Pull latest changes
-    if git pull origin dev; then
-        log "Git pull completed successfully"
+        # Pull latest changes
+        if git pull origin dev; then
+            log "Git pull completed successfully"
+        else
+            error "Git pull failed"
+            exit 1
+        fi
     else
-        error "Git pull failed"
-        exit 1
+        log "Not a git repository - skipping git pull (CI/CD will handle file sync)"
     fi
 
     # Verify public directory exists
@@ -252,7 +257,7 @@ pull_git_changes() {
         log "Deep linking files found in public/.well-known/"
         ls -la public/.well-known/
     else
-        warn "public/.well-known/ directory not found"
+        warn "public/.well-known/ directory not found - deep linking may not work"
     fi
 }
 
