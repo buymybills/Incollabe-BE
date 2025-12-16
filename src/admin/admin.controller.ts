@@ -121,6 +121,7 @@ import { UpdateDisplayOrderDto } from './dto/update-display-order.dto';
 import { AuditLogService } from './services/audit-log.service';
 import { ReferralProgramService } from './services/referral-program.service';
 import { MaxxSubscriptionAdminService } from './services/maxx-subscription-admin.service';
+import { MaxSubscriptionBrandService } from './services/max-subscription-brand.service';
 import { SupportTicketService } from '../shared/support-ticket.service';
 import { CreateSupportTicketDto } from '../shared/dto/create-support-ticket.dto';
 import { GetSupportTicketsDto } from '../shared/dto/get-support-tickets.dto';
@@ -148,6 +149,11 @@ import {
   CancelSubscriptionDto,
   SubscriptionActionResponseDto,
 } from './dto/maxx-subscription.dto';
+import {
+  MaxSubscriptionBrandStatisticsDto,
+  GetMaxPurchasesDto,
+  MaxPurchasesResponseDto,
+} from './dto/max-subscription-brand.dto';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -161,6 +167,7 @@ export class AdminController {
     private readonly dashboardStatsService: DashboardStatsService,
     private readonly referralProgramService: ReferralProgramService,
     private readonly maxxSubscriptionAdminService: MaxxSubscriptionAdminService,
+    private readonly maxSubscriptionBrandService: MaxSubscriptionBrandService,
     private readonly brandService: BrandService,
     private readonly influencerService: InfluencerService,
     private readonly postService: PostService,
@@ -2299,6 +2306,50 @@ export class AdminController {
     @Body() dto: CancelSubscriptionDto,
   ) {
     return await this.maxxSubscriptionAdminService.cancelSubscription(id, dto);
+  }
+
+  // ============================================
+  // MAX SUBSCRIPTION - BRAND
+  // ============================================
+
+  @Get('max-subscription-brand/statistics')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get Max Campaign Brand statistics',
+    description:
+      'Get comprehensive statistics for brand Max Campaign purchases including total profiles, active/inactive campaigns, and cancelled subscriptions with month-over-month growth percentages',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Max subscription brand statistics retrieved successfully',
+    type: MaxSubscriptionBrandStatisticsDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getMaxSubscriptionBrandStatistics() {
+    return await this.maxSubscriptionBrandService.getStatistics();
+  }
+
+  @Get('max-subscription-brand/purchases')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get list of Max Campaign purchases by brands',
+    description:
+      'Get paginated list of Max Campaign purchases with filters for purchase type (Invite Campaign vs Maxx Campaign), status, search, and date range. Supports sorting by date or amount.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Max campaign purchases retrieved successfully',
+    type: MaxPurchasesResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getMaxPurchases(@Query() filters: GetMaxPurchasesDto) {
+    return await this.maxSubscriptionBrandService.getMaxPurchases(filters);
   }
 
   // ============================================

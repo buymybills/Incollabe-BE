@@ -71,10 +71,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       timestamp: new Date().toISOString(),
       path: request.url,
       method: request.method,
-      message: status >= 500 ? 'Internal server error' : message,
+      message: message, // Always show actual error message
       ...(process.env.NODE_ENV !== 'production' &&
         status >= 500 && {
-          error: message,
           stack: stack?.split('\n'),
         }),
       requestId: request.requestId,
