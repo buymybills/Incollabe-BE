@@ -50,16 +50,21 @@ export class ReferralProgramService {
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
 
-    // 1. Total Referral Codes Generated (influencers with referral codes)
-    const totalReferralCodes = await this.influencerModel.count({
+    // 1. Total Referral Codes Generated (sum of all invite button clicks)
+    const totalReferralCodesResult = await this.influencerModel.findOne({
+      attributes: [[fn('SUM', col('referralInviteClickCount')), 'total']],
       where: {
         referralCode: {
           [Op.ne]: null,
         },
       },
+      raw: true,
     });
 
-    const lastMonthReferralCodes = await this.influencerModel.count({
+    const totalReferralCodes = Number(totalReferralCodesResult?.['total'] || 0);
+
+    const lastMonthReferralCodesResult = await this.influencerModel.findOne({
+      attributes: [[fn('SUM', col('referralInviteClickCount')), 'total']],
       where: {
         referralCode: {
           [Op.ne]: null,
@@ -68,7 +73,10 @@ export class ReferralProgramService {
           [Op.lt]: currentMonthStart,
         },
       },
+      raw: true,
     });
+
+    const lastMonthReferralCodes = Number(lastMonthReferralCodesResult?.['total'] || 0);
 
     const referralCodesGrowth = this.calculateGrowth(
       totalReferralCodes,
@@ -91,15 +99,13 @@ export class ReferralProgramService {
       lastMonthAccountsWithReferral,
     );
 
-    // 3. Amount Spent in Referral (total paid/processing transactions)
+    // 3. Amount Spent in Referral (total paid transactions only)
     // Exclude consolidated redemption transactions to prevent double-counting
     const amountSpentResult = await this.creditTransactionModel.findOne({
       attributes: [[fn('SUM', col('amount')), 'total']],
       where: {
         transactionType: 'referral_bonus',
-        paymentStatus: {
-          [Op.in]: ['paid', 'processing'],
-        },
+        paymentStatus: 'paid',
         description: {
           [Op.notLike]: 'Redemption request%',
         },
@@ -113,9 +119,7 @@ export class ReferralProgramService {
       attributes: [[fn('SUM', col('amount')), 'total']],
       where: {
         transactionType: 'referral_bonus',
-        paymentStatus: {
-          [Op.in]: ['paid', 'processing'],
-        },
+        paymentStatus: 'paid',
         description: {
           [Op.notLike]: 'Redemption request%',
         },
@@ -368,29 +372,24 @@ export class ReferralProgramService {
       attributes: [
         'influencerId',
         [
-          fn(
-            'SUM',
-            literal(
-              `CASE WHEN "paymentStatus" IN ('paid', 'processing') THEN amount ELSE 0 END`,
-            ),
-          ),
-          'totalEarnings',
-        ],
-        [
-          fn(
-            'SUM',
-            literal(`CASE WHEN "paymentStatus" = 'paid' THEN amount ELSE 0 END`),
-          ),
-          'redeemed',
+          fn('SUM', col('amount')),
+          'totalEarnings', // All transactions (pending + processing + paid)
         ],
         [
           fn(
             'SUM',
             literal(
-              `CASE WHEN "paymentStatus" IN ('pending', 'processing') THEN amount ELSE 0 END`,
+              `CASE WHEN "paymentStatus" IN ('processing', 'paid') THEN amount ELSE 0 END`,
             ),
           ),
-          'pending',
+          'redeemed', // Amounts that have been redeemed (processing + paid)
+        ],
+        [
+          fn(
+            'SUM',
+            literal(`CASE WHEN "paymentStatus" = 'pending' THEN amount ELSE 0 END`),
+          ),
+          'pending', // Only pending amounts (not yet redeemed)
         ],
       ],
       where: {
