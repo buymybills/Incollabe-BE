@@ -137,12 +137,13 @@ export class ReferralProgramService {
       lastMonthAmountSpent,
     );
 
-    // 4. Redeem Requests Raised (pending + processing transactions)
+    // 4. Redeem Requests Raised (only consolidated redemption transactions awaiting approval)
     const redeemRequests = await this.creditTransactionModel.count({
       where: {
         transactionType: 'referral_bonus',
-        paymentStatus: {
-          [Op.in]: ['pending', 'processing'],
+        paymentStatus: 'processing',
+        description: {
+          [Op.like]: 'Redemption request%',
         },
       },
     });
