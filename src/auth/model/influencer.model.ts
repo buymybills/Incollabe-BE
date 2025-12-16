@@ -52,9 +52,13 @@ export class Influencer extends Model {
   @Unique
   @Column(DataType.STRING)
   declare referralCode: string;
+
+  @AllowNull(true)
+  @Column({ type: DataType.INTEGER, defaultValue: 0, field: 'referral_invite_click_count' })
+  declare referralInviteClickCount: number;
   @PrimaryKey
   @AutoIncrement
-  @Column(DataType.INTEGER)
+  @Column(DataType.INTEGER) 
   declare id: number;
 
   @AllowNull(false)

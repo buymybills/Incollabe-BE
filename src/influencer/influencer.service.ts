@@ -2251,30 +2251,30 @@ export class InfluencerService {
     };
   }
 
-  // async trackReferralInviteClick(influencerId: number) {
-  //   // Verify influencer exists
-  //   const influencer = await this.influencerRepository.findById(influencerId);
-  //   if (!influencer) {
-  //     throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
-  //   }
+  async trackReferralInviteClick(influencerId: number) {
+    // Verify influencer exists
+    const influencer = await this.influencerRepository.findById(influencerId);
+    if (!influencer) {
+      throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
+    }
 
-  //   // Increment the click count atomically
-  //   await Influencer.increment('referralInviteClickCount', {
-  //     where: { id: influencerId },
-  //   });
+    // Increment the click count atomically
+    await Influencer.increment('referralInviteClickCount', {
+      where: { id: influencerId },
+    });
 
-  //   // Fetch the updated count
-  //   const updated = await this.influencerRepository.findById(influencerId);
-  //   if (!updated) {
-  //     throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
-  //   }
+    // Fetch the updated count
+    const updated = await this.influencerRepository.findById(influencerId);
+    if (!updated) {
+      throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
+    }
 
-  //   return {
-  //     success: true,
-  //     message: 'Invite click tracked successfully',
-  //     totalClicks: updated.referralInviteClickCount || 0,
-  //   };
-  // }
+    return {
+      success: true,
+      message: 'Invite click tracked successfully',
+      totalClicks: updated.referralInviteClickCount || 0,
+    };
+  }
 
   async redeemRewards(influencerId: number, upiIdRecordId?: number) {
     // Get influencer
@@ -2310,6 +2310,11 @@ export class InfluencerService {
     }
 
     const finalUpiId = selectedUpiRecord.upiId;
+    console.log('🔍 DEBUG - UPI ID selected for redemption:', {
+      selectedUpiRecordId: selectedUpiRecord.id,
+      finalUpiId,
+      influencerId,
+    });
 
     // Get all pending (earned but not redeemed) transactions
     const pendingTransactions = await this.creditTransactionModel.findAll({
@@ -2345,6 +2350,13 @@ export class InfluencerService {
     );
 
     // Create ONE consolidated redemption request transaction
+    console.log('🔍 DEBUG - Creating redemption transaction with:', {
+      influencerId,
+      amount: totalAmount,
+      upiId: finalUpiId,
+      transactionIds,
+    });
+
     const redemptionTransaction = await this.creditTransactionModel.create({
       influencerId,
       transactionType: 'referral_bonus',
@@ -2352,6 +2364,11 @@ export class InfluencerService {
       paymentStatus: 'processing', // Waiting for admin to process
       upiId: finalUpiId,
       description: `Redemption request for ${transactionIds.length} referral bonuses (IDs: ${transactionIds.join(', ')})`,
+    });
+
+    console.log('🔍 DEBUG - Created redemption transaction:', {
+      id: redemptionTransaction.id,
+      upiId: redemptionTransaction.upiId,
     });
 
     // Update the UPI ID's lastUsedAt timestamp

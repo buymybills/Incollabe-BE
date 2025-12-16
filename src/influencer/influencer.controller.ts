@@ -1556,6 +1556,32 @@ export class InfluencerController {
     return await this.influencerService.getReferralRewards(influencerId, page, limit);
   }
 
+  @Post('referral/track-invite-click')
+  @ApiOperation({
+    summary: 'Track "Invite Friend for referral" button click',
+    description:
+      'Increment the counter when influencer clicks the "Invite Friend for referral" button. This helps track referral engagement.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Click tracked successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Invite click tracked successfully',
+        totalClicks: 5,
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Influencer not found' })
+  async trackReferralInviteClick(@Req() req: RequestWithUser) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can track referral clicks');
+    }
+    const influencerId = req.user.id;
+    return await this.influencerService.trackReferralInviteClick(influencerId);
+  }
+
   // ==================== DEPRECATED: Use POST upi-ids/:upiIdRecordId/redeem-rewards instead ====================
   // @Post('redeem-rewards')
   // @ApiBearerAuth()

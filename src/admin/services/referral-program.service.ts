@@ -227,7 +227,7 @@ export class ReferralProgramService {
         referralCode: { [Op.in]: referrerCodes },
       },
       attributes: ['id', 'username', 'referralCode', 
-        //'referralInviteClickCount'
+        'referralInviteClickCount'
       ],
     });
 
@@ -251,7 +251,7 @@ export class ReferralProgramService {
           profileStatus: referredUser.isVerified ? 'verified' : 'unverified',
           referredBy: referrer?.username || 'N/A',
           referralCode: usage.referralCode,
-          //referrerInviteClickCount: referrer?.referralInviteClickCount || 0,
+          referrerInviteClickCount: referrer?.referralInviteClickCount || 0,
           referralDate: usage.createdAt,
           profileImage: referredUser.profileImage,
         };
@@ -286,31 +286,31 @@ export class ReferralProgramService {
     const offset = (page - 1) * limit;
 
     // First, get all unique referral codes that have been used
-    // const usedReferralCodes = await this.referralUsageModel.findAll({
-    //   attributes: [[fn('DISTINCT', col('referralCode')), 'referralCode']],
-    //   raw: true,
-    // });
+    const usedReferralCodes = await this.referralUsageModel.findAll({
+      attributes: [[fn('DISTINCT', col('referralCode')), 'referralCode']],
+      raw: true,
+    });
 
-    // const usedCodes = usedReferralCodes.map((r: any) => r.referralCode).filter(Boolean);
+    const usedCodes = usedReferralCodes.map((r: any) => r.referralCode).filter(Boolean);
 
-    // if (usedCodes.length === 0) {
-    //   // No referrals yet, return empty result
-    //   return {
-    //     data: [],
-    //     pagination: {
-    //       page,
-    //       limit,
-    //       total: 0,
-    //       totalPages: 0,
-    //     },
-    //   };
-    // }
+    if (usedCodes.length === 0) {
+      // No referrals yet, return empty result
+      return {
+        data: [],
+        pagination: {
+          page,
+          limit,
+          total: 0,
+          totalPages: 0,
+        },
+      };
+    }
 
     // Build where clause for influencers whose referral codes have been used
     const whereClause: any = {
       referralCode: {
-        [Op.ne]: null,
-        // [Op.in]: usedCodes,
+        //[Op.ne]: null,
+        [Op.in]: usedCodes,
       },
     };
 
@@ -426,8 +426,7 @@ export class ReferralProgramService {
         profileStatus: influencer.isVerified ? 'verified' : 'unverified',
         referralCode: influencer.referralCode || '',
         totalReferrals,
-        inviteClickCount: 0,
-        // influencer.referralInviteClickCount || 0,
+        inviteClickCount: influencer.referralInviteClickCount || 0,
         totalEarnings: earnings.totalEarnings,
         redeemed: earnings.redeemed,
         pending: earnings.pending,

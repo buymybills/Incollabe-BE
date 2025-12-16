@@ -149,6 +149,12 @@ export class NewAccountWithReferralItemDto {
   referralCode: string;
 
   @ApiProperty({
+    example: 15,
+    description: 'Number of times referrer clicked "Invite Friend" button',
+  })
+  referrerInviteClickCount: number;
+
+  @ApiProperty({
     example: '2025-10-02T12:28:00.000Z',
     description: 'Account creation date',
   })
@@ -267,6 +273,12 @@ export class AccountReferrerItemDto {
 
   @ApiProperty({ example: 25, description: 'Total number of successful referrals' })
   totalReferrals: number;
+
+  @ApiProperty({
+    example: 42,
+    description: 'Number of times clicked "Invite Friend" button',
+  })
+  inviteClickCount: number;
 
   @ApiProperty({
     example: 2500,
