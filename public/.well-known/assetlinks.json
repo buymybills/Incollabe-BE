@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.collabkaroo",
+      "sha256_cert_fingerprints": [
+        "58:AB:30:77:C6:32:5B:73:23:84:FD:F8:83:8D:3D:10:28:8C:6A:C9:C1:2D:DA:59:A6:BF:97:EE:C8:5D:D4:BD",
+        "B0:07:D4:03:C4:51:21:93:50:4E:C3:C8:1B:0D:52:3B:B3:84:80:B0:EB:1D:CB:81:CB:FA:29:BA:06:EC:0E:12"
+      ]
+    }
+  }
+]
