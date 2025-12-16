@@ -12,9 +12,14 @@ import { City } from '../shared/models/city.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Niche } from '../auth/model/niche.model';
 import { Brand } from '../brand/model/brand.model';
+// REMOVED: Models only needed for early selection bonus feature (now disabled)
+// import { CreditTransaction } from '../admin/models/credit-transaction.model';
+// import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
 import { SharedModule } from '../shared/shared.module';
 import { Follow } from '../post/models/follow.model';
 import { Experience } from '../influencer/models/experience.model';
+import { MaxCampaignPaymentService } from './services/max-campaign-payment.service';
+import { MaxCampaignInvoice } from './models/max-campaign-invoice.model';
 
 @Module({
   imports: [
@@ -28,13 +33,17 @@ import { Experience } from '../influencer/models/experience.model';
       Brand,
       Influencer,
       Niche,
+      // REMOVED: Models only needed for early selection bonus feature (now disabled)
+      // CreditTransaction,
+      // InfluencerReferralUsage,
       Follow,
       Experience,
+      MaxCampaignInvoice,
     ]),
     SharedModule,
   ],
   controllers: [CampaignController],
-  providers: [CampaignService, CampaignQueryService],
-  exports: [CampaignService],
+  providers: [CampaignService, CampaignQueryService, MaxCampaignPaymentService],
+  exports: [CampaignService, MaxCampaignPaymentService],
 })
 export class CampaignModule {}

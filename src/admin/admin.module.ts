@@ -11,15 +11,22 @@ import { AIScoringService } from './services/ai-scoring.service';
 import { InfluencerScoringService } from './services/influencer-scoring.service';
 import { DashboardStatsService } from './services/dashboard-stats.service';
 import { PushNotificationService } from './services/push-notification.service';
+import { NotificationSchedulerService } from './services/notification-scheduler.service';
 import { AuditLogService } from './services/audit-log.service';
+import { ReferralProgramService } from './services/referral-program.service';
+import { MaxxSubscriptionAdminService } from './services/maxx-subscription-admin.service';
+import { MaxSubscriptionBrandService } from './services/max-subscription-brand.service';
 
 import { Admin } from './models/admin.model';
 import { ProfileReview } from './models/profile-review.model';
 import { PushNotification } from './models/push-notification.model';
+import { DeepLink } from './models/deep-link.model';
 import { AuditLog } from './models/audit-log.model';
+import { CreditTransaction } from './models/credit-transaction.model';
 import { Brand } from '../brand/model/brand.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { InfluencerNiche } from '../auth/model/influencer-niche.model';
+import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
 import { Niche } from '../auth/model/niche.model';
 import { Country } from '../shared/models/country.model';
 import { City } from '../shared/models/city.model';
@@ -31,11 +38,16 @@ import { CampaignDeliverable } from '../campaign/models/campaign-deliverable.mod
 import { Experience } from '../influencer/models/experience.model';
 import { Follow } from '../post/models/follow.model';
 import { Post } from '../post/models/post.model';
+import { ProSubscription } from '../influencer/models/pro-subscription.model';
+import { ProInvoice } from '../influencer/models/pro-invoice.model';
+import { MaxCampaignInvoice } from '../campaign/models/max-campaign-invoice.model';
 
 import { SharedModule } from '../shared/shared.module';
 import { BrandModule } from '../brand/brand.module';
 import { InfluencerModule } from '../influencer/influencer.module';
 import { PostModule } from '../post/post.module';
+import { AuthModule } from '../auth/auth.module';
+import { CampaignModule } from '../campaign/campaign.module';
 
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
@@ -46,10 +58,13 @@ import { RolesGuard } from './guards/roles.guard';
       Admin,
       ProfileReview,
       PushNotification,
+      DeepLink,
       AuditLog,
+      CreditTransaction,
       Brand,
       Influencer,
       InfluencerNiche,
+      InfluencerReferralUsage,
       Niche,
       Country,
       City,
@@ -61,11 +76,16 @@ import { RolesGuard } from './guards/roles.guard';
       Experience,
       Follow,
       Post,
+      ProSubscription,
+      ProInvoice,
+      MaxCampaignInvoice,
     ]),
     SharedModule,
     forwardRef(() => BrandModule),
     forwardRef(() => InfluencerModule),
     PostModule,
+    forwardRef(() => AuthModule),
+    forwardRef(() => CampaignModule),
   ],
   controllers: [AdminController, PushNotificationController],
   providers: [
@@ -77,7 +97,11 @@ import { RolesGuard } from './guards/roles.guard';
     InfluencerScoringService,
     DashboardStatsService,
     PushNotificationService,
+    NotificationSchedulerService,
     AuditLogService,
+    ReferralProgramService,
+    MaxxSubscriptionAdminService,
+    MaxSubscriptionBrandService,
     AdminAuthGuard,
     RolesGuard,
   ],

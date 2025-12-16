@@ -6,6 +6,7 @@ import { WhatsAppService } from '../shared/whatsapp.service';
 import { OtpService } from '../shared/services/otp.service';
 import { CustomNicheService } from '../shared/services/custom-niche.service';
 import { NotificationService } from '../shared/notification.service';
+import { DeviceTokenService } from '../shared/device-token.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import {
   ProfileReview,
@@ -92,6 +93,13 @@ const mockAdminModel = {
 
 const mockNotificationService = {
   sendNewApplicationNotification: jest.fn(),
+};
+
+const mockDeviceTokenService = {
+  getAllUserTokens: jest.fn().mockResolvedValue(['mock-token-1', 'mock-token-2']),
+  addOrUpdateDeviceToken: jest.fn(),
+  removeDeviceToken: jest.fn(),
+  getUserDevices: jest.fn(),
 };
 
 describe('InfluencerService', () => {
@@ -215,6 +223,37 @@ describe('InfluencerService', () => {
         {
           provide: NotificationService,
           useValue: mockNotificationService,
+        },
+        {
+          provide: DeviceTokenService,
+          useValue: mockDeviceTokenService,
+        },
+        {
+          provide: 'CREDIT_TRANSACTION_MODEL',
+          useValue: {
+            findAll: jest.fn().mockResolvedValue([]),
+            findOne: jest.fn(),
+            create: jest.fn(),
+          },
+        },
+        {
+          provide: 'INFLUENCER_REFERRAL_USAGE_MODEL',
+          useValue: {
+            findAll: jest.fn().mockResolvedValue([]),
+            findOne: jest.fn(),
+            findAndCountAll: jest.fn().mockResolvedValue({ count: 0, rows: [] }),
+            count: jest.fn().mockResolvedValue(0),
+          },
+        },
+        {
+          provide: 'INFLUENCER_UPI_MODEL',
+          useValue: {
+            findAll: jest.fn().mockResolvedValue([]),
+            findOne: jest.fn(),
+            create: jest.fn(),
+            update: jest.fn(),
+            count: jest.fn().mockResolvedValue(0),
+          },
         },
       ],
     }).compile();

@@ -32,6 +32,9 @@ import { EncryptionService } from '../../shared/services/encryption.service';
   paranoid: true,
 })
 export class Influencer extends Model {
+  @AllowNull(true)
+  @Column(DataType.INTEGER)
+  declare referralCredits: number;
 
   // Weekly Credits System
   @AllowNull(true)
@@ -42,9 +45,20 @@ export class Influencer extends Model {
   @Column({ type: DataType.DATE, field: 'weekly_credits_reset_date' })
   declare weeklyCreditsResetDate: Date;
 
+  @AllowNull(true)
+  @Column(DataType.STRING)
+  declare upiId: string;
+  @AllowNull(true)
+  @Unique
+  @Column(DataType.STRING)
+  declare referralCode: string;
+
+  @AllowNull(true)
+  @Column({ type: DataType.INTEGER, defaultValue: 0, field: 'referral_invite_click_count' })
+  declare referralInviteClickCount: number;
   @PrimaryKey
   @AutoIncrement
-  @Column(DataType.INTEGER)
+  @Column(DataType.INTEGER) 
   declare id: number;
 
   @AllowNull(false)
@@ -148,6 +162,55 @@ export class Influencer extends Model {
   @Column(DataType.STRING)
   declare instagramUrl: string;
 
+  // Instagram OAuth Integration
+  @AllowNull(true)
+  @Column({ type: DataType.TEXT, field: 'instagram_access_token' })
+  declare instagramAccessToken: string;
+
+  @AllowNull(true)
+  @Column({ type: DataType.STRING, field: 'instagram_user_id' })
+  declare instagramUserId: string;
+
+  @AllowNull(true)
+  @Column({ type: DataType.STRING, field: 'instagram_username' })
+  declare instagramUsername: string;
+
+  @AllowNull(true)
+  @Column({ type: DataType.STRING, field: 'instagram_account_type' })
+  declare instagramAccountType: string;
+
+  @AllowNull(true)
+  @Column({ type: DataType.INTEGER, field: 'instagram_followers_count' })
+  declare instagramFollowersCount: number;
+
+  @AllowNull(true)
+  @Column({ type: DataType.INTEGER, field: 'instagram_follows_count' })
+  declare instagramFollowsCount: number;
+
+  @AllowNull(true)
+  @Column({ type: DataType.INTEGER, field: 'instagram_media_count' })
+  declare instagramMediaCount: number;
+
+  @AllowNull(true)
+  @Column({ type: DataType.TEXT, field: 'instagram_profile_picture_url' })
+  declare instagramProfilePictureUrl: string;
+
+  @AllowNull(true)
+  @Column({ type: DataType.TEXT, field: 'instagram_bio' })
+  declare instagramBio: string;
+
+  @AllowNull(true)
+  @Column({ type: DataType.DATE, field: 'instagram_token_expires_at' })
+  declare instagramTokenExpiresAt: Date;
+
+  @AllowNull(true)
+  @Column({ type: DataType.DATE, field: 'instagram_connected_at' })
+  declare instagramConnectedAt: Date;
+
+  @AllowNull(true)
+  @Column({ type: DataType.STRING, field: 'instagram_access_token_hash' })
+  declare instagramAccessTokenHash: string;
+
   @AllowNull(true)
   @Column(DataType.STRING)
   declare youtubeUrl: string;
@@ -198,6 +261,10 @@ export class Influencer extends Model {
   })
   declare isVerified: boolean;
 
+  @AllowNull(true)
+  @Column(DataType.DATE)
+  declare verifiedAt: Date;
+
   @AllowNull(false)
   @Column({
     type: DataType.BOOLEAN,
@@ -208,6 +275,22 @@ export class Influencer extends Model {
   @AllowNull(true)
   @Column(DataType.INTEGER)
   declare displayOrder: number;
+
+  // Pro Account Fields
+  @AllowNull(true)
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+  })
+  declare isPro: boolean;
+
+  @AllowNull(true)
+  @Column(DataType.DATE)
+  declare proActivatedAt: Date;
+
+  @AllowNull(true)
+  @Column(DataType.DATE)
+  declare proExpiresAt: Date;
 
   @AllowNull(true)
   @Column(DataType.DATE)
@@ -269,6 +352,21 @@ export class Influencer extends Model {
         );
       }
     }
+
+    // Encrypt instagramAccessToken if it's been modified and not already encrypted
+    if (instance.changed('instagramAccessToken') && instance.instagramAccessToken) {
+      if (!instance.instagramAccessToken.includes(':')) {
+        const crypto = require('crypto');
+        // Create hash for searching
+        instance.instagramAccessTokenHash = crypto
+          .createHash('sha256')
+          .update(instance.instagramAccessToken)
+          .digest('hex');
+        instance.instagramAccessToken = encryptionService.encrypt(
+          instance.instagramAccessToken,
+        );
+      }
+    }
   }
 
   @AfterFind
@@ -288,6 +386,11 @@ export class Influencer extends Model {
       if (instance.whatsappNumber) {
         instance.whatsappNumber = encryptionService.decrypt(
           instance.whatsappNumber,
+        );
+      }
+      if (instance.instagramAccessToken) {
+        instance.instagramAccessToken = encryptionService.decrypt(
+          instance.instagramAccessToken,
         );
       }
     };

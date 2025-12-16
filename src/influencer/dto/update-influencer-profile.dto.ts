@@ -49,6 +49,10 @@ export class UpdateInfluencerProfileDto {
   })
   whatsappNumber?: string;
 
+  // REMOVED: UPI ID is now managed via dedicated UPI management APIs
+  // Use POST /api/influencer/upi-ids to add UPI IDs
+  // Use PUT /api/influencer/upi-ids/select to select UPI for redemption
+
   @ApiProperty({ description: 'Instagram profile URL', required: false })
   @IsOptional()
   @Transform(({ value }) => {

@@ -43,6 +43,20 @@ import type { RequestWithUser } from '../types/request.types';
 import { SupportTicketService } from '../shared/support-ticket.service';
 import { CreateSupportTicketDto } from '../shared/dto/create-support-ticket.dto';
 import { UserType } from '../shared/models/support-ticket.model';
+import { ProSubscriptionService } from './services/pro-subscription.service';
+import {
+  VerifySubscriptionPaymentDto,
+  CancelSubscriptionDto,
+} from './dto/pro-subscription.dto';
+import { RedeemRewardsDto, RedeemRewardsResponseDto } from './dto/redeem-rewards.dto';
+import {
+  AddUpiIdDto,
+  SelectUpiIdDto,
+  GetUpiIdsResponseDto,
+  SelectAndRedeemDto,
+} from './dto/upi-management.dto';
+import { RazorpayService } from '../shared/razorpay.service';
+import { ConfigService } from '@nestjs/config';
 
 @ApiTags('Influencer Profile')
 @Controller('influencer')
@@ -52,6 +66,9 @@ export class InfluencerController {
   constructor(
     private readonly influencerService: InfluencerService,
     private readonly supportTicketService: SupportTicketService,
+    private readonly proSubscriptionService: ProSubscriptionService,
+    private readonly razorpayService: RazorpayService,
+    private readonly configService: ConfigService,
   ) {}
 
   @Get('profile')
@@ -70,13 +87,9 @@ export class InfluencerController {
     description: 'Forbidden - Only influencers can access this endpoint',
   })
   async getInfluencerProfile(@Req() req: RequestWithUser) {
-    if (req.user.userType !== 'influencer') {
-      throw new BadRequestException(
-        'Only influencers can access this endpoint',
-      );
-    }
     const influencerId = req.user.id;
-    return await this.influencerService.getInfluencerProfile(influencerId);
+    const userType = req.user.userType;
+    return await this.influencerService.getInfluencerProfile(influencerId, false, influencerId, userType);
   }
 
   @Put('profile')
@@ -122,6 +135,18 @@ export class InfluencerController {
         whatsappNumber: {
           type: 'string',
           description: 'WhatsApp number for verification',
+        },
+        upiId: {
+          type: 'string',
+          description: 'UPI ID for receiving referral credits',
+          example: 'username@paytm',
+        },
+
+        // Push Notifications
+        fcmToken: {
+          type: 'string',
+          description: 'Firebase Cloud Messaging token for push notifications',
+          example: 'dxyz123abc...',
         },
 
         // Niches
@@ -226,6 +251,8 @@ export class InfluencerController {
         countryId: '1',
         cityId: '3',
         whatsappNumber: '9870541151',
+        upiId: 'username@paytm',
+        fcmToken: 'dxyz123abc456def789ghi...',
         nicheIds: '[1,4,12]',
         customNiches: '["Sustainable Fashion","Tech Reviews"]',
         instagramUrl: 'https://www.instagram.com/bharti.1',
@@ -290,13 +317,6 @@ export class InfluencerController {
     @Body() updateData: UpdateInfluencerProfileDto,
     @UploadedFiles() files: any,
   ) {
-    // Check if user is an influencer
-    if (req.user.userType !== 'influencer') {
-      throw new BadRequestException(
-        'Only influencers can update influencer profiles',
-      );
-    }
-
     // Validate file sizes - 5MB for profile image and banner
     const maxImageSize = 5 * 1024 * 1024; // 5MB
 
@@ -312,10 +332,12 @@ export class InfluencerController {
     }
 
     const influencerId = req.user.id;
+    const userType = req.user.userType;
     return await this.influencerService.updateInfluencerProfile(
       influencerId,
       updateData,
       files,
+      userType,
     );
   }
 
@@ -925,5 +947,770 @@ export class InfluencerController {
   async getMySupportTickets(@Req() req: RequestWithUser) {
     const userId = req.user.id;
     return this.supportTicketService.getMyTickets(userId, UserType.INFLUENCER);
+  }
+
+  // Pro Subscription Endpoints
+
+  // Test Razorpay connection
+  @Get('pro/test-razorpay')
+  @ApiOperation({
+    summary: '[TEST] Test Razorpay connection',
+    description: 'Test if Razorpay credentials are working',
+  })
+  async testRazorpayConnection() {
+    try {
+      // Try to fetch any existing plan to test connection
+      const testPlanId = 'plan_test123'; // This will fail but show if API is working
+      const result = await this.razorpayService.getPlan(testPlanId);
+
+      return {
+        credentialsValid: true,
+        message: 'Razorpay connection is working (plan not found is expected)',
+        testResult: result,
+        keyId: process.env.RAZORPAY_KEY_ID,
+      };
+    } catch (error) {
+      return {
+        credentialsValid: false,
+        message: 'Razorpay connection test',
+        error: error.message,
+        keyId: process.env.RAZORPAY_KEY_ID,
+        hint: 'Check RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET',
+      };
+    }
+  }
+
+  // One-time setup endpoint to create Razorpay plan
+  @Post('pro/setup-plan')
+  @ApiOperation({
+    summary: '[ADMIN ONLY] Create Razorpay subscription plan',
+    description: 'One-time setup to create the Razorpay plan for Pro subscriptions. Run this once to get the RAZORPAY_PLAN_ID.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Plan created successfully',
+    schema: {
+      example: {
+        success: true,
+        planId: 'plan_NXXXxxxxxxxxxxxx',
+        message: 'Add this Plan ID to your .env file as RAZORPAY_PRO_PLAN_ID',
+        planDetails: {
+          id: 'plan_NXXXxxxxxxxxxxxx',
+          period: 'monthly',
+          interval: 1,
+          item: {
+            name: 'Pro Influencer Monthly Subscription',
+            amount: 19900,
+            currency: 'INR',
+          },
+        },
+      },
+    },
+  })
+  async setupRazorpayPlan() {
+    console.log('🚀 Setting up Razorpay plan...');
+
+    const result = await this.razorpayService.createPlan(
+      'monthly',
+      1,
+      199,
+      'INR',
+      'Pro Influencer Monthly Subscription',
+      'Monthly subscription for Pro Influencer features - Auto-renewable',
+      {
+        description: 'Pro account subscription with auto-renewal',
+        features: 'Unlimited campaigns, Priority support, Verified badge',
+        billing_cycle: 'monthly',
+      },
+    );
+
+    if (!result.success) {
+      console.error('❌ Plan creation failed:', result);
+      throw new BadRequestException({
+        message: 'Failed to create Razorpay plan',
+        error: result.error,
+        errorCode: result.errorCode,
+        details: result.details,
+        hint: 'Check your RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in .env file',
+      });
+    }
+
+    console.log('✅ Plan created successfully:', result.planId);
+
+    return {
+      success: true,
+      planId: result.planId,
+      message: 'Add this Plan ID to your .env file as RAZORPAY_PRO_PLAN_ID',
+      envVariable: `RAZORPAY_PRO_PLAN_ID=${result.planId}`,
+      planDetails: result.data,
+    };
+  }
+
+  @Post('pro/test-activate')
+  @ApiOperation({
+    summary: '[TEST MODE ONLY] Activate Pro subscription without payment',
+    description: 'Instantly activate Pro subscription for testing (no Razorpay plan or payment needed). Only works in development/staging.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Test subscription activated successfully',
+    schema: {
+      example: {
+        success: true,
+        message: '🧪 Test subscription activated (NO PAYMENT REQUIRED)',
+        subscription: {
+          id: 1,
+          status: 'active',
+          validUntil: '2024-12-25T12:00:00+05:30',
+        },
+        invoice: {
+          id: 1,
+          invoiceNumber: 'INV-202411-00001',
+        },
+        warning: 'This is a TEST subscription. Use real payment in production.',
+      },
+    },
+  })
+  async activateTestSubscription(@Req() req: RequestWithUser) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can subscribe to Pro');
+    }
+    return await this.proSubscriptionService.activateTestSubscription(req.user.id);
+  }
+
+  @Post('pro/subscribe')
+  @ApiOperation({
+    summary: 'Create Pro subscription payment order',
+    description: 'Subscribe to Pro Account (Rs 199/month) and get payment order details',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Payment order created successfully',
+    schema: {
+      example: {
+        subscription: {
+          id: 1,
+          status: 'payment_pending',
+          startDate: '2024-11-25T12:00:00Z',
+          endDate: '2024-12-25T12:00:00Z',
+          amount: 19900,
+        },
+        invoice: {
+          id: 1,
+          invoiceNumber: 'INV-202411-00001',
+          amount: 19900,
+        },
+        payment: {
+          orderId: 'order_MNpJx1234567890',
+          amount: 19900,
+          currency: 'INR',
+          keyId: 'rzp_test_...',
+        },
+      },
+    },
+  })
+  async createProSubscription(@Req() req: RequestWithUser) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can subscribe to Pro');
+    }
+    return await this.proSubscriptionService.createSubscriptionOrder(req.user.id);
+  }
+
+  @Post('pro/verify-payment')
+  @ApiOperation({
+    summary: 'Verify Pro subscription payment',
+    description: 'Verify Razorpay payment and activate Pro subscription',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment verified and Pro subscription activated',
+  })
+  async verifyProPayment(
+    @Req() req: RequestWithUser,
+    @Body() verifyDto: VerifySubscriptionPaymentDto,
+  ) {
+    return await this.proSubscriptionService.verifyAndActivateSubscription(
+      verifyDto.subscriptionId,
+      verifyDto.paymentId,
+      verifyDto.orderId,
+      verifyDto.signature,
+    );
+  }
+
+  @Get('pro/subscription')
+  @ApiOperation({
+    summary: 'Get Pro subscription details',
+    description: 'Get current Pro subscription status and invoice history',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Subscription details retrieved successfully',
+  })
+  async getProSubscription(@Req() req: RequestWithUser) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can access Pro subscription');
+    }
+    return await this.proSubscriptionService.getSubscriptionDetails(req.user.id);
+  }
+
+  @Get('pro/invoices')
+  @ApiOperation({
+    summary: '📄 Get all Pro subscription invoices',
+    description:
+      'Get a list of all invoices for Pro subscription payments.\n\n' +
+      '✅ Returns all invoices with payment status\n' +
+      '✅ Includes invoice PDF links\n' +
+      '✅ Sorted by date (newest first)\n\n' +
+      '💡 Use this to show billing history to users',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Invoices retrieved successfully',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          invoices: [
+            {
+              id: 1,
+              invoiceNumber: 'INV-202512-00001',
+              amount: 199,
+              status: 'paid',
+              billingPeriod: {
+                start: '2025-12-11T11:32:20.163+05:30',
+                end: '2026-01-10T11:32:20.163+05:30',
+              },
+              paidAt: '2025-12-11T11:35:20.163+05:30',
+              invoiceUrl: 'https://s3.amazonaws.com/invoices/...',
+              createdAt: '2025-12-11T11:32:20.163+05:30',
+            },
+          ],
+          totalInvoices: 1,
+        },
+        message: 'Invoices retrieved successfully',
+      },
+    },
+  })
+  async getAllInvoices(@Req() req: RequestWithUser) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can access invoices');
+    }
+    return await this.proSubscriptionService.getAllInvoices(req.user.id);
+  }
+
+  @Post('pro/cancel')
+  @ApiOperation({
+    summary: '[DEPRECATED] Cancel Pro subscription - Use /pro/cancel-autopay instead',
+    description: 'DEPRECATED: This endpoint is now an alias for /pro/cancel-autopay. Cancel UPI autopay completely. Your Pro access remains active until end of billing period, but the UPI mandate will be cancelled and you will need fresh approval to restart. For temporary pause (keeps mandate active), use /pro/pause instead.',
+    deprecated: true,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Subscription cancelled successfully',
+  })
+  async cancelProSubscription(
+    @Req() req: RequestWithUser,
+    @Body() cancelDto: CancelSubscriptionDto,
+  ) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can cancel Pro subscription');
+    }
+    // Redirect to cancelAutopay for proper Razorpay cancellation
+    return await this.proSubscriptionService.cancelAutopay(
+      req.user.id,
+      cancelDto.reason,
+    );
+  }
+
+  @Get('pro/invoices/:invoiceId')
+  @ApiOperation({
+    summary: 'Download Pro subscription invoice',
+    description: 'Download PDF invoice for a specific subscription payment',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Invoice details retrieved successfully',
+  })
+  async downloadInvoice(
+    @Req() req: RequestWithUser,
+    @Param('invoiceId', ParseIntPipe) invoiceId: number,
+  ) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can download invoices');
+    }
+    return await this.proSubscriptionService.getInvoiceDetails(
+      invoiceId,
+      req.user.id,
+    );
+  }
+
+  @Post('pro/invoices/:invoiceId/regenerate-pdf')
+  @ApiOperation({
+    summary: 'Regenerate PDF for Pro subscription invoice',
+    description: 'Regenerate and upload PDF for an existing invoice',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'PDF regenerated successfully',
+  })
+  async regenerateProInvoicePDF(
+    @Req() req: RequestWithUser,
+    @Param('invoiceId', ParseIntPipe) invoiceId: number,
+  ) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can regenerate invoices');
+    }
+    return await this.proSubscriptionService.regenerateInvoicePDF(
+      invoiceId,
+      req.user.id,
+    );
+  }
+
+  @Post('pro/setup-autopay')
+  @ApiOperation({
+    summary: '🎯 Setup Autopay (Unified - supports all payment methods)',
+    description:
+      '🎯 ONE API FOR ALL PAYMENT METHODS\n\n' +
+      '✅ Supports UPI, Card, NetBanking, and more\n' +
+      '✅ User chooses payment method at checkout\n' +
+      '✅ Simpler API - no need for separate UPI/Card endpoints\n' +
+      '✅ Same pause/resume/cancel features\n\n' +
+      '📱 Returns payment link where user can select their preferred payment method\n\n' +
+      '⚡ Replaces: /pro/setup-upi-autopay and /pro/setup-card-autopay',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Autopay setup initiated successfully',
+  })
+  async setupAutopay(@Req() req: RequestWithUser) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can setup autopay');
+    }
+
+    return await this.proSubscriptionService.setupAutopay(req.user.id);
+  }
+
+  @Post('pro/pause')
+  @ApiOperation({
+    summary: '⏸️ Pause Pro subscription (RECOMMENDED - Easy restart)',
+    description:
+      '⏸️ TEMPORARY PAUSE - Best for short breaks!\n\n' +
+      '✅ UPI mandate stays active (no fresh approval needed)\n' +
+      '✅ Easy restart anytime with /pro/resume\n' +
+      '✅ Auto-resumes after pause duration\n' +
+      '✅ No friction to restart\n\n' +
+      'The subscription will complete the current billing cycle, then pause for the specified duration, and automatically resume after that.\n\n' +
+      '💡 Use this when: Taking a short break, going on vacation, temporary budget constraints\n\n' +
+      '⚠️ For permanent cancellation, use /pro/cancel-autopay instead',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        pauseDurationDays: {
+          type: 'number',
+          description: 'Number of days to pause (1-365)',
+          example: 10,
+        },
+        reason: {
+          type: 'string',
+          description: 'Optional reason for pausing',
+          example: 'Going on vacation',
+        },
+      },
+      required: ['pauseDurationDays'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Subscription pause scheduled successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Subscription will pause after current billing cycle ends on 2025-01-15',
+        details: {
+          currentPeriodEnds: '2025-01-15',
+          pauseStartsOn: '2025-01-15',
+          pauseDurationDays: 10,
+          autoResumeOn: '2025-01-25',
+          nextBillingAfterResume: '2025-01-25',
+        },
+      },
+    },
+  })
+  async pauseSubscription(
+    @Req() req: RequestWithUser,
+    @Body() pauseDto: { pauseDurationDays: number; reason?: string },
+  ) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can pause subscription');
+    }
+    return await this.proSubscriptionService.pauseSubscription(
+      req.user.id,
+      pauseDto.pauseDurationDays,
+      pauseDto.reason,
+    );
+  }
+
+  @Post('pro/resume')
+  @ApiOperation({
+    summary: 'Resume paused subscription',
+    description:
+      'Manually resume a paused subscription immediately. The subscription will become active and billing will start from the resume date.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Subscription resumed successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Subscription resumed successfully!',
+        subscription: {
+          id: 1,
+          status: 'active',
+          currentPeriodStart: '2025-01-20',
+          currentPeriodEnd: '2025-02-19',
+          nextBillingDate: '2025-02-19',
+        },
+      },
+    },
+  })
+  async resumeSubscription(@Req() req: RequestWithUser) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can resume subscription');
+    }
+    return await this.proSubscriptionService.resumeSubscription(req.user.id, false);
+  }
+
+  @Post('pro/cancel-autopay')
+  @ApiOperation({
+    summary: '❌ Cancel UPI Autopay Completely (Requires fresh approval to restart)',
+    description:
+      '❌ PERMANENT CANCELLATION - Cancels UPI mandate!\n\n' +
+      '⚠️ UPI mandate will be CANCELLED in Razorpay\n' +
+      '⚠️ Requires FRESH APPROVAL to restart (as per RBI regulations)\n' +
+      '⚠️ User must re-authenticate mandate in UPI app\n' +
+      '✅ Pro access remains until end of current billing period\n\n' +
+      'This is required by law for UPI autopay - you cannot restart without fresh user approval.\n\n' +
+      '💡 Use this when: Permanently stopping subscription, switching payment methods, compliance requirements\n\n' +
+      '💡 For temporary pause (keeps mandate active), use /pro/pause instead - it\'s much easier to restart!',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        reason: {
+          type: 'string',
+          description: 'Optional reason for cancelling autopay',
+          example: 'Want to use manual payment',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Autopay cancelled successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Autopay cancelled. Your Pro access will remain active until the end of current billing period.',
+        validUntil: '2025-02-15',
+        note: 'You can setup autopay again anytime to continue Pro benefits.',
+      },
+    },
+  })
+  async cancelAutopay(
+    @Req() req: RequestWithUser,
+    @Body() cancelDto: { reason?: string },
+  ) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can cancel autopay');
+    }
+    return await this.proSubscriptionService.cancelAutopay(req.user.id, cancelDto.reason);
+  }
+
+  @Post('webhooks/razorpay')
+  @Public()
+  @ApiOperation({
+    summary: 'Razorpay webhook endpoint',
+    description:
+      'Receives webhook notifications from Razorpay for payment events. This endpoint stores all transaction data for audit purposes.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Webhook processed successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid webhook signature',
+  })
+  async handleRazorpayWebhook(@Req() req: any, @Body() body: any) {
+    try {
+      console.log('Webhook endpoint hit at /webhooks/razorpay');
+      console.log('Time:', new Date().toISOString());
+
+      // Get signature from headers
+      const signature = req.headers['x-razorpay-signature'];
+
+      // Only verify webhook signature in production
+      if (this.configService.get<string>('NODE_ENV') === 'production') {
+        if (!signature) {
+          throw new BadRequestException('Missing webhook signature');
+        }
+
+        // Verify webhook signature
+        const rawBody = JSON.stringify(body);
+        const isValid = this.razorpayService.verifyWebhookSignature(
+          rawBody,
+          signature,
+        );
+
+        if (!isValid) {
+          console.error('Invalid webhook signature');
+          throw new BadRequestException('Invalid webhook signature');
+        }
+      } else {
+        console.log('⚠️ Skipping webhook signature verification (not production)');
+      }
+
+      // Extract event and payload
+      const event = body.event;
+      const payload = body.payload;
+
+      // Process webhook
+      const result = await this.proSubscriptionService.handleWebhook(
+        event,
+        payload,
+      );
+
+      return result;
+    } catch (error) {
+      console.error('Webhook processing error:', error);
+      throw error;
+    }
+  }
+
+  // Referral Rewards Endpoints
+  @Get('referral-rewards')
+  @ApiOperation({
+    summary: 'Get referral rewards summary and history',
+    description:
+      'Fetch referral rewards summary (lifetime, redeemed, redeemable) and paginated list of referred influencers with reward details',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number for pagination (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Number of referrals per page (default: 10)',
+    example: 10,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Referral rewards retrieved successfully',
+    schema: {
+      example: {
+        summary: {
+          lifetimeReward: 2300,
+          redeemed: 1200,
+          redeemable: 1100,
+        },
+        referralHistory: [
+          {
+            id: 132,
+            name: 'Sneha Sharma',
+            username: 'sneha_s09',
+            profileImage: 'https://incollabstaging.s3.ap-south-1.amazonaws.com/...',
+            isVerified: true,
+            joinedAt: '2025-11-10T01:23:00.000Z',
+            rewardEarned: 100,
+            rewardStatus: 'paid',
+            creditTransactionId: 123,
+          },
+        ],
+        pagination: {
+          page: 1,
+          limit: 10,
+          total: 23,
+          totalPages: 3,
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Influencer not found' })
+  async getReferralRewards(
+    @Req() req: RequestWithUser,
+    @Query('page', new ParseIntPipe({ optional: true })) page: number = 1,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit: number = 10,
+  ) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can access referral rewards');
+    }
+    const influencerId = req.user.id;
+    return await this.influencerService.getReferralRewards(influencerId, page, limit);
+  }
+
+  @Post('referral/track-invite-click')
+  @ApiOperation({
+    summary: 'Track "Invite Friend for referral" button click',
+    description:
+      'Increment the counter when influencer clicks the "Invite Friend for referral" button. This helps track referral engagement.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Click tracked successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Invite click tracked successfully',
+        totalClicks: 5,
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Influencer not found' })
+  async trackReferralInviteClick(@Req() req: RequestWithUser) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can track referral clicks');
+    }
+    const influencerId = req.user.id;
+    return await this.influencerService.trackReferralInviteClick(influencerId);
+  }
+
+  // ==================== DEPRECATED: Use POST upi-ids/:upiIdRecordId/redeem-rewards instead ====================
+  // @Post('redeem-rewards')
+  // @ApiBearerAuth()
+  // @ApiOperation({
+  //   summary: 'Redeem referral rewards',
+  //   description:
+  //     'Submit a redemption request for pending referral rewards. Optionally update UPI ID. Amount will be transferred within 24-48 hours.',
+  // })
+  // @ApiBody({ type: RedeemRewardsDto })
+  // @ApiResponse({
+  //   status: 200,
+  //   description: 'Redemption request submitted successfully',
+  //   type: RedeemRewardsResponseDto,
+  // })
+  // @ApiResponse({ status: 400, description: 'Invalid request or no redeemable amount' })
+  // @ApiResponse({ status: 404, description: 'Influencer not found' })
+  // async redeemRewards(
+  //   @Req() req: RequestWithUser,
+  //   @Body() redeemRewardsDto: RedeemRewardsDto,
+  // ) {
+  //   const influencerId = req.user.id;
+  //   return await this.influencerService.redeemRewards(influencerId, redeemRewardsDto.upiIdRecordId);
+  // }
+
+  // ==================== UPI Management Endpoints ====================
+
+  @Get('upi-ids')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get all UPI IDs',
+    description: 'Fetch all UPI IDs for the influencer, ordered by selection status and last used',
+  })
+  @ApiResponse({ status: 200, description: 'List of UPI IDs', type: GetUpiIdsResponseDto })
+  async getUpiIds(@Req() req: RequestWithUser) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can access UPI IDs');
+    }
+    const influencerId = req.user.id;
+    return await this.influencerService.getInfluencerUpiIds(influencerId);
+  }
+
+  @Post('upi-ids')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Add new UPI ID',
+    description: 'Add a new UPI ID for the influencer. Optionally set it as selected for current transaction',
+  })
+  @ApiBody({ type: AddUpiIdDto })
+  @ApiResponse({ status: 201, description: 'UPI ID added successfully' })
+  @ApiResponse({ status: 400, description: 'UPI ID already exists' })
+  async addUpiId(@Req() req: RequestWithUser, @Body() addUpiIdDto: AddUpiIdDto) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can add UPI IDs');
+    }
+    const influencerId = req.user.id;
+    return await this.influencerService.addUpiId(
+      influencerId,
+      addUpiIdDto.upiId,
+      addUpiIdDto.setAsSelected,
+    );
+  }
+
+  // ==================== DEPRECATED: Use POST upi-ids/:upiIdRecordId/redeem-rewards instead ====================
+  // @Put('upi-ids/select')
+  // @ApiBearerAuth()
+  // @ApiOperation({
+  //   summary: 'Select UPI ID for transaction',
+  //   description: 'Select a UPI ID to use for the current redemption transaction',
+  // })
+  // @ApiBody({ type: SelectUpiIdDto })
+  // @ApiResponse({ status: 200, description: 'UPI ID selected successfully' })
+  // @ApiResponse({ status: 404, description: 'UPI ID not found' })
+  // async selectUpiId(@Req() req: RequestWithUser, @Body() selectUpiIdDto: SelectUpiIdDto) {
+  //   const influencerId = req.user.id;
+  //   return await this.influencerService.selectUpiIdForTransaction(
+  //     influencerId,
+  //     selectUpiIdDto.upiIdRecordId,
+  //   );
+  // }
+
+  @Delete('upi-ids/:upiIdRecordId')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Delete UPI ID',
+    description: 'Delete a UPI ID. Cannot delete if it is the only UPI ID and there are pending transactions',
+  })
+  @ApiParam({ name: 'upiIdRecordId', type: Number, description: 'UPI ID record ID' })
+  @ApiResponse({ status: 200, description: 'UPI ID deleted successfully' })
+  @ApiResponse({ status: 400, description: 'Cannot delete the only UPI ID with pending transactions' })
+  @ApiResponse({ status: 404, description: 'UPI ID not found' })
+  async deleteUpiId(
+    @Req() req: RequestWithUser,
+    @Param('upiIdRecordId', ParseIntPipe) upiIdRecordId: number,
+  ) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can delete UPI IDs');
+    }
+    const influencerId = req.user.id;
+    return await this.influencerService.deleteUpiId(influencerId, upiIdRecordId);
+  }
+
+
+  @Post('upi-ids/:upiIdRecordId/redeem-rewards')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Select UPI and redeem rewards (consolidated endpoint)',
+    description:
+      'Select a UPI ID and submit redemption request in a single atomic operation. This is the optimized endpoint combining UPI selection and reward redemption. Amount will be transferred within 24-48 hours.',
+  })
+  @ApiParam({
+    name: 'upiIdRecordId',
+    description: 'The ID of the UPI record to select and use for redemption',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'UPI selected and redemption request submitted successfully',
+    type: RedeemRewardsResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'No pending rewards or invalid UPI ID' })
+  @ApiResponse({ status: 404, description: 'Influencer or UPI ID not found' })
+  async selectUpiAndRedeem(
+    @Req() req: RequestWithUser,
+    @Param('upiIdRecordId', ParseIntPipe) upiIdRecordId: number,
+  ) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can redeem rewards');
+    }
+    const influencerId = req.user.id;
+    return await this.influencerService.selectUpiAndRedeemRewards(influencerId, upiIdRecordId);
   }
 }

@@ -21,6 +21,7 @@ import { RedisService } from '../redis/redis.service';
 import { MasterDataService } from '../shared/services/master-data.service';
 import { AdminModule } from '../admin/admin.module';
 import { SharedModule } from '../shared/shared.module';
+import { CampaignModule } from '../campaign/campaign.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { SharedModule } from '../shared/shared.module';
     ConfigModule,
     forwardRef(() => AdminModule),
     SharedModule,
+    forwardRef(() => CampaignModule),
   ],
   controllers: [BrandController],
   providers: [BrandService, RedisService, MasterDataService],

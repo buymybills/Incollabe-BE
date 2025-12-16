@@ -2,11 +2,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { InfluencerController } from './influencer.controller';
 import { InfluencerService } from './influencer.service';
 import { SupportTicketService } from '../shared/support-ticket.service';
+import { ProSubscriptionService } from './services/pro-subscription.service';
+import { RazorpayService } from '../shared/razorpay.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto';
 import { WhatsappVerificationDto } from './dto/whatsapp-verification.dto';
 import { RequestWithUser } from '../types/request.types';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 const mockInfluencerService = {
   getInfluencerProfile: jest.fn(),
@@ -24,6 +27,19 @@ const mockSupportTicketService = {
   deleteTicket: jest.fn(),
   createTicket: jest.fn(),
   getMyTickets: jest.fn(),
+};
+
+const mockProSubscriptionService = {
+  createSubscription: jest.fn(),
+  verifyPayment: jest.fn(),
+  getSubscriptionStatus: jest.fn(),
+  cancelSubscription: jest.fn(),
+};
+
+const mockRazorpayService = {
+  createOrder: jest.fn(),
+  verifySignature: jest.fn(),
+  getPaymentDetails: jest.fn(),
 };
 
 const mockAuthGuard = {
@@ -45,6 +61,23 @@ describe('InfluencerController', () => {
         {
           provide: SupportTicketService,
           useValue: mockSupportTicketService,
+        },
+        {
+          provide: ProSubscriptionService,
+          useValue: mockProSubscriptionService,
+        },
+        {
+          provide: RazorpayService,
+          useValue: mockRazorpayService,
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string) => {
+              if (key === 'NODE_ENV') return 'test';
+              return null;
+            }),
+          },
         },
       ],
     })
@@ -89,7 +122,12 @@ describe('InfluencerController', () => {
       const result = await controller.getInfluencerProfile(mockRequest);
 
       expect(result).toEqual(mockProfile);
-      expect(influencerService.getInfluencerProfile).toHaveBeenCalledWith(1);
+      expect(influencerService.getInfluencerProfile).toHaveBeenCalledWith(
+        1,
+        false,
+        1,
+        'influencer',
+      );
     });
 
     it('should handle service errors', async () => {
@@ -137,6 +175,7 @@ describe('InfluencerController', () => {
         1,
         updateDto,
         mockFiles,
+        'influencer',
       );
     });
 
@@ -161,6 +200,7 @@ describe('InfluencerController', () => {
         1,
         updateDto,
         undefined,
+        'influencer',
       );
     });
   });
@@ -353,7 +393,12 @@ describe('InfluencerController', () => {
 
       await controller.getInfluencerProfile(mockRequest);
 
-      expect(influencerService.getInfluencerProfile).toHaveBeenCalledWith(999);
+      expect(influencerService.getInfluencerProfile).toHaveBeenCalledWith(
+        999,
+        false,
+        999,
+        'influencer',
+      );
     });
   });
 
@@ -372,12 +417,13 @@ describe('InfluencerController', () => {
         },
       } as RequestWithUser;
 
+      mockInfluencerService.getInfluencerProfile.mockRejectedValue(
+        new BadRequestException('Only influencers can access this endpoint'),
+      );
+
       await expect(
         controller.getInfluencerProfile(brandRequest),
       ).rejects.toThrow(BadRequestException);
-      await expect(
-        controller.getInfluencerProfile(brandRequest),
-      ).rejects.toThrow('Only influencers can access this endpoint');
     });
 
     it('should reject brands from updating influencer profile', async () => {
@@ -394,12 +440,13 @@ describe('InfluencerController', () => {
         bio: 'Test bio with minimum required length',
       };
 
+      mockInfluencerService.updateInfluencerProfile.mockRejectedValue(
+        new BadRequestException('Only influencers can update influencer profiles'),
+      );
+
       await expect(
         controller.updateInfluencerProfile(brandRequest, updateDto, undefined),
       ).rejects.toThrow(BadRequestException);
-      await expect(
-        controller.updateInfluencerProfile(brandRequest, updateDto, undefined),
-      ).rejects.toThrow('Only influencers can update influencer profiles');
     });
   });
 

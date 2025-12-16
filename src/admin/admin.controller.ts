@@ -12,6 +12,9 @@ import {
   HttpStatus,
   Query,
   UnauthorizedException,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -25,7 +28,9 @@ import {
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiBadRequestResponse,
+  ApiConsumes,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { AdminAuthService } from './admin-auth.service';
 import { ProfileReviewService } from './profile-review.service';
 import { AdminCampaignService } from './services/admin-campaign.service';
@@ -35,6 +40,9 @@ import { DashboardStatsService } from './services/dashboard-stats.service';
 import { BrandService } from '../brand/brand.service';
 import { InfluencerService } from '../influencer/influencer.service';
 import { PostService } from '../post/post.service';
+import { AuthService } from '../auth/auth.service';
+import { CampaignService } from '../campaign/campaign.service';
+import { S3Service } from '../shared/s3.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import type { RequestWithAdmin } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
@@ -111,10 +119,41 @@ import { LogoutDto, LogoutResponseDto } from './dto/logout.dto';
 import { GetAuditLogsDto, AuditLogListResponseDto } from './dto/audit-log.dto';
 import { UpdateDisplayOrderDto } from './dto/update-display-order.dto';
 import { AuditLogService } from './services/audit-log.service';
+import { ReferralProgramService } from './services/referral-program.service';
+import { MaxxSubscriptionAdminService } from './services/maxx-subscription-admin.service';
+import { MaxSubscriptionBrandService } from './services/max-subscription-brand.service';
 import { SupportTicketService } from '../shared/support-ticket.service';
 import { CreateSupportTicketDto } from '../shared/dto/create-support-ticket.dto';
 import { GetSupportTicketsDto } from '../shared/dto/get-support-tickets.dto';
 import { UpdateSupportTicketDto } from '../shared/dto/update-support-ticket.dto';
+import {
+  GetNewAccountsWithReferralDto,
+  NewAccountsWithReferralResponseDto,
+  GetAccountReferrersDto,
+  AccountReferrersResponseDto,
+  GetReferralTransactionsDto,
+  ReferralTransactionsResponseDto,
+  ReferralProgramStatisticsDto,
+  GetRedemptionRequestsDto,
+  RedemptionRequestsResponseDto,
+  ProcessRedemptionDto,
+  ProcessRedemptionResponseDto,
+} from './dto/referral-program.dto';
+import {
+  GetMaxxSubscriptionsDto,
+  MaxxSubscriptionStatisticsDto,
+  MaxxSubscriptionsResponseDto,
+  SubscriptionDetailsDto,
+  PauseSubscriptionDto,
+  ResumeSubscriptionDto,
+  CancelSubscriptionDto,
+  SubscriptionActionResponseDto,
+} from './dto/maxx-subscription.dto';
+import {
+  MaxSubscriptionBrandStatisticsDto,
+  GetMaxPurchasesDto,
+  MaxPurchasesResponseDto,
+} from './dto/max-subscription-brand.dto';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -126,11 +165,17 @@ export class AdminController {
     private readonly adminPostService: AdminPostService,
     private readonly influencerScoringService: InfluencerScoringService,
     private readonly dashboardStatsService: DashboardStatsService,
+    private readonly referralProgramService: ReferralProgramService,
+    private readonly maxxSubscriptionAdminService: MaxxSubscriptionAdminService,
+    private readonly maxSubscriptionBrandService: MaxSubscriptionBrandService,
     private readonly brandService: BrandService,
     private readonly influencerService: InfluencerService,
     private readonly postService: PostService,
     private readonly auditLogService: AuditLogService,
     private readonly supportTicketService: SupportTicketService,
+    private readonly authService: AuthService,
+    private readonly campaignService: CampaignService,
+    private readonly s3Service: S3Service,
   ) {}
 
   @Post('login')
@@ -288,6 +333,133 @@ export class AdminController {
   })
   async logoutAll(@Req() req: RequestWithAdmin) {
     return await this.adminAuthService.logoutAll(req.admin.id);
+  }
+
+  @Post('upload')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB
+      },
+      fileFilter: (req, file, callback) => {
+        // Accept images only
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
+          return callback(
+            new Error('Only image files are allowed (jpg, jpeg, png, gif, webp)'),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  @ApiOperation({
+    summary: 'Upload file to S3',
+    description:
+      'Generic admin file upload endpoint. Upload images for various admin features. Domain parameter determines S3 folder structure.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiQuery({
+    name: 'domain',
+    required: true,
+    enum: [
+      'push_notification',
+      'campaigns',
+      'banners',
+      'profiles',
+      'posts',
+      'brands',
+      'influencers',
+    ],
+    description: 'Domain/folder name for S3 storage',
+    example: 'push_notification',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Image file to upload (max 10MB)',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    description: 'File uploaded successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        url: {
+          type: 'string',
+          example: 'https://bucket.s3.region.amazonaws.com/push_notification/image-123.jpg',
+        },
+        fileName: { type: 'string', example: 'banner.jpg' },
+        fileSize: { type: 'number', example: 2048576 },
+        fileType: { type: 'string', example: 'image/jpeg' },
+        domain: { type: 'string', example: 'push_notification' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Invalid file type, missing file, or invalid domain',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async uploadFile(
+    @UploadedFile() file: Express.Multer.File,
+    @Query('domain') domain: string,
+  ) {
+    // Validate file exists
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    // Validate domain parameter
+    if (!domain || typeof domain !== 'string') {
+      throw new BadRequestException('Domain parameter is required');
+    }
+
+    // Whitelist allowed domains
+    const allowedDomains = [
+      'push_notification',
+      'campaigns',
+      'banners',
+      'profiles',
+      'posts',
+      'brands',
+      'influencers',
+    ];
+
+    if (!allowedDomains.includes(domain)) {
+      throw new BadRequestException(
+        `Invalid domain. Allowed domains: ${allowedDomains.join(', ')}`,
+      );
+    }
+
+    // Upload to S3
+    const fileUrl = await this.s3Service.uploadFileToS3(
+      file,
+      domain,
+      'admin',
+    );
+
+    return {
+      success: true,
+      url: fileUrl,
+      fileName: file.originalname,
+      fileSize: file.size,
+      fileType: file.mimetype,
+      domain,
+    };
   }
 
   @Post('create')
@@ -697,7 +869,6 @@ export class AdminController {
     @Query() filters: GetPendingProfilesDto,
   ) {
     return await this.profileReviewService.getPendingProfiles(
-      req.admin.id,
       filters.profileType,
       filters.page || 1,
       filters.limit || 20,
@@ -1810,6 +1981,378 @@ export class AdminController {
   }
 
   // ============================================
+  // REFERRAL PROGRAM
+  // ============================================
+
+  @Get('referral-program/statistics')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get referral program statistics',
+    description:
+      'Get comprehensive referral program statistics including total referral codes generated, accounts created with referral, amount spent, and redeem requests with month-over-month growth percentages',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Referral program statistics retrieved successfully',
+    type: ReferralProgramStatisticsDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getReferralProgramStatistics() {
+    return await this.referralProgramService.getReferralStatistics();
+  }
+
+  @Get('referral-program/new-accounts')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get new accounts created with referral codes',
+    description:
+      'Get paginated list of new accounts (influencers) that were created using referral codes. Supports filtering by verification status, search, and date range.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'New accounts with referral retrieved successfully',
+    type: NewAccountsWithReferralResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getNewAccountsWithReferral(@Query() filters: GetNewAccountsWithReferralDto) {
+    return await this.referralProgramService.getNewAccountsWithReferral(filters);
+  }
+
+  @Get('referral-program/account-referrers')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get list of influencers who have referred others',
+    description:
+      'Get paginated list of influencers who have referral codes and have referred other users. Includes total referrals count, earnings, redeemed and pending amounts. Supports search and sorting.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Account referrers retrieved successfully',
+    type: AccountReferrersResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getAccountReferrers(@Query() filters: GetAccountReferrersDto) {
+    return await this.referralProgramService.getAccountReferrers(filters);
+  }
+
+  @Get('referral-program/transactions')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get referral transaction history',
+    description:
+      'Get paginated list of all referral bonus transactions. Supports filtering by payment status, search by influencer, and date range.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Referral transactions retrieved successfully',
+    type: ReferralTransactionsResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getReferralTransactions(@Query() filters: GetReferralTransactionsDto) {
+    return await this.referralProgramService.getReferralTransactions(filters);
+  }
+
+  @Get('referral-program/redemption-requests')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get redemption requests',
+    description:
+      'Get paginated list of credit redemption requests from influencers. Supports filtering by status, search by influencer, sorting, and date range.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Redemption requests retrieved successfully',
+    type: RedemptionRequestsResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getRedemptionRequests(@Query() filters: GetRedemptionRequestsDto) {
+    return await this.referralProgramService.getRedemptionRequests(filters);
+  }
+
+  @Put('referral-program/redemption-requests/:id/process')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Process a redemption request',
+    description:
+      'Mark a redemption request as processed (paid). Sends a push notification to the influencer confirming the payment. Requires SUPER_ADMIN or CONTENT_MODERATOR role.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Redemption processed successfully',
+    type: ProcessRedemptionResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - requires SUPER_ADMIN or CONTENT_MODERATOR role',
+  })
+  @ApiNotFoundResponse({
+    description: 'Redemption request not found',
+  })
+  @ApiBadRequestResponse({
+    description: 'Redemption request already processed or cancelled',
+  })
+  async processRedemption(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ProcessRedemptionDto,
+    @Req() req: any,
+  ) {
+    const adminId = req.admin.id;
+    return await this.referralProgramService.processRedemption(id, adminId, dto);
+  }
+
+  // ============================================
+  // MAXX SUBSCRIPTION
+  // ============================================
+
+  @Get('maxx-subscription/statistics')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get Maxx subscription statistics',
+    description:
+      'Get comprehensive statistics for Maxx (Pro) subscriptions including total profiles, active/inactive counts, average usage duration, and autopay subscriptions with month-over-month growth percentages',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Maxx subscription statistics retrieved successfully',
+    type: MaxxSubscriptionStatisticsDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getMaxxSubscriptionStatistics() {
+    return await this.maxxSubscriptionAdminService.getMaxxSubscriptionStatistics();
+  }
+
+  @Get('maxx-subscription/subscriptions')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get Maxx subscriptions list',
+    description:
+      'Get paginated list of Maxx (Pro) subscriptions with filters for status, payment type, search, and date range. Supports sorting by usage months or valid till date.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Maxx subscriptions retrieved successfully',
+    type: MaxxSubscriptionsResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getMaxxSubscriptions(@Query() filters: GetMaxxSubscriptionsDto) {
+    return await this.maxxSubscriptionAdminService.getMaxxSubscriptions(filters);
+  }
+
+  @Get('maxx-subscription/subscriptions/:id')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get Maxx subscription details',
+    description:
+      'Get detailed information about a specific Maxx (Pro) subscription including influencer details, payment history, pause information, and subscription status.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Subscription ID',
+    example: 123,
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Subscription details retrieved successfully',
+    type: SubscriptionDetailsDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Subscription not found',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getMaxxSubscriptionDetails(@Param('id', ParseIntPipe) id: number) {
+    return await this.maxxSubscriptionAdminService.getSubscriptionDetails(id);
+  }
+
+  @Put('maxx-subscription/subscriptions/:id/pause')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Pause a Maxx subscription',
+    description:
+      'Admin action to pause a Maxx (Pro) subscription. Requires Super Admin or Content Moderator role.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Subscription ID',
+    example: 123,
+  })
+  @ApiBody({ type: PauseSubscriptionDto })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Subscription paused successfully',
+    type: SubscriptionActionResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Subscription not found',
+  })
+  @ApiBadRequestResponse({
+    description: 'Cannot pause this subscription (already paused or cancelled)',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions',
+  })
+  async pauseMaxxSubscription(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: PauseSubscriptionDto,
+  ) {
+    return await this.maxxSubscriptionAdminService.pauseSubscription(id, dto);
+  }
+
+  @Put('maxx-subscription/subscriptions/:id/resume')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Resume a paused Maxx subscription',
+    description:
+      'Admin action to resume a paused Maxx (Pro) subscription. Adjusts billing dates based on pause duration. Requires Super Admin or Content Moderator role.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Subscription ID',
+    example: 123,
+  })
+  @ApiBody({ type: ResumeSubscriptionDto })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Subscription resumed successfully',
+    type: SubscriptionActionResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Subscription not found',
+  })
+  @ApiBadRequestResponse({
+    description: 'Subscription is not paused',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions',
+  })
+  async resumeMaxxSubscription(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ResumeSubscriptionDto,
+  ) {
+    return await this.maxxSubscriptionAdminService.resumeSubscription(id, dto);
+  }
+
+  @Put('maxx-subscription/subscriptions/:id/cancel')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Cancel a Maxx subscription',
+    description:
+      'Admin action to cancel a Maxx (Pro) subscription. Can cancel immediately or at period end. Requires Super Admin role only.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Subscription ID',
+    example: 123,
+  })
+  @ApiBody({ type: CancelSubscriptionDto })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Subscription cancelled successfully',
+    type: SubscriptionActionResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Subscription not found',
+  })
+  @ApiBadRequestResponse({
+    description: 'Subscription is already cancelled',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - Super Admin only',
+  })
+  async cancelMaxxSubscription(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CancelSubscriptionDto,
+  ) {
+    return await this.maxxSubscriptionAdminService.cancelSubscription(id, dto);
+  }
+
+  // ============================================
+  // MAX SUBSCRIPTION - BRAND
+  // ============================================
+
+  @Get('max-subscription-brand/statistics')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get Max Campaign Brand statistics',
+    description:
+      'Get comprehensive statistics for brand Max Campaign purchases including total profiles, active/inactive campaigns, and cancelled subscriptions with month-over-month growth percentages',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Max subscription brand statistics retrieved successfully',
+    type: MaxSubscriptionBrandStatisticsDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getMaxSubscriptionBrandStatistics() {
+    return await this.maxSubscriptionBrandService.getStatistics();
+  }
+
+  @Get('max-subscription-brand/purchases')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get list of Max Campaign purchases by brands',
+    description:
+      'Get paginated list of Max Campaign purchases with filters for purchase type (Invite Campaign vs Maxx Campaign), status, search, and date range. Supports sorting by date or amount.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Max campaign purchases retrieved successfully',
+    type: MaxPurchasesResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getMaxPurchases(@Query() filters: GetMaxPurchasesDto) {
+    return await this.maxSubscriptionBrandService.getMaxPurchases(filters);
+  }
+
+  // ============================================
   // SUPPORT TICKETS
   // ============================================
 
@@ -1947,5 +2490,175 @@ export class AdminController {
   })
   async deleteSupportTicket(@Param('id', ParseIntPipe) id: number) {
     return await this.supportTicketService.deleteTicket(id);
+  }
+
+  // Master Data Endpoints
+  @Get('niches')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get all niches',
+    description: 'Fetch all active niches that influencers and brands can choose from',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Niches fetched successfully',
+  })
+  async getNiches() {
+    return await this.authService.getNiches();
+  }
+
+  @Get('cities/popular')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get popular cities',
+    description: 'Get tier 1 and tier 2 cities commonly used for campaign targeting',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Popular cities retrieved successfully',
+  })
+  async getPopularCities() {
+    return await this.campaignService.getPopularCities();
+  }
+
+  @Get('cities/search')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Search cities',
+    description: 'Search cities by name for campaign targeting. Returns popular cities if query is less than 2 characters.',
+  })
+  @ApiQuery({
+    name: 'q',
+    required: false,
+    type: String,
+    description: 'Search query for city name (minimum 2 characters)',
+    example: 'Mumb',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Cities retrieved successfully',
+  })
+  async searchCities(@Query('q') query: string) {
+    return await this.campaignService.searchCities(query);
+  }
+
+  // Credit Transaction Management Endpoints
+  @Get('credit-transactions')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.PROFILE_REVIEWER)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get all credit transactions',
+    description:
+      'Retrieve all credit transactions with optional filters for payment status, transaction type, and influencer',
+  })
+  @ApiQuery({
+    name: 'paymentStatus',
+    required: false,
+    enum: ['pending', 'processing', 'paid', 'failed', 'cancelled'],
+    description: 'Filter by payment status',
+  })
+  @ApiQuery({
+    name: 'transactionType',
+    required: false,
+    enum: ['referral_bonus', 'early_selection_bonus'],
+    description: 'Filter by transaction type',
+  })
+  @ApiQuery({
+    name: 'influencerId',
+    required: false,
+    type: Number,
+    description: 'Filter by influencer ID',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Results per page',
+    example: 20,
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Credit transactions retrieved successfully',
+  })
+  async getCreditTransactions(
+    @Query('paymentStatus') paymentStatus?: string,
+    @Query('transactionType') transactionType?: string,
+    @Query('influencerId') influencerId?: number,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
+  ) {
+    return await this.profileReviewService.getCreditTransactions({
+      paymentStatus,
+      transactionType,
+      influencerId,
+      page,
+      limit,
+    });
+  }
+
+  @Put('credit-transactions/:id/status')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update credit transaction payment status',
+    description:
+      'Update the payment status of a credit transaction (mark as paid, failed, etc.)',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'Transaction ID',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        paymentStatus: {
+          type: 'string',
+          enum: ['pending', 'processing', 'paid', 'failed', 'cancelled'],
+        },
+        paymentReferenceId: {
+          type: 'string',
+          description: 'Payment reference/transaction ID',
+        },
+        adminNotes: {
+          type: 'string',
+          description: 'Admin notes about the payment',
+        },
+      },
+      required: ['paymentStatus'],
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Transaction status updated successfully',
+  })
+  async updateCreditTransactionStatus(
+    @Param('id', ParseIntPipe) transactionId: number,
+    @Body()
+    updateData: {
+      paymentStatus: string;
+      paymentReferenceId?: string;
+      adminNotes?: string;
+    },
+    @Req() req: RequestWithAdmin,
+  ) {
+    return await this.profileReviewService.updateCreditTransactionStatus(
+      transactionId,
+      updateData,
+      req.admin.id,
+    );
   }
 }

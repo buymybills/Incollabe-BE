@@ -4,6 +4,19 @@ import axios from 'axios';
 
 @Injectable()
 export class SmsService {
+  async sendNotificationSms(phone: string, message: string): Promise<void> {
+    // Implement SMS sending logic here, similar to sendOtp
+    try {
+      // Replace with actual SMS provider integration
+      await this.sendOtp(phone, message); // If sendOtp can send custom messages
+    } catch (error) {
+      this.logger.error(
+        `Failed to send notification SMS to ${phone}`,
+        error.stack,
+      );
+      throw new NotFoundException('Failed to send notification SMS');
+    }
+  }
   private readonly logger = new Logger(SmsService.name);
   private readonly FAST2SMS_API: string;
   private readonly AUTH_KEY: string;

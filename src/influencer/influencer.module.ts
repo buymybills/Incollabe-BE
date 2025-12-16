@@ -20,6 +20,14 @@ import { CampaignApplication } from '../campaign/models/campaign-application.mod
 import { CampaignInvitation } from '../campaign/models/campaign-invitation.model';
 import { CustomNiche } from '../auth/model/custom-niche.model';
 import { SharedModule } from '../shared/shared.module';
+import { ProSubscription } from './models/pro-subscription.model';
+import { ProInvoice } from './models/pro-invoice.model';
+import { ProPaymentTransaction } from './models/pro-payment-transaction.model';
+import { ProSubscriptionService } from './services/pro-subscription.service';
+import { SubscriptionSchedulerService } from './services/subscription-scheduler.service';
+import { CreditTransaction } from '../admin/models/credit-transaction.model';
+import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
+import { InfluencerUpi } from './models/influencer-upi.model';
 
 @Module({
   imports: [
@@ -39,6 +47,12 @@ import { SharedModule } from '../shared/shared.module';
       Campaign,
       CampaignApplication,
       CustomNiche,
+      ProSubscription,
+      ProInvoice,
+      ProPaymentTransaction,
+      CreditTransaction,
+      InfluencerReferralUsage,
+      InfluencerUpi,
     ]),
     SharedModule,
   ],
@@ -46,6 +60,8 @@ import { SharedModule } from '../shared/shared.module';
   providers: [
     InfluencerService,
     InfluencerRepository,
+    ProSubscriptionService,
+    SubscriptionSchedulerService,
     {
       provide: 'PROFILE_REVIEW_MODEL',
       useValue: ProfileReview,
@@ -94,7 +110,19 @@ import { SharedModule } from '../shared/shared.module';
       provide: 'CUSTOM_NICHE_MODEL',
       useValue: CustomNiche,
     },
+    {
+      provide: 'CREDIT_TRANSACTION_MODEL',
+      useValue: CreditTransaction,
+    },
+    {
+      provide: 'INFLUENCER_REFERRAL_USAGE_MODEL',
+      useValue: InfluencerReferralUsage,
+    },
+    {
+      provide: 'INFLUENCER_UPI_MODEL',
+      useValue: InfluencerUpi,
+    },
   ],
-  exports: [InfluencerService, InfluencerRepository],
+  exports: [InfluencerService, InfluencerRepository, ProSubscriptionService],
 })
 export class InfluencerModule {}

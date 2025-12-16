@@ -183,6 +183,47 @@ export class Campaign extends Model<Campaign, CampaignCreationAttributes> {
   })
   declare isActive: boolean;
 
+  // Max Campaign Payment Fields
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+  })
+  declare isMaxCampaign: boolean;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare maxCampaignPaymentStatus: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare maxCampaignPaymentId: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare maxCampaignOrderId: string;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare maxCampaignPaidAt: Date;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  declare maxCampaignAmount: number;
+
+  // Timestamps
+  declare createdAt: Date;
+  declare updatedAt: Date;
+
   // Associations
   @BelongsTo(() => Brand)
   declare brand: Brand;

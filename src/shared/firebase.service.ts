@@ -154,15 +154,134 @@ export class FirebaseService implements OnModuleInit {
     title: string,
     body: string,
     data?: { [key: string]: string },
+    options?: {
+      imageUrl?: string;
+      actionUrl?: string;
+      androidChannelId?: string;
+      sound?: string;
+      priority?: string;
+      expirationHours?: number;
+      // iOS-specific options
+      badge?: number;
+      threadId?: string;
+      interruptionLevel?: 'passive' | 'active' | 'timeSensitive' | 'critical';
+    },
   ): Promise<admin.messaging.BatchResponse | string> {
+    const notification: admin.messaging.Notification = {
+      title,
+      body,
+    };
+
+    // Note: Do NOT set imageUrl at notification level
+    // Images must be set in platform-specific configs (android/apns)
+
+    // Firebase requires all data values to be strings
+    const stringifiedData: { [key: string]: string } = {};
+    const allData = {
+      ...(data || {}),
+      // Add deep link URL as data (critical for background/killed state)
+      ...(options?.actionUrl ? {
+        actionUrl: options.actionUrl,
+        click_action: 'FLUTTER_NOTIFICATION_CLICK', // Required for Flutter/React Native deep linking
+        link: options.actionUrl, // Alternative key some apps check for
+      } : {}),
+      // Note: imageUrl is NOT sent in data - it's in android/apns configs only
+    };
+
+    // Convert all values to strings
+    for (const [key, value] of Object.entries(allData)) {
+      if (value !== null && value !== undefined) {
+        stringifiedData[key] = typeof value === 'string' ? value : JSON.stringify(value);
+      }
+    }
+
+    // Build Android-specific configuration
+    const androidConfig: admin.messaging.AndroidConfig | undefined = options
+      ? {
+          priority: options.priority === 'high' ? 'high' : 'normal',
+          ttl: options.expirationHours
+            ? options.expirationHours * 60 * 60 * 1000
+            : undefined,
+          notification: {
+            channelId: options.androidChannelId || 'default',
+            sound: options.sound || 'default',
+            imageUrl: options.imageUrl, // ← Image for Android
+            // NOTE: clickAction is deprecated - deep link is in data payload instead
+            // The Android app handles actionUrl/click_action from data when notification is tapped
+          },
+          // Add FCM options for deep linking
+          ...(options.actionUrl ? {
+            fcmOptions: {
+              analyticsLabel: 'notification_click',
+            },
+          } : {}),
+        }
+      : undefined;
+
+    // Build iOS-specific configuration
+    let apnsConfig: admin.messaging.ApnsConfig | undefined;
+    if (options) {
+      const apsPayload: any = {
+        sound: options.sound || 'default',
+      };
+
+      // Badge count (red number on app icon)
+      if (options.badge !== undefined) {
+        apsPayload.badge = options.badge;
+      }
+
+      // Thread identifier for grouping related notifications
+      if (options.threadId) {
+        apsPayload['thread-id'] = options.threadId;
+      }
+
+      // Interruption level (iOS 15+)
+      if (options.interruptionLevel) {
+        apsPayload['interruption-level'] = options.interruptionLevel;
+      }
+
+      // Category for deep linking
+      if (options.actionUrl) {
+        apsPayload.category = options.actionUrl;
+      }
+
+      apnsConfig = {
+        payload: {
+          aps: apsPayload,
+        },
+        fcmOptions: {
+          imageUrl: options.imageUrl, // ← Image for iOS
+        },
+      };
+    }
+
+    // Create the complete message
     const message: admin.messaging.MulticastMessage = {
-      notification: {
-        title,
-        body,
-      },
-      data: data || {},
+      notification,
+      data: stringifiedData,
+      android: androidConfig,
+      apns: apnsConfig,
       tokens: Array.isArray(tokens) ? tokens : [tokens],
     };
+
+    // Debug: Log the complete message structure
+    console.log('🚀 Sending FCM Message:');
+    console.log('📝 Notification:');
+    console.log('   - title:', notification.title);
+    console.log('   - body:', notification.body);
+    console.log('📊 Data:', stringifiedData);
+    console.log('🔗 Deep Link Data:');
+    console.log('   - actionUrl:', stringifiedData.actionUrl);
+    console.log('   - click_action:', stringifiedData.click_action);
+    console.log('   - link:', stringifiedData.link);
+    console.log('🤖 Android Config:');
+    console.log('   - imageUrl:', androidConfig?.notification?.imageUrl);
+    console.log('   - channelId:', androidConfig?.notification?.channelId);
+    console.log('   - priority:', androidConfig?.priority);
+    console.log('🍎 iOS Config:');
+    console.log('   - imageUrl:', apnsConfig?.fcmOptions?.imageUrl);
+    console.log('   - badge:', apnsConfig?.payload?.aps?.badge);
+    console.log('   - interruption-level:', apnsConfig?.payload?.aps?.['interruption-level']);
 
     if (Array.isArray(tokens)) {
       return this.getMessaging().sendEachForMulticast(message);

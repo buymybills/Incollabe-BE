@@ -28,6 +28,7 @@ import { AuthService } from './auth.service';
 import { RequestOtpDto } from './dto/request-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { InfluencerSignupDto } from './dto/influencer-signup.dto';
+import { UpdateFcmTokenDto } from './dto/update-fcm-token.dto';
 import { InfluencerSignupMultipartDto } from './dto/influencer-signup-multipart.dto';
 import { BrandSignupDto } from './dto/brand-signup.dto';
 import { BrandSignupMultipartDto } from './dto/brand-signup-multipart.dto';
@@ -157,6 +158,12 @@ export class AuthController {
       'Create a new influencer account with optional profile image upload. Bio is optional. Requires x-verification-key header from OTP verification.',
   })
   @ApiFileFields(['profileImage'], {
+    referralCode: {
+      type: 'string',
+      description: 'Referral code of the influencer who referred you (optional). Enter the 8-character code you received.',
+      example: 'ABC12XYZ',
+      required: false,
+    },
     name: {
       type: 'string',
       description: 'Full name of the influencer',
@@ -1094,5 +1101,107 @@ export class AuthController {
     @Query('email') email?: string,
   ) {
     return this.authService.verifyAndDeleteAccount(userType, otp, phone, email);
+  }
+
+  @Post('influencer/update-fcm-token')
+  @ApiOperation({
+    summary: 'Update FCM token for influencer',
+    description:
+      'Update Firebase Cloud Messaging token for push notifications. No authentication required.',
+  })
+  @ApiBody({ type: UpdateFcmTokenDto })
+  @ApiResponse({
+    status: 200,
+    description: 'FCM token updated successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'FCM token updated successfully',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Influencer not found',
+  })
+  async updateFcmToken(@Body() updateFcmTokenDto: UpdateFcmTokenDto) {
+    return this.authService.updateFcmToken(
+      updateFcmTokenDto.userId,
+      updateFcmTokenDto.fcmToken,
+      updateFcmTokenDto.deviceId,
+      updateFcmTokenDto.deviceName,
+      updateFcmTokenDto.deviceOs,
+      updateFcmTokenDto.appVersion,
+    );
+  }
+
+  @Post('validate-referral-code')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Validate referral code',
+    description:
+      'Check if a referral code is valid and within monthly usage limit. This endpoint can be called before signup to validate the referral code.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        referralCode: {
+          type: 'string',
+          description: 'Referral code to validate (8-character alphanumeric code)',
+          example: 'ABC12XYZ',
+          minLength: 8,
+          maxLength: 8,
+        },
+      },
+      required: ['referralCode'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Referral code validation result',
+    schema: {
+      oneOf: [
+        {
+          type: 'object',
+          properties: {
+            valid: { type: 'boolean', example: true },
+            message: { type: 'string', example: 'Referral code is valid' },
+            details: {
+              type: 'object',
+              properties: {
+                referrerName: { type: 'string', example: 'Dhruv Bhatia' },
+                referrerUsername: { type: 'string', example: 'dhruv_1109' },
+                usageCount: { type: 'number', example: 2 },
+                monthlyLimit: { type: 'number', example: 5 },
+              },
+            },
+          },
+        },
+        {
+          type: 'object',
+          properties: {
+            valid: { type: 'boolean', example: false },
+            message: {
+              type: 'string',
+              example: 'Invalid referral code',
+            },
+          },
+        },
+      ],
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid referral code format',
+  })
+  async validateReferralCode(@Body() body: { referralCode: string }) {
+    const { referralCode } = body;
+
+    if (!referralCode || referralCode.length !== 8) {
+      throw new BadRequestException('Referral code must be exactly 8 characters');
+    }
+
+    return this.authService.validateReferralCode(referralCode.toUpperCase());
   }
 }

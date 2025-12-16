@@ -13,6 +13,8 @@ import { Logger, UseGuards, UnauthorizedException } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { WsAuthGuard } from './guards/ws-auth.guard';
 import { SendMessageDto, MarkAsReadDto, TypingDto } from './dto/chat.dto';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 
 @WebSocketGateway({
   cors: {
@@ -28,29 +30,36 @@ import { SendMessageDto, MarkAsReadDto, TypingDto } from './dto/chat.dto';
   transports: ['websocket', 'polling'], // Allow both transports
 })
 export class ChatGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
-{
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
   private logger: Logger = new Logger('ChatGateway');
-  private userSockets: Map<string, Socket> = new Map(); // userId:userType -> socket
-
-  // Track connection health with heartbeat intervals
+  private userSockets: Map<string, Socket> = new Map();
   private heartbeats: Map<string, NodeJS.Timeout> = new Map();
-
-  // Rate limiting: userId:userType -> { count, resetTime }
   private messageRateLimits: Map<string, { count: number; resetTime: number }> =
     new Map();
 
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly jwtService: JwtService,
+  ) { }
 
   afterInit(server: Server) {
+    console.log('\n🚀 ===== WEBSOCKET GATEWAY INITIALIZED =====');
+    console.log('Namespace: /chat');
+    console.log('CORS: Enabled for all origins');
+    console.log('Transports: websocket, polling');
+    console.log('Ping Interval: 25 seconds');
+    console.log('Ping Timeout: 60 seconds');
+    console.log('===========================================\n');
+
     this.logger.log('WebSocket Gateway initialized');
 
     // Setup server-level error handling (if engine is available)
     if (server.engine) {
       server.engine.on('connection_error', (err) => {
+        console.error('🔴 Engine Connection Error:', err);
         this.logger.error('Connection error:', err);
       });
     }
@@ -69,13 +78,23 @@ export class ChatGateway
    */
   async handleConnection(client: Socket) {
     try {
+      console.log('=== NEW SOCKET CONNECTION ATTEMPT ===');
+      console.log('Client ID:', client.id);
+      console.log('Client IP:', client.handshake.address);
+      console.log('Client Headers:', JSON.stringify(client.handshake.headers, null, 2));
+      console.log('Client Auth:', JSON.stringify(client.handshake.auth, null, 2));
+      console.log('Client Query:', JSON.stringify(client.handshake.query, null, 2));
+
       this.logger.log(`Client attempting to connect: ${client.id}`);
 
       // Extract auth token from handshake
       const token =
         client.handshake.auth.token || client.handshake.headers.authorization;
 
+      console.log('Extracted Token:', token ? `${token.substring(0, 20)}...` : 'NULL');
+
       if (!token) {
+        console.error('❌ REJECTED: No token provided');
         this.logger.warn(`Client ${client.id} rejected: No token provided`);
         client.emit('error', { message: 'Authentication required' });
         client.disconnect(true);
@@ -88,12 +107,18 @@ export class ChatGateway
       // In production, properly validate JWT token
 
       const user = this.extractUserFromToken(token);
+
+      console.log('User Extraction Result:', user);
+
       if (!user) {
+        console.error('❌ REJECTED: Invalid token - could not extract user');
         this.logger.warn(`Client ${client.id} rejected: Invalid token`);
         client.emit('error', { message: 'Invalid authentication token' });
         client.disconnect(true);
         return;
       }
+
+      console.log('✅ Token Valid - User:', user.userId, 'Type:', user.userType);
 
       // Store user data in socket
       client.data.userId = user.userId;
@@ -101,6 +126,7 @@ export class ChatGateway
       client.data.connectedAt = Date.now();
 
       const userKey = `${user.userId}:${user.userType}`;
+      console.log('User Key:', userKey);
 
       // Disconnect previous connection if exists (single device policy)
       const existingSocket = this.userSockets.get(userKey);
@@ -121,7 +147,11 @@ export class ChatGateway
       this.setupHeartbeat(client, userKey);
 
       // Setup ping-pong handlers
-      this.setupPingPong(client, userKey);
+      // this.setupPingPong(client, userKey);
+
+      console.log('✅ CONNECTION SUCCESSFUL');
+      console.log('Total Connected Users:', this.userSockets.size);
+      console.log('=====================================\n');
 
       this.logger.log(
         `Client connected: ${client.id} (User: ${user.userId}, Type: ${user.userType})`,
@@ -133,6 +163,8 @@ export class ChatGateway
         userType: user.userType,
       });
 
+      console.log('Broadcasting user:online event for:', userKey);
+
       // Send connection success to client
       client.emit('connection:success', {
         userId: user.userId,
@@ -140,7 +172,14 @@ export class ChatGateway
         socketId: client.id,
         serverTime: Date.now(),
       });
+
+      console.log('Sent connection:success to client');
+
     } catch (error) {
+      console.error('❌ CONNECTION ERROR:', error.message);
+      console.error('Stack:', error.stack);
+      console.log('=====================================\n');
+
       this.logger.error(`Connection error: ${error.message}`, error.stack);
       client.emit('error', { message: 'Connection failed' });
       client.disconnect(true);
@@ -151,8 +190,14 @@ export class ChatGateway
    * Handle client disconnect
    */
   handleDisconnect(client: Socket) {
+    console.log('\n=== SOCKET DISCONNECTION ===');
+    console.log('Client ID:', client.id);
+
     const userId = client.data.userId;
     const userType = client.data.userType;
+
+    console.log('User ID:', userId);
+    console.log('User Type:', userType);
 
     if (userId && userType) {
       const userKey = `${userId}:${userType}`;
@@ -165,21 +210,33 @@ export class ChatGateway
       if (currentSocket?.id === client.id) {
         this.userSockets.delete(userKey);
 
+        console.log('✅ User removed from active connections');
+
         // Notify user is offline
         client.broadcast.emit('user:offline', {
           userId,
           userType,
         });
+
+        console.log('Broadcasting user:offline event');
+      } else {
+        console.log('⚠️  Socket was already replaced, not removing');
       }
 
       // Log connection duration
       const duration = Date.now() - (client.data.connectedAt || Date.now());
+      console.log('Connection Duration:', Math.round(duration / 1000), 'seconds');
+      console.log('Remaining Connected Users:', this.userSockets.size);
+
       this.logger.log(
         `Client disconnected: ${client.id} (User: ${userId}, Duration: ${Math.round(duration / 1000)}s)`,
       );
     } else {
+      console.log('⚠️  No user data found for this socket');
       this.logger.log(`Client disconnected: ${client.id}`);
     }
+
+    console.log('============================\n');
   }
 
   /**
@@ -246,10 +303,17 @@ export class ChatGateway
     @MessageBody() dto: SendMessageDto,
   ) {
     try {
+      console.log('\n📨 === INCOMING MESSAGE ===');
+      console.log('From Socket:', client.id);
+      console.log('Message DTO:', JSON.stringify(dto, null, 2));
+
       const userId = client.data.userId;
       const userType = client.data.userType;
 
+      console.log('Sender:', userId, '(' + userType + ')');
+
       if (!userId || !userType) {
+        console.error('❌ User not authenticated');
         throw new UnauthorizedException('User not authenticated');
       }
 
@@ -257,6 +321,7 @@ export class ChatGateway
 
       // Check rate limit
       if (!this.checkRateLimit(userKey)) {
+        console.warn('⚠️  Rate limit exceeded for:', userKey);
         client.emit('message:error', {
           error: 'Rate limit exceeded. Please slow down.',
           tempId: dto['tempId'],
@@ -266,25 +331,35 @@ export class ChatGateway
       }
 
       // Save message using existing chat service
+      console.log('💾 Saving message to database...');
       const message = await this.chatService.sendMessage(userId, userType, dto);
+      console.log('✅ Message saved:', message.id);
 
       // Get the actual conversationId from the message (in case it was auto-created)
       const conversationId = message.conversationId;
+      console.log('Conversation ID:', conversationId);
 
       // Emit to conversation room (both sender and receiver)
       const roomName = `conversation_${conversationId}`;
+      console.log('📡 Emitting to room:', roomName);
       this.server.to(roomName).emit('message:new', message);
 
       // Also send direct notification to the other user if they're not in the room
-      this.notifyUserDirectly(
+      console.log('📬 Sending direct notification to recipient...');
+      await this.notifyUserDirectlyWithConversation(
         conversationId,
         userId,
         userType,
-        'message:notification',
-        {
-          conversationId,
-          message,
-        },
+        message,
+      );
+
+      // 🆕 Send conversation update to SENDER as well
+      console.log('📤 Sending conversation update to sender...');
+      await this.sendConversationUpdateToSender(
+        conversationId,
+        userId,
+        userType,
+        client,
       );
 
       this.logger.log(
@@ -292,11 +367,19 @@ export class ChatGateway
       );
 
       // Acknowledge to sender
+      console.log('✅ Acknowledging to sender');
       client.emit('message:sent', {
         tempId: dto['tempId'], // Frontend can send tempId for optimistic UI
         message,
       });
+
+      console.log('==========================\n');
+
     } catch (error) {
+      console.error('❌ MESSAGE SEND ERROR:', error.message);
+      console.error('Stack:', error.stack);
+      console.log('==========================\n');
+
       this.logger.error(`Send message error: ${error.message}`, error.stack);
       client.emit('message:error', {
         error: error.message,
@@ -323,7 +406,7 @@ export class ChatGateway
 
       const result = await this.chatService.markAsRead(userId, userType, dto);
 
-      // Notify conversation room
+      // Notify conversation room (for read receipts)
       const roomName = `conversation_${dto.conversationId}`;
       this.server.to(roomName).emit('message:read', {
         conversationId: dto.conversationId,
@@ -334,7 +417,43 @@ export class ChatGateway
         },
       });
 
+      // Send confirmation to reader
       client.emit('message:read:success', result);
+
+      // Update conversation for the reader (reset unread count)
+      const conversation =
+        await this.chatService['conversationModel'].findByPk(dto.conversationId);
+
+      if (conversation) {
+        const otherParticipant =
+          conversation.participant1Type === userType &&
+          conversation.participant1Id === userId
+            ? {
+                type: conversation.participant2Type,
+                id: conversation.participant2Id,
+              }
+            : {
+                type: conversation.participant1Type,
+                id: conversation.participant1Id,
+              };
+
+        const otherPartyDetails = await this.chatService['getParticipantDetails'](
+          otherParticipant.type as any,
+          otherParticipant.id,
+        );
+
+        // Emit conversation update to reader (unread count is now 0)
+        client.emit('conversation:update', {
+          id: conversation.id,
+          lastMessage: conversation.lastMessage,
+          lastMessageAt: conversation.lastMessageAt,
+          lastMessageSenderType: conversation.lastMessageSenderType,
+          unreadCount: 0, // Just marked as read
+          otherParty: otherPartyDetails,
+          otherPartyType: otherParticipant.type,
+          updatedAt: conversation.updatedAt,
+        });
+      }
     } catch (error) {
       this.logger.error(`Mark as read error: ${error.message}`);
       client.emit('error', { message: error.message });
@@ -425,43 +544,41 @@ export class ChatGateway
   /**
    * Handle explicit ping from client
    */
-  @SubscribeMessage('ping')
-  handlePing(@ConnectedSocket() client: Socket) {
-    client.emit('pong', { timestamp: Date.now() });
-  }
+  // @SubscribeMessage('ping')
+  // handlePing(@ConnectedSocket() client: Socket) {
+  //   client.emit('pong', { timestamp: Date.now() });
+  // }
 
   /**
    * Helper: Extract user from token
    * TODO: Implement proper JWT validation
    */
-  private extractUserFromToken(token: string): {
-    userId: number;
-    userType: 'influencer' | 'brand';
-  } | null {
+  private extractUserFromToken(
+    token: string,
+  ): { userId: number; userType: 'influencer' | 'brand' } | null {
     try {
-      // Temporary implementation - replace with proper JWT validation
-      // Expected format: "Bearer userId:userType" or just the JWT token
+      // Remove 'Bearer ' prefix if present
+      const jwtToken = token.replace(/^Bearer\s+/, '');
 
-      // For now, assuming token format is "userId:userType" for testing
-      // In production, decode and validate JWT token properly
-      const tokenParts = token.replace('Bearer ', '').split(':');
-      if (tokenParts.length >= 2) {
-        return {
-          userId: parseInt(tokenParts[0]),
-          userType: tokenParts[1] as 'influencer' | 'brand',
-        };
+      // JwtModule.register({ secret: process.env.JWT_SECRET }) already set secret,
+      // so no need to pass secret again here
+      const payload = this.jwtService.verify(jwtToken) as any;
+
+      if (!payload?.id || !payload?.userType) {
+        return null;
       }
 
-      // TODO: Add proper JWT validation here
-      // const decoded = this.jwtService.verify(token);
-      // return { userId: decoded.sub, userType: decoded.userType };
-
-      return null;
+      return {
+        userId: payload.id,
+        userType: payload.userType,
+      };
     } catch (error) {
       this.logger.error(`Token extraction error: ${error.message}`);
       return null;
     }
   }
+
+
 
   /**
    * Helper: Notify a specific user directly
@@ -559,15 +676,15 @@ export class ChatGateway
   /**
    * Setup ping-pong handlers for connection health
    */
-  private setupPingPong(client: Socket, userKey: string) {
-    client.on('ping', () => {
-      client.emit('pong', { timestamp: Date.now() });
-    });
+  // private setupPingPong(client: Socket, userKey: string) {
+  //   client.on('ping', () => {
+  //     client.emit('pong', { timestamp: Date.now() });
+  //   });
 
-    client.on('pong', () => {
-      this.logger.debug(`Pong received from ${userKey}`);
-    });
-  }
+  //   client.on('pong', () => {
+  //     this.logger.debug(`Pong received from ${userKey}`);
+  //   });
+  // }
 
   /**
    * Check rate limit for message sending
@@ -612,5 +729,216 @@ export class ChatGateway
     this.logger.debug(
       `Cleaned up rate limits. Remaining: ${this.messageRateLimits.size}`,
     );
+  }
+
+  /**
+   * Public method: Emit new message events to WebSocket clients
+   * Called by HTTP endpoints to notify connected users
+   */
+  public async emitNewMessage(
+    conversationId: number,
+    senderId: number,
+    senderType: string,
+    message: any,
+  ) {
+    try {
+      console.log('\n📡 === EMITTING MESSAGE VIA HTTP ===');
+      console.log('Conversation ID:', conversationId);
+      console.log('Sender:', senderId, '(' + senderType + ')');
+      console.log('Message ID:', message.id);
+
+      // Emit to conversation room (both sender and receiver if they're in the room)
+      const roomName = `conversation_${conversationId}`;
+      console.log('📡 Emitting to room:', roomName);
+      this.server.to(roomName).emit('message:new', message);
+
+      // Also send direct notification to the other user if they're not in the room
+      console.log('📬 Sending direct notification to recipient...');
+      await this.notifyUserDirectlyWithConversation(
+        conversationId,
+        senderId,
+        senderType,
+        message,
+      );
+
+      console.log('✅ WebSocket events emitted successfully');
+      console.log('===================================\n');
+
+      this.logger.log(
+        `WebSocket events emitted for message ${message.id} in conversation ${conversationId}`,
+      );
+    } catch (error) {
+      console.error('❌ ERROR EMITTING WEBSOCKET EVENTS:', error.message);
+      console.error('Stack:', error.stack);
+      console.log('===================================\n'); 
+
+      this.logger.error(
+        `Failed to emit WebSocket events: ${error.message}`,
+        error.stack,
+      );
+    }
+  }
+
+  /**
+   * Helper: Notify a specific user with conversation update
+   * Sends both message notification and conversation list update
+   */
+  private async notifyUserDirectlyWithConversation(
+    conversationId: number,
+    senderUserId: number,
+    senderUserType: string,
+    message: any,
+  ) {
+    try {
+      // Get conversation to find the other user
+      const conversation =
+        await this.chatService['conversationModel'].findByPk(conversationId);
+
+      if (!conversation) return;
+
+      // Determine the recipient
+      let recipientUserId: number;
+      let recipientUserType: string;
+
+      if (
+        conversation.participant1Type === senderUserType &&
+        conversation.participant1Id === senderUserId
+      ) {
+        recipientUserId = conversation.participant2Id;
+        recipientUserType = conversation.participant2Type;
+      } else if (
+        conversation.participant2Type === senderUserType &&
+        conversation.participant2Id === senderUserId
+      ) {
+        recipientUserId = conversation.participant1Id;
+        recipientUserType = conversation.participant1Type;
+      } else {
+        this.logger.warn(
+          `Sender ${senderUserId}:${senderUserType} not in conversation ${conversationId}`,
+        );
+        return;
+      }
+
+      const userKey = `${recipientUserId}:${recipientUserType}`;
+      const recipientSocket = this.userSockets.get(userKey);
+
+      if (recipientSocket) {
+        // Send message notification
+        recipientSocket.emit('message:notification', {
+          conversationId,
+          message,
+        });
+
+        // Get recipient's unread count for this conversation
+        const recipientUnreadCount =
+          recipientUserType === conversation.participant1Type &&
+          recipientUserId === conversation.participant1Id
+            ? conversation.unreadCountParticipant1
+            : conversation.unreadCountParticipant2;
+
+        // Get sender details for conversation update
+        const senderDetails = await this.chatService['getParticipantDetails'](
+          senderUserType as any,
+          senderUserId,
+        );
+
+        // Send conversation update (for conversations list)
+        recipientSocket.emit('conversation:update', {
+          id: conversationId,
+          lastMessage: conversation.lastMessage,
+          lastMessageAt: conversation.lastMessageAt,
+          lastMessageSenderType: conversation.lastMessageSenderType,
+          unreadCount: recipientUnreadCount,
+          otherParty: senderDetails,
+          otherPartyType: senderUserType,
+          updatedAt: conversation.updatedAt,
+        });
+
+        this.logger.debug(
+          `Sent notifications to ${recipientUserId}:${recipientUserType}`,
+        );
+      } else {
+        this.logger.debug(
+          `Recipient ${recipientUserId}:${recipientUserType} not online`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(`Direct notification error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Helper: Send conversation update to the sender
+   * Updates the sender's conversation list after they send a message
+   */
+  private async sendConversationUpdateToSender(
+    conversationId: number,
+    senderUserId: number,
+    senderUserType: string,
+    senderSocket: Socket,
+  ) {
+    try {
+      // Get conversation details
+      const conversation =
+        await this.chatService['conversationModel'].findByPk(conversationId);
+
+      if (!conversation) return;
+
+      // Determine the other participant (recipient)
+      let recipientUserId: number;
+      let recipientUserType: string;
+
+      if (
+        conversation.participant1Type === senderUserType &&
+        conversation.participant1Id === senderUserId
+      ) {
+        // Sender is participant1, so other party is participant2
+        recipientUserId = conversation.participant2Id;
+        recipientUserType = conversation.participant2Type;
+      } else if (
+        conversation.participant2Type === senderUserType &&
+        conversation.participant2Id === senderUserId
+      ) {
+        // Sender is participant2, so other party is participant1
+        recipientUserId = conversation.participant1Id;
+        recipientUserType = conversation.participant1Type;
+      } else {
+        this.logger.warn(
+          `Sender ${senderUserId}:${senderUserType} not in conversation ${conversationId}`,
+        );
+        return;
+      }
+
+      // Get sender's unread count (should be 0 since they just sent the message)
+      const senderUnreadCount =
+        senderUserType === conversation.participant1Type &&
+        senderUserId === conversation.participant1Id
+          ? conversation.unreadCountParticipant1
+          : conversation.unreadCountParticipant2;
+
+      // Get recipient details for conversation update
+      const recipientDetails = await this.chatService['getParticipantDetails'](
+        recipientUserType as any,
+        recipientUserId,
+      );
+
+      // Send conversation update to sender
+      senderSocket.emit('conversation:update', {
+        id: conversationId,
+        lastMessage: conversation.lastMessage,
+        lastMessageAt: conversation.lastMessageAt,
+        lastMessageSenderType: conversation.lastMessageSenderType,
+        unreadCount: senderUnreadCount, // Should be 0 for sender
+        otherParty: recipientDetails,
+        otherPartyType: recipientUserType,
+        updatedAt: conversation.updatedAt,
+      });
+
+      this.logger.debug(
+        `Sent conversation update to sender ${senderUserId}:${senderUserType}`,
+      );
+    } catch (error) {
+      this.logger.error(`Sender conversation update error: ${error.message}`);
+    }
   }
 }

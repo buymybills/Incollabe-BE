@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { map } from 'rxjs/operators';
 import { Observable } from 'rxjs';
+import { toIST } from '../shared/utils/date.utils';
 
 @Injectable()
 export class ResponseInterceptor<T> implements NestInterceptor<T, any> {
@@ -15,7 +16,7 @@ export class ResponseInterceptor<T> implements NestInterceptor<T, any> {
         success: true,
         data,
         message: 'Success',
-        timestamp: new Date().toISOString(),
+        timestamp: toIST(new Date()),
       })),
     );
   }

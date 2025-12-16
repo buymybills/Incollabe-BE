@@ -25,6 +25,7 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { ChatService } from './chat.service';
+import { ChatGateway } from './chat.gateway';
 import { S3Service } from './s3.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import type { RequestWithUser } from '../types/request.types';
@@ -81,6 +82,7 @@ export class ChatController {
 
   constructor(
     private readonly chatService: ChatService,
+    private readonly chatGateway: ChatGateway,
     private readonly s3Service: S3Service,
   ) {}
 
@@ -99,7 +101,7 @@ export class ChatController {
       req.user.userType,
       dto,
     );
-    return conversation;  // Let interceptor wrap it
+    return conversation; // Let interceptor wrap it
   }
 
   @Get('chat/conversations')
@@ -138,7 +140,7 @@ export class ChatController {
       req.user.userType,
       dto,
     );
-    return result;  // Let interceptor wrap it
+    return result; // Let interceptor wrap it
   }
 
   @Post('chat/messages')
@@ -150,8 +152,8 @@ export class ChatController {
       '**E2EE Message Flow:**\n' +
       '1. Generate AES-256 session key on your device\n' +
       '2. Encrypt message content with AES-256-GCM\n' +
-      '3. Fetch recipient\'s public key: GET /api/e2ee/public-key/:userType/:userIdentifier\n' +
-      '4. Encrypt AES key with recipient\'s RSA-2048 public key\n' +
+      "3. Fetch recipient's public key: GET /api/e2ee/public-key/:userType/:userIdentifier\n" +
+      "4. Encrypt AES key with recipient's RSA-2048 public key\n" +
       '5. Send encrypted message using this endpoint\n\n' +
       '**Recommended Approach:**\n' +
       'Use `otherPartyId` + `otherPartyType` (conversation auto-created by backend):\n' +
@@ -165,7 +167,7 @@ export class ChatController {
       '```\n\n' +
       '**Content Format:**\n' +
       'The `content` field must be a JSON string with:\n' +
-      '- `encryptedKey`: AES key encrypted with recipient\'s RSA public key (Base64)\n' +
+      "- `encryptedKey`: AES key encrypted with recipient's RSA public key (Base64)\n" +
       '- `iv`: AES-GCM initialization vector (Base64)\n' +
       '- `ciphertext`: AES-256-GCM encrypted message (Base64)\n' +
       '- `version`: Protocol version (currently "v1")\n\n' +
@@ -231,7 +233,12 @@ export class ChatController {
           description: 'Option 1: Send using conversation ID',
         },
         {
-          required: ['otherPartyId', 'otherPartyType', 'content', 'messageType'],
+          required: [
+            'otherPartyId',
+            'otherPartyType',
+            'content',
+            'messageType',
+          ],
           description: 'Option 2 (Recommended): Send using recipient details',
         },
       ],
@@ -329,7 +336,16 @@ export class ChatController {
       req.user.userType,
       dto,
     );
-    return message;  // Let interceptor wrap it
+
+    // Emit WebSocket events to notify connected users in real-time
+    this.chatGateway.emitNewMessage(
+      message.conversationId,
+      req.user.id,
+      req.user.userType,
+      message,
+    );
+
+    return message; // Let interceptor wrap it
   }
 
   @Put('chat/conversations/:id/read')
@@ -353,7 +369,7 @@ export class ChatController {
       req.user.userType,
       dto,
     );
-    return result;  // Let interceptor wrap it
+    return result; // Let interceptor wrap it
   }
 
   @Get('chat/unread-count')
@@ -364,7 +380,7 @@ export class ChatController {
       req.user.id,
       req.user.userType,
     );
-    return result;  // Let interceptor wrap it
+    return result; // Let interceptor wrap it
   }
 
   @Delete('chat/conversations/:id')
@@ -379,7 +395,7 @@ export class ChatController {
       req.user.userType,
       conversationId,
     );
-    return result;  // Let interceptor wrap it
+    return result; // Let interceptor wrap it
   }
 
   @Post('chat/upload')
@@ -569,7 +585,7 @@ export class ChatController {
       req.user.userType,
       body.publicKey,
     );
-    return result;  // Let interceptor wrap it
+    return result; // Let interceptor wrap it
   }
 
   @Get('e2ee/public-key/:userType/:userIdentifier')
@@ -578,7 +594,7 @@ export class ChatController {
     description:
       'Retrieve the RSA-2048 public key of another user to encrypt messages for them.\n\n' +
       'Required for E2EE messaging workflow:\n' +
-      '1. Fetch recipient\'s public key using this endpoint\n' +
+      "1. Fetch recipient's public key using this endpoint\n" +
       '2. Encrypt your message with their public key\n' +
       '3. Send encrypted message via POST /api/chat/messages\n\n' +
       'You can use either:\n' +
@@ -593,8 +609,7 @@ export class ChatController {
   })
   @ApiParam({
     name: 'userIdentifier',
-    description:
-      'User ID (numeric) or username (string) of the recipient',
+    description: 'User ID (numeric) or username (string) of the recipient',
     example: '32',
   })
   @ApiResponse({
@@ -640,7 +655,7 @@ export class ChatController {
       userIdentifier,
       userType,
     );
-    return result;  // Let interceptor wrap it
+    return result; // Let interceptor wrap it
   }
 
   @Get('e2ee/my-public-key')
@@ -681,7 +696,8 @@ export class ChatController {
   })
   @ApiResponse({
     status: 404,
-    description: 'Public key not set - please set it first using PUT /api/e2ee/public-key',
+    description:
+      'Public key not set - please set it first using PUT /api/e2ee/public-key',
   })
   @ApiResponse({
     status: 401,
@@ -692,6 +708,6 @@ export class ChatController {
       req.user.id,
       req.user.userType,
     );
-    return result;  // Let interceptor wrap it
+    return result; // Let interceptor wrap it
   }
 }

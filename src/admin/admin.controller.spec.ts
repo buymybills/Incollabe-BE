@@ -7,10 +7,15 @@ import { AdminPostService } from './services/admin-post.service';
 import { InfluencerScoringService } from './services/influencer-scoring.service';
 import { DashboardStatsService } from './services/dashboard-stats.service';
 import { AuditLogService } from './services/audit-log.service';
+import { ReferralProgramService } from './services/referral-program.service';
+import { MaxxSubscriptionAdminService } from './services/maxx-subscription-admin.service';
 import { BrandService } from '../brand/brand.service';
 import { InfluencerService } from '../influencer/influencer.service';
 import { PostService } from '../post/post.service';
 import { SupportTicketService } from '../shared/support-ticket.service';
+import { AuthService } from '../auth/auth.service';
+import { CampaignService } from '../campaign/campaign.service';
+import { S3Service } from '../shared/s3.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { AdminLoginDto } from './dto/admin-login.dto';
@@ -63,6 +68,22 @@ const mockDashboardStatsService = {
   getCampaignDashboardStats: jest.fn(),
 };
 
+const mockReferralProgramService = {
+  getReferralStatistics: jest.fn(),
+  getNewAccountsWithReferral: jest.fn(),
+  getAccountReferrers: jest.fn(),
+  getReferralTransactions: jest.fn(),
+};
+
+const mockMaxxSubscriptionAdminService = {
+  getMaxxSubscriptionStatistics: jest.fn(),
+  getMaxxSubscriptions: jest.fn(),
+  getSubscriptionDetails: jest.fn(),
+  pauseSubscription: jest.fn(),
+  resumeSubscription: jest.fn(),
+  cancelSubscription: jest.fn(),
+};
+
 const mockAuditLogService = {
   createLog: jest.fn(),
   getAuditLogs: jest.fn(),
@@ -97,6 +118,20 @@ const mockSupportTicketService = {
   deleteTicket: jest.fn(),
   createTicket: jest.fn(),
   getMyTickets: jest.fn(),
+};
+
+const mockAuthService = {
+  getNiches: jest.fn(),
+};
+
+const mockCampaignService = {
+  getPopularCities: jest.fn(),
+  searchCities: jest.fn(),
+};
+
+const mockS3Service = {
+  uploadFileToS3: jest.fn(),
+  deleteFileFromS3: jest.fn(),
 };
 
 const mockAdminAuthGuard = {
@@ -141,6 +176,14 @@ describe('AdminController', () => {
           useValue: mockDashboardStatsService,
         },
         {
+          provide: ReferralProgramService,
+          useValue: mockReferralProgramService,
+        },
+        {
+          provide: MaxxSubscriptionAdminService,
+          useValue: mockMaxxSubscriptionAdminService,
+        },
+        {
           provide: AuditLogService,
           useValue: mockAuditLogService,
         },
@@ -159,6 +202,18 @@ describe('AdminController', () => {
         {
           provide: SupportTicketService,
           useValue: mockSupportTicketService,
+        },
+        {
+          provide: AuthService,
+          useValue: mockAuthService,
+        },
+        {
+          provide: CampaignService,
+          useValue: mockCampaignService,
+        },
+        {
+          provide: S3Service,
+          useValue: mockS3Service,
         },
       ],
     })
@@ -326,7 +381,6 @@ describe('AdminController', () => {
 
       expect(result).toEqual(mockPendingReviews);
       expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(
-        1,
         undefined,
         1,
         20,
@@ -342,7 +396,6 @@ describe('AdminController', () => {
       );
 
       expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(
-        1,
         undefined,
         1,
         20,
@@ -358,7 +411,6 @@ describe('AdminController', () => {
       );
 
       expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(
-        3,
         undefined,
         1,
         20,
@@ -585,7 +637,6 @@ describe('AdminController', () => {
       );
 
       expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(
-        2,
         undefined,
         1,
         20,
@@ -602,7 +653,6 @@ describe('AdminController', () => {
 
       // Should extract admin ID from request
       expect(profileReviewService.getPendingProfiles).toHaveBeenCalledWith(
-        1,
         undefined,
         1,
         20,

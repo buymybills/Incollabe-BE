@@ -9,6 +9,8 @@ import { S3Service } from '../shared/s3.service';
 import { EmailService } from '../shared/email.service';
 import { WhatsAppService } from '../shared/whatsapp.service';
 import { NotificationService } from '../shared/notification.service';
+import { DeviceTokenService } from '../shared/device-token.service';
+import { UserType as DeviceUserType } from '../shared/models/device-token.model';
 import { OtpService } from '../shared/services/otp.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto';
@@ -54,6 +56,9 @@ import * as crypto from 'crypto';
 import { Gender } from '../auth/types/gender.enum';
 import { CustomNicheService } from '../shared/services/custom-niche.service';
 import { UserType as CustomNicheUserType } from '../auth/model/custom-niche.model';
+import { CreditTransaction } from 'src/admin/models/credit-transaction.model';
+import { InfluencerReferralUsage } from 'src/auth/model/influencer-referral-usage.model';
+import { InfluencerUpi } from './models/influencer-upi.model';
 
 // Private types for InfluencerService
 type WhatsAppOtpRequest = {
@@ -89,6 +94,7 @@ export class InfluencerService {
     private readonly emailService: EmailService,
     private readonly whatsAppService: WhatsAppService,
     private readonly notificationService: NotificationService,
+    private readonly deviceTokenService: DeviceTokenService,
     @Inject('PROFILE_REVIEW_MODEL')
     private readonly profileReviewModel: typeof ProfileReview,
     @Inject('CAMPAIGN_MODEL')
@@ -114,6 +120,12 @@ export class InfluencerService {
     @Inject('CUSTOM_NICHE_MODEL')
     private readonly customNicheModel: typeof CustomNiche,
     private readonly customNicheService: CustomNicheService,
+    @Inject('CREDIT_TRANSACTION_MODEL')
+    private readonly creditTransactionModel: typeof CreditTransaction,
+    @Inject('INFLUENCER_REFERRAL_USAGE_MODEL')
+    private readonly influencerReferralUsageModel: typeof InfluencerReferralUsage,
+    @Inject('INFLUENCER_UPI_MODEL')
+    private readonly influencerUpiModel: typeof InfluencerUpi,
   ) {}
 
   async getInfluencerProfile(
@@ -122,6 +134,11 @@ export class InfluencerService {
     currentUserId?: number,
     currentUserType?: 'influencer' | 'brand',
   ) {
+    // Validate that only influencers can access their own profile
+    if (influencerId === currentUserId && currentUserType === 'brand') {
+      throw new BadRequestException('Only influencers can access this endpoint');
+    }
+
     let influencer = await this.influencerRepository.findById(influencerId);
 
     if (!influencer) {
@@ -282,6 +299,44 @@ export class InfluencerService {
 
     // Include private data only if not public view
     if (!isPublic) {
+      // Convert Pro subscription dates to IST if they exist
+      const proActivatedAtIST = influencer.proActivatedAt
+        ? new Date(influencer.proActivatedAt).toLocaleString('en-IN', {
+            timeZone: 'Asia/Kolkata',
+          })
+        : null;
+
+      const proExpiresAtIST = influencer.proExpiresAt
+        ? new Date(influencer.proExpiresAt).toLocaleString('en-IN', {
+            timeZone: 'Asia/Kolkata',
+          })
+        : null;
+
+      // Calculate monthly referral usage count
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const endOfMonth = new Date(startOfMonth);
+      endOfMonth.setMonth(endOfMonth.getMonth() + 1);
+      endOfMonth.setDate(0);
+      endOfMonth.setHours(23, 59, 59, 999);
+
+      const monthlyReferralUsageCount = await this.influencerReferralUsageModel.count({
+        where: {
+          influencerId: influencer.id,
+          referralCode: influencer.referralCode || '',
+          createdAt: {
+            [Op.gte]: startOfMonth,
+            [Op.lte]: endOfMonth,
+          },
+        },
+      });
+
+      // Calculate isPro dynamically based on actual subscription status
+      const now = new Date();
+      const isPro = influencer.isPro && influencer.proExpiresAt && influencer.proExpiresAt > now;
+
       return {
         ...baseProfile,
         phone: influencer.phone,
@@ -295,12 +350,21 @@ export class InfluencerService {
           isWhatsappVerified: influencer.isWhatsappVerified,
           isProfileCompleted: influencer.isProfileCompleted,
         },
+        proSubscription: {
+          isPro,
+          proActivatedAt: proActivatedAtIST,
+          proExpiresAt: proExpiresAtIST,
+        },
         weeklyCredits: {
           remaining: influencer.weeklyCredits || 0,
           resetDate: influencer.weeklyCreditsResetDate
             ? new Date(influencer.weeklyCreditsResetDate).toISOString()
             : this.getNextMondayResetDate().toISOString(),
         },
+        referralCode: influencer.referralCode || null,
+        referralCredits: influencer.referralCredits || 0,
+        monthlyReferralUsageCount,
+        upiId: influencer.upiId || null,
         profileCompletion,
       };
     }
@@ -312,7 +376,13 @@ export class InfluencerService {
     influencerId: number,
     updateData: UpdateInfluencerProfileDto,
     files?: any,
+    userType?: 'influencer' | 'brand',
   ) {
+    // Validate that only influencers can update influencer profiles
+    if (userType && userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can update influencer profiles');
+    }
+
     const influencer = await this.influencerRepository.findById(influencerId);
     if (!influencer) {
       throw new NotFoundException('Influencer not found');
@@ -399,15 +469,16 @@ export class InfluencerService {
 
     // Handle social links - set to null only if explicitly provided as empty string
     // This ensures that when a user removes a social link from their profile,
-    // it gets cleared, but when updating other fields, social links are preserved
-    const socialLinkFields = [
+    // it gets cleared, but when updating other fields, these values are preserved
+    // NOTE: upiId is now managed via dedicated UPI management APIs (POST /upi-ids, etc.)
+    const clearableFields = [
       'instagramUrl',
       'youtubeUrl',
       'facebookUrl',
       'linkedinUrl',
       'twitterUrl',
     ];
-    socialLinkFields.forEach((field) => {
+    clearableFields.forEach((field) => {
       if (processedData[field] === '') {
         processedData[field] = null;
       } else if (processedData[field] === undefined) {
@@ -1069,6 +1140,7 @@ export class InfluencerService {
     }
 
     // Add niche filter to WHERE condition if nicheIds are available
+    // This creates: campaign.nicheIds @> '[1]' OR campaign.nicheIds @> '[2]' OR ...
     if (nicheIdsToFilter.length > 0) {
       const nicheConditions = nicheIdsToFilter.map((nicheId) =>
         literal(`"Campaign"."nicheIds"::jsonb @> '[${nicheId}]'::jsonb`),
@@ -1252,7 +1324,7 @@ export class InfluencerService {
         status: CampaignStatus.ACTIVE,
         isActive: true,
       },
-      include: [{ model: Brand, attributes: ['brandName'] }],
+      include: [{ model: Brand, attributes: ['id', 'brandName'] }],
     } as any);
 
     if (!campaign) {
@@ -1273,6 +1345,24 @@ export class InfluencerService {
           'This is an invite-only campaign. You must be invited to apply.',
         );
       }
+    }
+
+    // Check Max Campaign 48-hour Pro-only window
+    if (campaign.isMaxCampaign) {
+      const now = new Date();
+      const campaignCreatedAt = new Date(campaign.createdAt);
+      const hoursSinceCreation = (now.getTime() - campaignCreatedAt.getTime()) / (1000 * 60 * 60);
+
+      // If within first 48 hours, only Pro influencers can apply
+      if (hoursSinceCreation <= 48) {
+        const influencer = await this.influencerRepository.findById(influencerId);
+        if (!influencer?.isPro) {
+          throw new ForbiddenException(
+            'This is a Max Campaign. Only Pro influencers can apply during the first 48 hours. Upgrade to Pro or wait until the campaign opens to all influencers.',
+          );
+        }
+      }
+      // After 48 hours, anyone can apply (no restriction)
     }
 
     // Check if influencer has already applied
@@ -1319,15 +1409,20 @@ export class InfluencerService {
 
     // Send push notification to brand owner about new application asynchronously (fire-and-forget)
     const brand = campaign.brand;
-    if (brand?.fcmToken) {
-      this.notificationService
-        .sendNewApplicationNotification(
-          brand.fcmToken,
-          influencer.name,
-          campaign.name,
-          influencer.id.toString(),
-        )
-        .catch((error) => {
+    if (brand?.id) {
+      this.deviceTokenService
+        .getAllUserTokens(brand.id, DeviceUserType.BRAND)
+        .then((deviceTokens: string[]) => {
+          if (deviceTokens.length > 0) {
+            return this.notificationService.sendNewApplicationNotification(
+              deviceTokens,
+              influencer.name,
+              campaign.name,
+              influencer.id.toString(),
+            );
+          }
+        })
+        .catch((error: any) => {
           console.error('Failed to send push notification to brand:', error);
         });
     }
@@ -2044,6 +2139,437 @@ export class InfluencerService {
       page,
       limit,
       totalPages: Math.ceil(influencersWithMetrics.length / limit),
+    };
+  }
+
+  async getReferralRewards(influencerId: number, page: number = 1, limit: number = 10) {
+    // Get influencer to fetch total referral credits
+    const influencer = await this.influencerRepository.findById(influencerId);
+    if (!influencer) {
+      throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
+    }
+
+    // Only get individual credit transactions, exclude consolidated redemption requests
+    const allTransactions = await this.creditTransactionModel.findAll({
+      where: {
+        influencerId,
+        description: {
+          [Op.notLike]: 'Redemption request%',
+        },
+      },
+      attributes: ['amount', 'paymentStatus'],
+      raw: true,
+    });
+
+    // Calculate summary
+    const lifetimeReward = allTransactions.reduce((sum: number, tx: any) => sum + tx.amount, 0);
+    const paid = allTransactions
+      .filter((tx: any) => tx.paymentStatus === 'paid')
+      .reduce((sum: number, tx: any) => sum + tx.amount, 0);
+    const processing = allTransactions
+      .filter((tx: any) => tx.paymentStatus === 'processing')
+      .reduce((sum: number, tx: any) => sum + tx.amount, 0);
+    const redeemable = allTransactions
+      .filter((tx: any) => tx.paymentStatus === 'pending')
+      .reduce((sum: number, tx: any) => sum + tx.amount, 0);
+
+    // Include processing amounts in redeemed (since redemption is already requested)
+    const redeemed = paid + processing;
+
+    // Get paginated referral history
+    const offset = (page - 1) * limit;
+
+    // Get referrals with their details
+    const { count, rows: referralUsages } = await this.influencerReferralUsageModel.findAndCountAll({
+      where: { influencerId },
+      order: [['createdAt', 'DESC']],
+      limit,
+      offset,
+      raw: true,
+    });
+
+    // Get referred influencers details
+    const referredUserIds = referralUsages.map((r: any) => r.referredUserId);
+
+    // Use Influencer model directly to fetch multiple users
+    const referredInfluencers = referredUserIds.length > 0
+      ? await Influencer.findAll({
+          where: { id: { [Op.in]: referredUserIds } },
+          attributes: ['id', 'name', 'username', 'profileImage', 'isVerified'],
+          raw: true,
+        })
+      : [];
+
+    // Get credit transactions for these referrals
+    const creditTransactions = referredUserIds.length > 0
+      ? await this.creditTransactionModel.findAll({
+          where: {
+            influencerId,
+            referredUserId: { [Op.in]: referredUserIds },
+          },
+          raw: true,
+        })
+      : [];
+
+    // Create a map of referredUserId to transaction
+    const txMap = new Map();
+    creditTransactions.forEach((tx: any) => {
+      txMap.set(tx.referredUserId, tx);
+    });
+
+    // Build referral history
+    const referralHistory = referralUsages.map((usage: any) => {
+      const referredInfluencer = referredInfluencers.find((inf: any) => inf.id === usage.referredUserId);
+      const transaction = txMap.get(usage.referredUserId);
+
+      return {
+        id: referredInfluencer?.id || usage.referredUserId,
+        name: referredInfluencer?.name || 'Unknown',
+        username: referredInfluencer?.username || 'unknown',
+        profileImage: referredInfluencer?.profileImage || null,
+        isVerified: referredInfluencer?.isVerified || false,
+        joinedAt: usage.createdAt,
+        rewardEarned: transaction?.amount || 0,
+        rewardStatus: transaction?.paymentStatus || 'pending',
+        creditTransactionId: transaction?.id || null,
+      };
+    });
+
+    return {
+      summary: {
+        lifetimeReward,
+        redeemed,
+        redeemable,
+      },
+      referralHistory,
+      pagination: {
+        page,
+        limit,
+        total: count,
+        totalPages: Math.ceil(count / limit),
+      },
+    };
+  }
+
+  async trackReferralInviteClick(influencerId: number) {
+    // Verify influencer exists
+    const influencer = await this.influencerRepository.findById(influencerId);
+    if (!influencer) {
+      throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
+    }
+
+    // Increment the click count atomically
+    await Influencer.increment('referralInviteClickCount', {
+      where: { id: influencerId },
+    });
+
+    // Fetch the updated count
+    const updated = await this.influencerRepository.findById(influencerId);
+    if (!updated) {
+      throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
+    }
+
+    return {
+      success: true,
+      message: 'Invite click tracked successfully',
+      totalClicks: updated.referralInviteClickCount || 0,
+    };
+  }
+
+  async redeemRewards(influencerId: number, upiIdRecordId?: number) {
+    // Get influencer
+    const influencer = await this.influencerRepository.findById(influencerId);
+    if (!influencer) {
+      throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
+    }
+
+    // Get selected UPI ID or use provided UPI ID record
+    let selectedUpiRecord: any;
+
+    if (upiIdRecordId) {
+      // Use the provided UPI ID record
+      selectedUpiRecord = await this.influencerUpiModel.findOne({
+        where: { id: upiIdRecordId, influencerId },
+      });
+
+      if (!selectedUpiRecord) {
+        throw new NotFoundException('Selected UPI ID not found.');
+      }
+    } else {
+      // Get the selected UPI ID
+      selectedUpiRecord = await this.influencerUpiModel.findOne({
+        where: {
+          influencerId,
+          isSelectedForCurrentTransaction: true
+        },
+      });
+
+      if (!selectedUpiRecord) {
+        throw new BadRequestException('No UPI ID selected for redemption. Please select a UPI ID first.');
+      }
+    }
+
+    const finalUpiId = selectedUpiRecord.upiId;
+    console.log('🔍 DEBUG - UPI ID selected for redemption:', {
+      selectedUpiRecordId: selectedUpiRecord.id,
+      finalUpiId,
+      influencerId,
+    });
+
+    // Get all pending (earned but not redeemed) transactions
+    const pendingTransactions = await this.creditTransactionModel.findAll({
+      where: {
+        influencerId,
+        paymentStatus: 'pending',
+      },
+      raw: true,
+    });
+
+    if (pendingTransactions.length === 0) {
+      throw new BadRequestException('No pending rewards to redeem.');
+    }
+
+    // Calculate total redeemable amount
+    const totalAmount = pendingTransactions.reduce((sum: number, tx: any) => sum + tx.amount, 0);
+
+    if (totalAmount <= 0) {
+      throw new BadRequestException('No redeemable amount available.');
+    }
+
+    // Mark all pending credit transactions as 'processing' since they're being redeemed
+    const transactionIds = pendingTransactions.map((tx: any) => tx.id);
+    await this.creditTransactionModel.update(
+      {
+        paymentStatus: 'processing', // Mark as being processed for redemption
+      },
+      {
+        where: {
+          id: { [Op.in]: transactionIds },
+        },
+      },
+    );
+
+    // Create ONE consolidated redemption request transaction
+    console.log('🔍 DEBUG - Creating redemption transaction with:', {
+      influencerId,
+      amount: totalAmount,
+      upiId: finalUpiId,
+      transactionIds,
+    });
+
+    const redemptionTransaction = await this.creditTransactionModel.create({
+      influencerId,
+      transactionType: 'referral_bonus',
+      amount: totalAmount,
+      paymentStatus: 'processing', // Waiting for admin to process
+      upiId: finalUpiId,
+      description: `Redemption request for ${transactionIds.length} referral bonuses (IDs: ${transactionIds.join(', ')})`,
+    });
+
+    console.log('🔍 DEBUG - Created redemption transaction:', {
+      id: redemptionTransaction.id,
+      upiId: redemptionTransaction.upiId,
+    });
+
+    // Update the UPI ID's lastUsedAt timestamp
+    await selectedUpiRecord.update({ lastUsedAt: new Date() });
+
+    // Send WhatsApp notification
+    if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
+      const message = `Your redemption request for Rs ${totalAmount} has been received. The amount will be transferred to your UPI ID (${finalUpiId}) within 24-48 working hours.`;
+      await this.whatsAppService.sendReferralCreditNotification(
+        influencer.whatsappNumber,
+        message,
+      );
+    }
+
+    console.log('✅ Redemption request processed:', {
+      influencerId,
+      influencerName: influencer.name,
+      amount: totalAmount,
+      upiId: finalUpiId,
+      upiIdRecordId: selectedUpiRecord.id,
+      transactionsCount: transactionIds.length,
+      timestamp: new Date().toISOString(),
+    });
+
+    return {
+      success: true,
+      message: 'Redemption request submitted successfully. You will receive the payment within 24-48 hours.',
+      amountRequested: totalAmount,
+      upiId: finalUpiId,
+      transactionsProcessed: transactionIds.length,
+    };
+  }
+
+  // ==================== UPI Management Methods ====================
+
+  async getInfluencerUpiIds(influencerId: number) {
+    const upiIds = await this.influencerUpiModel.findAll({
+      where: { influencerId },
+      order: [
+        ['isSelectedForCurrentTransaction', 'DESC'], // Selected first
+        ['lastUsedAt', 'DESC NULLS LAST'], // Then by last used
+        ['createdAt', 'DESC'], // Then by creation date
+      ],
+      raw: true,
+    });
+
+    // Transform to only include isSelectedForCurrentTransaction when true
+    const transformedUpiIds = upiIds.map((upi: any) => {
+      const { isSelectedForCurrentTransaction, ...rest } = upi;
+
+      // Only include the field if it's true
+      if (isSelectedForCurrentTransaction) {
+        return { ...rest, isSelectedForCurrentTransaction: true };
+      }
+
+      return rest;
+    });
+
+    return {
+      upiIds: transformedUpiIds,
+      total: transformedUpiIds.length,
+    };
+  }
+
+  async addUpiId(influencerId: number, upiId: string, setAsSelected: boolean = false) {
+    // Check if influencer exists
+    const influencer = await this.influencerRepository.findById(influencerId);
+    if (!influencer) {
+      throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
+    }
+
+    // Check if UPI ID already exists for this influencer
+    const existing = await this.influencerUpiModel.findOne({
+      where: { influencerId, upiId },
+    });
+
+    if (existing) {
+      throw new BadRequestException('This UPI ID is already added to your account.');
+    }
+
+    // If setAsSelected is true, unselect all other UPI IDs
+    if (setAsSelected) {
+      await this.influencerUpiModel.update(
+        { isSelectedForCurrentTransaction: false },
+        { where: { influencerId } },
+      );
+    }
+
+    // Create new UPI ID record
+    const newUpiRecord = await this.influencerUpiModel.create({
+      influencerId,
+      upiId,
+      isSelectedForCurrentTransaction: setAsSelected,
+    } as any);
+
+    console.log('✅ UPI ID added:', {
+      influencerId,
+      upiId,
+      setAsSelected,
+      timestamp: new Date().toISOString(),
+    });
+
+    return newUpiRecord;
+  }
+
+  async selectUpiIdForTransaction(influencerId: number, upiIdRecordId: number) {
+    // Check if the UPI record exists and belongs to this influencer
+    const upiRecord = await this.influencerUpiModel.findOne({
+      where: { id: upiIdRecordId, influencerId },
+    });
+
+    if (!upiRecord) {
+      throw new NotFoundException('UPI ID not found or does not belong to you.');
+    }
+
+    // Unselect all other UPI IDs for this influencer
+    await this.influencerUpiModel.update(
+      { isSelectedForCurrentTransaction: false },
+      { where: { influencerId } },
+    );
+
+    // Select the specified UPI ID
+    await upiRecord.update({ isSelectedForCurrentTransaction: true });
+
+    console.log('✅ UPI ID selected for transaction:', {
+      influencerId,
+      upiIdRecordId,
+      upiId: upiRecord.upiId,
+      timestamp: new Date().toISOString(),
+    });
+
+    return {
+      success: true,
+      message: 'UPI ID selected successfully',
+      upiId: upiRecord.upiId,
+    };
+  }
+
+  async selectUpiAndRedeemRewards(influencerId: number, upiIdRecordId: number) {
+    // Reuse existing methods: Select UPI first, then redeem rewards
+    // Step 1: Select the UPI ID for transaction
+    await this.selectUpiIdForTransaction(influencerId, upiIdRecordId);
+
+    // Step 2: Redeem rewards with the selected UPI
+    // Pass upiIdRecordId to explicitly use this UPI
+    const result = await this.redeemRewards(influencerId, upiIdRecordId);
+
+    console.log('✅ UPI Selected & Redemption Processed:', {
+      influencerId,
+      upiIdRecordId,
+      amountRequested: result.amountRequested,
+      upiId: result.upiId,
+      transactionsProcessed: result.transactionsProcessed,
+      timestamp: new Date().toISOString(),
+    });
+
+    return result;
+  }
+
+  async deleteUpiId(influencerId: number, upiIdRecordId: number) {
+    // Check if the UPI record exists and belongs to this influencer
+    const upiRecord = await this.influencerUpiModel.findOne({
+      where: { id: upiIdRecordId, influencerId },
+    });
+
+    if (!upiRecord) {
+      throw new NotFoundException('UPI ID not found or does not belong to you.');
+    }
+
+    // Don't allow deletion if this is the only UPI ID and there are pending transactions
+    const upiCount = await this.influencerUpiModel.count({
+      where: { influencerId },
+    });
+
+    if (upiCount === 1) {
+      const pendingTransactions = await this.creditTransactionModel.count({
+        where: {
+          influencerId,
+          paymentStatus: 'pending',
+        },
+      });
+
+      if (pendingTransactions > 0) {
+        throw new BadRequestException(
+          'Cannot delete the only UPI ID when there are pending redemptions. Please add another UPI ID first.',
+        );
+      }
+    }
+
+    await upiRecord.destroy();
+
+    console.log('✅ UPI ID deleted:', {
+      influencerId,
+      upiIdRecordId,
+      upiId: upiRecord.upiId,
+      timestamp: new Date().toISOString(),
+    });
+
+    return {
+      success: true,
+      message: 'UPI ID deleted successfully',
     };
   }
 

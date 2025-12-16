@@ -29,7 +29,15 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       exception.name === 'SequelizeDatabaseError'
     ) {
       status = HttpStatus.BAD_REQUEST;
-      message = 'Invalid data provided';
+      // Show detailed Sequelize error message
+      if (exception.name === 'SequelizeUniqueConstraintError') {
+        const field = exception.errors?.[0]?.path || 'field';
+        message = `${field} already exists`;
+      } else if (exception.name === 'SequelizeValidationError') {
+        message = exception.errors?.map((e: any) => e.message).join(', ') || 'Validation error';
+      } else {
+        message = exception.message || 'Database error';
+      }
     }
     // JWT errors
     else if (

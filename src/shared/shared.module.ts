@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { SequelizeModule } from '@nestjs/sequelize';
+import { ScheduleModule } from '@nestjs/schedule';
 import { SmsService } from './sms.service';
 import { S3Service } from './s3.service';
 import { EmailService } from './email.service';
@@ -18,7 +19,11 @@ import { ChatService } from './chat.service';
 import { ChatGateway } from './chat.gateway';
 import { SearchController } from './controllers/search.controller';
 import { ChatController } from './chat.controller';
+import { InstagramController } from './controllers/instagram.controller';
+import { InstagramService } from './services/instagram.service';
+import { InstagramSyncCronService } from './services/instagram-sync.cron';
 import { IsValidUsernameConstraint } from './validators/is-valid-username.validator';
+import { RazorpayService } from './razorpay.service';
 import { Otp } from '../auth/model/otp.model';
 import { CustomNiche } from '../auth/model/custom-niche.model';
 import { Influencer } from '../auth/model/influencer.model';
@@ -27,10 +32,20 @@ import { Niche } from '../auth/model/niche.model';
 import { SupportTicket } from './models/support-ticket.model';
 import { Conversation } from './models/conversation.model';
 import { Message } from './models/message.model';
+import { KeyBackup } from './models/key-backup.model';
+import { InstagramMedia } from './models/instagram-media.model';
+import { InstagramMediaInsight } from './models/instagram-media-insight.model';
+import { KeyBackupService } from './services/key-backup.service';
+import { KeyBackupController } from './key-backup.controller';
+import { JwtAuthModule } from './jwt.module';
+import { DeviceToken } from './models/device-token.model';
+import { DeviceTokenService } from './device-token.service';
 
 @Module({
   imports: [
-    ConfigModule,
+    ConfigModule.forRoot(),
+    ScheduleModule.forRoot(),
+    JwtAuthModule,
     SequelizeModule.forFeature([
       Otp,
       CustomNiche,
@@ -40,9 +55,13 @@ import { Message } from './models/message.model';
       SupportTicket,
       Conversation,
       Message,
+      KeyBackup,
+      InstagramMedia,
+      InstagramMediaInsight,
+      DeviceToken,
     ]),
   ],
-  controllers: [SearchController, ChatController],
+  controllers: [SearchController, ChatController, KeyBackupController, InstagramController],
   providers: [
     SmsService,
     S3Service,
@@ -60,6 +79,11 @@ import { Message } from './models/message.model';
     ChatService,
     ChatGateway,
     IsValidUsernameConstraint,
+    RazorpayService,
+    KeyBackupService,
+    InstagramService,
+    InstagramSyncCronService,
+    DeviceTokenService,
   ],
   exports: [
     SmsService,
@@ -77,6 +101,9 @@ import { Message } from './models/message.model';
     SupportTicketService,
     ChatService,
     IsValidUsernameConstraint,
+    RazorpayService,
+    InstagramService,
+    DeviceTokenService,
   ],
 })
-export class SharedModule {}
+export class SharedModule { }
