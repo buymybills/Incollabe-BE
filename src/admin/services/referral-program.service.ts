@@ -389,6 +389,10 @@ export class ReferralProgramService {
       where: {
         influencerId: { [Op.in]: influencerIds },
         transactionType: 'referral_bonus',
+        // Exclude consolidated redemption transactions to prevent double-counting
+        description: {
+          [Op.notLike]: 'Redemption request%',
+        },
       },
       group: ['influencerId'],
       raw: true,
