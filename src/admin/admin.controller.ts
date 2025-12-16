@@ -2108,7 +2108,7 @@ export class AdminController {
     @Body() dto: ProcessRedemptionDto,
     @Req() req: any,
   ) {
-    const adminId = req.user.adminId;
+    const adminId = req.admin.id;
     return await this.referralProgramService.processRedemption(id, adminId, dto);
   }
 
