@@ -283,9 +283,9 @@ export class MaxxSubscriptionAdminService {
     // Determine sort field
     let orderField: any = [['createdAt', sortOrder]];
     if (sortBy === 'usageMonths') {
-      orderField = [[literal('"subscription"."startDate"'), sortOrder]];
+      orderField = [['startDate', sortOrder]];
     } else if (sortBy === 'validTill') {
-      orderField = [[literal('"subscription"."currentPeriodEnd"'), sortOrder]];
+      orderField = [['currentPeriodEnd', sortOrder]];
     }
 
     // Get subscriptions with influencer details
