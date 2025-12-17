@@ -319,19 +319,16 @@ export class AuthService {
       .update(formattedPhone)
       .digest('hex');
 
-    const user = await this.sequelize.transaction(async (t) => {
-      try {
+    let user: Influencer | null;
+    try {
+      user = await this.sequelize.transaction(async (t) => {
+        // Delete the OTP record
         await this.otpModel.destroy({
           where: { id: otpRecord.id },
           transaction: t,
         });
-      } catch (error) {
-        console.error('OTP destroy error:', error);
-        throw error;
-      }
 
-      // Check for deleted account within 30 days
-      try {
+        // Check for deleted account within 30 days
         const deletedUser = await this.influencerModel.findOne({
           where: { phoneHash },
           paranoid: false,
@@ -356,15 +353,17 @@ export class AuthService {
           }
         }
 
+        // Look for existing user
         return await this.influencerModel.findOne({
           where: { phoneHash },
           transaction: t,
         });
-      } catch (error) {
-        console.error('Influencer lookup error:', error);
-        throw error;
-      }
-    });
+      });
+    } catch (error) {
+      // Transaction automatically rolled back on error
+      this.loggerService.error('OTP verification transaction failed:', error);
+      throw new InternalServerErrorException('Failed to verify OTP. Please try again.');
+    }
 
     // 🔹 Step 5: Handle new users (OTP verified but signup required)
     if (!user) {
