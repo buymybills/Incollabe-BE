@@ -38,7 +38,7 @@ export class VerifySubscriptionPaymentDto {
   subscriptionId: number;
 }
 
-export class CancelSubscriptionDto {
+export class CancelProSubscriptionDto {
   @ApiProperty({
     description: 'Reason for cancellation (optional)',
     example: 'Too expensive',

@@ -1,4 +1,5 @@
-import { Controller, Post, Get, Body, Query, Param, HttpCode, HttpStatus, UseGuards, Req, BadRequestException } from '@nestjs/common';
+import { Post, Get, Body, Query, Param, HttpCode, HttpStatus, UseGuards, Req, BadRequestException } from '@nestjs/common';
+// import { Controller } from '@nestjs/common'; // DISABLED: Commented out with @Controller decorator
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { InstagramService } from '../services/instagram.service';
 import { InstagramSyncCronService } from '../services/instagram-sync.cron';
@@ -12,8 +13,16 @@ import { AuthGuard } from '../../auth/guards/auth.guard';
 import { Public } from '../../auth/decorators/public.decorator';
 import type { RequestWithUser } from '../../types/request.types';
 
+/**
+ * DISABLED: Instagram functionality commented out for production
+ *
+ * To re-enable:
+ * 1. Uncomment the @Controller decorator below
+ * 2. Uncomment the controller registration in shared.module.ts
+ * 3. Uncomment the cron jobs in instagram-sync.cron.ts
+ */
 @ApiTags('Instagram OAuth')
-@Controller('instagram')
+// @Controller('instagram')
 @UseGuards(AuthGuard)
 @ApiBearerAuth()
 export class InstagramController {

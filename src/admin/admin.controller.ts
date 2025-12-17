@@ -146,7 +146,7 @@ import {
   SubscriptionDetailsDto,
   PauseSubscriptionDto,
   ResumeSubscriptionDto,
-  CancelSubscriptionDto,
+  CancelMaxxSubscriptionDto,
   SubscriptionActionResponseDto,
 } from './dto/maxx-subscription.dto';
 import {
@@ -2283,7 +2283,7 @@ export class AdminController {
     description: 'Subscription ID',
     example: 123,
   })
-  @ApiBody({ type: CancelSubscriptionDto })
+  @ApiBody({ type: CancelMaxxSubscriptionDto })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Subscription cancelled successfully',
@@ -2303,7 +2303,7 @@ export class AdminController {
   })
   async cancelMaxxSubscription(
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: CancelSubscriptionDto,
+    @Body() dto: CancelMaxxSubscriptionDto,
   ) {
     return await this.maxxSubscriptionAdminService.cancelSubscription(id, dto);
   }

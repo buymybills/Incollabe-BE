@@ -46,7 +46,7 @@ import { UserType } from '../shared/models/support-ticket.model';
 import { ProSubscriptionService } from './services/pro-subscription.service';
 import {
   VerifySubscriptionPaymentDto,
-  CancelSubscriptionDto,
+  CancelProSubscriptionDto,
 } from './dto/pro-subscription.dto';
 import { RedeemRewardsDto, RedeemRewardsResponseDto } from './dto/redeem-rewards.dto';
 import {
@@ -1210,7 +1210,7 @@ export class InfluencerController {
   })
   async cancelProSubscription(
     @Req() req: RequestWithUser,
-    @Body() cancelDto: CancelSubscriptionDto,
+    @Body() cancelDto: CancelProSubscriptionDto,
   ) {
     if (req.user.userType !== 'influencer') {
       throw new BadRequestException('Only influencers can cancel Pro subscription');

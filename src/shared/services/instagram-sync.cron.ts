@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+// import { Cron, CronExpression } from '@nestjs/schedule'; // DISABLED: Commented out with cron jobs
 import { InjectModel } from '@nestjs/sequelize';
 import { Op, WhereOptions } from 'sequelize';
 import { Influencer } from '../../auth/model/influencer.model';
@@ -22,11 +22,13 @@ export class InstagramSyncCronService {
    * Sync Instagram profiles for all connected users
    * Runs every day at 2:00 AM
    * Cron format: second minute hour day month dayOfWeek
+   *
+   * DISABLED: Instagram functionality commented out for production
    */
-  @Cron(CronExpression.EVERY_DAY_AT_2AM, {
-    name: 'instagram-profile-sync',
-    timeZone: 'Asia/Kolkata', // Change to your timezone
-  })
+  // @Cron(CronExpression.EVERY_DAY_AT_2AM, {
+  //   name: 'instagram-profile-sync',
+  //   timeZone: 'Asia/Kolkata', // Change to your timezone
+  // })
   async syncAllInstagramProfiles() {
     this.logger.log('🔄 Starting Instagram profile sync cron job...');
 
@@ -141,11 +143,13 @@ export class InstagramSyncCronService {
   /**
    * Sync only users with tokens expiring soon (within 7 days)
    * Runs every day at 1:00 AM
+   *
+   * DISABLED: Instagram functionality commented out for production
    */
-  @Cron(CronExpression.EVERY_DAY_AT_1AM, {
-    name: 'instagram-token-refresh',
-    timeZone: 'Asia/Kolkata',
-  })
+  // @Cron(CronExpression.EVERY_DAY_AT_1AM, {
+  //   name: 'instagram-token-refresh',
+  //   timeZone: 'Asia/Kolkata',
+  // })
   async refreshExpiringTokens() {
     this.logger.log('🔄 Starting Instagram token refresh cron job...');
 

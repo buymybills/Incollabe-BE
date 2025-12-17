@@ -19,9 +19,9 @@ import { ChatService } from './chat.service';
 import { ChatGateway } from './chat.gateway';
 import { SearchController } from './controllers/search.controller';
 import { ChatController } from './chat.controller';
-import { InstagramController } from './controllers/instagram.controller';
-import { InstagramService } from './services/instagram.service';
-import { InstagramSyncCronService } from './services/instagram-sync.cron';
+// import { InstagramController } from './controllers/instagram.controller'; // DISABLED: Instagram functionality commented out
+// import { InstagramService } from './services/instagram.service'; // DISABLED: Instagram functionality commented out
+// import { InstagramSyncCronService } from './services/instagram-sync.cron'; // DISABLED: Instagram functionality commented out
 import { IsValidUsernameConstraint } from './validators/is-valid-username.validator';
 import { RazorpayService } from './razorpay.service';
 import { Otp } from '../auth/model/otp.model';
@@ -61,7 +61,12 @@ import { DeviceTokenService } from './device-token.service';
       DeviceToken,
     ]),
   ],
-  controllers: [SearchController, ChatController, KeyBackupController, InstagramController],
+  controllers: [
+    SearchController,
+    ChatController,
+    KeyBackupController,
+    // InstagramController, // DISABLED: Instagram functionality commented out for production
+  ],
   providers: [
     SmsService,
     S3Service,
@@ -81,8 +86,8 @@ import { DeviceTokenService } from './device-token.service';
     IsValidUsernameConstraint,
     RazorpayService,
     KeyBackupService,
-    InstagramService,
-    InstagramSyncCronService,
+    // InstagramService, // DISABLED: Instagram functionality commented out for production
+    // InstagramSyncCronService, // DISABLED: Instagram functionality commented out for production
     DeviceTokenService,
   ],
   exports: [
@@ -102,7 +107,7 @@ import { DeviceTokenService } from './device-token.service';
     ChatService,
     IsValidUsernameConstraint,
     RazorpayService,
-    InstagramService,
+    // InstagramService, // DISABLED: Instagram functionality commented out for production
     DeviceTokenService,
   ],
 })
