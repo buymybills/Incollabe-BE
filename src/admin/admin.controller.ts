@@ -121,6 +121,7 @@ import { UpdateDisplayOrderDto } from './dto/update-display-order.dto';
 import { AuditLogService } from './services/audit-log.service';
 import { ReferralProgramService } from './services/referral-program.service';
 import { MaxxSubscriptionAdminService } from './services/maxx-subscription-admin.service';
+import { MaxSubscriptionBrandService } from './services/max-subscription-brand.service';
 import { SupportTicketService } from '../shared/support-ticket.service';
 import { CreateSupportTicketDto } from '../shared/dto/create-support-ticket.dto';
 import { GetSupportTicketsDto } from '../shared/dto/get-support-tickets.dto';
@@ -148,6 +149,11 @@ import {
   CancelSubscriptionDto,
   SubscriptionActionResponseDto,
 } from './dto/maxx-subscription.dto';
+import {
+  MaxSubscriptionBrandStatisticsDto,
+  GetMaxPurchasesDto,
+  MaxPurchasesResponseDto,
+} from './dto/max-subscription-brand.dto';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -161,6 +167,7 @@ export class AdminController {
     private readonly dashboardStatsService: DashboardStatsService,
     private readonly referralProgramService: ReferralProgramService,
     private readonly maxxSubscriptionAdminService: MaxxSubscriptionAdminService,
+    private readonly maxSubscriptionBrandService: MaxSubscriptionBrandService,
     private readonly brandService: BrandService,
     private readonly influencerService: InfluencerService,
     private readonly postService: PostService,
@@ -2299,6 +2306,96 @@ export class AdminController {
     @Body() dto: CancelSubscriptionDto,
   ) {
     return await this.maxxSubscriptionAdminService.cancelSubscription(id, dto);
+  }
+
+  // ============================================
+  // MAX SUBSCRIPTION BRAND
+  // ============================================
+
+  @Get('max-subscription-brand/statistics')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get Max Subscription Brand statistics',
+    description: 'Get comprehensive statistics for Max Subscription Brand including total Maxx profiles, active/inactive profiles, and cancellations with month-over-month growth',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Max Subscription Brand statistics retrieved successfully',
+    type: MaxSubscriptionBrandStatisticsDto,
+  })
+  async getMaxSubscriptionBrandStatistics(): Promise<MaxSubscriptionBrandStatisticsDto> {
+    return await this.maxSubscriptionBrandService.getStatistics();
+  }
+
+  @Get('max-subscription-brand/purchases')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get Max campaign purchases',
+    description: 'Get paginated list of Max campaign purchases with filtering by purchase type, status, date range, and search',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20)',
+  })
+  @ApiQuery({
+    name: 'purchaseType',
+    required: false,
+    enum: ['all', 'invite_campaign', 'maxx_campaign'],
+    description: 'Filter by purchase type',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['all', 'active', 'inactive', 'cancelled'],
+    description: 'Filter by campaign status',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by campaign name, brand name, or username',
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    type: String,
+    description: 'Filter by start date (ISO format)',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    description: 'Filter by end date (ISO format)',
+  })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    enum: ['createdAt', 'amount'],
+    description: 'Sort by field (default: createdAt)',
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    enum: ['ASC', 'DESC'],
+    description: 'Sort order (default: DESC)',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Max campaign purchases retrieved successfully',
+    type: MaxPurchasesResponseDto,
+  })
+  async getMaxPurchases(@Query() filters: GetMaxPurchasesDto): Promise<MaxPurchasesResponseDto> {
+    return await this.maxSubscriptionBrandService.getMaxPurchases(filters);
   }
 
   // ============================================
