@@ -159,7 +159,7 @@ export class MaxSubscriptionInvoiceService {
     endDate?: string,
   ): Promise<MaxSubscriptionInvoiceItemDto[]> {
     const whereClause: any = {
-      status: 'completed',
+      paymentStatus: 'paid',
     };
 
     // Date filtering
