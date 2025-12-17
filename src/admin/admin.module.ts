@@ -16,6 +16,7 @@ import { AuditLogService } from './services/audit-log.service';
 import { ReferralProgramService } from './services/referral-program.service';
 import { MaxxSubscriptionAdminService } from './services/maxx-subscription-admin.service';
 import { MaxSubscriptionBrandService } from './services/max-subscription-brand.service';
+import { MaxSubscriptionInvoiceService } from './services/max-subscription-invoice.service';
 
 import { Admin } from './models/admin.model';
 import { ProfileReview } from './models/profile-review.model';
@@ -102,6 +103,7 @@ import { RolesGuard } from './guards/roles.guard';
     ReferralProgramService,
     MaxxSubscriptionAdminService,
     MaxSubscriptionBrandService,
+    MaxSubscriptionInvoiceService,
     AdminAuthGuard,
     RolesGuard,
   ],

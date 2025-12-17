@@ -122,6 +122,7 @@ import { AuditLogService } from './services/audit-log.service';
 import { ReferralProgramService } from './services/referral-program.service';
 import { MaxxSubscriptionAdminService } from './services/maxx-subscription-admin.service';
 import { MaxSubscriptionBrandService } from './services/max-subscription-brand.service';
+import { MaxSubscriptionInvoiceService } from './services/max-subscription-invoice.service';
 import { SupportTicketService } from '../shared/support-ticket.service';
 import { CreateSupportTicketDto } from '../shared/dto/create-support-ticket.dto';
 import { GetSupportTicketsDto } from '../shared/dto/get-support-tickets.dto';
@@ -154,6 +155,11 @@ import {
   GetMaxPurchasesDto,
   MaxPurchasesResponseDto,
 } from './dto/max-subscription-brand.dto';
+import {
+  MaxSubscriptionInvoiceStatisticsDto,
+  GetMaxSubscriptionInvoicesDto,
+  MaxSubscriptionInvoicesResponseDto,
+} from './dto/max-subscription-invoice.dto';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -168,6 +174,7 @@ export class AdminController {
     private readonly referralProgramService: ReferralProgramService,
     private readonly maxxSubscriptionAdminService: MaxxSubscriptionAdminService,
     private readonly maxSubscriptionBrandService: MaxSubscriptionBrandService,
+    private readonly maxSubscriptionInvoiceService: MaxSubscriptionInvoiceService,
     private readonly brandService: BrandService,
     private readonly influencerService: InfluencerService,
     private readonly postService: PostService,
@@ -2396,6 +2403,90 @@ export class AdminController {
   })
   async getMaxPurchases(@Query() filters: GetMaxPurchasesDto): Promise<MaxPurchasesResponseDto> {
     return await this.maxSubscriptionBrandService.getMaxPurchases(filters);
+  }
+
+  // ============================================
+  // MAX SUBSCRIPTION INVOICE (UNIFIED)
+  // ============================================
+
+  @Get('max-subscription-invoice/statistics')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get unified Max Subscription Invoice statistics',
+    description: 'Get comprehensive statistics combining influencer Pro subscriptions and brand Max campaigns with month-over-month growth',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Unified statistics retrieved successfully',
+    type: MaxSubscriptionInvoiceStatisticsDto,
+  })
+  async getMaxSubscriptionInvoiceStatistics(): Promise<MaxSubscriptionInvoiceStatisticsDto> {
+    return await this.maxSubscriptionInvoiceService.getUnifiedStatistics();
+  }
+
+  @Get('max-subscription-invoice/invoices')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get unified Max Subscription invoices',
+    description: 'Get paginated list of all invoices including influencer subscriptions and brand Max campaigns',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20)',
+  })
+  @ApiQuery({
+    name: 'invoiceType',
+    required: false,
+    enum: ['all', 'maxx_subscription', 'invite_campaign', 'maxx_campaign'],
+    description: 'Filter by invoice type (tab selection)',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by name, username, or campaign name',
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    type: String,
+    description: 'Filter by start date (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    description: 'Filter by end date (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    enum: ['createdAt', 'amount'],
+    description: 'Sort by field (default: createdAt)',
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    enum: ['ASC', 'DESC'],
+    description: 'Sort order (default: DESC)',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Unified invoices retrieved successfully',
+    type: MaxSubscriptionInvoicesResponseDto,
+  })
+  async getMaxSubscriptionInvoices(@Query() filters: GetMaxSubscriptionInvoicesDto): Promise<MaxSubscriptionInvoicesResponseDto> {
+    return await this.maxSubscriptionInvoiceService.getUnifiedInvoices(filters);
   }
 
   // ============================================

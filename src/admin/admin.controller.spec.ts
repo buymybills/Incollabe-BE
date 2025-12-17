@@ -10,6 +10,7 @@ import { AuditLogService } from './services/audit-log.service';
 import { ReferralProgramService } from './services/referral-program.service';
 import { MaxxSubscriptionAdminService } from './services/maxx-subscription-admin.service';
 import { MaxSubscriptionBrandService } from './services/max-subscription-brand.service';
+import { MaxSubscriptionInvoiceService } from './services/max-subscription-invoice.service';
 import { BrandService } from '../brand/brand.service';
 import { InfluencerService } from '../influencer/influencer.service';
 import { PostService } from '../post/post.service';
@@ -88,6 +89,11 @@ const mockMaxxSubscriptionAdminService = {
 const mockMaxSubscriptionBrandService = {
   getStatistics: jest.fn(),
   getMaxPurchases: jest.fn(),
+};
+
+const mockMaxSubscriptionInvoiceService = {
+  getUnifiedStatistics: jest.fn(),
+  getUnifiedInvoices: jest.fn(),
 };
 
 const mockAuditLogService = {
@@ -192,6 +198,10 @@ describe('AdminController', () => {
         {
           provide: MaxSubscriptionBrandService,
           useValue: mockMaxSubscriptionBrandService,
+        },
+        {
+          provide: MaxSubscriptionInvoiceService,
+          useValue: mockMaxSubscriptionInvoiceService,
         },
         {
           provide: AuditLogService,
