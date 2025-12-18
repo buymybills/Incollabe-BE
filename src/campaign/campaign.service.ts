@@ -1846,4 +1846,73 @@ export class CampaignService {
 
     return updatedApplication;
   }
+
+  async rejectAllAppliedApplications(
+    campaignId: number,
+    brandId: number,
+  ): Promise<{
+    success: boolean;
+    rejectedCount: number;
+    message: string;
+  }> {
+    // Verify campaign exists and belongs to the brand
+    const campaign = await this.campaignModel.findOne({
+      where: { id: campaignId, brandId },
+      include: [
+        {
+          model: Brand,
+          attributes: ['id', 'brandName'],
+        },
+      ],
+    });
+
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found or access denied');
+    }
+
+    // Find all applications with status 'applied'
+    const appliedApplications = await this.campaignApplicationModel.findAll({
+      where: {
+        campaignId,
+        status: ApplicationStatus.APPLIED,
+      },
+      include: [
+        {
+          model: Influencer,
+          attributes: ['id', 'name', 'whatsappNumber'],
+        },
+      ],
+    });
+
+    if (appliedApplications.length === 0) {
+      return {
+        success: true,
+        rejectedCount: 0,
+        message: 'No applications in "applied" status found for this campaign',
+      };
+    }
+
+    const rejectionNote = 'This campaign has been closed. Thank you for your interest.';
+
+    // Update all applications to rejected status
+    await this.campaignApplicationModel.update(
+      {
+        status: ApplicationStatus.REJECTED,
+        reviewNotes: rejectionNote,
+        reviewedAt: new Date(),
+      },
+      {
+        where: {
+          campaignId,
+          status: ApplicationStatus.APPLIED,
+        },
+      },
+    );
+
+    return {
+      success: true,
+      rejectedCount: appliedApplications.length,
+      message: `Successfully rejected ${appliedApplications.length} application(s) that were in "applied" status`,
+    };
+  }
 }

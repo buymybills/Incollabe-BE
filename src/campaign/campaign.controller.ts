@@ -1561,4 +1561,49 @@ export class CampaignController {
       req.user.id,
     );
   }
+
+  @Put(':campaignId/applications/reject-all-applied')
+  @ApiOperation({
+    summary: 'Reject all applications in applied status',
+    description:
+      'Reject all campaign applications that are in "applied" status. Applications in "under_review", "selected", or "rejected" status will be skipped. Only accessible by the brand that owns the campaign.',
+  })
+  @ApiParam({
+    name: 'campaignId',
+    type: Number,
+    description: 'Campaign ID',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'All applied applications rejected successfully',
+    schema: {
+      example: {
+        success: true,
+        rejectedCount: 15,
+        message: 'Successfully rejected 15 application(s) that were in "applied" status',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Only brands can reject applications',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Campaign not found',
+  })
+  async rejectAllAppliedApplications(
+    @Param('campaignId', ParseIntPipe) campaignId: number,
+    @Req() req: RequestWithUser,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new ForbiddenException('Only brands can reject applications');
+    }
+
+    return this.campaignService.rejectAllAppliedApplications(
+      campaignId,
+      req.user.id,
+    );
+  }
 }
