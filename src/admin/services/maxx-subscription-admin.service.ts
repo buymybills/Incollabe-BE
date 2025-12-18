@@ -216,6 +216,8 @@ export class MaxxSubscriptionAdminService {
       sortOrder = 'DESC',
       startDate,
       endDate,
+      validTillStartDate,
+      validTillEndDate,
     } = filters;
 
     const offset = (page - 1) * limit;
@@ -258,7 +260,7 @@ export class MaxxSubscriptionAdminService {
       }
     }
 
-    // Date range filter
+    // Date range filter for subscription creation date
     if (startDate || endDate) {
       whereClause.createdAt = {};
       if (startDate) {
@@ -271,12 +273,28 @@ export class MaxxSubscriptionAdminService {
       }
     }
 
-    // Build influencer search clause
-    const influencerWhereClause: any = {};
+    // Date range filter for valid till date
+    if (validTillStartDate || validTillEndDate) {
+      whereClause.currentPeriodEnd = {};
+      if (validTillStartDate) {
+        whereClause.currentPeriodEnd[Op.gte] = new Date(validTillStartDate);
+      }
+      if (validTillEndDate) {
+        const endDateTime = new Date(validTillEndDate);
+        endDateTime.setHours(23, 59, 59, 999);
+        whereClause.currentPeriodEnd[Op.lte] = endDateTime;
+      }
+    }
+
+    // Build search clause
+    // When searching, we want to match profile name, username, OR location
+    // This requires using Sequelize's $or syntax at the query root level
     if (search) {
-      influencerWhereClause[Op.or] = [
-        { name: { [Op.iLike]: `%${search}%` } },
-        { username: { [Op.iLike]: `%${search}%` } },
+      // Add search conditions to main where clause using Sequelize's nested column syntax
+      whereClause[Op.or] = [
+        { '$influencer.name$': { [Op.iLike]: `%${search}%` } },
+        { '$influencer.username$': { [Op.iLike]: `%${search}%` } },
+        { '$influencer.city.name$': { [Op.iLike]: `%${search}%` } },
       ];
     }
 
@@ -286,6 +304,8 @@ export class MaxxSubscriptionAdminService {
       orderField = [['startDate', sortOrder]];
     } else if (sortBy === 'validTill') {
       orderField = [['currentPeriodEnd', sortOrder]];
+    } else if (sortBy === 'paymentType') {
+      orderField = [['autoRenew', sortOrder]];
     }
 
     // Get subscriptions with influencer details
@@ -296,14 +316,12 @@ export class MaxxSubscriptionAdminService {
           model: Influencer,
           as: 'influencer',
           attributes: ['id', 'name', 'username', 'profileImage', 'cityId'],
-          where: Object.keys(influencerWhereClause).length > 0
-            ? influencerWhereClause
-            : undefined,
-          required: Object.keys(influencerWhereClause).length > 0,
+          required: true,
           include: [
             {
               model: City,
               attributes: ['name'],
+              required: false,
             },
           ],
         },

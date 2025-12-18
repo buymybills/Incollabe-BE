@@ -10,7 +10,7 @@ import {
   MaxSubscriptionInvoiceStatisticsDto,
   GetMaxSubscriptionInvoicesDto,
   MaxSubscriptionInvoicesResponseDto,
-  MaxSubscriptionInvoiceItemDto,
+  MaxSubscriptionInvoiceItemDto, 
   InvoiceTypeFilter,
 } from '../dto/max-subscription-invoice.dto';
 import { MaxPurchaseTypeFilter } from '../dto/max-subscription-brand.dto';
