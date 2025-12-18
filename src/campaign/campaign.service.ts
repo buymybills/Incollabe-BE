@@ -1755,16 +1755,17 @@ export class CampaignService {
             );
           break;
 
-        case ApplicationStatus.REJECTED:
-          whatsappPromise =
-            this.whatsAppService.sendCampaignApplicationRejected(
-              influencer.whatsappNumber,
-              influencer.name,
-              campaign.name,
-              brandName,
-              updateStatusDto.reviewNotes,
-            );
-          break;
+        // COMMENTED OUT: Don't send WhatsApp notification for rejected applications
+        // case ApplicationStatus.REJECTED:
+        //   whatsappPromise =
+        //     this.whatsAppService.sendCampaignApplicationRejected(
+        //       influencer.whatsappNumber,
+        //       influencer.name,
+        //       campaign.name,
+        //       brandName,
+        //       updateStatusDto.reviewNotes,
+        //     );
+        //   break;
       }
 
       if (whatsappPromise) {
