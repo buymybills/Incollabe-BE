@@ -829,6 +829,8 @@ describe('CampaignService', () => {
         brandId,
         status: CampaignStatus.ACTIVE,
         name: 'Test Campaign',
+        isInviteOnly: false,
+        inviteOnlyPaid: false,
         brand: { brandName: 'Test Brand' },
       };
       const mockInfluencers = [
@@ -876,6 +878,8 @@ describe('CampaignService', () => {
         brandId,
         status: CampaignStatus.COMPLETED,
         name: 'Test Campaign',
+        isInviteOnly: false,
+        inviteOnlyPaid: false,
         brand: { brandName: 'Test Brand' },
       };
 
@@ -896,6 +900,8 @@ describe('CampaignService', () => {
         brandId,
         status: CampaignStatus.ACTIVE,
         name: 'Test Campaign',
+        isInviteOnly: false,
+        inviteOnlyPaid: false,
         brand: { brandName: 'Test Brand' },
       };
 
@@ -919,6 +925,8 @@ describe('CampaignService', () => {
         brandId,
         status: CampaignStatus.ACTIVE,
         name: 'Test Campaign',
+        isInviteOnly: false,
+        inviteOnlyPaid: false,
         brand: { brandName: 'Test Brand' },
       };
       const mockInfluencers = [
@@ -939,6 +947,61 @@ describe('CampaignService', () => {
       ).rejects.toThrow(
         'All selected influencers have already been invited to this campaign',
       );
+    });
+
+    it('should throw BadRequestException if invite-only campaign not paid', async () => {
+      const brandId = 1;
+      const mockCampaign = {
+        id: 1,
+        brandId,
+        status: CampaignStatus.ACTIVE,
+        name: 'Test Campaign',
+        isInviteOnly: true,
+        inviteOnlyPaid: false,
+        brand: { brandName: 'Test Brand' },
+      };
+
+      campaignModel.findOne.mockResolvedValue(mockCampaign);
+
+      await expect(
+        service.inviteInfluencers(mockInviteDto, brandId),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.inviteInfluencers(mockInviteDto, brandId),
+      ).rejects.toThrow(
+        'Please complete the payment of Rs 499 to unlock the invite-only feature before sending invitations',
+      );
+    });
+
+    it('should allow inviting if invite-only campaign is paid', async () => {
+      const brandId = 1;
+      const mockCampaign = {
+        id: 1,
+        brandId,
+        status: CampaignStatus.ACTIVE,
+        name: 'Test Campaign',
+        isInviteOnly: true,
+        inviteOnlyPaid: true,
+        brand: { brandName: 'Test Brand' },
+      };
+      const mockInfluencers = [
+        { id: 1, name: 'Influencer 1', whatsappNumber: '+919876543210' },
+        { id: 2, name: 'Influencer 2', whatsappNumber: '+919876543211' },
+      ];
+
+      campaignModel.findOne.mockResolvedValue(mockCampaign);
+      influencerModel.findAll.mockResolvedValue(mockInfluencers);
+      campaignInvitationModel.findAll.mockResolvedValue([]);
+      campaignInvitationModel.bulkCreate.mockResolvedValue([
+        { id: 1, campaignId: 1, influencerId: 1 },
+        { id: 2, campaignId: 1, influencerId: 2 },
+      ]);
+      whatsAppService.sendCampaignInvitation.mockResolvedValue(true);
+
+      const result = await service.inviteInfluencers(mockInviteDto, brandId);
+
+      expect(result.success).toBe(true);
+      expect(result.invitationsSent).toBe(2);
     });
   });
 
