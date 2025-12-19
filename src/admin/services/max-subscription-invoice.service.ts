@@ -10,7 +10,7 @@ import {
   MaxSubscriptionInvoiceStatisticsDto,
   GetMaxSubscriptionInvoicesDto,
   MaxSubscriptionInvoicesResponseDto,
-  MaxSubscriptionInvoiceItemDto, 
+  MaxSubscriptionInvoiceItemDto,
   InvoiceTypeFilter,
 } from '../dto/max-subscription-invoice.dto';
 import { MaxPurchaseTypeFilter } from '../dto/max-subscription-brand.dto';
@@ -101,6 +101,8 @@ export class MaxSubscriptionInvoiceService {
       search,
       startDate,
       endDate,
+      profileType,
+      paymentMethod,
       sortBy = 'createdAt',
       sortOrder = 'DESC',
     } = filters;
@@ -109,15 +111,25 @@ export class MaxSubscriptionInvoiceService {
     let brandInvoices: MaxSubscriptionInvoiceItemDto[] = [];
 
     // Fetch influencer subscription invoices if needed
-    if (!invoiceType || invoiceType === InvoiceTypeFilter.ALL || invoiceType === InvoiceTypeFilter.MAXX_SUBSCRIPTION) {
-      influencerInvoices = await this.getInfluencerSubscriptionInvoices(search, startDate, endDate);
+    // Skip if profileType filter is set to 'brand' only
+    const shouldFetchInfluencerInvoices =
+      (!invoiceType || invoiceType === InvoiceTypeFilter.ALL || invoiceType === InvoiceTypeFilter.MAXX_SUBSCRIPTION) &&
+      (!profileType || profileType === 'all' || profileType === 'influencer');
+
+    if (shouldFetchInfluencerInvoices) {
+      influencerInvoices = await this.getInfluencerSubscriptionInvoices(search, startDate, endDate, paymentMethod);
     }
 
     // Fetch brand campaign invoices if needed
-    if (!invoiceType || invoiceType === InvoiceTypeFilter.ALL || 
-        invoiceType === InvoiceTypeFilter.INVITE_CAMPAIGN || 
-        invoiceType === InvoiceTypeFilter.MAXX_CAMPAIGN) {
-      brandInvoices = await this.getBrandCampaignInvoices(search, startDate, endDate, invoiceType);
+    // Skip if profileType filter is set to 'influencer' only
+    const shouldFetchBrandInvoices =
+      (!invoiceType || invoiceType === InvoiceTypeFilter.ALL ||
+        invoiceType === InvoiceTypeFilter.INVITE_CAMPAIGN ||
+        invoiceType === InvoiceTypeFilter.MAXX_CAMPAIGN) &&
+      (!profileType || profileType === 'all' || profileType === 'brand');
+
+    if (shouldFetchBrandInvoices) {
+      brandInvoices = await this.getBrandCampaignInvoices(search, startDate, endDate, invoiceType, paymentMethod);
     }
 
     // Combine and sort all invoices
@@ -157,10 +169,25 @@ export class MaxSubscriptionInvoiceService {
     search?: string,
     startDate?: string,
     endDate?: string,
+    paymentMethod?: string,
   ): Promise<MaxSubscriptionInvoiceItemDto[]> {
     const whereClause: any = {
       paymentStatus: 'paid',
     };
+
+    // Payment method filter
+    if (paymentMethod && paymentMethod !== 'all') {
+      if (paymentMethod === 'upi') {
+        whereClause.paymentMethod = { [Op.iLike]: '%upi%' };
+      } else if (paymentMethod === 'credit_card') {
+        whereClause.paymentMethod = { [Op.or]: [
+          { [Op.iLike]: '%card%' },
+          { [Op.iLike]: '%credit%' },
+        ]};
+      } else if (paymentMethod === 'razorpay') {
+        whereClause.paymentMethod = { [Op.iLike]: '%razorpay%' };
+      }
+    }
 
     // Date filtering
     if (startDate || endDate) {
@@ -238,6 +265,7 @@ export class MaxSubscriptionInvoiceService {
     startDate?: string,
     endDate?: string,
     invoiceType?: InvoiceTypeFilter,
+    paymentMethod?: string,
   ): Promise<MaxSubscriptionInvoiceItemDto[]> {
     const result = await this.maxSubscriptionBrandService.getMaxPurchases({
       page: 1,
@@ -247,6 +275,7 @@ export class MaxSubscriptionInvoiceService {
       endDate,
       purchaseType: invoiceType === InvoiceTypeFilter.INVITE_CAMPAIGN ? MaxPurchaseTypeFilter.INVITE_CAMPAIGN :
                      invoiceType === InvoiceTypeFilter.MAXX_CAMPAIGN ? MaxPurchaseTypeFilter.MAXX_CAMPAIGN : MaxPurchaseTypeFilter.ALL,
+      paymentMethod,
     });
 
     return result.data.map((item) => ({

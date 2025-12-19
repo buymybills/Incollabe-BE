@@ -10,6 +10,21 @@ export enum InvoiceTypeFilter {
   MAXX_CAMPAIGN = 'maxx_campaign',
 }
 
+// Profile Type Filter
+export enum ProfileTypeFilter {
+  ALL = 'all',
+  BRAND = 'brand',
+  INFLUENCER = 'influencer',
+}
+
+// Payment Method Filter
+export enum PaymentMethodFilter {
+  ALL = 'all',
+  UPI = 'upi',
+  CREDIT_CARD = 'credit_card',
+  RAZORPAY = 'razorpay',
+}
+
 // Unified Statistics Response DTO
 export class MaxSubscriptionInvoiceStatisticsDto {
   @ApiProperty({ example: 2000, description: 'Total Maxx purchases (all types)' })
@@ -75,6 +90,22 @@ export class GetMaxSubscriptionInvoicesDto {
   @IsOptional()
   @IsDateString()
   endDate?: string;
+
+  @ApiPropertyOptional({
+    enum: ProfileTypeFilter,
+    description: 'Filter by profile type (Brand or Influencer)',
+  })
+  @IsOptional()
+  @IsEnum(ProfileTypeFilter)
+  profileType?: ProfileTypeFilter;
+
+  @ApiPropertyOptional({
+    enum: PaymentMethodFilter,
+    description: 'Filter by payment method',
+  })
+  @IsOptional()
+  @IsEnum(PaymentMethodFilter)
+  paymentMethod?: PaymentMethodFilter;
 
   @ApiPropertyOptional({
     enum: ['createdAt', 'amount'],

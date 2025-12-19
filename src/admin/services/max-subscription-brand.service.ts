@@ -207,6 +207,7 @@ export class MaxSubscriptionBrandService {
       search,
       startDate,
       endDate,
+      paymentMethod,
       sortBy = 'createdAt',
       sortOrder = 'DESC',
     } = filters;
@@ -228,6 +229,20 @@ export class MaxSubscriptionBrandService {
         const endDateTime = new Date(endDate);
         endDateTime.setHours(23, 59, 59, 999);
         invoiceWhereClause.paidAt[Op.lte] = endDateTime;
+      }
+    }
+
+    // Payment method filter
+    if (paymentMethod && paymentMethod !== 'all') {
+      if (paymentMethod === 'upi') {
+        invoiceWhereClause.paymentMethod = { [Op.iLike]: '%upi%' };
+      } else if (paymentMethod === 'credit_card') {
+        invoiceWhereClause.paymentMethod = { [Op.or]: [
+          { [Op.iLike]: '%card%' },
+          { [Op.iLike]: '%credit%' },
+        ]};
+      } else if (paymentMethod === 'razorpay') {
+        invoiceWhereClause.paymentMethod = { [Op.iLike]: '%razorpay%' };
       }
     }
 
