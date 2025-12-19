@@ -20,6 +20,8 @@ import { Follow } from '../post/models/follow.model';
 import { Experience } from '../influencer/models/experience.model';
 import { MaxCampaignPaymentService } from './services/max-campaign-payment.service';
 import { MaxCampaignInvoice } from './models/max-campaign-invoice.model';
+import { InviteOnlyPaymentService } from './services/invite-only-payment.service';
+import { InviteOnlyCampaignInvoice } from './models/invite-only-campaign-invoice.model';
 
 @Module({
   imports: [
@@ -39,11 +41,12 @@ import { MaxCampaignInvoice } from './models/max-campaign-invoice.model';
       Follow,
       Experience,
       MaxCampaignInvoice,
+      InviteOnlyCampaignInvoice,
     ]),
     SharedModule,
   ],
   controllers: [CampaignController],
-  providers: [CampaignService, CampaignQueryService, MaxCampaignPaymentService],
-  exports: [CampaignService, MaxCampaignPaymentService],
+  providers: [CampaignService, CampaignQueryService, MaxCampaignPaymentService, InviteOnlyPaymentService],
+  exports: [CampaignService, MaxCampaignPaymentService, InviteOnlyPaymentService],
 })
 export class CampaignModule {}
