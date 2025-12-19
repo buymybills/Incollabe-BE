@@ -6,6 +6,9 @@ import { MaxSubscriptionBrandService } from './max-subscription-brand.service';
 import { ProSubscription } from '../../influencer/models/pro-subscription.model';
 import { ProInvoice } from '../../influencer/models/pro-invoice.model';
 import { MaxCampaignInvoice } from '../../campaign/models/max-campaign-invoice.model';
+import { InviteOnlyCampaignInvoice } from '../../campaign/models/invite-only-campaign-invoice.model';
+import { Campaign } from '../../campaign/models/campaign.model';
+import { Brand } from '../../brand/model/brand.model';
 import {
   MaxSubscriptionInvoiceStatisticsDto,
   GetMaxSubscriptionInvoicesDto,
@@ -24,6 +27,8 @@ export class MaxSubscriptionInvoiceService {
     private readonly proInvoiceModel: typeof ProInvoice,
     @InjectModel(MaxCampaignInvoice)
     private readonly maxCampaignInvoiceModel: typeof MaxCampaignInvoice,
+    @InjectModel(InviteOnlyCampaignInvoice)
+    private readonly inviteOnlyCampaignInvoiceModel: typeof InviteOnlyCampaignInvoice,
     private readonly maxxSubscriptionAdminService: MaxxSubscriptionAdminService,
     private readonly maxSubscriptionBrandService: MaxSubscriptionBrandService,
   ) {}
@@ -269,30 +274,147 @@ export class MaxSubscriptionInvoiceService {
     invoiceType?: InvoiceTypeFilter,
     paymentMethod?: string,
   ): Promise<MaxSubscriptionInvoiceItemDto[]> {
-    const result = await this.maxSubscriptionBrandService.getMaxPurchases({
-      page: 1,
-      limit: 10000, // Get all for now, we'll paginate later
-      search,
-      startDate,
-      endDate,
-      purchaseType: invoiceType === InvoiceTypeFilter.INVITE_CAMPAIGN ? MaxPurchaseTypeFilter.INVITE_CAMPAIGN :
-                     invoiceType === InvoiceTypeFilter.MAXX_CAMPAIGN ? MaxPurchaseTypeFilter.MAXX_CAMPAIGN : MaxPurchaseTypeFilter.ALL,
-      paymentMethod,
+    let invoices: MaxSubscriptionInvoiceItemDto[] = [];
+
+    // Fetch invite-only campaign invoices
+    if (!invoiceType || invoiceType === InvoiceTypeFilter.ALL || invoiceType === InvoiceTypeFilter.INVITE_CAMPAIGN) {
+      const inviteOnlyInvoices = await this.getInviteOnlyCampaignInvoices(search, startDate, endDate, paymentMethod);
+      invoices = [...invoices, ...inviteOnlyInvoices];
+    }
+
+    // Fetch max campaign invoices
+    if (!invoiceType || invoiceType === InvoiceTypeFilter.ALL || invoiceType === InvoiceTypeFilter.MAXX_CAMPAIGN) {
+      const result = await this.maxSubscriptionBrandService.getMaxPurchases({
+        page: 1,
+        limit: 10000, // Get all for now, we'll paginate later
+        search,
+        startDate,
+        endDate,
+        purchaseType: MaxPurchaseTypeFilter.MAXX_CAMPAIGN,
+        paymentMethod,
+      });
+
+      const maxCampaignInvoices = result.data.map((item) => ({
+        id: item.id,
+        profileName: item.brandName,
+        username: item.username,
+        profileType: 'Brand',
+        maxxType: item.maxxType,
+        amount: item.amount,
+        transactionId: item.invoiceNumber,
+        paymentMethod: this.formatPaymentMethod(item.paymentMethod),
+        purchaseDateTime: item.purchaseDateTime,
+        campaignId: item.campaignId,
+        campaignName: item.campaignName,
+      }));
+
+      invoices = [...invoices, ...maxCampaignInvoices];
+    }
+
+    return invoices;
+  }
+
+  /**
+   * Get invite-only campaign invoices
+   */
+  private async getInviteOnlyCampaignInvoices(
+    search?: string,
+    startDate?: string,
+    endDate?: string,
+    paymentMethod?: string,
+  ): Promise<MaxSubscriptionInvoiceItemDto[]> {
+    const whereClause: any = {
+      paymentStatus: 'paid',
+    };
+
+    // Payment method filter
+    if (paymentMethod && paymentMethod !== 'all') {
+      if (paymentMethod === 'upi') {
+        whereClause.paymentMethod = { [Op.iLike]: '%upi%' };
+      } else if (paymentMethod === 'credit_card') {
+        whereClause.paymentMethod = {
+          [Op.or]: [
+            { [Op.iLike]: '%card%' },
+            { [Op.iLike]: '%credit%' },
+          ],
+        };
+      } else if (paymentMethod === 'razorpay') {
+        whereClause.paymentMethod = { [Op.iLike]: '%razorpay%' };
+      }
+    }
+
+    // Date filtering
+    if (startDate || endDate) {
+      whereClause.paidAt = {};
+      if (startDate) {
+        whereClause.paidAt[Op.gte] = new Date(startDate);
+      }
+      if (endDate) {
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(23, 59, 59, 999);
+        whereClause.paidAt[Op.lte] = endDateTime;
+      }
+    }
+
+    const invoices = await this.inviteOnlyCampaignInvoiceModel.findAll({
+      where: whereClause,
+      include: [
+        {
+          association: 'campaign',
+          required: true,
+          where: search
+            ? {
+                name: { [Op.iLike]: `%${search}%` },
+              }
+            : undefined,
+        },
+        {
+          association: 'brand',
+          required: true,
+          where: search
+            ? {
+                [Op.or]: [
+                  { brandName: { [Op.iLike]: `%${search}%` } },
+                  { username: { [Op.iLike]: `%${search}%` } },
+                ],
+              }
+            : undefined,
+        },
+      ],
+      order: [['paidAt', 'DESC']],
     });
 
-    return result.data.map((item) => ({
-      id: item.id,
-      profileName: item.brandName,
-      username: item.username,
-      profileType: 'Brand',
-      maxxType: item.maxxType,
-      amount: item.amount,
-      transactionId: item.invoiceNumber,
-      paymentMethod: this.formatPaymentMethod(item.paymentMethod),
-      purchaseDateTime: item.purchaseDateTime,
-      campaignId: item.campaignId,
-      campaignName: item.campaignName,
-    }));
+    return invoices
+      .filter((invoice) => invoice.campaign && invoice.brand)
+      .map((invoice) => {
+        const paidAt = new Date(invoice.paidAt);
+
+        const time = new Intl.DateTimeFormat('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        }).format(paidAt);
+
+        const date = new Intl.DateTimeFormat('en-US', {
+          month: 'short',
+          day: '2-digit',
+          year: 'numeric',
+        }).format(paidAt);
+
+        return {
+          id: invoice.id,
+          profileName: invoice.brand.brandName,
+          username: `@${invoice.brand.username}`,
+          profileType: 'Brand',
+          maxxType: 'Invite Campaign',
+          amount: invoice.totalAmount / 100, // Convert from paise to Rs
+          transactionId: invoice.razorpayPaymentId || invoice.invoiceNumber,
+          paymentMethod: this.formatPaymentMethod(invoice.paymentMethod),
+          purchaseDateTime: `${time} | ${date}`,
+          campaignId: invoice.campaignId,
+          campaignName: invoice.campaign.name,
+        };
+      });
   }
 
   /**
@@ -302,8 +424,6 @@ export class MaxSubscriptionInvoiceService {
     type: 'invite_campaign' | 'maxx_campaign',
     beforeDate?: Date,
   ): Promise<number> {
-    // This is a placeholder - you'll need to add a field to distinguish campaign types
-    // For now, returning mock data
     const whereClause: any = {
       paymentStatus: 'paid',
     };
@@ -314,13 +434,15 @@ export class MaxSubscriptionInvoiceService {
       };
     }
 
-    // TODO: Add proper filtering by campaign type once the field is added to the model
-    const count = await this.maxCampaignInvoiceModel.count({
-      where: whereClause,
-    });
-
-    // Mock distribution - you'll need to update this with actual logic
-    return type === 'invite_campaign' ? Math.floor(count * 0.5) : Math.floor(count * 0.5);
+    if (type === 'invite_campaign') {
+      return await this.inviteOnlyCampaignInvoiceModel.count({
+        where: whereClause,
+      });
+    } else {
+      return await this.maxCampaignInvoiceModel.count({
+        where: whereClause,
+      });
+    }
   }
 
   /**

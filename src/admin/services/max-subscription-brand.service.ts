@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Op } from 'sequelize';
 import { MaxCampaignInvoice, InvoiceStatus } from '../../campaign/models/max-campaign-invoice.model';
+import { InviteOnlyCampaignInvoice } from '../../campaign/models/invite-only-campaign-invoice.model';
 import { Campaign } from '../../campaign/models/campaign.model';
 import { Brand } from '../../brand/model/brand.model';
 import {
@@ -18,6 +19,8 @@ export class MaxSubscriptionBrandService {
   constructor(
     @InjectModel(MaxCampaignInvoice)
     private readonly maxCampaignInvoiceModel: typeof MaxCampaignInvoice,
+    @InjectModel(InviteOnlyCampaignInvoice)
+    private readonly inviteOnlyCampaignInvoiceModel: typeof InviteOnlyCampaignInvoice,
   ) {}
 
   /**
@@ -212,7 +215,202 @@ export class MaxSubscriptionBrandService {
       sortOrder = 'DESC',
     } = filters;
 
+    let allInvoices: MaxPurchaseItemDto[] = [];
+
+    // Fetch invite-only campaign invoices if needed
+    if (!purchaseType || purchaseType === MaxPurchaseTypeFilter.ALL || purchaseType === MaxPurchaseTypeFilter.INVITE_CAMPAIGN) {
+      const inviteOnlyInvoices = await this.getInviteOnlyPurchases({
+        search,
+        startDate,
+        endDate,
+        paymentMethod,
+        status,
+      });
+      allInvoices = [...allInvoices, ...inviteOnlyInvoices];
+    }
+
+    // Fetch max campaign invoices if needed
+    if (!purchaseType || purchaseType === MaxPurchaseTypeFilter.ALL || purchaseType === MaxPurchaseTypeFilter.MAXX_CAMPAIGN) {
+      const maxCampaignInvoices = await this.getMaxCampaignPurchases({
+        search,
+        startDate,
+        endDate,
+        paymentMethod,
+        status,
+      });
+      allInvoices = [...allInvoices, ...maxCampaignInvoices];
+    }
+
+    // Sort combined results
+    allInvoices.sort((a, b) => {
+      if (sortBy === 'amount') {
+        return sortOrder === 'ASC' ? a.amount - b.amount : b.amount - a.amount;
+      }
+      // Sort by date (parse purchaseDateTime)
+      const dateA = new Date(a.purchaseDateTime.split(' | ')[1]);
+      const dateB = new Date(b.purchaseDateTime.split(' | ')[1]);
+      return sortOrder === 'ASC' ? dateA.getTime() - dateB.getTime() : dateB.getTime() - dateA.getTime();
+    });
+
+    // Paginate
+    const total = allInvoices.length;
     const offset = (page - 1) * limit;
+    const paginatedInvoices = allInvoices.slice(offset, offset + limit);
+
+    return {
+      data: paginatedInvoices,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * Get invite-only campaign purchases
+   */
+  private async getInviteOnlyPurchases(filters: {
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+    paymentMethod?: string;
+    status?: MaxCampaignStatusFilter;
+  }): Promise<MaxPurchaseItemDto[]> {
+    const { search, startDate, endDate, paymentMethod, status } = filters;
+
+    // Build where clause for invoices
+    const invoiceWhereClause: any = {
+      paymentStatus: 'paid',
+    };
+
+    // Date filtering
+    if (startDate || endDate) {
+      invoiceWhereClause.paidAt = {};
+      if (startDate) {
+        invoiceWhereClause.paidAt[Op.gte] = new Date(startDate);
+      }
+      if (endDate) {
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(23, 59, 59, 999);
+        invoiceWhereClause.paidAt[Op.lte] = endDateTime;
+      }
+    }
+
+    // Payment method filter
+    if (paymentMethod && paymentMethod !== 'all') {
+      if (paymentMethod === 'upi') {
+        invoiceWhereClause.paymentMethod = { [Op.iLike]: '%upi%' };
+      } else if (paymentMethod === 'credit_card') {
+        invoiceWhereClause.paymentMethod = {
+          [Op.or]: [
+            { [Op.iLike]: '%card%' },
+            { [Op.iLike]: '%credit%' },
+          ],
+        };
+      } else if (paymentMethod === 'razorpay') {
+        invoiceWhereClause.paymentMethod = { [Op.iLike]: '%razorpay%' };
+      }
+    }
+
+    // Build where clause for campaigns
+    const campaignWhereClause: any = {};
+
+    // Status filter for campaigns
+    if (status && status !== MaxCampaignStatusFilter.ALL) {
+      if (status === MaxCampaignStatusFilter.ACTIVE) {
+        campaignWhereClause.status = 'active';
+      } else if (status === MaxCampaignStatusFilter.INACTIVE) {
+        campaignWhereClause.status = {
+          [Op.in]: ['completed', 'paused'],
+        };
+      } else if (status === MaxCampaignStatusFilter.CANCELLED) {
+        campaignWhereClause.status = 'cancelled';
+      }
+    }
+
+    // Apply search at the main invoice level using nested field syntax
+    if (search) {
+      invoiceWhereClause[Op.or] = [
+        { '$brand.brandName$': { [Op.iLike]: `%${search}%` } },
+        { '$brand.username$': { [Op.iLike]: `%${search}%` } },
+        { '$campaign.name$': { [Op.iLike]: `%${search}%` } },
+      ];
+    }
+
+    const invoices = await this.inviteOnlyCampaignInvoiceModel.findAll({
+      where: invoiceWhereClause,
+      include: [
+        {
+          model: Campaign,
+          as: 'campaign',
+          where: Object.keys(campaignWhereClause).length > 0
+            ? campaignWhereClause
+            : undefined,
+          attributes: ['id', 'name', 'status', 'createdAt'],
+          required: true,
+        },
+        {
+          model: Brand,
+          as: 'brand',
+          attributes: ['id', 'brandName', 'username'],
+          required: true,
+        },
+      ],
+      order: [['paidAt', 'DESC']],
+      subQuery: false,
+    });
+
+    return invoices
+      .filter((invoice) => invoice.campaign && invoice.brand)
+      .map((invoice) => {
+        const campaign = invoice.campaign;
+        const brand = invoice.brand;
+
+        // Format date as "HH:MM AM/PM | MMM DD, YYYY"
+        const purchaseDate = new Date(invoice.paidAt);
+        const time = new Intl.DateTimeFormat('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        }).format(purchaseDate);
+
+        const date = new Intl.DateTimeFormat('en-US', {
+          month: 'short',
+          day: '2-digit',
+          year: 'numeric',
+        }).format(purchaseDate);
+
+        const purchaseDateTime = `${time} | ${date}`;
+
+        return {
+          id: invoice.id,
+          campaignId: campaign.id,
+          brandName: brand.brandName,
+          username: `@${brand.username}`,
+          campaignName: campaign.name,
+          maxxType: 'Invite Campaign',
+          amount: invoice.totalAmount / 100, // Convert from paise to Rs
+          purchaseDateTime,
+          status: campaign.status,
+          invoiceNumber: invoice.invoiceNumber,
+          paymentMethod: invoice.paymentMethod || 'razorpay',
+        };
+      });
+  }
+
+  /**
+   * Get max campaign purchases (existing logic)
+   */
+  private async getMaxCampaignPurchases(filters: {
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+    paymentMethod?: string;
+    status?: MaxCampaignStatusFilter;
+  }): Promise<MaxPurchaseItemDto[]> {
+    const { search, startDate, endDate, paymentMethod, status } = filters;
 
     // Build where clause for invoices
     const invoiceWhereClause: any = {
@@ -237,10 +435,12 @@ export class MaxSubscriptionBrandService {
       if (paymentMethod === 'upi') {
         invoiceWhereClause.paymentMethod = { [Op.iLike]: '%upi%' };
       } else if (paymentMethod === 'credit_card') {
-        invoiceWhereClause.paymentMethod = { [Op.or]: [
-          { [Op.iLike]: '%card%' },
-          { [Op.iLike]: '%credit%' },
-        ]};
+        invoiceWhereClause.paymentMethod = {
+          [Op.or]: [
+            { [Op.iLike]: '%card%' },
+            { [Op.iLike]: '%credit%' },
+          ],
+        };
       } else if (paymentMethod === 'razorpay') {
         invoiceWhereClause.paymentMethod = { [Op.iLike]: '%razorpay%' };
       }
@@ -264,25 +464,7 @@ export class MaxSubscriptionBrandService {
       }
     }
 
-    // Purchase type filter (for tabs)
-    // Note: This would need a field in campaign to distinguish between invite and direct purchase
-    // For now, we'll assume campaigns created via invite have a specific field
-    if (purchaseType && purchaseType !== MaxPurchaseTypeFilter.ALL) {
-      if (purchaseType === MaxPurchaseTypeFilter.INVITE_CAMPAIGN) {
-        // Assuming there's a field like 'createdViaInvite' or similar
-        // campaignWhereClause.createdViaInvite = true;
-        // TODO: Add proper field check once confirmed
-      } else if (purchaseType === MaxPurchaseTypeFilter.MAXX_CAMPAIGN) {
-        // campaignWhereClause.createdViaInvite = false;
-        // TODO: Add proper field check once confirmed
-      }
-    }
-
-    // Build where clause for brands (no search here)
-    const brandWhereClause: any = {};
-
     // Apply search at the main invoice level using nested field syntax
-    // This allows OR logic across brand and campaign fields
     if (search) {
       invoiceWhereClause[Op.or] = [
         { '$brand.brandName$': { [Op.iLike]: `%${search}%` } },
@@ -291,41 +473,31 @@ export class MaxSubscriptionBrandService {
       ];
     }
 
-    // Determine sort field
-    const orderField = sortBy === 'amount' ? 'amount' : 'paidAt';
-
     // Get invoices with related campaign and brand details
-    const { count, rows: invoices } =
-      await this.maxCampaignInvoiceModel.findAndCountAll({
-        where: invoiceWhereClause,
-        include: [
-          {
-            model: Campaign,
-            as: 'campaign',
-            where: Object.keys(campaignWhereClause).length > 1 // > 1 because isMaxCampaign is always there
-              ? campaignWhereClause
-              : undefined,
-            attributes: ['id', 'name', 'status', 'createdAt'],
-            required: true,
-          },
-          {
-            model: Brand,
-            as: 'brand',
-            where: Object.keys(brandWhereClause).length > 0
-              ? brandWhereClause
-              : undefined,
-            attributes: ['id', 'brandName', 'username'],
-            required: true,
-          },
-        ],
-        limit,
-        offset,
-        order: [[orderField, sortOrder]],
-        subQuery: false, // Important: disable subQuery for nested field search to work
-      });
+    const invoices = await this.maxCampaignInvoiceModel.findAll({
+      where: invoiceWhereClause,
+      include: [
+        {
+          model: Campaign,
+          as: 'campaign',
+          where: Object.keys(campaignWhereClause).length > 1 // > 1 because isMaxCampaign is always there
+            ? campaignWhereClause
+            : undefined,
+          attributes: ['id', 'name', 'status', 'createdAt'],
+          required: true,
+        },
+        {
+          model: Brand,
+          as: 'brand',
+          attributes: ['id', 'brandName', 'username'],
+          required: true,
+        },
+      ],
+      order: [['paidAt', 'DESC']],
+      subQuery: false,
+    });
 
-    // Build response data
-    const data: MaxPurchaseItemDto[] = invoices.map((invoice) => {
+    return invoices.map((invoice) => {
       const campaign = invoice.campaign;
       const brand = invoice.brand;
 
@@ -345,17 +517,13 @@ export class MaxSubscriptionBrandService {
 
       const purchaseDateTime = `${time} | ${date}`;
 
-      // Determine maxx type (you may need to adjust this based on actual field)
-      // TODO: Update this logic based on how you distinguish invite vs direct purchase
-      const maxxType = 'Maxx Campaign'; // or 'Invite Campaign'
-
       return {
         id: invoice.id,
         campaignId: campaign.id,
         brandName: brand.brandName,
         username: `@${brand.username}`,
         campaignName: campaign.name,
-        maxxType,
+        maxxType: 'Maxx Campaign',
         amount: invoice.amount / 100, // Convert from paise to Rs
         purchaseDateTime,
         status: campaign.status,
@@ -363,16 +531,6 @@ export class MaxSubscriptionBrandService {
         paymentMethod: invoice.paymentMethod || 'razorpay',
       };
     });
-
-    return {
-      data,
-      pagination: {
-        page,
-        limit,
-        total: count,
-        totalPages: Math.ceil(count / limit),
-      },
-    };
   }
 
   /**

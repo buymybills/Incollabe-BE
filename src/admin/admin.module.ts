@@ -42,6 +42,7 @@ import { Post } from '../post/models/post.model';
 import { ProSubscription } from '../influencer/models/pro-subscription.model';
 import { ProInvoice } from '../influencer/models/pro-invoice.model';
 import { MaxCampaignInvoice } from '../campaign/models/max-campaign-invoice.model';
+import { InviteOnlyCampaignInvoice } from '../campaign/models/invite-only-campaign-invoice.model';
 
 import { SharedModule } from '../shared/shared.module';
 import { BrandModule } from '../brand/brand.module';
@@ -80,6 +81,7 @@ import { RolesGuard } from './guards/roles.guard';
       ProSubscription,
       ProInvoice,
       MaxCampaignInvoice,
+      InviteOnlyCampaignInvoice,
     ]),
     SharedModule,
     forwardRef(() => BrandModule),
