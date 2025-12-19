@@ -358,7 +358,7 @@ export class MaxSubscriptionBrandService {
         username: `@${brand.username}`,
         campaignName: campaign.name,
         maxxType,
-        amount: invoice.amount,
+        amount: invoice.amount / 100, // Convert from paise to Rs
         purchaseDateTime,
         status: campaign.status,
         invoiceNumber: invoice.invoiceNumber,
