@@ -38,6 +38,8 @@ import { CreateSupportTicketDto } from '../shared/dto/create-support-ticket.dto'
 import { UserType } from '../shared/models/support-ticket.model';
 import { MaxCampaignPaymentService } from '../campaign/services/max-campaign-payment.service';
 import { VerifyMaxCampaignPaymentDto } from '../campaign/dto/max-campaign.dto';
+import { InviteOnlyPaymentService } from '../campaign/services/invite-only-payment.service';
+import { VerifyInviteOnlyPaymentDto } from '../campaign/dto/invite-only-payment.dto';
 
 @ApiTags('Brand Profile')
 @Controller('brand')
@@ -48,6 +50,7 @@ export class BrandController {
     private readonly brandService: BrandService,
     private readonly supportTicketService: SupportTicketService,
     private readonly maxCampaignPaymentService: MaxCampaignPaymentService,
+    private readonly inviteOnlyPaymentService: InviteOnlyPaymentService,
   ) {}
 
   @Get('company-types')
@@ -584,6 +587,89 @@ export class BrandController {
       throw new BadRequestException('Only brands can view campaign status');
     }
     return await this.maxCampaignPaymentService.getMaxCampaignStatus(
+      campaignId,
+      req.user.id,
+    );
+  }
+
+  // Invite-Only Campaign Payment Endpoints
+  @Post('campaigns/:campaignId/unlock-invite-only')
+  @ApiOperation({
+    summary: 'Create payment order for invite-only feature',
+    description: 'Create Razorpay payment order to unlock invite-only campaign feature (Rs 499)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment order created successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Campaign not found' })
+  @ApiResponse({
+    status: 403,
+    description: 'You can only unlock features for your own campaigns',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Campaign is not invite-only or feature is already unlocked',
+  })
+  async unlockInviteOnlyFeature(
+    @Req() req: RequestWithUser,
+    @Param('campaignId', ParseIntPipe) campaignId: number,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new BadRequestException('Only brands can unlock campaign features');
+    }
+    return await this.inviteOnlyPaymentService.createInviteOnlyPaymentOrder(
+      campaignId,
+      req.user.id,
+    );
+  }
+
+  @Post('campaigns/:campaignId/verify-invite-only-payment')
+  @ApiOperation({
+    summary: 'Verify invite-only payment',
+    description: 'Verify Razorpay payment and unlock invite-only feature',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment verified and invite-only feature unlocked successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Campaign not found' })
+  @ApiResponse({ status: 400, description: 'Invalid payment signature' })
+  async verifyInviteOnlyPayment(
+    @Req() req: RequestWithUser,
+    @Param('campaignId', ParseIntPipe) campaignId: number,
+    @Body() verifyDto: VerifyInviteOnlyPaymentDto,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new BadRequestException('Only brands can verify campaign payments');
+    }
+    return await this.inviteOnlyPaymentService.verifyAndUnlockInviteOnly(
+      campaignId,
+      req.user.id,
+      verifyDto.paymentId,
+      verifyDto.orderId,
+      verifyDto.signature,
+    );
+  }
+
+  @Get('campaigns/:campaignId/invite-only-status')
+  @ApiOperation({
+    summary: 'Get invite-only payment status',
+    description: 'Get invite-only feature payment status and details for a campaign',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Invite-only status retrieved successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Campaign not found' })
+  async getInviteOnlyStatus(
+    @Req() req: RequestWithUser,
+    @Param('campaignId', ParseIntPipe) campaignId: number,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new BadRequestException('Only brands can view campaign status');
+    }
+    return await this.inviteOnlyPaymentService.getInviteOnlyStatus(
       campaignId,
       req.user.id,
     );

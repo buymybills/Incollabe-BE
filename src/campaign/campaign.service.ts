@@ -887,6 +887,13 @@ export class CampaignService {
       throw new NotFoundException('Campaign not found or access denied');
     }
 
+    // Check if invite-only campaign has been paid for
+    if (campaign.isInviteOnly && !campaign.inviteOnlyPaid) {
+      throw new BadRequestException(
+        'Please complete the payment of Rs 499 to unlock the invite-only feature before sending invitations',
+      );
+    }
+
     // Check if campaign is in correct status for invitations
     if (
       campaign.status !== CampaignStatus.DRAFT &&

@@ -278,19 +278,16 @@ export class MaxSubscriptionBrandService {
       }
     }
 
-    // Build where clause for brands and campaigns (search)
-    // Apply search to brand OR campaign name
+    // Build where clause for brands (no search here)
     const brandWhereClause: any = {};
+
+    // Apply search at the main invoice level using nested field syntax
+    // This allows OR logic across brand and campaign fields
     if (search) {
-      // Add campaign name to the brand search OR condition
-      // This searches across brand name, username, OR campaign name
-      brandWhereClause[Op.or] = [
-        { brandName: { [Op.iLike]: `%${search}%` } },
-        { username: { [Op.iLike]: `%${search}%` } },
-      ];
-      // Also add campaign name search to campaign where clause
-      campaignWhereClause[Op.or] = [
-        { name: { [Op.iLike]: `%${search}%` } },
+      invoiceWhereClause[Op.or] = [
+        { '$brand.brandName$': { [Op.iLike]: `%${search}%` } },
+        { '$brand.username$': { [Op.iLike]: `%${search}%` } },
+        { '$campaign.name$': { [Op.iLike]: `%${search}%` } },
       ];
     }
 
@@ -305,7 +302,7 @@ export class MaxSubscriptionBrandService {
           {
             model: Campaign,
             as: 'campaign',
-            where: Object.keys(campaignWhereClause).length > 0
+            where: Object.keys(campaignWhereClause).length > 1 // > 1 because isMaxCampaign is always there
               ? campaignWhereClause
               : undefined,
             attributes: ['id', 'name', 'status', 'createdAt'],
@@ -324,6 +321,7 @@ export class MaxSubscriptionBrandService {
         limit,
         offset,
         order: [[orderField, sortOrder]],
+        subQuery: false, // Important: disable subQuery for nested field search to work
       });
 
     // Build response data

@@ -220,6 +220,43 @@ export class Campaign extends Model<Campaign, CampaignCreationAttributes> {
   })
   declare maxCampaignAmount: number;
 
+  // Invite-Only Campaign Payment Fields
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+  })
+  declare inviteOnlyPaid: boolean;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare inviteOnlyPaymentStatus: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare inviteOnlyPaymentId: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare inviteOnlyOrderId: string;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare inviteOnlyPaidAt: Date;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  declare inviteOnlyAmount: number;
+
   // Timestamps
   declare createdAt: Date;
   declare updatedAt: Date;
