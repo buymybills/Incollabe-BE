@@ -207,9 +207,11 @@ export class MaxSubscriptionInvoiceService {
       include: [
         {
           association: 'subscription',
+          required: true,
           include: [
             {
               association: 'influencer',
+              required: true,
               where: search
                 ? {
                     [Op.or]: [
@@ -249,7 +251,7 @@ export class MaxSubscriptionInvoiceService {
           username: `@${influencer.username}`,
           profileType: 'Influencer',
           maxxType: 'Subscription',
-          amount: invoice.amount,
+          amount: invoice.amount / 100, // Convert from paise to Rs
           transactionId: invoice.razorpayPaymentId || invoice.invoiceNumber,
           paymentMethod: this.formatPaymentMethod(invoice.paymentMethod),
           purchaseDateTime: `${time} | ${date}`,

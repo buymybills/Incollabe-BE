@@ -278,19 +278,19 @@ export class MaxSubscriptionBrandService {
       }
     }
 
-    // Search by campaign name
-    if (search) {
-      campaignWhereClause[Op.or] = [
-        { name: { [Op.iLike]: `%${search}%` } },
-      ];
-    }
-
-    // Build where clause for brands (search)
+    // Build where clause for brands and campaigns (search)
+    // Apply search to brand OR campaign name
     const brandWhereClause: any = {};
     if (search) {
+      // Add campaign name to the brand search OR condition
+      // This searches across brand name, username, OR campaign name
       brandWhereClause[Op.or] = [
         { brandName: { [Op.iLike]: `%${search}%` } },
         { username: { [Op.iLike]: `%${search}%` } },
+      ];
+      // Also add campaign name search to campaign where clause
+      campaignWhereClause[Op.or] = [
+        { name: { [Op.iLike]: `%${search}%` } },
       ];
     }
 
