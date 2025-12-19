@@ -9,12 +9,15 @@ import {
   ParseIntPipe,
   UseGuards,
   Req,
+  Res,
   HttpStatus,
   Query,
   UnauthorizedException,
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  NotFoundException,
+  StreamableFile,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -2487,6 +2490,136 @@ export class AdminController {
   })
   async getMaxSubscriptionInvoices(@Query() filters: GetMaxSubscriptionInvoicesDto): Promise<MaxSubscriptionInvoicesResponseDto> {
     return await this.maxSubscriptionInvoiceService.getUnifiedInvoices(filters);
+  }
+
+  @Get('max-subscription-invoice/download/:invoiceId')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Download a single invoice',
+    description: 'Download a specific invoice PDF by ID and type',
+  })
+  @ApiParam({
+    name: 'invoiceId',
+    type: Number,
+    description: 'Invoice ID',
+  })
+  @ApiQuery({
+    name: 'invoiceType',
+    required: true,
+    enum: ['maxx_subscription', 'invite_campaign', 'maxx_campaign'],
+    description: 'Type of invoice to download',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Invoice PDF URL returned successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Invoice not found or has no PDF',
+  })
+  async downloadInvoice(
+    @Param('invoiceId', ParseIntPipe) invoiceId: number,
+    @Query('invoiceType') invoiceType: 'maxx_subscription' | 'invite_campaign' | 'maxx_campaign',
+  ) {
+    const invoice = await this.maxSubscriptionInvoiceService.getInvoiceById(
+      invoiceId,
+      invoiceType as any,
+    );
+
+    if (!invoice || !invoice.invoiceUrl) {
+      throw new NotFoundException('Invoice not found or has no PDF');
+    }
+
+    return {
+      invoiceUrl: invoice.invoiceUrl,
+      invoiceNumber: invoice.invoiceNumber,
+      profileName: invoice.profileName,
+    };
+  }
+
+  @Post('max-subscription-invoice/download-all')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Download all invoices as ZIP',
+    description: 'Download all filtered invoices as a ZIP file containing all PDFs',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        search: { type: 'string', description: 'Search by name, username, or campaign name' },
+        startDate: { type: 'string', format: 'date', description: 'Filter by start date' },
+        endDate: { type: 'string', format: 'date', description: 'Filter by end date' },
+        invoiceType: {
+          type: 'string',
+          enum: ['all', 'maxx_subscription', 'invite_campaign', 'maxx_campaign'],
+          description: 'Filter by invoice type',
+        },
+        paymentMethod: { type: 'string', description: 'Filter by payment method' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'ZIP file with all invoice PDFs',
+    content: {
+      'application/zip': {
+        schema: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  async downloadAllInvoices(
+    @Body() filters: GetMaxSubscriptionInvoicesDto,
+    @Res() res: any,
+  ) {
+    const axios = await import('axios');
+    const archiver = await import('archiver');
+
+    const invoices = await this.maxSubscriptionInvoiceService.getAllInvoicePdfUrls(filters);
+
+    if (!invoices || invoices.length === 0) {
+      throw new NotFoundException('No invoices found with PDF URLs');
+    }
+
+    // Create a zip archive
+    const archive = archiver.default('zip', {
+      zlib: { level: 9 },
+    });
+
+    // Set response headers
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename=invoices-${Date.now()}.zip`);
+
+    // Pipe archive to response
+    archive.pipe(res);
+
+    // Download and add each invoice PDF to the zip
+    let fileIndex = 1;
+    for (const invoice of invoices) {
+      try {
+        const response = await axios.default.get(invoice.invoiceUrl, {
+          responseType: 'arraybuffer',
+        });
+
+        // Create a safe filename
+        const safeProfileName = invoice.profileName.replace(/[^a-zA-Z0-9]/g, '_');
+        const safeInvoiceNumber = invoice.invoiceNumber.replace(/[^a-zA-Z0-9]/g, '_');
+        const filename = `${fileIndex}_${safeProfileName}_${safeInvoiceNumber}_${invoice.maxxType.replace(/\s/g, '_')}.pdf`;
+
+        archive.append(Buffer.from(response.data), { name: filename });
+        fileIndex++;
+      } catch (error) {
+        console.error(`Failed to download invoice ${invoice.invoiceNumber}:`, error);
+        // Continue with other invoices even if one fails
+      }
+    }
+
+    // Finalize the archive
+    await archive.finalize();
   }
 
   // ============================================

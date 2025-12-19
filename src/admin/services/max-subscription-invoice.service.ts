@@ -9,6 +9,7 @@ import { MaxCampaignInvoice } from '../../campaign/models/max-campaign-invoice.m
 import { InviteOnlyCampaignInvoice } from '../../campaign/models/invite-only-campaign-invoice.model';
 import { Campaign } from '../../campaign/models/campaign.model';
 import { Brand } from '../../brand/model/brand.model';
+import { Influencer } from '../../auth/model/influencer.model';
 import {
   MaxSubscriptionInvoiceStatisticsDto,
   GetMaxSubscriptionInvoicesDto,
@@ -443,6 +444,348 @@ export class MaxSubscriptionInvoiceService {
         where: whereClause,
       });
     }
+  }
+
+  /**
+   * Get a single invoice by ID and type
+   */
+  async getInvoiceById(
+    invoiceId: number,
+    invoiceType: InvoiceTypeFilter,
+  ): Promise<{ invoiceUrl: string; invoiceNumber: string; profileName: string } | null> {
+    try {
+      // Try to find in ProInvoice
+      if (invoiceType === InvoiceTypeFilter.MAXX_SUBSCRIPTION) {
+        const proInvoice = await this.proInvoiceModel.findOne({
+          where: { id: invoiceId },
+          include: [
+            {
+              model: ProSubscription,
+              as: 'subscription',
+              include: [
+                {
+                  model: Influencer,
+                  as: 'influencer',
+                  attributes: ['name', 'username'],
+                },
+              ],
+            },
+          ],
+        });
+
+        if (proInvoice && proInvoice.invoiceUrl && proInvoice.subscription?.influencer) {
+          return {
+            invoiceUrl: proInvoice.invoiceUrl,
+            invoiceNumber: proInvoice.invoiceNumber,
+            profileName: (proInvoice.subscription.influencer as any).name || 'Unknown',
+          };
+        }
+      }
+
+      // Try to find in InviteOnlyCampaignInvoice
+      if (invoiceType === InvoiceTypeFilter.INVITE_CAMPAIGN) {
+        const inviteInvoice = await this.inviteOnlyCampaignInvoiceModel.findOne({
+          where: { id: invoiceId },
+          include: [
+            {
+              model: Brand,
+              as: 'brand',
+              attributes: ['brandName', 'username'],
+            },
+            {
+              model: Campaign,
+              as: 'campaign',
+              attributes: ['name'],
+            },
+          ],
+        });
+
+        if (inviteInvoice && inviteInvoice.invoiceUrl) {
+          return {
+            invoiceUrl: inviteInvoice.invoiceUrl,
+            invoiceNumber: inviteInvoice.invoiceNumber,
+            profileName: inviteInvoice.brand?.brandName || 'Unknown',
+          };
+        }
+      }
+
+      // Try to find in MaxCampaignInvoice
+      if (invoiceType === InvoiceTypeFilter.MAXX_CAMPAIGN) {
+        const maxInvoice = await this.maxCampaignInvoiceModel.findOne({
+          where: { id: invoiceId },
+          include: [
+            {
+              model: Brand,
+              as: 'brand',
+              attributes: ['brandName', 'username'],
+            },
+            {
+              model: Campaign,
+              as: 'campaign',
+              attributes: ['name'],
+            },
+          ],
+        });
+
+        if (maxInvoice && maxInvoice.invoiceUrl) {
+          return {
+            invoiceUrl: maxInvoice.invoiceUrl,
+            invoiceNumber: maxInvoice.invoiceNumber,
+            profileName: maxInvoice.brand?.brandName || 'Unknown',
+          };
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error fetching invoice:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get all invoice PDF URLs for creating a zip file
+   */
+  async getAllInvoicePdfUrls(
+    filters: GetMaxSubscriptionInvoicesDto,
+  ): Promise<Array<{ invoiceUrl: string; invoiceNumber: string; profileName: string; maxxType: string }>> {
+    const invoices: Array<{ invoiceUrl: string; invoiceNumber: string; profileName: string; maxxType: string }> = [];
+
+    const { search, startDate, endDate, invoiceType, paymentMethod } = filters;
+
+    // Fetch influencer subscription invoices if needed
+    if (
+      !invoiceType ||
+      invoiceType === InvoiceTypeFilter.ALL ||
+      invoiceType === InvoiceTypeFilter.MAXX_SUBSCRIPTION
+    ) {
+      const proInvoices = await this.getInfluencerInvoicePdfUrls(search, startDate, endDate, paymentMethod);
+      invoices.push(...proInvoices);
+    }
+
+    // Fetch brand campaign invoices if needed
+    if (
+      !invoiceType ||
+      invoiceType === InvoiceTypeFilter.ALL ||
+      invoiceType === InvoiceTypeFilter.INVITE_CAMPAIGN ||
+      invoiceType === InvoiceTypeFilter.MAXX_CAMPAIGN
+    ) {
+      const brandInvoices = await this.getBrandInvoicePdfUrls(search, startDate, endDate, invoiceType, paymentMethod);
+      invoices.push(...brandInvoices);
+    }
+
+    return invoices.filter((inv) => inv.invoiceUrl); // Only return invoices with PDF URLs
+  }
+
+  /**
+   * Get influencer Pro subscription invoice PDF URLs
+   */
+  private async getInfluencerInvoicePdfUrls(
+    search?: string,
+    startDate?: string,
+    endDate?: string,
+    paymentMethod?: string,
+  ): Promise<Array<{ invoiceUrl: string; invoiceNumber: string; profileName: string; maxxType: string }>> {
+    const whereClause: any = {
+      paymentStatus: 'paid',
+    };
+
+    if (startDate || endDate) {
+      whereClause.paidAt = {};
+      if (startDate) whereClause.paidAt[Op.gte] = new Date(startDate);
+      if (endDate) whereClause.paidAt[Op.lte] = new Date(endDate);
+    }
+
+    if (paymentMethod) {
+      whereClause.paymentMethod = paymentMethod;
+    }
+
+    const influencerWhere: any = {};
+    if (search) {
+      influencerWhere[Op.or] = [
+        { name: { [Op.iLike]: `%${search}%` } },
+        { username: { [Op.iLike]: `%${search}%` } },
+      ];
+    }
+
+    const proInvoices = await this.proInvoiceModel.findAll({
+      where: whereClause,
+      include: [
+        {
+          model: ProSubscription,
+          as: 'subscription',
+          required: true,
+          include: [
+            {
+              model: Influencer,
+              as: 'influencer',
+              required: true,
+              where: Object.keys(influencerWhere).length > 0 ? influencerWhere : undefined,
+              attributes: ['name', 'username'],
+            },
+          ],
+        },
+      ],
+      attributes: ['invoiceUrl', 'invoiceNumber'],
+    });
+
+    return proInvoices
+      .filter((invoice) => invoice.subscription?.influencer && invoice.invoiceUrl)
+      .map((invoice) => ({
+        invoiceUrl: invoice.invoiceUrl,
+        invoiceNumber: invoice.invoiceNumber,
+        profileName: (invoice.subscription.influencer as any).name,
+        maxxType: 'Maxx Subscription',
+      }));
+  }
+
+  /**
+   * Get brand campaign invoice PDF URLs
+   */
+  private async getBrandInvoicePdfUrls(
+    search?: string,
+    startDate?: string,
+    endDate?: string,
+    invoiceType?: InvoiceTypeFilter,
+    paymentMethod?: string,
+  ): Promise<Array<{ invoiceUrl: string; invoiceNumber: string; profileName: string; maxxType: string }>> {
+    const invoices: Array<{ invoiceUrl: string; invoiceNumber: string; profileName: string; maxxType: string }> = [];
+
+    // Fetch invite-only campaign invoices
+    if (!invoiceType || invoiceType === InvoiceTypeFilter.ALL || invoiceType === InvoiceTypeFilter.INVITE_CAMPAIGN) {
+      const inviteInvoices = await this.getInviteOnlyInvoicePdfUrls(search, startDate, endDate, paymentMethod);
+      invoices.push(...inviteInvoices);
+    }
+
+    // Fetch max campaign invoices
+    if (!invoiceType || invoiceType === InvoiceTypeFilter.ALL || invoiceType === InvoiceTypeFilter.MAXX_CAMPAIGN) {
+      const maxInvoices = await this.getMaxCampaignInvoicePdfUrls(search, startDate, endDate, paymentMethod);
+      invoices.push(...maxInvoices);
+    }
+
+    return invoices;
+  }
+
+  /**
+   * Get invite-only campaign invoice PDF URLs
+   */
+  private async getInviteOnlyInvoicePdfUrls(
+    search?: string,
+    startDate?: string,
+    endDate?: string,
+    paymentMethod?: string,
+  ): Promise<Array<{ invoiceUrl: string; invoiceNumber: string; profileName: string; maxxType: string }>> {
+    const whereClause: any = {
+      paymentStatus: 'paid',
+    };
+
+    if (startDate || endDate) {
+      whereClause.paidAt = {};
+      if (startDate) whereClause.paidAt[Op.gte] = new Date(startDate);
+      if (endDate) whereClause.paidAt[Op.lte] = new Date(endDate);
+    }
+
+    if (paymentMethod) {
+      whereClause.paymentMethod = paymentMethod;
+    }
+
+    const brandWhere: any = {};
+    if (search) {
+      brandWhere[Op.or] = [
+        { brandName: { [Op.iLike]: `%${search}%` } },
+        { username: { [Op.iLike]: `%${search}%` } },
+      ];
+    }
+
+    const invoices = await this.inviteOnlyCampaignInvoiceModel.findAll({
+      where: whereClause,
+      include: [
+        {
+          model: Brand,
+          as: 'brand',
+          required: true,
+          where: Object.keys(brandWhere).length > 0 ? brandWhere : undefined,
+          attributes: ['brandName', 'username'],
+        },
+        {
+          model: Campaign,
+          as: 'campaign',
+          required: true,
+          attributes: ['name'],
+        },
+      ],
+      attributes: ['invoiceUrl', 'invoiceNumber'],
+    });
+
+    return invoices
+      .filter((invoice) => invoice.brand && invoice.invoiceUrl)
+      .map((invoice) => ({
+        invoiceUrl: invoice.invoiceUrl,
+        invoiceNumber: invoice.invoiceNumber,
+        profileName: invoice.brand.brandName,
+        maxxType: 'Invite Campaign',
+      }));
+  }
+
+  /**
+   * Get max campaign invoice PDF URLs
+   */
+  private async getMaxCampaignInvoicePdfUrls(
+    search?: string,
+    startDate?: string,
+    endDate?: string,
+    paymentMethod?: string,
+  ): Promise<Array<{ invoiceUrl: string; invoiceNumber: string; profileName: string; maxxType: string }>> {
+    const whereClause: any = {
+      paymentStatus: 'paid',
+    };
+
+    if (startDate || endDate) {
+      whereClause.paidAt = {};
+      if (startDate) whereClause.paidAt[Op.gte] = new Date(startDate);
+      if (endDate) whereClause.paidAt[Op.lte] = new Date(endDate);
+    }
+
+    if (paymentMethod) {
+      whereClause.paymentMethod = paymentMethod;
+    }
+
+    const brandWhere: any = {};
+    if (search) {
+      brandWhere[Op.or] = [
+        { brandName: { [Op.iLike]: `%${search}%` } },
+        { username: { [Op.iLike]: `%${search}%` } },
+      ];
+    }
+
+    const invoices = await this.maxCampaignInvoiceModel.findAll({
+      where: whereClause,
+      include: [
+        {
+          model: Brand,
+          as: 'brand',
+          required: true,
+          where: Object.keys(brandWhere).length > 0 ? brandWhere : undefined,
+          attributes: ['brandName', 'username'],
+        },
+        {
+          model: Campaign,
+          as: 'campaign',
+          required: true,
+          attributes: ['name'],
+        },
+      ],
+      attributes: ['invoiceUrl', 'invoiceNumber'],
+    });
+
+    return invoices
+      .filter((invoice) => invoice.brand && invoice.invoiceUrl)
+      .map((invoice) => ({
+        invoiceUrl: invoice.invoiceUrl,
+        invoiceNumber: invoice.invoiceNumber,
+        profileName: invoice.brand.brandName,
+        maxxType: 'Maxx Campaign',
+      }));
   }
 
   /**
