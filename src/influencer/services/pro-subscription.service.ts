@@ -1328,7 +1328,7 @@ export class ProSubscriptionService {
         razorpaySubscriptionId: subscriptionResult.subscriptionId,
         upiMandateStatus: 'pending',
         mandateCreatedAt: now,
-        autoRenew: true,
+        autoRenew: false, // Will be set to true by webhook when mandate is authenticated
         currentPeriodStart: startDate,
         currentPeriodEnd: endDate,
         nextBillingDate: endDate,
