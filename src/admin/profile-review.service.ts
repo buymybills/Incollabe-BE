@@ -538,13 +538,13 @@ export class ProfileReviewService {
           { where: { id: review.profileId } },
         );
         // For influencers, we only send WhatsApp notifications, not emails
-        // if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-        //   await this.whatsAppService.sendProfileRejected(
-        //     influencer.whatsappNumber,
-        //     influencer.name,
-        //     reason,
-        //   );
-        // }
+        if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
+          await this.whatsAppService.sendProfileRejected(
+            influencer.whatsappNumber,
+            influencer.name,
+            reason,
+          );
+        }
       }
     }
 
