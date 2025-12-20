@@ -526,16 +526,6 @@ export class GetRedemptionRequestsDto {
   limit?: number = 20;
 
   @ApiProperty({
-    description: 'Filter by redemption status',
-    enum: RedemptionStatusFilter,
-    required: false,
-    example: RedemptionStatusFilter.PENDING,
-  })
-  @IsOptional()
-  @IsEnum(RedemptionStatusFilter)
-  status?: RedemptionStatusFilter;
-
-  @ApiProperty({
     description: 'Search by influencer name or username',
     required: false,
     example: 'sneha',

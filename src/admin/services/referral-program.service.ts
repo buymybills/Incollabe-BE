@@ -21,7 +21,6 @@ import {
   ReferralTransactionItemDto,
   ReferralProgramStatisticsDto,
   GetRedemptionRequestsDto,
-  RedemptionStatusFilter,
   RedemptionRequestsResponseDto,
   RedemptionRequestItemDto,
   ProcessRedemptionDto,
@@ -592,7 +591,6 @@ export class ReferralProgramService {
     const {
       page = 1,
       limit = 20,
-      status,
       search,
       sortBy = 'createdAt',
       sortOrder = 'DESC',
@@ -603,18 +601,14 @@ export class ReferralProgramService {
     const offset = (page - 1) * limit;
 
     // Build where clause for transactions
-    // Only show consolidated redemption transactions, not individual credit transactions
+    // Only show consolidated redemption transactions in processing state
     const whereClause: any = {
       transactionType: 'referral_bonus',
       description: {
         [Op.like]: 'Redemption request%',
       },
+      paymentStatus: 'processing', // Always fetch only processing state
     };
-
-    // Filter by status
-    if (status && status !== RedemptionStatusFilter.ALL) {
-      whereClause.paymentStatus = status;
-    }
 
     // Date filtering
     if (startDate || endDate) {
