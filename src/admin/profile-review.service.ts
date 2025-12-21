@@ -356,21 +356,22 @@ export class ProfileReviewService {
         // For influencers, we only send WhatsApp notifications, not emails
         // Debug logging for WhatsApp notification
 
-        if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-          console.log(
-            'Sending WhatsApp notification to:',
-            influencer.whatsappNumber,
-          );
-          await this.whatsAppService.sendProfileVerified(
-            influencer.whatsappNumber,
-            influencer.name,
-          );
-        } else {
-          console.log('WhatsApp notification not sent. Reason:', {
-            hasWhatsappNumber: !!influencer.whatsappNumber,
-            isWhatsappVerified: influencer.isWhatsappVerified,
-          });
-        }
+        // COMMENTED: WhatsApp notification for profile verified
+        // if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
+        //   console.log(
+        //     'Sending WhatsApp notification to:',
+        //     influencer.whatsappNumber,
+        //   );
+        //   await this.whatsAppService.sendProfileVerified(
+        //     influencer.whatsappNumber,
+        //     influencer.name,
+        //   );
+        // } else {
+        //   console.log('WhatsApp notification not sent. Reason:', {
+        //     hasWhatsappNumber: !!influencer.whatsappNumber,
+        //     isWhatsappVerified: influencer.isWhatsappVerified,
+        //   });
+        // }
 
         // Award referral credit if this influencer was referred by someone
         // Wrap in try-catch to prevent profile approval failure if referral fails
@@ -538,13 +539,14 @@ export class ProfileReviewService {
           { where: { id: review.profileId } },
         );
         // For influencers, we only send WhatsApp notifications, not emails
-        if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-          await this.whatsAppService.sendProfileRejected(
-            influencer.whatsappNumber,
-            influencer.name,
-            reason,
-          );
-        }
+        // COMMENTED: WhatsApp notification for profile rejected
+        // if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
+        //   await this.whatsAppService.sendProfileRejected(
+        //     influencer.whatsappNumber,
+        //     influencer.name,
+        //     reason,
+        //   );
+        // }
       }
     }
 
