@@ -167,12 +167,13 @@ export class InfluencerService {
           await this.createProfileReview(influencerId);
           // Send verification pending notification asynchronously (fire-and-forget)
           // Error handling is done internally by WhatsApp service
-          if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-            this.whatsAppService.sendProfileVerificationPending(
-              influencer.whatsappNumber,
-              influencer.name,
-            );
-          }
+          // COMMENTED: WhatsApp notification for profile sent for verification
+          // if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
+          //   this.whatsAppService.sendProfileVerificationPending(
+          //     influencer.whatsappNumber,
+          //     influencer.name,
+          //   );
+          // }
         }
         // Refetch influencer to get updated state from database
         const updatedInfluencer = await this.influencerRepository.findById(
@@ -565,12 +566,13 @@ export class InfluencerService {
       await this.createProfileReview(influencerId);
 
       // Send verification pending notifications (WhatsApp only for influencers)
-      if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-        await this.whatsAppService.sendProfileVerificationPending(
-          influencer.whatsappNumber,
-          influencer.name,
-        );
-      }
+      // COMMENTED: WhatsApp notification for profile sent for verification
+      // if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
+      //   await this.whatsAppService.sendProfileVerificationPending(
+      //     influencer.whatsappNumber,
+      //     influencer.name,
+      //   );
+      // }
     }
 
     // If profile is already complete but has no review record, create one
@@ -579,12 +581,13 @@ export class InfluencerService {
       await this.createProfileReview(influencerId);
 
       // Send verification pending notifications (WhatsApp only for influencers)
-      if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-        await this.whatsAppService.sendProfileVerificationPending(
-          influencer.whatsappNumber,
-          influencer.name,
-        );
-      }
+      // COMMENTED: WhatsApp notification for profile sent for verification
+      // if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
+      //   await this.whatsAppService.sendProfileVerificationPending(
+      //     influencer.whatsappNumber,
+      //     influencer.name,
+      //   );
+      // }
     }
 
     // Send appropriate WhatsApp notification based on completion status
