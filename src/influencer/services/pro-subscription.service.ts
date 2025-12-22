@@ -844,23 +844,19 @@ export class ProSubscriptionService {
           { where: { id: subscription.influencerId } },
         );
 
-        // Check if invoice already exists for this billing period (prevent duplicates)
-        // Use date range check to handle slight timestamp differences
-        const periodStartBuffer = new Date(subscription.currentPeriodStart);
-        periodStartBuffer.setMinutes(periodStartBuffer.getMinutes() - 5);
-        const periodEndBuffer = new Date(subscription.currentPeriodEnd);
-        periodEndBuffer.setMinutes(periodEndBuffer.getMinutes() + 5);
-
+        // Check if invoice already exists (prevent duplicates from race conditions)
+        const razorpayPaymentId = subscriptionEntity.notes?.razorpay_payment_id || subscriptionEntity.id;
         const existingActivationInvoice = await this.proInvoiceModel.findOne({
           where: {
-            subscriptionId: subscription.id,
-            paymentStatus: 'paid',
-            billingPeriodStart: {
-              [Op.between]: [periodStartBuffer, new Date(subscription.currentPeriodStart)],
-            },
-            billingPeriodEnd: {
-              [Op.between]: [new Date(subscription.currentPeriodEnd), periodEndBuffer],
-            },
+            [Op.or]: [
+              { razorpayPaymentId },
+              {
+                subscriptionId: subscription.id,
+                paymentStatus: 'paid',
+                billingPeriodStart: subscription.currentPeriodStart,
+                billingPeriodEnd: subscription.currentPeriodEnd,
+              },
+            ],
           },
         });
 
@@ -902,23 +898,18 @@ export class ProSubscriptionService {
         // Recurring payment successful
         console.log(`💰 Subscription ${subscription.id} charged successfully`);
 
-        // Check if invoice already exists for this billing period (prevent duplicates)
-        // Use date range check to handle slight timestamp differences
-        const chargePeriodStartBuffer = new Date(subscription.currentPeriodStart);
-        chargePeriodStartBuffer.setMinutes(chargePeriodStartBuffer.getMinutes() - 5);
-        const chargePeriodEndBuffer = new Date(subscription.currentPeriodEnd);
-        chargePeriodEndBuffer.setMinutes(chargePeriodEndBuffer.getMinutes() + 5);
-
+        // Check if invoice already exists (prevent duplicates from race conditions)
         const existingChargeInvoice = await this.proInvoiceModel.findOne({
           where: {
-            subscriptionId: subscription.id,
-            paymentStatus: 'paid',
-            billingPeriodStart: {
-              [Op.between]: [chargePeriodStartBuffer, new Date(subscription.currentPeriodStart)],
-            },
-            billingPeriodEnd: {
-              [Op.between]: [new Date(subscription.currentPeriodEnd), chargePeriodEndBuffer],
-            },
+            [Op.or]: [
+              { razorpayPaymentId: subscriptionEntity.payment_id },
+              {
+                subscriptionId: subscription.id,
+                paymentStatus: 'paid',
+                billingPeriodStart: subscription.currentPeriodStart,
+                billingPeriodEnd: subscription.currentPeriodEnd,
+              },
+            ],
           },
         });
 
