@@ -11,6 +11,7 @@ import { WhatsAppService } from '../shared/whatsapp.service';
 import { NotificationService } from '../shared/notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
 import { UserType as DeviceUserType } from '../shared/models/device-token.model';
+//import { APP_VERSION } from '../shared/constants/app-version.constants';
 import { OtpService } from '../shared/services/otp.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto';
@@ -59,6 +60,7 @@ import { UserType as CustomNicheUserType } from '../auth/model/custom-niche.mode
 import { CreditTransaction } from 'src/admin/models/credit-transaction.model';
 import { InfluencerReferralUsage } from 'src/auth/model/influencer-referral-usage.model';
 import { InfluencerUpi } from './models/influencer-upi.model';
+import { ProSubscription, SubscriptionStatus } from './models/pro-subscription.model';
 
 // Private types for InfluencerService
 type WhatsAppOtpRequest = {
@@ -126,6 +128,8 @@ export class InfluencerService {
     private readonly influencerReferralUsageModel: typeof InfluencerReferralUsage,
     @Inject('INFLUENCER_UPI_MODEL')
     private readonly influencerUpiModel: typeof InfluencerUpi,
+    @Inject('PRO_SUBSCRIPTION_MODEL')
+    private readonly proSubscriptionModel: typeof ProSubscription,
   ) {}
 
   async getInfluencerProfile(
@@ -133,6 +137,7 @@ export class InfluencerService {
     isPublic: boolean = false,
     currentUserId?: number,
     currentUserType?: 'influencer' | 'brand',
+    //fcmToken?: string,
   ) {
     // Validate that only influencers can access their own profile
     if (influencerId === currentUserId && currentUserType === 'brand') {
@@ -165,14 +170,15 @@ export class InfluencerService {
         // If profile just became complete and hasn't been submitted, create review
         if (!hasBeenSubmitted) {
           await this.createProfileReview(influencerId);
-          // Send verification pending notification asynchronously (fire-and-forget)
-          // Error handling is done internally by WhatsApp service
-          // COMMENTED: WhatsApp notification for profile sent for verification
-          // if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-          //   this.whatsAppService.sendProfileVerificationPending(
-          //     influencer.whatsappNumber,
-          //     influencer.name,
-          //   );
+          // Send verification pending push notification asynchronously (fire-and-forget)
+          // const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencerId, DeviceUserType.INFLUENCER);
+          // if (fcmTokens && fcmTokens.length > 0) {
+          //   this.notificationService.sendCustomNotification(
+          //     fcmTokens,
+          //     'Profile Under Review',
+          //     `Hi ${influencer.name}, your profile has been submitted for verification. You will be notified once the review is complete within 48 hours.`,
+          //     { type: 'profile_verification_pending' },
+          //   ).catch(err => console.error('Failed to send profile verification pending notification:', err));
           // }
         }
         // Refetch influencer to get updated state from database
@@ -298,6 +304,63 @@ export class InfluencerService {
         influencer.updatedAt?.toISOString() || new Date().toISOString(),
     };
 
+    // Fetch user's device information (only for non-public view)
+    // let deviceInfo: {
+    //   deviceName: string | null;
+    //   deviceOs: string | null;
+    //   appVersion: string | null;
+    //   versionCode: number | null;
+    //   lastUsedAt: Date;
+    // } | null = null;
+
+    // if (!isPublic) {
+    //   const devices = await this.deviceTokenService.getUserDevices(influencerId, DeviceUserType.INFLUENCER);
+
+    //   let currentDevice: typeof devices[number] | null | undefined = null;
+
+    //   // If fcmToken is provided, find the specific device
+    //   if (fcmToken && devices && devices.length > 0) {
+    //     currentDevice = devices.find(device => device.fcmToken === fcmToken);
+    //   }
+
+    //   // Fall back to most recently used device if fcmToken not provided or not found
+    //   if (!currentDevice && devices && devices.length > 0) {
+    //     currentDevice = devices[0]; // devices are already ordered by lastUsedAt DESC
+    //   }
+
+    //   if (currentDevice) {
+    //     deviceInfo = {
+    //       deviceName: currentDevice.deviceName,
+    //       deviceOs: currentDevice.deviceOs,
+    //       appVersion: currentDevice.appVersion,
+    //       versionCode: currentDevice.versionCode,
+    //       lastUsedAt: currentDevice.lastUsedAt,
+    //     };
+    //   }
+    // }
+
+    // // App version information
+    // const appVersionInfo = {
+    //   current: {
+    //     appVersion: deviceInfo?.appVersion || null,
+    //     versionCode: deviceInfo?.versionCode || null,
+    //   },
+    //   minimum: {
+    //     appVersion: APP_VERSION.MINIMUM_VERSION,
+    //     versionCode: APP_VERSION.MINIMUM_VERSION_CODE,
+    //   },
+    //   latest: {
+    //     appVersion: APP_VERSION.LATEST_VERSION,
+    //     versionCode: APP_VERSION.LATEST_VERSION_CODE,
+    //   },
+    //   updateRequired: deviceInfo?.versionCode ? deviceInfo.versionCode < APP_VERSION.MINIMUM_VERSION_CODE : false,
+    //   updateAvailable: deviceInfo?.versionCode ? deviceInfo.versionCode < APP_VERSION.LATEST_VERSION_CODE : false,
+    //   forceUpdate: APP_VERSION.FORCE_UPDATE && (deviceInfo?.versionCode ? deviceInfo.versionCode < APP_VERSION.MINIMUM_VERSION_CODE : false),
+    //   updateMessage: APP_VERSION.FORCE_UPDATE && (deviceInfo?.versionCode ? deviceInfo.versionCode < APP_VERSION.MINIMUM_VERSION_CODE : false)
+    //     ? APP_VERSION.FORCE_UPDATE_MESSAGE
+    //     : APP_VERSION.UPDATE_MESSAGE,
+    // };
+
     // Include private data only if not public view
     if (!isPublic) {
       // Convert Pro subscription dates to IST if they exist
@@ -340,7 +403,21 @@ export class InfluencerService {
 
       // Calculate isPro dynamically based on actual subscription status
       const now = new Date();
-      const isPro = influencer.isPro && influencer.proExpiresAt && influencer.proExpiresAt > now;
+      let isPro = false;
+
+      // Query the actual subscription to check its status
+      const subscription = await this.proSubscriptionModel.findOne({
+        where: { influencerId },
+        order: [['createdAt', 'DESC']],
+      });
+
+      if (subscription) {
+        // User has Pro access if:
+        // 1. Subscription is ACTIVE, OR
+        // 2. Subscription is CANCELLED but current period hasn't ended yet
+        isPro = subscription.status === SubscriptionStatus.ACTIVE ||
+          (subscription.status === SubscriptionStatus.CANCELLED && subscription.currentPeriodEnd > now);
+      }
 
       return {
         ...baseProfile,
@@ -374,10 +451,17 @@ export class InfluencerService {
         monthlyReferralResetDate: nextResetDate.toISOString(),
         upiId: influencer.upiId || null,
         profileCompletion,
+        //deviceInfo,
+        //appVersion: appVersionInfo,
       };
     }
 
     return baseProfile;
+
+    // return {
+    //   ...baseProfile,
+    //   appVersion: appVersionInfo,
+    // };
   }
 
   async updateInfluencerProfile(
@@ -572,13 +656,15 @@ export class InfluencerService {
       // Create profile review for admin verification
       await this.createProfileReview(influencerId);
 
-      // Send verification pending notifications (WhatsApp only for influencers)
-      // COMMENTED: WhatsApp notification for profile sent for verification
-      // if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-      //   await this.whatsAppService.sendProfileVerificationPending(
-      //     influencer.whatsappNumber,
-      //     influencer.name,
-      //   );
+      // Send verification pending push notification
+      // const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencerId, DeviceUserType.INFLUENCER);
+      // if (fcmTokens && fcmTokens.length > 0) {
+      //   this.notificationService.sendCustomNotification(
+      //     fcmTokens,
+      //     'Profile Under Review',
+      //     `Hi ${updatedInfluencer.name}, your profile has been submitted for verification. You will be notified once the review is complete within 48 hours.`,
+      //     { type: 'profile_verification_pending' },
+      //   ).catch(err => console.error('Failed to send profile verification pending notification:', err));
       // }
     }
 
@@ -587,13 +673,15 @@ export class InfluencerService {
     if (isComplete && !hasBeenSubmitted && wasComplete) {
       await this.createProfileReview(influencerId);
 
-      // Send verification pending notifications (WhatsApp only for influencers)
-      // COMMENTED: WhatsApp notification for profile sent for verification
-      // if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-      //   await this.whatsAppService.sendProfileVerificationPending(
-      //     influencer.whatsappNumber,
-      //     influencer.name,
-      //   );
+      // Send verification pending push notification
+      // const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencerId, DeviceUserType.INFLUENCER);
+      // if (fcmTokens && fcmTokens.length > 0) {
+      //   this.notificationService.sendCustomNotification(
+      //     fcmTokens,
+      //     'Profile Under Review',
+      //     `Hi ${updatedInfluencer.name}, your profile has been submitted for verification. You will be notified once the review is complete within 48 hours.`,
+      //     { type: 'profile_verification_pending' },
+      //   ).catch(err => console.error('Failed to send profile verification pending notification:', err));
       // }
     }
 
@@ -611,25 +699,21 @@ export class InfluencerService {
           missingFields: profileCompletion.missingFields,
         });
 
-        if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-          console.log(
-            'Sending profile incomplete WhatsApp notification to:',
-            influencer.whatsappNumber,
-          );
-          await this.whatsAppService.sendProfileIncomplete(
-            influencer.whatsappNumber,
-            influencer.name,
-            profileCompletion.missingFields.length.toString(),
-          );
-        } else {
-          console.log(
-            'Profile incomplete WhatsApp notification not sent. Reason:',
-            {
-              hasWhatsappNumber: !!influencer.whatsappNumber,
-              isWhatsappVerified: influencer.isWhatsappVerified,
-            },
-          );
-        }
+        // Send profile incomplete push notification
+        // const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencer.id, DeviceUserType.INFLUENCER);
+        // if (fcmTokens && fcmTokens.length > 0) {
+        //   const missingCount = profileCompletion.missingFields.length;
+        //   this.notificationService.sendCustomNotification(
+        //     fcmTokens,
+        //     'Complete Your Profile',
+        //     `Hi ${influencer.name}, you have ${missingCount} field${missingCount > 1 ? 's' : ''} remaining to complete your profile. Complete it to apply for campaigns!`,
+        //     {
+        //       type: 'profile_incomplete',
+        //       missingFieldsCount: missingCount.toString(),
+        //       missingFields: JSON.stringify(profileCompletion.missingFields)
+        //     },
+        //   ).catch(err => console.error('Failed to send profile incomplete notification:', err));
+        // }
       }
     }
     // else: Profile has been submitted before - no notification
@@ -1408,14 +1492,21 @@ export class InfluencerService {
       status: ApplicationStatus.APPLIED,
     } as any);
 
-    // Send WhatsApp notification to influencer asynchronously (fire-and-forget)
-    // Error handling is done internally by WhatsApp service
-    this.whatsAppService.sendCampaignApplicationConfirmation(
-      influencer.whatsappNumber,
-      influencer.name,
-      campaign.name,
-      campaign.brand?.brandName || 'Brand',
-    );
+    // Send push notification to influencer about application confirmation asynchronously (fire-and-forget)
+    // const influencerFcmTokens = await this.deviceTokenService.getAllUserTokens(influencer.id, DeviceUserType.INFLUENCER);
+    // if (influencerFcmTokens && influencerFcmTokens.length > 0) {
+    //   this.notificationService.sendCustomNotification(
+    //     influencerFcmTokens,
+    //     'Application Submitted!',
+    //     `Hi ${influencer.name}, your application for "${campaign.name}" by ${campaign.brand?.brandName || 'Brand'} has been submitted successfully. You will be notified about the status.`,
+    //     {
+    //       type: 'campaign_application_submitted',
+    //       campaignId: campaign.id.toString(),
+    //       campaignName: campaign.name,
+    //       brandName: campaign.brand?.brandName || 'Brand',
+    //     },
+    //   ).catch(err => console.error('Failed to send campaign application confirmation notification:', err));
+    // }
 
     // Send push notification to brand owner about new application asynchronously (fire-and-forget)
     const brand = campaign.brand;

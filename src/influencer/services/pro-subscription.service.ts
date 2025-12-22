@@ -281,8 +281,15 @@ export class ProSubscriptionService {
     const isPro = subscription.status === SubscriptionStatus.ACTIVE ||
       (subscription.status === SubscriptionStatus.CANCELLED && subscription.currentPeriodEnd > now);
 
+    // Don't count subscriptions in pending/failed states as having a subscription
+    const hasSubscription = !(
+      subscription.status === SubscriptionStatus.PAYMENT_PENDING ||
+      subscription.status === SubscriptionStatus.PAYMENT_FAILED ||
+      subscription.status === SubscriptionStatus.INACTIVE
+    );
+
     return {
-      hasSubscription: true,
+      hasSubscription,
       isPro,
       subscription: {
         id: subscription.id,
