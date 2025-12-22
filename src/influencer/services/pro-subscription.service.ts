@@ -438,12 +438,14 @@ export class ProSubscriptionService {
     const subscription = await this.proSubscriptionModel.findOne({
       where: {
         influencerId,
-        status: SubscriptionStatus.ACTIVE,
+        status: {
+          [Op.in]: [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAUSED],
+        },
       },
     });
 
     if (!subscription) {
-      throw new NotFoundException('No active subscription found');
+      throw new NotFoundException('No active or paused subscription found');
     }
 
     await subscription.update({
