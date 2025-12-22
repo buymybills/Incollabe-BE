@@ -122,6 +122,10 @@ import { InfluencerUpi } from './models/influencer-upi.model';
       provide: 'INFLUENCER_UPI_MODEL',
       useValue: InfluencerUpi,
     },
+    {
+      provide: 'PRO_SUBSCRIPTION_MODEL',
+      useValue: ProSubscription,
+    },
   ],
   exports: [InfluencerService, InfluencerRepository, ProSubscriptionService],
 })

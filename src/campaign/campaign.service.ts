@@ -977,15 +977,14 @@ export class CampaignService {
     );
 
     for (const influencer of influencersToNotify) {
-      // Send WhatsApp notification asynchronously (fire-and-forget)
-      // Error handling is done internally by WhatsApp service
-      this.whatsAppService.sendCampaignInvitation(
-        influencer.whatsappNumber,
-        influencer.name,
-        campaign.name,
-        brandName,
-        personalMessage,
-      );
+      // COMMENTED: WhatsApp notification for campaign invitation (using push notifications instead)
+      // this.whatsAppService.sendCampaignInvitation(
+      //   influencer.whatsappNumber,
+      //   influencer.name,
+      //   campaign.name,
+      //   brandName,
+      //   personalMessage,
+      // );
 
       // Send push notification to all devices
       try {
@@ -1736,67 +1735,37 @@ export class CampaignService {
     //   }
     // }
 
-    // Send WhatsApp notifications asynchronously (fire-and-forget)
-    if (influencer && influencer.whatsappNumber) {
-      let whatsappPromise: Promise<void> | null = null;
-
-      switch (updateStatusDto.status) {
-        case ApplicationStatus.UNDER_REVIEW:
-          whatsappPromise =
-            this.whatsAppService.sendCampaignApplicationUnderReview(
-              influencer.whatsappNumber,
-              influencer.name,
-              campaign.name,
-              brandName,
-            );
-          break;
-
-        case ApplicationStatus.SELECTED:
-          whatsappPromise =
-            this.whatsAppService.sendCampaignApplicationSelected(
-              influencer.whatsappNumber,
-              influencer.name,
-              campaign.name,
-              brandName,
-              updateStatusDto.reviewNotes,
-            );
-          break;
-
-        // COMMENTED OUT: Don't send WhatsApp notification for rejected applications
-        // case ApplicationStatus.REJECTED:
-        //   whatsappPromise =
-        //     this.whatsAppService.sendCampaignApplicationRejected(
-        //       influencer.whatsappNumber,
-        //       influencer.name,
-        //       campaign.name,
-        //       brandName,
-        //       updateStatusDto.reviewNotes,
-        //     );
-        //   break;
-      }
-
-      if (whatsappPromise) {
-        whatsappPromise.catch((error) => {
+    // WhatsApp notification only for SELECTED status
+    if (
+      influencer &&
+      influencer.whatsappNumber &&
+      updateStatusDto.status === ApplicationStatus.SELECTED
+    ) {
+      this.whatsAppService
+        .sendCampaignApplicationSelected(
+          influencer.whatsappNumber,
+          influencer.name,
+          campaign.name,
+          brandName,
+          updateStatusDto.reviewNotes,
+        )
+        .catch((error) => {
           console.error('Failed to send WhatsApp notification:', error);
         });
-      }
     }
 
-    // Send push notifications to influencer asynchronously (fire-and-forget)
-    if (influencer && influencer.id) {
+    // Push notifications for UNDER_REVIEW and REJECTED statuses
+    if (
+      influencer &&
+      influencer.id &&
+      (updateStatusDto.status === ApplicationStatus.UNDER_REVIEW ||
+        updateStatusDto.status === ApplicationStatus.REJECTED)
+    ) {
       let pushStatus: string;
-      switch (updateStatusDto.status) {
-        case ApplicationStatus.UNDER_REVIEW:
-          pushStatus = 'pending';
-          break;
-        case ApplicationStatus.SELECTED:
-          pushStatus = 'approved';
-          break;
-        case ApplicationStatus.REJECTED:
-          pushStatus = 'rejected';
-          break;
-        default:
-          pushStatus = updateStatusDto.status;
+      if (updateStatusDto.status === ApplicationStatus.UNDER_REVIEW) {
+        pushStatus = 'pending';
+      } else {
+        pushStatus = 'rejected';
       }
 
       // Get all device tokens and send to all devices

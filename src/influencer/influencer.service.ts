@@ -11,7 +11,7 @@ import { WhatsAppService } from '../shared/whatsapp.service';
 import { NotificationService } from '../shared/notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
 import { UserType as DeviceUserType } from '../shared/models/device-token.model';
-//import { APP_VERSION } from '../shared/constants/app-version.constants';
+import { APP_VERSION } from '../shared/constants/app-version.constants';
 import { OtpService } from '../shared/services/otp.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto';
@@ -137,7 +137,7 @@ export class InfluencerService {
     isPublic: boolean = false,
     currentUserId?: number,
     currentUserType?: 'influencer' | 'brand',
-    //fcmToken?: string,
+    fcmToken?: string,
   ) {
     // Validate that only influencers can access their own profile
     if (influencerId === currentUserId && currentUserType === 'brand') {
@@ -171,15 +171,15 @@ export class InfluencerService {
         if (!hasBeenSubmitted) {
           await this.createProfileReview(influencerId);
           // Send verification pending push notification asynchronously (fire-and-forget)
-          // const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencerId, DeviceUserType.INFLUENCER);
-          // if (fcmTokens && fcmTokens.length > 0) {
-          //   this.notificationService.sendCustomNotification(
-          //     fcmTokens,
-          //     'Profile Under Review',
-          //     `Hi ${influencer.name}, your profile has been submitted for verification. You will be notified once the review is complete within 48 hours.`,
-          //     { type: 'profile_verification_pending' },
-          //   ).catch(err => console.error('Failed to send profile verification pending notification:', err));
-          // }
+          const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencerId, DeviceUserType.INFLUENCER);
+          if (fcmTokens && fcmTokens.length > 0) {
+            this.notificationService.sendCustomNotification(
+              fcmTokens,
+              'Profile Under Review',
+              `Hi ${influencer.name}, your profile has been submitted for verification. You will be notified once the review is complete within 48 hours.`,
+              { type: 'profile_verification_pending' },
+            ).catch(err => console.error('Failed to send profile verification pending notification:', err));
+          }
         }
         // Refetch influencer to get updated state from database
         const updatedInfluencer = await this.influencerRepository.findById(
@@ -305,61 +305,61 @@ export class InfluencerService {
     };
 
     // Fetch user's device information (only for non-public view)
-    // let deviceInfo: {
-    //   deviceName: string | null;
-    //   deviceOs: string | null;
-    //   appVersion: string | null;
-    //   versionCode: number | null;
-    //   lastUsedAt: Date;
-    // } | null = null;
+    let deviceInfo: {
+      deviceName: string | null;
+      deviceOs: string | null;
+      appVersion: string | null;
+      versionCode: number | null;
+      lastUsedAt: Date;
+    } | null = null;
 
-    // if (!isPublic) {
-    //   const devices = await this.deviceTokenService.getUserDevices(influencerId, DeviceUserType.INFLUENCER);
+    if (!isPublic) {
+      const devices = await this.deviceTokenService.getUserDevices(influencerId, DeviceUserType.INFLUENCER);
 
-    //   let currentDevice: typeof devices[number] | null | undefined = null;
+      let currentDevice: typeof devices[number] | null | undefined = null;
 
-    //   // If fcmToken is provided, find the specific device
-    //   if (fcmToken && devices && devices.length > 0) {
-    //     currentDevice = devices.find(device => device.fcmToken === fcmToken);
-    //   }
+      // If fcmToken is provided, find the specific device
+      if (fcmToken && devices && devices.length > 0) {
+        currentDevice = devices.find(device => device.fcmToken === fcmToken);
+      }
 
-    //   // Fall back to most recently used device if fcmToken not provided or not found
-    //   if (!currentDevice && devices && devices.length > 0) {
-    //     currentDevice = devices[0]; // devices are already ordered by lastUsedAt DESC
-    //   }
+      // Fall back to most recently used device if fcmToken not provided or not found
+      if (!currentDevice && devices && devices.length > 0) {
+        currentDevice = devices[0]; // devices are already ordered by lastUsedAt DESC
+      }
 
-    //   if (currentDevice) {
-    //     deviceInfo = {
-    //       deviceName: currentDevice.deviceName,
-    //       deviceOs: currentDevice.deviceOs,
-    //       appVersion: currentDevice.appVersion,
-    //       versionCode: currentDevice.versionCode,
-    //       lastUsedAt: currentDevice.lastUsedAt,
-    //     };
-    //   }
-    // }
+      if (currentDevice) {
+        deviceInfo = {
+          deviceName: currentDevice.deviceName,
+          deviceOs: currentDevice.deviceOs,
+          appVersion: currentDevice.appVersion,
+          versionCode: currentDevice.versionCode,
+          lastUsedAt: currentDevice.lastUsedAt,
+        };
+      }
+    }
 
-    // // App version information
-    // const appVersionInfo = {
-    //   current: {
-    //     appVersion: deviceInfo?.appVersion || null,
-    //     versionCode: deviceInfo?.versionCode || null,
-    //   },
-    //   minimum: {
-    //     appVersion: APP_VERSION.MINIMUM_VERSION,
-    //     versionCode: APP_VERSION.MINIMUM_VERSION_CODE,
-    //   },
-    //   latest: {
-    //     appVersion: APP_VERSION.LATEST_VERSION,
-    //     versionCode: APP_VERSION.LATEST_VERSION_CODE,
-    //   },
-    //   updateRequired: deviceInfo?.versionCode ? deviceInfo.versionCode < APP_VERSION.MINIMUM_VERSION_CODE : false,
-    //   updateAvailable: deviceInfo?.versionCode ? deviceInfo.versionCode < APP_VERSION.LATEST_VERSION_CODE : false,
-    //   forceUpdate: APP_VERSION.FORCE_UPDATE && (deviceInfo?.versionCode ? deviceInfo.versionCode < APP_VERSION.MINIMUM_VERSION_CODE : false),
-    //   updateMessage: APP_VERSION.FORCE_UPDATE && (deviceInfo?.versionCode ? deviceInfo.versionCode < APP_VERSION.MINIMUM_VERSION_CODE : false)
-    //     ? APP_VERSION.FORCE_UPDATE_MESSAGE
-    //     : APP_VERSION.UPDATE_MESSAGE,
-    // };
+    // App version information
+    const appVersionInfo = {
+      current: {
+        appVersion: deviceInfo?.appVersion || null,
+        versionCode: deviceInfo?.versionCode || null,
+      },
+      minimum: {
+        appVersion: APP_VERSION.MINIMUM_VERSION,
+        versionCode: APP_VERSION.MINIMUM_VERSION_CODE,
+      },
+      latest: {
+        appVersion: APP_VERSION.LATEST_VERSION,
+        versionCode: APP_VERSION.LATEST_VERSION_CODE,
+      },
+      updateRequired: deviceInfo?.versionCode ? deviceInfo.versionCode < APP_VERSION.MINIMUM_VERSION_CODE : false,
+      updateAvailable: deviceInfo?.versionCode ? deviceInfo.versionCode < APP_VERSION.LATEST_VERSION_CODE : false,
+      forceUpdate: APP_VERSION.FORCE_UPDATE && (deviceInfo?.versionCode ? deviceInfo.versionCode < APP_VERSION.MINIMUM_VERSION_CODE : false),
+      updateMessage: APP_VERSION.FORCE_UPDATE && (deviceInfo?.versionCode ? deviceInfo.versionCode < APP_VERSION.MINIMUM_VERSION_CODE : false)
+        ? APP_VERSION.FORCE_UPDATE_MESSAGE
+        : APP_VERSION.UPDATE_MESSAGE,
+    };
 
     // Include private data only if not public view
     if (!isPublic) {
@@ -657,15 +657,15 @@ export class InfluencerService {
       await this.createProfileReview(influencerId);
 
       // Send verification pending push notification
-      // const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencerId, DeviceUserType.INFLUENCER);
-      // if (fcmTokens && fcmTokens.length > 0) {
-      //   this.notificationService.sendCustomNotification(
-      //     fcmTokens,
-      //     'Profile Under Review',
-      //     `Hi ${updatedInfluencer.name}, your profile has been submitted for verification. You will be notified once the review is complete within 48 hours.`,
-      //     { type: 'profile_verification_pending' },
-      //   ).catch(err => console.error('Failed to send profile verification pending notification:', err));
-      // }
+      const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencerId, DeviceUserType.INFLUENCER);
+      if (fcmTokens && fcmTokens.length > 0) {
+        this.notificationService.sendCustomNotification(
+          fcmTokens,
+          'Profile Under Review',
+          `Hi ${updatedInfluencer.name}, your profile has been submitted for verification. You will be notified once the review is complete within 48 hours.`,
+          { type: 'profile_verification_pending' },
+        ).catch(err => console.error('Failed to send profile verification pending notification:', err));
+      }
     }
 
     // If profile is already complete but has no review record, create one
@@ -674,15 +674,15 @@ export class InfluencerService {
       await this.createProfileReview(influencerId);
 
       // Send verification pending push notification
-      // const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencerId, DeviceUserType.INFLUENCER);
-      // if (fcmTokens && fcmTokens.length > 0) {
-      //   this.notificationService.sendCustomNotification(
-      //     fcmTokens,
-      //     'Profile Under Review',
-      //     `Hi ${updatedInfluencer.name}, your profile has been submitted for verification. You will be notified once the review is complete within 48 hours.`,
-      //     { type: 'profile_verification_pending' },
-      //   ).catch(err => console.error('Failed to send profile verification pending notification:', err));
-      // }
+      const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencerId, DeviceUserType.INFLUENCER);
+      if (fcmTokens && fcmTokens.length > 0) {
+        this.notificationService.sendCustomNotification(
+          fcmTokens,
+          'Profile Under Review',
+          `Hi ${updatedInfluencer.name}, your profile has been submitted for verification. You will be notified once the review is complete within 48 hours.`,
+          { type: 'profile_verification_pending' },
+        ).catch(err => console.error('Failed to send profile verification pending notification:', err));
+      }
     }
 
     // Send appropriate WhatsApp notification based on completion status
@@ -700,20 +700,20 @@ export class InfluencerService {
         });
 
         // Send profile incomplete push notification
-        // const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencer.id, DeviceUserType.INFLUENCER);
-        // if (fcmTokens && fcmTokens.length > 0) {
-        //   const missingCount = profileCompletion.missingFields.length;
-        //   this.notificationService.sendCustomNotification(
-        //     fcmTokens,
-        //     'Complete Your Profile',
-        //     `Hi ${influencer.name}, you have ${missingCount} field${missingCount > 1 ? 's' : ''} remaining to complete your profile. Complete it to apply for campaigns!`,
-        //     {
-        //       type: 'profile_incomplete',
-        //       missingFieldsCount: missingCount.toString(),
-        //       missingFields: JSON.stringify(profileCompletion.missingFields)
-        //     },
-        //   ).catch(err => console.error('Failed to send profile incomplete notification:', err));
-        // }
+        const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencer.id, DeviceUserType.INFLUENCER);
+        if (fcmTokens && fcmTokens.length > 0) {
+          const missingCount = profileCompletion.missingFields.length;
+          this.notificationService.sendCustomNotification(
+            fcmTokens,
+            'Complete Your Profile',
+            `Hi ${influencer.name}, you have ${missingCount} field${missingCount > 1 ? 's' : ''} remaining to complete your profile. Complete it to apply for campaigns!`,
+            {
+              type: 'profile_incomplete',
+              missingFieldsCount: missingCount.toString(),
+              missingFields: JSON.stringify(profileCompletion.missingFields)
+            },
+          ).catch(err => console.error('Failed to send profile incomplete notification:', err));
+        }
       }
     }
     // else: Profile has been submitted before - no notification
@@ -1493,20 +1493,20 @@ export class InfluencerService {
     } as any);
 
     // Send push notification to influencer about application confirmation asynchronously (fire-and-forget)
-    // const influencerFcmTokens = await this.deviceTokenService.getAllUserTokens(influencer.id, DeviceUserType.INFLUENCER);
-    // if (influencerFcmTokens && influencerFcmTokens.length > 0) {
-    //   this.notificationService.sendCustomNotification(
-    //     influencerFcmTokens,
-    //     'Application Submitted!',
-    //     `Hi ${influencer.name}, your application for "${campaign.name}" by ${campaign.brand?.brandName || 'Brand'} has been submitted successfully. You will be notified about the status.`,
-    //     {
-    //       type: 'campaign_application_submitted',
-    //       campaignId: campaign.id.toString(),
-    //       campaignName: campaign.name,
-    //       brandName: campaign.brand?.brandName || 'Brand',
-    //     },
-    //   ).catch(err => console.error('Failed to send campaign application confirmation notification:', err));
-    // }
+    const influencerFcmTokens = await this.deviceTokenService.getAllUserTokens(influencer.id, DeviceUserType.INFLUENCER);
+    if (influencerFcmTokens && influencerFcmTokens.length > 0) {
+      this.notificationService.sendCustomNotification(
+        influencerFcmTokens,
+        'Application Submitted!',
+        `Hi ${influencer.name}, your application for "${campaign.name}" by ${campaign.brand?.brandName || 'Brand'} has been submitted successfully. You will be notified about the status.`,
+        {
+          type: 'campaign_application_submitted',
+          campaignId: campaign.id.toString(),
+          campaignName: campaign.name,
+          brandName: campaign.brand?.brandName || 'Brand',
+        },
+      ).catch(err => console.error('Failed to send campaign application confirmation notification:', err));
+    }
 
     // Send push notification to brand owner about new application asynchronously (fire-and-forget)
     const brand = campaign.brand;

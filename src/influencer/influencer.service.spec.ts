@@ -93,6 +93,7 @@ const mockAdminModel = {
 
 const mockNotificationService = {
   sendNewApplicationNotification: jest.fn(),
+  sendCustomNotification: jest.fn().mockResolvedValue(undefined),
 };
 
 const mockDeviceTokenService = {
@@ -253,6 +254,15 @@ describe('InfluencerService', () => {
             create: jest.fn(),
             update: jest.fn(),
             count: jest.fn().mockResolvedValue(0),
+          },
+        },
+        {
+          provide: 'PRO_SUBSCRIPTION_MODEL',
+          useValue: {
+            findOne: jest.fn().mockResolvedValue(null),
+            findAll: jest.fn().mockResolvedValue([]),
+            create: jest.fn(),
+            update: jest.fn(),
           },
         },
       ],

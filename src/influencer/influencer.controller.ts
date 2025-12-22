@@ -13,6 +13,7 @@ import {
   UploadedFiles,
   Delete,
   BadRequestException,
+  Headers,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -23,6 +24,7 @@ import {
   ApiBody,
   ApiQuery,
   ApiParam,
+  ApiHeader,
 } from '@nestjs/swagger';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { InfluencerService } from './influencer.service';
@@ -75,7 +77,12 @@ export class InfluencerController {
   @ApiOperation({
     summary: 'Get comprehensive influencer profile',
     description:
-      'Returns complete influencer profile with verification status and completion details',
+      'Returns complete influencer profile with verification status and completion details. Include X-FCM-Token header to get device-specific app version info.',
+  })
+  @ApiHeader({
+    name: 'X-FCM-Token',
+    required: false,
+    description: 'FCM token to identify the current device (same as used in update-fcm-token)',
   })
   @ApiResponse({
     status: 200,
@@ -86,10 +93,10 @@ export class InfluencerController {
     status: 403,
     description: 'Forbidden - Only influencers can access this endpoint',
   })
-  async getInfluencerProfile(@Req() req: RequestWithUser) {
+  async getInfluencerProfile(@Req() req: RequestWithUser, @Headers('x-fcm-token') fcmToken?: string) {
     const influencerId = req.user.id;
     const userType = req.user.userType;
-    return await this.influencerService.getInfluencerProfile(influencerId, false, influencerId, userType);
+    return await this.influencerService.getInfluencerProfile(influencerId, false, influencerId, userType, fcmToken);
   }
 
   @Put('profile')

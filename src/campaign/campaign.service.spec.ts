@@ -855,7 +855,8 @@ describe('CampaignService', () => {
         'Successfully sent 2 campaign invitations',
       );
       expect(campaignInvitationModel.bulkCreate).toHaveBeenCalled();
-      expect(whatsAppService.sendCampaignInvitation).toHaveBeenCalledTimes(2);
+      // WhatsApp invitations are commented out in favor of push notifications
+      // expect(whatsAppService.sendCampaignInvitation).toHaveBeenCalledTimes(2);
     });
 
     it('should throw NotFoundException if campaign not found', async () => {
