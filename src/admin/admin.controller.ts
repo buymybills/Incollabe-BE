@@ -2492,7 +2492,7 @@ export class AdminController {
     return await this.maxSubscriptionInvoiceService.getUnifiedInvoices(filters);
   }
 
-  @Get('max-subscription-invoice/download/:invoiceId')
+  @Post('max-subscription-invoice/download/:invoiceId')
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -2504,11 +2504,18 @@ export class AdminController {
     type: Number,
     description: 'Invoice ID',
   })
-  @ApiQuery({
-    name: 'invoiceType',
-    required: true,
-    enum: ['maxx_subscription', 'invite_campaign', 'maxx_campaign'],
-    description: 'Type of invoice to download',
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['invoiceType'],
+      properties: {
+        invoiceType: {
+          type: 'string',
+          enum: ['maxx_subscription', 'invite_campaign', 'maxx_campaign'],
+          description: 'Type of invoice to download',
+        },
+      },
+    },
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -2519,7 +2526,7 @@ export class AdminController {
   })
   async downloadInvoice(
     @Param('invoiceId', ParseIntPipe) invoiceId: number,
-    @Query('invoiceType') invoiceType: 'maxx_subscription' | 'invite_campaign' | 'maxx_campaign',
+    @Body('invoiceType') invoiceType: 'maxx_subscription' | 'invite_campaign' | 'maxx_campaign',
   ) {
     const invoice = await this.maxSubscriptionInvoiceService.getInvoiceById(
       invoiceId,

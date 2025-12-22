@@ -1222,7 +1222,7 @@ export class InfluencerController {
     );
   }
 
-  @Get('pro/invoices/:invoiceId')
+  @Post('pro/invoices/:invoiceId')
   @ApiOperation({
     summary: 'Download Pro subscription invoice',
     description: 'Download PDF invoice for a specific subscription payment',
