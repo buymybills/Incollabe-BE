@@ -276,10 +276,32 @@ export class ProSubscriptionService {
 
     // User has Pro access if:
     // 1. Subscription is ACTIVE, OR
-    // 2. Subscription is CANCELLED but current period hasn't ended yet
+    // 2. Subscription is CANCELLED but current period hasn't ended yet, OR
+    // 3. Subscription is PAUSED:
+    //    - Before currentPeriodEnd: isPro = true (paid period, pause hasn't started)
+    //    - After resumeDate: isPro = true (pause ended)
+    //    - Between currentPeriodEnd and resumeDate: isPro = false (pause active)
     const now = createDatabaseDate();
-    const isPro = subscription.status === SubscriptionStatus.ACTIVE ||
-      (subscription.status === SubscriptionStatus.CANCELLED && subscription.currentPeriodEnd > now);
+    let isPro = false;
+
+    if (subscription.status === SubscriptionStatus.ACTIVE) {
+      isPro = true;
+    } else if (subscription.status === SubscriptionStatus.CANCELLED) {
+      isPro = subscription.currentPeriodEnd > now;
+    } else if (subscription.status === SubscriptionStatus.PAUSED) {
+      // If pause period has ended, give Pro access
+      if (subscription.resumeDate && subscription.resumeDate <= now) {
+        isPro = true;
+      }
+      // If still in paid period (pause hasn't started yet), give Pro access
+      else if (subscription.currentPeriodEnd > now) {
+        isPro = true;
+      }
+      // Otherwise, we're in the pause period - no Pro access
+      else {
+        isPro = false;
+      }
+    }
 
     // Don't count subscriptions in pending/failed states as having a subscription
     const hasSubscription = !(
