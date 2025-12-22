@@ -1671,8 +1671,9 @@ export class ProSubscriptionService {
       }
     }
 
-    // Update subscription - mark as "autopay disabled" but keep mandate alive
+    // Update subscription - mark as cancelled
     await subscription.update({
+      status: SubscriptionStatus.CANCELLED,
       autoRenew: false,
       cancelledAt: createDatabaseDate(),
       cancelReason: reason,
