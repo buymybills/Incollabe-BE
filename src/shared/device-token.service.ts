@@ -11,6 +11,7 @@ interface AddDeviceTokenParams {
   deviceName?: string;
   deviceOs?: 'ios' | 'android';
   appVersion?: string;
+  versionCode?: number;
 }
 
 @Injectable()
@@ -29,7 +30,7 @@ export class DeviceTokenService {
    * - Add the new device token
    */
   async addOrUpdateDeviceToken(params: AddDeviceTokenParams): Promise<DeviceToken> {
-    const { userId, userType, fcmToken, deviceId, deviceName, deviceOs, appVersion } = params;
+    const { userId, userType, fcmToken, deviceId, deviceName, deviceOs, appVersion, versionCode } = params;
 
     // Check if this FCM token already exists
     const existingToken = await this.deviceTokenModel.findOne({
@@ -45,6 +46,7 @@ export class DeviceTokenService {
         deviceName: deviceName || existingToken.deviceName,
         deviceOs: deviceOs || existingToken.deviceOs,
         appVersion: appVersion || existingToken.appVersion,
+        versionCode: versionCode || existingToken.versionCode,
         lastUsedAt: new Date(),
       });
 
@@ -85,6 +87,7 @@ export class DeviceTokenService {
       deviceName,
       deviceOs,
       appVersion,
+      versionCode,
       lastUsedAt: new Date(),
     });
 

@@ -1132,6 +1132,7 @@ export class AuthController {
       updateFcmTokenDto.deviceName,
       updateFcmTokenDto.deviceOs,
       updateFcmTokenDto.appVersion,
+      updateFcmTokenDto.versionCode,
     );
   }
 
