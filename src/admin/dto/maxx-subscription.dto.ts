@@ -482,7 +482,7 @@ export class ResumeSubscriptionDto {
   adminNotes?: string;
 }
 
-export class CancelSubscriptionDto {
+export class AdminCancelSubscriptionDto {
   @ApiProperty({
     description: 'Reason for cancellation',
     example: 'Policy violation',

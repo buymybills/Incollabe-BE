@@ -17,7 +17,7 @@ import {
   PaymentTypeFilter,
   PauseSubscriptionDto,
   ResumeSubscriptionDto,
-  CancelSubscriptionDto,
+  AdminCancelSubscriptionDto,
   SubscriptionActionResponseDto,
 } from '../dto/maxx-subscription.dto';
 
@@ -573,7 +573,7 @@ export class MaxxSubscriptionAdminService {
    */
   async cancelSubscription(
     subscriptionId: number,
-    dto: CancelSubscriptionDto,
+    dto: AdminCancelSubscriptionDto,
   ): Promise<SubscriptionActionResponseDto> {
     const subscription = await this.proSubscriptionModel.findByPk(subscriptionId);
 
