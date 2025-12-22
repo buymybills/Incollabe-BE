@@ -1568,7 +1568,20 @@ export class ProSubscriptionService {
     }
 
     const now = createDatabaseDate();
-    const newPeriodEnd = addDaysForDatabase(now, this.SUBSCRIPTION_DURATION_DAYS);
+
+    // Check if pause has started yet
+    const pauseHasStarted = subscription.currentPeriodEnd <= now;
+
+    // If pause hasn't started yet, keep original billing period
+    // If pause has started, create a new billing period
+    let newPeriodStart = now;
+    let newPeriodEnd = addDaysForDatabase(now, this.SUBSCRIPTION_DURATION_DAYS);
+
+    if (!pauseHasStarted) {
+      // Pause hasn't started yet - keep original billing period
+      newPeriodStart = subscription.currentPeriodStart;
+      newPeriodEnd = subscription.currentPeriodEnd;
+    }
 
     // Resume in Razorpay if using autopay
     if (subscription.razorpaySubscriptionId) {
@@ -1618,7 +1631,7 @@ export class ProSubscriptionService {
       cancelledAt: null, // Clear cancellation when resuming
       cancelReason: null, // Clear cancel reason
       autoRenew: true, // Re-enable auto-renewal
-      currentPeriodStart: now,
+      currentPeriodStart: newPeriodStart,
       currentPeriodEnd: newPeriodEnd,
       nextBillingDate: newPeriodEnd,
       status: SubscriptionStatus.ACTIVE,
@@ -1636,13 +1649,17 @@ export class ProSubscriptionService {
       },
     );
 
+    const message = pauseHasStarted
+      ? 'Subscription resumed successfully! Your new billing period has started.'
+      : 'Pause cancelled successfully! Your subscription remains active with the original billing period.';
+
     return {
       success: true,
-      message: 'Subscription resumed successfully!',
+      message,
       subscription: {
         id: subscription.id,
         status: subscription.status,
-        currentPeriodStart: toIST(now),
+        currentPeriodStart: toIST(newPeriodStart),
         currentPeriodEnd: toIST(newPeriodEnd),
         nextBillingDate: toIST(newPeriodEnd),
       },
