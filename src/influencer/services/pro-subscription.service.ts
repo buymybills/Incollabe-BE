@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
+import { ConfigService } from '@nestjs/config';
 import { ProSubscription, SubscriptionStatus, PaymentMethod } from '../models/pro-subscription.model';
 import { ProInvoice, InvoiceStatus } from '../models/pro-invoice.model';
 import { ProPaymentTransaction, TransactionType, TransactionStatus } from '../models/pro-payment-transaction.model';
@@ -28,6 +29,7 @@ export class ProSubscriptionService {
     private influencerModel: typeof Influencer,
     private razorpayService: RazorpayService,
     private s3Service: S3Service,
+    private configService: ConfigService,
   ) {}
 
   /**
@@ -1354,6 +1356,9 @@ export class ProSubscriptionService {
       });
     }
 
+    // Get Razorpay key for frontend checkout
+    const razorpayKey = this.configService.get<string>('RAZORPAY_KEY_ID');
+
     return {
       success: true,
       message: hasActivePro
@@ -1365,25 +1370,43 @@ export class ProSubscriptionService {
         status: subscription.status,
         mandateStatus: subscription.upiMandateStatus,
       },
+      // Razorpay checkout data for in-app payment
+      razorpayCheckout: {
+        key: razorpayKey,
+        subscription_id: subscriptionResult.subscriptionId,
+        name: 'CollabKaroo Pro',
+        description: 'Pro Subscription - Monthly Auto-Renewal',
+        prefill: {
+          name: influencer.name,
+          contact: influencer.phone || '',
+          email: '', // Influencers don't have email
+        },
+        notes: {
+          influencer_id: influencerId,
+          subscription_type: 'pro_monthly',
+        },
+        theme: {
+          color: '#3399cc',
+        },
+      },
+      // Deprecated: Keep for backward compatibility (can be removed later)
       paymentLink: subscriptionResult.paymentLink,
       currentPeriodEnd: hasActivePro ? toIST(endDate) : undefined,
       nextBillingDate: toIST(endDate),
       instructions: hasActivePro
         ? [
-            '1. Click on the payment link',
+            '1. Complete the payment in-app to setup autopay',
             '2. Choose your preferred payment method (UPI, Card, NetBanking, etc.)',
-            '3. Complete the payment authentication to setup autopay',
-            '4. No charge now - your existing Pro access will continue',
-            `5. Next payment will be auto-charged on ${toIST(endDate)}`,
-            '6. You can pause or cancel anytime',
+            '3. No charge now - your existing Pro access will continue',
+            `4. Next payment will be auto-charged on ${toIST(endDate)}`,
+            '5. You can pause or cancel anytime',
           ]
         : [
-            '1. Click on the payment link',
+            '1. Complete the payment in-app to setup autopay',
             '2. Choose your preferred payment method (UPI, Card, NetBanking, etc.)',
-            '3. Complete the payment authentication',
-            '4. First payment will be charged immediately',
-            '5. Subsequent payments will be auto-charged every 30 days',
-            '6. You can pause or cancel anytime',
+            '3. First payment will be charged immediately',
+            '4. Subsequent payments will be auto-charged every 30 days',
+            '5. You can pause or cancel anytime',
           ],
     };
   }
