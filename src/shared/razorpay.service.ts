@@ -300,7 +300,7 @@ export class RazorpayService {
         plan_id: planId,
         total_count: totalCount, // 0 = until cancelled
         quantity: 1,
-        customer_notify: 1, // Send email/SMS to customer
+        customer_notify: 0, // Disabled: Do not send email/SMS to customer
         notes: notes || {},
       };
 
@@ -398,7 +398,7 @@ export class RazorpayService {
         plan_id: planId,
         total_count: 12, // 12 months = 1 year (auto-renews for another year after)
         quantity: 1,
-        customer_notify: 1,
+        customer_notify: 0, // Disabled: Do not send email/SMS to customer
         notes: {
           ...notes,
           influencerId,
@@ -598,8 +598,8 @@ export class RazorpayService {
           email: customerEmail,
         },
         notify: {
-          sms: true,
-          email: true,
+          sms: false, // Disabled: Do not send SMS
+          email: false, // Disabled: Do not send email
         },
         reminder_enable: true,
         reference_id: referenceId,
