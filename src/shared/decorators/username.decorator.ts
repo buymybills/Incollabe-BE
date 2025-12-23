@@ -37,9 +37,17 @@ export function Username(options?: { required?: boolean; example?: string }) {
       message:
         'Username can only contain lowercase letters, numbers, dots, and underscores',
     }),
-    Matches(/^(?![_.])(?!.*[_.]{2})[a-z0-9._]+(?<![_.])$/, {
-      message:
-        'Username cannot start/end with dot or underscore, and cannot have consecutive dots or underscores',
+    Matches(/^[a-z0-9]/, {
+      message: 'Username must start with a letter or number',
+    }),
+    Matches(/[a-z0-9]$/, {
+      message: 'Username must end with a letter or number',
+    }),
+    Matches(/^(?!.*\.\..*$).*$/, {
+      message: 'Username cannot contain consecutive dots (..)',
+    }),
+    Matches(/^(?!.*__.*$).*$/, {
+      message: 'Username cannot contain consecutive underscores (__)',
     }),
     IsValidUsername(),
     Transform(({ value }) => value?.toLowerCase().trim()),
