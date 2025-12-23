@@ -498,6 +498,13 @@ export class ProSubscriptionService {
       autoRenew: false,
       cancelledAt: createDatabaseDate(),
       cancelReason: reason,
+      // Clear pause flags since cancellation overrides pause
+      isPaused: false,
+      pausedAt: null,
+      pauseStartDate: null,
+      pauseDurationDays: null,
+      resumeDate: null,
+      pauseReason: null,
     });
 
     return {
@@ -1725,13 +1732,20 @@ export class ProSubscriptionService {
       }
     }
 
-    // Update subscription - mark as cancelled
+    // Update subscription - mark as cancelled and clear pause data
     await subscription.update({
       status: SubscriptionStatus.CANCELLED,
       autoRenew: false,
       cancelledAt: createDatabaseDate(),
       cancelReason: reason,
       upiMandateStatus: 'paused', // Changed from 'cancelled' to 'paused'
+      // Clear pause flags since cancellation overrides pause
+      isPaused: false,
+      pausedAt: null,
+      pauseStartDate: null,
+      pauseDurationDays: null,
+      resumeDate: null,
+      pauseReason: null,
     });
 
     return {
