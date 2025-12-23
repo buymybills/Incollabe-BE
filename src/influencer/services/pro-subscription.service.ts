@@ -336,10 +336,12 @@ export class ProSubscriptionService {
       subscription: {
         id: subscription.id,
         status: displayStatus,
-        isCancelled: displayStatus === SubscriptionStatus.CANCELLED,
-        isPaused: displayStatus === SubscriptionStatus.PAUSED,
+        isCancelled: subscription.status === SubscriptionStatus.CANCELLED || displayStatus === SubscriptionStatus.EXPIRED,
+        isPaused: subscription.isPaused,  // True if pause is scheduled OR active
         pausedAt: subscription.pausedAt ? toIST(subscription.pausedAt) : null,
-        pauseStartDate: subscription.pauseStartDate ? toIST(subscription.pauseStartDate) : null,
+        pauseStartDate: subscription.pauseStartDate
+          ? toIST(subscription.pauseStartDate)
+          : (subscription.isPaused ? toIST(subscription.currentPeriodEnd) : null),  // Fallback for old data
         pauseEndDate: subscription.resumeDate ? toIST(subscription.resumeDate) : null,
         pauseDurationDays: subscription.pauseDurationDays,
         startDate: toIST(subscription.startDate),
