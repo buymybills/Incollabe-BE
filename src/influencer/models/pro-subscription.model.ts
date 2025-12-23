@@ -156,6 +156,13 @@ export class ProSubscription extends Model {
   declare pausedAt: Date;
 
   @Column({
+    type: DataType.DATE,
+    allowNull: true,
+    field: 'pause_start_date',
+  })
+  declare pauseStartDate: Date;
+
+  @Column({
     type: DataType.INTEGER,
     allowNull: true,
     field: 'pause_duration_days',

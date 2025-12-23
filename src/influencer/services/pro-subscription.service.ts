@@ -310,15 +310,36 @@ export class ProSubscriptionService {
       subscription.status === SubscriptionStatus.INACTIVE
     );
 
+    // Calculate display status dynamically based on current time
+    let displayStatus = subscription.status;
+
+    // If cancelled and current period has ended, show as expired
+    if (subscription.status === SubscriptionStatus.CANCELLED && subscription.currentPeriodEnd <= now) {
+      displayStatus = SubscriptionStatus.EXPIRED;
+    }
+    // If pause is scheduled but hasn't started yet (before currentPeriodEnd), show as active
+    else if (subscription.isPaused && subscription.currentPeriodEnd > now) {
+      displayStatus = SubscriptionStatus.ACTIVE;
+    }
+    // If pause has started (after currentPeriodEnd but before resumeDate), show as paused
+    else if (subscription.isPaused && subscription.resumeDate && subscription.currentPeriodEnd <= now && subscription.resumeDate > now) {
+      displayStatus = SubscriptionStatus.PAUSED;
+    }
+    // If pause period has ended (after resumeDate), show as active
+    else if (subscription.isPaused && subscription.resumeDate && subscription.resumeDate <= now) {
+      displayStatus = SubscriptionStatus.ACTIVE;
+    }
+
     return {
       hasSubscription,
       isPro,
       subscription: {
         id: subscription.id,
-        status: subscription.status,
-        isCancelled: subscription.status === SubscriptionStatus.CANCELLED,
-        isPaused: subscription.status === SubscriptionStatus.PAUSED,
+        status: displayStatus,
+        isCancelled: displayStatus === SubscriptionStatus.CANCELLED,
+        isPaused: displayStatus === SubscriptionStatus.PAUSED,
         pausedAt: subscription.pausedAt ? toIST(subscription.pausedAt) : null,
+        pauseStartDate: subscription.pauseStartDate ? toIST(subscription.pauseStartDate) : null,
         pauseEndDate: subscription.resumeDate ? toIST(subscription.resumeDate) : null,
         pauseDurationDays: subscription.pauseDurationDays,
         startDate: toIST(subscription.startDate),
@@ -1521,7 +1542,8 @@ export class ProSubscriptionService {
     // Update subscription with pause details
     await subscription.update({
       isPaused: true,
-      pausedAt: createDatabaseDate(), 
+      pausedAt: createDatabaseDate(),
+      pauseStartDate: pauseStartDate,
       pauseDurationDays,
       resumeDate,
       pauseReason: reason,
