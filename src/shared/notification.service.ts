@@ -69,8 +69,8 @@ export class NotificationService {
   }
 
   /**
-   * Send persistent notification for campaign selection
-   * This notification stays until dismissed by the user
+   * Send high-priority notification for campaign selection
+   * This notification can be dismissed by the user
    */
   async sendCampaignSelectionNotification(
     fcmTokens: string | string[],
@@ -92,7 +92,8 @@ export class NotificationService {
         campaignId: campaignId.toString(),
         campaignName,
         brandName,
-        persistent: 'true', // Flag for mobile app to show as ongoing notification
+        dismissible: 'true', // Allow user to dismiss this notification
+        showDismissAction: 'true', // Show dismiss button on Android
         action: 'view_campaign',
       },
       {
