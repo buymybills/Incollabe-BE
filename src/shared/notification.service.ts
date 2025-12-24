@@ -68,6 +68,42 @@ export class NotificationService {
     );
   }
 
+  /**
+   * Send persistent notification for campaign selection
+   * This notification stays until dismissed by the user
+   */
+  async sendCampaignSelectionNotification(
+    fcmTokens: string | string[],
+    campaignName: string,
+    brandName: string,
+    campaignId: number,
+    reviewNotes?: string,
+  ) {
+    const body = reviewNotes
+      ? `Congratulations! You've been selected for "${campaignName}" by ${brandName}. ${reviewNotes}`
+      : `Congratulations! You've been selected for "${campaignName}" by ${brandName}`;
+
+    return await this.sendCustomNotification(
+      fcmTokens,
+      'Campaign Selection',
+      body,
+      {
+        type: 'campaign_selected',
+        campaignId: campaignId.toString(),
+        campaignName,
+        brandName,
+        persistent: 'true', // Flag for mobile app to show as ongoing notification
+        action: 'view_campaign',
+      },
+      {
+        priority: 'high', // High priority for immediate delivery
+        androidChannelId: 'campaign_important', // Use high-priority notification channel
+        interruptionLevel: 'timeSensitive', // iOS - breaks through Focus modes
+        sound: 'default',
+      },
+    );
+  }
+
   async sendNewFollowerNotification(
     fcmToken: string,
     followerName: string,

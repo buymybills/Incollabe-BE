@@ -1754,6 +1754,31 @@ export class CampaignService {
         });
     }
 
+    // Persistent push notification for SELECTED status
+    if (
+      influencer &&
+      influencer.id &&
+      updateStatusDto.status === ApplicationStatus.SELECTED
+    ) {
+      // Get all device tokens and send persistent notification
+      this.deviceTokenService
+        .getAllUserTokens(influencer.id, UserType.INFLUENCER)
+        .then((deviceTokens: string[]) => {
+          if (deviceTokens.length > 0) {
+            return this.notificationService.sendCampaignSelectionNotification(
+              deviceTokens,
+              campaign.name,
+              brandName,
+              campaign.id,
+              updateStatusDto.reviewNotes,
+            );
+          }
+        })
+        .catch((error: any) => {
+          console.error('Failed to send persistent push notification to influencer:', error);
+        });
+    }
+
     // Push notifications for UNDER_REVIEW and REJECTED statuses
     if (
       influencer &&
