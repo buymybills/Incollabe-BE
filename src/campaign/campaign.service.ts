@@ -146,6 +146,7 @@ export class CampaignService {
   async getCampaigns(
     getCampaignsDto: GetCampaignsDto,
     brandId?: number,
+    influencerId?: number,
   ): Promise<{
     campaigns: Campaign[];
     total: number;
@@ -162,6 +163,27 @@ export class CampaignService {
       whereCondition.brandId = brandId;
     }
 
+    // For influencers: exclude invite-only campaigns they haven't been invited to
+    let inviteOnlyFilter: any = null;
+    if (influencerId && !brandId) {
+      // Get campaign IDs where influencer has been invited
+      const invitations = await this.campaignInvitationModel.findAll({
+        where: { influencerId },
+        attributes: ['campaignId'],
+      });
+      const invitedCampaignIds = invitations.map(inv => inv.campaignId);
+
+      // Show only:
+      // 1. Non-invite-only campaigns (isInviteOnly: false)
+      // 2. Invite-only campaigns where they have an invitation
+      inviteOnlyFilter = {
+        [Op.or]: [
+          { isInviteOnly: false },
+          { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } }
+        ]
+      };
+    }
+
     if (status) {
       whereCondition.status = status;
     }
@@ -171,10 +193,22 @@ export class CampaignService {
     }
 
     if (search) {
-      whereCondition[Op.or] = [
-        { name: { [Op.iLike]: `%${search}%` } },
-        { description: { [Op.iLike]: `%${search}%` } },
-      ];
+      const searchCondition = {
+        [Op.or]: [
+          { name: { [Op.iLike]: `%${search}%` } },
+          { description: { [Op.iLike]: `%${search}%` } },
+        ]
+      };
+
+      // Combine search with invite-only filter if both exist
+      if (inviteOnlyFilter) {
+        whereCondition[Op.and] = [inviteOnlyFilter, searchCondition];
+      } else {
+        Object.assign(whereCondition, searchCondition);
+      }
+    } else if (inviteOnlyFilter) {
+      // Apply invite-only filter without search
+      Object.assign(whereCondition, inviteOnlyFilter);
     }
 
     const { count, rows: campaigns } = await this.campaignModel.findAndCountAll(

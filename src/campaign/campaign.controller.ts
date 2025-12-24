@@ -396,7 +396,8 @@ export class CampaignController {
     @Req() req?: RequestWithUser,
   ) {
     const brandId = req?.user?.userType === 'brand' ? req.user.id : undefined;
-    return this.campaignService.getCampaigns(getCampaignsDto, brandId);
+    const influencerId = req?.user?.userType === 'influencer' ? req.user.id : undefined;
+    return this.campaignService.getCampaigns(getCampaignsDto, brandId, influencerId);
   }
 
   @Get('my-campaigns')

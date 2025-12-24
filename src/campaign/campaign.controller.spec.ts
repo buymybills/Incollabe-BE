@@ -147,6 +147,7 @@ describe('CampaignController', () => {
       expect(campaignService.getCampaigns).toHaveBeenCalledWith(
         getCampaignsDto,
         1,
+        undefined,
       );
     });
 
@@ -171,6 +172,7 @@ describe('CampaignController', () => {
       expect(result).toEqual(mockResult);
       expect(campaignService.getCampaigns).toHaveBeenCalledWith(
         getCampaignsDto,
+        undefined,
         undefined,
       );
     });
