@@ -1261,6 +1261,26 @@ export class InfluencerService {
       isActive: true,
     };
 
+    // Get campaign IDs where influencer has been invited
+    const invitations = await this.campaignInvitationModel.findAll({
+      where: { influencerId },
+      attributes: ['campaignId'],
+    });
+    const invitedCampaignIds = invitations ? invitations.map(inv => inv.campaignId) : [];
+
+    // Exclude invite-only campaigns they haven't been invited to
+    // Show only:
+    // 1. Non-invite-only campaigns (isInviteOnly: false)
+    // 2. Invite-only campaigns where they have an invitation
+    whereCondition[Op.and] = [
+      {
+        [Op.or]: [
+          { isInviteOnly: false },
+          { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } }
+        ]
+      }
+    ];
+
     // Search by campaign name or brand name
     if (search) {
       whereCondition[Op.or] = [

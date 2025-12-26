@@ -79,7 +79,7 @@ const mockCampaignApplicationModel = {
 
 const mockCampaignInvitationModel = {
   findOne: jest.fn(),
-  findAll: jest.fn(),
+  findAll: jest.fn().mockResolvedValue([]), // Default to empty array for no invitations
   create: jest.fn(),
   update: jest.fn(),
 };
