@@ -304,15 +304,15 @@ export class InfluencerService {
         influencer.updatedAt?.toISOString() || new Date().toISOString(),
     };
 
-    // Fetch device tokens for the user (only for non-public view)
-    let deviceTokens: Array<{
+    // Fetch device token for the user (only for non-public view)
+    let deviceToken: {
       id: number;
       deviceId: string | null;
       deviceName: string | null;
       deviceOs: string | null;
       appVersion: string | null;
       versionCode: number | null;
-    }> = [];
+    } | null = null;
 
     // App version information with constants and user's installed version
     let appVersionInfo: {
@@ -337,24 +337,28 @@ export class InfluencerService {
     if (!isPublic) {
       const devices = await this.deviceTokenService.getUserDevices(influencerId, DeviceUserType.INFLUENCER);
 
-      // If deviceId is provided, filter for that specific device
-      let filteredDevices = devices;
+      // If deviceId is provided, find that specific device; otherwise use most recent
+      let selectedDevice: typeof devices[number] | undefined = undefined;
       if (deviceId) {
-        filteredDevices = devices.filter(device => device.deviceId === deviceId);
+        selectedDevice = devices.find(device => device.deviceId === deviceId);
+      } else if (devices.length > 0) {
+        selectedDevice = devices[0]; // Most recently used device
       }
 
-      // Map device tokens to response format (without fcmToken)
-      deviceTokens = filteredDevices.map(device => ({
-        id: device.id,
-        deviceId: device.deviceId,
-        deviceName: device.deviceName,
-        deviceOs: device.deviceOs,
-        appVersion: device.appVersion,
-        versionCode: device.versionCode,
-      }));
+      // Map device token to response format (without fcmToken)
+      if (selectedDevice) {
+        deviceToken = {
+          id: selectedDevice.id,
+          deviceId: selectedDevice.deviceId,
+          deviceName: selectedDevice.deviceName,
+          deviceOs: selectedDevice.deviceOs,
+          appVersion: selectedDevice.appVersion,
+          versionCode: selectedDevice.versionCode,
+        };
+      }
 
       // Get the most recently used device for app version comparison
-      const mostRecentDevice = devices.length > 0 ? devices[0] : null;
+      const mostRecentDevice = selectedDevice || (devices.length > 0 ? devices[0] : null);
 
       // Build app version info with constants and user's installed version
       appVersionInfo = {
@@ -503,7 +507,7 @@ export class InfluencerService {
         monthlyReferralResetDate: nextResetDate.toISOString(),
         upiId: influencer.upiId || null,
         profileCompletion,
-        deviceTokens,
+        deviceToken,
         appVersion: appVersionInfo,
       };
     }

@@ -357,11 +357,12 @@ describe('InfluencerService', () => {
       if ('profileCompletion' in result) {
         expect((result as any).profileCompletion.completionPercentage).toBe(36);
       }
-      // Check for deviceTokens
-      if ('deviceTokens' in result) {
-        expect((result as any).deviceTokens).toHaveLength(2);
-        expect((result as any).deviceTokens[0]).toHaveProperty('deviceId', 'device-123');
-        expect((result as any).deviceTokens[0]).not.toHaveProperty('fcmToken'); // Should not include fcmToken
+      // Check for deviceToken (single object, not array)
+      if ('deviceToken' in result) {
+        expect((result as any).deviceToken).toBeDefined();
+        expect((result as any).deviceToken).toHaveProperty('deviceId', 'device-123');
+        expect((result as any).deviceToken).toHaveProperty('deviceName', 'iPhone 14');
+        expect((result as any).deviceToken).not.toHaveProperty('fcmToken'); // Should not include fcmToken
       }
       // Check for appVersion info
       if ('appVersion' in result) {
@@ -374,16 +375,16 @@ describe('InfluencerService', () => {
       expect(influencerRepository.findById).toHaveBeenCalledWith(1);
     });
 
-    it('should filter device tokens by deviceId when provided', async () => {
+    it('should return specific device when deviceId is provided', async () => {
       mockInfluencerRepository.findById.mockResolvedValue(mockInfluencer);
 
       const result = await service.getInfluencerProfile(1, false, 1, 'influencer', 'device-123');
 
-      // Should only return devices matching the deviceId
-      if ('deviceTokens' in result) {
-        expect((result as any).deviceTokens).toHaveLength(1);
-        expect((result as any).deviceTokens[0]).toHaveProperty('deviceId', 'device-123');
-        expect((result as any).deviceTokens[0]).toHaveProperty('deviceName', 'iPhone 14');
+      // Should return the device matching the deviceId
+      if ('deviceToken' in result) {
+        expect((result as any).deviceToken).toBeDefined();
+        expect((result as any).deviceToken).toHaveProperty('deviceId', 'device-123');
+        expect((result as any).deviceToken).toHaveProperty('deviceName', 'iPhone 14');
       }
     });
 
