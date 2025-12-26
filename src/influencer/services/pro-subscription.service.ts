@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { ConfigService } from '@nestjs/config';
-import { ProSubscription, SubscriptionStatus, PaymentMethod } from '../models/pro-subscription.model';
+import { ProSubscription, SubscriptionStatus, PaymentMethod, UpiMandateStatus } from '../models/pro-subscription.model';
 import { ProInvoice, InvoiceStatus } from '../models/pro-invoice.model';
 import { ProPaymentTransaction, TransactionType, TransactionStatus } from '../models/pro-payment-transaction.model';
 import { Influencer } from '../../auth/model/influencer.model';
@@ -1699,7 +1699,7 @@ export class ProSubscriptionService {
 
   /**
    * Cancel autopay (but keep subscription active until period end)
-   * Actually PAUSES the subscription instead of cancelling to allow easy restart without double charging
+   * Cancels the subscription in Razorpay at cycle end
    */
   async cancelAutopay(influencerId: number, reason?: string) {
     const subscription = await this.proSubscriptionModel.findOne({
@@ -1715,20 +1715,45 @@ export class ProSubscriptionService {
       throw new NotFoundException('No active subscription found');
     }
 
-    // PAUSE in Razorpay instead of cancelling (allows restart without double charge)
+    // Cancel in Razorpay (at cycle end to allow Pro access until period ends)
     if (subscription.razorpaySubscriptionId) {
-      const pauseResult = await this.razorpayService.pauseSubscription(
+      // First check the current status in Razorpay to avoid unnecessary API calls
+      const subscriptionDetails = await this.razorpayService.getSubscription(
         subscription.razorpaySubscriptionId,
       );
 
-      if (!pauseResult.success) {
-        console.error(
-          'Failed to pause in Razorpay:',
-          pauseResult.error,
-        );
-        // Continue anyway to update local DB
+      if (subscriptionDetails.success) {
+        const razorpayStatus = subscriptionDetails.data?.status;
+
+        // Only attempt to cancel if not already cancelled
+        if (razorpayStatus !== 'cancelled' && razorpayStatus !== 'completed') {
+          const cancelResult = await this.razorpayService.cancelSubscription(
+            subscription.razorpaySubscriptionId,
+            true, // cancelAtCycleEnd = true (allows Pro access until period ends)
+          );
+
+          if (!cancelResult.success) {
+            console.error(
+              'Failed to cancel in Razorpay:',
+              cancelResult.error,
+            );
+            // Continue anyway to update local DB
+          } else {
+            console.log('✅ Razorpay subscription cancelled at cycle end');
+          }
+        } else {
+          console.log(`✅ Razorpay subscription already ${razorpayStatus} - skipping cancellation`);
+        }
       } else {
-        console.log('✅ Razorpay subscription paused (not cancelled) - can be restarted easily');
+        console.warn('Failed to fetch Razorpay subscription status:', subscriptionDetails.error);
+        // Try to cancel anyway
+        const cancelResult = await this.razorpayService.cancelSubscription(
+          subscription.razorpaySubscriptionId,
+          true,
+        );
+        if (!cancelResult.success) {
+          console.error('Failed to cancel in Razorpay:', cancelResult.error);
+        }
       }
     }
 
@@ -1738,7 +1763,7 @@ export class ProSubscriptionService {
       autoRenew: false,
       cancelledAt: createDatabaseDate(),
       cancelReason: reason,
-      upiMandateStatus: 'paused', // Changed from 'cancelled' to 'paused'
+      upiMandateStatus: UpiMandateStatus.CANCELLED,
       // Clear pause flags since cancellation overrides pause
       isPaused: false,
       pausedAt: null,
@@ -1750,9 +1775,9 @@ export class ProSubscriptionService {
 
     return {
       success: true,
-      message: 'Autopay disabled. Your Pro access will remain active until the end of current billing period.',
+      message: 'Autopay cancelled. Your Pro access will remain active until the end of current billing period.',
       validUntil: toIST(subscription.currentPeriodEnd),
-      note: 'You can restart autopay anytime without being charged again for the current period.',
+      note: 'You can setup autopay again anytime to continue Pro benefits.',
     };
   }
 
