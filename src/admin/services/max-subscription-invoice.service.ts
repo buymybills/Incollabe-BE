@@ -243,12 +243,14 @@ export class MaxSubscriptionInvoiceService {
           hour: 'numeric',
           minute: '2-digit',
           hour12: true,
+          timeZone: 'Asia/Kolkata',
         }).format(paidAt);
 
         const date = new Intl.DateTimeFormat('en-US', {
           month: 'short',
           day: '2-digit',
           year: 'numeric',
+          timeZone: 'Asia/Kolkata',
         }).format(paidAt);
 
         return {
@@ -394,12 +396,14 @@ export class MaxSubscriptionInvoiceService {
           hour: 'numeric',
           minute: '2-digit',
           hour12: true,
+          timeZone: 'Asia/Kolkata',
         }).format(paidAt);
 
         const date = new Intl.DateTimeFormat('en-US', {
           month: 'short',
           day: '2-digit',
           year: 'numeric',
+          timeZone: 'Asia/Kolkata',
         }).format(paidAt);
 
         return {

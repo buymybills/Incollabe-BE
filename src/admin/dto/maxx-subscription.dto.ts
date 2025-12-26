@@ -243,16 +243,16 @@ export class MaxxSubscriptionItemDto {
 
   @ApiProperty({
     example: '2025-10-02T23:59:00.000Z',
-    description: 'Subscription valid till date',
+    description: 'Subscription valid till date (IST)',
     nullable: true,
   })
-  validTillDate: Date | null;
+  validTillDate: string | null;
 
   @ApiProperty({
     example: '2025-06-02T12:00:00.000Z',
-    description: 'Subscription start date',
+    description: 'Subscription start date (IST)',
   })
-  subscriptionStartDate: Date;
+  subscriptionStartDate: string | null;
 
   @ApiProperty({
     example: 'https://example.com/profile.jpg',
@@ -315,10 +315,10 @@ export class PaymentHistoryItemDto {
 
   @ApiProperty({
     example: '2025-09-02T14:30:00.000Z',
-    description: 'Payment date',
+    description: 'Payment date (IST)',
     nullable: true,
   })
-  paymentDate: Date | null;
+  paymentDate: string | null;
 
   @ApiProperty({
     example: 'paid',
@@ -385,16 +385,16 @@ export class SubscriptionDetailsDto {
 
   @ApiProperty({
     example: '2025-06-02T12:00:00.000Z',
-    description: 'Subscription start date',
+    description: 'Subscription start date (IST)',
   })
-  subscriptionStartDate: Date;
+  subscriptionStartDate: string | null;
 
   @ApiProperty({
     example: '2025-10-02T23:59:00.000Z',
-    description: 'Subscription end date',
+    description: 'Subscription end date (IST)',
     nullable: true,
   })
-  subscriptionEndDate: Date | null;
+  subscriptionEndDate: string | null;
 
   @ApiProperty({ example: 4, description: 'Usage duration in months' })
   usageMonths: number;
@@ -410,17 +410,17 @@ export class SubscriptionDetailsDto {
 
   @ApiProperty({
     example: '2025-10-02T00:00:00.000Z',
-    description: 'Next billing date',
+    description: 'Next billing date (IST)',
     nullable: true,
   })
-  nextBillingDate: Date | null;
+  nextBillingDate: string | null;
 
   @ApiProperty({
     example: '2025-09-02T14:30:00.000Z',
-    description: 'Last payment date',
+    description: 'Last payment date (IST)',
     nullable: true,
   })
-  lastPaymentDate: Date | null;
+  lastPaymentDate: string | null;
 
   @ApiProperty({
     description: 'Payment history',
@@ -436,15 +436,15 @@ export class SubscriptionDetailsDto {
 
   @ApiProperty({
     example: '2025-06-02T12:00:00.000Z',
-    description: 'Subscription creation date',
+    description: 'Subscription creation date (IST)',
   })
-  createdAt: Date;
+  createdAt: string | null;
 
   @ApiProperty({
     example: '2025-09-02T14:30:00.000Z',
-    description: 'Last update date',
+    description: 'Last update date (IST)',
   })
-  updatedAt: Date;
+  updatedAt: string | null;
 }
 
 // ============================================

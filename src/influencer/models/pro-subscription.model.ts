@@ -111,7 +111,7 @@ export class ProSubscription extends Model {
   declare upiMandateId: string;
 
   @Column({
-    type: DataType.STRING,
+    type: DataType.ENUM(...Object.values(UpiMandateStatus)),
     allowNull: false,
     defaultValue: UpiMandateStatus.NOT_CREATED,
     field: 'upi_mandate_status',

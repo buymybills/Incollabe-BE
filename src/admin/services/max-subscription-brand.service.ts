@@ -368,18 +368,20 @@ export class MaxSubscriptionBrandService {
         const campaign = invoice.campaign;
         const brand = invoice.brand;
 
-        // Format date as "HH:MM AM/PM | MMM DD, YYYY"
+        // Format date as "HH:MM AM/PM | MMM DD, YYYY" in IST
         const purchaseDate = new Date(invoice.paidAt);
         const time = new Intl.DateTimeFormat('en-US', {
           hour: 'numeric',
           minute: '2-digit',
           hour12: true,
+          timeZone: 'Asia/Kolkata',
         }).format(purchaseDate);
 
         const date = new Intl.DateTimeFormat('en-US', {
           month: 'short',
           day: '2-digit',
           year: 'numeric',
+          timeZone: 'Asia/Kolkata',
         }).format(purchaseDate);
 
         const purchaseDateTime = `${time} | ${date}`;
@@ -501,18 +503,20 @@ export class MaxSubscriptionBrandService {
       const campaign = invoice.campaign;
       const brand = invoice.brand;
 
-      // Format date as "HH:MM AM/PM | MMM DD, YYYY"
+      // Format date as "HH:MM AM/PM | MMM DD, YYYY" in IST
       const purchaseDate = new Date(invoice.paidAt);
       const time = new Intl.DateTimeFormat('en-US', {
         hour: 'numeric',
         minute: '2-digit',
         hour12: true,
+        timeZone: 'Asia/Kolkata',
       }).format(purchaseDate);
 
       const date = new Intl.DateTimeFormat('en-US', {
         month: 'short',
         day: '2-digit',
         year: 'numeric',
+        timeZone: 'Asia/Kolkata',
       }).format(purchaseDate);
 
       const purchaseDateTime = `${time} | ${date}`;
