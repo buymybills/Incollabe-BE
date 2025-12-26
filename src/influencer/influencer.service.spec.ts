@@ -100,7 +100,32 @@ const mockDeviceTokenService = {
   getAllUserTokens: jest.fn().mockResolvedValue(['mock-token-1', 'mock-token-2']),
   addOrUpdateDeviceToken: jest.fn(),
   removeDeviceToken: jest.fn(),
-  getUserDevices: jest.fn(),
+  getUserDevices: jest.fn().mockResolvedValue([
+    {
+      id: 1,
+      fcmToken: 'mock-fcm-token-1',
+      deviceId: 'device-123',
+      deviceName: 'iPhone 14',
+      deviceOs: 'ios',
+      appVersion: '3.5.0',
+      versionCode: 5,
+      lastUsedAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+    {
+      id: 2,
+      fcmToken: 'mock-fcm-token-2',
+      deviceId: 'device-456',
+      deviceName: 'Samsung Galaxy',
+      deviceOs: 'android',
+      appVersion: '4.0.0',
+      versionCode: 7,
+      lastUsedAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  ]),
 };
 
 describe('InfluencerService', () => {
@@ -196,6 +221,7 @@ describe('InfluencerService', () => {
           provide: 'FOLLOW_MODEL',
           useValue: {
             count: jest.fn().mockResolvedValue(0),
+            findOne: jest.fn().mockResolvedValue(null),
           },
         },
         {
@@ -331,7 +357,34 @@ describe('InfluencerService', () => {
       if ('profileCompletion' in result) {
         expect((result as any).profileCompletion.completionPercentage).toBe(36);
       }
+      // Check for deviceTokens
+      if ('deviceTokens' in result) {
+        expect((result as any).deviceTokens).toHaveLength(2);
+        expect((result as any).deviceTokens[0]).toHaveProperty('deviceId', 'device-123');
+        expect((result as any).deviceTokens[0]).not.toHaveProperty('fcmToken'); // Should not include fcmToken
+      }
+      // Check for appVersion info
+      if ('appVersion' in result) {
+        expect((result as any).appVersion).toHaveProperty('installedVersion');
+        expect((result as any).appVersion).toHaveProperty('minimumVersion');
+        expect((result as any).appVersion).toHaveProperty('latestVersion');
+        expect((result as any).appVersion).toHaveProperty('updateRequired');
+        expect((result as any).appVersion).toHaveProperty('updateAvailable');
+      }
       expect(influencerRepository.findById).toHaveBeenCalledWith(1);
+    });
+
+    it('should filter device tokens by deviceId when provided', async () => {
+      mockInfluencerRepository.findById.mockResolvedValue(mockInfluencer);
+
+      const result = await service.getInfluencerProfile(1, false, 1, 'influencer', 'device-123');
+
+      // Should only return devices matching the deviceId
+      if ('deviceTokens' in result) {
+        expect((result as any).deviceTokens).toHaveLength(1);
+        expect((result as any).deviceTokens[0]).toHaveProperty('deviceId', 'device-123');
+        expect((result as any).deviceTokens[0]).toHaveProperty('deviceName', 'iPhone 14');
+      }
     });
 
     it('should throw NotFoundException for non-existent influencer', async () => {

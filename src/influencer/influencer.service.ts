@@ -137,7 +137,7 @@ export class InfluencerService {
     isPublic: boolean = false,
     currentUserId?: number,
     currentUserType?: 'influencer' | 'brand',
-    fcmToken?: string,
+    deviceId?: string,
   ) {
     // Validate that only influencers can access their own profile
     if (influencerId === currentUserId && currentUserType === 'brand') {
@@ -304,62 +304,93 @@ export class InfluencerService {
         influencer.updatedAt?.toISOString() || new Date().toISOString(),
     };
 
-    // Fetch user's device information (only for non-public view)
-    let deviceInfo: {
+    // Fetch device tokens for the user (only for non-public view)
+    let deviceTokens: Array<{
+      id: number;
+      deviceId: string | null;
       deviceName: string | null;
       deviceOs: string | null;
       appVersion: string | null;
       versionCode: number | null;
-      lastUsedAt: Date;
+    }> = [];
+
+    // App version information with constants and user's installed version
+    let appVersionInfo: {
+      installedVersion: {
+        appVersion: string | null;
+        versionCode: number | null;
+      };
+      minimumVersion: {
+        appVersion: string;
+        versionCode: number;
+      };
+      latestVersion: {
+        appVersion: string;
+        versionCode: number;
+      };
+      updateRequired: boolean;
+      updateAvailable: boolean;
+      forceUpdate: boolean;
+      updateMessage: string;
     } | null = null;
 
     if (!isPublic) {
       const devices = await this.deviceTokenService.getUserDevices(influencerId, DeviceUserType.INFLUENCER);
 
-      let currentDevice: typeof devices[number] | null | undefined = null;
-
-      // If fcmToken is provided, find the specific device
-      if (fcmToken && devices && devices.length > 0) {
-        currentDevice = devices.find(device => device.fcmToken === fcmToken);
+      // If deviceId is provided, filter for that specific device
+      let filteredDevices = devices;
+      if (deviceId) {
+        filteredDevices = devices.filter(device => device.deviceId === deviceId);
       }
 
-      // Fall back to most recently used device if fcmToken not provided or not found
-      if (!currentDevice && devices && devices.length > 0) {
-        currentDevice = devices[0]; // devices are already ordered by lastUsedAt DESC
-      }
+      // Map device tokens to response format (without fcmToken)
+      deviceTokens = filteredDevices.map(device => ({
+        id: device.id,
+        deviceId: device.deviceId,
+        deviceName: device.deviceName,
+        deviceOs: device.deviceOs,
+        appVersion: device.appVersion,
+        versionCode: device.versionCode,
+      }));
 
-      if (currentDevice) {
-        deviceInfo = {
-          deviceName: currentDevice.deviceName,
-          deviceOs: currentDevice.deviceOs,
-          appVersion: currentDevice.appVersion,
-          versionCode: currentDevice.versionCode,
-          lastUsedAt: currentDevice.lastUsedAt,
-        };
-      }
+      // Get the most recently used device for app version comparison
+      const mostRecentDevice = devices.length > 0 ? devices[0] : null;
+
+      // Build app version info with constants and user's installed version
+      appVersionInfo = {
+        // User's currently installed app version (from their device)
+        installedVersion: {
+          appVersion: mostRecentDevice?.appVersion || null,
+          versionCode: mostRecentDevice?.versionCode || null,
+        },
+        // Minimum required version (from constants)
+        minimumVersion: {
+          appVersion: APP_VERSION.MINIMUM_VERSION,
+          versionCode: APP_VERSION.MINIMUM_VERSION_CODE,
+        },
+        // Latest available version (from constants)
+        latestVersion: {
+          appVersion: APP_VERSION.LATEST_VERSION,
+          versionCode: APP_VERSION.LATEST_VERSION_CODE,
+        },
+        // Update flags
+        updateRequired: mostRecentDevice?.versionCode
+          ? mostRecentDevice.versionCode < APP_VERSION.MINIMUM_VERSION_CODE
+          : false,
+        updateAvailable: mostRecentDevice?.versionCode
+          ? mostRecentDevice.versionCode < APP_VERSION.LATEST_VERSION_CODE
+          : false,
+        forceUpdate: APP_VERSION.FORCE_UPDATE && (mostRecentDevice?.versionCode
+          ? mostRecentDevice.versionCode < APP_VERSION.MINIMUM_VERSION_CODE
+          : false),
+        // Update messages
+        updateMessage: APP_VERSION.FORCE_UPDATE && (mostRecentDevice?.versionCode
+          ? mostRecentDevice.versionCode < APP_VERSION.MINIMUM_VERSION_CODE
+          : false)
+          ? APP_VERSION.FORCE_UPDATE_MESSAGE
+          : APP_VERSION.UPDATE_MESSAGE,
+      };
     }
-
-    // App version information
-    const appVersionInfo = {
-      current: {
-        appVersion: deviceInfo?.appVersion || null,
-        versionCode: deviceInfo?.versionCode || null,
-      },
-      minimum: {
-        appVersion: APP_VERSION.MINIMUM_VERSION,
-        versionCode: APP_VERSION.MINIMUM_VERSION_CODE,
-      },
-      latest: {
-        appVersion: APP_VERSION.LATEST_VERSION,
-        versionCode: APP_VERSION.LATEST_VERSION_CODE,
-      },
-      updateRequired: deviceInfo?.versionCode ? deviceInfo.versionCode < APP_VERSION.MINIMUM_VERSION_CODE : false,
-      updateAvailable: deviceInfo?.versionCode ? deviceInfo.versionCode < APP_VERSION.LATEST_VERSION_CODE : false,
-      forceUpdate: APP_VERSION.FORCE_UPDATE && (deviceInfo?.versionCode ? deviceInfo.versionCode < APP_VERSION.MINIMUM_VERSION_CODE : false),
-      updateMessage: APP_VERSION.FORCE_UPDATE && (deviceInfo?.versionCode ? deviceInfo.versionCode < APP_VERSION.MINIMUM_VERSION_CODE : false)
-        ? APP_VERSION.FORCE_UPDATE_MESSAGE
-        : APP_VERSION.UPDATE_MESSAGE,
-    };
 
     // Include private data only if not public view
     if (!isPublic) {
@@ -472,17 +503,12 @@ export class InfluencerService {
         monthlyReferralResetDate: nextResetDate.toISOString(),
         upiId: influencer.upiId || null,
         profileCompletion,
-        //deviceInfo,
-        //appVersion: appVersionInfo,
+        deviceTokens,
+        appVersion: appVersionInfo,
       };
     }
 
     return baseProfile;
-
-    // return {
-    //   ...baseProfile,
-    //   appVersion: appVersionInfo,
-    // };
   }
 
   async updateInfluencerProfile(

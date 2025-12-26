@@ -77,12 +77,12 @@ export class InfluencerController {
   @ApiOperation({
     summary: 'Get comprehensive influencer profile',
     description:
-      'Returns complete influencer profile with verification status and completion details. Include X-FCM-Token header to get device-specific app version info.',
+      'Returns complete influencer profile with verification status and completion details. Include X-Device-ID header to get all device token details for that specific device.',
   })
   @ApiHeader({
-    name: 'X-FCM-Token',
+    name: 'X-Device-ID',
     required: false,
-    description: 'FCM token to identify the current device (same as used in update-fcm-token)',
+    description: 'Device ID to get all device token details for this specific device',
   })
   @ApiResponse({
     status: 200,
@@ -93,10 +93,13 @@ export class InfluencerController {
     status: 403,
     description: 'Forbidden - Only influencers can access this endpoint',
   })
-  async getInfluencerProfile(@Req() req: RequestWithUser, @Headers('x-fcm-token') fcmToken?: string) {
+  async getInfluencerProfile(
+    @Req() req: RequestWithUser,
+    @Headers('x-device-id') deviceId?: string,
+  ) {
     const influencerId = req.user.id;
     const userType = req.user.userType;
-    return await this.influencerService.getInfluencerProfile(influencerId, false, influencerId, userType, fcmToken);
+    return await this.influencerService.getInfluencerProfile(influencerId, false, influencerId, userType, deviceId);
   }
 
   @Put('profile')
