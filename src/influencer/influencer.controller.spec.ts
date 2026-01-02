@@ -3,6 +3,7 @@ import { InfluencerController } from './influencer.controller';
 import { InfluencerService } from './influencer.service';
 import { SupportTicketService } from '../shared/support-ticket.service';
 import { ProSubscriptionService } from './services/pro-subscription.service';
+import { CampaignService } from '../campaign/campaign.service';
 import { RazorpayService } from '../shared/razorpay.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto';
@@ -36,6 +37,10 @@ const mockProSubscriptionService = {
   cancelSubscription: jest.fn(),
 };
 
+const mockCampaignService = {
+  handleCampaignPaymentWebhook: jest.fn(),
+};
+
 const mockRazorpayService = {
   createOrder: jest.fn(),
   verifySignature: jest.fn(),
@@ -65,6 +70,10 @@ describe('InfluencerController', () => {
         {
           provide: ProSubscriptionService,
           useValue: mockProSubscriptionService,
+        },
+        {
+          provide: CampaignService,
+          useValue: mockCampaignService,
         },
         {
           provide: RazorpayService,

@@ -46,6 +46,7 @@ import { SupportTicketService } from '../shared/support-ticket.service';
 import { CreateSupportTicketDto } from '../shared/dto/create-support-ticket.dto';
 import { UserType } from '../shared/models/support-ticket.model';
 import { ProSubscriptionService } from './services/pro-subscription.service';
+import { CampaignService } from '../campaign/campaign.service';
 import {
   VerifySubscriptionPaymentDto,
   CancelProSubscriptionDto,
@@ -69,6 +70,7 @@ export class InfluencerController {
     private readonly influencerService: InfluencerService,
     private readonly supportTicketService: SupportTicketService,
     private readonly proSubscriptionService: ProSubscriptionService,
+    private readonly campaignService: CampaignService,
     private readonly razorpayService: RazorpayService,
     private readonly configService: ConfigService,
   ) {}
@@ -1487,7 +1489,21 @@ export class InfluencerController {
       const event = body.event;
       const payload = body.payload;
 
-      // Process webhook
+      // Check if this is a campaign payment webhook
+      const paymentNotes = payload?.payment?.entity?.notes || payload?.order?.entity?.notes;
+      const upgradeType = paymentNotes?.upgradeType;
+
+      // Route to appropriate handler based on payment type
+      if (upgradeType === 'max_campaign' || upgradeType === 'invite_only') {
+        console.log(`🎯 Routing to campaign payment webhook handler (${upgradeType})`);
+        const result = await this.campaignService.handleCampaignPaymentWebhook(
+          event,
+          payload,
+        );
+        return result;
+      }
+
+      // Default: Handle as Pro subscription webhook
       const result = await this.proSubscriptionService.handleWebhook(
         event,
         payload,
