@@ -263,6 +263,35 @@ export class Campaign extends Model<Campaign, CampaignCreationAttributes> {
   })
   declare inviteOnlyAmount: number;
 
+  // Payment Status Tracking Fields
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+    field: 'payment_status_message',
+  })
+  declare paymentStatusMessage: string;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+    field: 'payment_status_updated_at',
+  })
+  declare paymentStatusUpdatedAt: Date;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+    field: 'last_payment_attempt_at',
+  })
+  declare lastPaymentAttemptAt: Date;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+    field: 'razorpay_last_webhook_at',
+  })
+  declare razorpayLastWebhookAt: Date;
+
   // Timestamps
   declare createdAt: Date;
   declare updatedAt: Date;

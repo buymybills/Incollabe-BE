@@ -17,9 +17,13 @@ export enum PaymentMethod {
 
 export enum InvoiceStatus {
   PENDING = 'pending',
+  PROCESSING = 'processing',
+  DEDUCTED_NOT_RECEIVED = 'deducted_not_received',
   PAID = 'paid',
   FAILED = 'failed',
   REFUNDED = 'refunded',
+  EXPIRED = 'expired',
+  CANCELLED = 'cancelled',
 }
 
 export enum TransactionType {
