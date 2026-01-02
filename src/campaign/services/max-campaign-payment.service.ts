@@ -109,11 +109,12 @@ export class MaxCampaignPaymentService {
       razorpayOrderId: razorpayOrder.orderId,
     });
 
-    // Update campaign with order details
+    // Update campaign with order details and set status to DRAFT until payment is completed
     await campaign.update({
       maxCampaignPaymentStatus: 'pending',
       maxCampaignOrderId: razorpayOrder.orderId,
       maxCampaignAmount: this.MAX_CAMPAIGN_AMOUNT,
+      status: 'draft' as any, // Campaign will be DRAFT until payment is completed
     });
 
     return {
@@ -197,12 +198,13 @@ export class MaxCampaignPaymentService {
       paidAt: now,
     });
 
-    // Update campaign to Max Campaign
+    // Update campaign to Max Campaign and set status to ACTIVE
     await campaign.update({
       isMaxCampaign: true,
       maxCampaignPaymentStatus: 'paid',
       maxCampaignPaymentId: paymentId,
       maxCampaignPaidAt: now,
+      status: 'active' as any, // Activate campaign after payment is completed
     });
 
     // Generate and store invoice data
