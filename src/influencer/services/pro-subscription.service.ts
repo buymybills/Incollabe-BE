@@ -42,31 +42,44 @@ export class ProSubscriptionService {
       throw new NotFoundException('Influencer not found');
     }
 
-    // Check if already has active subscription
-    const existingActiveSubscription = await this.proSubscriptionModel.findOne({
+    // Check if there's a pending payment to prevent duplicate payment attempts
+    const existingPendingSubscription = await this.proSubscriptionModel.findOne({
       where: {
         influencerId,
-        status: SubscriptionStatus.ACTIVE,
+        status: SubscriptionStatus.PAYMENT_PENDING,
       },
     });
 
-    if (existingActiveSubscription) {
-      throw new BadRequestException('You already have an active Pro subscription');
+    if (existingPendingSubscription) {
+      throw new BadRequestException('You already have a pending payment. Please complete or cancel it before creating a new subscription.');
     }
 
-    // Delete any old pending/failed subscriptions to avoid unique constraint violation
+    // Delete any old failed subscriptions to avoid unique constraint violation
     await this.proSubscriptionModel.destroy({
       where: {
         influencerId,
-        status: {
-          [Op.in]: [SubscriptionStatus.PAYMENT_PENDING, SubscriptionStatus.PAYMENT_FAILED],
-        },
+        status: SubscriptionStatus.PAYMENT_FAILED,
       },
     });
 
     // Create subscription record with timezone-adjusted dates
-    const startDate = createDatabaseDate();
-    const endDate = addDaysForDatabase(startDate, this.SUBSCRIPTION_DURATION_DAYS);
+    // If influencer has active Pro, extend from current expiry date to avoid losing days
+    const now = createDatabaseDate();
+    let startDate: Date;
+    let endDate: Date;
+
+    if (influencer.isPro && influencer.proExpiresAt && influencer.proExpiresAt > now) {
+      // Extend from current expiry - Example: If current expiry is Day 30 and they purchase on Day 20,
+      // new period will be Day 30 to Day 60 (not Day 20 to Day 50)
+      startDate = influencer.proExpiresAt;
+      endDate = addDaysForDatabase(startDate, this.SUBSCRIPTION_DURATION_DAYS);
+      console.log(`✅ Extending Pro membership from current expiry (${toIST(influencer.proExpiresAt)}) to ${toIST(endDate)}`);
+    } else {
+      // No active Pro or already expired - start new period from now
+      startDate = now;
+      endDate = addDaysForDatabase(startDate, this.SUBSCRIPTION_DURATION_DAYS);
+      console.log(`📅 Starting new Pro membership from now (ends: ${toIST(endDate)})`);
+    }
 
     const subscription = await this.proSubscriptionModel.create({
       influencerId,
