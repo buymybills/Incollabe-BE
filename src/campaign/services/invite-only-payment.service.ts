@@ -114,11 +114,12 @@ export class InviteOnlyPaymentService {
       razorpayOrderId: razorpayOrder.orderId,
     });
 
-    // Update campaign with order details
+    // Update campaign with order details and set status to DRAFT until payment is completed
     await campaign.update({
       inviteOnlyPaymentStatus: 'pending',
       inviteOnlyOrderId: razorpayOrder.orderId,
       inviteOnlyAmount: this.INVITE_ONLY_AMOUNT,
+      status: 'draft' as any, // Campaign will be DRAFT until payment is completed
     });
 
     return {
@@ -202,12 +203,13 @@ export class InviteOnlyPaymentService {
       paidAt: now,
     });
 
-    // Update campaign - unlock invite-only feature
+    // Update campaign - unlock invite-only feature and set status to ACTIVE
     await campaign.update({
       inviteOnlyPaid: true,
       inviteOnlyPaymentStatus: 'paid',
       inviteOnlyPaymentId: paymentId,
       inviteOnlyPaidAt: now,
+      status: 'active' as any, // Activate campaign after payment is completed
     });
 
     // Generate and store invoice data
