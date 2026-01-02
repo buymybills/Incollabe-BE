@@ -25,6 +25,7 @@ import { InviteInfluencersDto } from './dto/invite-influencers.dto';
 import { Brand } from '../brand/model/brand.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Niche } from '../auth/model/niche.model';
+import { InvoiceStatus } from '../influencer/models/payment-enums';
 // REMOVED: Imports only needed for early selection bonus feature (now disabled)
 // import { CreditTransactionType, PaymentStatus } from '../admin/models/credit-transaction.model';
 // import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
@@ -1950,5 +1951,71 @@ export class CampaignService {
       rejectedCount: appliedApplications.length,
       message: `Successfully rejected ${appliedApplications.length} application(s) that were in "applied" status`,
     };
+  }
+
+  /**
+   * Handle Razorpay webhook for campaign payments
+   */
+  async handleCampaignPaymentWebhook(event: string, payload: any) {
+    try {
+      const paymentEntity = payload.payment?.entity;
+      if (!paymentEntity) {
+        return { success: false, message: 'Invalid webhook payload' };
+      }
+
+      // Find campaign by payment ID or order ID
+      const campaign = await this.campaignModel.findOne({
+        where: {
+          [Op.or]: [
+            { maxCampaignPaymentId: paymentEntity.id },
+            { maxCampaignOrderId: paymentEntity.order_id },
+            { inviteOnlyPaymentId: paymentEntity.id },
+            { inviteOnlyOrderId: paymentEntity.order_id },
+          ],
+        },
+      });
+
+      if (!campaign) {
+        return { success: false, message: 'Campaign not found for this payment' };
+      }
+
+      // Determine which payment type this is
+      const isMaxCampaign = campaign.maxCampaignPaymentId === paymentEntity.id ||
+                            campaign.maxCampaignOrderId === paymentEntity.order_id;
+      const statusField = isMaxCampaign ? 'maxCampaignPaymentStatus' : 'inviteOnlyPaymentStatus';
+
+      // Handle different payment events
+      switch (event) {
+        case 'payment.captured':
+        case 'order.paid':
+          // Payment successful - set status to ACTIVE
+          await campaign.update({
+            [statusField]: InvoiceStatus.PAID,
+            status: 'active' as any,
+            paymentStatusUpdatedAt: new Date(),
+            razorpayLastWebhookAt: new Date(),
+          });
+          console.log(`✅ Campaign ${campaign.id} activated after payment captured`);
+          break;
+
+        case 'payment.failed':
+          // Payment failed - keep as DRAFT
+          await campaign.update({
+            [statusField]: InvoiceStatus.FAILED,
+            paymentStatusUpdatedAt: new Date(),
+            razorpayLastWebhookAt: new Date(),
+          });
+          console.log(`❌ Campaign ${campaign.id} payment failed`);
+          break;
+
+        default:
+          console.log(`ℹ️ Unhandled payment event: ${event}`);
+      }
+
+      return { success: true, message: `Campaign payment webhook handled: ${event}` };
+    } catch (error) {
+      console.error('Error handling campaign payment webhook:', error);
+      return { success: false, message: error.message };
+    }
   }
 }
