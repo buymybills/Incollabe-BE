@@ -324,8 +324,6 @@ export class ReferralProgramService {
       sortOrder = 'DESC',
     } = filters;
 
-    const offset = (page - 1) * limit;
-
     // First, get all unique referral codes that have been used
     const usedReferralCodes = await this.referralUsageModel.findAll({
       attributes: [[fn('DISTINCT', col('referralCode')), 'referralCode']],
@@ -363,23 +361,20 @@ export class ReferralProgramService {
       ];
     }
 
-    // Get influencers whose referral codes have been used
-    const { count, rows: influencers } =
-      await this.influencerModel.findAndCountAll({
-        where: whereClause,
-        include: [
-          {
-            model: City,
-            attributes: ['name'],
-          },
-        ],
-        limit,
-        offset,
-        order:
-          sortBy === 'createdAt'
-            ? [['createdAt', sortOrder]]
-            : [['id', sortOrder]], // Default ordering, will sort after aggregation
-      });
+    // Get ALL influencers whose referral codes have been used (no pagination yet)
+    // We need to fetch all to properly sort by totalReferrals before paginating
+    const influencers = await this.influencerModel.findAll({
+      where: whereClause,
+      include: [
+        {
+          model: City,
+          attributes: ['name'],
+        },
+      ],
+      order: sortBy === 'createdAt' ? [['createdAt', sortOrder]] : [['id', 'ASC']],
+    });
+
+    const totalCount = influencers.length;
 
     // Get referral statistics for each influencer
     const influencerIds = influencers.map((i) => i.id);
@@ -449,8 +444,8 @@ export class ReferralProgramService {
       ]),
     );
 
-    // Build response data
-    let data: AccountReferrerItemDto[] = influencers.map((influencer) => {
+    // Build response data for ALL influencers
+    let allData: AccountReferrerItemDto[] = influencers.map((influencer) => {
       const totalReferrals = referralCountsMap.get(influencer.id) || 0;
       const earnings = earningsMap.get(influencer.id) || {
         totalEarnings: 0,
@@ -475,28 +470,33 @@ export class ReferralProgramService {
       };
     });
 
-    // Sort by custom fields if needed
+    // Sort by the specified field
     if (sortBy === 'totalReferrals') {
-      data.sort((a, b) =>
+      allData.sort((a, b) =>
         sortOrder === 'DESC'
           ? b.totalReferrals - a.totalReferrals
           : a.totalReferrals - b.totalReferrals,
       );
     } else if (sortBy === 'totalEarnings') {
-      data.sort((a, b) =>
+      allData.sort((a, b) =>
         sortOrder === 'DESC'
           ? b.totalEarnings - a.totalEarnings
           : a.totalEarnings - b.totalEarnings,
       );
     }
+    // createdAt sorting is already handled by the initial query
+
+    // Apply pagination AFTER sorting
+    const offset = (page - 1) * limit;
+    const paginatedData = allData.slice(offset, offset + limit);
 
     return {
-      data,
+      data: paginatedData,
       pagination: {
         page,
         limit,
-        total: count,
-        totalPages: Math.ceil(count / limit),
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limit),
       },
     };
   }
