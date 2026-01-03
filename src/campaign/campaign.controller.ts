@@ -1607,4 +1607,44 @@ export class CampaignController {
       req.user.id,
     );
   }
+
+  @Get('deliverable-formats')
+  @Public()
+  @ApiOperation({
+    summary: 'Get available deliverable formats based on campaign type',
+    description:
+      'Returns a list of available deliverable format options for a given campaign type. ' +
+      'For UGC, PAID, and BARTER campaigns, returns social media deliverables. ' +
+      'For ENGAGEMENT campaigns, returns engagement-specific deliverables.',
+  })
+  @ApiQuery({
+    name: 'campaignType',
+    required: false,
+    enum: ['ugc', 'paid', 'barter', 'engagement'],
+    description: 'Campaign type (defaults to "paid" if not specified)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Deliverable formats retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        campaignType: { type: 'string', example: 'paid' },
+        deliverableFormats: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              value: { type: 'string', example: 'instagram_reel' },
+              label: { type: 'string', example: 'Insta Reel / Post' },
+              platform: { type: 'string', example: 'instagram' },
+            },
+          },
+        },
+      },
+    },
+  })
+  async getDeliverableFormats(@Query('campaignType') campaignType?: string) {
+    return this.campaignService.getDeliverableFormats(campaignType);
+  }
 }

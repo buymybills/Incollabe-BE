@@ -29,10 +29,6 @@ export class UpdateCampaignDto {
   category?: string;
 
   @IsOptional()
-  @IsString()
-  deliverableFormat?: string;
-
-  @IsOptional()
   @IsEnum(CampaignType)
   type?: CampaignType;
 

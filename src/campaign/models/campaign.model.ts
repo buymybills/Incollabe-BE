@@ -22,9 +22,10 @@ export enum CampaignStatus {
 }
 
 export enum CampaignType {
+  UGC = 'ugc',
   PAID = 'paid',
   BARTER = 'barter',
-  HYBRID = 'hybrid',
+  ENGAGEMENT = 'engagement',
 }
 
 export interface CampaignCreationAttributes {

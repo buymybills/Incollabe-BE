@@ -2018,4 +2018,98 @@ export class CampaignService {
       return { success: false, message: error.message };
     }
   }
+
+  /**
+   * Get available deliverable formats based on campaign type
+   */
+  async getDeliverableFormats(
+    campaignType?: string,
+  ): Promise<{
+    campaignType: string;
+    deliverableFormats: Array<{ value: string; label: string; platform: string }>;
+  }> {
+    const type = campaignType || 'paid'; // Default to 'paid'
+
+    let deliverableFormats: Array<{ value: string; label: string; platform: string }>;
+
+    if (type === 'engagement') {
+      // Engagement campaign deliverables
+      deliverableFormats = [
+        {
+          value: 'like_comment',
+          label: 'Like/Comment',
+          platform: 'engagement',
+        },
+        {
+          value: 'playstore_review',
+          label: 'Playstore Review',
+          platform: 'engagement',
+        },
+        {
+          value: 'appstore_review',
+          label: 'App Store Review',
+          platform: 'engagement',
+        },
+        {
+          value: 'google_review',
+          label: 'Google Review',
+          platform: 'engagement',
+        },
+        {
+          value: 'app_download',
+          label: 'App Download',
+          platform: 'engagement',
+        },
+      ];
+    } else {
+      // Social media deliverables for UGC, PAID, BARTER
+      deliverableFormats = [
+        {
+          value: 'instagram_reel',
+          label: 'Insta Reel / Post',
+          platform: 'instagram',
+        },
+        {
+          value: 'instagram_story',
+          label: 'Insta Story',
+          platform: 'instagram',
+        },
+        {
+          value: 'youtube_short',
+          label: 'YT Shorts',
+          platform: 'youtube',
+        },
+        {
+          value: 'youtube_long_video',
+          label: 'YT Video',
+          platform: 'youtube',
+        },
+        {
+          value: 'facebook_story',
+          label: 'FB Story',
+          platform: 'facebook',
+        },
+        {
+          value: 'facebook_post',
+          label: 'FB Post',
+          platform: 'facebook',
+        },
+        {
+          value: 'twitter_post',
+          label: 'X Post',
+          platform: 'twitter',
+        },
+        {
+          value: 'linkedin_post',
+          label: 'LinkedIn Post',
+          platform: 'linkedin',
+        },
+      ];
+    }
+
+    return {
+      campaignType: type,
+      deliverableFormats,
+    };
+  }
 }
