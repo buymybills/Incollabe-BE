@@ -38,7 +38,7 @@ export class CampaignResponseDto {
   name: string;
   description?: string;
   category?: string;
-  deliverableFormat?: string[]; // Array of deliverable type strings
+  deliverableFormat?: string[]; // Array of human-readable deliverable labels (e.g., ["Insta Reel / Post", "YT Shorts"])
   status: CampaignStatus;
   type: CampaignType;
   startDate?: Date;

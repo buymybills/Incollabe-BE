@@ -83,15 +83,40 @@ export class CampaignService {
    * @param campaignData - Raw campaign data
    * @returns Transformed campaign data with proper field names
    */
+  /**
+   * Maps deliverable type value to its human-readable label
+   */
+  private getDeliverableLabel(value: string): string {
+    const deliverableLabels: Record<string, string> = {
+      // Social media deliverables
+      instagram_reel: 'Insta Reel / Post',
+      instagram_story: 'Insta Story',
+      youtube_short: 'YT Shorts',
+      youtube_long_video: 'YT Video',
+      facebook_story: 'FB Story',
+      facebook_post: 'FB Post',
+      twitter_post: 'X Post',
+      linkedin_post: 'LinkedIn Post',
+      // Engagement deliverables
+      like_comment: 'Like/Comment',
+      playstore_review: 'Playstore Review',
+      appstore_review: 'App Store Review',
+      google_review: 'Google Review',
+      app_download: 'App Download',
+    };
+
+    return deliverableLabels[value] || value;
+  }
+
   private transformCampaignResponse(campaignData: any): any {
-    // Extract deliverableFormat as array of type strings from deliverables
+    // Extract deliverableFormat as array of human-readable labels from deliverables
     const deliverableFormat = campaignData.deliverables
-      ? campaignData.deliverables.map((d: any) => d.type)
+      ? campaignData.deliverables.map((d: any) => this.getDeliverableLabel(d.type))
       : [];
 
     const response: any = {
       ...campaignData,
-      deliverableFormat, // Array of strings: ["instagram_reel", "youtube_short"]
+      deliverableFormat, // Array of label strings: ["Insta Reel / Post", "YT Shorts"]
       deliverables: campaignData.deliverables, // Full objects with platform, type, budget, quantity
     };
 

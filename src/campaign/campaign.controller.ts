@@ -44,8 +44,17 @@ export class CampaignController {
   @Post()
   @ApiOperation({
     summary: 'Create a new campaign',
-    description:
-      'Creates a new marketing campaign with deliverables and targeting preferences',
+    description: `Creates a new marketing campaign with deliverables and targeting preferences.
+
+**Budget Field Requirements by Campaign Type:**
+- **PAID/UGC/ENGAGEMENT**: Requires 'campaignBudget' field (total budget in INR)
+- **BARTER**: Requires 'barterProductWorth' field (product value in INR), 'additionalMonetaryPayout' is optional
+
+**Important Notes:**
+- All campaigns require 'numberOfInfluencers' field (number of influencers to hire)
+- Use GET /campaign/deliverable-formats?campaignType={type} to get available deliverable formats for each campaign type
+- 'deliverableFormat' should be an array of strings (e.g., ['instagram_reel', 'instagram_story'])
+- For Invite-Only campaigns, set 'isInviteOnly: true' (campaign will be in DRAFT status until payment is completed)`,
   })
   @ApiBody({
     type: CreateCampaignDto,
@@ -54,7 +63,7 @@ export class CampaignController {
       paidCampaign: {
         summary: 'PAID Campaign Example',
         description:
-          'PAID campaign with social media deliverables. Get formats from GET /campaign/deliverable-formats?campaignType=paid',
+          'PAID campaign with campaignBudget field. Requires campaignBudget and numberOfInfluencers. Get deliverable formats from GET /campaign/deliverable-formats?campaignType=paid',
         value: {
           name: 'Summer Fashion Campaign',
           description: 'Promote new summer fashion collection',
@@ -79,7 +88,7 @@ export class CampaignController {
       barterCampaign: {
         summary: 'BARTER Campaign Example',
         description:
-          'BARTER campaign with product worth instead of budget. Optional additional monetary payout.',
+          'BARTER campaign with barterProductWorth instead of campaignBudget. Requires barterProductWorth and numberOfInfluencers. additionalMonetaryPayout is optional.',
         value: {
           name: 'Product Review Campaign',
           description: 'Send products for honest reviews',
@@ -103,7 +112,7 @@ export class CampaignController {
       engagementCampaign: {
         summary: 'ENGAGEMENT Campaign Example',
         description:
-          'ENGAGEMENT campaign for app reviews/downloads. Get formats from GET /campaign/deliverable-formats?campaignType=engagement',
+          'ENGAGEMENT campaign with campaignBudget field. Requires campaignBudget and numberOfInfluencers. Get deliverable formats from GET /campaign/deliverable-formats?campaignType=engagement',
         value: {
           name: 'App Launch Campaign',
           description: 'Drive app downloads and reviews',
@@ -184,7 +193,7 @@ export class CampaignController {
             id: 1,
             name: 'Glow Like Never Before',
             category: 'Skincare + Makeup',
-            deliverableFormat: '2 Instagram reels, 3 story posts',
+            deliverableFormat: ['Insta Reel / Post', 'Insta Story'],
             status: 'active',
             createdAt: '2025-09-11T00:00:00Z',
             brand: {
@@ -205,6 +214,12 @@ export class CampaignController {
                 type: 'instagram_reel',
                 budget: 8000,
                 quantity: 2,
+              },
+              {
+                platform: 'instagram',
+                type: 'instagram_story',
+                budget: 3000,
+                quantity: 3,
               },
             ],
             applications: [
@@ -623,10 +638,11 @@ export class CampaignController {
         description:
           "L'Oreal Paris skincare campaign focusing on natural glow and authentic beauty routines",
         category: 'Skincare + Makeup',
-        deliverableFormat:
-          'Instagram Reel - 1 iPhone reel, 1 story posts\n\nDuration: 30 seconds\nVertical format: 9:16 ratio\nMusic: Trending audio with clear voice-over\nHashtags: Include brand hashtags and trending beauty tags\nTags: @lorealparis\nContent: Product review with before/after, authentic testimonial',
+        deliverableFormat: ['Insta Reel / Post', 'Insta Story'],
         status: 'active',
         type: 'paid',
+        campaignBudget: 20000,
+        numberOfInfluencers: 10,
         startDate: '2024-06-01T00:00:00Z',
         endDate: '2024-07-31T00:00:00Z',
         isPanIndia: false,
@@ -713,8 +729,16 @@ export class CampaignController {
   @Put(':id')
   @ApiOperation({
     summary: 'Update campaign',
-    description:
-      'Updates a campaign with new data (only by the brand that owns it)',
+    description: `Updates a campaign with new data (only by the brand that owns it).
+
+**Budget Field Requirements by Campaign Type:**
+- **PAID/UGC/ENGAGEMENT**: Requires 'campaignBudget' field (total budget in INR)
+- **BARTER**: Requires 'barterProductWorth' field (product value in INR), 'additionalMonetaryPayout' is optional
+
+**Important Notes:**
+- All campaigns require 'numberOfInfluencers' field (number of influencers to hire)
+- Use GET /campaign/deliverable-formats?campaignType={type} to get available deliverable formats for each campaign type
+- 'deliverableFormat' should be an array of strings (e.g., ['instagram_reel', 'instagram_story'])`,
   })
   @ApiParam({
     name: 'id',
@@ -729,7 +753,7 @@ export class CampaignController {
       paidCampaign: {
         summary: 'PAID Campaign Example',
         description:
-          'PAID campaign with social media deliverables. Get formats from GET /campaign/deliverable-formats?campaignType=paid',
+          'PAID campaign with campaignBudget field. Requires campaignBudget and numberOfInfluencers. Get deliverable formats from GET /campaign/deliverable-formats?campaignType=paid',
         value: {
           name: 'Summer Fashion Campaign',
           description: 'Promote new summer fashion collection',
@@ -754,7 +778,7 @@ export class CampaignController {
       barterCampaign: {
         summary: 'BARTER Campaign Example',
         description:
-          'BARTER campaign with product worth instead of budget. Optional additional monetary payout.',
+          'BARTER campaign with barterProductWorth instead of campaignBudget. Requires barterProductWorth and numberOfInfluencers. additionalMonetaryPayout is optional.',
         value: {
           name: 'Product Review Campaign',
           description: 'Send products for honest reviews',
@@ -778,7 +802,7 @@ export class CampaignController {
       engagementCampaign: {
         summary: 'ENGAGEMENT Campaign Example',
         description:
-          'ENGAGEMENT campaign for app reviews/downloads. Get formats from GET /campaign/deliverable-formats?campaignType=engagement',
+          'ENGAGEMENT campaign with campaignBudget field. Requires campaignBudget and numberOfInfluencers. Get deliverable formats from GET /campaign/deliverable-formats?campaignType=engagement',
         value: {
           name: 'App Launch Campaign',
           description: 'Drive app downloads and reviews',
