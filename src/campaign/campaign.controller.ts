@@ -195,6 +195,11 @@ export class CampaignController {
             category: 'Skincare + Makeup',
             deliverableFormat: ['Insta Reel / Post', 'Insta Story'],
             status: 'active',
+            type: 'paid',
+            campaignBudget: 20000,
+            numberOfInfluencers: 10,
+            isMaxCampaign: false,
+            isInviteOnly: false,
             createdAt: '2025-09-11T00:00:00Z',
             brand: {
               id: 1,
@@ -206,20 +211,6 @@ export class CampaignController {
                 id: 5,
                 name: 'Mumbai',
                 tier: '1',
-              },
-            ],
-            deliverables: [
-              {
-                platform: 'instagram',
-                type: 'instagram_reel',
-                budget: 8000,
-                quantity: 2,
-              },
-              {
-                platform: 'instagram',
-                type: 'instagram_story',
-                budget: 3000,
-                quantity: 3,
               },
             ],
             applications: [
@@ -331,20 +322,19 @@ export class CampaignController {
             id: 1,
             name: 'Summer Fashion Campaign',
             status: 'active',
+            type: 'paid',
+            campaignBudget: 50000,
+            numberOfInfluencers: 10,
+            isMaxCampaign: false,
+            isInviteOnly: false,
+            promotionType: 'organic',
             brandId: 1,
             brand: {
               id: 1,
               brandName: 'Fashion Brand',
               profileImage: 'brand.jpg',
             },
-            deliverables: [
-              {
-                platform: 'instagram',
-                type: 'instagram_post',
-                budget: 2000,
-                quantity: 3,
-              },
-            ],
+            deliverableFormat: ['Insta Reel / Post', 'Insta Story'],
           },
         ],
         total: 25,
@@ -393,13 +383,13 @@ export class CampaignController {
             id: 1,
             name: 'Summer Fashion Campaign',
             status: 'active',
-            deliverables: [
-              {
-                platform: 'instagram',
-                type: 'instagram_post',
-                budget: 2000,
-              },
-            ],
+            type: 'paid',
+            campaignBudget: 50000,
+            numberOfInfluencers: 10,
+            isMaxCampaign: false,
+            isInviteOnly: false,
+            promotionType: 'organic',
+            deliverableFormat: ['Insta Reel / Post', 'Insta Story'],
             invitations: [{ status: 'pending' }, { status: 'accepted' }],
             totalApplications: 15,
           },
@@ -468,13 +458,13 @@ export class CampaignController {
             id: 1,
             name: 'Summer Fashion Campaign',
             status: 'active',
-            deliverables: [
-              {
-                platform: 'instagram',
-                type: 'instagram_post',
-                budget: 2000,
-              },
-            ],
+            type: 'paid',
+            campaignBudget: 50000,
+            numberOfInfluencers: 10,
+            isMaxCampaign: false,
+            isInviteOnly: false,
+            promotionType: 'organic',
+            deliverableFormat: ['Insta Reel / Post', 'Insta Story'],
             invitations: [{ status: 'pending' }, { status: 'accepted' }],
             totalApplications: 15,
           },
@@ -620,7 +610,13 @@ export class CampaignController {
   @Get(':id')
   @ApiOperation({
     summary: 'Get campaign by ID',
-    description: 'Retrieves detailed information about a specific campaign',
+    description: `Retrieves detailed information about a specific campaign.
+
+**Response includes promotionType field:**
+- "organic" - Regular campaign (default)
+- "max" - Boosted MAX campaign (paid Rs 299)
+- "invite_only" - Invite-only campaign (paid Rs 499)
+- "invite_only_unpaid" - Invite-only campaign (not yet paid, in DRAFT status)`,
   })
   @ApiParam({
     name: 'id',
@@ -643,6 +639,9 @@ export class CampaignController {
         type: 'paid',
         campaignBudget: 20000,
         numberOfInfluencers: 10,
+        isMaxCampaign: false,
+        isInviteOnly: false,
+        promotionType: 'organic',
         startDate: '2024-06-01T00:00:00Z',
         endDate: '2024-07-31T00:00:00Z',
         isPanIndia: false,

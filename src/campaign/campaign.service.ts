@@ -114,11 +114,24 @@ export class CampaignService {
       ? campaignData.deliverables.map((d: any) => this.getDeliverableLabel(d.type))
       : [];
 
+    // Calculate promotionType based on boolean flags
+    let promotionType: 'organic' | 'max' | 'invite_only' | 'invite_only_unpaid' = 'organic';
+    if (campaignData.isMaxCampaign) {
+      promotionType = 'max';
+    } else if (campaignData.isInviteOnly && campaignData.inviteOnlyPaid) {
+      promotionType = 'invite_only';
+    } else if (campaignData.isInviteOnly && !campaignData.inviteOnlyPaid) {
+      promotionType = 'invite_only_unpaid';
+    }
+
     const response: any = {
       ...campaignData,
       deliverableFormat, // Array of label strings: ["Insta Reel / Post", "YT Shorts"]
-      deliverables: campaignData.deliverables, // Full objects with platform, type, budget, quantity
+      promotionType, // Computed field: "organic" | "max" | "invite_only" | "invite_only_unpaid"
     };
+
+    // Remove deliverables from response (we only need deliverableFormat labels)
+    delete response.deliverables;
 
     return response;
   }

@@ -60,6 +60,7 @@ export class CampaignResponseDto {
   isActive: boolean;
   isMaxCampaign?: boolean;
   isInviteOnly?: boolean;
+  promotionType?: 'organic' | 'max' | 'invite_only' | 'invite_only_unpaid'; // Computed: organic (default), max (paid Rs 299), invite_only (paid Rs 499), invite_only_unpaid (not paid yet)
   createdAt?: Date;
   updatedAt?: Date;
   brand?: BrandDto;
