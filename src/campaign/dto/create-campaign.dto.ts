@@ -6,15 +6,12 @@ import {
   IsNumber,
   IsBoolean,
   IsArray,
-  ValidateNested,
   Min,
   Max,
   ArrayMinSize,
 } from 'class-validator';
-import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { CampaignType } from '../models/campaign.model';
-import { CreateCampaignDeliverableDto } from './create-campaign-deliverable.dto';
 
 export class CreateCampaignDto {
   @IsString()
@@ -99,9 +96,18 @@ export class CreateCampaignDto {
   @IsString()
   brandSupport?: string;
 
+  @ApiProperty({
+    description:
+      'Array of deliverable format types. Use values from GET /campaign/deliverable-formats endpoint. ' +
+      'For UGC/PAID/BARTER: social media formats (instagram_reel, youtube_short, etc.). ' +
+      'For ENGAGEMENT: engagement formats (like_comment, playstore_review, etc.)',
+    example: ['instagram_reel', 'instagram_story', 'youtube_short'],
+    type: [String],
+    isArray: true,
+    minItems: 1,
+  })
   @IsArray()
-  @ArrayMinSize(1)
-  @ValidateNested({ each: true })
-  @Type(() => CreateCampaignDeliverableDto)
-  deliverables: CreateCampaignDeliverableDto[];
+  @ArrayMinSize(1, { message: 'At least one deliverable format is required' })
+  @IsString({ each: true })
+  deliverableFormat: string[];
 }

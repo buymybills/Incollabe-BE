@@ -186,14 +186,7 @@ describe('CampaignService', () => {
       cityIds: [1, 2],
       isOpenToAllAges: true,
       isOpenToAllGenders: true,
-      deliverables: [
-        {
-          platform: Platform.INSTAGRAM,
-          type: DeliverableType.INSTAGRAM_POST,
-          budget: 1000,
-          quantity: 1,
-        },
-      ],
+      deliverableFormat: ['instagram_post', 'instagram_story'],
     };
 
     it('should create a campaign successfully', async () => {

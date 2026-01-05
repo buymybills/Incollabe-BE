@@ -100,7 +100,7 @@ export class CampaignService {
     createCampaignDto: CreateCampaignDto,
     brandId: number,
   ): Promise<CampaignResponseDto> {
-    const { deliverables, cityIds, ...campaignData } = createCampaignDto;
+    const { deliverableFormat, cityIds, ...campaignData } = createCampaignDto;
 
     // Validate cities if not pan India
     if (!createCampaignDto.isPanIndia && (!cityIds || cityIds.length === 0)) {
@@ -134,14 +134,40 @@ export class CampaignService {
       await this.campaignCityModel.bulkCreate(campaignCities as any);
     }
 
-    // Add deliverables
-    const campaignDeliverables = deliverables.map((deliverable) => ({
-      ...deliverable,
+    // Transform deliverableFormat array (strings) into deliverable objects
+    const campaignDeliverables = deliverableFormat.map((type) => ({
       campaignId: campaign.id,
+      platform: this.extractPlatformFromType(type),
+      type: type,
+      quantity: 1, // Default quantity
     }));
     await this.campaignDeliverableModel.bulkCreate(campaignDeliverables as any);
 
     return this.getCampaignById(campaign.id);
+  }
+
+  /**
+   * Helper method to extract platform from deliverable type
+   * E.g., "instagram_story" -> "instagram"
+   */
+  private extractPlatformFromType(type: string): string {
+    if (type.startsWith('instagram_')) return 'instagram';
+    if (type.startsWith('youtube_')) return 'youtube';
+    if (type.startsWith('facebook_')) return 'facebook';
+    if (type.startsWith('linkedin_')) return 'linkedin';
+    if (type.startsWith('twitter_')) return 'twitter';
+    if (
+      [
+        'like_comment',
+        'playstore_review',
+        'appstore_review',
+        'google_review',
+        'app_download',
+      ].includes(type)
+    ) {
+      return 'engagement';
+    }
+    throw new BadRequestException(`Unknown deliverable type: ${type}`);
   }
 
   async getCampaigns(
