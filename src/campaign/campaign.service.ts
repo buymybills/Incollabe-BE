@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Op, literal } from 'sequelize';
-import { Campaign, CampaignStatus } from './models/campaign.model';
+import { Campaign, CampaignStatus, CampaignType } from './models/campaign.model';
 import { CampaignCity } from './models/campaign-city.model';
 import { CampaignDeliverable } from './models/campaign-deliverable.model';
 import { CampaignInvitation } from './models/campaign-invitation.model';
@@ -79,19 +79,21 @@ export class CampaignService {
   ) {}
 
   /**
-   * Transform campaign data to rename fields for API response
+   * Transform campaign data for API response
    * @param campaignData - Raw campaign data
-   * @returns Transformed campaign data with renamed fields
+   * @returns Transformed campaign data with proper field names
    */
   private transformCampaignResponse(campaignData: any): any {
+    // Extract deliverableFormat as array of type strings from deliverables
+    const deliverableFormat = campaignData.deliverables
+      ? campaignData.deliverables.map((d: any) => d.type)
+      : [];
+
     const response: any = {
       ...campaignData,
-      deliverables: campaignData.deliverableFormat, // Rename deliverableFormat to deliverables
-      collaborationCost: campaignData.deliverables, // Rename deliverables array to collaborationCost
+      deliverableFormat, // Array of strings: ["instagram_reel", "youtube_short"]
+      deliverables: campaignData.deliverables, // Full objects with platform, type, budget, quantity
     };
-
-    // Remove old field names
-    delete response.deliverableFormat;
 
     return response;
   }
@@ -101,6 +103,25 @@ export class CampaignService {
     brandId: number,
   ): Promise<CampaignResponseDto> {
     const { deliverableFormat, cityIds, ...campaignData } = createCampaignDto;
+
+    // Validate budget fields based on campaign type
+    const campaignType = createCampaignDto.type || CampaignType.PAID;
+
+    if (campaignType === CampaignType.BARTER) {
+      // BARTER campaigns require barterProductWorth
+      if (!createCampaignDto.barterProductWorth) {
+        throw new BadRequestException(
+          'Barter Product Worth is required for BARTER campaigns',
+        );
+      }
+    } else {
+      // PAID, UGC, ENGAGEMENT campaigns require campaignBudget
+      if (!createCampaignDto.campaignBudget) {
+        throw new BadRequestException(
+          'Campaign Budget is required for PAID, UGC, and ENGAGEMENT campaigns',
+        );
+      }
+    }
 
     // Validate cities if not pan India
     if (!createCampaignDto.isPanIndia && (!cityIds || cityIds.length === 0)) {

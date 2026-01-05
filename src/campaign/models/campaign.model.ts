@@ -47,6 +47,10 @@ export interface CampaignCreationAttributes {
   customInfluencerRequirements?: string;
   performanceExpectations?: string;
   brandSupport?: string;
+  campaignBudget?: number;
+  barterProductWorth?: number;
+  additionalMonetaryPayout?: number;
+  numberOfInfluencers?: number;
   isActive?: boolean;
 }
 
@@ -176,6 +180,32 @@ export class Campaign extends Model<Campaign, CampaignCreationAttributes> {
     allowNull: true,
   })
   declare brandSupport: string;
+
+  // Budget and Influencer Count Fields
+  @Column({
+    type: DataType.DECIMAL(12, 2),
+    allowNull: true,
+  })
+  declare campaignBudget: number;
+
+  @Column({
+    type: DataType.DECIMAL(12, 2),
+    allowNull: true,
+  })
+  declare barterProductWorth: number;
+
+  @Column({
+    type: DataType.DECIMAL(12, 2),
+    allowNull: true,
+  })
+  declare additionalMonetaryPayout: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 1,
+  })
+  declare numberOfInfluencers: number;
 
   @Column({
     type: DataType.BOOLEAN,

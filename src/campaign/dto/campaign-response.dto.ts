@@ -38,7 +38,7 @@ export class CampaignResponseDto {
   name: string;
   description?: string;
   category?: string;
-  deliverables?: string; // Renamed from deliverableFormat
+  deliverableFormat?: string[]; // Array of deliverable type strings
   status: CampaignStatus;
   type: CampaignType;
   startDate?: Date;
@@ -53,11 +53,18 @@ export class CampaignResponseDto {
   customInfluencerRequirements?: string;
   performanceExpectations?: string;
   brandSupport?: string;
+  campaignBudget?: number;
+  barterProductWorth?: number;
+  additionalMonetaryPayout?: number;
+  numberOfInfluencers?: number;
   isActive: boolean;
+  isMaxCampaign?: boolean;
+  isInviteOnly?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
   brand?: BrandDto;
   cities?: CityDto[];
-  collaborationCost?: CampaignDeliverableDto[]; // Renamed from deliverables
+  deliverables?: CampaignDeliverableDto[]; // Full deliverable objects with budget/quantity
   invitations?: CampaignInvitationDto[];
+  totalApplications?: number;
 }

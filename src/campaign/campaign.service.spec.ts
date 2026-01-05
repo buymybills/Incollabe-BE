@@ -187,6 +187,8 @@ describe('CampaignService', () => {
       isOpenToAllAges: true,
       isOpenToAllGenders: true,
       deliverableFormat: ['instagram_post', 'instagram_story'],
+      campaignBudget: 50000,
+      numberOfInfluencers: 10,
     };
 
     it('should create a campaign successfully', async () => {
@@ -235,6 +237,8 @@ describe('CampaignService', () => {
         isPanIndia: false,
         isOpenToAllAges: true,
         isOpenToAllGenders: true,
+        campaignBudget: 50000,
+        numberOfInfluencers: 10,
         brandId,
       });
       expect(campaignCityModel.bulkCreate).toHaveBeenCalled();
@@ -316,8 +320,8 @@ describe('CampaignService', () => {
             brandId,
             brand: { id: brandId, brandName: 'Test Brand' },
             cities: [],
-            deliverables: 'Test Format',
-            collaborationCost: [],
+            deliverableFormat: [],
+            deliverables: [],
           },
         ],
         total: 1,
@@ -416,8 +420,8 @@ describe('CampaignService', () => {
         name: 'Test Campaign',
         brand: { id: 1, brandName: 'Test Brand' },
         cities: [],
-        deliverables: 'Test Format',
-        collaborationCost: [],
+        deliverableFormat: [],
+        deliverables: [],
         invitations: [],
       });
       expect(campaignModel.findOne).toHaveBeenCalledWith({
@@ -1036,8 +1040,8 @@ describe('CampaignService', () => {
             id: 1,
             name: 'Campaign 1',
             brandId,
-            deliverables: 'Test Format',
-            collaborationCost: [],
+            deliverableFormat: [],
+            deliverables: [],
             invitations: [],
             applications: [{ id: 1 }, { id: 2 }, { id: 3 }],
             totalApplications: 3,

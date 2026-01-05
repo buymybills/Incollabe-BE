@@ -110,4 +110,46 @@ export class CreateCampaignDto {
   @ArrayMinSize(1, { message: 'At least one deliverable format is required' })
   @IsString({ each: true })
   deliverableFormat: string[];
+
+  @ApiProperty({
+    description:
+      'Campaign budget in INR. Required for PAID, UGC, and ENGAGEMENT campaigns. Not applicable for BARTER campaigns.',
+    example: 50000,
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  campaignBudget?: number;
+
+  @ApiProperty({
+    description:
+      'Product worth in INR for BARTER campaigns. Required only for BARTER type campaigns.',
+    example: 5000,
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  barterProductWorth?: number;
+
+  @ApiProperty({
+    description:
+      'Additional monetary payout in INR for BARTER campaigns (optional). This is extra cash payment on top of product.',
+    example: 2000,
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  additionalMonetaryPayout?: number;
+
+  @ApiProperty({
+    description:
+      'Number of influencers the brand intends to hire for this campaign.',
+    example: 10,
+  })
+  @IsNumber()
+  @Min(1)
+  numberOfInfluencers: number;
 }
