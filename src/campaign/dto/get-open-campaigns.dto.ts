@@ -5,9 +5,11 @@ import {
   IsArray,
   Min,
   Max,
+  IsEnum,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
+import { CampaignType } from '../models/campaign.model';
 
 export class GetOpenCampaignsDto {
   @ApiProperty({
@@ -67,6 +69,16 @@ export class GetOpenCampaignsDto {
   @IsNumber()
   @Min(0)
   maxBudget?: number;
+
+  @ApiProperty({
+    description: 'Filter by campaign type (paid, barter, ugc, engagement)',
+    required: false,
+    enum: ['paid', 'barter', 'ugc', 'engagement'],
+    example: 'paid',
+  })
+  @IsOptional()
+  @IsEnum(CampaignType)
+  campaignType?: CampaignType;
 
   @ApiProperty({
     description: 'Page number for pagination',

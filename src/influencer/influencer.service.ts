@@ -1230,6 +1230,7 @@ export class InfluencerService {
       nicheIds,
       minBudget,
       maxBudget,
+      campaignType,
       page = 1,
       limit = 10,
     } = getOpenCampaignsDto;
@@ -1389,6 +1390,14 @@ export class InfluencerService {
       ];
     }
 
+    // Add campaign type filter to WHERE condition
+    if (campaignType) {
+      whereCondition[Op.and] = [
+        ...(whereCondition[Op.and] || []),
+        { type: campaignType },
+      ];
+    }
+
     const includeOptions: any[] = [
       {
         model: Brand,
@@ -1437,6 +1446,36 @@ export class InfluencerService {
     // Apply pagination at database level
     const { count, rows: campaigns } = await this.campaignModel.findAndCountAll(
       {
+        attributes: [
+          'id',
+          'brandId',
+          'name',
+          'description',
+          'category',
+          'deliverableFormat',
+          'status',
+          'type',
+          'isInviteOnly',
+          'isPanIndia',
+          'minAge',
+          'maxAge',
+          'isOpenToAllAges',
+          'genderPreferences',
+          'isOpenToAllGenders',
+          'nicheIds',
+          'customInfluencerRequirements',
+          'performanceExpectations',
+          'brandSupport',
+          'campaignBudget',
+          'barterProductWorth',
+          'additionalMonetaryPayout',
+          'numberOfInfluencers',
+          'isActive',
+          'isMaxCampaign',
+          'endDate',
+          'createdAt',
+          'updatedAt',
+        ],
         where: whereCondition,
         include: includeOptions,
         order: [['createdAt', 'DESC']],

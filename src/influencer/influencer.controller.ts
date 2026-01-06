@@ -450,7 +450,7 @@ export class InfluencerController {
       '2. Age requirements (if campaign has age restrictions)\n' +
       '3. Gender preferences (if campaign has gender targeting)\n' +
       '4. Location (if campaign is not Pan-India, only influencers in target cities see it)\n' +
-      'You can further filter by search query, specific niches, cities, and budget range.',
+      'You can further filter by search query, specific niches, cities, budget range, and campaign type (paid, barter, ugc, engagement).',
   })
   @ApiResponse({
     status: 200,
@@ -462,6 +462,7 @@ export class InfluencerController {
             id: 1,
             name: 'Summer Fashion Campaign',
             description: 'Promote our new summer collection',
+            type: 'paid',
             brand: {
               id: 1,
               brandName: 'Fashion Brand',
