@@ -1281,6 +1281,46 @@ export class InfluencerService {
       }
     ];
 
+    // 24-hour early access filter for ORGANIC campaigns only
+    // MAX campaigns are always visible, but ORGANIC campaigns are hidden from non-Pro for first 24 hours
+    // ORGANIC = NOT MAX + NOT invite-only (consistent with promotionType logic)
+    if (!influencer?.isPro) {
+      const twentyFourHoursAgo = new Date();
+      twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+
+      console.log('⏰ Early Access Filter (Open Campaigns) - Non-Pro User:', {
+        currentTime: new Date().toISOString(),
+        twentyFourHoursAgo: twentyFourHoursAgo.toISOString(),
+        influencerId,
+        isPro: influencer.isPro,
+      });
+
+      // Show only:
+      // 1. MAX campaigns (regardless of age)
+      // 2. Invite-only campaigns (already handled by filter above)
+      // 3. ORGANIC campaigns (NOT MAX AND NOT invite-only) older than 24 hours
+      whereCondition[Op.and] = [
+        ...(whereCondition[Op.and] || []),
+        {
+          [Op.or]: [
+            { isMaxCampaign: true }, // Always show MAX campaigns
+            { isInviteOnly: true }, // Always show invite-only campaigns (if invited)
+            {
+              // Show organic campaigns older than 24 hours
+              // ORGANIC = NOT MAX AND NOT invite-only
+              [Op.and]: [
+                { isMaxCampaign: { [Op.ne]: true } }, // Not MAX
+                { isInviteOnly: { [Op.ne]: true } }, // Not invite-only
+                { createdAt: { [Op.lte]: twentyFourHoursAgo } }, // Older than 24 hours
+              ],
+            },
+          ],
+        },
+      ];
+
+      console.log('✅ Early Access Filter Applied to Open Campaigns');
+    }
+
     // Search by campaign name or brand name
     if (search) {
       whereCondition[Op.or] = [
