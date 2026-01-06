@@ -874,7 +874,11 @@ export class CampaignService {
 
     const { rows: campaigns, count: total } =
       await this.campaignModel.findAndCountAll({
-        where: { brandId, isActive: true },
+        where: {
+          brandId,
+          isActive: true,
+          status: CampaignStatus.ACTIVE, // Only return active campaigns, exclude drafts
+        },
         include: [
           {
             model: CampaignDeliverable,

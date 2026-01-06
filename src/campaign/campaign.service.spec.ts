@@ -1055,7 +1055,11 @@ describe('CampaignService', () => {
       });
       expect(campaignModel.findAndCountAll).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { brandId, isActive: true },
+          where: {
+            brandId,
+            isActive: true,
+            status: CampaignStatus.ACTIVE,
+          },
           order: [['createdAt', 'DESC']],
           limit: 10,
           offset: 0,

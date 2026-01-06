@@ -75,14 +75,7 @@ describe('CampaignController', () => {
         isPanIndia: false,
         cityIds: [1, 2],
         isOpenToAllGenders: true,
-        deliverables: [
-          {
-            platform: Platform.INSTAGRAM,
-            type: DeliverableType.INSTAGRAM_POST,
-            budget: 1000,
-            quantity: 1,
-          },
-        ],
+        deliverableFormat: ['instagram_post'],
         isOpenToAllAges: false,
       };
 
@@ -400,14 +393,7 @@ describe('CampaignController', () => {
         isPanIndia: false,
         cityIds: [1, 2],
         isOpenToAllGenders: true,
-        deliverables: [
-          {
-            platform: Platform.INSTAGRAM,
-            type: DeliverableType.INSTAGRAM_POST,
-            budget: 1000,
-            quantity: 1,
-          },
-        ],
+        deliverableFormat: ['instagram_post'],
         isOpenToAllAges: false,
       };
 
