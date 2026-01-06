@@ -1299,21 +1299,23 @@ export class InfluencerService {
       invitationsCount: invitations.length,
       invitedCampaignIds,
       hasInvitations: invitedCampaignIds.length > 0,
+      invitationRawData: invitations.map(inv => ({ id: inv.id, campaignId: inv.campaignId, status: inv.status })),
     });
 
-    // Build base invitation filter - show invited campaigns OR pass through to other filters
-    const inviteOrCondition = {
+    // CORE FILTER: Show invited campaigns OR (non-invited campaigns that pass other filters)
+    // This will be built and then added to whereCondition[Op.and]
+    const coreFilter: any = {
       [Op.or]: [
-        // Always show invited campaigns (bypass all other filters)
+        // ALWAYS show invited campaigns (they bypass all other filters)
         { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
-        // For non-invited campaigns, apply all the filters
-        {
-          [Op.and]: [],
-        },
+        // For non-invited: apply isInviteOnly filter to exclude invite-only campaigns
+        { isInviteOnly: false },
       ],
     };
 
-    // 24-hour early access filter for non-Pro users
+    whereCondition[Op.and] = [coreFilter];
+
+    // 24-hour early access filter for non-Pro users (applies to non-invited campaigns only)
     if (!influencer?.isPro) {
       const twentyFourHoursAgo = new Date();
       twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
@@ -1325,12 +1327,15 @@ export class InfluencerService {
         isPro: influencer.isPro,
       });
 
-      // For non-invited campaigns: show MAX or older than 24 hours
-      (inviteOrCondition[Op.or][1][Op.and] as any[]).push({
+      // Show: invited campaigns (handled above) OR (MAX campaigns) OR (organic older than 24h)
+      whereCondition[Op.and].push({
         [Op.or]: [
-          { isMaxCampaign: true }, // MAX campaigns always visible
+          // Invited campaigns (redundant but safe)
+          { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
+          // MAX campaigns always visible
+          { isMaxCampaign: true },
+          // Organic campaigns older than 24 hours
           {
-            // ORGANIC campaigns older than 24 hours
             [Op.and]: [
               { isMaxCampaign: { [Op.ne]: true } },
               { isInviteOnly: { [Op.ne]: true } },
@@ -1341,21 +1346,6 @@ export class InfluencerService {
       });
 
       console.log('✅ Early Access Filter Applied to Open Campaigns');
-    } else {
-      // Pro users see all non-invite-only non-invited campaigns
-      (inviteOrCondition[Op.or][1][Op.and] as any[]).push({
-        isInviteOnly: false,
-      });
-    }
-
-    whereCondition[Op.and] = [inviteOrCondition];
-
-    // Search by campaign name or brand name
-    if (search) {
-      whereCondition[Op.or] = [
-        { name: { [Op.iLike]: `%${search}%` } },
-        { description: { [Op.iLike]: `%${search}%` } },
-      ];
     }
 
     // Niche filter - use provided nicheIds or fetch influencer's niches
@@ -1373,46 +1363,59 @@ export class InfluencerService {
       nicheIdsToFilter = influencerNiches.map((n: any) => n.nicheId);
     }
 
-    // Add niche filter to non-invited campaigns
+    // Add niche filter (applies to non-invited campaigns only via OR with invited check)
     if (nicheIdsToFilter.length > 0) {
       const nicheConditions = nicheIdsToFilter.map((nicheId) =>
         literal(`"Campaign"."nicheIds"::jsonb @> '[${nicheId}]'::jsonb`),
       );
-      (inviteOrCondition[Op.or][1][Op.and] as any[]).push({
-        [Op.or]: nicheConditions,
+      whereCondition[Op.and].push({
+        [Op.or]: [
+          { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
+          { [Op.or]: nicheConditions },
+        ],
       });
     }
 
-    // Add age filter to non-invited campaigns
+    // Add age filter (applies to non-invited campaigns only via OR with invited check)
     if (influencerAge !== null) {
-      (inviteOrCondition[Op.or][1][Op.and] as any[]).push({
+      whereCondition[Op.and].push({
         [Op.or]: [
-          { isOpenToAllAges: true },
+          { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
           {
-            [Op.and]: [
-              { minAge: { [Op.lte]: influencerAge } },
-              { maxAge: { [Op.gte]: influencerAge } },
+            [Op.or]: [
+              { isOpenToAllAges: true },
+              {
+                [Op.and]: [
+                  { minAge: { [Op.lte]: influencerAge } },
+                  { maxAge: { [Op.gte]: influencerAge } },
+                ],
+              },
             ],
           },
         ],
       });
     }
 
-    // Add gender filter to non-invited campaigns
+    // Add gender filter (applies to non-invited campaigns only via OR with invited check)
     if (influencer.gender) {
-      (inviteOrCondition[Op.or][1][Op.and] as any[]).push({
+      whereCondition[Op.and].push({
         [Op.or]: [
-          { isOpenToAllGenders: true },
-          literal(
-            `"Campaign"."genderPreferences"::jsonb @> '["${influencer.gender}"]'::jsonb`,
-          ),
+          { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
+          {
+            [Op.or]: [
+              { isOpenToAllGenders: true },
+              literal(
+                `"Campaign"."genderPreferences"::jsonb @> '["${influencer.gender}"]'::jsonb`,
+              ),
+            ],
+          },
         ],
       });
     }
 
-    // Add campaign type filter to non-invited campaigns
+    // Add campaign type filter
     if (campaignType) {
-      (inviteOrCondition[Op.or][1][Op.and] as any[]).push({
+      whereCondition[Op.and].push({
         type: campaignType,
       });
     }
@@ -1447,13 +1450,18 @@ export class InfluencerService {
       });
     }
 
-    // Location filter - apply to non-invited campaigns
+    // Location filter (applies to non-invited campaigns only via OR with invited check)
     if (influencer.cityId) {
-      (inviteOrCondition[Op.or][1][Op.and] as any[]).push({
+      whereCondition[Op.and].push({
         [Op.or]: [
-          { isPanIndia: true },
+          { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
           {
-            '$cities.cityId$': influencer.cityId,
+            [Op.or]: [
+              { isPanIndia: true },
+              {
+                '$cities.cityId$': influencer.cityId,
+              },
+            ],
           },
         ],
       });
