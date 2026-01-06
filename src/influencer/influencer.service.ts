@@ -1472,7 +1472,6 @@ export class InfluencerService {
           'numberOfInfluencers',
           'isActive',
           'isMaxCampaign',
-          'endDate',
           'createdAt',
           'updatedAt',
         ],
