@@ -278,21 +278,26 @@ export class CampaignService {
 
       // 24-hour early access filter for ORGANIC campaigns only
       // MAX campaigns are always visible, but ORGANIC campaigns are hidden from non-Pro for first 24 hours
+      // ORGANIC = NOT MAX + NOT invite-only (consistent with promotionType logic)
       if (!influencer?.isPro) {
         const twentyFourHoursAgo = new Date();
         twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
 
         // Show only:
         // 1. MAX campaigns (regardless of age)
-        // 2. ORGANIC campaigns older than 24 hours
+        // 2. Invite-only campaigns (handled by inviteOnlyFilter above, shown if invited)
+        // 3. ORGANIC campaigns (NOT MAX AND NOT invite-only) older than 24 hours
         earlyAccessFilter = {
           [Op.or]: [
             { isMaxCampaign: true }, // Always show MAX campaigns
+            { isInviteOnly: true }, // Always show invite-only campaigns (inviteOnlyFilter handles access)
             {
               // Show organic campaigns older than 24 hours
+              // ORGANIC = NOT MAX AND NOT invite-only
               [Op.and]: [
-                { isMaxCampaign: false },
-                { createdAt: { [Op.lte]: twentyFourHoursAgo } },
+                { isMaxCampaign: { [Op.ne]: true } }, // Not MAX
+                { isInviteOnly: { [Op.ne]: true } }, // Not invite-only
+                { createdAt: { [Op.lte]: twentyFourHoursAgo } }, // Older than 24 hours
               ],
             },
           ],
@@ -336,6 +341,21 @@ export class CampaignService {
       } else {
         whereCondition[Op.and] = filtersToApply;
       }
+    }
+
+    // Debug logging for campaign filtering
+    if (influencerId && !brandId) {
+      const influencer = await this.influencerModel.findByPk(influencerId, {
+        attributes: ['isPro'],
+      });
+      console.log('🔍 Campaign Filter Debug:', {
+        influencerId,
+        isPro: influencer?.isPro,
+        hasInviteOnlyFilter: !!inviteOnlyFilter,
+        hasEarlyAccessFilter: !!earlyAccessFilter,
+        filtersCount: filtersToApply.length,
+        whereCondition: JSON.stringify(whereCondition, null, 2),
+      });
     }
 
     const { count, rows: campaigns } = await this.campaignModel.findAndCountAll(
