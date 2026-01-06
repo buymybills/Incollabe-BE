@@ -55,14 +55,23 @@ export class CampaignQueryService {
   /**
    * Fetch open campaigns for a brand
    * Only returns active campaigns (status: ACTIVE, not invite-only, not finished/cancelled)
+   * @param brandId - Brand ID
+   * @param campaignType - Optional filter by campaign type (paid, barter, ugc, engagement)
    */
-  async fetchOpenCampaigns(brandId: number): Promise<Campaign[]> {
+  async fetchOpenCampaigns(brandId: number, campaignType?: string): Promise<Campaign[]> {
+    const whereCondition: any = {
+      brandId,
+      status: CampaignStatus.ACTIVE,
+      isInviteOnly: false,
+    };
+
+    // Add campaign type filter if specified
+    if (campaignType) {
+      whereCondition.type = campaignType;
+    }
+
     return this.campaignModel.findAll({
-      where: {
-        brandId,
-        status: CampaignStatus.ACTIVE,
-        isInviteOnly: false,
-      },
+      where: whereCondition,
       include: this.getBaseIncludeOptions(),
       order: [['createdAt', 'DESC']],
     });
@@ -129,17 +138,21 @@ export class CampaignQueryService {
 
   /**
    * Get campaigns by category with stats
+   * @param brandId - Brand ID
+   * @param type - Category type (open, invite, finished, all)
+   * @param campaignType - Optional filter by campaign type (paid, barter, ugc, engagement) - only applies to 'open' category
    */
   async getCampaignsByCategory(
     brandId: number,
     type?: string,
+    campaignType?: string,
   ): Promise<CampaignWithStats[]> {
     let campaigns: Campaign[];
     let statsProcessor: (campaign: Campaign) => CampaignWithStats;
 
     switch (type) {
       case 'open':
-        campaigns = await this.fetchOpenCampaigns(brandId);
+        campaigns = await this.fetchOpenCampaigns(brandId, campaignType);
         statsProcessor = (c) => CampaignStatsHelper.addApplicationCount(c);
         break;
 

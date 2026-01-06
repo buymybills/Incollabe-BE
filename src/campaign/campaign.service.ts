@@ -364,16 +364,19 @@ export class CampaignService {
   /**
    * Get campaigns by category with proper type safety and separation of concerns
    * @param brandId - The brand ID to fetch campaigns for
-   * @param type - Optional campaign type filter (open, invite, finished)
+   * @param type - Optional campaign category filter (open, invite, finished)
+   * @param campaignType - Optional campaign type filter (paid, barter, ugc, engagement)
    * @returns Campaigns with appropriate statistics
    */
   async getCampaignsByCategory(
     brandId: number,
     type?: string,
+    campaignType?: string,
   ): Promise<CampaignsByCategoryResponse> {
     const campaigns = await this.campaignQueryService.getCampaignsByCategory(
       brandId,
       type,
+      campaignType,
     );
 
     // Transform field names and cities for all campaigns

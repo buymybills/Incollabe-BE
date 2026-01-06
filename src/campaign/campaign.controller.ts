@@ -180,8 +180,16 @@ export class CampaignController {
     required: false,
     enum: ['open', 'invite', 'finished'],
     description:
-      'Filter campaigns by type. If not specified, returns all campaigns.',
+      'Filter campaigns by category type. If not specified, returns all campaigns.',
     example: 'open',
+  })
+  @ApiQuery({
+    name: 'campaignType',
+    required: false,
+    enum: ['paid', 'barter', 'ugc', 'engagement'],
+    description:
+      'Filter by campaign type (paid, barter, ugc, engagement). Only applies when type=open. If not specified, returns all campaign types.',
+    example: 'paid',
   })
   @ApiResponse({
     status: 200,
@@ -263,6 +271,7 @@ export class CampaignController {
   async getCampaignsByCategory(
     @Req() req: RequestWithUser,
     @Query('type') type?: string,
+    @Query('campaignType') campaignType?: string,
   ) {
     if (req.user.userType !== 'brand') {
       throw new ForbiddenException(
@@ -270,7 +279,7 @@ export class CampaignController {
       );
     }
 
-    return this.campaignService.getCampaignsByCategory(req.user.id, type);
+    return this.campaignService.getCampaignsByCategory(req.user.id, type, campaignType);
   }
 
   @Get()
