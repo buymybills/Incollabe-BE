@@ -283,6 +283,12 @@ export class CampaignService {
         const twentyFourHoursAgo = new Date();
         twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
 
+        console.log('⏰ Early Access Filter - Non-Pro User:', {
+          currentTime: new Date().toISOString(),
+          twentyFourHoursAgo: twentyFourHoursAgo.toISOString(),
+          influencerId,
+        });
+
         // Show only:
         // 1. MAX campaigns (regardless of age)
         // 2. Invite-only campaigns (handled by inviteOnlyFilter above, shown if invited)
@@ -302,6 +308,8 @@ export class CampaignService {
             },
           ],
         };
+
+        console.log('✅ Early Access Filter Created:', JSON.stringify(earlyAccessFilter, null, 2));
       }
     }
 
@@ -354,8 +362,8 @@ export class CampaignService {
         hasInviteOnlyFilter: !!inviteOnlyFilter,
         hasEarlyAccessFilter: !!earlyAccessFilter,
         filtersCount: filtersToApply.length,
-        whereCondition: JSON.stringify(whereCondition, null, 2),
       });
+      console.log('📋 Final WHERE Condition:', JSON.stringify(whereCondition, null, 2));
     }
 
     const { count, rows: campaigns } = await this.campaignModel.findAndCountAll(
