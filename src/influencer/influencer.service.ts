@@ -1355,6 +1355,7 @@ export class InfluencerService {
     }
 
     // Niche filter - use provided nicheIds or fetch influencer's niches
+    // IMPORTANT: Invited campaigns bypass niche filter
     let nicheIdsToFilter: number[] = [];
     if (nicheIds && nicheIds.length > 0) {
       // Use explicitly provided nicheIds from query parameter
@@ -1371,27 +1372,43 @@ export class InfluencerService {
 
     // Add niche filter to WHERE condition if nicheIds are available
     // This creates: campaign.nicheIds @> '[1]' OR campaign.nicheIds @> '[2]' OR ...
+    // But invited campaigns are exempt from niche filter
     if (nicheIdsToFilter.length > 0) {
       const nicheConditions = nicheIdsToFilter.map((nicheId) =>
         literal(`"Campaign"."nicheIds"::jsonb @> '[${nicheId}]'::jsonb`),
       );
       whereCondition[Op.and] = [
         ...(whereCondition[Op.and] || []),
-        { [Op.or]: nicheConditions },
+        {
+          [Op.or]: [
+            // Invited campaigns bypass niche filter
+            { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
+            // Non-invited campaigns must match niche
+            { [Op.or]: nicheConditions },
+          ],
+        },
       ];
     }
 
     // Add age filter to WHERE condition
+    // IMPORTANT: Invited campaigns bypass age filter
     if (influencerAge !== null) {
       whereCondition[Op.and] = [
         ...(whereCondition[Op.and] || []),
         {
           [Op.or]: [
-            { isOpenToAllAges: true },
+            // Invited campaigns bypass age filter
+            { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
+            // Non-invited campaigns must match age or be open to all ages
             {
-              [Op.and]: [
-                { minAge: { [Op.lte]: influencerAge } },
-                { maxAge: { [Op.gte]: influencerAge } },
+              [Op.or]: [
+                { isOpenToAllAges: true },
+                {
+                  [Op.and]: [
+                    { minAge: { [Op.lte]: influencerAge } },
+                    { maxAge: { [Op.gte]: influencerAge } },
+                  ],
+                },
               ],
             },
           ],
@@ -1400,15 +1417,23 @@ export class InfluencerService {
     }
 
     // Add gender filter to WHERE condition
+    // IMPORTANT: Invited campaigns bypass gender filter
     if (influencer.gender) {
       whereCondition[Op.and] = [
         ...(whereCondition[Op.and] || []),
         {
           [Op.or]: [
-            { isOpenToAllGenders: true },
-            literal(
-              `"Campaign"."genderPreferences"::jsonb @> '["${influencer.gender}"]'::jsonb`,
-            ),
+            // Invited campaigns bypass gender filter
+            { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
+            // Non-invited campaigns must match gender or be open to all genders
+            {
+              [Op.or]: [
+                { isOpenToAllGenders: true },
+                literal(
+                  `"Campaign"."genderPreferences"::jsonb @> '["${influencer.gender}"]'::jsonb`,
+                ),
+              ],
+            },
           ],
         },
       ];
@@ -1453,14 +1478,22 @@ export class InfluencerService {
     }
 
     // Location filter - campaigns that match influencer's city or are Pan-India
+    // IMPORTANT: Invited campaigns bypass location filter
     if (influencer.cityId) {
       whereCondition[Op.and] = [
         ...(whereCondition[Op.and] || []),
         {
           [Op.or]: [
-            { isPanIndia: true },
+            // Invited campaigns bypass location filter
+            { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
+            // Non-invited campaigns must match location or be Pan-India
             {
-              '$cities.cityId$': influencer.cityId,
+              [Op.or]: [
+                { isPanIndia: true },
+                {
+                  '$cities.cityId$': influencer.cityId,
+                },
+              ],
             },
           ],
         },
