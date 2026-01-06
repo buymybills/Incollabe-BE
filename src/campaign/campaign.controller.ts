@@ -178,7 +178,7 @@ export class CampaignController {
   @ApiQuery({
     name: 'type',
     required: false,
-    enum: ['open', 'invite', 'finished'],
+    enum: ['open', 'invite', 'draft', 'finished'],
     description:
       'Filter campaigns by category type. If not specified, returns all campaigns.',
     example: 'open',

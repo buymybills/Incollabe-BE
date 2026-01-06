@@ -78,6 +78,21 @@ export class CampaignQueryService {
   }
 
   /**
+   * Fetch draft campaigns for a brand
+   * Only returns campaigns with DRAFT status
+   */
+  async fetchDraftCampaigns(brandId: number): Promise<Campaign[]> {
+    return this.campaignModel.findAll({
+      where: {
+        brandId,
+        status: CampaignStatus.DRAFT,
+      },
+      include: this.getBaseIncludeOptions(),
+      order: [['createdAt', 'DESC']],
+    });
+  }
+
+  /**
    * Fetch invite-only campaigns for a brand
    * Only returns active invite campaigns (status: ACTIVE, invite-only, not finished/cancelled)
    */
@@ -159,6 +174,11 @@ export class CampaignQueryService {
       case 'invite':
         campaigns = await this.fetchInviteCampaigns(brandId);
         statsProcessor = (c) => CampaignStatsHelper.addInviteCount(c);
+        break;
+
+      case 'draft':
+        campaigns = await this.fetchDraftCampaigns(brandId);
+        statsProcessor = (c) => c.toJSON();
         break;
 
       case 'finished':

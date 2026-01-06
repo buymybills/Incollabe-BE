@@ -52,6 +52,7 @@ const mockCampaignQueryService = {
   getCampaignsByCategory: jest.fn(),
   fetchOpenCampaigns: jest.fn(),
   fetchInviteCampaigns: jest.fn(),
+  fetchDraftCampaigns: jest.fn(),
   fetchFinishedCampaigns: jest.fn(),
   fetchAllCampaigns: jest.fn(),
 };
