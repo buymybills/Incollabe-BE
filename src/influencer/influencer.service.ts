@@ -1293,6 +1293,13 @@ export class InfluencerService {
       attributes: ['campaignId'],
     });
     const invitedCampaignIds = invitations ? invitations.map(inv => inv.campaignId) : [];
+    
+    console.log('🎯 INVITATION DEBUG - getOpenCampaigns:', {
+      influencerId,
+      invitationsCount: invitations.length,
+      invitedCampaignIds,
+      hasInvitations: invitedCampaignIds.length > 0,
+    });
 
     // 24-hour early access filter for ORGANIC campaigns only
     // MAX campaigns are always visible, but ORGANIC campaigns are hidden from non-Pro for first 24 hours
@@ -1541,6 +1548,15 @@ export class InfluencerService {
         subQuery: false,
       },
     );
+
+    console.log('📊 QUERY RESULTS - getOpenCampaigns:', {
+      influencerId,
+      invitedCampaignIds,
+      campaignsReturned: campaigns.length,
+      totalCount: count,
+      campaignIds: campaigns.map(c => c.id),
+      campaignNames: campaigns.map(c => c.name),
+    });
 
     // Add application status for each campaign
     const campaignIds = campaigns.map((campaign) => campaign.id);
