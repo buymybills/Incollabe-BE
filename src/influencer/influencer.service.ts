@@ -1512,23 +1512,24 @@ export class InfluencerService {
       }
     }
 
-    // Check Max Campaign 48-hour Pro-only window
-    if (campaign.isMaxCampaign) {
-      const now = new Date();
-      const campaignCreatedAt = new Date(campaign.createdAt);
-      const hoursSinceCreation = (now.getTime() - campaignCreatedAt.getTime()) / (1000 * 60 * 60);
+    // Check 24-hour Pro-only early access window (applies to ALL campaigns)
+    const now = new Date();
+    const campaignCreatedAt = new Date(campaign.createdAt);
+    const hoursSinceCreation = (now.getTime() - campaignCreatedAt.getTime()) / (1000 * 60 * 60);
 
-      // If within first 48 hours, only Pro influencers can apply
-      if (hoursSinceCreation <= 48) {
-        const influencer = await this.influencerRepository.findById(influencerId);
-        if (!influencer?.isPro) {
-          throw new ForbiddenException(
-            'This is a Max Campaign. Only Pro influencers can apply during the first 48 hours. Upgrade to Pro or wait until the campaign opens to all influencers.',
-          );
-        }
+    // If within first 24 hours, only Pro influencers can apply
+    if (hoursSinceCreation <= 24) {
+      const influencer = await this.influencerRepository.findById(influencerId);
+      if (!influencer?.isPro) {
+        const campaignTypeMessage = campaign.isMaxCampaign
+          ? 'This is a Max Campaign.'
+          : 'This campaign is in early access period.';
+        throw new ForbiddenException(
+          `${campaignTypeMessage} Only Pro influencers can apply during the first 24 hours. Upgrade to Pro or wait until the campaign opens to all influencers.`,
+        );
       }
-      // After 48 hours, anyone can apply (no restriction)
     }
+    // After 24 hours, anyone can apply (no restriction)
 
     // Check if influencer has already applied
     const existingApplication = await this.campaignApplicationModel.findOne({

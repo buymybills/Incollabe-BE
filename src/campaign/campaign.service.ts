@@ -251,7 +251,14 @@ export class CampaignService {
 
     // For influencers: exclude invite-only campaigns they haven't been invited to
     let inviteOnlyFilter: any = null;
+    let earlyAccessFilter: any = null;
+
     if (influencerId && !brandId) {
+      // Check if influencer is Pro
+      const influencer = await this.influencerModel.findByPk(influencerId, {
+        attributes: ['isPro'],
+      });
+
       // Get campaign IDs where influencer has been invited
       const invitations = await this.campaignInvitationModel.findAll({
         where: { influencerId },
@@ -268,6 +275,29 @@ export class CampaignService {
           { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } }
         ]
       };
+
+      // 24-hour early access filter for ORGANIC campaigns only
+      // MAX campaigns are always visible, but ORGANIC campaigns are hidden from non-Pro for first 24 hours
+      if (!influencer?.isPro) {
+        const twentyFourHoursAgo = new Date();
+        twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+
+        // Show only:
+        // 1. MAX campaigns (regardless of age)
+        // 2. ORGANIC campaigns older than 24 hours
+        earlyAccessFilter = {
+          [Op.or]: [
+            { isMaxCampaign: true }, // Always show MAX campaigns
+            {
+              // Show organic campaigns older than 24 hours
+              [Op.and]: [
+                { isMaxCampaign: false },
+                { createdAt: { [Op.lte]: twentyFourHoursAgo } },
+              ],
+            },
+          ],
+        };
+      }
     }
 
     if (status) {
@@ -278,6 +308,17 @@ export class CampaignService {
       whereCondition.type = type;
     }
 
+    // Build combined filters array
+    const filtersToApply: any[] = [];
+
+    if (inviteOnlyFilter) {
+      filtersToApply.push(inviteOnlyFilter);
+    }
+
+    if (earlyAccessFilter) {
+      filtersToApply.push(earlyAccessFilter);
+    }
+
     if (search) {
       const searchCondition = {
         [Op.or]: [
@@ -285,16 +326,16 @@ export class CampaignService {
           { description: { [Op.iLike]: `%${search}%` } },
         ]
       };
+      filtersToApply.push(searchCondition);
+    }
 
-      // Combine search with invite-only filter if both exist
-      if (inviteOnlyFilter) {
-        whereCondition[Op.and] = [inviteOnlyFilter, searchCondition];
+    // Apply all filters using AND logic
+    if (filtersToApply.length > 0) {
+      if (filtersToApply.length === 1) {
+        Object.assign(whereCondition, filtersToApply[0]);
       } else {
-        Object.assign(whereCondition, searchCondition);
+        whereCondition[Op.and] = filtersToApply;
       }
-    } else if (inviteOnlyFilter) {
-      // Apply invite-only filter without search
-      Object.assign(whereCondition, inviteOnlyFilter);
     }
 
     const { count, rows: campaigns } = await this.campaignModel.findAndCountAll(
