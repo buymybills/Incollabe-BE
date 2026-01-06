@@ -1294,22 +1294,10 @@ export class InfluencerService {
     });
     const invitedCampaignIds = invitations ? invitations.map(inv => inv.campaignId) : [];
 
-    // Exclude invite-only campaigns they haven't been invited to
-    // Show only:
-    // 1. Non-invite-only campaigns (isInviteOnly: false)
-    // 2. Invite-only campaigns where they have an invitation
-    whereCondition[Op.and] = [
-      {
-        [Op.or]: [
-          { isInviteOnly: false },
-          { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } }
-        ]
-      }
-    ];
-
     // 24-hour early access filter for ORGANIC campaigns only
     // MAX campaigns are always visible, but ORGANIC campaigns are hidden from non-Pro for first 24 hours
     // ORGANIC = NOT MAX + NOT invite-only (consistent with promotionType logic)
+    // IMPORTANT: Invited campaigns are ALWAYS visible regardless of age or Pro status
     if (!influencer?.isPro) {
       const twentyFourHoursAgo = new Date();
       twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
@@ -1321,19 +1309,20 @@ export class InfluencerService {
         isPro: influencer.isPro,
       });
 
-      // Show only:
-      // 1. MAX campaigns (regardless of age)
-      // 2. Invite-only campaigns (already handled by filter above)
-      // 3. ORGANIC campaigns (NOT MAX AND NOT invite-only) older than 24 hours
+      // Show campaigns if ANY of these conditions are true:
+      // 1. Influencer has been invited to this campaign (invited campaigns always visible)
+      // 2. Campaign is MAX (regardless of age)
+      // 3. Campaign is invite-only and influencer is invited (handled by condition 1)
+      // 4. ORGANIC campaigns (NOT MAX AND NOT invite-only) older than 24 hours
       whereCondition[Op.and] = [
-        ...(whereCondition[Op.and] || []),
         {
           [Op.or]: [
-            { isMaxCampaign: true }, // Always show MAX campaigns
-            { isInviteOnly: true }, // Always show invite-only campaigns (if invited)
+            // Show invited campaigns regardless of anything else
+            { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
+            // Show MAX campaigns regardless of age
+            { isMaxCampaign: true },
+            // Show ORGANIC campaigns older than 24 hours
             {
-              // Show organic campaigns older than 24 hours
-              // ORGANIC = NOT MAX AND NOT invite-only
               [Op.and]: [
                 { isMaxCampaign: { [Op.ne]: true } }, // Not MAX
                 { isInviteOnly: { [Op.ne]: true } }, // Not invite-only
@@ -1345,6 +1334,16 @@ export class InfluencerService {
       ];
 
       console.log('✅ Early Access Filter Applied to Open Campaigns');
+    } else {
+      // Pro users see all non-invite-only campaigns + invited campaigns
+      whereCondition[Op.and] = [
+        {
+          [Op.or]: [
+            { isInviteOnly: false }, // See all non-invite-only campaigns
+            { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } } // See invited campaigns
+          ]
+        }
+      ];
     }
 
     // Search by campaign name or brand name
