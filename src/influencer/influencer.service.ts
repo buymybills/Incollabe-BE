@@ -1301,10 +1301,16 @@ export class InfluencerService {
       hasInvitations: invitedCampaignIds.length > 0,
     });
 
-    // 24-hour early access filter for ORGANIC campaigns only
-    // MAX campaigns are always visible, but ORGANIC campaigns are hidden from non-Pro for first 24 hours
-    // ORGANIC = NOT MAX + NOT invite-only (consistent with promotionType logic)
-    // IMPORTANT: Invited campaigns are ALWAYS visible regardless of age or Pro status
+    // CRITICAL FIX: Use a top-level [Op.or] to separate invited campaigns from regular campaigns
+    // This allows invited campaigns to bypass all demographic filters
+    const allAndConditions: any[] = [];
+
+    // Add invited campaigns at the TOP LEVEL so they bypass all other filters
+    const inviteOnlyOrConditions: any[] = [
+      { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
+    ];
+
+    // 24-hour early access filter for non-Pro users (only for NON-INVITED campaigns)
     if (!influencer?.isPro) {
       const twentyFourHoursAgo = new Date();
       twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
@@ -1316,42 +1322,43 @@ export class InfluencerService {
         isPro: influencer.isPro,
       });
 
-      // Show campaigns if ANY of these conditions are true:
-      // 1. Influencer has been invited to this campaign (invited campaigns always visible)
-      // 2. Campaign is MAX (regardless of age)
-      // 3. Campaign is invite-only and influencer is invited (handled by condition 1)
-      // 4. ORGANIC campaigns (NOT MAX AND NOT invite-only) older than 24 hours
-      whereCondition[Op.and] = [
-        {
-          [Op.or]: [
-            // Show invited campaigns regardless of anything else
-            { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
-            // Show MAX campaigns regardless of age
-            { isMaxCampaign: true },
-            // Show ORGANIC campaigns older than 24 hours
-            {
-              [Op.and]: [
-                { isMaxCampaign: { [Op.ne]: true } }, // Not MAX
-                { isInviteOnly: { [Op.ne]: true } }, // Not invite-only
-                { createdAt: { [Op.lte]: twentyFourHoursAgo } }, // Older than 24 hours
-              ],
-            },
-          ],
-        },
-      ];
+      // Non-invited campaigns must match early access logic
+      inviteOnlyOrConditions.push({
+        [Op.and]: [
+          { [Op.not]: { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } } }, // NOT invited
+          {
+            [Op.or]: [
+              { isMaxCampaign: true }, // Show MAX campaigns
+              {
+                // Show ORGANIC campaigns older than 24 hours
+                [Op.and]: [
+                  { isMaxCampaign: { [Op.ne]: true } },
+                  { isInviteOnly: { [Op.ne]: true } },
+                  { createdAt: { [Op.lte]: twentyFourHoursAgo } },
+                ],
+              },
+            ],
+          },
+        ],
+      } as any);
 
       console.log('✅ Early Access Filter Applied to Open Campaigns');
     } else {
-      // Pro users see all non-invite-only campaigns + invited campaigns
-      whereCondition[Op.and] = [
-        {
-          [Op.or]: [
-            { isInviteOnly: false }, // See all non-invite-only campaigns
-            { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } } // See invited campaigns
-          ]
-        }
-      ];
+      // Pro users see non-invite-only campaigns (not invited)
+      inviteOnlyOrConditions.push({
+        [Op.and]: [
+          { [Op.not]: { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } } }, // NOT invited
+          { isInviteOnly: false }, // Only non-invite-only
+        ],
+      } as any);
     }
+
+    // Add the invite/non-invite logic as top level OR
+    allAndConditions.push({
+      [Op.or]: inviteOnlyOrConditions,
+    });
+
+    whereCondition[Op.and] = allAndConditions;
 
     // Search by campaign name or brand name
     if (search) {
@@ -1362,7 +1369,6 @@ export class InfluencerService {
     }
 
     // Niche filter - use provided nicheIds or fetch influencer's niches
-    // IMPORTANT: Invited campaigns bypass niche filter
     let nicheIdsToFilter: number[] = [];
     if (nicheIds && nicheIds.length > 0) {
       // Use explicitly provided nicheIds from query parameter
@@ -1378,44 +1384,29 @@ export class InfluencerService {
     }
 
     // Add niche filter to WHERE condition if nicheIds are available
-    // This creates: campaign.nicheIds @> '[1]' OR campaign.nicheIds @> '[2]' OR ...
-    // But invited campaigns are exempt from niche filter
+    // Invited campaigns won't reach here because they're handled in the top-level OR
     if (nicheIdsToFilter.length > 0) {
       const nicheConditions = nicheIdsToFilter.map((nicheId) =>
         literal(`"Campaign"."nicheIds"::jsonb @> '[${nicheId}]'::jsonb`),
       );
       whereCondition[Op.and] = [
         ...(whereCondition[Op.and] || []),
-        {
-          [Op.or]: [
-            // Invited campaigns bypass niche filter
-            { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
-            // Non-invited campaigns must match niche
-            { [Op.or]: nicheConditions },
-          ],
-        },
+        { [Op.or]: nicheConditions },
       ];
     }
 
     // Add age filter to WHERE condition
-    // IMPORTANT: Invited campaigns bypass age filter
+    // Invited campaigns won't reach here because they're handled in the top-level OR
     if (influencerAge !== null) {
       whereCondition[Op.and] = [
         ...(whereCondition[Op.and] || []),
         {
           [Op.or]: [
-            // Invited campaigns bypass age filter
-            { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
-            // Non-invited campaigns must match age or be open to all ages
+            { isOpenToAllAges: true },
             {
-              [Op.or]: [
-                { isOpenToAllAges: true },
-                {
-                  [Op.and]: [
-                    { minAge: { [Op.lte]: influencerAge } },
-                    { maxAge: { [Op.gte]: influencerAge } },
-                  ],
-                },
+              [Op.and]: [
+                { minAge: { [Op.lte]: influencerAge } },
+                { maxAge: { [Op.gte]: influencerAge } },
               ],
             },
           ],
@@ -1424,23 +1415,16 @@ export class InfluencerService {
     }
 
     // Add gender filter to WHERE condition
-    // IMPORTANT: Invited campaigns bypass gender filter
+    // Invited campaigns won't reach here because they're handled in the top-level OR
     if (influencer.gender) {
       whereCondition[Op.and] = [
         ...(whereCondition[Op.and] || []),
         {
           [Op.or]: [
-            // Invited campaigns bypass gender filter
-            { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
-            // Non-invited campaigns must match gender or be open to all genders
-            {
-              [Op.or]: [
-                { isOpenToAllGenders: true },
-                literal(
-                  `"Campaign"."genderPreferences"::jsonb @> '["${influencer.gender}"]'::jsonb`,
-                ),
-              ],
-            },
+            { isOpenToAllGenders: true },
+            literal(
+              `"Campaign"."genderPreferences"::jsonb @> '["${influencer.gender}"]'::jsonb`,
+            ),
           ],
         },
       ];
@@ -1483,24 +1467,16 @@ export class InfluencerService {
         required: true,
       });
     }
-
     // Location filter - campaigns that match influencer's city or are Pan-India
-    // IMPORTANT: Invited campaigns bypass location filter
+    // Invited campaigns won't reach here because they're handled in the top-level OR
     if (influencer.cityId) {
       whereCondition[Op.and] = [
         ...(whereCondition[Op.and] || []),
         {
           [Op.or]: [
-            // Invited campaigns bypass location filter
-            { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
-            // Non-invited campaigns must match location or be Pan-India
+            { isPanIndia: true },
             {
-              [Op.or]: [
-                { isPanIndia: true },
-                {
-                  '$cities.cityId$': influencer.cityId,
-                },
-              ],
+              '$cities.cityId$': influencer.cityId,
             },
           ],
         },
