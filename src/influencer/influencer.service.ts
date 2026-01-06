@@ -1765,6 +1765,14 @@ export class InfluencerService {
               'type',
               'category',
               'deliverableFormat',
+              'campaignBudget',
+              'barterProductWorth',
+              'additionalMonetaryPayout',
+              'numberOfInfluencers',
+              'isActive',
+              'isMaxCampaign',
+              'createdAt',
+              'updatedAt',
             ],
             include: [
               {
@@ -1786,25 +1794,27 @@ export class InfluencerService {
     const mappedApplications = applications.map((app) => {
       const appData = app.toJSON();
 
-      // Transform campaign field names to match API conventions
-      const transformedCampaign = {
-        ...appData.campaign,
-        deliverables: appData.campaign.deliverableFormat, // Rename deliverableFormat to deliverables
-        collaborationCost: appData.campaign.deliverables, // Rename deliverables array to collaborationCost
-      };
+      // Transform deliverables to human-readable labels
+      let deliverableFormat: string[] | null = null;
+      if (appData.campaign.deliverables && appData.campaign.deliverables.length > 0) {
+        deliverableFormat = appData.campaign.deliverables.map((d: any) => this.getDeliverableLabel(d.type));
+      }
 
-      // Remove old field name (TypeScript workaround)
-      delete (transformedCampaign as any).deliverableFormat;
+      // Destructure to exclude deliverables from campaign response
+      const { deliverables, ...campaignWithoutDeliverables } = appData.campaign;
 
       return {
         id: appData.id,
         status: appData.status,
         coverLetter: appData.coverLetter,
-        proposalMessage: appData.proposalMessage, 
+        proposalMessage: appData.proposalMessage,
         createdAt: appData.createdAt,
         reviewedAt: appData.reviewedAt,
         reviewNotes: appData.reviewNotes,
-        campaign: transformedCampaign as any, // Type assertion to fix deliverables type mismatch
+        campaign: {
+          ...campaignWithoutDeliverables,
+          deliverableFormat,
+        },
       };
     });
 
