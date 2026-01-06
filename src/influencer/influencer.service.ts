@@ -132,6 +132,31 @@ export class InfluencerService {
     private readonly proSubscriptionModel: typeof ProSubscription,
   ) {}
 
+  /**
+   * Maps deliverable type value to its human-readable label
+   */
+  private getDeliverableLabel(value: string): string {
+    const deliverableLabels: Record<string, string> = {
+      // Social media deliverables
+      instagram_reel: 'Insta Reel / Post',
+      instagram_story: 'Insta Story',
+      youtube_short: 'YT Shorts',
+      youtube_long_video: 'YT Video',
+      facebook_story: 'FB Story',
+      facebook_post: 'FB Post',
+      twitter_post: 'X Post',
+      linkedin_post: 'LinkedIn Post',
+      // Engagement deliverables
+      like_comment: 'Like/Comment',
+      playstore_review: 'Playstore Review',
+      appstore_review: 'App Store Review',
+      google_review: 'Google Review',
+      app_download: 'App Download',
+    };
+
+    return deliverableLabels[value] || value;
+  }
+
   async getInfluencerProfile(
     influencerId: number,
     isPublic: boolean = false,
@@ -1532,8 +1557,18 @@ export class InfluencerService {
         (campaignData as any).cities = [];
       }
 
+      // Transform deliverables to human-readable labels and remove from response
+      let deliverableFormat: string[] | null = null;
+      if (campaignData.deliverables && campaignData.deliverables.length > 0) {
+        deliverableFormat = campaignData.deliverables.map((d: any) => this.getDeliverableLabel(d.type));
+      }
+
+      // Destructure to exclude deliverables from response
+      const { deliverables, ...campaignDataWithoutDeliverables } = campaignData;
+
       return {
-        ...campaignData,
+        ...campaignDataWithoutDeliverables,
+        deliverableFormat,
         hasApplied: applicationMap.has(campaign.id),
         applicationStatus: applicationMap.get(campaign.id) || null,
         totalApplications: countMap.get(campaign.id) || 0,
@@ -1849,7 +1884,12 @@ export class InfluencerService {
         'customInfluencerRequirements',
         'performanceExpectations',
         'brandSupport',
+        'campaignBudget',
+        'barterProductWorth',
+        'additionalMonetaryPayout',
+        'numberOfInfluencers',
         'isActive',
+        'isMaxCampaign',
         'createdAt',
         'updatedAt',
       ],
@@ -1905,17 +1945,24 @@ export class InfluencerService {
       });
     }
 
-    // Transform field names for API response
+    // Transform deliverables to human-readable labels
+    let deliverableFormat: string[] | null = null;
+    if (campaignData.deliverables && campaignData.deliverables.length > 0) {
+      deliverableFormat = campaignData.deliverables.map((d: any) => this.getDeliverableLabel(d.type));
+    }
+
+    // Destructure to exclude deliverables from response
+    const { deliverables, ...campaignDataWithoutDeliverables } = campaignData;
+
+    // Return transformed campaign data
     return {
-      ...campaignData,
+      ...campaignDataWithoutDeliverables,
       cities: transformedCities,
+      deliverableFormat,
       hasApplied: !!application,
       applicationStatus: application?.status || null,
       appliedAt: application?.createdAt || null,
       totalApplications,
-      deliverables: campaignData.deliverableFormat,
-      collaborationCost: campaignData.deliverables,
-      deliverableFormat: undefined,
     };
   }
 
