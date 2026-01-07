@@ -652,12 +652,13 @@ export class ProSubscriptionService {
       const pageWidth = doc.page.width;
       const margin = 50;
 
-      // Header - Company name on left, INVOICE on right
-      doc
-        .fontSize(24)
-        .fillColor('#4285F4')
-        .font('Helvetica-Bold')
-        .text('CollabKaroo', margin, 45, { width: 250 });
+      // Header - Logo on left, INVOICE on right
+      const logoPath = path.join(process.cwd(), 'src', 'assets', 'collabkaroo-logo.png');
+
+      // Add logo on the left
+      doc.image(logoPath, margin, 40, {
+        fit: [180, 50]
+      });
 
       // INVOICE title and number on the right
       doc
