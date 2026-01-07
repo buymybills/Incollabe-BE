@@ -653,12 +653,22 @@ export class ProSubscriptionService {
       const margin = 50;
 
       // Header - Logo on left, INVOICE on right
-      const logoPath = path.join(process.cwd(), 'src', 'assets', 'collabkaroo-logo.png');
+      try {
+        const logoPath = path.join(process.cwd(), 'src', 'assets', 'collabkaroo-logo.png');
 
-      // Add logo on the left
-      doc.image(logoPath, margin, 40, {
-        fit: [180, 50]
-      });
+        // Add logo on the left
+        doc.image(logoPath, margin, 40, {
+          fit: [180, 50]
+        });
+      } catch (logoError) {
+        // Fallback to text if logo not found
+        console.warn('Logo not found, using text fallback:', logoError.message);
+        doc
+          .fontSize(24)
+          .fillColor('#4285F4')
+          .font('Helvetica-Bold')
+          .text('CollabKaroo', margin, 45, { width: 250 });
+      }
 
       // INVOICE title and number on the right
       doc
@@ -1378,14 +1388,15 @@ export class ProSubscriptionService {
       throw new NotFoundException('Influencer not found');
     }
 
-    // Check if already has active subscription with autopay
+    // Check if already has subscription (including cancelled ones with remaining Pro access)
     const existingSubscription = await this.proSubscriptionModel.findOne({
       where: {
         influencerId,
         status: {
-          [Op.in]: [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAYMENT_PENDING],
+          [Op.in]: [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAYMENT_PENDING, SubscriptionStatus.CANCELLED],
         },
       },
+      order: [['createdAt', 'DESC']], // Get the most recent subscription
     });
 
     // Allow restarting autopay if:

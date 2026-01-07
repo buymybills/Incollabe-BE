@@ -52,12 +52,22 @@ export async function generateBrandInvoicePDF(
     /* ================= HEADER ================= */
 
     // Header - Logo on left, INVOICE on right
-    const logoPath = path.join(process.cwd(), 'src', 'assets', 'collabkaroo-logo.png');
+    try {
+      const logoPath = path.join(process.cwd(), 'src', 'assets', 'collabkaroo-logo.png');
 
-    // Add logo on the left
-    doc.image(logoPath, margin, 40, {
-      fit: [180, 50]
-    });
+      // Add logo on the left
+      doc.image(logoPath, margin, 40, {
+        fit: [180, 50]
+      });
+    } catch (logoError) {
+      // Fallback to text if logo not found
+      console.warn('Logo not found, using text fallback:', logoError.message);
+      doc
+        .fontSize(24)
+        .fillColor('#4285F4')
+        .font('Helvetica-Bold')
+        .text('CollabKaroo', margin, 45, { width: 250 });
+    }
 
     // INVOICE title and number on the right
     doc

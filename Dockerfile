@@ -38,8 +38,8 @@ RUN npm ci --only=production && npm cache clean --force
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
 
-# Copy assets folder to the production stage
-COPY --from=builder /app/src/assets ./dist/assets
+# Copy assets folder to the production stage (keep same path as dev)
+COPY --from=builder /app/src/assets ./src/assets
 
 # Change ownership to non-root user
 RUN chown -R nestjs:nodejs /app
