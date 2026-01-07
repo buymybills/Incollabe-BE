@@ -1001,6 +1001,119 @@ export class EmailService {
   /**
    * Send OTP for admin login (2FA)
    */
+  /**
+   * Send Max Campaign invoice email to brand
+   */
+  async sendMaxCampaignInvoiceEmail(
+    email: string,
+    brandName: string,
+    invoiceNumber: string,
+    amount: number,
+    invoiceUrl: string,
+    campaignName: string,
+  ): Promise<void> {
+    const subject = `Max Campaign Invoice - ${invoiceNumber} - CollabKaroo`;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Max Campaign Invoice</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-align: center; padding: 30px; border-radius: 10px 10px 0 0; }
+          .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; }
+          .invoice-box { background: white; border: 2px solid #667eea; padding: 25px; margin: 25px 0; border-radius: 8px; }
+          .invoice-details { margin: 20px 0; }
+          .invoice-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e9ecef; }
+          .invoice-row.total { font-weight: bold; font-size: 18px; color: #667eea; border-top: 2px solid #667eea; border-bottom: none; margin-top: 10px; }
+          .download-button { display: inline-block; background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; }
+          .download-button:hover { background: #5a67d8; }
+          .footer { text-align: center; margin-top: 20px; color: #666; font-size: 14px; }
+          .success-badge { background: #d4edda; color: #155724; padding: 10px 20px; border-radius: 5px; display: inline-block; margin: 15px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🎉 Payment Successful!</h1>
+            <p>Your Max Campaign has been activated</p>
+          </div>
+          <div class="content">
+            <h2>Hello ${brandName},</h2>
+            <p>Thank you for upgrading your campaign <strong>"${campaignName}"</strong> to a Max Campaign!</p>
+
+            <div class="success-badge">
+              ✅ Payment Confirmed - Your campaign is now live for Pro influencers
+            </div>
+
+            <div class="invoice-box">
+              <h3>📄 Invoice Details</h3>
+              <div class="invoice-details">
+                <div class="invoice-row">
+                  <span>Invoice Number:</span>
+                  <strong>${invoiceNumber}</strong>
+                </div>
+                <div class="invoice-row">
+                  <span>Campaign:</span>
+                  <span>${campaignName}</span>
+                </div>
+                <div class="invoice-row">
+                  <span>Service:</span>
+                  <span>Max Campaign - Brand</span>
+                </div>
+                <div class="invoice-row total">
+                  <span>Amount Paid:</span>
+                  <span>₹${amount.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div style="text-align: center; margin-top: 25px;">
+                <a href="${invoiceUrl}" class="download-button">📥 Download Invoice PDF</a>
+              </div>
+            </div>
+
+            <p><strong>What's Next?</strong></p>
+            <ul>
+              <li>Your campaign is now visible to all Pro influencers</li>
+              <li>Pro members get early access to your campaign opportunities</li>
+              <li>Expect higher quality applications from verified influencers</li>
+              <li>Track your campaign performance in the dashboard</li>
+            </ul>
+
+            <p><strong>Need Help?</strong> Our support team is here to assist you with any questions about your Max Campaign.</p>
+
+            <p>Best regards,<br>
+            <strong>The CollabKaroo Team</strong></p>
+          </div>
+          <div class="footer">
+            <p>© 2025 CollabKaroo. All rights reserved.</p>
+            <p>This is an automated payment confirmation email.</p>
+            <p>Contact us at <a href="mailto:contact.us@gobuymybills.com">contact.us@gobuymybills.com</a></p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    try {
+      await this.transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: subject,
+        html: html,
+      });
+
+      console.log(`Max Campaign invoice email sent to: ${email} (${invoiceNumber})`);
+    } catch (error) {
+      console.error(`Failed to send Max Campaign invoice email to ${email}:`, error);
+      // Don't throw error - email is not critical for payment flow
+    }
+  }
+
   async sendAdminLoginOtp(
     email: string,
     adminName: string,

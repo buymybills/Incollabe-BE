@@ -5,6 +5,7 @@ import { Brand } from '../../brand/model/brand.model';
 import { MaxCampaignInvoice, InvoiceStatus, PaymentMethod } from '../models/max-campaign-invoice.model';
 import { RazorpayService } from '../../shared/razorpay.service';
 import { S3Service } from '../../shared/s3.service';
+import { EmailService } from '../../shared/email.service';
 import { createDatabaseDate, toIST } from '../../shared/utils/date.utils';
 import { Op } from 'sequelize';
 import PDFDocument from 'pdfkit';
@@ -47,6 +48,7 @@ export class MaxCampaignPaymentService {
     private maxCampaignInvoiceModel: typeof MaxCampaignInvoice,
     private razorpayService: RazorpayService,
     private s3Service: S3Service,
+    private emailService: EmailService,
   ) {}
 
   /**
@@ -440,6 +442,21 @@ export class MaxCampaignPaymentService {
       invoiceData,
       invoiceUrl,
     });
+
+    // Send invoice email to brand
+    try {
+      await this.emailService.sendMaxCampaignInvoiceEmail(
+        invoice.brand.email,
+        invoice.brand.brandName,
+        invoice.invoiceNumber,
+        invoice.totalAmount / 100, // Convert paise to rupees
+        invoiceUrl,
+        invoice.campaign.name,
+      );
+    } catch (error) {
+      console.error('Failed to send Max Campaign invoice email:', error);
+      // Don't throw - email failure shouldn't break the flow
+    }
 
     return invoiceData;
   }

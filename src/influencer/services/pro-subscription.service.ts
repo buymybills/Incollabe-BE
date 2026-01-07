@@ -363,6 +363,9 @@ export class ProSubscriptionService {
         nextBillingDate: toIST(subscription.nextBillingDate),
         amount: subscription.subscriptionAmount / 100, // Convert to Rs
         autoRenew: subscription.autoRenew,
+        paymentMethod: subscription.paymentMethod,
+        isAutopay: subscription.autoRenew && !!subscription.razorpaySubscriptionId, // true if autopay, false if monthly
+        subscriptionType: subscription.autoRenew && subscription.razorpaySubscriptionId ? 'autopay' : 'monthly',
       },
       invoices: subscription.invoices.map((inv) => ({
         id: inv.id,
@@ -375,6 +378,10 @@ export class ProSubscriptionService {
         },
         paidAt: toIST(inv.paidAt),
         invoiceUrl: inv.invoiceUrl,
+        paymentMethod: inv.paymentMethod,
+        // Check if this invoice was paid via autopay (has razorpayPaymentId starting with subscription-related prefix)
+        isAutopay: inv.razorpayPaymentId ? inv.razorpayPaymentId.includes('sub_') : false,
+        paymentType: inv.razorpayPaymentId && inv.razorpayPaymentId.includes('sub_') ? 'Autopay' : 'Monthly',
       })),
     };
   }
@@ -414,6 +421,9 @@ export class ProSubscriptionService {
         },
         paidAt: toIST(inv.paidAt),
         invoiceUrl: inv.invoiceUrl,
+        paymentMethod: inv.paymentMethod,
+        isAutopay: inv.razorpayPaymentId ? inv.razorpayPaymentId.includes('sub_') : false,
+        paymentType: inv.razorpayPaymentId && inv.razorpayPaymentId.includes('sub_') ? 'Autopay' : 'Monthly',
         createdAt: toIST(inv.createdAt),
       })),
       totalInvoices: subscription.invoices.length,
