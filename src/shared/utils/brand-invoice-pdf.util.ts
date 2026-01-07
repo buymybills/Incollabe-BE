@@ -1,5 +1,14 @@
 import PDFDocument from 'pdfkit';
 
+/**
+ * SAFELY format any numeric value for PDF rendering
+ * Prevents `.toFixed()` runtime crashes
+ */
+const formatAmount = (value: number | string | undefined | null): string => {
+  const num = Number(value);
+  return isNaN(num) ? '0.00' : num.toFixed(2);
+};
+
 export interface BrandInvoiceData {
   invoiceNumber: string;
   date: Date | string;
@@ -22,14 +31,16 @@ export interface BrandInvoiceData {
  * Generate a professional brand invoice PDF using PDFKit
  * Used for both Max Campaign and Invite-Only Campaign invoices
  */
-export async function generateBrandInvoicePDF(invoiceData: BrandInvoiceData): Promise<Buffer> {
+export async function generateBrandInvoicePDF(
+  invoiceData: BrandInvoiceData
+): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       margin: 50,
       size: 'A4'
     });
-    const chunks: Buffer[] = [];
 
+    const chunks: Buffer[] = [];
     doc.on('data', (chunk) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
@@ -37,7 +48,8 @@ export async function generateBrandInvoicePDF(invoiceData: BrandInvoiceData): Pr
     const pageWidth = doc.page.width;
     const margin = 50;
 
-    // Header - CollabKaroo logo and INVOICE title
+    /* ================= HEADER ================= */
+
     doc
       .fontSize(20)
       .fillColor('#1e6dfb')
@@ -49,9 +61,13 @@ export async function generateBrandInvoicePDF(invoiceData: BrandInvoiceData): Pr
       .fontSize(12)
       .fillColor('#6b7280')
       .font('Helvetica')
-      .text(invoiceData.invoiceNumber, pageWidth - 200, 65, { width: 150, align: 'right' });
+      .text(invoiceData.invoiceNumber, pageWidth - 200, 65, {
+        width: 150,
+        align: 'right'
+      });
 
-    // Issued and Billed To section
+    /* ================= META ================= */
+
     doc
       .fontSize(10)
       .fillColor('#000000')
@@ -60,11 +76,15 @@ export async function generateBrandInvoicePDF(invoiceData: BrandInvoiceData): Pr
       .font('Helvetica')
       .fontSize(13)
       .fillColor('#374151')
-      .text(new Date(invoiceData.date).toLocaleDateString('en-GB', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric'
-      }), margin, 118);
+      .text(
+        new Date(invoiceData.date).toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
+        }),
+        margin,
+        118
+      );
 
     doc
       .fontSize(10)
@@ -74,9 +94,8 @@ export async function generateBrandInvoicePDF(invoiceData: BrandInvoiceData): Pr
       .font('Helvetica')
       .fontSize(13)
       .fillColor('#374151')
-      .text(invoiceData.brand.name, margin + 180, 118);
+      .text(invoiceData.brand?.name || 'N/A', margin + 180, 118);
 
-    // From section (Company details)
     doc
       .fontSize(10)
       .fillColor('#000000')
@@ -91,28 +110,27 @@ export async function generateBrandInvoicePDF(invoiceData: BrandInvoiceData): Pr
       .text('West Delhi, Delhi, 110059, IN', pageWidth - 250, 157, { width: 200 })
       .text('GSTIN – 07AACD5691K1ZB', pageWidth - 250, 170, { width: 200 });
 
-    // Table header
+    /* ================= TABLE ================= */
+
     const tableTop = 200;
-    const colPositions = {
+    const col = {
       service: margin,
       qty: margin + 240,
       rate: margin + 300,
-      hscCode: margin + 370,
+      hsc: margin + 370,
       taxes: margin + 450
     };
 
-    // Table header with light border
     doc
       .fontSize(13)
       .fillColor('#6b7280')
       .font('Helvetica')
-      .text('Service', colPositions.service, tableTop)
-      .text('Qty', colPositions.qty, tableTop)
-      .text('Rate', colPositions.rate, tableTop)
-      .text('HSC Code', colPositions.hscCode, tableTop)
-      .text('Taxes', colPositions.taxes, tableTop);
+      .text('Service', col.service, tableTop)
+      .text('Qty', col.qty, tableTop)
+      .text('Rate', col.rate, tableTop)
+      .text('HSC Code', col.hsc, tableTop)
+      .text('Taxes', col.taxes, tableTop);
 
-    // Header bottom border
     doc
       .strokeColor('#e5e7eb')
       .lineWidth(1)
@@ -120,31 +138,32 @@ export async function generateBrandInvoicePDF(invoiceData: BrandInvoiceData): Pr
       .lineTo(pageWidth - margin, tableTop + 18)
       .stroke();
 
-    // Table rows
-    let yPosition = tableTop + 30;
+    let y = tableTop + 30;
+
     invoiceData.items.forEach((item) => {
       doc
         .fontSize(14)
         .font('Helvetica')
         .fillColor('#374151')
-        .text(item.description, colPositions.service, yPosition, { width: 220 })
-        .text(item.quantity.toString(), colPositions.qty, yPosition)
-        .text(`₹${item.rate.toFixed(2)}`, colPositions.rate, yPosition)
-        .text(item.hscCode || 'N/A', colPositions.hscCode, yPosition)
-        .text(`₹${item.taxes.toFixed(2)}`, colPositions.taxes, yPosition);
-      yPosition += 35;
+        .text(item.description, col.service, y, { width: 220 })
+        .text(String(item.quantity ?? 0), col.qty, y)
+        .text(`₹${formatAmount(item.rate)}`, col.rate, y)
+        .text(item.hscCode || 'N/A', col.hsc, y)
+        .text(`₹${formatAmount(item.taxes)}`, col.taxes, y);
 
-      // Row bottom border
+      y += 35;
+
       doc
         .strokeColor('#f1f5f9')
         .lineWidth(1)
-        .moveTo(margin, yPosition - 5)
-        .lineTo(pageWidth - margin, yPosition - 5)
+        .moveTo(margin, y - 5)
+        .lineTo(pageWidth - margin, y - 5)
         .stroke();
     });
 
-    // Totals section
-    yPosition += 20;
+    /* ================= TOTALS ================= */
+
+    y += 20;
     const totalsX = pageWidth - 240;
     const totalsValueX = pageWidth - 100;
 
@@ -152,64 +171,63 @@ export async function generateBrandInvoicePDF(invoiceData: BrandInvoiceData): Pr
       .fontSize(14)
       .font('Helvetica')
       .fillColor('#374151')
-      .text('Subtotal', totalsX, yPosition)
-      .text(`₹${invoiceData.subtotal.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
+      .text('Subtotal', totalsX, y)
+      .text(`₹${formatAmount(invoiceData.subtotal)}`, totalsValueX, y, {
+        align: 'right',
+        width: 80
+      });
 
-    yPosition += 25;
+    y += 25;
     doc
-      .text('Tax (0%)', totalsX, yPosition)
-      .text(`₹${invoiceData.tax.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
+      .text('Tax (0%)', totalsX, y)
+      .text(`₹${formatAmount(invoiceData.tax)}`, totalsValueX, y, {
+        align: 'right',
+        width: 80
+      });
 
-    yPosition += 25;
-    // Total border
+    y += 25;
     doc
       .strokeColor('#e5e7eb')
       .lineWidth(1)
-      .moveTo(totalsX, yPosition - 5)
-      .lineTo(pageWidth - margin, yPosition - 5)
+      .moveTo(totalsX, y - 5)
+      .lineTo(pageWidth - margin, y - 5)
       .stroke();
 
     doc
-      .fontSize(14)
       .font('Helvetica-Bold')
-      .fillColor('#374151')
-      .text('Total', totalsX, yPosition)
-      .text(`₹${invoiceData.total.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
+      .text('Total', totalsX, y)
+      .text(`₹${formatAmount(invoiceData.total)}`, totalsValueX, y, {
+        align: 'right',
+        width: 80
+      });
 
-    // Amount due highlighted
-    yPosition += 25;
+    y += 25;
     doc
-      .fontSize(14)
-      .font('Helvetica-Bold')
       .fillColor('#1e6dfb')
-      .text('Amount due', totalsX, yPosition)
-      .text(`INR ₹${invoiceData.total.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
+      .text('Amount due', totalsX, y)
+      .text(`INR ₹${formatAmount(invoiceData.total)}`, totalsValueX, y, {
+        align: 'right',
+        width: 80
+      });
 
-    // Footer
+    /* ================= FOOTER ================= */
+
     const footerY = doc.page.height - 100;
 
     doc
       .fontSize(12)
       .font('Helvetica')
       .fillColor('#6b7280')
-      .text('Thank you', margin, footerY);
-
-    doc
-      .fontSize(12)
-      .font('Helvetica')
-      .fillColor('#6b7280')
-      .text('For Query and help,', margin, footerY + 18);
-
-    doc
-      .fontSize(12)
-      .font('Helvetica')
-      .fillColor('#6b7280')
-      .text('Computer Generated Invoice', pageWidth - 250, footerY, { align: 'right', width: 200 });
-
-    doc
-      .fontSize(12)
-      .fillColor('#6b7280')
-      .text('contact.us@gobuybill.com', pageWidth - 250, footerY + 18, { align: 'right', width: 200 });
+      .text('Thank you', margin, footerY)
+      .text('For Query and help,', margin, footerY + 18)
+      .text('Computer Generated Invoice', pageWidth - 250, footerY, {
+        align: 'right',
+        width: 200
+      })
+      .text('contact.us@gobuybill.com', pageWidth - 250, footerY + 18, {
+        align: 'right',
+        width: 200
+      });
 
     doc.end();
   });
