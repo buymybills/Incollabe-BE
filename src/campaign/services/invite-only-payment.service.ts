@@ -7,7 +7,7 @@ import { RazorpayService } from '../../shared/razorpay.service';
 import { S3Service } from '../../shared/s3.service';
 import { createDatabaseDate, toIST } from '../../shared/utils/date.utils';
 import { Op } from 'sequelize';
-import PDFDocument from 'pdfkit';
+import { generateBrandInvoicePDF } from '../../shared/utils/brand-invoice-pdf.util';
 
 @Injectable()
 export class InviteOnlyPaymentService {
@@ -344,114 +344,7 @@ export class InviteOnlyPaymentService {
    * Generate PDF from invoice data
    */
   private async generateInvoicePDF(invoiceData: any): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 50 });
-      const chunks: Buffer[] = [];
-
-      doc.on('data', (chunk) => chunks.push(chunk));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
-      doc.on('error', reject);
-
-      // Header
-      doc
-        .fontSize(20)
-        .text('CollabKaroo', { align: 'center' })
-        .fontSize(10)
-        .text('Invite-Only Campaign Feature Invoice', { align: 'center' })
-        .moveDown();
-
-      // Invoice details
-      doc
-        .fontSize(12)
-        .text(`Invoice Number: ${invoiceData.invoiceNumber}`, 50, 150)
-        .text(`Date: ${new Date(invoiceData.date).toLocaleDateString('en-IN')}`, 50, 170)
-        .moveDown();
-
-      // Brand details
-      doc
-        .fontSize(14)
-        .text('Bill To:', 50, 210)
-        .fontSize(10)
-        .text(invoiceData.brand.name, 50, 230)
-        .moveDown();
-
-      // Campaign details
-      doc
-        .fontSize(12)
-        .text('Campaign Details:', 50, 270)
-        .fontSize(10)
-        .text(`Campaign: ${invoiceData.campaign.name}`, 50, 290)
-        .moveDown();
-
-      // Table header
-      const tableTop = 330;
-      doc
-        .fontSize(10)
-        .text('Description', 50, tableTop)
-        .text('Quantity', 300, tableTop)
-        .text('Rate', 380, tableTop)
-        .text('Amount', 450, tableTop);
-
-      // Draw line
-      doc
-        .moveTo(50, tableTop + 15)
-        .lineTo(550, tableTop + 15)
-        .stroke();
-
-      // Items
-      let yPosition = tableTop + 25;
-      invoiceData.items.forEach((item) => {
-        doc
-          .fontSize(9)
-          .text(item.description, 50, yPosition, { width: 230 })
-          .text(item.quantity.toString(), 300, yPosition)
-          .text(`₹${item.rate}`, 380, yPosition)
-          .text(`₹${item.amount}`, 450, yPosition);
-        yPosition += 30;
-      });
-
-      // Draw line
-      doc
-        .moveTo(50, yPosition)
-        .lineTo(550, yPosition)
-        .stroke();
-
-      // Totals
-      yPosition += 20;
-      doc
-        .fontSize(10)
-        .text('Subtotal:', 380, yPosition)
-        .text(`₹${invoiceData.subtotal}`, 450, yPosition);
-
-      yPosition += 20;
-      doc
-        .text('Tax:', 380, yPosition)
-        .text(`₹${invoiceData.tax}`, 450, yPosition);
-
-      yPosition += 20;
-      doc
-        .fontSize(12)
-        .text('Total:', 380, yPosition)
-        .text(`₹${invoiceData.total}`, 450, yPosition);
-
-      // Footer
-      doc
-        .fontSize(8)
-        .text(
-          'Thank you for your business!',
-          50,
-          700,
-          { align: 'center' }
-        )
-        .text(
-          'This is a computer-generated invoice.',
-          50,
-          715,
-          { align: 'center' }
-        );
-
-      doc.end();
-    });
+    return generateBrandInvoicePDF(invoiceData);
   }
 
   /**

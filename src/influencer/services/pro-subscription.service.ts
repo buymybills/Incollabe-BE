@@ -268,16 +268,10 @@ export class ProSubscriptionService {
    * Get subscription details for an influencer
    */
   async getSubscriptionDetails(influencerId: number) {
+    // Get the latest subscription
     const subscription = await this.proSubscriptionModel.findOne({
       where: { influencerId },
       order: [['createdAt', 'DESC']],
-      include: [
-        {
-          model: ProInvoice,
-          as: 'invoices',
-          order: [['createdAt', 'DESC']],
-        },
-      ],
     });
 
     if (!subscription) {
@@ -286,6 +280,12 @@ export class ProSubscriptionService {
         isPro: false,
       };
     }
+
+    // Get ALL invoices for this influencer across all subscriptions
+    const allInvoices = await this.proInvoiceModel.findAll({
+      where: { influencerId },
+      order: [['createdAt', 'DESC']],
+    });
 
     // User has Pro access if:
     // 1. Subscription is ACTIVE, OR
@@ -367,7 +367,7 @@ export class ProSubscriptionService {
         isAutopay: subscription.autoRenew && !!subscription.razorpaySubscriptionId, // true if autopay, false if monthly
         subscriptionType: subscription.autoRenew && subscription.razorpaySubscriptionId ? 'autopay' : 'monthly',
       },
-      invoices: subscription.invoices.map((inv) => ({
+      invoices: allInvoices.map((inv) => ({
         id: inv.id,
         invoiceNumber: inv.invoiceNumber,
         amount: inv.totalAmount / 100,
@@ -387,22 +387,16 @@ export class ProSubscriptionService {
   }
 
   /**
-   * Get all invoices for an influencer
+   * Get all invoices for an influencer across ALL subscriptions
    */
   async getAllInvoices(influencerId: number) {
-    const subscription = await this.proSubscriptionModel.findOne({
+    // Fetch ALL invoices for this influencer across all subscriptions
+    const allInvoices = await this.proInvoiceModel.findAll({
       where: { influencerId },
       order: [['createdAt', 'DESC']],
-      include: [
-        {
-          model: ProInvoice,
-          as: 'invoices',
-          order: [['createdAt', 'DESC']],
-        },
-      ],
     });
 
-    if (!subscription || !subscription.invoices || subscription.invoices.length === 0) {
+    if (!allInvoices || allInvoices.length === 0) {
       return {
         invoices: [],
         totalInvoices: 0,
@@ -410,7 +404,7 @@ export class ProSubscriptionService {
     }
 
     return {
-      invoices: subscription.invoices.map((inv) => ({
+      invoices: allInvoices.map((inv) => ({
         id: inv.id,
         invoiceNumber: inv.invoiceNumber,
         amount: inv.totalAmount / 100, // Convert to Rs
@@ -426,7 +420,7 @@ export class ProSubscriptionService {
         paymentType: inv.razorpayPaymentId && inv.razorpayPaymentId.includes('sub_') ? 'Autopay' : 'Monthly',
         createdAt: toIST(inv.createdAt),
       })),
-      totalInvoices: subscription.invoices.length,
+      totalInvoices: allInvoices.length,
     };
   }
 
