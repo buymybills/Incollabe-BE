@@ -42,22 +42,25 @@ export class CampaignInvitation extends Model<CampaignInvitation> {
   @Column({
     type: DataType.INTEGER,
     allowNull: false,
+    field: 'campaignId',
   })
-  campaignId: number;
+  declare campaignId: number;
 
   @ForeignKey(() => Influencer)
   @Column({
     type: DataType.INTEGER,
     allowNull: false,
+    field: 'influencerId',
   })
-  influencerId: number;
+  declare influencerId: number;
 
   @Column({
     type: DataType.ENUM(...Object.values(InvitationStatus)),
     allowNull: false,
     defaultValue: InvitationStatus.PENDING,
+    field: 'status',
   })
-  status: InvitationStatus;
+  declare status: InvitationStatus;
 
   @Column({
     type: DataType.TEXT,
