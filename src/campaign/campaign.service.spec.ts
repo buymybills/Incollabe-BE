@@ -31,6 +31,7 @@ import { DeviceTokenService } from '../shared/device-token.service';
 import { Experience } from '../influencer/models/experience.model';
 import { CreditTransaction } from '../admin/models/credit-transaction.model';
 import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
+import { MaxCampaignInvoice } from './models/max-campaign-invoice.model';
 
 const mockModel = () => ({
   findOne: jest.fn(),
@@ -126,6 +127,10 @@ describe('CampaignService', () => {
         },
         {
           provide: getModelToken(Experience),
+          useValue: mockModel(),
+        },
+        {
+          provide: getModelToken(MaxCampaignInvoice),
           useValue: mockModel(),
         },
         {
