@@ -528,19 +528,18 @@ export class ProSubscriptionService {
   }
 
   /**
-   * Generate unique invoice number with influencer ID
-   * Format: INV-YYYYMM-INFLUENCERID-SEQ
-   * Example: INV-202512-7-001 (User 7's 1st invoice in Dec 2025)
+   * Generate unique invoice number for Max influencer
+   * Format: MAXXINV-YYYYMM-SEQ
+   * Example: MAXXINV-202601-1 (1st invoice in Jan 2026)
    */
   private async generateInvoiceNumber(influencerId: number): Promise<string> {
     const year = new Date().getFullYear();
     const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    const prefix = `INV-${year}${month}-${influencerId}-`;
+    const prefix = `MAXXINV-${year}${month}-`;
 
-    // Get the latest invoice number for this user in this month
+    // Get the latest invoice number for this month (across all users)
     const latestInvoice = await this.proInvoiceModel.findOne({
       where: {
-        influencerId,
         invoiceNumber: {
           [Op.like]: `${prefix}%`,
         },
@@ -550,13 +549,13 @@ export class ProSubscriptionService {
 
     let nextNumber = 1;
     if (latestInvoice) {
-      // Extract the sequence number (e.g., "INV-202512-7-001" -> 1)
+      // Extract the sequence number (e.g., "MAXXINV-202601-1" -> 1)
       const parts = latestInvoice.invoiceNumber.split('-');
-      const lastNumber = parseInt(parts[3], 10);
+      const lastNumber = parseInt(parts[2], 10);
       nextNumber = lastNumber + 1;
     }
 
-    return `${prefix}${String(nextNumber).padStart(3, '0')}`;
+    return `${prefix}${nextNumber}`;
   }
 
   /**
@@ -580,14 +579,16 @@ export class ProSubscriptionService {
       date: invoice.paidAt || invoice.createdAt,
       influencer: {
         name: invoice.influencer.name,
-        phone: invoice.influencer.phone,
+        username: invoice.influencer.username,
       },
       items: [
         {
-          description: 'Pro Account Subscription (30 days)',
+          description: 'Maxx membership- Creator',
           quantity: 1,
           rate: invoice.amount / 100,
           amount: invoice.amount / 100,
+          hscCode: '998361', // HSC code for marketing services
+          taxes: invoice.tax / 100,
         },
       ],
       subtotal: invoice.amount / 100,
@@ -626,120 +627,195 @@ export class ProSubscriptionService {
    */
   private async createProInvoicePDF(invoiceData: any): Promise<Buffer> {
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 50 });
+      const doc = new PDFDocument({
+        margin: 50,
+        size: 'A4'
+      });
       const chunks: Buffer[] = [];
 
       doc.on('data', (chunk) => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // Header
+      const pageWidth = doc.page.width;
+      const margin = 50;
+
+      // Background color for header section
+      doc.save()
+        .fillColor('#FFF5F7')
+        .rect(0, 0, pageWidth, 180)
+        .fill()
+        .restore();
+
+      // Header - CollabKaroo logo and INVOICE title
       doc
+        .fontSize(24)
+        .fillColor('#4A90E2')
+        .font('Helvetica-Bold')
+        .text('CollabKaroo', margin, 40, { width: 250 })
         .fontSize(20)
-        .text('CollabKaroo', { align: 'center' })
-        .fontSize(10)
-        .text('Pro Subscription Invoice', { align: 'center' })
-        .moveDown();
+        .fillColor('#000000')
+        .text('INVOICE', pageWidth - 200, 40, { width: 150, align: 'right' })
+        .fontSize(11)
+        .fillColor('#666666')
+        .font('Helvetica')
+        .text(invoiceData.invoiceNumber, pageWidth - 200, 65, { width: 150, align: 'right' });
 
-      // Invoice details
+      // Issued and Billed To section
       doc
-        .fontSize(12)
-        .text(`Invoice Number: ${invoiceData.invoiceNumber}`, 50, 150)
-        .text(`Date: ${new Date(invoiceData.date).toLocaleDateString('en-IN')}`, 50, 170)
-        .moveDown();
-
-      // Influencer details
-      doc
-        .fontSize(14)
-        .text('Bill To:', 50, 210)
         .fontSize(10)
-        .text(invoiceData.influencer.name, 50, 230)
-        .text(invoiceData.influencer.phone, 50, 245)
-        .moveDown();
+        .fillColor('#000000')
+        .font('Helvetica-Bold')
+        .text('Issued', margin, 120)
+        .font('Helvetica')
+        .fontSize(9)
+        .fillColor('#666666')
+        .text(new Date(invoiceData.date).toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
+        }), margin, 138);
 
-      // Billing period
       doc
-        .fontSize(12)
-        .text('Billing Period:', 50, 280)
         .fontSize(10)
-        .text(
-          `From: ${new Date(invoiceData.billingPeriod.start).toLocaleDateString('en-IN')}`,
-          50,
-          300
-        )
-        .text(
-          `To: ${new Date(invoiceData.billingPeriod.end).toLocaleDateString('en-IN')}`,
-          50,
-          315
-        )
-        .moveDown();
+        .fillColor('#000000')
+        .font('Helvetica-Bold')
+        .text('Billed to', margin + 180, 120)
+        .font('Helvetica')
+        .fontSize(9)
+        .fillColor('#666666')
+        .text(invoiceData.influencer.name, margin + 180, 138)
+        .text(`@${invoiceData.influencer.username || 'N/A'}`, margin + 180, 152);
+
+      // From section (Company details)
+      doc
+        .fontSize(10)
+        .fillColor('#000000')
+        .font('Helvetica-Bold')
+        .text('From', pageWidth - 250, 120)
+        .font('Helvetica')
+        .fontSize(9)
+        .fillColor('#666666')
+        .text('Deshanta Marketing Solutions Pvt. Ltd', pageWidth - 250, 138, { width: 200 })
+        .text('Plot A-18, Manjeet farm', pageWidth - 250, 151, { width: 200 })
+        .text('Uttam Nagar, Delhi', pageWidth - 250, 164, { width: 200 })
+        .text('West Delhi, Delhi, 110059, IN', pageWidth - 250, 177, { width: 200 })
+        .text('GSTIN – 07AACD5691K1ZB', pageWidth - 250, 190, { width: 200 });
 
       // Table header
-      const tableTop = 360;
-      doc
-        .fontSize(10)
-        .text('Description', 50, tableTop)
-        .text('Quantity', 300, tableTop)
-        .text('Rate', 380, tableTop)
-        .text('Amount', 450, tableTop);
+      const tableTop = 230;
+      const colPositions = {
+        service: margin,
+        qty: margin + 180,
+        rate: margin + 250,
+        hscCode: margin + 330,
+        taxes: margin + 410
+      };
 
-      // Draw line
+      // Table header background
+      doc.save()
+        .fillColor('#F5F5F5')
+        .rect(margin, tableTop, pageWidth - (margin * 2), 25)
+        .fill()
+        .restore();
+
       doc
-        .moveTo(50, tableTop + 15)
-        .lineTo(550, tableTop + 15)
+        .fontSize(9)
+        .fillColor('#000000')
+        .font('Helvetica-Bold')
+        .text('Service', colPositions.service, tableTop + 8)
+        .text('Qty', colPositions.qty, tableTop + 8)
+        .text('Rate', colPositions.rate, tableTop + 8)
+        .text('HSC Code', colPositions.hscCode, tableTop + 8)
+        .text('Taxes', colPositions.taxes, tableTop + 8);
+
+      // Table row
+      let yPosition = tableTop + 35;
+      const item = invoiceData.items[0];
+
+      doc
+        .fontSize(9)
+        .font('Helvetica')
+        .fillColor('#333333')
+        .text('Maxx membership- Creator', colPositions.service, yPosition)
+        .text(item.quantity.toString(), colPositions.qty, yPosition)
+        .text(`₹${item.rate.toFixed(2)}`, colPositions.rate, yPosition)
+        .text(item.hscCode || 'N/A', colPositions.hscCode, yPosition)
+        .text(`₹${item.taxes.toFixed(2)}`, colPositions.taxes, yPosition);
+
+      // Separator line
+      yPosition += 40;
+      doc
+        .strokeColor('#E0E0E0')
+        .lineWidth(0.5)
+        .moveTo(margin, yPosition)
+        .lineTo(pageWidth - margin, yPosition)
         .stroke();
 
-      // Items
-      let yPosition = tableTop + 25;
-      invoiceData.items.forEach((item) => {
-        doc
-          .fontSize(9)
-          .text(item.description, 50, yPosition, { width: 230 })
-          .text(item.quantity.toString(), 300, yPosition)
-          .text(`₹${item.rate}`, 380, yPosition)
-          .text(`₹${item.amount}`, 450, yPosition);
-        yPosition += 30;
-      });
+      // Totals section
+      yPosition += 20;
+      const totalsX = pageWidth - 220;
 
-      // Draw line
       doc
-        .moveTo(50, yPosition)
-        .lineTo(550, yPosition)
-        .stroke();
+        .fontSize(9)
+        .font('Helvetica')
+        .fillColor('#666666')
+        .text('Subtotal', totalsX, yPosition)
+        .text(`₹${invoiceData.subtotal.toFixed(2)}`, totalsX + 120, yPosition, { align: 'right', width: 80 });
 
-      // Totals
+      yPosition += 20;
+      doc
+        .text('Tax (0%)', totalsX, yPosition)
+        .text(`₹${invoiceData.tax.toFixed(2)}`, totalsX + 120, yPosition, { align: 'right', width: 80 });
+
       yPosition += 20;
       doc
         .fontSize(10)
-        .text('Subtotal:', 380, yPosition)
-        .text(`₹${invoiceData.subtotal}`, 450, yPosition);
+        .font('Helvetica-Bold')
+        .fillColor('#000000')
+        .text('Total', totalsX, yPosition)
+        .text(`₹${invoiceData.total.toFixed(2)}`, totalsX + 120, yPosition, { align: 'right', width: 80 });
 
-      yPosition += 20;
-      doc
-        .text('Tax:', 380, yPosition)
-        .text(`₹${invoiceData.tax}`, 450, yPosition);
+      // Amount due highlighted
+      yPosition += 25;
+      doc.save()
+        .fillColor('#E3F2FD')
+        .rect(totalsX - 10, yPosition - 5, 210, 25)
+        .fill()
+        .restore();
 
-      yPosition += 20;
       doc
-        .fontSize(12)
-        .text('Total:', 380, yPosition)
-        .text(`₹${invoiceData.total}`, 450, yPosition);
+        .fontSize(10)
+        .font('Helvetica-Bold')
+        .fillColor('#1976D2')
+        .text('Amount due', totalsX, yPosition)
+        .text(`INR ₹${invoiceData.total.toFixed(2)}`, totalsX + 120, yPosition, { align: 'right', width: 80 });
 
       // Footer
+      const footerY = doc.page.height - 100;
+
+      doc
+        .fontSize(10)
+        .font('Helvetica-Bold')
+        .fillColor('#000000')
+        .text('Thank you', margin, footerY);
+
       doc
         .fontSize(8)
-        .text(
-          'Thank you for subscribing to CollabKaroo Pro!',
-          50,
-          700,
-          { align: 'center' }
-        )
-        .text(
-          'This is a computer-generated invoice.',
-          50,
-          715,
-          { align: 'center' }
-        );
+        .font('Helvetica')
+        .fillColor('#666666')
+        .text('For Query and help,', margin, footerY + 20);
+
+      doc
+        .fontSize(9)
+        .font('Helvetica')
+        .fillColor('#666666')
+        .text('Computer Generated Invoice', pageWidth - 250, footerY, { align: 'right', width: 200 });
+
+      doc
+        .fontSize(8)
+        .fillColor('#666666')
+        .text('contact.us@gobuybill.com', pageWidth - 250, footerY + 20, { align: 'right', width: 200 });
 
       doc.end();
     });

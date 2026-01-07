@@ -9,6 +9,31 @@ import { createDatabaseDate, toIST } from '../../shared/utils/date.utils';
 import { Op } from 'sequelize';
 import PDFDocument from 'pdfkit';
 
+interface InvoiceItem {
+  description: string;
+  quantity: number;
+  rate: number;
+  amount: number;
+  hscCode: string;
+  taxes: number;
+}
+
+interface InvoiceData {
+  invoiceNumber: string;
+  date: Date;
+  brand: {
+    name: string;
+    email: string;
+  };
+  campaign: {
+    name: string;
+  };
+  items: InvoiceItem[];
+  subtotal: number;
+  tax: number;
+  total: number;
+}
+
 @Injectable()
 export class MaxCampaignPaymentService {
   private readonly MAX_CAMPAIGN_AMOUNT = 29900; // Rs 299 in paise
@@ -384,10 +409,12 @@ export class MaxCampaignPaymentService {
       },
       items: [
         {
-          description: 'Max Campaign Upgrade - Premium campaign visible to Pro influencers only',
+          description: 'Maxx campaign - Brand',
           quantity: 1,
           rate: invoice.amount / 100,
           amount: invoice.amount / 100,
+          hscCode: '998361', // HSC code for marketing services
+          taxes: invoice.tax / 100,
         },
       ],
       subtotal: invoice.amount / 100,
@@ -420,112 +447,194 @@ export class MaxCampaignPaymentService {
   /**
    * Generate PDF from invoice data
    */
-  private async generateInvoicePDF(invoiceData: any): Promise<Buffer> {
+  private async generateInvoicePDF(invoiceData: InvoiceData): Promise<Buffer> {
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 50 });
+      const doc = new PDFDocument({
+        margin: 50,
+        size: 'A4'
+      });
       const chunks: Buffer[] = [];
 
       doc.on('data', (chunk) => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // Header
+      const pageWidth = doc.page.width;
+      const margin = 50;
+
+      // Header - CollabKaroo logo and INVOICE title
       doc
         .fontSize(20)
-        .text('InCollab', { align: 'center' })
-        .fontSize(10)
-        .text('Max Campaign Invoice', { align: 'center' })
-        .moveDown();
-
-      // Invoice details
-      doc
+        .fillColor('#1e6dfb')
+        .font('Helvetica-Bold')
+        .text('CollabKaroo', margin, 40, { width: 250 })
+        .fontSize(20)
+        .fillColor('#000000')
+        .text('INVOICE', pageWidth - 200, 40, { width: 150, align: 'right' })
         .fontSize(12)
-        .text(`Invoice Number: ${invoiceData.invoiceNumber}`, 50, 150)
-        .text(`Date: ${new Date(invoiceData.date).toLocaleDateString('en-IN')}`, 50, 170)
-        .moveDown();
+        .fillColor('#6b7280')
+        .font('Helvetica')
+        .text(invoiceData.invoiceNumber, pageWidth - 200, 65, { width: 150, align: 'right' });
 
-      // Brand details
+      // Issued and Billed To section
       doc
-        .fontSize(14)
-        .text('Bill To:', 50, 210)
         .fontSize(10)
-        .text(invoiceData.brand.name, 50, 230)
-        .moveDown();
+        .fillColor('#000000')
+        .font('Helvetica-Bold')
+        .text('Issued', margin, 100)
+        .font('Helvetica')
+        .fontSize(13)
+        .fillColor('#374151')
+        .text(new Date(invoiceData.date).toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
+        }), margin, 118);
 
-      // Campaign details
       doc
-        .fontSize(12)
-        .text('Campaign Details:', 50, 270)
         .fontSize(10)
-        .text(`Campaign: ${invoiceData.campaign.name}`, 50, 290)
-        .moveDown();
+        .fillColor('#000000')
+        .font('Helvetica-Bold')
+        .text('Billed to', margin + 180, 100)
+        .font('Helvetica')
+        .fontSize(13)
+        .fillColor('#374151')
+        .text(invoiceData.brand.name, margin + 180, 118);
+
+      // From section (Company details)
+      doc
+        .fontSize(10)
+        .fillColor('#000000')
+        .font('Helvetica-Bold')
+        .text('From', pageWidth - 250, 100)
+        .font('Helvetica')
+        .fontSize(9)
+        .fillColor('#374151')
+        .text('Deshanta Marketing Solutions Pvt. Ltd', pageWidth - 250, 118, { width: 200 })
+        .text('Plot A-18, Manjeet farm', pageWidth - 250, 131, { width: 200 })
+        .text('Uttam Nagar, Delhi', pageWidth - 250, 144, { width: 200 })
+        .text('West Delhi, Delhi, 110059, IN', pageWidth - 250, 157, { width: 200 })
+        .text('GSTIN – 07AACD5691K1ZB', pageWidth - 250, 170, { width: 200 });
 
       // Table header
-      const tableTop = 330;
-      doc
-        .fontSize(10)
-        .text('Description', 50, tableTop)
-        .text('Quantity', 300, tableTop)
-        .text('Rate', 380, tableTop)
-        .text('Amount', 450, tableTop);
+      const tableTop = 200;
+      const colPositions = {
+        service: margin,
+        qty: margin + 240,
+        rate: margin + 300,
+        hscCode: margin + 370,
+        taxes: margin + 450
+      };
 
-      // Draw line
+      // Table header with light border
       doc
-        .moveTo(50, tableTop + 15)
-        .lineTo(550, tableTop + 15)
+        .fontSize(13)
+        .fillColor('#6b7280')
+        .font('Helvetica')
+        .text('Service', colPositions.service, tableTop)
+        .text('Qty', colPositions.qty, tableTop)
+        .text('Rate', colPositions.rate, tableTop)
+        .text('HSC Code', colPositions.hscCode, tableTop)
+        .text('Taxes', colPositions.taxes, tableTop);
+
+      // Header bottom border
+      doc
+        .strokeColor('#e5e7eb')
+        .lineWidth(1)
+        .moveTo(margin, tableTop + 18)
+        .lineTo(pageWidth - margin, tableTop + 18)
         .stroke();
 
-      // Items
-      let yPosition = tableTop + 25;
+      // Table rows
+      let yPosition = tableTop + 30;
       invoiceData.items.forEach((item) => {
         doc
-          .fontSize(9)
-          .text(item.description, 50, yPosition, { width: 230 })
-          .text(item.quantity.toString(), 300, yPosition)
-          .text(`₹${item.rate}`, 380, yPosition)
-          .text(`₹${item.amount}`, 450, yPosition);
-        yPosition += 30;
+          .fontSize(14)
+          .font('Helvetica')
+          .fillColor('#374151')
+          .text(item.description, colPositions.service, yPosition, { width: 220 })
+          .text(item.quantity.toString(), colPositions.qty, yPosition)
+          .text(`₹${item.rate.toFixed(2)}`, colPositions.rate, yPosition)
+          .text(item.hscCode || 'N/A', colPositions.hscCode, yPosition)
+          .text(`₹${item.taxes.toFixed(2)}`, colPositions.taxes, yPosition);
+        yPosition += 35;
+
+        // Row bottom border
+        doc
+          .strokeColor('#f1f5f9')
+          .lineWidth(1)
+          .moveTo(margin, yPosition - 5)
+          .lineTo(pageWidth - margin, yPosition - 5)
+          .stroke();
       });
 
-      // Draw line
+      // Totals section
+      yPosition += 20;
+      const totalsX = pageWidth - 240;
+      const totalsValueX = pageWidth - 100;
+
       doc
-        .moveTo(50, yPosition)
-        .lineTo(550, yPosition)
+        .fontSize(14)
+        .font('Helvetica')
+        .fillColor('#374151')
+        .text('Subtotal', totalsX, yPosition)
+        .text(`₹${invoiceData.subtotal.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
+
+      yPosition += 25;
+      doc
+        .text('Tax (0%)', totalsX, yPosition)
+        .text(`₹${invoiceData.tax.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
+
+      yPosition += 25;
+      // Total border
+      doc
+        .strokeColor('#e5e7eb')
+        .lineWidth(1)
+        .moveTo(totalsX, yPosition - 5)
+        .lineTo(pageWidth - margin, yPosition - 5)
         .stroke();
 
-      // Totals
-      yPosition += 20;
       doc
-        .fontSize(10)
-        .text('Subtotal:', 380, yPosition)
-        .text(`₹${invoiceData.subtotal}`, 450, yPosition);
+        .fontSize(14)
+        .font('Helvetica-Bold')
+        .fillColor('#374151')
+        .text('Total', totalsX, yPosition)
+        .text(`₹${invoiceData.total.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
 
-      yPosition += 20;
+      // Amount due highlighted
+      yPosition += 25;
       doc
-        .text('Tax:', 380, yPosition)
-        .text(`₹${invoiceData.tax}`, 450, yPosition);
-
-      yPosition += 20;
-      doc
-        .fontSize(12)
-        .text('Total:', 380, yPosition)
-        .text(`₹${invoiceData.total}`, 450, yPosition);
+        .fontSize(14)
+        .font('Helvetica-Bold')
+        .fillColor('#1e6dfb')
+        .text('Amount due', totalsX, yPosition)
+        .text(`INR ₹${invoiceData.total.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
 
       // Footer
+      const footerY = doc.page.height - 100;
+
       doc
-        .fontSize(8)
-        .text(
-          'Thank you for your business!',
-          50,
-          700,
-          { align: 'center' }
-        )
-        .text(
-          'This is a computer-generated invoice.',
-          50,
-          715,
-          { align: 'center' }
-        );
+        .fontSize(12)
+        .font('Helvetica')
+        .fillColor('#6b7280')
+        .text('Thank you', margin, footerY);
+
+      doc
+        .fontSize(12)
+        .font('Helvetica')
+        .fillColor('#6b7280')
+        .text('For Query and help,', margin, footerY + 18);
+
+      doc
+        .fontSize(12)
+        .font('Helvetica')
+        .fillColor('#6b7280')
+        .text('Computer Generated Invoice', pageWidth - 250, footerY, { align: 'right', width: 200 });
+
+      doc
+        .fontSize(12)
+        .fillColor('#6b7280')
+        .text('contact.us@gobuybill.com', pageWidth - 250, footerY + 18, { align: 'right', width: 200 });
 
       doc.end();
     });
@@ -573,11 +682,13 @@ export class MaxCampaignPaymentService {
 
   /**
    * Generate unique invoice number for Max Campaign
+   * Format: MAXXINV-YYYYMM-SEQ
+   * Example: MAXXINV-202601-1 (1st invoice in Jan 2026)
    */
   private async generateInvoiceNumber(): Promise<string> {
     const year = new Date().getFullYear();
     const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    const prefix = `MAXINV-${year}${month}-`;
+    const prefix = `MAXXINV-${year}${month}-`;
 
     // Get the latest invoice number for this month
     const latestInvoice = await this.maxCampaignInvoiceModel.findOne({
@@ -591,11 +702,12 @@ export class MaxCampaignPaymentService {
 
     let nextNumber = 1;
     if (latestInvoice) {
-      // Extract the number from the latest invoice (e.g., "MAXINV-202512-00001" -> 1)
-      const lastNumber = parseInt(latestInvoice.invoiceNumber.split('-')[2], 10);
+      // Extract the sequence number (e.g., "MAXXINV-202601-1" -> 1)
+      const parts = latestInvoice.invoiceNumber.split('-');
+      const lastNumber = parseInt(parts[2], 10);
       nextNumber = lastNumber + 1;
     }
 
-    return `${prefix}${String(nextNumber).padStart(5, '0')}`;
+    return `${prefix}${nextNumber}`;
   }
 }
