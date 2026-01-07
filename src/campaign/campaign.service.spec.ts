@@ -331,7 +331,11 @@ describe('CampaignService', () => {
         totalPages: 1,
       });
       expect(campaignModel.findAndCountAll).toHaveBeenCalledWith({
-        where: { isActive: true, brandId },
+        where: {
+          isActive: true,
+          brandId,
+          status: { [Symbol.for('ne')]: CampaignStatus.DRAFT },
+        },
         include: expect.any(Array),
         order: [['createdAt', 'DESC']],
         limit: 10,

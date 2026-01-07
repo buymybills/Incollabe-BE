@@ -245,6 +245,11 @@ export class CampaignService {
 
     const whereCondition: any = { isActive: true };
 
+    // Exclude draft campaigns by default (unless explicitly filtered by status)
+    if (!status) {
+      whereCondition.status = { [Op.ne]: CampaignStatus.DRAFT };
+    }
+
     if (brandId) {
       whereCondition.brandId = brandId;
     }

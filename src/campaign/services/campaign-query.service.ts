@@ -134,11 +134,17 @@ export class CampaignQueryService {
   }
 
   /**
-   * Fetch all campaigns for a brand
+   * Fetch all campaigns for a brand (excludes drafts)
    */
   async fetchAllCampaigns(brandId: number): Promise<Campaign[]> {
+    const { Op } = require('sequelize');
     return this.campaignModel.findAll({
-      where: { brandId },
+      where: {
+        brandId,
+        status: {
+          [Op.ne]: CampaignStatus.DRAFT, // Exclude draft campaigns
+        },
+      },
       include: [
         ...this.getBaseIncludeOptions(),
         {
