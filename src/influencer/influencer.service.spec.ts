@@ -1072,334 +1072,334 @@ describe('InfluencerService', () => {
     });
   });
 
-  // describe('getOpenCampaigns', () => {
-  //   const mockInfluencer = {
-  //     id: 1,
-  //     name: 'Test Influencer',
-  //     gender: 'female',
-  //     dateOfBirth: new Date('1995-01-01'), // Age: ~30
-  //     cityId: 1,
-  //   };
+  describe('getOpenCampaigns', () => {
+    const mockInfluencer = {
+      id: 1,
+      name: 'Test Influencer',
+      gender: 'female',
+      dateOfBirth: new Date('1995-01-01'), // Age: ~30
+      cityId: 1,
+    };
 
-  //   const mockCampaign1 = {
-  //     id: 1,
-  //     name: 'Fashion Campaign',
-  //     description: 'Test campaign',
-  //     status: 'active',
-  //     isActive: true,
-  //     nicheIds: [1, 3], // Fashion, Beauty
-  //     isOpenToAllAges: false,
-  //     minAge: 21,
-  //     maxAge: 35,
-  //     isOpenToAllGenders: false,
-  //     genderPreferences: ['female'],
-  //     isPanIndia: false,
-  //     cities: [{ cityId: 1 }, { cityId: 2 }],
-  //     toJSON: jest.fn().mockReturnThis(),
-  //   };
+    const mockCampaign1 = {
+      id: 1,
+      name: 'Fashion Campaign',
+      description: 'Test campaign',
+      status: 'active',
+      isActive: true,
+      nicheIds: [1, 3], // Fashion, Beauty
+      isOpenToAllAges: false,
+      minAge: 21,
+      maxAge: 35,
+      isOpenToAllGenders: false,
+      genderPreferences: ['female'],
+      isPanIndia: false,
+      cities: [{ cityId: 1 }, { cityId: 2 }],
+      toJSON: jest.fn().mockReturnThis(),
+    };
 
-  //   const mockCampaign2 = {
-  //     id: 2,
-  //     name: 'Tech Campaign',
-  //     description: 'Tech products',
-  //     status: 'active',
-  //     isActive: true,
-  //     nicheIds: [7], // Tech
-  //     isOpenToAllAges: true,
-  //     isOpenToAllGenders: true,
-  //     isPanIndia: true,
-  //     cities: [],
-  //     toJSON: jest.fn().mockReturnThis(),
-  //   };
+    const mockCampaign2 = {
+      id: 2,
+      name: 'Tech Campaign',
+      description: 'Tech products',
+      status: 'active',
+      isActive: true,
+      nicheIds: [7], // Tech
+      isOpenToAllAges: true,
+      isOpenToAllGenders: true,
+      isPanIndia: true,
+      cities: [],
+      toJSON: jest.fn().mockReturnThis(),
+    };
 
-  //   const mockCampaign3 = {
-  //     id: 3,
-  //     name: 'Beauty Campaign',
-  //     description: 'Beauty products',
-  //     status: 'active',
-  //     isActive: true,
-  //     nicheIds: [3], // Beauty
-  //     isOpenToAllAges: false,
-  //     minAge: 18,
-  //     maxAge: 25, // Will be filtered out due to age
-  //     isOpenToAllGenders: true,
-  //     isPanIndia: true,
-  //     cities: [],
-  //     toJSON: jest.fn().mockReturnThis(),
-  //   };
+    const mockCampaign3 = {
+      id: 3,
+      name: 'Beauty Campaign',
+      description: 'Beauty products',
+      status: 'active',
+      isActive: true,
+      nicheIds: [3], // Beauty
+      isOpenToAllAges: false,
+      minAge: 18,
+      maxAge: 25, // Will be filtered out due to age
+      isOpenToAllGenders: true,
+      isPanIndia: true,
+      cities: [],
+      toJSON: jest.fn().mockReturnThis(),
+    };
 
-  //   const mockCampaign4 = {
-  //     id: 4,
-  //     name: 'Male Fitness Campaign',
-  //     description: 'Fitness for men',
-  //     status: 'active',
-  //     isActive: true,
-  //     nicheIds: [1], // Fashion
-  //     isOpenToAllAges: true,
-  //     isOpenToAllGenders: false,
-  //     genderPreferences: ['male'], // Will be filtered out due to gender
-  //     isPanIndia: true,
-  //     cities: [],
-  //     toJSON: jest.fn().mockReturnThis(),
-  //   };
+    const mockCampaign4 = {
+      id: 4,
+      name: 'Male Fitness Campaign',
+      description: 'Fitness for men',
+      status: 'active',
+      isActive: true,
+      nicheIds: [1], // Fashion
+      isOpenToAllAges: true,
+      isOpenToAllGenders: false,
+      genderPreferences: ['male'], // Will be filtered out due to gender
+      isPanIndia: true,
+      cities: [],
+      toJSON: jest.fn().mockReturnThis(),
+    };
 
-  //   beforeEach(() => {
-  //     mockInfluencerRepository.findById.mockResolvedValue(mockInfluencer);
-  //   });
+    beforeEach(() => {
+      mockInfluencerRepository.findById.mockResolvedValue(mockInfluencer);
+    });
 
-  //   it('should filter campaigns by influencer niches automatically', async () => {
-  //     const influencerNicheModel = module.get('INFLUENCER_NICHE_MODEL');
-  //     influencerNicheModel.findAll = jest
-  //       .fn()
-  //       .mockResolvedValue([{ nicheId: 1 }, { nicheId: 3 }]); // Fashion, Beauty
+    it('should filter campaigns by influencer niches automatically', async () => {
+      const influencerNicheModel = module.get('INFLUENCER_NICHE_MODEL');
+      influencerNicheModel.findAll = jest
+        .fn()
+        .mockResolvedValue([{ nicheId: 1 }, { nicheId: 3 }]); // Fashion, Beauty
 
-  //     // Mock should return only campaigns matching the niche filter in WHERE clause
-  //     mockCampaignModel.findAndCountAll.mockResolvedValue({
-  //       count: 1,
-  //       rows: [mockCampaign1], // Only Fashion Campaign has matching niches
-  //     });
+      // Mock should return only campaigns matching the niche filter in WHERE clause
+      mockCampaignModel.findAndCountAll.mockResolvedValue({
+        count: 1,
+        rows: [mockCampaign1], // Only Fashion Campaign has matching niches
+      });
 
-  //     mockCampaignApplicationModel.findAll
-  //       .mockResolvedValueOnce([]) // No existing applications
-  //       .mockResolvedValueOnce([]); // No application counts
+      mockCampaignApplicationModel.findAll
+        .mockResolvedValueOnce([]) // No existing applications
+        .mockResolvedValueOnce([]); // No application counts
 
-  //     const result = await service.getOpenCampaigns({ page: 1, limit: 10 }, 1);
+      const result = await service.getOpenCampaigns({ page: 1, limit: 10 }, 1);
 
-  //     expect(influencerNicheModel.findAll).toHaveBeenCalledWith({
-  //       where: { influencerId: 1 },
-  //       attributes: ['nicheId'],
-  //       raw: true,
-  //     });
-  //     expect(result.campaigns).toHaveLength(1);
-  //     expect(result.campaigns[0].id).toBe(1); // Only Fashion Campaign matches
-  //   });
+      expect(influencerNicheModel.findAll).toHaveBeenCalledWith({
+        where: { influencerId: 1 },
+        attributes: ['nicheId'],
+        raw: true,
+      });
+      expect(result.campaigns).toHaveLength(1);
+      expect(result.campaigns[0].id).toBe(1); // Only Fashion Campaign matches
+    });
 
-  //   it('should filter out campaigns by age requirements', async () => {
-  //     const influencerNicheModel = module.get('INFLUENCER_NICHE_MODEL');
-  //     influencerNicheModel.findAll = jest
-  //       .fn()
-  //       .mockResolvedValue([{ nicheId: 3 }]); // Beauty
+    it('should filter out campaigns by age requirements', async () => {
+      const influencerNicheModel = module.get('INFLUENCER_NICHE_MODEL');
+      influencerNicheModel.findAll = jest
+        .fn()
+        .mockResolvedValue([{ nicheId: 3 }]); // Beauty
 
-  //     // Database filters out campaigns that don't match age requirements
-  //     mockCampaignModel.findAndCountAll.mockResolvedValue({
-  //       count: 0,
-  //       rows: [], // Age filter applied at DB level
-  //     });
+      // Database filters out campaigns that don't match age requirements
+      mockCampaignModel.findAndCountAll.mockResolvedValue({
+        count: 0,
+        rows: [], // Age filter applied at DB level
+      });
 
-  //     mockCampaignApplicationModel.findAll
-  //       .mockResolvedValueOnce([])
-  //       .mockResolvedValueOnce([]);
+      mockCampaignApplicationModel.findAll
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
 
-  //     const result = await service.getOpenCampaigns({ page: 1, limit: 10 }, 1);
+      const result = await service.getOpenCampaigns({ page: 1, limit: 10 }, 1);
 
-  //     expect(result.campaigns).toHaveLength(0); // Filtered out due to age
-  //   });
+      expect(result.campaigns).toHaveLength(0); // Filtered out due to age
+    });
 
-  //   it('should filter out campaigns by gender preferences', async () => {
-  //     const influencerNicheModel = module.get('INFLUENCER_NICHE_MODEL');
-  //     influencerNicheModel.findAll = jest
-  //       .fn()
-  //       .mockResolvedValue([{ nicheId: 1 }]); // Fashion
+    it('should filter out campaigns by gender preferences', async () => {
+      const influencerNicheModel = module.get('INFLUENCER_NICHE_MODEL');
+      influencerNicheModel.findAll = jest
+        .fn()
+        .mockResolvedValue([{ nicheId: 1 }]); // Fashion
 
-  //     // Database filters out campaigns that don't match gender preferences
-  //     mockCampaignModel.findAndCountAll.mockResolvedValue({
-  //       count: 0,
-  //       rows: [], // Gender filter applied at DB level
-  //     });
+      // Database filters out campaigns that don't match gender preferences
+      mockCampaignModel.findAndCountAll.mockResolvedValue({
+        count: 0,
+        rows: [], // Gender filter applied at DB level
+      });
 
-  //     mockCampaignApplicationModel.findAll
-  //       .mockResolvedValueOnce([])
-  //       .mockResolvedValueOnce([]);
+      mockCampaignApplicationModel.findAll
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
 
-  //     const result = await service.getOpenCampaigns({ page: 1, limit: 10 }, 1);
+      const result = await service.getOpenCampaigns({ page: 1, limit: 10 }, 1);
 
-  //     expect(result.campaigns).toHaveLength(0); // Filtered out due to gender
-  //   });
+      expect(result.campaigns).toHaveLength(0); // Filtered out due to gender
+    });
 
-  //   it('should filter out campaigns by location when not Pan-India', async () => {
-  //     const influencerWithDifferentCity = {
-  //       ...mockInfluencer,
-  //       cityId: 5, // Different city
-  //     };
-  //     mockInfluencerRepository.findById.mockResolvedValue(
-  //       influencerWithDifferentCity,
-  //     );
+    it('should filter out campaigns by location when not Pan-India', async () => {
+      const influencerWithDifferentCity = {
+        ...mockInfluencer,
+        cityId: 5, // Different city
+      };
+      mockInfluencerRepository.findById.mockResolvedValue(
+        influencerWithDifferentCity,
+      );
 
-  //     const influencerNicheModel = module.get('INFLUENCER_NICHE_MODEL');
-  //     influencerNicheModel.findAll = jest
-  //       .fn()
-  //       .mockResolvedValue([{ nicheId: 1 }]);
+      const influencerNicheModel = module.get('INFLUENCER_NICHE_MODEL');
+      influencerNicheModel.findAll = jest
+        .fn()
+        .mockResolvedValue([{ nicheId: 1 }]);
 
-  //     // Database filters out campaigns that don't match location
-  //     mockCampaignModel.findAndCountAll.mockResolvedValue({
-  //       count: 0,
-  //       rows: [], // Location filter applied at DB level
-  //     });
+      // Database filters out campaigns that don't match location
+      mockCampaignModel.findAndCountAll.mockResolvedValue({
+        count: 0,
+        rows: [], // Location filter applied at DB level
+      });
 
-  //     mockCampaignApplicationModel.findAll
-  //       .mockResolvedValueOnce([])
-  //       .mockResolvedValueOnce([]);
+      mockCampaignApplicationModel.findAll
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
 
-  //     const result = await service.getOpenCampaigns({ page: 1, limit: 10 }, 1);
+      const result = await service.getOpenCampaigns({ page: 1, limit: 10 }, 1);
 
-  //     expect(result.campaigns).toHaveLength(0); // Filtered out due to location
-  //   });
+      expect(result.campaigns).toHaveLength(0); // Filtered out due to location
+    });
 
-  //   it('should allow Pan-India campaigns for all locations', async () => {
-  //     const influencerNicheModel = module.get('INFLUENCER_NICHE_MODEL');
-  //     influencerNicheModel.findAll = jest
-  //       .fn()
-  //       .mockResolvedValue([{ nicheId: 7 }]); // Tech
+    it('should allow Pan-India campaigns for all locations', async () => {
+      const influencerNicheModel = module.get('INFLUENCER_NICHE_MODEL');
+      influencerNicheModel.findAll = jest
+        .fn()
+        .mockResolvedValue([{ nicheId: 7 }]); // Tech
 
-  //     mockCampaignModel.findAndCountAll.mockResolvedValue({
-  //       count: 1,
-  //       rows: [mockCampaign2], // Pan-India
-  //     });
+      mockCampaignModel.findAndCountAll.mockResolvedValue({
+        count: 1,
+        rows: [mockCampaign2], // Pan-India
+      });
 
-  //     mockCampaignApplicationModel.findAll
-  //       .mockResolvedValueOnce([])
-  //       .mockResolvedValueOnce([]);
+      mockCampaignApplicationModel.findAll
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
 
-  //     const result = await service.getOpenCampaigns({ page: 1, limit: 10 }, 1);
+      const result = await service.getOpenCampaigns({ page: 1, limit: 10 }, 1);
 
-  //     expect(result.campaigns).toHaveLength(1);
-  //     expect(result.campaigns[0].id).toBe(2);
-  //   });
+      expect(result.campaigns).toHaveLength(1);
+      expect(result.campaigns[0].id).toBe(2);
+    });
 
-  //   it('should use provided nicheIds instead of influencer niches', async () => {
-  //     const influencerNicheModel = module.get('INFLUENCER_NICHE_MODEL');
+    it('should use provided nicheIds instead of influencer niches', async () => {
+      const influencerNicheModel = module.get('INFLUENCER_NICHE_MODEL');
 
-  //     mockCampaignModel.findAndCountAll.mockResolvedValue({
-  //       count: 1,
-  //       rows: [mockCampaign2],
-  //     });
+      mockCampaignModel.findAndCountAll.mockResolvedValue({
+        count: 1,
+        rows: [mockCampaign2],
+      });
 
-  //     mockCampaignApplicationModel.findAll
-  //       .mockResolvedValueOnce([])
-  //       .mockResolvedValueOnce([]);
+      mockCampaignApplicationModel.findAll
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
 
-  //     const result = await service.getOpenCampaigns(
-  //       { nicheIds: [7], page: 1, limit: 10 }, // Override with Tech
-  //       1,
-  //     );
+      const result = await service.getOpenCampaigns(
+        { nicheIds: [7], page: 1, limit: 10 }, // Override with Tech
+        1,
+      );
 
-  //     // Should NOT fetch influencer niches
-  //     expect(influencerNicheModel.findAll).not.toHaveBeenCalled();
-  //     expect(result.campaigns).toHaveLength(1);
-  //     expect(result.campaigns[0].id).toBe(2);
-  //   });
+      // Should NOT fetch influencer niches
+      expect(influencerNicheModel.findAll).not.toHaveBeenCalled();
+      expect(result.campaigns).toHaveLength(1);
+      expect(result.campaigns[0].id).toBe(2);
+    });
 
-  //   it('should include application status for each campaign', async () => {
-  //     const influencerNicheModel = module.get('INFLUENCER_NICHE_MODEL');
-  //     influencerNicheModel.findAll = jest
-  //       .fn()
-  //       .mockResolvedValue([{ nicheId: 1 }]);
+    it('should include application status for each campaign', async () => {
+      const influencerNicheModel = module.get('INFLUENCER_NICHE_MODEL');
+      influencerNicheModel.findAll = jest
+        .fn()
+        .mockResolvedValue([{ nicheId: 1 }]);
 
-  //     mockCampaignModel.findAndCountAll.mockResolvedValue({
-  //       count: 1,
-  //       rows: [mockCampaign1],
-  //     });
+      mockCampaignModel.findAndCountAll.mockResolvedValue({
+        count: 1,
+        rows: [mockCampaign1],
+      });
 
-  //     mockCampaignApplicationModel.findAll
-  //       .mockResolvedValueOnce([{ campaignId: 1, status: 'pending' }])
-  //       .mockResolvedValueOnce([{ campaignId: 1, count: '5' }]);
+      mockCampaignApplicationModel.findAll
+        .mockResolvedValueOnce([{ campaignId: 1, status: 'pending' }])
+        .mockResolvedValueOnce([{ campaignId: 1, count: '5' }]);
 
-  //     const result = await service.getOpenCampaigns({ page: 1, limit: 10 }, 1);
+      const result = await service.getOpenCampaigns({ page: 1, limit: 10 }, 1);
 
-  //     expect(result.campaigns[0].hasApplied).toBe(true);
-  //     expect(result.campaigns[0].applicationStatus).toBe('pending');
-  //     expect(result.campaigns[0].totalApplications).toBe(5);
-  //   });
+      expect(result.campaigns[0].hasApplied).toBe(true);
+      expect(result.campaigns[0].applicationStatus).toBe('pending');
+      expect(result.campaigns[0].totalApplications).toBe(5);
+    });
 
-  //   it('should handle pagination correctly', async () => {
-  //     const influencerNicheModel = module.get('INFLUENCER_NICHE_MODEL');
-  //     influencerNicheModel.findAll = jest
-  //       .fn()
-  //       .mockResolvedValue([{ nicheId: 1 }]);
+    it('should handle pagination correctly', async () => {
+      const influencerNicheModel = module.get('INFLUENCER_NICHE_MODEL');
+      influencerNicheModel.findAll = jest
+        .fn()
+        .mockResolvedValue([{ nicheId: 1 }]);
 
-  //     // Database returns only page 2 campaigns (items 11-15)
-  //     const page2Campaigns = Array.from({ length: 5 }, (_, i) => ({
-  //       ...mockCampaign1,
-  //       id: i + 11, // IDs 11-15 for page 2
-  //       toJSON: jest.fn().mockReturnThis(),
-  //     }));
+      // Database returns only page 2 campaigns (items 11-15)
+      const page2Campaigns = Array.from({ length: 5 }, (_, i) => ({
+        ...mockCampaign1,
+        id: i + 11, // IDs 11-15 for page 2
+        toJSON: jest.fn().mockReturnThis(),
+      }));
 
-  //     // Database handles pagination, so it returns only the requested page
-  //     mockCampaignModel.findAndCountAll.mockResolvedValue({
-  //       count: 15, // Total count across all pages
-  //       rows: page2Campaigns, // Only campaigns for page 2
-  //     });
+      // Database handles pagination, so it returns only the requested page
+      mockCampaignModel.findAndCountAll.mockResolvedValue({
+        count: 15, // Total count across all pages
+        rows: page2Campaigns, // Only campaigns for page 2
+      });
 
-  //     mockCampaignApplicationModel.findAll
-  //       .mockResolvedValueOnce([])
-  //       .mockResolvedValueOnce([]);
+      mockCampaignApplicationModel.findAll
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
 
-  //     const result = await service.getOpenCampaigns({ page: 2, limit: 10 }, 1);
+      const result = await service.getOpenCampaigns({ page: 2, limit: 10 }, 1);
 
-  //     expect(result.campaigns).toHaveLength(5); // 15 total, page 2 with limit 10
-  //     expect(result.total).toBe(15);
-  //     expect(result.page).toBe(2);
-  //     expect(result.totalPages).toBe(2);
-  //   });
+      expect(result.campaigns).toHaveLength(5); // 15 total, page 2 with limit 10
+      expect(result.total).toBe(15);
+      expect(result.page).toBe(2);
+      expect(result.totalPages).toBe(2);
+    });
 
-  //   it('should handle influencer with no date of birth', async () => {
-  //     mockInfluencerRepository.findById.mockResolvedValue({
-  //       ...mockInfluencer,
-  //       dateOfBirth: null,
-  //     });
+    it('should handle influencer with no date of birth', async () => {
+      mockInfluencerRepository.findById.mockResolvedValue({
+        ...mockInfluencer,
+        dateOfBirth: null,
+      });
 
-  //     const influencerNicheModel = module.get('INFLUENCER_NICHE_MODEL');
-  //     influencerNicheModel.findAll = jest
-  //       .fn()
-  //       .mockResolvedValue([{ nicheId: 3 }]);
+      const influencerNicheModel = module.get('INFLUENCER_NICHE_MODEL');
+      influencerNicheModel.findAll = jest
+        .fn()
+        .mockResolvedValue([{ nicheId: 3 }]);
 
-  //     mockCampaignModel.findAndCountAll.mockResolvedValue({
-  //       count: 1,
-  //       rows: [mockCampaign3], // Has age restrictions
-  //     });
+      mockCampaignModel.findAndCountAll.mockResolvedValue({
+        count: 1,
+        rows: [mockCampaign3], // Has age restrictions
+      });
 
-  //     mockCampaignApplicationModel.findAll
-  //       .mockResolvedValueOnce([])
-  //       .mockResolvedValueOnce([]);
+      mockCampaignApplicationModel.findAll
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
 
-  //     const result = await service.getOpenCampaigns({ page: 1, limit: 10 }, 1);
+      const result = await service.getOpenCampaigns({ page: 1, limit: 10 }, 1);
 
-  //     // Should skip age filter when dateOfBirth is null
-  //     expect(result.campaigns).toHaveLength(1);
-  //   });
+      // Should skip age filter when dateOfBirth is null
+      expect(result.campaigns).toHaveLength(1);
+    });
 
-  //   it('should throw NotFoundException for non-existent influencer', async () => {
-  //     mockInfluencerRepository.findById.mockResolvedValue(null);
+    it('should throw NotFoundException for non-existent influencer', async () => {
+      mockInfluencerRepository.findById.mockResolvedValue(null);
 
-  //     await expect(
-  //       service.getOpenCampaigns({ page: 1, limit: 10 }, 999),
-  //     ).rejects.toThrow(NotFoundException);
-  //   });
+      await expect(
+        service.getOpenCampaigns({ page: 1, limit: 10 }, 999),
+      ).rejects.toThrow(NotFoundException);
+    });
 
-  //   it('should handle search query correctly', async () => {
-  //     const influencerNicheModel = module.get('INFLUENCER_NICHE_MODEL');
-  //     influencerNicheModel.findAll = jest
-  //       .fn()
-  //       .mockResolvedValue([{ nicheId: 1 }]);
+    it('should handle search query correctly', async () => {
+      const influencerNicheModel = module.get('INFLUENCER_NICHE_MODEL');
+      influencerNicheModel.findAll = jest
+        .fn()
+        .mockResolvedValue([{ nicheId: 1 }]);
 
-  //     mockCampaignModel.findAndCountAll.mockResolvedValue({
-  //       count: 1,
-  //       rows: [mockCampaign1],
-  //     });
+      mockCampaignModel.findAndCountAll.mockResolvedValue({
+        count: 1,
+        rows: [mockCampaign1],
+      });
 
-  //     mockCampaignApplicationModel.findAll
-  //       .mockResolvedValueOnce([])
-  //       .mockResolvedValueOnce([]);
+      mockCampaignApplicationModel.findAll
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
 
-  //     await service.getOpenCampaigns(
-  //       { search: 'fashion', page: 1, limit: 10 },
-  //       1,
-  //     );
+      await service.getOpenCampaigns(
+        { search: 'fashion', page: 1, limit: 10 },
+        1,
+      );
 
-  //     expect(mockCampaignModel.findAndCountAll).toHaveBeenCalled();
-  //     const callArgs = mockCampaignModel.findAndCountAll.mock.calls[0][0];
-  //     // Check that Op.or was used for search conditions
-  //     expect(callArgs.where[Symbol.for('or')]).toBeDefined();
-  //   });
-  // });
+      expect(mockCampaignModel.findAndCountAll).toHaveBeenCalled();
+      const callArgs = mockCampaignModel.findAndCountAll.mock.calls[0][0];
+      // Check that Op.or was used for search conditions
+      expect(callArgs.where[Symbol.for('or')]).toBeDefined();
+    });
+  });
 });

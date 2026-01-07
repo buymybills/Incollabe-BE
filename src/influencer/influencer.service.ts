@@ -1420,6 +1420,14 @@ export class InfluencerService {
       });
     }
 
+    // Add search filter (search by campaign name or description)
+    if (search && search.trim()) {
+      whereCondition[Op.or] = [
+        { name: { [Op.iLike]: `%${search}%` } },
+        { description: { [Op.iLike]: `%${search}%` } },
+      ];
+    }
+
     const includeOptions: any[] = [
       {
         model: Brand,
