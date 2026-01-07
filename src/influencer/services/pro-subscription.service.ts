@@ -652,45 +652,38 @@ export class ProSubscriptionService {
       const pageWidth = doc.page.width;
       const margin = 50;
 
-      // Header - CollabKaroo logo and name
+      // Header - Logo on left, INVOICE on right
       try {
         const logoPath = path.join(process.cwd(), 'src', 'assets', 'collabkaroo-logo.png');
         const logoSize = 40;
-        const logoX = (pageWidth - 280) / 2; // Center the logo+text combo
-        const logoY = 40;
 
-        // Add logo
-        doc.image(logoPath, logoX, logoY, { width: logoSize, height: logoSize });
-
-        // Add company name next to logo
-        doc
-          .fontSize(26)
-          .fillColor('#4A90E2')
-          .font('Helvetica-Bold')
-          .text('CollabKaroo', logoX + logoSize + 10, logoY + 8, { width: 200 });
+        // Add logo on the left
+        doc.image(logoPath, margin, 40, { width: logoSize, height: logoSize });
       } catch (error) {
         // Fallback if logo not found - just show text
         console.error('Logo not found, using text only:', error);
         doc
-          .fontSize(26)
-          .fillColor('#4A90E2')
+          .fontSize(20)
+          .fillColor('#1e6dfb')
           .font('Helvetica-Bold')
-          .text('CollabKaroo', 0, 50, { width: pageWidth, align: 'center' });
+          .text('CollabKaroo', margin, 40, { width: 250 });
       }
 
+      // INVOICE title and number on the right
       doc
-        .fontSize(22)
+        .fontSize(20)
         .fillColor('#000000')
-        .text('INVOICE', 0, 95, { width: pageWidth, align: 'center' });
-
-      doc
-        .fontSize(11)
-        .fillColor('#666666')
+        .text('INVOICE', pageWidth - 200, 40, { width: 150, align: 'right' })
+        .fontSize(12)
+        .fillColor('#6b7280')
         .font('Helvetica')
-        .text(invoiceData.invoiceNumber, 0, 125, { width: pageWidth, align: 'center' });
+        .text(invoiceData.invoiceNumber, pageWidth - 200, 65, {
+          width: 150,
+          align: 'right'
+        });
 
-      // Issued, Billed To, and From section (better spacing)
-      const detailsStartY = 170;
+      // Issued, Billed To, and From section
+      const detailsStartY = 100;
 
       // Issued
       doc
@@ -699,26 +692,26 @@ export class ProSubscriptionService {
         .font('Helvetica-Bold')
         .text('Issued', margin, detailsStartY)
         .font('Helvetica')
-        .fontSize(9)
-        .fillColor('#666666')
+        .fontSize(13)
+        .fillColor('#374151')
         .text(new Date(invoiceData.date).toLocaleDateString('en-GB', {
           day: '2-digit',
           month: 'short',
           year: 'numeric'
         }), margin, detailsStartY + 18);
 
-      // Billed to (center aligned)
-      const billedToX = (pageWidth - 200) / 2;
+      // Billed to
       doc
         .fontSize(10)
         .fillColor('#000000')
         .font('Helvetica-Bold')
-        .text('Billed to', billedToX, detailsStartY, { width: 200, align: 'center' })
+        .text('Billed to', margin + 180, detailsStartY)
         .font('Helvetica')
+        .fontSize(13)
+        .fillColor('#374151')
+        .text(invoiceData.influencer.name, margin + 180, detailsStartY + 18)
         .fontSize(9)
-        .fillColor('#666666')
-        .text(invoiceData.influencer.name, billedToX, detailsStartY + 18, { width: 200, align: 'center' })
-        .text(invoiceData.influencer.phone || 'N/A', billedToX, detailsStartY + 32, { width: 200, align: 'center' });
+        .text(invoiceData.influencer.phone || 'N/A', margin + 180, detailsStartY + 35);
 
       // From section (Company details)
       doc
@@ -728,15 +721,15 @@ export class ProSubscriptionService {
         .text('From', pageWidth - 250, detailsStartY)
         .font('Helvetica')
         .fontSize(9)
-        .fillColor('#666666')
+        .fillColor('#374151')
         .text('Deshanta Marketing Solutions Pvt. Ltd', pageWidth - 250, detailsStartY + 18, { width: 200 })
         .text('Plot A-18, Manjeet farm', pageWidth - 250, detailsStartY + 31, { width: 200 })
         .text('Uttam Nagar, Delhi', pageWidth - 250, detailsStartY + 44, { width: 200 })
         .text('West Delhi, Delhi, 110059, IN', pageWidth - 250, detailsStartY + 57, { width: 200 })
         .text('GSTIN – 07AACD5691K1ZB', pageWidth - 250, detailsStartY + 70, { width: 200 });
 
-      // Table header (moved down for better spacing)
-      const tableTop = 270;
+      // Table header
+      const tableTop = 200;
       const colPositions = {
         service: margin,
         qty: margin + 180,
@@ -745,36 +738,36 @@ export class ProSubscriptionService {
         taxes: margin + 410
       };
 
-      // Table header background
-      doc.save()
-        .fillColor('#F5F5F5')
-        .rect(margin, tableTop, pageWidth - (margin * 2), 25)
-        .fill()
-        .restore();
+      doc
+        .fontSize(13)
+        .fillColor('#6b7280')
+        .font('Helvetica')
+        .text('Service', colPositions.service, tableTop)
+        .text('Qty', colPositions.qty, tableTop)
+        .text('Rate', colPositions.rate, tableTop)
+        .text('HSC Code', colPositions.hscCode, tableTop)
+        .text('Taxes', colPositions.taxes, tableTop);
 
       doc
-        .fontSize(9)
-        .fillColor('#000000')
-        .font('Helvetica-Bold')
-        .text('Service', colPositions.service, tableTop + 8)
-        .text('Qty', colPositions.qty, tableTop + 8)
-        .text('Rate', colPositions.rate, tableTop + 8)
-        .text('HSC Code', colPositions.hscCode, tableTop + 8)
-        .text('Taxes', colPositions.taxes, tableTop + 8);
+        .strokeColor('#e5e7eb')
+        .lineWidth(1)
+        .moveTo(margin, tableTop + 18)
+        .lineTo(pageWidth - margin, tableTop + 18)
+        .stroke();
 
       // Table row
-      let yPosition = tableTop + 35;
+      let yPosition = tableTop + 30;
       const item = invoiceData.items[0];
 
       doc
-        .fontSize(9)
+        .fontSize(14)
         .font('Helvetica')
-        .fillColor('#333333')
+        .fillColor('#374151')
         .text('Maxx membership- Creator', colPositions.service, yPosition)
         .text(String(item.quantity), colPositions.qty, yPosition)
-        .text(`₹${item.rate.toFixed(2)}`, colPositions.rate, yPosition)
+        .text(`Rs. ${item.rate.toFixed(2)}`, colPositions.rate, yPosition)
         .text(String(item.hscCode || 'N/A'), colPositions.hscCode, yPosition)
-        .text(`₹${item.taxes.toFixed(2)}`, colPositions.taxes, yPosition);
+        .text(`Rs. ${item.taxes.toFixed(2)}`, colPositions.taxes, yPosition);
 
       // Separator line
       yPosition += 40;
@@ -787,68 +780,57 @@ export class ProSubscriptionService {
 
       // Totals section
       yPosition += 20;
-      const totalsX = pageWidth - 220;
+      const totalsX = pageWidth - 240;
+      const totalsValueX = pageWidth - 100;
 
       doc
-        .fontSize(9)
+        .fontSize(14)
         .font('Helvetica')
-        .fillColor('#666666')
+        .fillColor('#374151')
         .text('Subtotal', totalsX, yPosition)
-        .text(`₹${invoiceData.subtotal.toFixed(2)}`, totalsX + 120, yPosition, { align: 'right', width: 80 });
+        .text(`Rs. ${invoiceData.subtotal.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
 
-      yPosition += 20;
+      yPosition += 25;
       doc
         .text('Tax (0%)', totalsX, yPosition)
-        .text(`₹${invoiceData.tax.toFixed(2)}`, totalsX + 120, yPosition, { align: 'right', width: 80 });
+        .text(`Rs. ${invoiceData.tax.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
 
-      yPosition += 20;
-      doc
-        .fontSize(10)
-        .font('Helvetica-Bold')
-        .fillColor('#000000')
-        .text('Total', totalsX, yPosition)
-        .text(`₹${invoiceData.total.toFixed(2)}`, totalsX + 120, yPosition, { align: 'right', width: 80 });
-
-      // Amount due highlighted
       yPosition += 25;
-      doc.save()
-        .fillColor('#E3F2FD')
-        .rect(totalsX - 10, yPosition - 5, 210, 25)
-        .fill()
-        .restore();
+      doc
+        .strokeColor('#e5e7eb')
+        .lineWidth(1)
+        .moveTo(totalsX, yPosition - 5)
+        .lineTo(pageWidth - margin, yPosition - 5)
+        .stroke();
 
       doc
-        .fontSize(10)
         .font('Helvetica-Bold')
-        .fillColor('#1976D2')
+        .text('Total', totalsX, yPosition)
+        .text(`Rs. ${invoiceData.total.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
+
+      yPosition += 25;
+      doc
+        .fillColor('#1e6dfb')
         .text('Amount due', totalsX, yPosition)
-        .text(`₹${invoiceData.total.toFixed(2)}`, totalsX + 120, yPosition, { align: 'right', width: 80 });
+        .text(`INR ${invoiceData.total.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
 
-      // Footer (center aligned and better positioned)
-      const footerY = doc.page.height - 120;
-
-      doc
-        .fontSize(10)
-        .font('Helvetica-Bold')
-        .fillColor('#000000')
-        .text('Thank you', 0, footerY, { width: pageWidth, align: 'center' });
+      // Footer
+      const footerY = doc.page.height - 100;
 
       doc
-        .fontSize(8)
+        .fontSize(12)
         .font('Helvetica')
-        .fillColor('#666666')
-        .text('For Query and help,', 0, footerY + 20, { width: pageWidth, align: 'center' });
-
-      doc
-        .fontSize(8)
-        .fillColor('#666666')
-        .text('contact.us@gobuybill.com', 0, footerY + 35, { width: pageWidth, align: 'center' });
-
-      doc
-        .fontSize(9)
-        .font('Helvetica')
-        .fillColor('#666666')
-        .text('Computer Generated Invoice', 0, footerY + 55, { width: pageWidth, align: 'center' });
+        .fillColor('#6b7280')
+        .text('Thank you', margin, footerY)
+        .text('For Query and help,', margin, footerY + 18)
+        .text('Computer Generated Invoice', pageWidth - 250, footerY, {
+          align: 'right',
+          width: 200
+        })
+        .text('contact.us@gobuybill.com', pageWidth - 250, footerY + 18, {
+          align: 'right',
+          width: 200
+        });
 
       doc.end();
     });

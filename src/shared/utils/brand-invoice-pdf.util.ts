@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import * as path from 'path';
 
 /**
  * SAFELY format any numeric value for PDF rendering
@@ -50,11 +51,25 @@ export async function generateBrandInvoicePDF(
 
     /* ================= HEADER ================= */
 
+    // Add logo on the left
+    try {
+      const logoPath = path.join(process.cwd(), 'src', 'assets', 'collabkaroo-logo.png');
+      const logoSize = 40;
+
+      // Add logo on the left
+      doc.image(logoPath, margin, 40, { width: logoSize, height: logoSize });
+    } catch (error) {
+      // Fallback if logo not found - just show text
+      console.error('Logo not found, using text only:', error);
+      doc
+        .fontSize(20)
+        .fillColor('#1e6dfb')
+        .font('Helvetica-Bold')
+        .text('CollabKaroo', margin, 40, { width: 250 });
+    }
+
+    // INVOICE title and number on the right
     doc
-      .fontSize(20)
-      .fillColor('#1e6dfb')
-      .font('Helvetica-Bold')
-      .text('CollabKaroo', margin, 40, { width: 250 })
       .fontSize(20)
       .fillColor('#000000')
       .text('INVOICE', pageWidth - 200, 40, { width: 150, align: 'right' })
@@ -147,9 +162,9 @@ export async function generateBrandInvoicePDF(
         .fillColor('#374151')
         .text(item.description, col.service, y, { width: 220 })
         .text(String(item.quantity ?? 0), col.qty, y)
-        .text(`₹${formatAmount(item.rate)}`, col.rate, y)
+        .text(`Rs. ${formatAmount(item.rate)}`, col.rate, y)
         .text(item.hscCode || 'N/A', col.hsc, y)
-        .text(`₹${formatAmount(item.taxes)}`, col.taxes, y);
+        .text(`Rs. ${formatAmount(item.taxes)}`, col.taxes, y);
 
       y += 35;
 
@@ -172,7 +187,7 @@ export async function generateBrandInvoicePDF(
       .font('Helvetica')
       .fillColor('#374151')
       .text('Subtotal', totalsX, y)
-      .text(`₹${formatAmount(invoiceData.subtotal)}`, totalsValueX, y, {
+      .text(`Rs. ${formatAmount(invoiceData.subtotal)}`, totalsValueX, y, {
         align: 'right',
         width: 80
       });
@@ -180,7 +195,7 @@ export async function generateBrandInvoicePDF(
     y += 25;
     doc
       .text('Tax (0%)', totalsX, y)
-      .text(`₹${formatAmount(invoiceData.tax)}`, totalsValueX, y, {
+      .text(`Rs. ${formatAmount(invoiceData.tax)}`, totalsValueX, y, {
         align: 'right',
         width: 80
       });
@@ -196,7 +211,7 @@ export async function generateBrandInvoicePDF(
     doc
       .font('Helvetica-Bold')
       .text('Total', totalsX, y)
-      .text(`₹${formatAmount(invoiceData.total)}`, totalsValueX, y, {
+      .text(`Rs. ${formatAmount(invoiceData.total)}`, totalsValueX, y, {
         align: 'right',
         width: 80
       });
@@ -205,7 +220,7 @@ export async function generateBrandInvoicePDF(
     doc
       .fillColor('#1e6dfb')
       .text('Amount due', totalsX, y)
-      .text(`INR ₹${formatAmount(invoiceData.total)}`, totalsValueX, y, {
+      .text(`INR ${formatAmount(invoiceData.total)}`, totalsValueX, y, {
         align: 'right',
         width: 80
       });
