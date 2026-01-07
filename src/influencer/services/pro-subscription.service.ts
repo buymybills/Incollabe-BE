@@ -584,7 +584,7 @@ export class ProSubscriptionService {
       ? this.encryptionService.decrypt(invoice.influencer.phone)
       : invoice.influencer.phone;
 
-    // Mask phone number - show only middle 6 digits
+    // Mask phone number - show first 2 and last 2 digits, mask middle 6
     const maskPhoneNumber = (phone: string): string => {
       if (!phone) return 'N/A';
 
@@ -603,10 +603,11 @@ export class ProSubscriptionService {
         numberPart = cleanPhone.substring(2);
       }
 
-      // For 10-digit numbers: show middle 6 digits (e.g., 9876543210 -> **765432**)
+      // For 10-digit numbers: show first 2 and last 2 digits (e.g., 9876543210 -> 98******10)
       if (numberPart.length === 10) {
-        const middle6 = numberPart.substring(2, 8);
-        return prefix ? `${prefix}**${middle6}**` : `**${middle6}**`;
+        const first2 = numberPart.substring(0, 2);
+        const last2 = numberPart.substring(8, 10);
+        return prefix ? `${prefix}${first2}******${last2}` : `${first2}******${last2}`;
       }
 
       // For other lengths: return as is with N/A fallback
