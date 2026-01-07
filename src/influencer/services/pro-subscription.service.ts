@@ -687,12 +687,18 @@ export class ProSubscriptionService {
       // Issued, Billed To, and From section
       const detailsStartY = 110;
 
+      // Calculate positions for space-between layout
+      const contentWidth = pageWidth - 2 * margin;
+      const col1X = margin;
+      const col2X = margin + contentWidth * 0.35; // ~35% from left
+      const col3X = pageWidth - 250;
+
       // Issued
       doc
         .fontSize(11)
         .fillColor('#000000')
         .font('Helvetica-Bold')
-        .text('Issued', margin, detailsStartY)
+        .text('Issued', col1X, detailsStartY)
         .font('Helvetica')
         .fontSize(11)
         .fillColor('#374151')
@@ -700,34 +706,34 @@ export class ProSubscriptionService {
           day: '2-digit',
           month: 'short',
           year: 'numeric'
-        }), margin, detailsStartY + 18);
+        }), col1X, detailsStartY + 18);
 
       // Billed to
       doc
         .fontSize(11)
         .fillColor('#000000')
         .font('Helvetica-Bold')
-        .text('Billed to', margin + 180, detailsStartY)
+        .text('Billed to', col2X, detailsStartY)
         .font('Helvetica')
         .fontSize(11)
         .fillColor('#374151')
-        .text(invoiceData.influencer.name, margin + 180, detailsStartY + 18)
-        .text(invoiceData.influencer.phone || 'N/A', margin + 180, detailsStartY + 35);
+        .text(invoiceData.influencer.name, col2X, detailsStartY + 18)
+        .text(invoiceData.influencer.phone || 'N/A', col2X, detailsStartY + 35);
 
       // From section (Company details)
       doc
         .fontSize(11)
         .fillColor('#000000')
         .font('Helvetica-Bold')
-        .text('From', pageWidth - 250, detailsStartY)
+        .text('From', col3X, detailsStartY)
         .font('Helvetica')
         .fontSize(11)
         .fillColor('#374151')
-        .text('Deshanta Marketing Solutions Pvt. Ltd', pageWidth - 250, detailsStartY + 18, { width: 200 })
-        .text('Plot A-18, Manjeet farm', pageWidth - 250, detailsStartY + 31, { width: 200 })
-        .text('Uttam Nagar, Delhi', pageWidth - 250, detailsStartY + 44, { width: 200 })
-        .text('West Delhi, Delhi, 110059, IN', pageWidth - 250, detailsStartY + 57, { width: 200 })
-        .text('GSTIN – 07AACD5691K1ZB', pageWidth - 250, detailsStartY + 70, { width: 200 });
+        .text('Deshanta Marketing Solutions Pvt. Ltd', col3X, detailsStartY + 18, { width: 200 })
+        .text('Plot A-18, Manjeet farm', col3X, detailsStartY + 31, { width: 200 })
+        .text('Uttam Nagar, Delhi', col3X, detailsStartY + 44, { width: 200 })
+        .text('West Delhi, Delhi, 110059, IN', col3X, detailsStartY + 57, { width: 200 })
+        .text('GSTIN – 07AACD5691K1ZB', col3X, detailsStartY + 70, { width: 200 });
 
       // Table header (added inch spacing between metadata and table)
       const tableTop = 252;

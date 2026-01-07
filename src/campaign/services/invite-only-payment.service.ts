@@ -320,6 +320,8 @@ export class InviteOnlyPaymentService {
           quantity: 1,
           rate: invoice.amount / 100,
           amount: invoice.amount / 100,
+          hscCode: '998361', // HSC code for marketing services
+          taxes: invoice.tax / 100,
         },
       ],
       subtotal: invoice.amount / 100,
@@ -373,11 +375,13 @@ export class InviteOnlyPaymentService {
 
   /**
    * Generate unique invoice number for Invite-Only Campaign
+   * Format: MAXXINV-YYYYMM-SEQ
+   * Example: MAXXINV-202601-1 (1st invoice in Jan 2026)
    */
   private async generateInvoiceNumber(): Promise<string> {
     const year = new Date().getFullYear();
     const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    const prefix = `INVITEINV-${year}${month}-`;
+    const prefix = `MAXXINV-${year}${month}-`;
 
     // Get the latest invoice number for this month
     const latestInvoice = await this.inviteOnlyInvoiceModel.findOne({
@@ -391,7 +395,7 @@ export class InviteOnlyPaymentService {
 
     let nextNumber = 1;
     if (latestInvoice) {
-      // Extract the sequence number (e.g., "INVITEINV-202601-1" -> 1)
+      // Extract the sequence number (e.g., "MAXXINV-202601-1" -> 1)
       const parts = latestInvoice.invoiceNumber.split('-');
       const lastNumber = parseInt(parts[2], 10);
       nextNumber = lastNumber + 1;
