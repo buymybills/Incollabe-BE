@@ -125,6 +125,7 @@ import { AuditLogService } from './services/audit-log.service';
 import { ReferralProgramService } from './services/referral-program.service';
 import { MaxxSubscriptionAdminService } from './services/maxx-subscription-admin.service';
 import { MaxSubscriptionBrandService } from './services/max-subscription-brand.service';
+import { MaxSubscriptionInvoiceService } from './services/max-subscription-invoice.service';
 import { SupportTicketService } from '../shared/support-ticket.service';
 import { CreateSupportTicketDto } from '../shared/dto/create-support-ticket.dto';
 import { GetSupportTicketsDto } from '../shared/dto/get-support-tickets.dto';
@@ -157,6 +158,11 @@ import {
   GetMaxPurchasesDto,
   MaxPurchasesResponseDto,
 } from './dto/max-subscription-brand.dto';
+import {
+  MaxSubscriptionInvoiceStatisticsDto,
+  GetMaxSubscriptionInvoicesDto,
+  MaxSubscriptionInvoicesResponseDto,
+} from './dto/max-subscription-invoice.dto';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -171,6 +177,7 @@ export class AdminController {
     private readonly referralProgramService: ReferralProgramService,
     private readonly maxxSubscriptionAdminService: MaxxSubscriptionAdminService,
     private readonly maxSubscriptionBrandService: MaxSubscriptionBrandService,
+    private readonly maxSubscriptionInvoiceService: MaxSubscriptionInvoiceService,
     private readonly brandService: BrandService,
     private readonly influencerService: InfluencerService,
     private readonly postService: PostService,
