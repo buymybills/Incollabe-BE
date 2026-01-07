@@ -7,6 +7,7 @@ import { ProPaymentTransaction, TransactionType, TransactionStatus } from '../mo
 import { Influencer } from '../../auth/model/influencer.model';
 import { RazorpayService } from '../../shared/razorpay.service';
 import { S3Service } from '../../shared/s3.service';
+import { EncryptionService } from '../../shared/services/encryption.service';
 import { Op } from 'sequelize';
 import { toIST, createDatabaseDate, addDaysForDatabase } from '../../shared/utils/date.utils';
 import PDFDocument from 'pdfkit';
@@ -30,6 +31,7 @@ export class ProSubscriptionService {
     private razorpayService: RazorpayService,
     private s3Service: S3Service,
     private configService: ConfigService,
+    private encryptionService: EncryptionService,
   ) {}
 
   /**
@@ -577,13 +579,49 @@ export class ProSubscriptionService {
       return;
     }
 
+    // Decrypt phone number if encrypted
+    const decryptedPhone = invoice.influencer.phone?.includes(':')
+      ? this.encryptionService.decrypt(invoice.influencer.phone)
+      : invoice.influencer.phone;
+
+    // Mask phone number - show only middle 6 digits
+    const maskPhoneNumber = (phone: string): string => {
+      if (!phone) return 'N/A';
+
+      // Remove spaces and dashes
+      const cleanPhone = phone.replace(/[\s-]/g, '');
+
+      // Handle +91 or 91 prefix
+      let numberPart = cleanPhone;
+      let prefix = '';
+
+      if (cleanPhone.startsWith('+91')) {
+        prefix = '+91';
+        numberPart = cleanPhone.substring(3);
+      } else if (cleanPhone.startsWith('91') && cleanPhone.length > 10) {
+        prefix = '91';
+        numberPart = cleanPhone.substring(2);
+      }
+
+      // For 10-digit numbers: show middle 6 digits (e.g., 9876543210 -> **765432**)
+      if (numberPart.length === 10) {
+        const middle6 = numberPart.substring(2, 8);
+        return prefix ? `${prefix}**${middle6}**` : `**${middle6}**`;
+      }
+
+      // For other lengths: return as is with N/A fallback
+      return phone.length >= 6 ? phone : 'N/A';
+    };
+
+    const maskedPhone = maskPhoneNumber(decryptedPhone);
+
     // Store invoice data
     const invoiceData = {
       invoiceNumber: invoice.invoiceNumber,
       date: invoice.paidAt || invoice.createdAt,
       influencer: {
         name: invoice.influencer.name,
-        username: invoice.influencer.username,
+        phone: maskedPhone,
       },
       items: [
         {
@@ -644,33 +682,33 @@ export class ProSubscriptionService {
       const pageWidth = doc.page.width;
       const margin = 50;
 
-      // Background color for header section
-      doc.save()
-        .fillColor('#FFF5F7')
-        .rect(0, 0, pageWidth, 180)
-        .fill()
-        .restore();
-
-      // Header - CollabKaroo logo and INVOICE title
+      // Header - CollabKaroo logo and INVOICE title (center aligned)
       doc
-        .fontSize(24)
+        .fontSize(26)
         .fillColor('#4A90E2')
         .font('Helvetica-Bold')
-        .text('CollabKaroo', margin, 40, { width: 250 })
-        .fontSize(20)
+        .text('CollabKaroo', 0, 50, { width: pageWidth, align: 'center' });
+
+      doc
+        .fontSize(22)
         .fillColor('#000000')
-        .text('INVOICE', pageWidth - 200, 40, { width: 150, align: 'right' })
+        .text('INVOICE', 0, 85, { width: pageWidth, align: 'center' });
+
+      doc
         .fontSize(11)
         .fillColor('#666666')
         .font('Helvetica')
-        .text(invoiceData.invoiceNumber, pageWidth - 200, 65, { width: 150, align: 'right' });
+        .text(invoiceData.invoiceNumber, 0, 115, { width: pageWidth, align: 'center' });
 
-      // Issued and Billed To section
+      // Issued, Billed To, and From section (better spacing)
+      const detailsStartY = 160;
+
+      // Issued
       doc
         .fontSize(10)
         .fillColor('#000000')
         .font('Helvetica-Bold')
-        .text('Issued', margin, 120)
+        .text('Issued', margin, detailsStartY)
         .font('Helvetica')
         .fontSize(9)
         .fillColor('#666666')
@@ -678,36 +716,38 @@ export class ProSubscriptionService {
           day: '2-digit',
           month: 'short',
           year: 'numeric'
-        }), margin, 138);
+        }), margin, detailsStartY + 18);
 
+      // Billed to (center aligned)
+      const billedToX = (pageWidth - 200) / 2;
       doc
         .fontSize(10)
         .fillColor('#000000')
         .font('Helvetica-Bold')
-        .text('Billed to', margin + 180, 120)
+        .text('Billed to', billedToX, detailsStartY, { width: 200, align: 'center' })
         .font('Helvetica')
         .fontSize(9)
         .fillColor('#666666')
-        .text(invoiceData.influencer.name, margin + 180, 138)
-        .text(`@${invoiceData.influencer.username || 'N/A'}`, margin + 180, 152);
+        .text(invoiceData.influencer.name, billedToX, detailsStartY + 18, { width: 200, align: 'center' })
+        .text(invoiceData.influencer.phone || 'N/A', billedToX, detailsStartY + 32, { width: 200, align: 'center' });
 
       // From section (Company details)
       doc
         .fontSize(10)
         .fillColor('#000000')
         .font('Helvetica-Bold')
-        .text('From', pageWidth - 250, 120)
+        .text('From', pageWidth - 250, detailsStartY)
         .font('Helvetica')
         .fontSize(9)
         .fillColor('#666666')
-        .text('Deshanta Marketing Solutions Pvt. Ltd', pageWidth - 250, 138, { width: 200 })
-        .text('Plot A-18, Manjeet farm', pageWidth - 250, 151, { width: 200 })
-        .text('Uttam Nagar, Delhi', pageWidth - 250, 164, { width: 200 })
-        .text('West Delhi, Delhi, 110059, IN', pageWidth - 250, 177, { width: 200 })
-        .text('GSTIN – 07AACD5691K1ZB', pageWidth - 250, 190, { width: 200 });
+        .text('Deshanta Marketing Solutions Pvt. Ltd', pageWidth - 250, detailsStartY + 18, { width: 200 })
+        .text('Plot A-18, Manjeet farm', pageWidth - 250, detailsStartY + 31, { width: 200 })
+        .text('Uttam Nagar, Delhi', pageWidth - 250, detailsStartY + 44, { width: 200 })
+        .text('West Delhi, Delhi, 110059, IN', pageWidth - 250, detailsStartY + 57, { width: 200 })
+        .text('GSTIN – 07AACD5691K1ZB', pageWidth - 250, detailsStartY + 70, { width: 200 });
 
-      // Table header
-      const tableTop = 230;
+      // Table header (moved down for better spacing)
+      const tableTop = 270;
       const colPositions = {
         service: margin,
         qty: margin + 180,
@@ -742,9 +782,9 @@ export class ProSubscriptionService {
         .font('Helvetica')
         .fillColor('#333333')
         .text('Maxx membership- Creator', colPositions.service, yPosition)
-        .text(item.quantity.toString(), colPositions.qty, yPosition)
+        .text(String(item.quantity), colPositions.qty, yPosition)
         .text(`₹${item.rate.toFixed(2)}`, colPositions.rate, yPosition)
-        .text(item.hscCode || 'N/A', colPositions.hscCode, yPosition)
+        .text(String(item.hscCode || 'N/A'), colPositions.hscCode, yPosition)
         .text(`₹${item.taxes.toFixed(2)}`, colPositions.taxes, yPosition);
 
       // Separator line
@@ -793,33 +833,33 @@ export class ProSubscriptionService {
         .font('Helvetica-Bold')
         .fillColor('#1976D2')
         .text('Amount due', totalsX, yPosition)
-        .text(`INR ₹${invoiceData.total.toFixed(2)}`, totalsX + 120, yPosition, { align: 'right', width: 80 });
+        .text(`₹${invoiceData.total.toFixed(2)}`, totalsX + 120, yPosition, { align: 'right', width: 80 });
 
-      // Footer
-      const footerY = doc.page.height - 100;
+      // Footer (center aligned and better positioned)
+      const footerY = doc.page.height - 120;
 
       doc
         .fontSize(10)
         .font('Helvetica-Bold')
         .fillColor('#000000')
-        .text('Thank you', margin, footerY);
+        .text('Thank you', 0, footerY, { width: pageWidth, align: 'center' });
 
       doc
         .fontSize(8)
         .font('Helvetica')
         .fillColor('#666666')
-        .text('For Query and help,', margin, footerY + 20);
+        .text('For Query and help,', 0, footerY + 20, { width: pageWidth, align: 'center' });
+
+      doc
+        .fontSize(8)
+        .fillColor('#666666')
+        .text('contact.us@gobuybill.com', 0, footerY + 35, { width: pageWidth, align: 'center' });
 
       doc
         .fontSize(9)
         .font('Helvetica')
         .fillColor('#666666')
-        .text('Computer Generated Invoice', pageWidth - 250, footerY, { align: 'right', width: 200 });
-
-      doc
-        .fontSize(8)
-        .fillColor('#666666')
-        .text('contact.us@gobuybill.com', pageWidth - 250, footerY + 20, { align: 'right', width: 200 });
+        .text('Computer Generated Invoice', 0, footerY + 55, { width: pageWidth, align: 'center' });
 
       doc.end();
     });

@@ -6,6 +6,7 @@ import { MaxCampaignInvoice, InvoiceStatus, PaymentMethod } from '../models/max-
 import { RazorpayService } from '../../shared/razorpay.service';
 import { S3Service } from '../../shared/s3.service';
 import { EmailService } from '../../shared/email.service';
+import { EncryptionService } from '../../shared/services/encryption.service';
 import { createDatabaseDate, toIST } from '../../shared/utils/date.utils';
 import { Op } from 'sequelize';
 import { generateBrandInvoicePDF } from '../../shared/utils/brand-invoice-pdf.util';
@@ -49,6 +50,7 @@ export class MaxCampaignPaymentService {
     private razorpayService: RazorpayService,
     private s3Service: S3Service,
     private emailService: EmailService,
+    private encryptionService: EncryptionService,
   ) {}
 
   /**
@@ -398,13 +400,18 @@ export class MaxCampaignPaymentService {
       return;
     }
 
+    // Decrypt brand email if encrypted
+    const decryptedEmail = invoice.brand.email?.includes(':')
+      ? this.encryptionService.decrypt(invoice.brand.email)
+      : invoice.brand.email;
+
     // Store invoice data
     const invoiceData = {
       invoiceNumber: invoice.invoiceNumber,
       date: invoice.paidAt || invoice.createdAt,
       brand: {
         name: invoice.brand.brandName,
-        email: invoice.brand.email,
+        email: decryptedEmail,
       },
       campaign: {
         name: invoice.campaign.name,
@@ -446,7 +453,7 @@ export class MaxCampaignPaymentService {
     // Send invoice email to brand
     try {
       await this.emailService.sendMaxCampaignInvoiceEmail(
-        invoice.brand.email,
+        decryptedEmail,
         invoice.brand.brandName,
         invoice.invoiceNumber,
         invoice.totalAmount / 100, // Convert paise to rupees

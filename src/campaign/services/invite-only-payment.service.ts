@@ -5,6 +5,7 @@ import { Brand } from '../../brand/model/brand.model';
 import { InviteOnlyCampaignInvoice, InvoiceStatus, PaymentMethod } from '../models/invite-only-campaign-invoice.model';
 import { RazorpayService } from '../../shared/razorpay.service';
 import { S3Service } from '../../shared/s3.service';
+import { EncryptionService } from '../../shared/services/encryption.service';
 import { createDatabaseDate, toIST } from '../../shared/utils/date.utils';
 import { Op } from 'sequelize';
 import { generateBrandInvoicePDF } from '../../shared/utils/brand-invoice-pdf.util';
@@ -22,6 +23,7 @@ export class InviteOnlyPaymentService {
     private inviteOnlyInvoiceModel: typeof InviteOnlyCampaignInvoice,
     private razorpayService: RazorpayService,
     private s3Service: S3Service,
+    private encryptionService: EncryptionService,
   ) {}
 
   /**
@@ -294,13 +296,18 @@ export class InviteOnlyPaymentService {
       return;
     }
 
+    // Decrypt brand email if encrypted
+    const decryptedEmail = invoice.brand.email?.includes(':')
+      ? this.encryptionService.decrypt(invoice.brand.email)
+      : invoice.brand.email;
+
     // Store invoice data
     const invoiceData = {
       invoiceNumber: invoice.invoiceNumber,
       date: invoice.paidAt || invoice.createdAt,
       brand: {
         name: invoice.brand.brandName,
-        email: invoice.brand.email,
+        email: decryptedEmail,
       },
       campaign: {
         name: invoice.campaign.name,
