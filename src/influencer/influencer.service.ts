@@ -1290,7 +1290,7 @@ export class InfluencerService {
     // Get campaign IDs where influencer has been invited
     const invitations = await this.campaignInvitationModel.findAll({
       where: { influencerId },
-      attributes: ['campaignId'],
+      attributes: ['id', 'campaignId', 'status'],
     });
     const invitedCampaignIds = invitations ? invitations.map(inv => inv.campaignId) : [];
     

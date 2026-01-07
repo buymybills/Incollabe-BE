@@ -21,7 +21,7 @@ export enum InvitationStatus {
 @Table({
   tableName: 'campaign_invitations',
   timestamps: true,
-  underscored: false,
+  underscored: false, // DB columns are already in camelCase
   indexes: [
     {
       unique: true,
