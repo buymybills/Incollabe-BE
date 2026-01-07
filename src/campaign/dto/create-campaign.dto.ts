@@ -40,6 +40,17 @@ export class CreateCampaignDto {
   @IsBoolean()
   isInviteOnly?: boolean;
 
+  @ApiProperty({
+    description:
+      'Whether campaign is organic (true). Organic campaigns cannot be upgraded to Max Campaign or Invite-Only.',
+    example: false,
+    default: false,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isOrganic?: boolean;
+
   @IsOptional()
   @IsDateString()
   startDate?: string;

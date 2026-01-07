@@ -37,6 +37,7 @@ export interface CampaignCreationAttributes {
   status?: CampaignStatus;
   type?: CampaignType;
   isInviteOnly?: boolean;
+  isOrganic?: boolean;
   isPanIndia?: boolean;
   minAge?: number;
   maxAge?: number;
@@ -117,6 +118,13 @@ export class Campaign extends Model<Campaign, CampaignCreationAttributes> {
     defaultValue: false,
   })
   declare isInviteOnly: boolean;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  declare isOrganic: boolean;
 
   @Column({
     type: DataType.BOOLEAN,

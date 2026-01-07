@@ -525,7 +525,7 @@ export class BrandController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Campaign is already a Max Campaign or payment is pending',
+    description: 'Campaign is already a Max Campaign, is marked as organic, or payment is pending',
   })
   async upgradeToMaxCampaign(
     @Req() req: RequestWithUser,

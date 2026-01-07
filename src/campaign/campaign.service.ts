@@ -26,6 +26,7 @@ import { Brand } from '../brand/model/brand.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Niche } from '../auth/model/niche.model';
 import { InvoiceStatus } from '../influencer/models/payment-enums';
+import { MaxCampaignInvoice } from './models/max-campaign-invoice.model';
 // REMOVED: Imports only needed for early selection bonus feature (now disabled)
 // import { CreditTransactionType, PaymentStatus } from '../admin/models/credit-transaction.model';
 // import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
@@ -67,6 +68,8 @@ export class CampaignService {
     private readonly followModel: typeof Follow,
     @InjectModel(Experience)
     private readonly experienceModel: typeof Experience,
+    @InjectModel(MaxCampaignInvoice)
+    private readonly maxCampaignInvoiceModel: typeof MaxCampaignInvoice,
     // REMOVED: Models only needed for early selection bonus feature (now disabled)
     // @InjectModel(CreditTransaction)
     // private readonly creditTransactionModel: typeof CreditTransaction,
@@ -607,6 +610,41 @@ export class CampaignService {
           campaignDeliverables as any,
         );
       }
+    }
+
+    // Check if campaign is being marked as organic
+    // If so, cancel any pending Max Campaign payment and set status to active
+    if (updateCampaignDto.isOrganic === true && !campaign.isOrganic) {
+      console.log(`🌿 Campaign ${campaignId} marked as organic - checking for pending Max Campaign payment to cancel`);
+
+      // Cancel pending Max Campaign payment if exists
+      if (campaign.maxCampaignPaymentStatus === 'pending') {
+        console.log(`  ❌ Cancelling pending Max Campaign payment (orderId: ${campaign.maxCampaignOrderId})`);
+
+        // Delete pending Max Campaign invoice
+        await this.maxCampaignInvoiceModel.destroy({
+          where: {
+            campaignId,
+            paymentStatus: 'pending',
+          },
+        });
+
+        // Clear Max Campaign payment fields using campaign.update() instead of campaignData
+        await campaign.update({
+          maxCampaignPaymentStatus: null,
+          maxCampaignOrderId: null,
+          maxCampaignPaymentId: null,
+          maxCampaignAmount: null,
+        } as any);
+      }
+
+      // Ensure campaign status is active (not draft)
+      if (campaign.status === 'draft') {
+        console.log(`  ✅ Setting campaign status to active`);
+        await campaign.update({ status: CampaignStatus.ACTIVE });
+      }
+
+      console.log(`✅ Campaign ${campaignId} is now organic and active`);
     }
 
     // Update campaign fields
@@ -2152,6 +2190,17 @@ export class CampaignService {
 
       // Handle different payment events
       switch (event) {
+        case 'payment.authorized':
+          // Payment authorized but not yet captured - mark as PROCESSING
+          await campaign.update({
+            [statusField]: InvoiceStatus.PROCESSING,
+            paymentStatusUpdatedAt: new Date(),
+            razorpayLastWebhookAt: new Date(),
+            paymentStatusMessage: 'Payment authorized, waiting for confirmation',
+          });
+          console.log(`⏳ Campaign ${campaign.id} payment authorized - status set to PROCESSING`);
+          break;
+
         case 'payment.captured':
         case 'order.paid':
           // Payment successful - set status to ACTIVE
@@ -2160,6 +2209,7 @@ export class CampaignService {
             status: 'active' as any,
             paymentStatusUpdatedAt: new Date(),
             razorpayLastWebhookAt: new Date(),
+            paymentStatusMessage: 'Payment successful',
           });
           console.log(`✅ Campaign ${campaign.id} activated after payment captured`);
           break;
@@ -2170,6 +2220,7 @@ export class CampaignService {
             [statusField]: InvoiceStatus.FAILED,
             paymentStatusUpdatedAt: new Date(),
             razorpayLastWebhookAt: new Date(),
+            paymentStatusMessage: paymentEntity.error_description || 'Payment failed',
           });
           console.log(`❌ Campaign ${campaign.id} payment failed`);
           break;

@@ -22,6 +22,7 @@ import { MaxCampaignPaymentService } from './services/max-campaign-payment.servi
 import { MaxCampaignInvoice } from './models/max-campaign-invoice.model';
 import { InviteOnlyPaymentService } from './services/invite-only-payment.service';
 import { InviteOnlyCampaignInvoice } from './models/invite-only-campaign-invoice.model';
+import { PaymentStatusCheckerService } from './services/payment-status-checker.service';
 
 @Module({
   imports: [
@@ -46,7 +47,13 @@ import { InviteOnlyCampaignInvoice } from './models/invite-only-campaign-invoice
     SharedModule,
   ],
   controllers: [CampaignController],
-  providers: [CampaignService, CampaignQueryService, MaxCampaignPaymentService, InviteOnlyPaymentService],
+  providers: [
+    CampaignService,
+    CampaignQueryService,
+    MaxCampaignPaymentService,
+    InviteOnlyPaymentService,
+    PaymentStatusCheckerService,
+  ],
   exports: [CampaignService, MaxCampaignPaymentService, InviteOnlyPaymentService],
 })
 export class CampaignModule {}

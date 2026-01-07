@@ -74,6 +74,11 @@ export class MaxCampaignPaymentService {
       throw new BadRequestException('This campaign is already a Max Campaign');
     }
 
+    // Check if campaign is marked as organic
+    if (campaign.isOrganic) {
+      throw new BadRequestException('Organic campaigns cannot be upgraded to Max Campaign');
+    }
+
     // Auto-delete old pending payment and invoice (same as Pro subscription logic)
     if (campaign.maxCampaignPaymentStatus === 'pending') {
       // Delete old pending invoice if exists
@@ -138,7 +143,7 @@ export class MaxCampaignPaymentService {
       razorpayOrderId: razorpayOrder.orderId,
     });
 
-    // Update campaign with order details and set status to DRAFT until payment is completed
+    // Update campaign with order details (keep campaign active while payment is pending)
     await campaign.update({
       maxCampaignPaymentStatus: 'pending',
       maxCampaignOrderId: razorpayOrder.orderId,

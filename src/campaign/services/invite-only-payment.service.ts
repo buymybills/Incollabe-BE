@@ -118,7 +118,7 @@ export class InviteOnlyPaymentService {
       razorpayOrderId: razorpayOrder.orderId,
     });
 
-    // Update campaign with order details and set status to DRAFT until payment is completed
+    // Update campaign with order details (keep campaign active while payment is pending)
     await campaign.update({
       inviteOnlyPaymentStatus: 'pending',
       inviteOnlyOrderId: razorpayOrder.orderId,
