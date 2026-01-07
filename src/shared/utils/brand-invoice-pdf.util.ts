@@ -54,10 +54,11 @@ export async function generateBrandInvoicePDF(
     // Add logo on the left
     try {
       const logoPath = path.join(process.cwd(), 'src', 'assets', 'collabkaroo-logo.png');
-      const logoSize = 40;
+      const logoWidth = 120;
+      const logoHeight = 35;
 
-      // Add logo on the left
-      doc.image(logoPath, margin, 40, { width: logoSize, height: logoSize });
+      // Add logo on the left (PNG contains both logo icon and "CollabKaroo" text)
+      doc.image(logoPath, margin, 40, { width: logoWidth, height: logoHeight });
     } catch (error) {
       // Fallback if logo not found - just show text
       console.error('Logo not found, using text only:', error);
@@ -220,7 +221,7 @@ export async function generateBrandInvoicePDF(
     doc
       .fillColor('#1e6dfb')
       .text('Amount due', totalsX, y)
-      .text(`INR ${formatAmount(invoiceData.total)}`, totalsValueX, y, {
+      .text(`Rs. ${formatAmount(invoiceData.total)}`, totalsValueX, y, {
         align: 'right',
         width: 80
       });
