@@ -2403,6 +2403,7 @@ export class AuthService {
     deviceName?: string,
     deviceOs?: 'ios' | 'android',
     appVersion?: string,
+    versionCode?: number,
   ) {
     const influencer = await this.influencerModel.findByPk(userId);
 
@@ -2419,6 +2420,7 @@ export class AuthService {
       deviceName,
       deviceOs,
       appVersion,
+      versionCode,
     });
 
     // Still update the main fcmToken field for backward compatibility

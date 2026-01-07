@@ -28,6 +28,7 @@ import { SubscriptionSchedulerService } from './services/subscription-scheduler.
 import { CreditTransaction } from '../admin/models/credit-transaction.model';
 import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
 import { InfluencerUpi } from './models/influencer-upi.model';
+import { CampaignModule } from '../campaign/campaign.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { InfluencerUpi } from './models/influencer-upi.model';
       InfluencerUpi,
     ]),
     SharedModule,
+    CampaignModule,
   ],
   controllers: [InfluencerController],
   providers: [
@@ -121,6 +123,10 @@ import { InfluencerUpi } from './models/influencer-upi.model';
     {
       provide: 'INFLUENCER_UPI_MODEL',
       useValue: InfluencerUpi,
+    },
+    {
+      provide: 'PRO_SUBSCRIPTION_MODEL',
+      useValue: ProSubscription,
     },
   ],
   exports: [InfluencerService, InfluencerRepository, ProSubscriptionService],

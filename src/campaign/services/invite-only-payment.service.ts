@@ -2,61 +2,36 @@ import { Injectable, BadRequestException, NotFoundException, ForbiddenException 
 import { InjectModel } from '@nestjs/sequelize';
 import { Campaign } from '../models/campaign.model';
 import { Brand } from '../../brand/model/brand.model';
-import { MaxCampaignInvoice, InvoiceStatus, PaymentMethod } from '../models/max-campaign-invoice.model';
+import { InviteOnlyCampaignInvoice, InvoiceStatus, PaymentMethod } from '../models/invite-only-campaign-invoice.model';
 import { RazorpayService } from '../../shared/razorpay.service';
 import { S3Service } from '../../shared/s3.service';
-import { EmailService } from '../../shared/email.service';
 import { EncryptionService } from '../../shared/services/encryption.service';
+import { EmailService } from '../../shared/email.service';
 import { createDatabaseDate, toIST } from '../../shared/utils/date.utils';
 import { Op } from 'sequelize';
 import { generateBrandInvoicePDF } from '../../shared/utils/brand-invoice-pdf.util';
 
-interface InvoiceItem {
-  description: string;
-  quantity: number;
-  rate: number;
-  amount: number;
-  hscCode: string;
-  taxes: number;
-}
-
-interface InvoiceData {
-  invoiceNumber: string;
-  date: Date;
-  brand: {
-    name: string;
-    email: string;
-  };
-  campaign: {
-    name: string;
-  };
-  items: InvoiceItem[];
-  subtotal: number;
-  tax: number;
-  total: number;
-}
-
 @Injectable()
-export class MaxCampaignPaymentService {
-  private readonly MAX_CAMPAIGN_AMOUNT = 29900; // Rs 299 in paise
+export class InviteOnlyPaymentService {
+  private readonly INVITE_ONLY_AMOUNT = 49900; // Rs 499 in paise
 
   constructor(
     @InjectModel(Campaign)
     private campaignModel: typeof Campaign,
     @InjectModel(Brand)
     private brandModel: typeof Brand,
-    @InjectModel(MaxCampaignInvoice)
-    private maxCampaignInvoiceModel: typeof MaxCampaignInvoice,
+    @InjectModel(InviteOnlyCampaignInvoice)
+    private inviteOnlyInvoiceModel: typeof InviteOnlyCampaignInvoice,
     private razorpayService: RazorpayService,
     private s3Service: S3Service,
-    private emailService: EmailService,
     private encryptionService: EncryptionService,
+    private emailService: EmailService,
   ) {}
 
   /**
-   * Create payment order to upgrade campaign to Max Campaign
+   * Create payment order to unlock invite-only feature for a campaign
    */
-  async createMaxCampaignOrder(campaignId: number, brandId: number) {
+  async createInviteOnlyPaymentOrder(campaignId: number, brandId: number) {
     // Get campaign
     const campaign = await this.campaignModel.findByPk(campaignId);
 
@@ -66,23 +41,23 @@ export class MaxCampaignPaymentService {
 
     // Check if brand owns this campaign
     if (campaign.brandId !== brandId) {
-      throw new ForbiddenException('You can only upgrade your own campaigns');
+      throw new ForbiddenException('You can only unlock features for your own campaigns');
     }
 
-    // Check if already a Max Campaign
-    if (campaign.isMaxCampaign) {
-      throw new BadRequestException('This campaign is already a Max Campaign');
+    // Check if campaign is invite-only
+    if (!campaign.isInviteOnly) {
+      throw new BadRequestException('This feature is only available for invite-only campaigns');
     }
 
-    // Check if campaign is marked as organic
-    if (campaign.isOrganic) {
-      throw new BadRequestException('Organic campaigns cannot be upgraded to Max Campaign');
+    // Check if already paid for invite-only feature
+    if (campaign.inviteOnlyPaid) {
+      throw new BadRequestException('Invite-only feature is already unlocked for this campaign');
     }
 
-    // Auto-delete old pending payment and invoice (same as Pro subscription logic)
-    if (campaign.maxCampaignPaymentStatus === 'pending') {
+    // Auto-delete old pending payment and invoice
+    if (campaign.inviteOnlyPaymentStatus === 'pending') {
       // Delete old pending invoice if exists
-      await this.maxCampaignInvoiceModel.destroy({
+      await this.inviteOnlyInvoiceModel.destroy({
         where: {
           campaignId,
           paymentStatus: InvoiceStatus.PENDING,
@@ -91,10 +66,10 @@ export class MaxCampaignPaymentService {
 
       // Clear campaign payment fields
       await campaign.update({
-        maxCampaignPaymentStatus: undefined,
-        maxCampaignOrderId: undefined,
-        maxCampaignPaymentId: undefined,
-        maxCampaignAmount: undefined,
+        inviteOnlyPaymentStatus: undefined,
+        inviteOnlyOrderId: undefined,
+        inviteOnlyPaymentId: undefined,
+        inviteOnlyAmount: undefined,
       } as any);
     }
 
@@ -108,29 +83,29 @@ export class MaxCampaignPaymentService {
     const invoiceNumber = await this.generateInvoiceNumber();
 
     // Create invoice
-    const invoice = await this.maxCampaignInvoiceModel.create({
+    const invoice = await this.inviteOnlyInvoiceModel.create({
       invoiceNumber,
       campaignId,
       brandId,
-      amount: this.MAX_CAMPAIGN_AMOUNT,
+      amount: this.INVITE_ONLY_AMOUNT,
       tax: 0, // No GST for services under Rs 20 lakh turnover
-      totalAmount: this.MAX_CAMPAIGN_AMOUNT,
+      totalAmount: this.INVITE_ONLY_AMOUNT,
       paymentStatus: InvoiceStatus.PENDING,
       paymentMethod: PaymentMethod.RAZORPAY,
     });
 
     // Create Razorpay order
     const razorpayOrder = await this.razorpayService.createOrder(
-      299, // Amount in Rs
+      499, // Amount in Rs
       'INR',
-      `MAX_CAMPAIGN_${campaignId}_INV_${invoice.id}`,
+      `INVITE_ONLY_${campaignId}_INV_${invoice.id}`,
       {
         campaignId,
         invoiceId: invoice.id,
         brandId,
         brandName: brand.brandName,
         campaignName: campaign.name,
-        upgradeType: 'max_campaign',
+        featureType: 'invite_only',
       },
     );
 
@@ -145,9 +120,9 @@ export class MaxCampaignPaymentService {
 
     // Update campaign with order details (keep campaign active while payment is pending)
     await campaign.update({
-      maxCampaignPaymentStatus: 'pending',
-      maxCampaignOrderId: razorpayOrder.orderId,
-      maxCampaignAmount: this.MAX_CAMPAIGN_AMOUNT,
+      inviteOnlyPaymentStatus: 'pending',
+      inviteOnlyOrderId: razorpayOrder.orderId,
+      inviteOnlyAmount: this.INVITE_ONLY_AMOUNT,
       status: 'draft' as any, // Campaign will be DRAFT until payment is completed
     });
 
@@ -156,14 +131,14 @@ export class MaxCampaignPaymentService {
         id: campaign.id,
         name: campaign.name,
         currentStatus: {
-          isMaxCampaign: false,
+          inviteOnlyPaid: false,
           paymentStatus: 'pending',
         },
       },
       invoice: {
         id: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
-        amount: invoice.totalAmount,
+        amount: invoice.totalAmount / 100, // Convert to Rs
       },
       payment: {
         orderId: razorpayOrder.orderId,
@@ -175,9 +150,9 @@ export class MaxCampaignPaymentService {
   }
 
   /**
-   * Verify payment and activate Max Campaign
+   * Verify payment and unlock invite-only feature
    */
-  async verifyAndActivateMaxCampaign(
+  async verifyAndUnlockInviteOnly(
     campaignId: number,
     brandId: number,
     paymentId: string,
@@ -203,16 +178,16 @@ export class MaxCampaignPaymentService {
 
     // Check ownership
     if (campaign.brandId !== brandId) {
-      throw new ForbiddenException('You can only upgrade your own campaigns');
+      throw new ForbiddenException('You can only unlock features for your own campaigns');
     }
 
     // Verify order ID matches
-    if (campaign.maxCampaignOrderId !== orderId) {
+    if (campaign.inviteOnlyOrderId !== orderId) {
       throw new BadRequestException('Order ID mismatch');
     }
 
     // Get invoice
-    const invoice = await this.maxCampaignInvoiceModel.findOne({
+    const invoice = await this.inviteOnlyInvoiceModel.findOne({
       where: {
         campaignId,
         razorpayOrderId: orderId,
@@ -232,12 +207,12 @@ export class MaxCampaignPaymentService {
       paidAt: now,
     });
 
-    // Update campaign to Max Campaign and set status to ACTIVE
+    // Update campaign - unlock invite-only feature and set status to ACTIVE
     await campaign.update({
-      isMaxCampaign: true,
-      maxCampaignPaymentStatus: 'paid',
-      maxCampaignPaymentId: paymentId,
-      maxCampaignPaidAt: now,
+      inviteOnlyPaid: true,
+      inviteOnlyPaymentStatus: 'paid',
+      inviteOnlyPaymentId: paymentId,
+      inviteOnlyPaidAt: now,
       status: 'active' as any, // Activate campaign after payment is completed
     });
 
@@ -246,12 +221,12 @@ export class MaxCampaignPaymentService {
 
     return {
       success: true,
-      message: 'Campaign upgraded to Max Campaign successfully! Only Pro influencers can now apply.',
+      message: 'Invite-only feature unlocked successfully! You can now send invitations to influencers.',
       campaign: {
         id: campaign.id,
         name: campaign.name,
-        isMaxCampaign: true,
-        upgradedAt: toIST(now),
+        inviteOnlyPaid: true,
+        unlockedAt: toIST(now),
       },
       invoice: {
         id: invoice.id,
@@ -263,9 +238,9 @@ export class MaxCampaignPaymentService {
   }
 
   /**
-   * Get Max Campaign status
+   * Get invite-only payment status
    */
-  async getMaxCampaignStatus(campaignId: number, brandId: number) {
+  async getInviteOnlyStatus(campaignId: number, brandId: number) {
     const campaign = await this.campaignModel.findByPk(campaignId);
 
     if (!campaign) {
@@ -278,7 +253,7 @@ export class MaxCampaignPaymentService {
     }
 
     // Get invoice if exists
-    const invoice = await this.maxCampaignInvoiceModel.findOne({
+    const invoice = await this.inviteOnlyInvoiceModel.findOne({
       where: { campaignId },
       order: [['createdAt', 'DESC']],
     });
@@ -286,13 +261,14 @@ export class MaxCampaignPaymentService {
     return {
       campaignId: campaign.id,
       campaignName: campaign.name,
-      isMaxCampaign: campaign.isMaxCampaign,
-      maxCampaignDetails: {
-        paymentStatus: campaign.maxCampaignPaymentStatus,
-        amount: campaign.maxCampaignAmount ? campaign.maxCampaignAmount / 100 : 299,
-        paidAt: toIST(campaign.maxCampaignPaidAt),
-        orderId: campaign.maxCampaignOrderId,
-        paymentId: campaign.maxCampaignPaymentId,
+      isInviteOnly: campaign.isInviteOnly,
+      inviteOnlyPaid: campaign.inviteOnlyPaid,
+      inviteOnlyDetails: {
+        paymentStatus: campaign.inviteOnlyPaymentStatus,
+        amount: campaign.inviteOnlyAmount ? campaign.inviteOnlyAmount / 100 : 499,
+        paidAt: toIST(campaign.inviteOnlyPaidAt),
+        orderId: campaign.inviteOnlyOrderId,
+        paymentId: campaign.inviteOnlyPaymentId,
       },
       invoice: invoice
         ? {
@@ -301,92 +277,9 @@ export class MaxCampaignPaymentService {
             amount: invoice.totalAmount / 100,
             status: invoice.paymentStatus,
             paidAt: toIST(invoice.paidAt),
+            invoiceUrl: invoice.invoiceUrl,
           }
         : null,
-    };
-  }
-
-  /**
-   * Get all invoices for a brand (billing history)
-   */
-  async getBillingHistory(brandId: number) {
-    const invoices = await this.maxCampaignInvoiceModel.findAll({
-      where: { brandId },
-      include: [
-        {
-          model: Campaign,
-          as: 'campaign',
-          attributes: ['id', 'name'],
-        },
-      ],
-      order: [['createdAt', 'DESC']],
-    });
-
-    return {
-      invoices: invoices.map((invoice) => ({
-        id: invoice.id,
-        invoiceNumber: invoice.invoiceNumber,
-        campaignId: invoice.campaignId,
-        campaignName: invoice.campaign?.name,
-        amount: invoice.totalAmount / 100, // Convert paise to rupees
-        status: invoice.paymentStatus,
-        paymentMethod: invoice.paymentMethod,
-        razorpayOrderId: invoice.razorpayOrderId,
-        razorpayPaymentId: invoice.razorpayPaymentId,
-        paidAt: toIST(invoice.paidAt),
-        invoiceUrl: invoice.invoiceUrl,
-        createdAt: toIST(invoice.createdAt),
-      })),
-    };
-  }
-
-  /**
-   * Get invoice details
-   */
-  async getInvoiceDetails(invoiceId: number, brandId: number) {
-    const invoice = await this.maxCampaignInvoiceModel.findOne({
-      where: {
-        id: invoiceId,
-        brandId,
-      },
-      include: [
-        {
-          model: Campaign,
-          as: 'campaign',
-        },
-        {
-          model: Brand,
-          as: 'brand',
-        },
-      ],
-    });
-
-    if (!invoice) {
-      throw new NotFoundException('Invoice not found');
-    }
-
-    return {
-      id: invoice.id,
-      invoiceNumber: invoice.invoiceNumber,
-      amount: invoice.amount / 100,
-      tax: invoice.tax / 100,
-      totalAmount: invoice.totalAmount / 100,
-      campaign: {
-        id: invoice.campaign.id,
-        name: invoice.campaign.name,
-      },
-      brand: {
-        id: invoice.brand.id,
-        brandName: invoice.brand.brandName,
-      },
-      paymentStatus: invoice.paymentStatus,
-      paymentMethod: invoice.paymentMethod,
-      razorpayOrderId: invoice.razorpayOrderId,
-      razorpayPaymentId: invoice.razorpayPaymentId,
-      paidAt: toIST(invoice.paidAt),
-      invoiceUrl: invoice.invoiceUrl,
-      invoiceData: invoice.invoiceData, // Structured invoice data for PDF generation
-      createdAt: toIST(invoice.createdAt),
     };
   }
 
@@ -394,7 +287,7 @@ export class MaxCampaignPaymentService {
    * Generate invoice data and PDF, upload to S3
    */
   private async generateInvoiceData(invoiceId: number) {
-    const invoice = await this.maxCampaignInvoiceModel.findByPk(invoiceId, {
+    const invoice = await this.inviteOnlyInvoiceModel.findByPk(invoiceId, {
       include: [
         { model: Campaign, as: 'campaign' },
         { model: Brand, as: 'brand' },
@@ -446,7 +339,7 @@ export class MaxCampaignPaymentService {
     const pdfBuffer = await this.generateInvoicePDF(invoiceData);
 
     // Upload to S3
-    const s3Key = `invoices/max-campaign/${invoice.invoiceNumber}.pdf`;
+    const s3Key = `invoices/invite-only-campaign/${invoice.invoiceNumber}.pdf`;
     const mockFile = {
       buffer: pdfBuffer,
       mimetype: 'application/pdf',
@@ -463,7 +356,7 @@ export class MaxCampaignPaymentService {
 
     // Send invoice email to brand
     try {
-      await this.emailService.sendMaxCampaignInvoiceEmail(
+      await this.emailService.sendInviteCampaignInvoiceEmail(
         decryptedEmail,
         invoice.brand.brandName,
         invoice.invoiceNumber,
@@ -472,7 +365,7 @@ export class MaxCampaignPaymentService {
         invoice.campaign.name,
       );
     } catch (error) {
-      console.error('Failed to send Max Campaign invoice email:', error);
+      console.error('Failed to send Invite Campaign invoice email:', error);
       // Don't throw - email failure shouldn't break the flow
     }
 
@@ -482,52 +375,12 @@ export class MaxCampaignPaymentService {
   /**
    * Generate PDF from invoice data
    */
-  private async generateInvoicePDF(invoiceData: InvoiceData): Promise<Buffer> {
+  private async generateInvoicePDF(invoiceData: any): Promise<Buffer> {
     return generateBrandInvoicePDF(invoiceData);
   }
 
   /**
-   * Regenerate PDF for existing invoice
-   */
-  async regenerateInvoicePDF(invoiceId: number, brandId: number) {
-    const invoice = await this.maxCampaignInvoiceModel.findOne({
-      where: {
-        id: invoiceId,
-        brandId,
-      },
-    });
-
-    if (!invoice) {
-      throw new NotFoundException('Invoice not found');
-    }
-
-    if (invoice.paymentStatus !== InvoiceStatus.PAID) {
-      throw new BadRequestException('Can only generate PDF for paid invoices');
-    }
-
-    // Regenerate invoice data and PDF
-    await this.generateInvoiceData(invoiceId);
-
-    // Fetch updated invoice
-    const updatedInvoice = await this.maxCampaignInvoiceModel.findByPk(invoiceId);
-
-    if (!updatedInvoice) {
-      throw new NotFoundException('Invoice not found after regeneration');
-    }
-
-    return {
-      success: true,
-      message: 'Invoice PDF generated successfully',
-      invoice: {
-        id: updatedInvoice.id,
-        invoiceNumber: updatedInvoice.invoiceNumber,
-        invoiceUrl: updatedInvoice.invoiceUrl,
-      },
-    };
-  }
-
-  /**
-   * Generate unique invoice number for Max Campaign
+   * Generate unique invoice number for Invite-Only Campaign
    * Format: MAXXINV-YYYYMM-SEQ
    * Example: MAXXINV-202601-1 (1st invoice in Jan 2026)
    */
@@ -537,7 +390,7 @@ export class MaxCampaignPaymentService {
     const prefix = `MAXXINV-${year}${month}-`;
 
     // Get the latest invoice number for this month
-    const latestInvoice = await this.maxCampaignInvoiceModel.findOne({
+    const latestInvoice = await this.inviteOnlyInvoiceModel.findOne({
       where: {
         invoiceNumber: {
           [Op.like]: `${prefix}%`,

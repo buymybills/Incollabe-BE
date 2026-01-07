@@ -11,6 +11,7 @@ import { WhatsAppService } from '../shared/whatsapp.service';
 import { NotificationService } from '../shared/notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
 import { UserType as DeviceUserType } from '../shared/models/device-token.model';
+import { APP_VERSION } from '../shared/constants/app-version.constants';
 import { OtpService } from '../shared/services/otp.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto';
@@ -59,6 +60,7 @@ import { UserType as CustomNicheUserType } from '../auth/model/custom-niche.mode
 import { CreditTransaction } from 'src/admin/models/credit-transaction.model';
 import { InfluencerReferralUsage } from 'src/auth/model/influencer-referral-usage.model';
 import { InfluencerUpi } from './models/influencer-upi.model';
+import { ProSubscription, SubscriptionStatus } from './models/pro-subscription.model';
 
 // Private types for InfluencerService
 type WhatsAppOtpRequest = {
@@ -126,13 +128,41 @@ export class InfluencerService {
     private readonly influencerReferralUsageModel: typeof InfluencerReferralUsage,
     @Inject('INFLUENCER_UPI_MODEL')
     private readonly influencerUpiModel: typeof InfluencerUpi,
+    @Inject('PRO_SUBSCRIPTION_MODEL')
+    private readonly proSubscriptionModel: typeof ProSubscription,
   ) {}
+
+  /**
+   * Maps deliverable type value to its human-readable label
+   */
+  private getDeliverableLabel(value: string): string {
+    const deliverableLabels: Record<string, string> = {
+      // Social media deliverables
+      instagram_reel: 'Insta Reel / Post',
+      instagram_story: 'Insta Story',
+      youtube_short: 'YT Shorts',
+      youtube_long_video: 'YT Video',
+      facebook_story: 'FB Story',
+      facebook_post: 'FB Post',
+      twitter_post: 'X Post',
+      linkedin_post: 'LinkedIn Post',
+      // Engagement deliverables
+      like_comment: 'Like/Comment',
+      playstore_review: 'Playstore Review',
+      appstore_review: 'App Store Review',
+      google_review: 'Google Review',
+      app_download: 'App Download',
+    };
+
+    return deliverableLabels[value] || value;
+  }
 
   async getInfluencerProfile(
     influencerId: number,
     isPublic: boolean = false,
     currentUserId?: number,
     currentUserType?: 'influencer' | 'brand',
+    deviceId?: string,
   ) {
     // Validate that only influencers can access their own profile
     if (influencerId === currentUserId && currentUserType === 'brand') {
@@ -165,15 +195,16 @@ export class InfluencerService {
         // If profile just became complete and hasn't been submitted, create review
         if (!hasBeenSubmitted) {
           await this.createProfileReview(influencerId);
-          // Send verification pending notification asynchronously (fire-and-forget)
-          // Error handling is done internally by WhatsApp service
-          // COMMENTED: WhatsApp notification for profile sent for verification
-          // if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-          //   this.whatsAppService.sendProfileVerificationPending(
-          //     influencer.whatsappNumber,
-          //     influencer.name,
-          //   );
-          // }
+          // Send verification pending push notification asynchronously (fire-and-forget)
+          const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencerId, DeviceUserType.INFLUENCER);
+          if (fcmTokens && fcmTokens.length > 0) {
+            this.notificationService.sendCustomNotification(
+              fcmTokens,
+              'Profile Under Review',
+              `Hi ${influencer.name}, your profile has been submitted for verification. You will be notified once the review is complete within 48 hours.`,
+              { type: 'profile_verification_pending' },
+            ).catch(err => console.error('Failed to send profile verification pending notification:', err));
+          }
         }
         // Refetch influencer to get updated state from database
         const updatedInfluencer = await this.influencerRepository.findById(
@@ -298,6 +329,98 @@ export class InfluencerService {
         influencer.updatedAt?.toISOString() || new Date().toISOString(),
     };
 
+    // Fetch device token for the user (only for non-public view)
+    let deviceToken: {
+      id: number;
+      deviceId: string | null;
+      deviceName: string | null;
+      deviceOs: string | null;
+      appVersion: string | null;
+      versionCode: number | null;
+    } | null = null;
+
+    // App version information with constants and user's installed version
+    let appVersionInfo: {
+      installedVersion: {
+        appVersion: string | null;
+        versionCode: number | null;
+      };
+      minimumVersion: {
+        appVersion: string;
+        versionCode: number;
+      };
+      latestVersion: {
+        appVersion: string;
+        versionCode: number;
+      };
+      updateRequired: boolean;
+      updateAvailable: boolean;
+      forceUpdate: boolean;
+      updateMessage: string;
+    } | null = null;
+
+    if (!isPublic) {
+      const devices = await this.deviceTokenService.getUserDevices(influencerId, DeviceUserType.INFLUENCER);
+
+      // If deviceId is provided, find that specific device; otherwise use most recent
+      let selectedDevice: typeof devices[number] | undefined = undefined;
+      if (deviceId) {
+        selectedDevice = devices.find(device => device.deviceId === deviceId);
+      } else if (devices.length > 0) {
+        selectedDevice = devices[0]; // Most recently used device
+      }
+
+      // Map device token to response format (without fcmToken)
+      if (selectedDevice) {
+        deviceToken = {
+          id: selectedDevice.id,
+          deviceId: selectedDevice.deviceId,
+          deviceName: selectedDevice.deviceName,
+          deviceOs: selectedDevice.deviceOs,
+          appVersion: selectedDevice.appVersion,
+          versionCode: selectedDevice.versionCode,
+        };
+      }
+
+      // Get the most recently used device for app version comparison
+      const mostRecentDevice = selectedDevice || (devices.length > 0 ? devices[0] : null);
+
+      // Build app version info with constants and user's installed version
+      appVersionInfo = {
+        // User's currently installed app version (from their device)
+        installedVersion: {
+          appVersion: mostRecentDevice?.appVersion || null,
+          versionCode: mostRecentDevice?.versionCode || null,
+        },
+        // Minimum required version (from constants)
+        minimumVersion: {
+          appVersion: APP_VERSION.MINIMUM_VERSION,
+          versionCode: APP_VERSION.MINIMUM_VERSION_CODE,
+        },
+        // Latest available version (from constants)
+        latestVersion: {
+          appVersion: APP_VERSION.LATEST_VERSION,
+          versionCode: APP_VERSION.LATEST_VERSION_CODE,
+        },
+        // Update flags
+        updateRequired: mostRecentDevice?.versionCode
+          ? mostRecentDevice.versionCode < APP_VERSION.MINIMUM_VERSION_CODE
+          : false,
+        updateAvailable: mostRecentDevice?.versionCode
+          ? mostRecentDevice.versionCode < APP_VERSION.LATEST_VERSION_CODE
+          : false,
+        forceUpdate: APP_VERSION.FORCE_UPDATE && (mostRecentDevice?.versionCode
+          ? mostRecentDevice.versionCode < APP_VERSION.MINIMUM_VERSION_CODE
+          : false),
+        // Update messages
+        updateMessage: APP_VERSION.FORCE_UPDATE && (mostRecentDevice?.versionCode
+          ? mostRecentDevice.versionCode < APP_VERSION.MINIMUM_VERSION_CODE
+          : false)
+          ? APP_VERSION.FORCE_UPDATE_MESSAGE
+          : APP_VERSION.UPDATE_MESSAGE,
+      };
+    }
+
     // Include private data only if not public view
     if (!isPublic) {
       // Convert Pro subscription dates to IST if they exist
@@ -336,7 +459,42 @@ export class InfluencerService {
 
       // Calculate isPro dynamically based on actual subscription status
       const now = new Date();
-      const isPro = influencer.isPro && influencer.proExpiresAt && influencer.proExpiresAt > now;
+      let isPro = false;
+
+      // Query the actual subscription to check its status
+      const subscription = await this.proSubscriptionModel.findOne({
+        where: { influencerId },
+        order: [['createdAt', 'DESC']],
+      });
+
+      if (subscription) {
+        // User has Pro access if:
+        // 1. Subscription is ACTIVE, OR
+        // 2. Subscription is CANCELLED but current period hasn't ended yet, OR
+        // 3. Subscription is PAUSED:
+        //    - Before currentPeriodEnd: isPro = true (paid period, pause hasn't started)
+        //    - After resumeDate: isPro = true (pause ended)
+        //    - Between currentPeriodEnd and resumeDate: isPro = false (pause active)
+
+        if (subscription.status === SubscriptionStatus.ACTIVE) {
+          isPro = true;
+        } else if (subscription.status === SubscriptionStatus.CANCELLED) {
+          isPro = subscription.currentPeriodEnd > now;
+        } else if (subscription.status === SubscriptionStatus.PAUSED) {
+          // If pause period has ended, give Pro access
+          if (subscription.resumeDate && subscription.resumeDate <= now) {
+            isPro = true;
+          }
+          // If still in paid period (pause hasn't started yet), give Pro access
+          else if (subscription.currentPeriodEnd > now) {
+            isPro = true;
+          }
+          // Otherwise, we're in the pause period - no Pro access
+          else {
+            isPro = false;
+          }
+        }
+      }
 
       return {
         ...baseProfile,
@@ -367,6 +525,8 @@ export class InfluencerService {
         monthlyReferralUsageCount,
         upiId: influencer.upiId || null,
         profileCompletion,
+        deviceToken,
+        appVersion: appVersionInfo,
       };
     }
 
@@ -565,14 +725,16 @@ export class InfluencerService {
       // Create profile review for admin verification
       await this.createProfileReview(influencerId);
 
-      // Send verification pending notifications (WhatsApp only for influencers)
-      // COMMENTED: WhatsApp notification for profile sent for verification
-      // if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-      //   await this.whatsAppService.sendProfileVerificationPending(
-      //     influencer.whatsappNumber,
-      //     influencer.name,
-      //   );
-      // }
+      // Send verification pending push notification
+      const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencerId, DeviceUserType.INFLUENCER);
+      if (fcmTokens && fcmTokens.length > 0) {
+        this.notificationService.sendCustomNotification(
+          fcmTokens,
+          'Profile Under Review',
+          `Hi ${updatedInfluencer.name}, your profile has been submitted for verification. You will be notified once the review is complete within 48 hours.`,
+          { type: 'profile_verification_pending' },
+        ).catch(err => console.error('Failed to send profile verification pending notification:', err));
+      }
     }
 
     // If profile is already complete but has no review record, create one
@@ -580,14 +742,16 @@ export class InfluencerService {
     if (isComplete && !hasBeenSubmitted && wasComplete) {
       await this.createProfileReview(influencerId);
 
-      // Send verification pending notifications (WhatsApp only for influencers)
-      // COMMENTED: WhatsApp notification for profile sent for verification
-      // if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-      //   await this.whatsAppService.sendProfileVerificationPending(
-      //     influencer.whatsappNumber,
-      //     influencer.name,
-      //   );
-      // }
+      // Send verification pending push notification
+      const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencerId, DeviceUserType.INFLUENCER);
+      if (fcmTokens && fcmTokens.length > 0) {
+        this.notificationService.sendCustomNotification(
+          fcmTokens,
+          'Profile Under Review',
+          `Hi ${updatedInfluencer.name}, your profile has been submitted for verification. You will be notified once the review is complete within 48 hours.`,
+          { type: 'profile_verification_pending' },
+        ).catch(err => console.error('Failed to send profile verification pending notification:', err));
+      }
     }
 
     // Send appropriate WhatsApp notification based on completion status
@@ -604,24 +768,20 @@ export class InfluencerService {
           missingFields: profileCompletion.missingFields,
         });
 
-        if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-          console.log(
-            'Sending profile incomplete WhatsApp notification to:',
-            influencer.whatsappNumber,
-          );
-          await this.whatsAppService.sendProfileIncomplete(
-            influencer.whatsappNumber,
-            influencer.name,
-            profileCompletion.missingFields.length.toString(),
-          );
-        } else {
-          console.log(
-            'Profile incomplete WhatsApp notification not sent. Reason:',
+        // Send profile incomplete push notification
+        const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencer.id, DeviceUserType.INFLUENCER);
+        if (fcmTokens && fcmTokens.length > 0) {
+          const missingCount = profileCompletion.missingFields.length;
+          this.notificationService.sendCustomNotification(
+            fcmTokens,
+            'Complete Your Profile',
+            `Hi ${influencer.name}, you have ${missingCount} field${missingCount > 1 ? 's' : ''} remaining to complete your profile. Complete it to apply for campaigns!`,
             {
-              hasWhatsappNumber: !!influencer.whatsappNumber,
-              isWhatsappVerified: influencer.isWhatsappVerified,
+              type: 'profile_incomplete',
+              missingFieldsCount: missingCount.toString(),
+              missingFields: JSON.stringify(profileCompletion.missingFields)
             },
-          );
+          ).catch(err => console.error('Failed to send profile incomplete notification:', err));
         }
       }
     }
@@ -1088,6 +1248,7 @@ export class InfluencerService {
       nicheIds,
       minBudget,
       maxBudget,
+      campaignType,
       page = 1,
       limit = 10,
     } = getOpenCampaignsDto;
@@ -1119,12 +1280,65 @@ export class InfluencerService {
       isActive: true,
     };
 
-    // Search by campaign name or brand name
-    if (search) {
-      whereCondition[Op.or] = [
-        { name: { [Op.iLike]: `%${search}%` } },
-        { description: { [Op.iLike]: `%${search}%` } },
-      ];
+    // Get campaign IDs where influencer has been invited
+    const invitations = await this.campaignInvitationModel.findAll({
+      where: { influencerId },
+      attributes: ['id', 'campaignId', 'status'],
+    });
+    const invitedCampaignIds = invitations ? invitations.map(inv => inv.campaignId) : [];
+    
+    console.log('🎯 INVITATION DEBUG - getOpenCampaigns:', {
+      influencerId,
+      invitationsCount: invitations.length,
+      invitedCampaignIds,
+      hasInvitations: invitedCampaignIds.length > 0,
+      invitationRawData: invitations.map(inv => ({ id: inv.id, campaignId: inv.campaignId, status: inv.status })),
+    });
+
+    // CORE FILTER: Show invited campaigns OR (non-invited campaigns that pass other filters)
+    // This will be built and then added to whereCondition[Op.and]
+    const coreFilter: any = {
+      [Op.or]: [
+        // ALWAYS show invited campaigns (they bypass all other filters)
+        { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
+        // For non-invited: apply isInviteOnly filter to exclude invite-only campaigns
+        { isInviteOnly: false },
+      ],
+    };
+
+    whereCondition[Op.and] = [coreFilter];
+
+    // 24-hour early access filter for non-Pro users (applies to non-invited campaigns only)
+    if (!influencer?.isPro) {
+      const twentyFourHoursAgo = new Date();
+      twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+
+      console.log('⏰ Early Access Filter (Open Campaigns) - Non-Pro User:', {
+        currentTime: new Date().toISOString(),
+        twentyFourHoursAgo: twentyFourHoursAgo.toISOString(),
+        influencerId,
+        isPro: influencer.isPro,
+      });
+
+      // Show: invited campaigns (handled above) OR (MAX campaigns) OR (organic older than 24h)
+      whereCondition[Op.and].push({
+        [Op.or]: [
+          // Invited campaigns (redundant but safe)
+          { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
+          // MAX campaigns always visible
+          { isMaxCampaign: true },
+          // Organic campaigns older than 24 hours
+          {
+            [Op.and]: [
+              { isMaxCampaign: { [Op.ne]: true } },
+              { isInviteOnly: { [Op.ne]: true } },
+              { createdAt: { [Op.lte]: twentyFourHoursAgo } },
+            ],
+          },
+        ],
+      });
+
+      console.log('✅ Early Access Filter Applied to Open Campaigns');
     }
 
     // Niche filter - use provided nicheIds or fetch influencer's niches
@@ -1142,48 +1356,68 @@ export class InfluencerService {
       nicheIdsToFilter = influencerNiches.map((n: any) => n.nicheId);
     }
 
-    // Add niche filter to WHERE condition if nicheIds are available
-    // This creates: campaign.nicheIds @> '[1]' OR campaign.nicheIds @> '[2]' OR ...
+    // Add niche filter (applies to non-invited campaigns only via OR with invited check)
     if (nicheIdsToFilter.length > 0) {
       const nicheConditions = nicheIdsToFilter.map((nicheId) =>
         literal(`"Campaign"."nicheIds"::jsonb @> '[${nicheId}]'::jsonb`),
       );
-      whereCondition[Op.and] = [
-        ...(whereCondition[Op.and] || []),
-        { [Op.or]: nicheConditions },
-      ];
+      whereCondition[Op.and].push({
+        [Op.or]: [
+          { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
+          { [Op.or]: nicheConditions },
+        ],
+      });
     }
 
-    // Add age filter to WHERE condition
+    // Add age filter (applies to non-invited campaigns only via OR with invited check)
     if (influencerAge !== null) {
-      whereCondition[Op.and] = [
-        ...(whereCondition[Op.and] || []),
-        {
-          [Op.or]: [
-            { isOpenToAllAges: true },
-            {
-              [Op.and]: [
-                { minAge: { [Op.lte]: influencerAge } },
-                { maxAge: { [Op.gte]: influencerAge } },
-              ],
-            },
-          ],
-        },
-      ];
+      whereCondition[Op.and].push({
+        [Op.or]: [
+          { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
+          {
+            [Op.or]: [
+              { isOpenToAllAges: true },
+              {
+                [Op.and]: [
+                  { minAge: { [Op.lte]: influencerAge } },
+                  { maxAge: { [Op.gte]: influencerAge } },
+                ],
+              },
+            ],
+          },
+        ],
+      });
     }
 
-    // Add gender filter to WHERE condition
+    // Add gender filter (applies to non-invited campaigns only via OR with invited check)
     if (influencer.gender) {
-      whereCondition[Op.and] = [
-        ...(whereCondition[Op.and] || []),
-        {
-          [Op.or]: [
-            { isOpenToAllGenders: true },
-            literal(
-              `"Campaign"."genderPreferences"::jsonb @> '["${influencer.gender}"]'::jsonb`,
-            ),
-          ],
-        },
+      whereCondition[Op.and].push({
+        [Op.or]: [
+          { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
+          {
+            [Op.or]: [
+              { isOpenToAllGenders: true },
+              literal(
+                `"Campaign"."genderPreferences"::jsonb @> '["${influencer.gender}"]'::jsonb`,
+              ),
+            ],
+          },
+        ],
+      });
+    }
+
+    // Add campaign type filter
+    if (campaignType) {
+      whereCondition[Op.and].push({
+        type: campaignType,
+      });
+    }
+
+    // Add search filter (search by campaign name or description)
+    if (search && search.trim()) {
+      whereCondition[Op.or] = [
+        { name: { [Op.iLike]: `%${search}%` } },
+        { description: { [Op.iLike]: `%${search}%` } },
       ];
     }
 
@@ -1217,24 +1451,55 @@ export class InfluencerService {
       });
     }
 
-    // Location filter - campaigns that match influencer's city or are Pan-India
+    // Location filter (applies to non-invited campaigns only via OR with invited check)
     if (influencer.cityId) {
-      whereCondition[Op.and] = [
-        ...(whereCondition[Op.and] || []),
-        {
-          [Op.or]: [
-            { isPanIndia: true },
-            {
-              '$cities.cityId$': influencer.cityId,
-            },
-          ],
-        },
-      ];
+      whereCondition[Op.and].push({
+        [Op.or]: [
+          { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
+          {
+            [Op.or]: [
+              { isPanIndia: true },
+              {
+                '$cities.cityId$': influencer.cityId,
+              },
+            ],
+          },
+        ],
+      });
     }
 
     // Apply pagination at database level
     const { count, rows: campaigns } = await this.campaignModel.findAndCountAll(
       {
+        attributes: [
+          'id',
+          'brandId',
+          'name',
+          'description',
+          'category',
+          'deliverableFormat',
+          'status',
+          'type',
+          'isInviteOnly',
+          'isPanIndia',
+          'minAge',
+          'maxAge',
+          'isOpenToAllAges',
+          'genderPreferences',
+          'isOpenToAllGenders',
+          'nicheIds',
+          'customInfluencerRequirements',
+          'performanceExpectations',
+          'brandSupport',
+          'campaignBudget',
+          'barterProductWorth',
+          'additionalMonetaryPayout',
+          'numberOfInfluencers',
+          'isActive',
+          'isMaxCampaign',
+          'createdAt',
+          'updatedAt',
+        ],
         where: whereCondition,
         include: includeOptions,
         order: [['createdAt', 'DESC']],
@@ -1244,6 +1509,15 @@ export class InfluencerService {
         subQuery: false,
       },
     );
+
+    console.log('📊 QUERY RESULTS - getOpenCampaigns:', {
+      influencerId,
+      invitedCampaignIds,
+      campaignsReturned: campaigns.length,
+      totalCount: count,
+      campaignIds: campaigns.map(c => c.id),
+      campaignNames: campaigns.map(c => c.name),
+    });
 
     // Add application status for each campaign
     const campaignIds = campaigns.map((campaign) => campaign.id);
@@ -1292,8 +1566,18 @@ export class InfluencerService {
         (campaignData as any).cities = [];
       }
 
+      // Transform deliverables to human-readable labels and remove from response
+      let deliverableFormat: string[] | null = null;
+      if (campaignData.deliverables && campaignData.deliverables.length > 0) {
+        deliverableFormat = campaignData.deliverables.map((d: any) => this.getDeliverableLabel(d.type));
+      }
+
+      // Destructure to exclude deliverables from response
+      const { deliverables, ...campaignDataWithoutDeliverables } = campaignData;
+
       return {
-        ...campaignData,
+        ...campaignDataWithoutDeliverables,
+        deliverableFormat,
         hasApplied: applicationMap.has(campaign.id),
         applicationStatus: applicationMap.get(campaign.id) || null,
         totalApplications: countMap.get(campaign.id) || 0,
@@ -1350,23 +1634,24 @@ export class InfluencerService {
       }
     }
 
-    // Check Max Campaign 48-hour Pro-only window
-    if (campaign.isMaxCampaign) {
-      const now = new Date();
-      const campaignCreatedAt = new Date(campaign.createdAt);
-      const hoursSinceCreation = (now.getTime() - campaignCreatedAt.getTime()) / (1000 * 60 * 60);
+    // Check 24-hour Pro-only early access window (applies to ALL campaigns)
+    const now = new Date();
+    const campaignCreatedAt = new Date(campaign.createdAt);
+    const hoursSinceCreation = (now.getTime() - campaignCreatedAt.getTime()) / (1000 * 60 * 60);
 
-      // If within first 48 hours, only Pro influencers can apply
-      if (hoursSinceCreation <= 48) {
-        const influencer = await this.influencerRepository.findById(influencerId);
-        if (!influencer?.isPro) {
-          throw new ForbiddenException(
-            'This is a Max Campaign. Only Pro influencers can apply during the first 48 hours. Upgrade to Pro or wait until the campaign opens to all influencers.',
-          );
-        }
+    // If within first 24 hours, only Pro influencers can apply
+    if (hoursSinceCreation <= 24) {
+      const influencer = await this.influencerRepository.findById(influencerId);
+      if (!influencer?.isPro) {
+        const campaignTypeMessage = campaign.isMaxCampaign
+          ? 'This is a Max Campaign.'
+          : 'This campaign is in early access period.';
+        throw new ForbiddenException(
+          `${campaignTypeMessage} Only Pro influencers can apply during the first 24 hours. Upgrade to Pro or wait until the campaign opens to all influencers.`,
+        );
       }
-      // After 48 hours, anyone can apply (no restriction)
     }
+    // After 24 hours, anyone can apply (no restriction)
 
     // Check if influencer has already applied
     const existingApplication = await this.campaignApplicationModel.findOne({
@@ -1401,14 +1686,21 @@ export class InfluencerService {
       status: ApplicationStatus.APPLIED,
     } as any);
 
-    // Send WhatsApp notification to influencer asynchronously (fire-and-forget)
-    // Error handling is done internally by WhatsApp service
-    this.whatsAppService.sendCampaignApplicationConfirmation(
-      influencer.whatsappNumber,
-      influencer.name,
-      campaign.name,
-      campaign.brand?.brandName || 'Brand',
-    );
+    // Send push notification to influencer about application confirmation asynchronously (fire-and-forget)
+    const influencerFcmTokens = await this.deviceTokenService.getAllUserTokens(influencer.id, DeviceUserType.INFLUENCER);
+    if (influencerFcmTokens && influencerFcmTokens.length > 0) {
+      this.notificationService.sendCustomNotification(
+        influencerFcmTokens,
+        'Application Submitted!',
+        `Hi ${influencer.name}, your application for "${campaign.name}" by ${campaign.brand?.brandName || 'Brand'} has been submitted successfully. You will be notified about the status.`,
+        {
+          type: 'campaign_application_submitted',
+          campaignId: campaign.id.toString(),
+          campaignName: campaign.name,
+          brandName: campaign.brand?.brandName || 'Brand',
+        },
+      ).catch(err => console.error('Failed to send campaign application confirmation notification:', err));
+    }
 
     // Send push notification to brand owner about new application asynchronously (fire-and-forget)
     const brand = campaign.brand;
@@ -1482,6 +1774,14 @@ export class InfluencerService {
               'type',
               'category',
               'deliverableFormat',
+              'campaignBudget',
+              'barterProductWorth',
+              'additionalMonetaryPayout',
+              'numberOfInfluencers',
+              'isActive',
+              'isMaxCampaign',
+              'createdAt',
+              'updatedAt',
             ],
             include: [
               {
@@ -1503,25 +1803,27 @@ export class InfluencerService {
     const mappedApplications = applications.map((app) => {
       const appData = app.toJSON();
 
-      // Transform campaign field names to match API conventions
-      const transformedCampaign = {
-        ...appData.campaign,
-        deliverables: appData.campaign.deliverableFormat, // Rename deliverableFormat to deliverables
-        collaborationCost: appData.campaign.deliverables, // Rename deliverables array to collaborationCost
-      };
+      // Transform deliverables to human-readable labels
+      let deliverableFormat: string[] | null = null;
+      if (appData.campaign.deliverables && appData.campaign.deliverables.length > 0) {
+        deliverableFormat = appData.campaign.deliverables.map((d: any) => this.getDeliverableLabel(d.type));
+      }
 
-      // Remove old field name (TypeScript workaround)
-      delete (transformedCampaign as any).deliverableFormat;
+      // Destructure to exclude deliverables from campaign response
+      const { deliverables, ...campaignWithoutDeliverables } = appData.campaign;
 
       return {
         id: appData.id,
         status: appData.status,
         coverLetter: appData.coverLetter,
-        proposalMessage: appData.proposalMessage, 
+        proposalMessage: appData.proposalMessage,
         createdAt: appData.createdAt,
         reviewedAt: appData.reviewedAt,
         reviewNotes: appData.reviewNotes,
-        campaign: transformedCampaign as any, // Type assertion to fix deliverables type mismatch
+        campaign: {
+          ...campaignWithoutDeliverables,
+          deliverableFormat,
+        },
       };
     });
 
@@ -1601,7 +1903,12 @@ export class InfluencerService {
         'customInfluencerRequirements',
         'performanceExpectations',
         'brandSupport',
+        'campaignBudget',
+        'barterProductWorth',
+        'additionalMonetaryPayout',
+        'numberOfInfluencers',
         'isActive',
+        'isMaxCampaign',
         'createdAt',
         'updatedAt',
       ],
@@ -1657,17 +1964,24 @@ export class InfluencerService {
       });
     }
 
-    // Transform field names for API response
+    // Transform deliverables to human-readable labels
+    let deliverableFormat: string[] | null = null;
+    if (campaignData.deliverables && campaignData.deliverables.length > 0) {
+      deliverableFormat = campaignData.deliverables.map((d: any) => this.getDeliverableLabel(d.type));
+    }
+
+    // Destructure to exclude deliverables from response
+    const { deliverables, ...campaignDataWithoutDeliverables } = campaignData;
+
+    // Return transformed campaign data
     return {
-      ...campaignData,
+      ...campaignDataWithoutDeliverables,
       cities: transformedCities,
+      deliverableFormat,
       hasApplied: !!application,
       applicationStatus: application?.status || null,
       appliedAt: application?.createdAt || null,
       totalApplications,
-      deliverables: campaignData.deliverableFormat,
-      collaborationCost: campaignData.deliverables,
-      deliverableFormat: undefined,
     };
   }
 

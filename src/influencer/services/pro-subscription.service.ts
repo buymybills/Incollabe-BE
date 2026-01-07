@@ -1,14 +1,17 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
-import { ProSubscription, SubscriptionStatus, PaymentMethod } from '../models/pro-subscription.model';
+import { ConfigService } from '@nestjs/config';
+import { ProSubscription, SubscriptionStatus, PaymentMethod, UpiMandateStatus } from '../models/pro-subscription.model';
 import { ProInvoice, InvoiceStatus } from '../models/pro-invoice.model';
 import { ProPaymentTransaction, TransactionType, TransactionStatus } from '../models/pro-payment-transaction.model';
 import { Influencer } from '../../auth/model/influencer.model';
 import { RazorpayService } from '../../shared/razorpay.service';
 import { S3Service } from '../../shared/s3.service';
+import { EncryptionService } from '../../shared/services/encryption.service';
 import { Op } from 'sequelize';
 import { toIST, createDatabaseDate, addDaysForDatabase } from '../../shared/utils/date.utils';
 import PDFDocument from 'pdfkit';
+import * as path from 'path';
 
 @Injectable()
 export class ProSubscriptionService {
@@ -28,6 +31,8 @@ export class ProSubscriptionService {
     private influencerModel: typeof Influencer,
     private razorpayService: RazorpayService,
     private s3Service: S3Service,
+    private configService: ConfigService,
+    private encryptionService: EncryptionService,
   ) {}
 
   /**
@@ -40,31 +45,44 @@ export class ProSubscriptionService {
       throw new NotFoundException('Influencer not found');
     }
 
-    // Check if already has active subscription
-    const existingActiveSubscription = await this.proSubscriptionModel.findOne({
+    // Check if there's a pending payment to prevent duplicate payment attempts
+    const existingPendingSubscription = await this.proSubscriptionModel.findOne({
       where: {
         influencerId,
-        status: SubscriptionStatus.ACTIVE,
+        status: SubscriptionStatus.PAYMENT_PENDING,
       },
     });
 
-    if (existingActiveSubscription) {
-      throw new BadRequestException('You already have an active Pro subscription');
+    if (existingPendingSubscription) {
+      throw new BadRequestException('You already have a pending payment. Please complete or cancel it before creating a new subscription.');
     }
 
-    // Delete any old pending/failed subscriptions to avoid unique constraint violation
+    // Delete any old failed subscriptions to avoid unique constraint violation
     await this.proSubscriptionModel.destroy({
       where: {
         influencerId,
-        status: {
-          [Op.in]: [SubscriptionStatus.PAYMENT_PENDING, SubscriptionStatus.PAYMENT_FAILED],
-        },
+        status: SubscriptionStatus.PAYMENT_FAILED,
       },
     });
 
     // Create subscription record with timezone-adjusted dates
-    const startDate = createDatabaseDate();
-    const endDate = addDaysForDatabase(startDate, this.SUBSCRIPTION_DURATION_DAYS);
+    // If influencer has active Pro, extend from current expiry date to avoid losing days
+    const now = createDatabaseDate();
+    let startDate: Date;
+    let endDate: Date;
+
+    if (influencer.isPro && influencer.proExpiresAt && influencer.proExpiresAt > now) {
+      // Extend from current expiry - Example: If current expiry is Day 30 and they purchase on Day 20,
+      // new period will be Day 30 to Day 60 (not Day 20 to Day 50)
+      startDate = influencer.proExpiresAt;
+      endDate = addDaysForDatabase(startDate, this.SUBSCRIPTION_DURATION_DAYS);
+      console.log(`✅ Extending Pro membership from current expiry (${toIST(influencer.proExpiresAt)}) to ${toIST(endDate)}`);
+    } else {
+      // No active Pro or already expired - start new period from now
+      startDate = now;
+      endDate = addDaysForDatabase(startDate, this.SUBSCRIPTION_DURATION_DAYS);
+      console.log(`📅 Starting new Pro membership from now (ends: ${toIST(endDate)})`);
+    }
 
     const subscription = await this.proSubscriptionModel.create({
       influencerId,
@@ -253,16 +271,10 @@ export class ProSubscriptionService {
    * Get subscription details for an influencer
    */
   async getSubscriptionDetails(influencerId: number) {
+    // Get the latest subscription
     const subscription = await this.proSubscriptionModel.findOne({
       where: { influencerId },
       order: [['createdAt', 'DESC']],
-      include: [
-        {
-          model: ProInvoice,
-          as: 'invoices',
-          order: [['createdAt', 'DESC']],
-        },
-      ],
     });
 
     if (!subscription) {
@@ -272,27 +284,93 @@ export class ProSubscriptionService {
       };
     }
 
+    // Get ALL invoices for this influencer across all subscriptions
+    const allInvoices = await this.proInvoiceModel.findAll({
+      where: { influencerId },
+      order: [['createdAt', 'DESC']],
+    });
+
     // User has Pro access if:
     // 1. Subscription is ACTIVE, OR
-    // 2. Subscription is CANCELLED but current period hasn't ended yet
+    // 2. Subscription is CANCELLED but current period hasn't ended yet, OR
+    // 3. Subscription is PAUSED:
+    //    - Before currentPeriodEnd: isPro = true (paid period, pause hasn't started)
+    //    - After resumeDate: isPro = true (pause ended)
+    //    - Between currentPeriodEnd and resumeDate: isPro = false (pause active)
     const now = createDatabaseDate();
-    const isPro = subscription.status === SubscriptionStatus.ACTIVE ||
-      (subscription.status === SubscriptionStatus.CANCELLED && subscription.currentPeriodEnd > now);
+    let isPro = false;
+
+    if (subscription.status === SubscriptionStatus.ACTIVE) {
+      isPro = true;
+    } else if (subscription.status === SubscriptionStatus.CANCELLED) {
+      isPro = subscription.currentPeriodEnd > now;
+    } else if (subscription.status === SubscriptionStatus.PAUSED) {
+      // If pause period has ended, give Pro access
+      if (subscription.resumeDate && subscription.resumeDate <= now) {
+        isPro = true;
+      }
+      // If still in paid period (pause hasn't started yet), give Pro access
+      else if (subscription.currentPeriodEnd > now) {
+        isPro = true;
+      }
+      // Otherwise, we're in the pause period - no Pro access
+      else {
+        isPro = false;
+      }
+    }
+
+    // Don't count subscriptions in pending/failed states as having a subscription
+    const hasSubscription = !(
+      subscription.status === SubscriptionStatus.PAYMENT_PENDING ||
+      subscription.status === SubscriptionStatus.PAYMENT_FAILED ||
+      subscription.status === SubscriptionStatus.INACTIVE
+    );
+
+    // Calculate display status dynamically based on current time
+    let displayStatus = subscription.status;
+
+    // If cancelled and current period has ended, show as expired
+    if (subscription.status === SubscriptionStatus.CANCELLED && subscription.currentPeriodEnd <= now) {
+      displayStatus = SubscriptionStatus.EXPIRED;
+    }
+    // If pause is scheduled but hasn't started yet (before currentPeriodEnd), show as active
+    else if (subscription.isPaused && subscription.currentPeriodEnd > now) {
+      displayStatus = SubscriptionStatus.ACTIVE;
+    }
+    // If pause has started (after currentPeriodEnd but before resumeDate), show as paused
+    else if (subscription.isPaused && subscription.resumeDate && subscription.currentPeriodEnd <= now && subscription.resumeDate > now) {
+      displayStatus = SubscriptionStatus.PAUSED;
+    }
+    // If pause period has ended (after resumeDate), show as active
+    else if (subscription.isPaused && subscription.resumeDate && subscription.resumeDate <= now) {
+      displayStatus = SubscriptionStatus.ACTIVE;
+    }
 
     return {
-      hasSubscription: true,
+      hasSubscription,
       isPro,
       subscription: {
         id: subscription.id,
-        status: subscription.status,
+        status: displayStatus,
+        isCancelled: subscription.status === SubscriptionStatus.CANCELLED || displayStatus === SubscriptionStatus.EXPIRED,
+        isPaused: subscription.isPaused,  // True if pause is scheduled OR active
+        pausedAt: subscription.pausedAt ? toIST(subscription.pausedAt) : null,
+        pauseStartDate: subscription.pauseStartDate
+          ? toIST(subscription.pauseStartDate)
+          : (subscription.isPaused ? toIST(subscription.currentPeriodEnd) : null),  // Fallback for old data
+        pauseEndDate: subscription.resumeDate ? toIST(subscription.resumeDate) : null,
+        pauseDurationDays: subscription.pauseDurationDays,
         startDate: toIST(subscription.startDate),
         currentPeriodStart: toIST(subscription.currentPeriodStart),
         currentPeriodEnd: toIST(subscription.currentPeriodEnd),
         nextBillingDate: toIST(subscription.nextBillingDate),
         amount: subscription.subscriptionAmount / 100, // Convert to Rs
         autoRenew: subscription.autoRenew,
+        paymentMethod: subscription.paymentMethod,
+        isAutopay: subscription.autoRenew && !!subscription.razorpaySubscriptionId, // true if autopay, false if monthly
+        subscriptionType: subscription.autoRenew && subscription.razorpaySubscriptionId ? 'autopay' : 'monthly',
       },
-      invoices: subscription.invoices.map((inv) => ({
+      invoices: allInvoices.map((inv) => ({
         id: inv.id,
         invoiceNumber: inv.invoiceNumber,
         amount: inv.totalAmount / 100,
@@ -303,27 +381,25 @@ export class ProSubscriptionService {
         },
         paidAt: toIST(inv.paidAt),
         invoiceUrl: inv.invoiceUrl,
+        paymentMethod: inv.paymentMethod,
+        // Check if this invoice was paid via autopay (has razorpayPaymentId starting with subscription-related prefix)
+        isAutopay: inv.razorpayPaymentId ? inv.razorpayPaymentId.includes('sub_') : false,
+        paymentType: inv.razorpayPaymentId && inv.razorpayPaymentId.includes('sub_') ? 'Autopay' : 'Monthly',
       })),
     };
   }
 
   /**
-   * Get all invoices for an influencer
+   * Get all invoices for an influencer across ALL subscriptions
    */
   async getAllInvoices(influencerId: number) {
-    const subscription = await this.proSubscriptionModel.findOne({
+    // Fetch ALL invoices for this influencer across all subscriptions
+    const allInvoices = await this.proInvoiceModel.findAll({
       where: { influencerId },
       order: [['createdAt', 'DESC']],
-      include: [
-        {
-          model: ProInvoice,
-          as: 'invoices',
-          order: [['createdAt', 'DESC']],
-        },
-      ],
     });
 
-    if (!subscription || !subscription.invoices || subscription.invoices.length === 0) {
+    if (!allInvoices || allInvoices.length === 0) {
       return {
         invoices: [],
         totalInvoices: 0,
@@ -331,7 +407,7 @@ export class ProSubscriptionService {
     }
 
     return {
-      invoices: subscription.invoices.map((inv) => ({
+      invoices: allInvoices.map((inv) => ({
         id: inv.id,
         invoiceNumber: inv.invoiceNumber,
         amount: inv.totalAmount / 100, // Convert to Rs
@@ -342,9 +418,12 @@ export class ProSubscriptionService {
         },
         paidAt: toIST(inv.paidAt),
         invoiceUrl: inv.invoiceUrl,
+        paymentMethod: inv.paymentMethod,
+        isAutopay: inv.razorpayPaymentId ? inv.razorpayPaymentId.includes('sub_') : false,
+        paymentType: inv.razorpayPaymentId && inv.razorpayPaymentId.includes('sub_') ? 'Autopay' : 'Monthly',
         createdAt: toIST(inv.createdAt),
       })),
-      totalInvoices: subscription.invoices.length,
+      totalInvoices: allInvoices.length,
     };
   }
 
@@ -424,12 +503,14 @@ export class ProSubscriptionService {
     const subscription = await this.proSubscriptionModel.findOne({
       where: {
         influencerId,
-        status: SubscriptionStatus.ACTIVE,
+        status: {
+          [Op.in]: [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAUSED],
+        },
       },
     });
 
     if (!subscription) {
-      throw new NotFoundException('No active subscription found');
+      throw new NotFoundException('No active or paused subscription found');
     }
 
     await subscription.update({
@@ -437,6 +518,13 @@ export class ProSubscriptionService {
       autoRenew: false,
       cancelledAt: createDatabaseDate(),
       cancelReason: reason,
+      // Clear pause flags since cancellation overrides pause
+      isPaused: false,
+      pausedAt: null,
+      pauseStartDate: null,
+      pauseDurationDays: null,
+      resumeDate: null,
+      pauseReason: null,
     });
 
     return {
@@ -447,19 +535,18 @@ export class ProSubscriptionService {
   }
 
   /**
-   * Generate unique invoice number with influencer ID
-   * Format: INV-YYYYMM-INFLUENCERID-SEQ
-   * Example: INV-202512-7-001 (User 7's 1st invoice in Dec 2025)
+   * Generate unique invoice number for Max influencer
+   * Format: MAXXINV-YYYYMM-SEQ
+   * Example: MAXXINV-202601-1 (1st invoice in Jan 2026)
    */
   private async generateInvoiceNumber(influencerId: number): Promise<string> {
     const year = new Date().getFullYear();
     const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    const prefix = `INV-${year}${month}-${influencerId}-`;
+    const prefix = `MAXXINV-${year}${month}-`;
 
-    // Get the latest invoice number for this user in this month
+    // Get the latest invoice number for this month (across all users)
     const latestInvoice = await this.proInvoiceModel.findOne({
       where: {
-        influencerId,
         invoiceNumber: {
           [Op.like]: `${prefix}%`,
         },
@@ -469,13 +556,13 @@ export class ProSubscriptionService {
 
     let nextNumber = 1;
     if (latestInvoice) {
-      // Extract the sequence number (e.g., "INV-202512-7-001" -> 1)
+      // Extract the sequence number (e.g., "MAXXINV-202601-1" -> 1)
       const parts = latestInvoice.invoiceNumber.split('-');
-      const lastNumber = parseInt(parts[3], 10);
+      const lastNumber = parseInt(parts[2], 10);
       nextNumber = lastNumber + 1;
     }
 
-    return `${prefix}${String(nextNumber).padStart(3, '0')}`;
+    return `${prefix}${nextNumber}`;
   }
 
   /**
@@ -493,20 +580,27 @@ export class ProSubscriptionService {
       return;
     }
 
+    // Decrypt phone number if encrypted
+    const decryptedPhone = invoice.influencer.phone?.includes(':')
+      ? this.encryptionService.decrypt(invoice.influencer.phone)
+      : invoice.influencer.phone;
+
     // Store invoice data
     const invoiceData = {
       invoiceNumber: invoice.invoiceNumber,
       date: invoice.paidAt || invoice.createdAt,
       influencer: {
         name: invoice.influencer.name,
-        phone: invoice.influencer.phone,
+        phone: decryptedPhone || 'N/A',
       },
       items: [
         {
-          description: 'Pro Account Subscription (30 days)',
+          description: 'Maxx membership- Creator',
           quantity: 1,
           rate: invoice.amount / 100,
           amount: invoice.amount / 100,
+          hscCode: '998361', // HSC code for marketing services
+          taxes: invoice.tax / 100,
         },
       ],
       subtotal: invoice.amount / 100,
@@ -545,120 +639,209 @@ export class ProSubscriptionService {
    */
   private async createProInvoicePDF(invoiceData: any): Promise<Buffer> {
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 50 });
+      const doc = new PDFDocument({
+        margin: 50,
+        size: 'A4'
+      });
       const chunks: Buffer[] = [];
 
       doc.on('data', (chunk) => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // Header
-      doc
-        .fontSize(20)
-        .text('CollabKaroo', { align: 'center' })
-        .fontSize(10)
-        .text('Pro Subscription Invoice', { align: 'center' })
-        .moveDown();
+      const pageWidth = doc.page.width;
+      const margin = 50;
 
-      // Invoice details
-      doc
-        .fontSize(12)
-        .text(`Invoice Number: ${invoiceData.invoiceNumber}`, 50, 150)
-        .text(`Date: ${new Date(invoiceData.date).toLocaleDateString('en-IN')}`, 50, 170)
-        .moveDown();
+      // Header - Logo on left, INVOICE on right
+      try {
+        const logoPath = path.join(process.cwd(), 'src', 'assets', 'collabkaroo-logo.png');
 
-      // Influencer details
-      doc
-        .fontSize(14)
-        .text('Bill To:', 50, 210)
-        .fontSize(10)
-        .text(invoiceData.influencer.name, 50, 230)
-        .text(invoiceData.influencer.phone, 50, 245)
-        .moveDown();
-
-      // Billing period
-      doc
-        .fontSize(12)
-        .text('Billing Period:', 50, 280)
-        .fontSize(10)
-        .text(
-          `From: ${new Date(invoiceData.billingPeriod.start).toLocaleDateString('en-IN')}`,
-          50,
-          300
-        )
-        .text(
-          `To: ${new Date(invoiceData.billingPeriod.end).toLocaleDateString('en-IN')}`,
-          50,
-          315
-        )
-        .moveDown();
-
-      // Table header
-      const tableTop = 360;
-      doc
-        .fontSize(10)
-        .text('Description', 50, tableTop)
-        .text('Quantity', 300, tableTop)
-        .text('Rate', 380, tableTop)
-        .text('Amount', 450, tableTop);
-
-      // Draw line
-      doc
-        .moveTo(50, tableTop + 15)
-        .lineTo(550, tableTop + 15)
-        .stroke();
-
-      // Items
-      let yPosition = tableTop + 25;
-      invoiceData.items.forEach((item) => {
+        // Add logo on the left
+        doc.image(logoPath, margin, 40, {
+          fit: [180, 50]
+        });
+      } catch (logoError) {
+        // Fallback to text if logo not found
+        console.warn('Logo not found, using text fallback:', logoError.message);
         doc
-          .fontSize(9)
-          .text(item.description, 50, yPosition, { width: 230 })
-          .text(item.quantity.toString(), 300, yPosition)
-          .text(`₹${item.rate}`, 380, yPosition)
-          .text(`₹${item.amount}`, 450, yPosition);
-        yPosition += 30;
-      });
+          .fontSize(24)
+          .fillColor('#4285F4')
+          .font('Helvetica-Bold')
+          .text('CollabKaroo', margin, 45, { width: 250 });
+      }
 
-      // Draw line
+      // INVOICE title and number on the right
       doc
-        .moveTo(50, yPosition)
-        .lineTo(550, yPosition)
+        .fontSize(24)
+        .fillColor('#000000')
+        .font('Helvetica-Bold')
+        .text('INVOICE', pageWidth - 250, 45, { width: 200, align: 'right' })
+        .fontSize(14)
+        .fillColor('#6b7280')
+        .font('Helvetica')
+        .text(invoiceData.invoiceNumber, pageWidth - 250, 73, {
+          width: 200,
+          align: 'right'
+        });
+
+      // Issued, Billed To, and From section
+      const detailsStartY = 110;
+
+      // Calculate positions for space-between layout
+      const contentWidth = pageWidth - 2 * margin;
+      const col1X = margin;
+      const col2X = margin + contentWidth * 0.35; // ~35% from left
+      const col3X = pageWidth - 250;
+
+      // Issued
+      doc
+        .fontSize(11)
+        .fillColor('#000000')
+        .font('Helvetica-Bold')
+        .text('Issued', col1X, detailsStartY)
+        .font('Helvetica')
+        .fontSize(11)
+        .fillColor('#374151')
+        .text(new Date(invoiceData.date).toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
+        }), col1X, detailsStartY + 18);
+
+      // Billed to
+      doc
+        .fontSize(11)
+        .fillColor('#000000')
+        .font('Helvetica-Bold')
+        .text('Billed to', col2X, detailsStartY)
+        .font('Helvetica')
+        .fontSize(11)
+        .fillColor('#374151')
+        .text(invoiceData.influencer.name, col2X, detailsStartY + 18)
+        .text(invoiceData.influencer.phone || 'N/A', col2X, detailsStartY + 35);
+
+      // From section (Company details)
+      doc
+        .fontSize(11)
+        .fillColor('#000000')
+        .font('Helvetica-Bold')
+        .text('From', col3X, detailsStartY)
+        .font('Helvetica')
+        .fontSize(11)
+        .fillColor('#374151')
+        .text('Deshanta Marketing Solutions Pvt. Ltd', col3X, detailsStartY + 18, { width: 200 })
+        .text('Plot A-18, Manjeet farm', col3X, detailsStartY + 31, { width: 200 })
+        .text('Uttam Nagar, Delhi', col3X, detailsStartY + 44, { width: 200 })
+        .text('West Delhi, Delhi, 110059, IN', col3X, detailsStartY + 57, { width: 200 })
+        .text('GSTIN – 07AACD5691K1ZB', col3X, detailsStartY + 70, { width: 200 });
+
+      // Table header (added inch spacing between metadata and table)
+      const tableTop = 252;
+      const colPositions = {
+        service: margin,
+        qty: margin + 180,
+        rate: margin + 250,
+        hscCode: margin + 330,
+        taxes: margin + 410
+      };
+
+      doc
+        .fontSize(11)
+        .fillColor('#6b7280')
+        .font('Helvetica')
+        .text('Service', colPositions.service, tableTop)
+        .text('Qty', colPositions.qty, tableTop)
+        .text('Rate', colPositions.rate, tableTop)
+        .text('HSC Code', colPositions.hscCode, tableTop)
+        .text('Taxes', colPositions.taxes, tableTop);
+
+      doc
+        .strokeColor('#e5e7eb')
+        .lineWidth(1)
+        .moveTo(margin, tableTop + 18)
+        .lineTo(pageWidth - margin, tableTop + 18)
         .stroke();
 
-      // Totals
-      yPosition += 20;
-      doc
-        .fontSize(10)
-        .text('Subtotal:', 380, yPosition)
-        .text(`₹${invoiceData.subtotal}`, 450, yPosition);
+      // Table row
+      let yPosition = tableTop + 30;
+      const item = invoiceData.items[0];
 
-      yPosition += 20;
       doc
-        .text('Tax:', 380, yPosition)
-        .text(`₹${invoiceData.tax}`, 450, yPosition);
+        .fontSize(11)
+        .font('Helvetica')
+        .fillColor('#374151')
+        .text('Maxx membership- Creator', colPositions.service, yPosition)
+        .text(String(item.quantity), colPositions.qty, yPosition)
+        .text(`Rs. ${item.rate.toFixed(2)}`, colPositions.rate, yPosition)
+        .text(String(item.hscCode || 'N/A'), colPositions.hscCode, yPosition)
+        .text(`Rs. ${item.taxes.toFixed(2)}`, colPositions.taxes, yPosition);
 
-      yPosition += 20;
+      // Separator line
+      yPosition += 40;
       doc
-        .fontSize(12)
-        .text('Total:', 380, yPosition)
-        .text(`₹${invoiceData.total}`, 450, yPosition);
+        .strokeColor('#E0E0E0')
+        .lineWidth(0.5)
+        .moveTo(margin, yPosition)
+        .lineTo(pageWidth - margin, yPosition)
+        .stroke();
+
+      // Totals section
+      yPosition += 20;
+      const totalsX = pageWidth - 240;
+      const totalsValueX = pageWidth - 100;
+
+      doc
+        .fontSize(11)
+        .font('Helvetica')
+        .fillColor('#374151')
+        .text('Subtotal', totalsX, yPosition)
+        .text(`Rs. ${invoiceData.subtotal.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
+
+      yPosition += 25;
+      doc
+        .text('Tax (0%)', totalsX, yPosition)
+        .text(`Rs. ${invoiceData.tax.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
+
+      yPosition += 25;
+      doc
+        .strokeColor('#e5e7eb')
+        .lineWidth(1)
+        .moveTo(totalsX, yPosition - 5)
+        .lineTo(pageWidth - margin, yPosition - 5)
+        .stroke();
+
+      doc
+        .fontSize(11)
+        .font('Helvetica-Bold')
+        .fillColor('#374151')
+        .text('Total', totalsX, yPosition)
+        .text(`Rs. ${invoiceData.total.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
+
+      yPosition += 25;
+      doc
+        .fontSize(11)
+        .fillColor('#4285F4')
+        .font('Helvetica-Bold')
+        .text('Amount due', totalsX, yPosition)
+        .text(`Rs. ${invoiceData.total.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
 
       // Footer
+      const footerY = doc.page.height - 100;
+
       doc
-        .fontSize(8)
-        .text(
-          'Thank you for subscribing to CollabKaroo Pro!',
-          50,
-          700,
-          { align: 'center' }
-        )
-        .text(
-          'This is a computer-generated invoice.',
-          50,
-          715,
-          { align: 'center' }
-        );
+        .fontSize(11)
+        .font('Helvetica')
+        .fillColor('#6b7280')
+        .text('Thank you', margin, footerY)
+        .text('For Query and help,', margin, footerY + 18)
+        .text('Computer Generated Invoice', pageWidth - 250, footerY, {
+          align: 'right',
+          width: 200
+        })
+        .text('contact.us@gobuybill.com', pageWidth - 250, footerY + 18, {
+          align: 'right',
+          width: 200
+        });
 
       doc.end();
     });
@@ -828,23 +1011,19 @@ export class ProSubscriptionService {
           { where: { id: subscription.influencerId } },
         );
 
-        // Check if invoice already exists for this billing period (prevent duplicates)
-        // Use date range check to handle slight timestamp differences
-        const periodStartBuffer = new Date(subscription.currentPeriodStart);
-        periodStartBuffer.setMinutes(periodStartBuffer.getMinutes() - 5);
-        const periodEndBuffer = new Date(subscription.currentPeriodEnd);
-        periodEndBuffer.setMinutes(periodEndBuffer.getMinutes() + 5);
-
+        // Check if invoice already exists (prevent duplicates from race conditions)
+        const razorpayPaymentId = subscriptionEntity.notes?.razorpay_payment_id || subscriptionEntity.id;
         const existingActivationInvoice = await this.proInvoiceModel.findOne({
           where: {
-            subscriptionId: subscription.id,
-            paymentStatus: 'paid',
-            billingPeriodStart: {
-              [Op.between]: [periodStartBuffer, new Date(subscription.currentPeriodStart)],
-            },
-            billingPeriodEnd: {
-              [Op.between]: [new Date(subscription.currentPeriodEnd), periodEndBuffer],
-            },
+            [Op.or]: [
+              { razorpayPaymentId },
+              {
+                subscriptionId: subscription.id,
+                paymentStatus: 'paid',
+                billingPeriodStart: subscription.currentPeriodStart,
+                billingPeriodEnd: subscription.currentPeriodEnd,
+              },
+            ],
           },
         });
 
@@ -886,23 +1065,18 @@ export class ProSubscriptionService {
         // Recurring payment successful
         console.log(`💰 Subscription ${subscription.id} charged successfully`);
 
-        // Check if invoice already exists for this billing period (prevent duplicates)
-        // Use date range check to handle slight timestamp differences
-        const chargePeriodStartBuffer = new Date(subscription.currentPeriodStart);
-        chargePeriodStartBuffer.setMinutes(chargePeriodStartBuffer.getMinutes() - 5);
-        const chargePeriodEndBuffer = new Date(subscription.currentPeriodEnd);
-        chargePeriodEndBuffer.setMinutes(chargePeriodEndBuffer.getMinutes() + 5);
-
+        // Check if invoice already exists (prevent duplicates from race conditions)
         const existingChargeInvoice = await this.proInvoiceModel.findOne({
           where: {
-            subscriptionId: subscription.id,
-            paymentStatus: 'paid',
-            billingPeriodStart: {
-              [Op.between]: [chargePeriodStartBuffer, new Date(subscription.currentPeriodStart)],
-            },
-            billingPeriodEnd: {
-              [Op.between]: [new Date(subscription.currentPeriodEnd), chargePeriodEndBuffer],
-            },
+            [Op.or]: [
+              { razorpayPaymentId: subscriptionEntity.payment_id },
+              {
+                subscriptionId: subscription.id,
+                paymentStatus: 'paid',
+                billingPeriodStart: subscription.currentPeriodStart,
+                billingPeriodEnd: subscription.currentPeriodEnd,
+              },
+            ],
           },
         });
 
@@ -1220,14 +1394,15 @@ export class ProSubscriptionService {
       throw new NotFoundException('Influencer not found');
     }
 
-    // Check if already has active subscription with autopay
+    // Check if already has subscription (including cancelled ones with remaining Pro access)
     const existingSubscription = await this.proSubscriptionModel.findOne({
       where: {
         influencerId,
         status: {
-          [Op.in]: [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAYMENT_PENDING],
+          [Op.in]: [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAYMENT_PENDING, SubscriptionStatus.CANCELLED],
         },
       },
+      order: [['createdAt', 'DESC']], // Get the most recent subscription
     });
 
     // Allow restarting autopay if:
@@ -1328,7 +1503,7 @@ export class ProSubscriptionService {
         razorpaySubscriptionId: subscriptionResult.subscriptionId,
         upiMandateStatus: 'pending',
         mandateCreatedAt: now,
-        autoRenew: true,
+        autoRenew: false, // Will be set to true by webhook when mandate is authenticated
         currentPeriodStart: startDate,
         currentPeriodEnd: endDate,
         nextBillingDate: endDate,
@@ -1354,6 +1529,9 @@ export class ProSubscriptionService {
       });
     }
 
+    // Get Razorpay key for frontend checkout
+    const razorpayKey = this.configService.get<string>('RAZORPAY_KEY_ID');
+
     return {
       success: true,
       message: hasActivePro
@@ -1365,25 +1543,43 @@ export class ProSubscriptionService {
         status: subscription.status,
         mandateStatus: subscription.upiMandateStatus,
       },
+      // Razorpay checkout data for in-app payment
+      razorpayCheckout: {
+        key: razorpayKey,
+        subscription_id: subscriptionResult.subscriptionId,
+        name: 'CollabKaroo Pro',
+        description: 'Pro Subscription - Monthly Auto-Renewal',
+        prefill: {
+          name: influencer.name,
+          contact: influencer.phone || '',
+          email: '', // Influencers don't have email
+        },
+        notes: {
+          influencer_id: influencerId,
+          subscription_type: 'pro_monthly',
+        },
+        theme: {
+          color: '#3399cc',
+        },
+      },
+      // Deprecated: Keep for backward compatibility (can be removed later)
       paymentLink: subscriptionResult.paymentLink,
       currentPeriodEnd: hasActivePro ? toIST(endDate) : undefined,
       nextBillingDate: toIST(endDate),
       instructions: hasActivePro
         ? [
-            '1. Click on the payment link',
+            '1. Complete the payment in-app to setup autopay',
             '2. Choose your preferred payment method (UPI, Card, NetBanking, etc.)',
-            '3. Complete the payment authentication to setup autopay',
-            '4. No charge now - your existing Pro access will continue',
-            `5. Next payment will be auto-charged on ${toIST(endDate)}`,
-            '6. You can pause or cancel anytime',
+            '3. No charge now - your existing Pro access will continue',
+            `4. Next payment will be auto-charged on ${toIST(endDate)}`,
+            '5. You can pause or cancel anytime',
           ]
         : [
-            '1. Click on the payment link',
+            '1. Complete the payment in-app to setup autopay',
             '2. Choose your preferred payment method (UPI, Card, NetBanking, etc.)',
-            '3. Complete the payment authentication',
-            '4. First payment will be charged immediately',
-            '5. Subsequent payments will be auto-charged every 30 days',
-            '6. You can pause or cancel anytime',
+            '3. First payment will be charged immediately',
+            '4. Subsequent payments will be auto-charged every 30 days',
+            '5. You can pause or cancel anytime',
           ],
     };
   }
@@ -1471,7 +1667,8 @@ export class ProSubscriptionService {
     // Update subscription with pause details
     await subscription.update({
       isPaused: true,
-      pausedAt: createDatabaseDate(), 
+      pausedAt: createDatabaseDate(),
+      pauseStartDate: pauseStartDate,
       pauseDurationDays,
       resumeDate,
       pauseReason: reason,
@@ -1518,7 +1715,20 @@ export class ProSubscriptionService {
     }
 
     const now = createDatabaseDate();
-    const newPeriodEnd = addDaysForDatabase(now, this.SUBSCRIPTION_DURATION_DAYS);
+
+    // Check if pause has started yet
+    const pauseHasStarted = subscription.currentPeriodEnd <= now;
+
+    // If pause hasn't started yet, keep original billing period
+    // If pause has started, create a new billing period
+    let newPeriodStart = now;
+    let newPeriodEnd = addDaysForDatabase(now, this.SUBSCRIPTION_DURATION_DAYS);
+
+    if (!pauseHasStarted) {
+      // Pause hasn't started yet - keep original billing period
+      newPeriodStart = subscription.currentPeriodStart;
+      newPeriodEnd = subscription.currentPeriodEnd;
+    }
 
     // Resume in Razorpay if using autopay
     if (subscription.razorpaySubscriptionId) {
@@ -1568,7 +1778,7 @@ export class ProSubscriptionService {
       cancelledAt: null, // Clear cancellation when resuming
       cancelReason: null, // Clear cancel reason
       autoRenew: true, // Re-enable auto-renewal
-      currentPeriodStart: now,
+      currentPeriodStart: newPeriodStart,
       currentPeriodEnd: newPeriodEnd,
       nextBillingDate: newPeriodEnd,
       status: SubscriptionStatus.ACTIVE,
@@ -1586,13 +1796,17 @@ export class ProSubscriptionService {
       },
     );
 
+    const message = pauseHasStarted
+      ? 'Subscription resumed successfully! Your new billing period has started.'
+      : 'Pause cancelled successfully! Your subscription remains active with the original billing period.';
+
     return {
       success: true,
-      message: 'Subscription resumed successfully!',
+      message,
       subscription: {
         id: subscription.id,
         status: subscription.status,
-        currentPeriodStart: toIST(now),
+        currentPeriodStart: toIST(newPeriodStart),
         currentPeriodEnd: toIST(newPeriodEnd),
         nextBillingDate: toIST(newPeriodEnd),
       },
@@ -1601,7 +1815,7 @@ export class ProSubscriptionService {
 
   /**
    * Cancel autopay (but keep subscription active until period end)
-   * Actually PAUSES the subscription instead of cancelling to allow easy restart without double charging
+   * Cancels the subscription in Razorpay at cycle end
    */
   async cancelAutopay(influencerId: number, reason?: string) {
     const subscription = await this.proSubscriptionModel.findOne({
@@ -1617,36 +1831,69 @@ export class ProSubscriptionService {
       throw new NotFoundException('No active subscription found');
     }
 
-    // PAUSE in Razorpay instead of cancelling (allows restart without double charge)
+    // Cancel in Razorpay (at cycle end to allow Pro access until period ends)
     if (subscription.razorpaySubscriptionId) {
-      const pauseResult = await this.razorpayService.pauseSubscription(
+      // First check the current status in Razorpay to avoid unnecessary API calls
+      const subscriptionDetails = await this.razorpayService.getSubscription(
         subscription.razorpaySubscriptionId,
       );
 
-      if (!pauseResult.success) {
-        console.error(
-          'Failed to pause in Razorpay:',
-          pauseResult.error,
-        );
-        // Continue anyway to update local DB
+      if (subscriptionDetails.success) {
+        const razorpayStatus = subscriptionDetails.data?.status;
+
+        // Only attempt to cancel if not already cancelled
+        if (razorpayStatus !== 'cancelled' && razorpayStatus !== 'completed') {
+          const cancelResult = await this.razorpayService.cancelSubscription(
+            subscription.razorpaySubscriptionId,
+            true, // cancelAtCycleEnd = true (allows Pro access until period ends)
+          );
+
+          if (!cancelResult.success) {
+            console.error(
+              'Failed to cancel in Razorpay:',
+              cancelResult.error,
+            );
+            // Continue anyway to update local DB
+          } else {
+            console.log('✅ Razorpay subscription cancelled at cycle end');
+          }
+        } else {
+          console.log(`✅ Razorpay subscription already ${razorpayStatus} - skipping cancellation`);
+        }
       } else {
-        console.log('✅ Razorpay subscription paused (not cancelled) - can be restarted easily');
+        console.warn('Failed to fetch Razorpay subscription status:', subscriptionDetails.error);
+        // Try to cancel anyway
+        const cancelResult = await this.razorpayService.cancelSubscription(
+          subscription.razorpaySubscriptionId,
+          true,
+        );
+        if (!cancelResult.success) {
+          console.error('Failed to cancel in Razorpay:', cancelResult.error);
+        }
       }
     }
 
-    // Update subscription - mark as "autopay disabled" but keep mandate alive
+    // Update subscription - mark as cancelled and clear pause data
     await subscription.update({
+      status: SubscriptionStatus.CANCELLED,
       autoRenew: false,
       cancelledAt: createDatabaseDate(),
       cancelReason: reason,
-      upiMandateStatus: 'paused', // Changed from 'cancelled' to 'paused'
+      upiMandateStatus: UpiMandateStatus.CANCELLED,
+      // Clear pause flags since cancellation overrides pause
+      isPaused: false,
+      pausedAt: null,
+      pauseStartDate: null,
+      pauseDurationDays: null,
+      resumeDate: null,
+      pauseReason: null,
     });
 
     return {
       success: true,
-      message: 'Autopay disabled. Your Pro access will remain active until the end of current billing period.',
+      message: 'Autopay cancelled. Your Pro access will remain active until the end of current billing period.',
       validUntil: toIST(subscription.currentPeriodEnd),
-      note: 'You can restart autopay anytime without being charged again for the current period.',
+      note: 'You can setup autopay again anytime to continue Pro benefits.',
     };
   }
 

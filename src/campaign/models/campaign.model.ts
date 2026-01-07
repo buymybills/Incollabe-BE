@@ -22,9 +22,10 @@ export enum CampaignStatus {
 }
 
 export enum CampaignType {
+  UGC = 'ugc',
   PAID = 'paid',
   BARTER = 'barter',
-  HYBRID = 'hybrid',
+  ENGAGEMENT = 'engagement',
 }
 
 export interface CampaignCreationAttributes {
@@ -36,6 +37,7 @@ export interface CampaignCreationAttributes {
   status?: CampaignStatus;
   type?: CampaignType;
   isInviteOnly?: boolean;
+  isOrganic?: boolean;
   isPanIndia?: boolean;
   minAge?: number;
   maxAge?: number;
@@ -46,6 +48,10 @@ export interface CampaignCreationAttributes {
   customInfluencerRequirements?: string;
   performanceExpectations?: string;
   brandSupport?: string;
+  campaignBudget?: number;
+  barterProductWorth?: number;
+  additionalMonetaryPayout?: number;
+  numberOfInfluencers?: number;
   isActive?: boolean;
 }
 
@@ -118,6 +124,13 @@ export class Campaign extends Model<Campaign, CampaignCreationAttributes> {
     allowNull: false,
     defaultValue: false,
   })
+  declare isOrganic: boolean;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
   declare isPanIndia: boolean;
 
   @Column({
@@ -176,6 +189,32 @@ export class Campaign extends Model<Campaign, CampaignCreationAttributes> {
   })
   declare brandSupport: string;
 
+  // Budget and Influencer Count Fields
+  @Column({
+    type: DataType.DECIMAL(12, 2),
+    allowNull: true,
+  })
+  declare campaignBudget: number;
+
+  @Column({
+    type: DataType.DECIMAL(12, 2),
+    allowNull: true,
+  })
+  declare barterProductWorth: number;
+
+  @Column({
+    type: DataType.DECIMAL(12, 2),
+    allowNull: true,
+  })
+  declare additionalMonetaryPayout: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 1,
+  })
+  declare numberOfInfluencers: number;
+
   @Column({
     type: DataType.BOOLEAN,
     allowNull: false,
@@ -219,6 +258,78 @@ export class Campaign extends Model<Campaign, CampaignCreationAttributes> {
     allowNull: true,
   })
   declare maxCampaignAmount: number;
+
+  // Invite-Only Campaign Payment Fields
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+    field: 'invite_only_paid',
+  })
+  declare inviteOnlyPaid: boolean;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+    field: 'invite_only_payment_status',
+  })
+  declare inviteOnlyPaymentStatus: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+    field: 'invite_only_payment_id',
+  })
+  declare inviteOnlyPaymentId: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+    field: 'invite_only_order_id',
+  })
+  declare inviteOnlyOrderId: string;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+    field: 'invite_only_paid_at',
+  })
+  declare inviteOnlyPaidAt: Date;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    field: 'invite_only_amount',
+  })
+  declare inviteOnlyAmount: number;
+
+  // Payment Status Tracking Fields
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+    field: 'payment_status_message',
+  })
+  declare paymentStatusMessage: string;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+    field: 'payment_status_updated_at',
+  })
+  declare paymentStatusUpdatedAt: Date;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+    field: 'last_payment_attempt_at',
+  })
+  declare lastPaymentAttemptAt: Date;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+    field: 'razorpay_last_webhook_at',
+  })
+  declare razorpayLastWebhookAt: Date;
 
   // Timestamps
   declare createdAt: Date;

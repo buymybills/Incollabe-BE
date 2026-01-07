@@ -21,10 +21,11 @@ export enum InvitationStatus {
 @Table({
   tableName: 'campaign_invitations',
   timestamps: true,
+  underscored: false, // DB columns are already in camelCase
   indexes: [
     {
       unique: true,
-      fields: ['campaign_id', 'influencer_id'],
+      fields: ['campaignId', 'influencerId'],
       name: 'unique_campaign_influencer_invitation',
     },
   ],
@@ -41,22 +42,25 @@ export class CampaignInvitation extends Model<CampaignInvitation> {
   @Column({
     type: DataType.INTEGER,
     allowNull: false,
+    field: 'campaignId',
   })
-  campaignId: number;
+  declare campaignId: number;
 
   @ForeignKey(() => Influencer)
   @Column({
     type: DataType.INTEGER,
     allowNull: false,
+    field: 'influencerId',
   })
-  influencerId: number;
+  declare influencerId: number;
 
   @Column({
     type: DataType.ENUM(...Object.values(InvitationStatus)),
     allowNull: false,
     defaultValue: InvitationStatus.PENDING,
+    field: 'status',
   })
-  status: InvitationStatus;
+  declare status: InvitationStatus;
 
   @Column({
     type: DataType.TEXT,
@@ -81,6 +85,12 @@ export class CampaignInvitation extends Model<CampaignInvitation> {
     allowNull: true,
   })
   responseMessage: string;
+
+  @CreatedAt
+  declare createdAt: Date;
+
+  @UpdatedAt
+  declare updatedAt: Date;
 
   // Associations
   @BelongsTo(() => Campaign)

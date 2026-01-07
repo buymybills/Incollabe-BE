@@ -44,133 +44,90 @@ export class CampaignController {
   @Post()
   @ApiOperation({
     summary: 'Create a new campaign',
-    description:
-      'Creates a new marketing campaign with deliverables and targeting preferences',
+    description: `Creates a new marketing campaign with deliverables and targeting preferences.
+
+**Budget Field Requirements by Campaign Type:**
+- **PAID/UGC/ENGAGEMENT**: Requires 'campaignBudget' field (total budget in INR)
+- **BARTER**: Requires 'barterProductWorth' field (product value in INR), 'additionalMonetaryPayout' is optional
+
+**Important Notes:**
+- All campaigns require 'numberOfInfluencers' field (number of influencers to hire)
+- Use GET /campaign/deliverable-formats?campaignType={type} to get available deliverable formats for each campaign type
+- 'deliverableFormat' should be an array of strings (e.g., ['instagram_reel', 'instagram_story'])
+- For Invite-Only campaigns, set 'isInviteOnly: true' (campaign will be in DRAFT status until payment is completed)`,
   })
   @ApiBody({
     type: CreateCampaignDto,
     description: 'Campaign creation data',
     examples: {
-      allDeliverableTypes: {
-        summary: 'All Available Deliverable Types',
+      paidCampaign: {
+        summary: 'PAID Campaign Example',
         description:
-          'Example showing all supported platform and deliverable type combinations',
+          'PAID campaign with campaignBudget field. Requires campaignBudget and numberOfInfluencers. Get deliverable formats from GET /campaign/deliverable-formats?campaignType=paid',
         value: {
-          name: 'Complete Multi-Platform Campaign',
-          description:
-            'Campaign showcasing all available deliverable types across platforms',
-          category: 'Fashion',
-          deliverableFormat: 'Mixed content across all platforms',
-          isPanIndia: false,
-          cityIds: [1, 2, 3],
-          minAge: 18,
-          maxAge: 35,
-          isOpenToAllAges: false,
-          genderPreferences: ['Female', 'Male'],
-          isOpenToAllGenders: false,
-          nicheIds: [1, 2],
-          customInfluencerRequirements:
-            'Active on multiple platforms with good engagement',
-          performanceExpectations: 'Meet platform-specific engagement targets',
-          brandSupport: 'Product samples and creative guidelines provided',
-          deliverables: [
-            {
-              platform: 'instagram',
-              type: 'instagram_post',
-              budget: 2000,
-              quantity: 2,
-              specifications: 'High-quality feed posts with product placement',
-            },
-            {
-              platform: 'instagram',
-              type: 'instagram_story',
-              budget: 1000,
-              quantity: 3,
-              specifications: 'Stories with interactive elements',
-            },
-            {
-              platform: 'instagram',
-              type: 'instagram_reel',
-              budget: 3000,
-              quantity: 2,
-              specifications: 'Trending reels with product showcase',
-            },
-            {
-              platform: 'youtube',
-              type: 'youtube_short',
-              budget: 2500,
-              quantity: 2,
-              specifications: 'Vertical short-form videos under 60 seconds',
-            },
-            {
-              platform: 'youtube',
-              type: 'youtube_long_video',
-              budget: 15000,
-              quantity: 1,
-              specifications: 'Detailed review or tutorial video',
-            },
-            {
-              platform: 'facebook',
-              type: 'facebook_post',
-              budget: 1500,
-              quantity: 1,
-              specifications: 'Engaging Facebook post with brand integration',
-            },
-            {
-              platform: 'linkedin',
-              type: 'linkedin_post',
-              budget: 2000,
-              quantity: 1,
-              specifications:
-                'Professional LinkedIn post with industry insights',
-            },
-            {
-              platform: 'twitter',
-              type: 'twitter_post',
-              budget: 800,
-              quantity: 2,
-              specifications: 'Twitter posts or threads with brand mentions',
-            },
-          ],
-          isInviteOnly: false,
-        },
-      },
-      simpleExample: {
-        summary: 'Simple Instagram Campaign',
-        description: 'Basic campaign example matching typical UI flow',
-        value: {
-          name: 'Summer Collection Launch',
+          name: 'Summer Fashion Campaign',
           description: 'Promote new summer fashion collection',
           category: 'Fashion',
-          deliverableFormat: 'Instagram posts and stories',
+          type: 'paid',
+          deliverableFormat: ['instagram_reel', 'instagram_story', 'youtube_short'],
+          campaignBudget: 50000,
+          numberOfInfluencers: 10,
           isPanIndia: true,
           isOpenToAllAges: false,
           minAge: 18,
           maxAge: 30,
           genderPreferences: ['Female'],
           isOpenToAllGenders: false,
-          nicheIds: [1],
-          customInfluencerRequirements:
-            'Fashion influencers with style-focused content',
-          performanceExpectations:
-            'High engagement and authentic brand integration',
+          nicheIds: [1, 2],
+          customInfluencerRequirements: 'Fashion influencers with style-focused content',
+          performanceExpectations: 'High engagement and authentic brand integration',
           brandSupport: 'Product samples and styling guidelines',
-          deliverables: [
-            {
-              platform: 'instagram',
-              type: 'instagram_post',
-              budget: 5000,
-              quantity: 2,
-              specifications: 'Styled outfit posts featuring collection pieces',
-            },
-            {
-              platform: 'instagram',
-              type: 'instagram_story',
-              budget: 2000,
-              quantity: 3,
-              specifications: 'Behind-the-scenes styling and try-on content',
-            },
-          ],
+          isInviteOnly: false,
+        },
+      },
+      barterCampaign: {
+        summary: 'BARTER Campaign Example',
+        description:
+          'BARTER campaign with barterProductWorth instead of campaignBudget. Requires barterProductWorth and numberOfInfluencers. additionalMonetaryPayout is optional.',
+        value: {
+          name: 'Product Review Campaign',
+          description: 'Send products for honest reviews',
+          category: 'Beauty',
+          type: 'barter',
+          deliverableFormat: ['instagram_reel', 'youtube_long_video'],
+          barterProductWorth: 5000,
+          additionalMonetaryPayout: 2000,
+          numberOfInfluencers: 15,
+          isPanIndia: false,
+          cityIds: [1, 2, 3],
+          isOpenToAllAges: true,
+          genderPreferences: [],
+          isOpenToAllGenders: true,
+          nicheIds: [1],
+          customInfluencerRequirements: 'Authentic reviewers',
+          brandSupport: 'Free product samples',
+          isInviteOnly: false,
+        },
+      },
+      engagementCampaign: {
+        summary: 'ENGAGEMENT Campaign Example',
+        description:
+          'ENGAGEMENT campaign with campaignBudget field. Requires campaignBudget and numberOfInfluencers. Get deliverable formats from GET /campaign/deliverable-formats?campaignType=engagement',
+        value: {
+          name: 'App Launch Campaign',
+          description: 'Drive app downloads and reviews',
+          category: 'Technology',
+          type: 'engagement',
+          deliverableFormat: ['app_download', 'playstore_review', 'appstore_review'],
+          campaignBudget: 30000,
+          numberOfInfluencers: 20,
+          isPanIndia: true,
+          isOpenToAllAges: true,
+          genderPreferences: [],
+          isOpenToAllGenders: true,
+          nicheIds: [10],
+          customInfluencerRequirements: 'Tech-savvy users',
+          performanceExpectations: 'Genuine reviews',
           isInviteOnly: false,
         },
       },
@@ -221,10 +178,18 @@ export class CampaignController {
   @ApiQuery({
     name: 'type',
     required: false,
-    enum: ['open', 'invite', 'finished'],
+    enum: ['open', 'invite', 'draft', 'finished'],
     description:
-      'Filter campaigns by type. If not specified, returns all campaigns.',
+      'Filter campaigns by category type. If not specified, returns all campaigns.',
     example: 'open',
+  })
+  @ApiQuery({
+    name: 'campaignType',
+    required: false,
+    enum: ['paid', 'barter', 'ugc', 'engagement'],
+    description:
+      'Filter by campaign type (paid, barter, ugc, engagement). Only applies when type=open. If not specified, returns all campaign types.',
+    example: 'paid',
   })
   @ApiResponse({
     status: 200,
@@ -236,8 +201,13 @@ export class CampaignController {
             id: 1,
             name: 'Glow Like Never Before',
             category: 'Skincare + Makeup',
-            deliverableFormat: '2 Instagram reels, 3 story posts',
+            deliverableFormat: ['Insta Reel / Post', 'Insta Story'],
             status: 'active',
+            type: 'paid',
+            campaignBudget: 20000,
+            numberOfInfluencers: 10,
+            isMaxCampaign: false,
+            isInviteOnly: false,
             createdAt: '2025-09-11T00:00:00Z',
             brand: {
               id: 1,
@@ -249,14 +219,6 @@ export class CampaignController {
                 id: 5,
                 name: 'Mumbai',
                 tier: '1',
-              },
-            ],
-            deliverables: [
-              {
-                platform: 'instagram',
-                type: 'instagram_reel',
-                budget: 8000,
-                quantity: 2,
               },
             ],
             applications: [
@@ -309,6 +271,7 @@ export class CampaignController {
   async getCampaignsByCategory(
     @Req() req: RequestWithUser,
     @Query('type') type?: string,
+    @Query('campaignType') campaignType?: string,
   ) {
     if (req.user.userType !== 'brand') {
       throw new ForbiddenException(
@@ -316,7 +279,7 @@ export class CampaignController {
       );
     }
 
-    return this.campaignService.getCampaignsByCategory(req.user.id, type);
+    return this.campaignService.getCampaignsByCategory(req.user.id, type, campaignType);
   }
 
   @Get()
@@ -368,20 +331,19 @@ export class CampaignController {
             id: 1,
             name: 'Summer Fashion Campaign',
             status: 'active',
+            type: 'paid',
+            campaignBudget: 50000,
+            numberOfInfluencers: 10,
+            isMaxCampaign: false,
+            isInviteOnly: false,
+            promotionType: 'organic',
             brandId: 1,
             brand: {
               id: 1,
               brandName: 'Fashion Brand',
               profileImage: 'brand.jpg',
             },
-            deliverables: [
-              {
-                platform: 'instagram',
-                type: 'instagram_post',
-                budget: 2000,
-                quantity: 3,
-              },
-            ],
+            deliverableFormat: ['Insta Reel / Post', 'Insta Story'],
           },
         ],
         total: 25,
@@ -396,7 +358,8 @@ export class CampaignController {
     @Req() req?: RequestWithUser,
   ) {
     const brandId = req?.user?.userType === 'brand' ? req.user.id : undefined;
-    return this.campaignService.getCampaigns(getCampaignsDto, brandId);
+    const influencerId = req?.user?.userType === 'influencer' ? req.user.id : undefined;
+    return this.campaignService.getCampaigns(getCampaignsDto, brandId, influencerId);
   }
 
   @Get('my-campaigns')
@@ -429,13 +392,13 @@ export class CampaignController {
             id: 1,
             name: 'Summer Fashion Campaign',
             status: 'active',
-            deliverables: [
-              {
-                platform: 'instagram',
-                type: 'instagram_post',
-                budget: 2000,
-              },
-            ],
+            type: 'paid',
+            campaignBudget: 50000,
+            numberOfInfluencers: 10,
+            isMaxCampaign: false,
+            isInviteOnly: false,
+            promotionType: 'organic',
+            deliverableFormat: ['Insta Reel / Post', 'Insta Story'],
             invitations: [{ status: 'pending' }, { status: 'accepted' }],
             totalApplications: 15,
           },
@@ -504,13 +467,13 @@ export class CampaignController {
             id: 1,
             name: 'Summer Fashion Campaign',
             status: 'active',
-            deliverables: [
-              {
-                platform: 'instagram',
-                type: 'instagram_post',
-                budget: 2000,
-              },
-            ],
+            type: 'paid',
+            campaignBudget: 50000,
+            numberOfInfluencers: 10,
+            isMaxCampaign: false,
+            isInviteOnly: false,
+            promotionType: 'organic',
+            deliverableFormat: ['Insta Reel / Post', 'Insta Story'],
             invitations: [{ status: 'pending' }, { status: 'accepted' }],
             totalApplications: 15,
           },
@@ -613,10 +576,56 @@ export class CampaignController {
     return this.campaignService.searchCities(query);
   }
 
+  @Get('deliverable-formats')
+  @Public()
+  @ApiOperation({
+    summary: 'Get available deliverable formats based on campaign type',
+    description:
+      'Returns a list of available deliverable format options for a given campaign type. ' +
+      'For UGC, PAID, and BARTER campaigns, returns social media deliverables. ' +
+      'For ENGAGEMENT campaigns, returns engagement-specific deliverables.',
+  })
+  @ApiQuery({
+    name: 'campaignType',
+    required: false,
+    enum: ['ugc', 'paid', 'barter', 'engagement'],
+    description: 'Campaign type (defaults to "paid" if not specified)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Deliverable formats retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        campaignType: { type: 'string', example: 'paid' },
+        deliverableFormats: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              value: { type: 'string', example: 'instagram_reel' },
+              label: { type: 'string', example: 'Insta Reel / Post' },
+              platform: { type: 'string', example: 'instagram' },
+            },
+          },
+        },
+      },
+    },
+  })
+  async getDeliverableFormats(@Query('campaignType') campaignType?: string) {
+    return this.campaignService.getDeliverableFormats(campaignType);
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get campaign by ID',
-    description: 'Retrieves detailed information about a specific campaign',
+    description: `Retrieves detailed information about a specific campaign.
+
+**Response includes promotionType field:**
+- "organic" - Regular campaign (default)
+- "max" - Boosted MAX campaign (paid Rs 299)
+- "invite_only" - Invite-only campaign (paid Rs 499)
+- "invite_only_unpaid" - Invite-only campaign (not yet paid, in DRAFT status)`,
   })
   @ApiParam({
     name: 'id',
@@ -634,10 +643,14 @@ export class CampaignController {
         description:
           "L'Oreal Paris skincare campaign focusing on natural glow and authentic beauty routines",
         category: 'Skincare + Makeup',
-        deliverableFormat:
-          'Instagram Reel - 1 iPhone reel, 1 story posts\n\nDuration: 30 seconds\nVertical format: 9:16 ratio\nMusic: Trending audio with clear voice-over\nHashtags: Include brand hashtags and trending beauty tags\nTags: @lorealparis\nContent: Product review with before/after, authentic testimonial',
+        deliverableFormat: ['Insta Reel / Post', 'Insta Story'],
         status: 'active',
         type: 'paid',
+        campaignBudget: 20000,
+        numberOfInfluencers: 10,
+        isMaxCampaign: false,
+        isInviteOnly: false,
+        promotionType: 'organic',
         startDate: '2024-06-01T00:00:00Z',
         endDate: '2024-07-31T00:00:00Z',
         isPanIndia: false,
@@ -724,8 +737,16 @@ export class CampaignController {
   @Put(':id')
   @ApiOperation({
     summary: 'Update campaign',
-    description:
-      'Updates a campaign with new data (only by the brand that owns it)',
+    description: `Updates a campaign with new data (only by the brand that owns it).
+
+**Budget Field Requirements by Campaign Type:**
+- **PAID/UGC/ENGAGEMENT**: Requires 'campaignBudget' field (total budget in INR)
+- **BARTER**: Requires 'barterProductWorth' field (product value in INR), 'additionalMonetaryPayout' is optional
+
+**Important Notes:**
+- All campaigns require 'numberOfInfluencers' field (number of influencers to hire)
+- Use GET /campaign/deliverable-formats?campaignType={type} to get available deliverable formats for each campaign type
+- 'deliverableFormat' should be an array of strings (e.g., ['instagram_reel', 'instagram_story'])`,
   })
   @ApiParam({
     name: 'id',
@@ -737,126 +758,74 @@ export class CampaignController {
     type: UpdateCampaignDto,
     description: 'Campaign update data',
     examples: {
-      allDeliverableTypes: {
-        summary: 'All Available Deliverable Types',
+      paidCampaign: {
+        summary: 'PAID Campaign Example',
         description:
-          'Example showing all supported platform and deliverable type combinations',
+          'PAID campaign with campaignBudget field. Requires campaignBudget and numberOfInfluencers. Get deliverable formats from GET /campaign/deliverable-formats?campaignType=paid',
         value: {
-          name: 'Complete Multi-Platform Campaign',
-          description:
-            'Campaign showcasing all available deliverable types across platforms',
-          category: 'Fashion',
-          deliverableFormat: 'Mixed content across all platforms',
-          isPanIndia: false,
-          cityIds: [1, 2, 3],
-          minAge: 18,
-          maxAge: 35,
-          isOpenToAllAges: false,
-          genderPreferences: ['Female', 'Male'],
-          isOpenToAllGenders: false,
-          nicheIds: [1, 2],
-          customInfluencerRequirements:
-            'Active on multiple platforms with good engagement',
-          performanceExpectations: 'Meet platform-specific engagement targets',
-          brandSupport: 'Product samples and creative guidelines provided',
-          deliverables: [
-            {
-              platform: 'instagram',
-              type: 'instagram_post',
-              budget: 2000,
-              quantity: 2,
-              specifications: 'High-quality feed posts with product placement',
-            },
-            {
-              platform: 'instagram',
-              type: 'instagram_story',
-              budget: 1000,
-              quantity: 3,
-              specifications: 'Stories with interactive elements',
-            },
-            {
-              platform: 'instagram',
-              type: 'instagram_reel',
-              budget: 3000,
-              quantity: 2,
-              specifications: 'Trending reels with product showcase',
-            },
-            {
-              platform: 'youtube',
-              type: 'youtube_short',
-              budget: 2500,
-              quantity: 2,
-              specifications: 'Vertical short-form videos under 60 seconds',
-            },
-            {
-              platform: 'youtube',
-              type: 'youtube_long_video',
-              budget: 15000,
-              quantity: 1,
-              specifications: 'Detailed review or tutorial video',
-            },
-            {
-              platform: 'facebook',
-              type: 'facebook_post',
-              budget: 1500,
-              quantity: 1,
-              specifications: 'Engaging Facebook post with brand integration',
-            },
-            {
-              platform: 'linkedin',
-              type: 'linkedin_post',
-              budget: 2000,
-              quantity: 1,
-              specifications:
-                'Professional LinkedIn post with industry insights',
-            },
-            {
-              platform: 'twitter',
-              type: 'twitter_post',
-              budget: 800,
-              quantity: 2,
-              specifications: 'Twitter posts or threads with brand mentions',
-            },
-          ],
-          isInviteOnly: false,
-        },
-      },
-      simpleExample: {
-        summary: 'Simple Instagram Campaign',
-        description: 'Basic campaign example matching typical UI flow',
-        value: {
-          name: 'Summer Collection Launch',
+          name: 'Summer Fashion Campaign',
           description: 'Promote new summer fashion collection',
           category: 'Fashion',
-          deliverableFormat: 'Instagram posts and stories',
+          type: 'paid',
+          deliverableFormat: ['instagram_reel', 'instagram_story', 'youtube_short'],
+          campaignBudget: 50000,
+          numberOfInfluencers: 10,
           isPanIndia: true,
           isOpenToAllAges: false,
           minAge: 18,
           maxAge: 30,
           genderPreferences: ['Female'],
           isOpenToAllGenders: false,
-          nicheIds: [1],
-          customInfluencerRequirements:
-            'Fashion influencers with style-focused content',
-          performanceExpectations:
-            'High engagement and authentic brand integration',
+          nicheIds: [1, 2],
+          customInfluencerRequirements: 'Fashion influencers with style-focused content',
+          performanceExpectations: 'High engagement and authentic brand integration',
           brandSupport: 'Product samples and styling guidelines',
-          deliverables: [
-            {
-              platform: 'instagram',
-              type: 'instagram_post',
-              budget: 5000,
-              quantity: 2,
-              specifications: 'Styled outfit posts featuring collection pieces',
-            },
-            {
-              platform: 'instagram',
-              type: 'instagram_story',
-              budget: 2000,
-              quantity: 3,
-              specifications: 'Behind-the-scenes styling and try-on content',
-            },
-          ],
+          isInviteOnly: false,
+        },
+      },
+      barterCampaign: {
+        summary: 'BARTER Campaign Example',
+        description:
+          'BARTER campaign with barterProductWorth instead of campaignBudget. Requires barterProductWorth and numberOfInfluencers. additionalMonetaryPayout is optional.',
+        value: {
+          name: 'Product Review Campaign',
+          description: 'Send products for honest reviews',
+          category: 'Beauty',
+          type: 'barter',
+          deliverableFormat: ['instagram_reel', 'youtube_long_video'],
+          barterProductWorth: 5000,
+          additionalMonetaryPayout: 2000,
+          numberOfInfluencers: 15,
+          isPanIndia: false,
+          cityIds: [1, 2, 3],
+          isOpenToAllAges: true,
+          genderPreferences: [],
+          isOpenToAllGenders: true,
+          nicheIds: [1],
+          customInfluencerRequirements: 'Authentic reviewers',
+          brandSupport: 'Free product samples',
+          isInviteOnly: false,
+        },
+      },
+      engagementCampaign: {
+        summary: 'ENGAGEMENT Campaign Example',
+        description:
+          'ENGAGEMENT campaign with campaignBudget field. Requires campaignBudget and numberOfInfluencers. Get deliverable formats from GET /campaign/deliverable-formats?campaignType=engagement',
+        value: {
+          name: 'App Launch Campaign',
+          description: 'Drive app downloads and reviews',
+          category: 'Technology',
+          type: 'engagement',
+          deliverableFormat: ['app_download', 'playstore_review', 'appstore_review'],
+          campaignBudget: 30000,
+          numberOfInfluencers: 20,
+          isPanIndia: true,
+          isOpenToAllAges: true,
+          genderPreferences: [],
+          isOpenToAllGenders: true,
+          nicheIds: [10],
+          customInfluencerRequirements: 'Tech-savvy users',
+          performanceExpectations: 'Genuine reviews',
           isInviteOnly: false,
         },
       },

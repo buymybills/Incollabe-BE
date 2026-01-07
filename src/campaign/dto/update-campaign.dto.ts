@@ -29,10 +29,6 @@ export class UpdateCampaignDto {
   category?: string;
 
   @IsOptional()
-  @IsString()
-  deliverableFormat?: string;
-
-  @IsOptional()
   @IsEnum(CampaignType)
   type?: CampaignType;
 
@@ -46,6 +42,17 @@ export class UpdateCampaignDto {
   @IsOptional()
   @IsBoolean()
   isInviteOnly?: boolean;
+
+  @ApiProperty({
+    description:
+      'Whether campaign is organic (true). Organic campaigns cannot be upgraded to Max Campaign or Invite-Only. Setting this to true will cancel any pending payment upgrades.',
+    example: false,
+    default: false,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isOrganic?: boolean;
 
   @IsOptional()
   @IsDateString()

@@ -11,6 +11,7 @@ interface AddDeviceTokenParams {
   deviceName?: string;
   deviceOs?: 'ios' | 'android';
   appVersion?: string;
+  versionCode?: number;
 }
 
 @Injectable()
@@ -29,66 +30,101 @@ export class DeviceTokenService {
    * - Add the new device token
    */
   async addOrUpdateDeviceToken(params: AddDeviceTokenParams): Promise<DeviceToken> {
-    const { userId, userType, fcmToken, deviceId, deviceName, deviceOs, appVersion } = params;
+    const { userId, userType, fcmToken, deviceId, deviceName, deviceOs, appVersion, versionCode } = params;
 
-    // Check if this FCM token already exists
+    // If deviceId is provided, use upsert pattern to prevent duplicates
+    if (deviceId) {
+      // Find existing device by userId + userType + deviceId
+      let existingDevice = await this.deviceTokenModel.findOne({
+        where: {
+          userId,
+          userType,
+          deviceId,
+        },
+      });
+
+      if (existingDevice) {
+        // Device exists - update it with new data
+        await existingDevice.update({
+          fcmToken,
+          deviceName: deviceName || existingDevice.deviceName,
+          deviceOs: deviceOs || existingDevice.deviceOs,
+          appVersion: appVersion || existingDevice.appVersion,
+          versionCode: versionCode || existingDevice.versionCode,
+          lastUsedAt: new Date(),
+        });
+
+        console.log(`✅ Updated device ${deviceId} for ${userType} ${userId}`);
+        return existingDevice;
+      }
+
+      // Device doesn't exist - check if we need to remove old devices before creating
+      const userDeviceCount = await this.deviceTokenModel.count({
+        where: { userId, userType },
+      });
+
+      if (userDeviceCount >= this.MAX_DEVICES_PER_USER) {
+        const oldestDevice = await this.deviceTokenModel.findOne({
+          where: { userId, userType },
+          order: [['lastUsedAt', 'ASC']],
+        });
+
+        if (oldestDevice) {
+          await oldestDevice.destroy();
+          console.log(`🗑️ Removed oldest device for ${userType} ${userId} (limit: ${this.MAX_DEVICES_PER_USER})`);
+        }
+      }
+
+      // Create new device
+      const newDevice = await this.deviceTokenModel.create({
+        userId,
+        userType,
+        fcmToken,
+        deviceId,
+        deviceName,
+        deviceOs,
+        appVersion,
+        versionCode,
+        lastUsedAt: new Date(),
+      });
+
+      console.log(`🆕 Added new device ${deviceId} for ${userType} ${userId}`);
+      return newDevice;
+    }
+
+    // Fallback: No deviceId provided - use old fcmToken-based logic
     const existingToken = await this.deviceTokenModel.findOne({
       where: { fcmToken },
     });
 
     if (existingToken) {
-      // Update existing token with new device info and last used timestamp
       await existingToken.update({
-        userId, // Update in case token was transferred to another account
+        userId,
         userType,
-        deviceId: deviceId || existingToken.deviceId,
         deviceName: deviceName || existingToken.deviceName,
         deviceOs: deviceOs || existingToken.deviceOs,
         appVersion: appVersion || existingToken.appVersion,
+        versionCode: versionCode || existingToken.versionCode,
         lastUsedAt: new Date(),
       });
 
-      console.log(`✅ Updated existing FCM token for ${userType} ${userId}`);
+      console.log(`✅ Updated FCM token for ${userType} ${userId}`);
       return existingToken;
     }
 
-    // Check current device count for this user
-    const userDeviceCount = await this.deviceTokenModel.count({
-      where: {
-        userId,
-        userType,
-      },
-    });
-
-    // If user has 5 or more devices, remove the oldest one
-    if (userDeviceCount >= this.MAX_DEVICES_PER_USER) {
-      const oldestDevice = await this.deviceTokenModel.findOne({
-        where: {
-          userId,
-          userType,
-        },
-        order: [['lastUsedAt', 'ASC']],
-      });
-
-      if (oldestDevice) {
-        await oldestDevice.destroy();
-        console.log(`🗑️ Removed oldest device token for ${userType} ${userId} (limit: ${this.MAX_DEVICES_PER_USER})`);
-      }
-    }
-
-    // Create new device token
+    // Create new token
     const newToken = await this.deviceTokenModel.create({
       userId,
       userType,
       fcmToken,
-      deviceId,
       deviceName,
       deviceOs,
       appVersion,
+      versionCode,
       lastUsedAt: new Date(),
     });
 
-    console.log(`🆕 Added new FCM token for ${userType} ${userId} (device: ${deviceName || 'Unknown'})`);
+    console.log(`🆕 Added new FCM token for ${userType} ${userId}`);
     return newToken;
   }
 

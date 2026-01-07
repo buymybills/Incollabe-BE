@@ -15,6 +15,8 @@ import { Campaign } from '../campaign/models/campaign.model';
 import { Admin } from './models/admin.model';
 import { EmailService } from '../shared/email.service';
 import { WhatsAppService } from '../shared/whatsapp.service';
+import { NotificationService } from '../shared/notification.service';
+import { DeviceTokenService } from '../shared/device-token.service';
 import { AuditLogService } from './services/audit-log.service';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { ProfileReviewDto } from './dto/profile-review.dto';
@@ -161,6 +163,21 @@ describe('ProfileReviewService', () => {
         {
           provide: getModelToken(CreditTransaction),
           useValue: mockCreditTransactionModel,
+        },
+        {
+          provide: NotificationService,
+          useValue: {
+            sendCustomNotification: jest.fn().mockResolvedValue(undefined),
+            sendCampaignStatusUpdate: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: DeviceTokenService,
+          useValue: {
+            getAllUserTokens: jest.fn().mockResolvedValue([]),
+            addOrUpdateDeviceToken: jest.fn(),
+            removeDeviceToken: jest.fn(),
+          },
         },
       ],
     }).compile();

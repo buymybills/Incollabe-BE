@@ -79,7 +79,7 @@ const mockCampaignApplicationModel = {
 
 const mockCampaignInvitationModel = {
   findOne: jest.fn(),
-  findAll: jest.fn(),
+  findAll: jest.fn().mockResolvedValue([]), // Default to empty array for no invitations
   create: jest.fn(),
   update: jest.fn(),
 };
@@ -93,13 +93,39 @@ const mockAdminModel = {
 
 const mockNotificationService = {
   sendNewApplicationNotification: jest.fn(),
+  sendCustomNotification: jest.fn().mockResolvedValue(undefined),
 };
 
 const mockDeviceTokenService = {
   getAllUserTokens: jest.fn().mockResolvedValue(['mock-token-1', 'mock-token-2']),
   addOrUpdateDeviceToken: jest.fn(),
   removeDeviceToken: jest.fn(),
-  getUserDevices: jest.fn(),
+  getUserDevices: jest.fn().mockResolvedValue([
+    {
+      id: 1,
+      fcmToken: 'mock-fcm-token-1',
+      deviceId: 'device-123',
+      deviceName: 'iPhone 14',
+      deviceOs: 'ios',
+      appVersion: '3.5.0',
+      versionCode: 5,
+      lastUsedAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+    {
+      id: 2,
+      fcmToken: 'mock-fcm-token-2',
+      deviceId: 'device-456',
+      deviceName: 'Samsung Galaxy',
+      deviceOs: 'android',
+      appVersion: '4.0.0',
+      versionCode: 7,
+      lastUsedAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  ]),
 };
 
 describe('InfluencerService', () => {
@@ -195,6 +221,7 @@ describe('InfluencerService', () => {
           provide: 'FOLLOW_MODEL',
           useValue: {
             count: jest.fn().mockResolvedValue(0),
+            findOne: jest.fn().mockResolvedValue(null),
           },
         },
         {
@@ -253,6 +280,15 @@ describe('InfluencerService', () => {
             create: jest.fn(),
             update: jest.fn(),
             count: jest.fn().mockResolvedValue(0),
+          },
+        },
+        {
+          provide: 'PRO_SUBSCRIPTION_MODEL',
+          useValue: {
+            findOne: jest.fn().mockResolvedValue(null),
+            findAll: jest.fn().mockResolvedValue([]),
+            create: jest.fn(),
+            update: jest.fn(),
           },
         },
       ],
@@ -321,7 +357,35 @@ describe('InfluencerService', () => {
       if ('profileCompletion' in result) {
         expect((result as any).profileCompletion.completionPercentage).toBe(36);
       }
+      // Check for deviceToken (single object, not array)
+      if ('deviceToken' in result) {
+        expect((result as any).deviceToken).toBeDefined();
+        expect((result as any).deviceToken).toHaveProperty('deviceId', 'device-123');
+        expect((result as any).deviceToken).toHaveProperty('deviceName', 'iPhone 14');
+        expect((result as any).deviceToken).not.toHaveProperty('fcmToken'); // Should not include fcmToken
+      }
+      // Check for appVersion info
+      if ('appVersion' in result) {
+        expect((result as any).appVersion).toHaveProperty('installedVersion');
+        expect((result as any).appVersion).toHaveProperty('minimumVersion');
+        expect((result as any).appVersion).toHaveProperty('latestVersion');
+        expect((result as any).appVersion).toHaveProperty('updateRequired');
+        expect((result as any).appVersion).toHaveProperty('updateAvailable');
+      }
       expect(influencerRepository.findById).toHaveBeenCalledWith(1);
+    });
+
+    it('should return specific device when deviceId is provided', async () => {
+      mockInfluencerRepository.findById.mockResolvedValue(mockInfluencer);
+
+      const result = await service.getInfluencerProfile(1, false, 1, 'influencer', 'device-123');
+
+      // Should return the device matching the deviceId
+      if ('deviceToken' in result) {
+        expect((result as any).deviceToken).toBeDefined();
+        expect((result as any).deviceToken).toHaveProperty('deviceId', 'device-123');
+        expect((result as any).deviceToken).toHaveProperty('deviceName', 'iPhone 14');
+      }
     });
 
     it('should throw NotFoundException for non-existent influencer', async () => {

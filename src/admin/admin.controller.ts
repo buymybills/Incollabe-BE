@@ -9,12 +9,15 @@ import {
   ParseIntPipe,
   UseGuards,
   Req,
+  Res,
   HttpStatus,
   Query,
   UnauthorizedException,
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  NotFoundException,
+  StreamableFile,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -146,7 +149,7 @@ import {
   SubscriptionDetailsDto,
   PauseSubscriptionDto,
   ResumeSubscriptionDto,
-  CancelMaxxSubscriptionDto,
+  AdminCancelSubscriptionDto,
   SubscriptionActionResponseDto,
 } from './dto/maxx-subscription.dto';
 import {
@@ -2283,7 +2286,7 @@ export class AdminController {
     description: 'Subscription ID',
     example: 123,
   })
-  @ApiBody({ type: CancelMaxxSubscriptionDto })
+  @ApiBody({ type: AdminCancelSubscriptionDto })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Subscription cancelled successfully',
@@ -2303,7 +2306,7 @@ export class AdminController {
   })
   async cancelMaxxSubscription(
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: CancelMaxxSubscriptionDto,
+    @Body() dto: AdminCancelSubscriptionDto,
   ) {
     return await this.maxxSubscriptionAdminService.cancelSubscription(id, dto);
   }
@@ -2350,6 +2353,227 @@ export class AdminController {
   })
   async getMaxPurchases(@Query() filters: GetMaxPurchasesDto) {
     return await this.maxSubscriptionBrandService.getMaxPurchases(filters);
+  }
+
+  // ============================================
+  // MAX SUBSCRIPTION INVOICE (UNIFIED)
+  // ============================================
+
+  @Get('max-subscription-invoice/statistics')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get unified Max Subscription Invoice statistics',
+    description: 'Get comprehensive statistics combining influencer Pro subscriptions and brand Max campaigns with month-over-month growth',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Unified statistics retrieved successfully',
+    type: MaxSubscriptionInvoiceStatisticsDto,
+  })
+  async getMaxSubscriptionInvoiceStatistics(): Promise<MaxSubscriptionInvoiceStatisticsDto> {
+    return await this.maxSubscriptionInvoiceService.getUnifiedStatistics();
+  }
+
+  @Get('max-subscription-invoice/invoices')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get unified Max Subscription invoices',
+    description: 'Get paginated list of all invoices including influencer subscriptions and brand Max campaigns',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20)',
+  })
+  @ApiQuery({
+    name: 'invoiceType',
+    required: false,
+    enum: ['all', 'maxx_subscription', 'invite_campaign', 'maxx_campaign'],
+    description: 'Filter by invoice type (tab selection)',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by name, username, or campaign name',
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    type: String,
+    description: 'Filter by start date (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    description: 'Filter by end date (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    enum: ['createdAt', 'amount'],
+    description: 'Sort by field (default: createdAt)',
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    enum: ['ASC', 'DESC'],
+    description: 'Sort order (default: DESC)',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Unified invoices retrieved successfully',
+    type: MaxSubscriptionInvoicesResponseDto,
+  })
+  async getMaxSubscriptionInvoices(@Query() filters: GetMaxSubscriptionInvoicesDto): Promise<MaxSubscriptionInvoicesResponseDto> {
+    return await this.maxSubscriptionInvoiceService.getUnifiedInvoices(filters);
+  }
+
+  @Post('max-subscription-invoice/download/:invoiceId')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Download a single invoice',
+    description: 'Download a specific invoice PDF by ID and type',
+  })
+  @ApiParam({
+    name: 'invoiceId',
+    type: Number,
+    description: 'Invoice ID',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['invoiceType'],
+      properties: {
+        invoiceType: {
+          type: 'string',
+          enum: ['maxx_subscription', 'invite_campaign', 'maxx_campaign'],
+          description: 'Type of invoice to download',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Invoice PDF URL returned successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Invoice not found or has no PDF',
+  })
+  async downloadInvoice(
+    @Param('invoiceId', ParseIntPipe) invoiceId: number,
+    @Body('invoiceType') invoiceType: 'maxx_subscription' | 'invite_campaign' | 'maxx_campaign',
+  ) {
+    const invoice = await this.maxSubscriptionInvoiceService.getInvoiceById(
+      invoiceId,
+      invoiceType as any,
+    );
+
+    if (!invoice || !invoice.invoiceUrl) {
+      throw new NotFoundException('Invoice not found or has no PDF');
+    }
+
+    return {
+      invoiceUrl: invoice.invoiceUrl,
+      invoiceNumber: invoice.invoiceNumber,
+      profileName: invoice.profileName,
+    };
+  }
+
+  @Post('max-subscription-invoice/download-all')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Download all invoices as ZIP',
+    description: 'Download all filtered invoices as a ZIP file containing all PDFs',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        search: { type: 'string', description: 'Search by name, username, or campaign name' },
+        startDate: { type: 'string', format: 'date', description: 'Filter by start date' },
+        endDate: { type: 'string', format: 'date', description: 'Filter by end date' },
+        invoiceType: {
+          type: 'string',
+          enum: ['all', 'maxx_subscription', 'invite_campaign', 'maxx_campaign'],
+          description: 'Filter by invoice type',
+        },
+        paymentMethod: { type: 'string', description: 'Filter by payment method' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'ZIP file with all invoice PDFs',
+    content: {
+      'application/zip': {
+        schema: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  async downloadAllInvoices(
+    @Body() filters: GetMaxSubscriptionInvoicesDto,
+    @Res() res: any,
+  ) {
+    const axios = await import('axios');
+    const archiver = await import('archiver');
+
+    const invoices = await this.maxSubscriptionInvoiceService.getAllInvoicePdfUrls(filters);
+
+    if (!invoices || invoices.length === 0) {
+      throw new NotFoundException('No invoices found with PDF URLs');
+    }
+
+    // Create a zip archive
+    const archive = archiver.default('zip', {
+      zlib: { level: 9 },
+    });
+
+    // Set response headers
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename=invoices-${Date.now()}.zip`);
+
+    // Pipe archive to response
+    archive.pipe(res);
+
+    // Download and add each invoice PDF to the zip
+    let fileIndex = 1;
+    for (const invoice of invoices) {
+      try {
+        const response = await axios.default.get(invoice.invoiceUrl, {
+          responseType: 'arraybuffer',
+        });
+
+        // Create a safe filename
+        const safeProfileName = invoice.profileName.replace(/[^a-zA-Z0-9]/g, '_');
+        const safeInvoiceNumber = invoice.invoiceNumber.replace(/[^a-zA-Z0-9]/g, '_');
+        const filename = `${fileIndex}_${safeProfileName}_${safeInvoiceNumber}_${invoice.maxxType.replace(/\s/g, '_')}.pdf`;
+
+        archive.append(Buffer.from(response.data), { name: filename });
+        fileIndex++;
+      } catch (error) {
+        console.error(`Failed to download invoice ${invoice.invoiceNumber}:`, error);
+        // Continue with other invoices even if one fails
+      }
+    }
+
+    // Finalize the archive
+    await archive.finalize();
   }
 
   // ============================================

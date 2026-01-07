@@ -111,7 +111,7 @@ export class ProSubscription extends Model {
   declare upiMandateId: string;
 
   @Column({
-    type: DataType.STRING,
+    type: DataType.ENUM(...Object.values(UpiMandateStatus)),
     allowNull: false,
     defaultValue: UpiMandateStatus.NOT_CREATED,
     field: 'upi_mandate_status',
@@ -154,6 +154,13 @@ export class ProSubscription extends Model {
     field: 'paused_at',
   })
   declare pausedAt: Date;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+    field: 'pause_start_date',
+  })
+  declare pauseStartDate: Date;
 
   @Column({
     type: DataType.INTEGER,

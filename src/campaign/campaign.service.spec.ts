@@ -31,6 +31,7 @@ import { DeviceTokenService } from '../shared/device-token.service';
 import { Experience } from '../influencer/models/experience.model';
 import { CreditTransaction } from '../admin/models/credit-transaction.model';
 import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
+import { MaxCampaignInvoice } from './models/max-campaign-invoice.model';
 
 const mockModel = () => ({
   findOne: jest.fn(),
@@ -52,6 +53,7 @@ const mockCampaignQueryService = {
   getCampaignsByCategory: jest.fn(),
   fetchOpenCampaigns: jest.fn(),
   fetchInviteCampaigns: jest.fn(),
+  fetchDraftCampaigns: jest.fn(),
   fetchFinishedCampaigns: jest.fn(),
   fetchAllCampaigns: jest.fn(),
 };
@@ -128,6 +130,10 @@ describe('CampaignService', () => {
           useValue: mockModel(),
         },
         {
+          provide: getModelToken(MaxCampaignInvoice),
+          useValue: mockModel(),
+        },
+        {
           provide: WhatsAppService,
           useValue: mockWhatsAppService,
         },
@@ -186,14 +192,9 @@ describe('CampaignService', () => {
       cityIds: [1, 2],
       isOpenToAllAges: true,
       isOpenToAllGenders: true,
-      deliverables: [
-        {
-          platform: Platform.INSTAGRAM,
-          type: DeliverableType.INSTAGRAM_POST,
-          budget: 1000,
-          quantity: 1,
-        },
-      ],
+      deliverableFormat: ['instagram_post', 'instagram_story'],
+      campaignBudget: 50000,
+      numberOfInfluencers: 10,
     };
 
     it('should create a campaign successfully', async () => {
@@ -242,6 +243,8 @@ describe('CampaignService', () => {
         isPanIndia: false,
         isOpenToAllAges: true,
         isOpenToAllGenders: true,
+        campaignBudget: 50000,
+        numberOfInfluencers: 10,
         brandId,
       });
       expect(campaignCityModel.bulkCreate).toHaveBeenCalled();
@@ -323,8 +326,8 @@ describe('CampaignService', () => {
             brandId,
             brand: { id: brandId, brandName: 'Test Brand' },
             cities: [],
-            deliverables: 'Test Format',
-            collaborationCost: [],
+            deliverableFormat: [],
+            promotionType: 'organic',
           },
         ],
         total: 1,
@@ -333,7 +336,11 @@ describe('CampaignService', () => {
         totalPages: 1,
       });
       expect(campaignModel.findAndCountAll).toHaveBeenCalledWith({
-        where: { isActive: true, brandId },
+        where: {
+          isActive: true,
+          brandId,
+          status: { [Symbol.for('ne')]: CampaignStatus.DRAFT },
+        },
         include: expect.any(Array),
         order: [['createdAt', 'DESC']],
         limit: 10,
@@ -423,9 +430,9 @@ describe('CampaignService', () => {
         name: 'Test Campaign',
         brand: { id: 1, brandName: 'Test Brand' },
         cities: [],
-        deliverables: 'Test Format',
-        collaborationCost: [],
+        deliverableFormat: [],
         invitations: [],
+        promotionType: 'organic',
       });
       expect(campaignModel.findOne).toHaveBeenCalledWith({
         where: { id: campaignId },
@@ -829,6 +836,8 @@ describe('CampaignService', () => {
         brandId,
         status: CampaignStatus.ACTIVE,
         name: 'Test Campaign',
+        isInviteOnly: false,
+        inviteOnlyPaid: false,
         brand: { brandName: 'Test Brand' },
       };
       const mockInfluencers = [
@@ -853,7 +862,8 @@ describe('CampaignService', () => {
         'Successfully sent 2 campaign invitations',
       );
       expect(campaignInvitationModel.bulkCreate).toHaveBeenCalled();
-      expect(whatsAppService.sendCampaignInvitation).toHaveBeenCalledTimes(2);
+      // WhatsApp invitations are commented out in favor of push notifications
+      // expect(whatsAppService.sendCampaignInvitation).toHaveBeenCalledTimes(2);
     });
 
     it('should throw NotFoundException if campaign not found', async () => {
@@ -876,6 +886,8 @@ describe('CampaignService', () => {
         brandId,
         status: CampaignStatus.COMPLETED,
         name: 'Test Campaign',
+        isInviteOnly: false,
+        inviteOnlyPaid: false,
         brand: { brandName: 'Test Brand' },
       };
 
@@ -896,6 +908,8 @@ describe('CampaignService', () => {
         brandId,
         status: CampaignStatus.ACTIVE,
         name: 'Test Campaign',
+        isInviteOnly: false,
+        inviteOnlyPaid: false,
         brand: { brandName: 'Test Brand' },
       };
 
@@ -919,6 +933,8 @@ describe('CampaignService', () => {
         brandId,
         status: CampaignStatus.ACTIVE,
         name: 'Test Campaign',
+        isInviteOnly: false,
+        inviteOnlyPaid: false,
         brand: { brandName: 'Test Brand' },
       };
       const mockInfluencers = [
@@ -939,6 +955,61 @@ describe('CampaignService', () => {
       ).rejects.toThrow(
         'All selected influencers have already been invited to this campaign',
       );
+    });
+
+    it('should throw BadRequestException if invite-only campaign not paid', async () => {
+      const brandId = 1;
+      const mockCampaign = {
+        id: 1,
+        brandId,
+        status: CampaignStatus.ACTIVE,
+        name: 'Test Campaign',
+        isInviteOnly: true,
+        inviteOnlyPaid: false,
+        brand: { brandName: 'Test Brand' },
+      };
+
+      campaignModel.findOne.mockResolvedValue(mockCampaign);
+
+      await expect(
+        service.inviteInfluencers(mockInviteDto, brandId),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.inviteInfluencers(mockInviteDto, brandId),
+      ).rejects.toThrow(
+        'Please complete the payment of Rs 499 to unlock the invite-only feature before sending invitations',
+      );
+    });
+
+    it('should allow inviting if invite-only campaign is paid', async () => {
+      const brandId = 1;
+      const mockCampaign = {
+        id: 1,
+        brandId,
+        status: CampaignStatus.ACTIVE,
+        name: 'Test Campaign',
+        isInviteOnly: true,
+        inviteOnlyPaid: true,
+        brand: { brandName: 'Test Brand' },
+      };
+      const mockInfluencers = [
+        { id: 1, name: 'Influencer 1', whatsappNumber: '+919876543210' },
+        { id: 2, name: 'Influencer 2', whatsappNumber: '+919876543211' },
+      ];
+
+      campaignModel.findOne.mockResolvedValue(mockCampaign);
+      influencerModel.findAll.mockResolvedValue(mockInfluencers);
+      campaignInvitationModel.findAll.mockResolvedValue([]);
+      campaignInvitationModel.bulkCreate.mockResolvedValue([
+        { id: 1, campaignId: 1, influencerId: 1 },
+        { id: 2, campaignId: 1, influencerId: 2 },
+      ]);
+      whatsAppService.sendCampaignInvitation.mockResolvedValue(true);
+
+      const result = await service.inviteInfluencers(mockInviteDto, brandId);
+
+      expect(result.success).toBe(true);
+      expect(result.invitationsSent).toBe(2);
     });
   });
 
@@ -979,11 +1050,11 @@ describe('CampaignService', () => {
             id: 1,
             name: 'Campaign 1',
             brandId,
-            deliverables: 'Test Format',
-            collaborationCost: [],
+            deliverableFormat: [],
             invitations: [],
             applications: [{ id: 1 }, { id: 2 }, { id: 3 }],
             totalApplications: 3,
+            promotionType: 'organic',
           },
         ],
         total: 1,
@@ -993,7 +1064,11 @@ describe('CampaignService', () => {
       });
       expect(campaignModel.findAndCountAll).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { brandId, isActive: true },
+          where: {
+            brandId,
+            isActive: true,
+            status: CampaignStatus.ACTIVE,
+          },
           order: [['createdAt', 'DESC']],
           limit: 10,
           offset: 0,

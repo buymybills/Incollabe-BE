@@ -77,6 +77,10 @@ import { PushNotification } from '../admin/models/push-notification.model';
           password,
           database,
           dialectOptions,
+          define: {
+            underscored: false, // Use camelCase for column names
+            timestamps: true,
+          },
           pool: {
             max: 30, // Maximum 30 connections per instance (2 instances = 60 total, safe for RDS)
             min: 5, // Minimum 5 idle connections

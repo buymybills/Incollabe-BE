@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Op, literal } from 'sequelize';
-import { Campaign, CampaignStatus } from './models/campaign.model';
+import { Campaign, CampaignStatus, CampaignType } from './models/campaign.model';
 import { CampaignCity } from './models/campaign-city.model';
 import { CampaignDeliverable } from './models/campaign-deliverable.model';
 import { CampaignInvitation } from './models/campaign-invitation.model';
@@ -25,6 +25,8 @@ import { InviteInfluencersDto } from './dto/invite-influencers.dto';
 import { Brand } from '../brand/model/brand.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Niche } from '../auth/model/niche.model';
+import { InvoiceStatus } from '../influencer/models/payment-enums';
+import { MaxCampaignInvoice } from './models/max-campaign-invoice.model';
 // REMOVED: Imports only needed for early selection bonus feature (now disabled)
 // import { CreditTransactionType, PaymentStatus } from '../admin/models/credit-transaction.model';
 // import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
@@ -66,6 +68,8 @@ export class CampaignService {
     private readonly followModel: typeof Follow,
     @InjectModel(Experience)
     private readonly experienceModel: typeof Experience,
+    @InjectModel(MaxCampaignInvoice)
+    private readonly maxCampaignInvoiceModel: typeof MaxCampaignInvoice,
     // REMOVED: Models only needed for early selection bonus feature (now disabled)
     // @InjectModel(CreditTransaction)
     // private readonly creditTransactionModel: typeof CreditTransaction,
@@ -78,19 +82,59 @@ export class CampaignService {
   ) {}
 
   /**
-   * Transform campaign data to rename fields for API response
+   * Transform campaign data for API response
    * @param campaignData - Raw campaign data
-   * @returns Transformed campaign data with renamed fields
+   * @returns Transformed campaign data with proper field names
    */
-  private transformCampaignResponse(campaignData: any): any {
-    const response: any = {
-      ...campaignData,
-      deliverables: campaignData.deliverableFormat, // Rename deliverableFormat to deliverables
-      collaborationCost: campaignData.deliverables, // Rename deliverables array to collaborationCost
+  /**
+   * Maps deliverable type value to its human-readable label
+   */
+  private getDeliverableLabel(value: string): string {
+    const deliverableLabels: Record<string, string> = {
+      // Social media deliverables
+      instagram_reel: 'Insta Reel / Post',
+      instagram_story: 'Insta Story',
+      youtube_short: 'YT Shorts',
+      youtube_long_video: 'YT Video',
+      facebook_story: 'FB Story',
+      facebook_post: 'FB Post',
+      twitter_post: 'X Post',
+      linkedin_post: 'LinkedIn Post',
+      // Engagement deliverables
+      like_comment: 'Like/Comment',
+      playstore_review: 'Playstore Review',
+      appstore_review: 'App Store Review',
+      google_review: 'Google Review',
+      app_download: 'App Download',
     };
 
-    // Remove old field names
-    delete response.deliverableFormat;
+    return deliverableLabels[value] || value;
+  }
+
+  private transformCampaignResponse(campaignData: any): any {
+    // Extract deliverableFormat as array of human-readable labels from deliverables
+    const deliverableFormat = campaignData.deliverables
+      ? campaignData.deliverables.map((d: any) => this.getDeliverableLabel(d.type))
+      : [];
+
+    // Calculate promotionType based on boolean flags
+    let promotionType: 'organic' | 'max' | 'invite_only' | 'invite_only_unpaid' = 'organic';
+    if (campaignData.isMaxCampaign) {
+      promotionType = 'max';
+    } else if (campaignData.isInviteOnly && campaignData.inviteOnlyPaid) {
+      promotionType = 'invite_only';
+    } else if (campaignData.isInviteOnly && !campaignData.inviteOnlyPaid) {
+      promotionType = 'invite_only_unpaid';
+    }
+
+    const response: any = {
+      ...campaignData,
+      deliverableFormat, // Array of label strings: ["Insta Reel / Post", "YT Shorts"]
+      promotionType, // Computed field: "organic" | "max" | "invite_only" | "invite_only_unpaid"
+    };
+
+    // Remove deliverables from response (we only need deliverableFormat labels)
+    delete response.deliverables;
 
     return response;
   }
@@ -99,7 +143,26 @@ export class CampaignService {
     createCampaignDto: CreateCampaignDto,
     brandId: number,
   ): Promise<CampaignResponseDto> {
-    const { deliverables, cityIds, ...campaignData } = createCampaignDto;
+    const { deliverableFormat, cityIds, ...campaignData } = createCampaignDto;
+
+    // Validate budget fields based on campaign type
+    const campaignType = createCampaignDto.type || CampaignType.PAID;
+
+    if (campaignType === CampaignType.BARTER) {
+      // BARTER campaigns require barterProductWorth
+      if (!createCampaignDto.barterProductWorth) {
+        throw new BadRequestException(
+          'Barter Product Worth is required for BARTER campaigns',
+        );
+      }
+    } else {
+      // PAID, UGC, ENGAGEMENT campaigns require campaignBudget
+      if (!createCampaignDto.campaignBudget) {
+        throw new BadRequestException(
+          'Campaign Budget is required for PAID, UGC, and ENGAGEMENT campaigns',
+        );
+      }
+    }
 
     // Validate cities if not pan India
     if (!createCampaignDto.isPanIndia && (!cityIds || cityIds.length === 0)) {
@@ -133,19 +196,46 @@ export class CampaignService {
       await this.campaignCityModel.bulkCreate(campaignCities as any);
     }
 
-    // Add deliverables
-    const campaignDeliverables = deliverables.map((deliverable) => ({
-      ...deliverable,
+    // Transform deliverableFormat array (strings) into deliverable objects
+    const campaignDeliverables = deliverableFormat.map((type) => ({
       campaignId: campaign.id,
+      platform: this.extractPlatformFromType(type),
+      type: type,
+      quantity: 1, // Default quantity
     }));
     await this.campaignDeliverableModel.bulkCreate(campaignDeliverables as any);
 
     return this.getCampaignById(campaign.id);
   }
 
+  /**
+   * Helper method to extract platform from deliverable type
+   * E.g., "instagram_story" -> "instagram"
+   */
+  private extractPlatformFromType(type: string): string {
+    if (type.startsWith('instagram_')) return 'instagram';
+    if (type.startsWith('youtube_')) return 'youtube';
+    if (type.startsWith('facebook_')) return 'facebook';
+    if (type.startsWith('linkedin_')) return 'linkedin';
+    if (type.startsWith('twitter_')) return 'twitter';
+    if (
+      [
+        'like_comment',
+        'playstore_review',
+        'appstore_review',
+        'google_review',
+        'app_download',
+      ].includes(type)
+    ) {
+      return 'engagement';
+    }
+    throw new BadRequestException(`Unknown deliverable type: ${type}`);
+  }
+
   async getCampaigns(
     getCampaignsDto: GetCampaignsDto,
     brandId?: number,
+    influencerId?: number,
   ): Promise<{
     campaigns: Campaign[];
     total: number;
@@ -158,8 +248,77 @@ export class CampaignService {
 
     const whereCondition: any = { isActive: true };
 
+    // Exclude draft campaigns by default (unless explicitly filtered by status)
+    if (!status) {
+      whereCondition.status = { [Op.ne]: CampaignStatus.DRAFT };
+    }
+
     if (brandId) {
       whereCondition.brandId = brandId;
+    }
+
+    // For influencers: exclude invite-only campaigns they haven't been invited to
+    let inviteOnlyFilter: any = null;
+    let earlyAccessFilter: any = null;
+
+    if (influencerId && !brandId) {
+      // Check if influencer is Pro
+      const influencer = await this.influencerModel.findByPk(influencerId, {
+        attributes: ['isPro'],
+      });
+
+      // Get campaign IDs where influencer has been invited
+      const invitations = await this.campaignInvitationModel.findAll({
+        where: { influencerId },
+        attributes: ['campaignId'],
+      });
+      const invitedCampaignIds = invitations.map(inv => inv.campaignId);
+
+      // Show only:
+      // 1. Non-invite-only campaigns (isInviteOnly: false)
+      // 2. Invite-only campaigns where they have an invitation
+      inviteOnlyFilter = {
+        [Op.or]: [
+          { isInviteOnly: false },
+          { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } }
+        ]
+      };
+
+      // 24-hour early access filter for ORGANIC campaigns only
+      // MAX campaigns are always visible, but ORGANIC campaigns are hidden from non-Pro for first 24 hours
+      // ORGANIC = NOT MAX + NOT invite-only (consistent with promotionType logic)
+      if (!influencer?.isPro) {
+        const twentyFourHoursAgo = new Date();
+        twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+
+        console.log('⏰ Early Access Filter - Non-Pro User:', {
+          currentTime: new Date().toISOString(),
+          twentyFourHoursAgo: twentyFourHoursAgo.toISOString(),
+          influencerId,
+        });
+
+        // Show only:
+        // 1. MAX campaigns (regardless of age)
+        // 2. Invite-only campaigns (handled by inviteOnlyFilter above, shown if invited)
+        // 3. ORGANIC campaigns (NOT MAX AND NOT invite-only) older than 24 hours
+        earlyAccessFilter = {
+          [Op.or]: [
+            { isMaxCampaign: true }, // Always show MAX campaigns
+            { isInviteOnly: true }, // Always show invite-only campaigns (inviteOnlyFilter handles access)
+            {
+              // Show organic campaigns older than 24 hours
+              // ORGANIC = NOT MAX AND NOT invite-only
+              [Op.and]: [
+                { isMaxCampaign: { [Op.ne]: true } }, // Not MAX
+                { isInviteOnly: { [Op.ne]: true } }, // Not invite-only
+                { createdAt: { [Op.lte]: twentyFourHoursAgo } }, // Older than 24 hours
+              ],
+            },
+          ],
+        };
+
+        console.log('✅ Early Access Filter Created:', JSON.stringify(earlyAccessFilter, null, 2));
+      }
     }
 
     if (status) {
@@ -170,11 +329,49 @@ export class CampaignService {
       whereCondition.type = type;
     }
 
+    // Build combined filters array
+    const filtersToApply: any[] = [];
+
+    if (inviteOnlyFilter) {
+      filtersToApply.push(inviteOnlyFilter);
+    }
+
+    if (earlyAccessFilter) {
+      filtersToApply.push(earlyAccessFilter);
+    }
+
     if (search) {
-      whereCondition[Op.or] = [
-        { name: { [Op.iLike]: `%${search}%` } },
-        { description: { [Op.iLike]: `%${search}%` } },
-      ];
+      const searchCondition = {
+        [Op.or]: [
+          { name: { [Op.iLike]: `%${search}%` } },
+          { description: { [Op.iLike]: `%${search}%` } },
+        ]
+      };
+      filtersToApply.push(searchCondition);
+    }
+
+    // Apply all filters using AND logic
+    if (filtersToApply.length > 0) {
+      if (filtersToApply.length === 1) {
+        Object.assign(whereCondition, filtersToApply[0]);
+      } else {
+        whereCondition[Op.and] = filtersToApply;
+      }
+    }
+
+    // Debug logging for campaign filtering
+    if (influencerId && !brandId) {
+      const influencer = await this.influencerModel.findByPk(influencerId, {
+        attributes: ['isPro'],
+      });
+      console.log('🔍 Campaign Filter Debug:', {
+        influencerId,
+        isPro: influencer?.isPro,
+        hasInviteOnlyFilter: !!inviteOnlyFilter,
+        hasEarlyAccessFilter: !!earlyAccessFilter,
+        filtersCount: filtersToApply.length,
+      });
+      console.log('📋 Final WHERE Condition:', JSON.stringify(whereCondition, null, 2));
     }
 
     const { count, rows: campaigns } = await this.campaignModel.findAndCountAll(
@@ -244,16 +441,19 @@ export class CampaignService {
   /**
    * Get campaigns by category with proper type safety and separation of concerns
    * @param brandId - The brand ID to fetch campaigns for
-   * @param type - Optional campaign type filter (open, invite, finished)
+   * @param type - Optional campaign category filter (open, invite, finished)
+   * @param campaignType - Optional campaign type filter (paid, barter, ugc, engagement)
    * @returns Campaigns with appropriate statistics
    */
   async getCampaignsByCategory(
     brandId: number,
     type?: string,
+    campaignType?: string,
   ): Promise<CampaignsByCategoryResponse> {
     const campaigns = await this.campaignQueryService.getCampaignsByCategory(
       brandId,
       type,
+      campaignType,
     );
 
     // Transform field names and cities for all campaigns
@@ -410,6 +610,41 @@ export class CampaignService {
           campaignDeliverables as any,
         );
       }
+    }
+
+    // Check if campaign is being marked as organic
+    // If so, cancel any pending Max Campaign payment and set status to active
+    if (updateCampaignDto.isOrganic === true && !campaign.isOrganic) {
+      console.log(`🌿 Campaign ${campaignId} marked as organic - checking for pending Max Campaign payment to cancel`);
+
+      // Cancel pending Max Campaign payment if exists
+      if (campaign.maxCampaignPaymentStatus === 'pending') {
+        console.log(`  ❌ Cancelling pending Max Campaign payment (orderId: ${campaign.maxCampaignOrderId})`);
+
+        // Delete pending Max Campaign invoice
+        await this.maxCampaignInvoiceModel.destroy({
+          where: {
+            campaignId,
+            paymentStatus: 'pending',
+          },
+        });
+
+        // Clear Max Campaign payment fields using campaign.update() instead of campaignData
+        await campaign.update({
+          maxCampaignPaymentStatus: null,
+          maxCampaignOrderId: null,
+          maxCampaignPaymentId: null,
+          maxCampaignAmount: null,
+        } as any);
+      }
+
+      // Ensure campaign status is active (not draft)
+      if (campaign.status === 'draft') {
+        console.log(`  ✅ Setting campaign status to active`);
+        await campaign.update({ status: CampaignStatus.ACTIVE });
+      }
+
+      console.log(`✅ Campaign ${campaignId} is now organic and active`);
     }
 
     // Update campaign fields
@@ -682,7 +917,11 @@ export class CampaignService {
 
     const { rows: campaigns, count: total } =
       await this.campaignModel.findAndCountAll({
-        where: { brandId, isActive: true },
+        where: {
+          brandId,
+          isActive: true,
+          status: CampaignStatus.ACTIVE, // Only return active campaigns, exclude drafts
+        },
         include: [
           {
             model: CampaignDeliverable,
@@ -887,6 +1126,13 @@ export class CampaignService {
       throw new NotFoundException('Campaign not found or access denied');
     }
 
+    // Check if invite-only campaign has been paid for
+    if (campaign.isInviteOnly && !campaign.inviteOnlyPaid) {
+      throw new BadRequestException(
+        'Please complete the payment of Rs 499 to unlock the invite-only feature before sending invitations',
+      );
+    }
+
     // Check if campaign is in correct status for invitations
     if (
       campaign.status !== CampaignStatus.DRAFT &&
@@ -970,15 +1216,14 @@ export class CampaignService {
     );
 
     for (const influencer of influencersToNotify) {
-      // Send WhatsApp notification asynchronously (fire-and-forget)
-      // Error handling is done internally by WhatsApp service
-      this.whatsAppService.sendCampaignInvitation(
-        influencer.whatsappNumber,
-        influencer.name,
-        campaign.name,
-        brandName,
-        personalMessage,
-      );
+      // COMMENTED: WhatsApp notification for campaign invitation (using push notifications instead)
+      // this.whatsAppService.sendCampaignInvitation(
+      //   influencer.whatsappNumber,
+      //   influencer.name,
+      //   campaign.name,
+      //   brandName,
+      //   personalMessage,
+      // );
 
       // Send push notification to all devices
       try {
@@ -1729,67 +1974,62 @@ export class CampaignService {
     //   }
     // }
 
-    // Send WhatsApp notifications asynchronously (fire-and-forget)
-    if (influencer && influencer.whatsappNumber) {
-      let whatsappPromise: Promise<void> | null = null;
-
-      switch (updateStatusDto.status) {
-        case ApplicationStatus.UNDER_REVIEW:
-          whatsappPromise =
-            this.whatsAppService.sendCampaignApplicationUnderReview(
-              influencer.whatsappNumber,
-              influencer.name,
-              campaign.name,
-              brandName,
-            );
-          break;
-
-        case ApplicationStatus.SELECTED:
-          whatsappPromise =
-            this.whatsAppService.sendCampaignApplicationSelected(
-              influencer.whatsappNumber,
-              influencer.name,
-              campaign.name,
-              brandName,
-              updateStatusDto.reviewNotes,
-            );
-          break;
-
-        // COMMENTED OUT: Don't send WhatsApp notification for rejected applications
-        // case ApplicationStatus.REJECTED:
-        //   whatsappPromise =
-        //     this.whatsAppService.sendCampaignApplicationRejected(
-        //       influencer.whatsappNumber,
-        //       influencer.name,
-        //       campaign.name,
-        //       brandName,
-        //       updateStatusDto.reviewNotes,
-        //     );
-        //   break;
-      }
-
-      if (whatsappPromise) {
-        whatsappPromise.catch((error) => {
+    // WhatsApp notification only for SELECTED status
+    if (
+      influencer &&
+      influencer.whatsappNumber &&
+      updateStatusDto.status === ApplicationStatus.SELECTED
+    ) {
+      this.whatsAppService
+        .sendCampaignApplicationSelected(
+          influencer.whatsappNumber,
+          influencer.name,
+          campaign.name,
+          brandName,
+          updateStatusDto.reviewNotes,
+        )
+        .catch((error) => {
           console.error('Failed to send WhatsApp notification:', error);
         });
-      }
     }
 
-    // Send push notifications to influencer asynchronously (fire-and-forget)
-    if (influencer && influencer.id) {
+    // Persistent push notification for SELECTED status
+    if (
+      influencer &&
+      influencer.id &&
+      updateStatusDto.status === ApplicationStatus.SELECTED
+    ) {
+      // Get all device tokens and send persistent notification
+      this.deviceTokenService
+        .getAllUserTokens(influencer.id, UserType.INFLUENCER)
+        .then((deviceTokens: string[]) => {
+          if (deviceTokens.length > 0) {
+            return this.notificationService.sendCampaignSelectionNotification(
+              deviceTokens,
+              campaign.name,
+              brandName,
+              campaign.id,
+              updateStatusDto.reviewNotes,
+            );
+          }
+        })
+        .catch((error: any) => {
+          console.error('Failed to send persistent push notification to influencer:', error);
+        });
+    }
+
+    // Push notifications for UNDER_REVIEW and REJECTED statuses
+    if (
+      influencer &&
+      influencer.id &&
+      (updateStatusDto.status === ApplicationStatus.UNDER_REVIEW ||
+        updateStatusDto.status === ApplicationStatus.REJECTED)
+    ) {
       let pushStatus: string;
-      switch (updateStatusDto.status) {
-        case ApplicationStatus.UNDER_REVIEW:
-          pushStatus = 'pending';
-          break;
-        case ApplicationStatus.SELECTED:
-          pushStatus = 'approved';
-          break;
-        case ApplicationStatus.REJECTED:
-          pushStatus = 'rejected';
-          break;
-        default:
-          pushStatus = updateStatusDto.status;
+      if (updateStatusDto.status === ApplicationStatus.UNDER_REVIEW) {
+        pushStatus = 'pending';
+      } else {
+        pushStatus = 'rejected';
       }
 
       // Get all device tokens and send to all devices
@@ -1914,6 +2154,179 @@ export class CampaignService {
       success: true,
       rejectedCount: appliedApplications.length,
       message: `Successfully rejected ${appliedApplications.length} application(s) that were in "applied" status`,
+    };
+  }
+
+  /**
+   * Handle Razorpay webhook for campaign payments
+   */
+  async handleCampaignPaymentWebhook(event: string, payload: any) {
+    try {
+      const paymentEntity = payload.payment?.entity;
+      if (!paymentEntity) {
+        return { success: false, message: 'Invalid webhook payload' };
+      }
+
+      // Find campaign by payment ID or order ID
+      const campaign = await this.campaignModel.findOne({
+        where: {
+          [Op.or]: [
+            { maxCampaignPaymentId: paymentEntity.id },
+            { maxCampaignOrderId: paymentEntity.order_id },
+            { inviteOnlyPaymentId: paymentEntity.id },
+            { inviteOnlyOrderId: paymentEntity.order_id },
+          ],
+        },
+      });
+
+      if (!campaign) {
+        return { success: false, message: 'Campaign not found for this payment' };
+      }
+
+      // Determine which payment type this is
+      const isMaxCampaign = campaign.maxCampaignPaymentId === paymentEntity.id ||
+                            campaign.maxCampaignOrderId === paymentEntity.order_id;
+      const statusField = isMaxCampaign ? 'maxCampaignPaymentStatus' : 'inviteOnlyPaymentStatus';
+
+      // Handle different payment events
+      switch (event) {
+        case 'payment.authorized':
+          // Payment authorized but not yet captured - mark as PROCESSING
+          await campaign.update({
+            [statusField]: InvoiceStatus.PROCESSING,
+            paymentStatusUpdatedAt: new Date(),
+            razorpayLastWebhookAt: new Date(),
+            paymentStatusMessage: 'Payment authorized, waiting for confirmation',
+          });
+          console.log(`⏳ Campaign ${campaign.id} payment authorized - status set to PROCESSING`);
+          break;
+
+        case 'payment.captured':
+        case 'order.paid':
+          // Payment successful - set status to ACTIVE
+          await campaign.update({
+            [statusField]: InvoiceStatus.PAID,
+            status: 'active' as any,
+            paymentStatusUpdatedAt: new Date(),
+            razorpayLastWebhookAt: new Date(),
+            paymentStatusMessage: 'Payment successful',
+          });
+          console.log(`✅ Campaign ${campaign.id} activated after payment captured`);
+          break;
+
+        case 'payment.failed':
+          // Payment failed - keep as DRAFT
+          await campaign.update({
+            [statusField]: InvoiceStatus.FAILED,
+            paymentStatusUpdatedAt: new Date(),
+            razorpayLastWebhookAt: new Date(),
+            paymentStatusMessage: paymentEntity.error_description || 'Payment failed',
+          });
+          console.log(`❌ Campaign ${campaign.id} payment failed`);
+          break;
+
+        default:
+          console.log(`ℹ️ Unhandled payment event: ${event}`);
+      }
+
+      return { success: true, message: `Campaign payment webhook handled: ${event}` };
+    } catch (error) {
+      console.error('Error handling campaign payment webhook:', error);
+      return { success: false, message: error.message };
+    }
+  }
+
+  /**
+   * Get available deliverable formats based on campaign type
+   */
+  async getDeliverableFormats(
+    campaignType?: string,
+  ): Promise<{
+    campaignType: string;
+    deliverableFormats: Array<{ value: string; label: string; platform: string }>;
+  }> {
+    const type = campaignType || 'paid'; // Default to 'paid'
+
+    let deliverableFormats: Array<{ value: string; label: string; platform: string }>;
+
+    if (type === 'engagement') {
+      // Engagement campaign deliverables
+      deliverableFormats = [
+        {
+          value: 'like_comment',
+          label: 'Like/Comment',
+          platform: 'engagement',
+        },
+        {
+          value: 'playstore_review',
+          label: 'Playstore Review',
+          platform: 'engagement',
+        },
+        {
+          value: 'appstore_review',
+          label: 'App Store Review',
+          platform: 'engagement',
+        },
+        {
+          value: 'google_review',
+          label: 'Google Review',
+          platform: 'engagement',
+        },
+        {
+          value: 'app_download',
+          label: 'App Download',
+          platform: 'engagement',
+        },
+      ];
+    } else {
+      // Social media deliverables for UGC, PAID, BARTER
+      deliverableFormats = [
+        {
+          value: 'instagram_reel',
+          label: 'Insta Reel / Post',
+          platform: 'instagram',
+        },
+        {
+          value: 'instagram_story',
+          label: 'Insta Story',
+          platform: 'instagram',
+        },
+        {
+          value: 'youtube_short',
+          label: 'YT Shorts',
+          platform: 'youtube',
+        },
+        {
+          value: 'youtube_long_video',
+          label: 'YT Video',
+          platform: 'youtube',
+        },
+        {
+          value: 'facebook_story',
+          label: 'FB Story',
+          platform: 'facebook',
+        },
+        {
+          value: 'facebook_post',
+          label: 'FB Post',
+          platform: 'facebook',
+        },
+        {
+          value: 'twitter_post',
+          label: 'X Post',
+          platform: 'twitter',
+        },
+        {
+          value: 'linkedin_post',
+          label: 'LinkedIn Post',
+          platform: 'linkedin',
+        },
+      ];
+    }
+
+    return {
+      campaignType: type,
+      deliverableFormats,
     };
   }
 }

@@ -13,6 +13,7 @@ import {
   UploadedFiles,
   Delete,
   BadRequestException,
+  Headers,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -23,6 +24,7 @@ import {
   ApiBody,
   ApiQuery,
   ApiParam,
+  ApiHeader,
 } from '@nestjs/swagger';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { InfluencerService } from './influencer.service';
@@ -44,6 +46,7 @@ import { SupportTicketService } from '../shared/support-ticket.service';
 import { CreateSupportTicketDto } from '../shared/dto/create-support-ticket.dto';
 import { UserType } from '../shared/models/support-ticket.model';
 import { ProSubscriptionService } from './services/pro-subscription.service';
+import { CampaignService } from '../campaign/campaign.service';
 import {
   VerifySubscriptionPaymentDto,
   CancelProSubscriptionDto,
@@ -67,6 +70,7 @@ export class InfluencerController {
     private readonly influencerService: InfluencerService,
     private readonly supportTicketService: SupportTicketService,
     private readonly proSubscriptionService: ProSubscriptionService,
+    private readonly campaignService: CampaignService,
     private readonly razorpayService: RazorpayService,
     private readonly configService: ConfigService,
   ) {}
@@ -75,7 +79,12 @@ export class InfluencerController {
   @ApiOperation({
     summary: 'Get comprehensive influencer profile',
     description:
-      'Returns complete influencer profile with verification status and completion details',
+      'Returns complete influencer profile with verification status and completion details. Include X-Device-ID header to get all device token details for that specific device.',
+  })
+  @ApiHeader({
+    name: 'X-Device-ID',
+    required: false,
+    description: 'Device ID to get all device token details for this specific device',
   })
   @ApiResponse({
     status: 200,
@@ -86,10 +95,13 @@ export class InfluencerController {
     status: 403,
     description: 'Forbidden - Only influencers can access this endpoint',
   })
-  async getInfluencerProfile(@Req() req: RequestWithUser) {
+  async getInfluencerProfile(
+    @Req() req: RequestWithUser,
+    @Headers('x-device-id') deviceId?: string,
+  ) {
     const influencerId = req.user.id;
     const userType = req.user.userType;
-    return await this.influencerService.getInfluencerProfile(influencerId, false, influencerId, userType);
+    return await this.influencerService.getInfluencerProfile(influencerId, false, influencerId, userType, deviceId);
   }
 
   @Put('profile')
@@ -438,7 +450,7 @@ export class InfluencerController {
       '2. Age requirements (if campaign has age restrictions)\n' +
       '3. Gender preferences (if campaign has gender targeting)\n' +
       '4. Location (if campaign is not Pan-India, only influencers in target cities see it)\n' +
-      'You can further filter by search query, specific niches, cities, and budget range.',
+      'You can further filter by search query, specific niches, cities, budget range, and campaign type (paid, barter, ugc, engagement).',
   })
   @ApiResponse({
     status: 200,
@@ -450,6 +462,7 @@ export class InfluencerController {
             id: 1,
             name: 'Summer Fashion Campaign',
             description: 'Promote our new summer collection',
+            type: 'paid',
             brand: {
               id: 1,
               brandName: 'Fashion Brand',
@@ -1222,7 +1235,7 @@ export class InfluencerController {
     );
   }
 
-  @Get('pro/invoices/:invoiceId')
+  @Post('pro/invoices/:invoiceId')
   @ApiOperation({
     summary: 'Download Pro subscription invoice',
     description: 'Download PDF invoice for a specific subscription payment',
@@ -1477,7 +1490,21 @@ export class InfluencerController {
       const event = body.event;
       const payload = body.payload;
 
-      // Process webhook
+      // Check if this is a campaign payment webhook
+      const paymentNotes = payload?.payment?.entity?.notes || payload?.order?.entity?.notes;
+      const upgradeType = paymentNotes?.upgradeType;
+
+      // Route to appropriate handler based on payment type
+      if (upgradeType === 'max_campaign' || upgradeType === 'invite_only') {
+        console.log(`🎯 Routing to campaign payment webhook handler (${upgradeType})`);
+        const result = await this.campaignService.handleCampaignPaymentWebhook(
+          event,
+          payload,
+        );
+        return result;
+      }
+
+      // Default: Handle as Pro subscription webhook
       const result = await this.proSubscriptionService.handleWebhook(
         event,
         payload,

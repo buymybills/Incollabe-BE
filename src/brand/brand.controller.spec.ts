@@ -3,6 +3,7 @@ import { BrandController } from './brand.controller';
 import { BrandService } from './brand.service';
 import { SupportTicketService } from '../shared/support-ticket.service';
 import { MaxCampaignPaymentService } from '../campaign/services/max-campaign-payment.service';
+import { InviteOnlyPaymentService } from '../campaign/services/invite-only-payment.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { UpdateBrandProfileDto } from './dto/update-brand-profile.dto';
 import { UpdateBrandNichesDto } from './dto/update-brand-niches.dto';
@@ -37,6 +38,12 @@ const mockMaxCampaignPaymentService = {
   getPaymentStatus: jest.fn(),
 };
 
+const mockInviteOnlyPaymentService = {
+  createInviteOnlyPaymentOrder: jest.fn(),
+  verifyAndUnlockInviteOnly: jest.fn(),
+  getInviteOnlyStatus: jest.fn(),
+};
+
 const mockAuthGuard = {
   canActivate: jest.fn(() => true),
 };
@@ -60,6 +67,10 @@ describe('BrandController', () => {
         {
           provide: MaxCampaignPaymentService,
           useValue: mockMaxCampaignPaymentService,
+        },
+        {
+          provide: InviteOnlyPaymentService,
+          useValue: mockInviteOnlyPaymentService,
         },
       ],
     })

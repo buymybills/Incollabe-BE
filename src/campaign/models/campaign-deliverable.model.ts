@@ -9,14 +9,23 @@ import {
 import { Campaign } from './campaign.model';
 
 export enum DeliverableType {
+  // Social Media Deliverables (for UGC, PAID, BARTER)
   INSTAGRAM_POST = 'instagram_post',
   INSTAGRAM_STORY = 'instagram_story',
   INSTAGRAM_REEL = 'instagram_reel',
   YOUTUBE_SHORT = 'youtube_short',
   YOUTUBE_LONG_VIDEO = 'youtube_long_video',
   FACEBOOK_POST = 'facebook_post',
+  FACEBOOK_STORY = 'facebook_story',
   LINKEDIN_POST = 'linkedin_post',
   TWITTER_POST = 'twitter_post',
+
+  // Engagement Deliverables (for ENGAGEMENT)
+  LIKE_COMMENT = 'like_comment',
+  PLAYSTORE_REVIEW = 'playstore_review',
+  APPSTORE_REVIEW = 'appstore_review',
+  GOOGLE_REVIEW = 'google_review',
+  APP_DOWNLOAD = 'app_download',
 }
 
 export enum Platform {
@@ -25,6 +34,7 @@ export enum Platform {
   FACEBOOK = 'facebook',
   LINKEDIN = 'linkedin',
   TWITTER = 'twitter',
+  ENGAGEMENT = 'engagement', // For engagement-type deliverables
 }
 
 @Table({

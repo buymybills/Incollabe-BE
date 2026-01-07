@@ -20,6 +20,9 @@ import { Country } from '../shared/models/country.model';
 import { Campaign } from '../campaign/models/campaign.model';
 import { EmailService } from '../shared/email.service';
 import { WhatsAppService } from '../shared/whatsapp.service';
+import { NotificationService } from '../shared/notification.service';
+import { DeviceTokenService } from '../shared/device-token.service';
+import { UserType as DeviceUserType } from '../shared/models/device-token.model';
 import { AuditLogService } from './services/audit-log.service';
 import { AuditActionType } from './models/audit-log.model';
 import { ProfileReviewDto } from './dto/profile-review.dto';
@@ -57,6 +60,8 @@ export class ProfileReviewService {
     private readonly adminModel: typeof Admin,
     private readonly emailService: EmailService,
     private readonly whatsAppService: WhatsAppService,
+    private readonly notificationService: NotificationService,
+    private readonly deviceTokenService: DeviceTokenService,
     private readonly auditLogService: AuditLogService,
   ) { }
 
@@ -353,25 +358,16 @@ export class ProfileReviewService {
 
       const influencer = await this.influencerModel.findByPk(review.profileId);
       if (influencer) {
-        // For influencers, we only send WhatsApp notifications, not emails
-        // Debug logging for WhatsApp notification
-
-        // COMMENTED: WhatsApp notification for profile verified
-        // if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-        //   console.log(
-        //     'Sending WhatsApp notification to:',
-        //     influencer.whatsappNumber,
-        //   );
-        //   await this.whatsAppService.sendProfileVerified(
-        //     influencer.whatsappNumber,
-        //     influencer.name,
-        //   );
-        // } else {
-        //   console.log('WhatsApp notification not sent. Reason:', {
-        //     hasWhatsappNumber: !!influencer.whatsappNumber,
-        //     isWhatsappVerified: influencer.isWhatsappVerified,
-        //   });
-        // }
+        // Send push notification for profile verified
+        const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencer.id, DeviceUserType.INFLUENCER);
+        if (fcmTokens && fcmTokens.length > 0) {
+          this.notificationService.sendCustomNotification(
+            fcmTokens,
+            'Profile Verified!',
+            `Congratulations ${influencer.name}! Your profile has been verified and you can now apply for campaigns.`,
+            { type: 'profile_verified' },
+          ).catch(err => console.error('Failed to send profile verified notification:', err));
+        }
 
         // Award referral credit if this influencer was referred by someone
         // Wrap in try-catch to prevent profile approval failure if referral fails
@@ -538,15 +534,16 @@ export class ProfileReviewService {
           { isProfileCompleted: false },
           { where: { id: review.profileId } },
         );
-        // For influencers, we only send WhatsApp notifications, not emails
-        // COMMENTED: WhatsApp notification for profile rejected
-        // if (influencer.whatsappNumber && influencer.isWhatsappVerified) {
-        //   await this.whatsAppService.sendProfileRejected(
-        //     influencer.whatsappNumber,
-        //     influencer.name,
-        //     reason,
-        //   );
-        // }
+        // Send push notification for profile rejected
+        const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencer.id, DeviceUserType.INFLUENCER);
+        if (fcmTokens && fcmTokens.length > 0) {
+          this.notificationService.sendCustomNotification(
+            fcmTokens,
+            'Profile Rejected',
+            `Hi ${influencer.name}, your profile verification was rejected. Reason: ${reason}. Please update your profile and resubmit.`,
+            { type: 'profile_rejected', reason },
+          ).catch(err => console.error('Failed to send profile rejected notification:', err));
+        }
       }
     }
 

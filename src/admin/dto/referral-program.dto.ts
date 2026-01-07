@@ -104,6 +104,24 @@ export class GetNewAccountsWithReferralDto {
   search?: string;
 
   @ApiProperty({
+    description: 'Filter by location/city',
+    required: false,
+    example: 'Mumbai',
+  })
+  @IsOptional()
+  @IsString()
+  location?: string;
+
+  @ApiProperty({
+    description: 'Filter by referrer username',
+    required: false,
+    example: '@john_doe',
+  })
+  @IsOptional()
+  @IsString()
+  referredBy?: string;
+
+  @ApiProperty({
     description: 'Start date for filtering (YYYY-MM-DD)',
     required: false,
     example: '2025-10-01',
@@ -120,6 +138,26 @@ export class GetNewAccountsWithReferralDto {
   @IsOptional()
   @IsDateString()
   endDate?: string;
+
+  @ApiProperty({
+    description: 'Sort by field',
+    enum: ['referralDate', 'profileName'],
+    required: false,
+    example: 'referralDate',
+  })
+  @IsOptional()
+  @IsString()
+  sortBy?: string;
+
+  @ApiProperty({
+    description: 'Sort order',
+    enum: ['ASC', 'DESC'],
+    required: false,
+    example: 'DESC',
+  })
+  @IsOptional()
+  @IsString()
+  sortOrder?: 'ASC' | 'DESC';
 }
 
 export class NewAccountWithReferralItemDto {

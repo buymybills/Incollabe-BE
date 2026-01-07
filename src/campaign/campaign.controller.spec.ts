@@ -75,14 +75,7 @@ describe('CampaignController', () => {
         isPanIndia: false,
         cityIds: [1, 2],
         isOpenToAllGenders: true,
-        deliverables: [
-          {
-            platform: Platform.INSTAGRAM,
-            type: DeliverableType.INSTAGRAM_POST,
-            budget: 1000,
-            quantity: 1,
-          },
-        ],
+        deliverableFormat: ['instagram_post'],
         isOpenToAllAges: false,
       };
 
@@ -147,6 +140,7 @@ describe('CampaignController', () => {
       expect(campaignService.getCampaigns).toHaveBeenCalledWith(
         getCampaignsDto,
         1,
+        undefined,
       );
     });
 
@@ -171,6 +165,7 @@ describe('CampaignController', () => {
       expect(result).toEqual(mockResult);
       expect(campaignService.getCampaigns).toHaveBeenCalledWith(
         getCampaignsDto,
+        undefined,
         undefined,
       );
     });
@@ -398,14 +393,7 @@ describe('CampaignController', () => {
         isPanIndia: false,
         cityIds: [1, 2],
         isOpenToAllGenders: true,
-        deliverables: [
-          {
-            platform: Platform.INSTAGRAM,
-            type: DeliverableType.INSTAGRAM_POST,
-            budget: 1000,
-            quantity: 1,
-          },
-        ],
+        deliverableFormat: ['instagram_post'],
         isOpenToAllAges: false,
       };
 

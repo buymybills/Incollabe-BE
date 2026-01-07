@@ -169,8 +169,12 @@ export class ReferralProgramService {
       limit = 20,
       profileStatus,
       search,
+      location,
+      referredBy,
       startDate,
       endDate,
+      sortBy = 'referralDate',
+      sortOrder = 'DESC',
     } = filters;
 
     const offset = (page - 1) * limit;
@@ -205,18 +209,35 @@ export class ReferralProgramService {
       }
     }
 
+    // Determine sort order
+    const orderClause: any = sortBy === 'profileName'
+      ? [] // Will sort after fetching
+      : [['createdAt', sortOrder]];
+
     // Get referral usages with referred user details
     const { count, rows: referralUsages } =
       await this.referralUsageModel.findAndCountAll({
         where: usageWhereClause,
         limit,
         offset,
-        order: [['createdAt', 'DESC']],
+        order: orderClause,
       });
 
     // Get referred user IDs and referrer user IDs
     const referredUserIds = referralUsages.map((r) => r.referredUserId);
     const referrerCodes = referralUsages.map((r) => r.referralCode);
+
+    // Build city filter
+    const cityInclude: any = {
+      model: City,
+      attributes: ['name'],
+    };
+    if (location) {
+      cityInclude.where = {
+        name: { [Op.iLike]: `%${location}%` },
+      };
+      cityInclude.required = true;
+    }
 
     // Fetch referred users
     const referredUsers = await this.influencerModel.findAll({
@@ -224,20 +245,21 @@ export class ReferralProgramService {
         id: { [Op.in]: referredUserIds },
         ...whereClause,
       },
-      include: [
-        {
-          model: City,
-          attributes: ['name'],
-        },
-      ],
+      include: [cityInclude],
     });
+
+    // Build referrer filter
+    const referrerWhere: any = {
+      referralCode: { [Op.in]: referrerCodes },
+    };
+    if (referredBy) {
+      referrerWhere.username = { [Op.iLike]: `%${referredBy}%` };
+    }
 
     // Fetch referrers
     const referrers = await this.influencerModel.findAll({
-      where: {
-        referralCode: { [Op.in]: referrerCodes },
-      },
-      attributes: ['id', 'username', 'referralCode', 
+      where: referrerWhere,
+      attributes: ['id', 'username', 'referralCode',
         'referralInviteClickCount'
       ],
     });
@@ -247,7 +269,7 @@ export class ReferralProgramService {
     const referrersMap = new Map(referrers.map((r) => [r.referralCode, r]));
 
     // Build response data
-    const data: NewAccountWithReferralItemDto[] = referralUsages
+    let data: NewAccountWithReferralItemDto[] = referralUsages
       .map((usage) => {
         const referredUser = referredUsersMap.get(usage.referredUserId);
         const referrer = referrersMap.get(usage.referralCode);
@@ -268,6 +290,14 @@ export class ReferralProgramService {
         };
       })
       .filter((item) => item !== null) as NewAccountWithReferralItemDto[];
+
+    // Sort by profile name if requested
+    if (sortBy === 'profileName') {
+      data.sort((a, b) => {
+        const comparison = a.profileName.localeCompare(b.profileName);
+        return sortOrder === 'ASC' ? comparison : -comparison;
+      });
+    }
 
     return {
       data,
@@ -293,8 +323,6 @@ export class ReferralProgramService {
       sortBy = 'totalReferrals',
       sortOrder = 'DESC',
     } = filters;
-
-    const offset = (page - 1) * limit;
 
     // First, get all unique referral codes that have been used
     const usedReferralCodes = await this.referralUsageModel.findAll({
@@ -333,23 +361,20 @@ export class ReferralProgramService {
       ];
     }
 
-    // Get influencers whose referral codes have been used
-    const { count, rows: influencers } =
-      await this.influencerModel.findAndCountAll({
-        where: whereClause,
-        include: [
-          {
-            model: City,
-            attributes: ['name'],
-          },
-        ],
-        limit,
-        offset,
-        order:
-          sortBy === 'createdAt'
-            ? [['createdAt', sortOrder]]
-            : [['id', sortOrder]], // Default ordering, will sort after aggregation
-      });
+    // Get ALL influencers whose referral codes have been used (no pagination yet)
+    // We need to fetch all to properly sort by totalReferrals before paginating
+    const influencers = await this.influencerModel.findAll({
+      where: whereClause,
+      include: [
+        {
+          model: City,
+          attributes: ['name'],
+        },
+      ],
+      order: sortBy === 'createdAt' ? [['createdAt', sortOrder]] : [['id', 'ASC']],
+    });
+
+    const totalCount = influencers.length;
 
     // Get referral statistics for each influencer
     const influencerIds = influencers.map((i) => i.id);
@@ -419,8 +444,8 @@ export class ReferralProgramService {
       ]),
     );
 
-    // Build response data
-    let data: AccountReferrerItemDto[] = influencers.map((influencer) => {
+    // Build response data for ALL influencers
+    let allData: AccountReferrerItemDto[] = influencers.map((influencer) => {
       const totalReferrals = referralCountsMap.get(influencer.id) || 0;
       const earnings = earningsMap.get(influencer.id) || {
         totalEarnings: 0,
@@ -445,28 +470,33 @@ export class ReferralProgramService {
       };
     });
 
-    // Sort by custom fields if needed
+    // Sort by the specified field
     if (sortBy === 'totalReferrals') {
-      data.sort((a, b) =>
+      allData.sort((a, b) =>
         sortOrder === 'DESC'
           ? b.totalReferrals - a.totalReferrals
           : a.totalReferrals - b.totalReferrals,
       );
     } else if (sortBy === 'totalEarnings') {
-      data.sort((a, b) =>
+      allData.sort((a, b) =>
         sortOrder === 'DESC'
           ? b.totalEarnings - a.totalEarnings
           : a.totalEarnings - b.totalEarnings,
       );
     }
+    // createdAt sorting is already handled by the initial query
+
+    // Apply pagination AFTER sorting
+    const offset = (page - 1) * limit;
+    const paginatedData = allData.slice(offset, offset + limit);
 
     return {
-      data,
+      data: paginatedData,
       pagination: {
         page,
         limit,
-        total: count,
-        totalPages: Math.ceil(count / limit),
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limit),
       },
     };
   }

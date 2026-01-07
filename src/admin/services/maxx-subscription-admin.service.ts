@@ -6,6 +6,7 @@ import { ProInvoice } from '../../influencer/models/pro-invoice.model';
 import { Influencer } from '../../auth/model/influencer.model';
 import { City } from '../../shared/models/city.model';
 import { SubscriptionStatus, PaymentMethod } from '../../influencer/models/payment-enums';
+import { toIST } from '../../shared/utils/date.utils';
 import {
   GetMaxxSubscriptionsDto,
   MaxxSubscriptionStatisticsDto,
@@ -17,7 +18,7 @@ import {
   PaymentTypeFilter,
   PauseSubscriptionDto,
   ResumeSubscriptionDto,
-  CancelMaxxSubscriptionDto,
+  AdminCancelSubscriptionDto,
   SubscriptionActionResponseDto,
 } from '../dto/maxx-subscription.dto';
 
@@ -341,7 +342,10 @@ export class MaxxSubscriptionAdminService {
       }
 
       // Determine payment type
-      const paymentType = subscription.autoRenew ? 'autopay' : 'monthly';
+      // Check upiMandateStatus to identify autopay even if cancelled
+      // Autopay subscriptions will have upiMandateStatus set (pending/authenticated/paused/cancelled)
+      // Manual subscriptions will have upiMandateStatus as null
+      const paymentType = subscription.upiMandateStatus ? 'autopay' : 'monthly';
 
       return {
         id: subscription.id,
@@ -352,8 +356,8 @@ export class MaxxSubscriptionAdminService {
         profileStatus,
         usageMonths,
         paymentType,
-        validTillDate: subscription.currentPeriodEnd,
-        subscriptionStartDate: subscription.startDate,
+        validTillDate: toIST(subscription.currentPeriodEnd),
+        subscriptionStartDate: toIST(subscription.startDate),
         profileImage: influencer?.profileImage,
         isAutoRenew: subscription.autoRenew,
         razorpaySubscriptionId: subscription.razorpaySubscriptionId,
@@ -423,14 +427,14 @@ export class MaxxSubscriptionAdminService {
       invoiceId: invoice.id,
       invoiceNumber: invoice.invoiceNumber,
       amount: invoice.totalAmount / 100, // Convert from paise to Rs
-      paymentDate: invoice.paidAt,
+      paymentDate: invoice.paidAt ? toIST(invoice.paidAt) : null,
       paymentStatus: invoice.paymentStatus,
       razorpayPaymentId: invoice.razorpayPaymentId,
     }));
 
     // Get last payment date
     const lastPaymentDate = paidInvoices.length > 0
-      ? paidInvoices.sort((a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime())[0].paidAt
+      ? toIST(paidInvoices.sort((a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime())[0].paidAt)
       : null;
 
     return {
@@ -445,20 +449,23 @@ export class MaxxSubscriptionAdminService {
         isVerified: influencer.isVerified,
       },
       subscriptionStatus: subscription.status,
-      paymentType: subscription.autoRenew ? 'autopay' : 'monthly',
+      // Check upiMandateStatus to identify autopay even if cancelled
+      // Autopay subscriptions will have upiMandateStatus set (pending/authenticated/paused/cancelled)
+      // Manual subscriptions will have upiMandateStatus as null
+      paymentType: subscription.upiMandateStatus ? 'autopay' : 'monthly',
       razorpaySubscriptionId: subscription.razorpaySubscriptionId,
-      subscriptionStartDate: subscription.startDate,
-      subscriptionEndDate: subscription.currentPeriodEnd,
+      subscriptionStartDate: toIST(subscription.startDate),
+      subscriptionEndDate: toIST(subscription.currentPeriodEnd),
       usageMonths,
       totalAmount,
       amountPerMonth: subscription.subscriptionAmount / 100,
       isAutoRenew: subscription.autoRenew,
-      nextBillingDate: subscription.nextBillingDate,
+      nextBillingDate: subscription.nextBillingDate ? toIST(subscription.nextBillingDate) : null,
       lastPaymentDate,
       paymentHistory,
       isPaused: subscription.isPaused || false,
-      createdAt: subscription.createdAt,
-      updatedAt: subscription.updatedAt,
+      createdAt: toIST(subscription.createdAt),
+      updatedAt: toIST(subscription.updatedAt),
     };
   }
 
@@ -555,7 +562,7 @@ export class MaxxSubscriptionAdminService {
    */
   async cancelSubscription(
     subscriptionId: number,
-    dto: CancelMaxxSubscriptionDto,
+    dto: AdminCancelSubscriptionDto,
   ): Promise<SubscriptionActionResponseDto> {
     const subscription = await this.proSubscriptionModel.findByPk(subscriptionId);
 

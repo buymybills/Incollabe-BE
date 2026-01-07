@@ -72,6 +72,12 @@ export class DeviceToken extends Model {
   })
   declare appVersion: string | null;
 
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  declare versionCode: number | null;
+
   @Index('idx_last_used')
   @Column({
     type: DataType.DATE,

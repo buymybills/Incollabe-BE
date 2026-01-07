@@ -1107,7 +1107,7 @@ export class AuthController {
   @ApiOperation({
     summary: 'Update FCM token for influencer',
     description:
-      'Update Firebase Cloud Messaging token for push notifications. No authentication required.',
+      'Update Firebase Cloud Messaging token for push notifications. No authentication required.', 
   })
   @ApiBody({ type: UpdateFcmTokenDto })
   @ApiResponse({
@@ -1132,6 +1132,7 @@ export class AuthController {
       updateFcmTokenDto.deviceName,
       updateFcmTokenDto.deviceOs,
       updateFcmTokenDto.appVersion,
+      updateFcmTokenDto.versionCode,
     );
   }
 

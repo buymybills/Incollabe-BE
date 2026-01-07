@@ -50,4 +50,12 @@ export class UpdateFcmTokenDto {
   @IsOptional()
   @IsString()
   appVersion?: string;
+
+  @ApiPropertyOptional({
+    description: 'Numeric version code (build number)',
+    example: 123,
+  })
+  @IsOptional()
+  @IsNumber()
+  versionCode?: number;
 }

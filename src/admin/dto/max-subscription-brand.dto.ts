@@ -90,6 +90,11 @@ export class GetMaxPurchasesDto {
   @IsDateString()
   endDate?: string;
 
+  @ApiPropertyOptional({ description: 'Filter by payment method' })
+  @IsOptional()
+  @IsString()
+  paymentMethod?: string;
+
   @ApiPropertyOptional({
     enum: ['createdAt', 'amount'],
     description: 'Sort field',
