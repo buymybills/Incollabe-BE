@@ -51,46 +51,38 @@ export async function generateBrandInvoicePDF(
 
     /* ================= HEADER ================= */
 
-    // Add logo on the left
-    try {
-      const logoPath = path.join(process.cwd(), 'src', 'assets', 'collabkaroo-logo.png');
-      const logoWidth = 120;
-      const logoHeight = 35;
-
-      // Add logo on the left (PNG contains both logo icon and "CollabKaroo" text)
-      doc.image(logoPath, margin, 40, { width: logoWidth, height: logoHeight });
-    } catch (error) {
-      // Fallback if logo not found - just show text
-      console.error('Logo not found, using text only:', error);
-      doc
-        .fontSize(20)
-        .fillColor('#1e6dfb')
-        .font('Helvetica-Bold')
-        .text('CollabKaroo', margin, 40, { width: 250 });
-    }
+    // Header - Company name on left, INVOICE on right
+    doc
+      .fontSize(24)
+      .fillColor('#4285F4')
+      .font('Helvetica-Bold')
+      .text('CollabKaroo', margin, 45, { width: 250 });
 
     // INVOICE title and number on the right
     doc
-      .fontSize(20)
+      .fontSize(24)
       .fillColor('#000000')
-      .text('INVOICE', pageWidth - 200, 40, { width: 150, align: 'right' })
-      .fontSize(12)
+      .font('Helvetica-Bold')
+      .text('INVOICE', pageWidth - 250, 45, { width: 200, align: 'right' })
+      .fontSize(14)
       .fillColor('#6b7280')
       .font('Helvetica')
-      .text(invoiceData.invoiceNumber, pageWidth - 200, 65, {
-        width: 150,
+      .text(invoiceData.invoiceNumber, pageWidth - 250, 73, {
+        width: 200,
         align: 'right'
       });
 
     /* ================= META ================= */
 
+    const detailsStartY = 110;
+
     doc
-      .fontSize(10)
+      .fontSize(11)
       .fillColor('#000000')
       .font('Helvetica-Bold')
-      .text('Issued', margin, 100)
+      .text('Issued', margin, detailsStartY)
       .font('Helvetica')
-      .fontSize(13)
+      .fontSize(11)
       .fillColor('#374151')
       .text(
         new Date(invoiceData.date).toLocaleDateString('en-GB', {
@@ -99,32 +91,32 @@ export async function generateBrandInvoicePDF(
           year: 'numeric'
         }),
         margin,
-        118
+        detailsStartY + 18
       );
 
     doc
-      .fontSize(10)
+      .fontSize(11)
       .fillColor('#000000')
       .font('Helvetica-Bold')
-      .text('Billed to', margin + 180, 100)
+      .text('Billed to', margin + 180, detailsStartY)
       .font('Helvetica')
-      .fontSize(13)
+      .fontSize(11)
       .fillColor('#374151')
-      .text(invoiceData.brand?.name || 'N/A', margin + 180, 118);
+      .text(invoiceData.brand?.name || 'N/A', margin + 180, detailsStartY + 18);
 
     doc
-      .fontSize(10)
+      .fontSize(11)
       .fillColor('#000000')
       .font('Helvetica-Bold')
-      .text('From', pageWidth - 250, 100)
+      .text('From', pageWidth - 250, detailsStartY)
       .font('Helvetica')
-      .fontSize(9)
+      .fontSize(11)
       .fillColor('#374151')
-      .text('Deshanta Marketing Solutions Pvt. Ltd', pageWidth - 250, 118, { width: 200 })
-      .text('Plot A-18, Manjeet farm', pageWidth - 250, 131, { width: 200 })
-      .text('Uttam Nagar, Delhi', pageWidth - 250, 144, { width: 200 })
-      .text('West Delhi, Delhi, 110059, IN', pageWidth - 250, 157, { width: 200 })
-      .text('GSTIN – 07AACD5691K1ZB', pageWidth - 250, 170, { width: 200 });
+      .text('Deshanta Marketing Solutions Pvt. Ltd', pageWidth - 250, detailsStartY + 18, { width: 200 })
+      .text('Plot A-18, Manjeet farm', pageWidth - 250, detailsStartY + 31, { width: 200 })
+      .text('Uttam Nagar, Delhi', pageWidth - 250, detailsStartY + 44, { width: 200 })
+      .text('West Delhi, Delhi, 110059, IN', pageWidth - 250, detailsStartY + 57, { width: 200 })
+      .text('GSTIN – 07AACD5691K1ZB', pageWidth - 250, detailsStartY + 70, { width: 200 });
 
     /* ================= TABLE ================= */
 
@@ -138,7 +130,7 @@ export async function generateBrandInvoicePDF(
     };
 
     doc
-      .fontSize(13)
+      .fontSize(11)
       .fillColor('#6b7280')
       .font('Helvetica')
       .text('Service', col.service, tableTop)
@@ -158,7 +150,7 @@ export async function generateBrandInvoicePDF(
 
     invoiceData.items.forEach((item) => {
       doc
-        .fontSize(14)
+        .fontSize(11)
         .font('Helvetica')
         .fillColor('#374151')
         .text(item.description, col.service, y, { width: 220 })
@@ -184,7 +176,7 @@ export async function generateBrandInvoicePDF(
     const totalsValueX = pageWidth - 100;
 
     doc
-      .fontSize(14)
+      .fontSize(11)
       .font('Helvetica')
       .fillColor('#374151')
       .text('Subtotal', totalsX, y)
@@ -210,7 +202,9 @@ export async function generateBrandInvoicePDF(
       .stroke();
 
     doc
+      .fontSize(11)
       .font('Helvetica-Bold')
+      .fillColor('#374151')
       .text('Total', totalsX, y)
       .text(`Rs. ${formatAmount(invoiceData.total)}`, totalsValueX, y, {
         align: 'right',
@@ -219,7 +213,9 @@ export async function generateBrandInvoicePDF(
 
     y += 25;
     doc
-      .fillColor('#1e6dfb')
+      .fontSize(11)
+      .fillColor('#4285F4')
+      .font('Helvetica-Bold')
       .text('Amount due', totalsX, y)
       .text(`Rs. ${formatAmount(invoiceData.total)}`, totalsValueX, y, {
         align: 'right',
@@ -231,7 +227,7 @@ export async function generateBrandInvoicePDF(
     const footerY = doc.page.height - 100;
 
     doc
-      .fontSize(12)
+      .fontSize(11)
       .font('Helvetica')
       .fillColor('#6b7280')
       .text('Thank you', margin, footerY)

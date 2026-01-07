@@ -652,48 +652,38 @@ export class ProSubscriptionService {
       const pageWidth = doc.page.width;
       const margin = 50;
 
-      // Header - Logo on left, INVOICE on right
-      try {
-        const logoPath = path.join(process.cwd(), 'src', 'assets', 'collabkaroo-logo.png');
-        const logoWidth = 120;
-        const logoHeight = 35;
-
-        // Add logo on the left (PNG contains both logo icon and "CollabKaroo" text)
-        doc.image(logoPath, margin, 40, { width: logoWidth, height: logoHeight });
-      } catch (error) {
-        // Fallback if logo not found - just show text
-        console.error('Logo not found, using text only:', error);
-        doc
-          .fontSize(20)
-          .fillColor('#1e6dfb')
-          .font('Helvetica-Bold')
-          .text('CollabKaroo', margin, 40, { width: 250 });
-      }
+      // Header - Company name on left, INVOICE on right
+      doc
+        .fontSize(24)
+        .fillColor('#4285F4')
+        .font('Helvetica-Bold')
+        .text('CollabKaroo', margin, 45, { width: 250 });
 
       // INVOICE title and number on the right
       doc
-        .fontSize(20)
+        .fontSize(24)
         .fillColor('#000000')
-        .text('INVOICE', pageWidth - 200, 40, { width: 150, align: 'right' })
-        .fontSize(12)
+        .font('Helvetica-Bold')
+        .text('INVOICE', pageWidth - 250, 45, { width: 200, align: 'right' })
+        .fontSize(14)
         .fillColor('#6b7280')
         .font('Helvetica')
-        .text(invoiceData.invoiceNumber, pageWidth - 200, 65, {
-          width: 150,
+        .text(invoiceData.invoiceNumber, pageWidth - 250, 73, {
+          width: 200,
           align: 'right'
         });
 
       // Issued, Billed To, and From section
-      const detailsStartY = 100;
+      const detailsStartY = 110;
 
       // Issued
       doc
-        .fontSize(10)
+        .fontSize(11)
         .fillColor('#000000')
         .font('Helvetica-Bold')
         .text('Issued', margin, detailsStartY)
         .font('Helvetica')
-        .fontSize(13)
+        .fontSize(11)
         .fillColor('#374151')
         .text(new Date(invoiceData.date).toLocaleDateString('en-GB', {
           day: '2-digit',
@@ -703,25 +693,24 @@ export class ProSubscriptionService {
 
       // Billed to
       doc
-        .fontSize(10)
+        .fontSize(11)
         .fillColor('#000000')
         .font('Helvetica-Bold')
         .text('Billed to', margin + 180, detailsStartY)
         .font('Helvetica')
-        .fontSize(13)
+        .fontSize(11)
         .fillColor('#374151')
         .text(invoiceData.influencer.name, margin + 180, detailsStartY + 18)
-        .fontSize(9)
         .text(invoiceData.influencer.phone || 'N/A', margin + 180, detailsStartY + 35);
 
       // From section (Company details)
       doc
-        .fontSize(10)
+        .fontSize(11)
         .fillColor('#000000')
         .font('Helvetica-Bold')
         .text('From', pageWidth - 250, detailsStartY)
         .font('Helvetica')
-        .fontSize(9)
+        .fontSize(11)
         .fillColor('#374151')
         .text('Deshanta Marketing Solutions Pvt. Ltd', pageWidth - 250, detailsStartY + 18, { width: 200 })
         .text('Plot A-18, Manjeet farm', pageWidth - 250, detailsStartY + 31, { width: 200 })
@@ -740,7 +729,7 @@ export class ProSubscriptionService {
       };
 
       doc
-        .fontSize(13)
+        .fontSize(11)
         .fillColor('#6b7280')
         .font('Helvetica')
         .text('Service', colPositions.service, tableTop)
@@ -761,7 +750,7 @@ export class ProSubscriptionService {
       const item = invoiceData.items[0];
 
       doc
-        .fontSize(14)
+        .fontSize(11)
         .font('Helvetica')
         .fillColor('#374151')
         .text('Maxx membership- Creator', colPositions.service, yPosition)
@@ -785,7 +774,7 @@ export class ProSubscriptionService {
       const totalsValueX = pageWidth - 100;
 
       doc
-        .fontSize(14)
+        .fontSize(11)
         .font('Helvetica')
         .fillColor('#374151')
         .text('Subtotal', totalsX, yPosition)
@@ -805,13 +794,17 @@ export class ProSubscriptionService {
         .stroke();
 
       doc
+        .fontSize(11)
         .font('Helvetica-Bold')
+        .fillColor('#374151')
         .text('Total', totalsX, yPosition)
         .text(`Rs. ${invoiceData.total.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
 
       yPosition += 25;
       doc
-        .fillColor('#1e6dfb')
+        .fontSize(11)
+        .fillColor('#4285F4')
+        .font('Helvetica-Bold')
         .text('Amount due', totalsX, yPosition)
         .text(`Rs. ${invoiceData.total.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
 
@@ -819,7 +812,7 @@ export class ProSubscriptionService {
       const footerY = doc.page.height - 100;
 
       doc
-        .fontSize(12)
+        .fontSize(11)
         .font('Helvetica')
         .fillColor('#6b7280')
         .text('Thank you', margin, footerY)
