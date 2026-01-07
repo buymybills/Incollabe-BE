@@ -11,6 +11,7 @@ import { EncryptionService } from '../../shared/services/encryption.service';
 import { Op } from 'sequelize';
 import { toIST, createDatabaseDate, addDaysForDatabase } from '../../shared/utils/date.utils';
 import PDFDocument from 'pdfkit';
+import * as path from 'path';
 
 @Injectable()
 export class ProSubscriptionService {
@@ -584,45 +585,13 @@ export class ProSubscriptionService {
       ? this.encryptionService.decrypt(invoice.influencer.phone)
       : invoice.influencer.phone;
 
-    // Mask phone number - show first 2 and last 2 digits, mask middle 6
-    const maskPhoneNumber = (phone: string): string => {
-      if (!phone) return 'N/A';
-
-      // Remove spaces and dashes
-      const cleanPhone = phone.replace(/[\s-]/g, '');
-
-      // Handle +91 or 91 prefix
-      let numberPart = cleanPhone;
-      let prefix = '';
-
-      if (cleanPhone.startsWith('+91')) {
-        prefix = '+91';
-        numberPart = cleanPhone.substring(3);
-      } else if (cleanPhone.startsWith('91') && cleanPhone.length > 10) {
-        prefix = '91';
-        numberPart = cleanPhone.substring(2);
-      }
-
-      // For 10-digit numbers: show first 2 and last 2 digits (e.g., 9876543210 -> 98******10)
-      if (numberPart.length === 10) {
-        const first2 = numberPart.substring(0, 2);
-        const last2 = numberPart.substring(8, 10);
-        return prefix ? `${prefix}${first2}******${last2}` : `${first2}******${last2}`;
-      }
-
-      // For other lengths: return as is with N/A fallback
-      return phone.length >= 6 ? phone : 'N/A';
-    };
-
-    const maskedPhone = maskPhoneNumber(decryptedPhone);
-
     // Store invoice data
     const invoiceData = {
       invoiceNumber: invoice.invoiceNumber,
       date: invoice.paidAt || invoice.createdAt,
       influencer: {
         name: invoice.influencer.name,
-        phone: maskedPhone,
+        phone: decryptedPhone || 'N/A',
       },
       items: [
         {
@@ -683,26 +652,45 @@ export class ProSubscriptionService {
       const pageWidth = doc.page.width;
       const margin = 50;
 
-      // Header - CollabKaroo logo and INVOICE title (center aligned)
-      doc
-        .fontSize(26)
-        .fillColor('#4A90E2')
-        .font('Helvetica-Bold')
-        .text('CollabKaroo', 0, 50, { width: pageWidth, align: 'center' });
+      // Header - CollabKaroo logo and name
+      try {
+        const logoPath = path.join(process.cwd(), 'src', 'assets', 'collabkaroo-logo.png');
+        const logoSize = 40;
+        const logoX = (pageWidth - 280) / 2; // Center the logo+text combo
+        const logoY = 40;
+
+        // Add logo
+        doc.image(logoPath, logoX, logoY, { width: logoSize, height: logoSize });
+
+        // Add company name next to logo
+        doc
+          .fontSize(26)
+          .fillColor('#4A90E2')
+          .font('Helvetica-Bold')
+          .text('CollabKaroo', logoX + logoSize + 10, logoY + 8, { width: 200 });
+      } catch (error) {
+        // Fallback if logo not found - just show text
+        console.error('Logo not found, using text only:', error);
+        doc
+          .fontSize(26)
+          .fillColor('#4A90E2')
+          .font('Helvetica-Bold')
+          .text('CollabKaroo', 0, 50, { width: pageWidth, align: 'center' });
+      }
 
       doc
         .fontSize(22)
         .fillColor('#000000')
-        .text('INVOICE', 0, 85, { width: pageWidth, align: 'center' });
+        .text('INVOICE', 0, 95, { width: pageWidth, align: 'center' });
 
       doc
         .fontSize(11)
         .fillColor('#666666')
         .font('Helvetica')
-        .text(invoiceData.invoiceNumber, 0, 115, { width: pageWidth, align: 'center' });
+        .text(invoiceData.invoiceNumber, 0, 125, { width: pageWidth, align: 'center' });
 
       // Issued, Billed To, and From section (better spacing)
-      const detailsStartY = 160;
+      const detailsStartY = 170;
 
       // Issued
       doc
