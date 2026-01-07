@@ -400,6 +400,12 @@ export class MaxCampaignPaymentService {
       return;
     }
 
+    // Check if invoice PDF has already been generated (idempotency protection)
+    if (invoice.invoiceUrl) {
+      console.log(`Invoice ${invoice.invoiceNumber} already generated, skipping duplicate generation`);
+      return invoice.invoiceData;
+    }
+
     // Decrypt brand email if encrypted
     const decryptedEmail = invoice.brand.email?.includes(':')
       ? this.encryptionService.decrypt(invoice.brand.email)

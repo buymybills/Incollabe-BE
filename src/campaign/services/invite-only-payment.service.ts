@@ -298,6 +298,12 @@ export class InviteOnlyPaymentService {
       return;
     }
 
+    // Check if invoice PDF has already been generated (idempotency protection)
+    if (invoice.invoiceUrl) {
+      console.log(`Invoice ${invoice.invoiceNumber} already generated, skipping duplicate generation`);
+      return invoice.invoiceData;
+    }
+
     // Decrypt brand email if encrypted
     const decryptedEmail = invoice.brand.email?.includes(':')
       ? this.encryptionService.decrypt(invoice.brand.email)
@@ -316,7 +322,7 @@ export class InviteOnlyPaymentService {
       },
       items: [
         {
-          description: 'Invite-Only Campaign Feature - Send personalized invitations to influencers',
+          description: 'Maxx campaign - Brand',
           quantity: 1,
           rate: invoice.amount / 100,
           amount: invoice.amount / 100,
