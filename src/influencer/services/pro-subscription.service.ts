@@ -729,8 +729,8 @@ export class ProSubscriptionService {
         .text('West Delhi, Delhi, 110059, IN', pageWidth - 250, detailsStartY + 57, { width: 200 })
         .text('GSTIN – 07AACD5691K1ZB', pageWidth - 250, detailsStartY + 70, { width: 200 });
 
-      // Table header
-      const tableTop = 200;
+      // Table header (added inch spacing between metadata and table)
+      const tableTop = 252;
       const colPositions = {
         service: margin,
         qty: margin + 180,

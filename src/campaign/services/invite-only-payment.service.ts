@@ -6,6 +6,7 @@ import { InviteOnlyCampaignInvoice, InvoiceStatus, PaymentMethod } from '../mode
 import { RazorpayService } from '../../shared/razorpay.service';
 import { S3Service } from '../../shared/s3.service';
 import { EncryptionService } from '../../shared/services/encryption.service';
+import { EmailService } from '../../shared/email.service';
 import { createDatabaseDate, toIST } from '../../shared/utils/date.utils';
 import { Op } from 'sequelize';
 import { generateBrandInvoicePDF } from '../../shared/utils/brand-invoice-pdf.util';
@@ -24,6 +25,7 @@ export class InviteOnlyPaymentService {
     private razorpayService: RazorpayService,
     private s3Service: S3Service,
     private encryptionService: EncryptionService,
+    private emailService: EmailService,
   ) {}
 
   /**
@@ -344,6 +346,21 @@ export class InviteOnlyPaymentService {
       invoiceUrl,
     });
 
+    // Send invoice email to brand
+    try {
+      await this.emailService.sendInviteCampaignInvoiceEmail(
+        decryptedEmail,
+        invoice.brand.brandName,
+        invoice.invoiceNumber,
+        invoice.totalAmount / 100, // Convert paise to rupees
+        invoiceUrl,
+        invoice.campaign.name,
+      );
+    } catch (error) {
+      console.error('Failed to send Invite Campaign invoice email:', error);
+      // Don't throw - email failure shouldn't break the flow
+    }
+
     return invoiceData;
   }
 
@@ -374,11 +391,12 @@ export class InviteOnlyPaymentService {
 
     let nextNumber = 1;
     if (latestInvoice) {
-      // Extract the number from the latest invoice
-      const lastNumber = parseInt(latestInvoice.invoiceNumber.split('-')[2], 10);
+      // Extract the sequence number (e.g., "INVITEINV-202601-1" -> 1)
+      const parts = latestInvoice.invoiceNumber.split('-');
+      const lastNumber = parseInt(parts[2], 10);
       nextNumber = lastNumber + 1;
     }
 
-    return `${prefix}${String(nextNumber).padStart(5, '0')}`;
+    return `${prefix}${nextNumber}`;
   }
 }

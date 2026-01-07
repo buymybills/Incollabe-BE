@@ -131,7 +131,7 @@ export async function generateBrandInvoicePDF(
 
     /* ================= TABLE ================= */
 
-    const tableTop = 200;
+    const tableTop = 252;
     const col = {
       service: margin,
       qty: margin + 240,

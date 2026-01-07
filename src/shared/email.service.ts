@@ -1112,6 +1112,124 @@ export class EmailService {
     }
   }
 
+  /**
+   * Send Invite Campaign invoice email to brand
+   */
+  async sendInviteCampaignInvoiceEmail(
+    email: string,
+    brandName: string,
+    invoiceNumber: string,
+    amount: number,
+    invoiceUrl: string,
+    campaignName: string,
+  ): Promise<void> {
+    const subject = `Invite Campaign Invoice - ${invoiceNumber} - CollabKaroo`;
+
+    const formattedAmount = Number(amount || 0).toFixed(2);
+
+    const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Invite Campaign Invoice</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-align: center; padding: 30px; border-radius: 10px 10px 0 0; }
+        .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; }
+        .invoice-box { background: white; border: 2px solid #667eea; padding: 25px; margin: 25px 0; border-radius: 8px; }
+        .invoice-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e9ecef; }
+        .invoice-row.total { font-weight: bold; font-size: 18px; color: #667eea; border-top: 2px solid #667eea; border-bottom: none; margin-top: 10px; }
+        .download-button { display: inline-block; background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; }
+        .success-badge { background: #d4edda; color: #155724; padding: 10px 20px; border-radius: 5px; display: inline-block; margin: 15px 0; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>🎉 Payment Successful!</h1>
+          <p>Your Invite-Only Campaign feature has been activated</p>
+        </div>
+        <div class="content">
+          <h2>Hello ${brandName},</h2>
+          <p>Thank you for unlocking the Invite-Only feature for your campaign <strong>"${campaignName}"</strong>!</p>
+
+          <div class="success-badge">
+            ✅ Payment Confirmed - You can now send personalized invitations to influencers
+          </div>
+
+          <div class="invoice-box">
+            <h3>📄 Invoice Details</h3>
+            <div class="invoice-row">
+              <span>Invoice Number:</span>
+              <strong>${invoiceNumber}</strong>
+            </div>
+            <div class="invoice-row">
+              <span>Campaign:</span>
+              <span>${campaignName}</span>
+            </div>
+            <div class="invoice-row">
+              <span>Service:</span>
+              <span>Invite-Only Campaign Feature</span>
+            </div>
+            <div class="invoice-row total">
+              <span>Amount Paid:</span>
+              <span>₹${formattedAmount}</span>
+            </div>
+
+            <div style="text-align:center;margin-top:25px;">
+              <a href="${invoiceUrl}" class="download-button">
+                📥 Download Invoice PDF
+              </a>
+            </div>
+          </div>
+
+          <p><strong>What's next?</strong></p>
+          <ul>
+            <li>Search for influencers that match your campaign</li>
+            <li>Send personalized invitations to selected influencers</li>
+            <li>Track invitation responses in your dashboard</li>
+          </ul>
+
+          <p>Best regards,<br><strong>The CollabKaroo Team</strong></p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+    try {
+      console.log(
+        `[EMAIL] Sending Invite Campaign invoice email → ${email}, invoice=${invoiceNumber}`
+      );
+
+      await this.transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject,
+        html,
+        attachments: [
+          {
+            filename: `Invoice-${invoiceNumber}.pdf`,
+            path: invoiceUrl,
+          },
+        ],
+      });
+
+      console.log(
+        `[EMAIL SUCCESS] Invite Campaign invoice email sent successfully → ${email}, invoice=${invoiceNumber}`
+      );
+    } catch (error) {
+      console.error(
+        `[EMAIL ERROR] Failed to send Invite Campaign invoice email → ${email}, invoice=${invoiceNumber}`,
+        error
+      );
+      // Intentionally not throwing – email is non-critical
+    }
+  }
+
 
   async sendAdminLoginOtp(
     email: string,
