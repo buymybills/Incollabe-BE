@@ -743,6 +743,12 @@ export class CampaignController {
 - **PAID/UGC/ENGAGEMENT**: Requires 'campaignBudget' field (total budget in INR)
 - **BARTER**: Requires 'barterProductWorth' field (product value in INR), 'additionalMonetaryPayout' is optional
 
+**Organic Campaign Flag (isOrganic):**
+- Setting \`isOrganic: true\` marks the campaign as organic and prevents Max Campaign upgrades
+- **Automatically cancels** any pending Max Campaign payments and restores campaign to active status
+- Use this when user goes to Razorpay payment page but clicks back arrow to abandon payment
+- Organic campaigns cannot be upgraded to Max Campaign in the future
+
 **Important Notes:**
 - All campaigns require 'numberOfInfluencers' field (number of influencers to hire)
 - Use GET /campaign/deliverable-formats?campaignType={type} to get available deliverable formats for each campaign type
@@ -827,6 +833,14 @@ export class CampaignController {
           customInfluencerRequirements: 'Tech-savvy users',
           performanceExpectations: 'Genuine reviews',
           isInviteOnly: false,
+        },
+      },
+      cancelPendingPayment: {
+        summary: 'Cancel Pending Payment & Mark as Organic',
+        description:
+          'Use this when user initiated Max Campaign payment but clicked back arrow on Razorpay page. Setting isOrganic:true will automatically cancel pending payment, delete invoice, clear payment fields, and restore campaign to active status.',
+        value: {
+          isOrganic: true,
         },
       },
     },
