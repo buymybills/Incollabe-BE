@@ -35,6 +35,7 @@ export class AppVersionService {
     const cacheTime = this.cacheExpiry.get(platform);
 
     if (cached && cacheTime && Date.now() < cacheTime) {
+      this.logger.log(`✅ Returning cached version config for ${platform}`);
       return cached;
     }
 
@@ -44,7 +45,10 @@ export class AppVersionService {
         platform,
         isActive: true,
       },
+      raw: true,
     });
+
+    this.logger.log(`🔍 Database query result for platform ${platform}:`, JSON.stringify(config));
 
     if (!config) {
       this.logger.warn(`No active version configuration found for platform: ${platform}`);
@@ -61,6 +65,8 @@ export class AppVersionService {
       updateMessage: config.updateMessage,
       forceUpdateMessage: config.forceUpdateMessage,
     };
+
+    this.logger.log(`✅ Built version config for ${platform}:`, JSON.stringify(versionConfig));
 
     // Update cache
     this.versionCache.set(platform, versionConfig);
