@@ -354,7 +354,6 @@ export class InfluencerService {
         appVersion: string;
         versionCode: number;
       };
-      updateRequired: boolean;
       updateAvailable: boolean;
       forceUpdate: boolean;
       updateMessage: string;
@@ -389,15 +388,10 @@ export class InfluencerService {
       // Get version config from database based on device OS
       if (mostRecentDevice?.deviceOs) {
         const platform = mostRecentDevice.deviceOs as 'ios' | 'android';
-
-        console.log(`🔍 Getting version status for platform: ${platform}, versionCode: ${mostRecentDevice.versionCode}`);
-
         const versionStatus = await this.appVersionService.checkVersionStatus(
           platform,
           mostRecentDevice.versionCode || 0,
         );
-
-        console.log('📦 Version Status Result:', JSON.stringify(versionStatus, null, 2));
 
         if (versionStatus.config) {
           // Build app version info with database config and user's installed version
@@ -418,18 +412,11 @@ export class InfluencerService {
               versionCode: versionStatus.config.latestVersionCode,
             },
             // Update flags from service
-            updateRequired: versionStatus.updateRequired,
             updateAvailable: versionStatus.updateAvailable,
             forceUpdate: versionStatus.forceUpdate,
             updateMessage: versionStatus.updateMessage,
           };
-
-          console.log('✅ Built appVersionInfo:', JSON.stringify(appVersionInfo, null, 2));
-        } else {
-          console.warn('⚠️ versionStatus.config is null/undefined');
         }
-      } else {
-        console.log('⚠️ No deviceOs found on mostRecentDevice');
       }
     }
 

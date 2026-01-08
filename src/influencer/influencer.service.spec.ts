@@ -141,7 +141,6 @@ const mockAppVersionService = {
     forceUpdateMessage: 'This version is no longer supported. Please update to continue using the app.',
   }),
   checkVersionStatus: jest.fn().mockResolvedValue({
-    updateRequired: false,
     updateAvailable: false,
     forceUpdate: false,
     updateMessage: 'A new version is available. Please update to get the latest features and improvements.',
@@ -406,8 +405,8 @@ describe('InfluencerService', () => {
         expect((result as any).appVersion).toHaveProperty('installedVersion');
         expect((result as any).appVersion).toHaveProperty('minimumVersion');
         expect((result as any).appVersion).toHaveProperty('latestVersion');
-        expect((result as any).appVersion).toHaveProperty('updateRequired');
         expect((result as any).appVersion).toHaveProperty('updateAvailable');
+        expect((result as any).appVersion).toHaveProperty('forceUpdate');
       }
       expect(influencerRepository.findById).toHaveBeenCalledWith(1);
     });

@@ -35,7 +35,6 @@ export class AppVersionService {
     const cacheTime = this.cacheExpiry.get(platform);
 
     if (cached && cacheTime && Date.now() < cacheTime) {
-      this.logger.log(`✅ Returning cached version config for ${platform}`);
       return cached;
     }
 
@@ -47,8 +46,6 @@ export class AppVersionService {
       },
       raw: true,
     });
-
-    this.logger.log(`🔍 Database query result for platform ${platform}:`, JSON.stringify(config));
 
     if (!config) {
       this.logger.warn(`No active version configuration found for platform: ${platform}`);
@@ -65,8 +62,6 @@ export class AppVersionService {
       updateMessage: config.updateMessage,
       forceUpdateMessage: config.forceUpdateMessage,
     };
-
-    this.logger.log(`✅ Built version config for ${platform}:`, JSON.stringify(versionConfig));
 
     // Update cache
     this.versionCache.set(platform, versionConfig);
@@ -105,7 +100,6 @@ export class AppVersionService {
     platform: PlatformType,
     installedVersionCode: number,
   ): Promise<{
-    updateRequired: boolean;
     updateAvailable: boolean;
     forceUpdate: boolean;
     updateMessage: string;
@@ -115,7 +109,6 @@ export class AppVersionService {
 
     if (!config) {
       return {
-        updateRequired: false,
         updateAvailable: false,
         forceUpdate: false,
         updateMessage: '',
@@ -123,12 +116,10 @@ export class AppVersionService {
       };
     }
 
-    const updateRequired = installedVersionCode < config.minimumVersionCode;
     const updateAvailable = installedVersionCode < config.latestVersionCode;
-    const forceUpdate = config.forceUpdate && updateRequired;
+    const forceUpdate = config.forceUpdate && (installedVersionCode < config.minimumVersionCode);
 
     return {
-      updateRequired,
       updateAvailable,
       forceUpdate,
       updateMessage: forceUpdate ? config.forceUpdateMessage : config.updateMessage,
