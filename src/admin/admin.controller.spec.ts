@@ -18,6 +18,7 @@ import { SupportTicketService } from '../shared/support-ticket.service';
 import { AuthService } from '../auth/auth.service';
 import { CampaignService } from '../campaign/campaign.service';
 import { S3Service } from '../shared/s3.service';
+import { AppVersionService } from '../shared/services/app-version.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { AdminLoginDto } from './dto/admin-login.dto';
@@ -146,6 +147,16 @@ const mockS3Service = {
   deleteFileFromS3: jest.fn(),
 };
 
+const mockAppVersionService = {
+  getCurrentVersions: jest.fn(),
+  getAllVersionsWithMetrics: jest.fn(),
+  createVersion: jest.fn(),
+  activateVersion: jest.fn(),
+  deactivateVersion: jest.fn(),
+  updateVersion: jest.fn(),
+  deleteVersion: jest.fn(),
+};
+
 const mockAdminAuthGuard = {
   canActivate: jest.fn(() => true),
 };
@@ -234,6 +245,10 @@ describe('AdminController', () => {
         {
           provide: S3Service,
           useValue: mockS3Service,
+        },
+        {
+          provide: AppVersionService,
+          useValue: mockAppVersionService,
         },
       ],
     })
