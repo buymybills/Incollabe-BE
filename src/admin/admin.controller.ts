@@ -46,6 +46,7 @@ import { PostService } from '../post/post.service';
 import { AuthService } from '../auth/auth.service';
 import { CampaignService } from '../campaign/campaign.service';
 import { S3Service } from '../shared/s3.service';
+import { AppVersionService } from '../shared/services/app-version.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import type { RequestWithAdmin } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
@@ -163,6 +164,13 @@ import {
   GetMaxSubscriptionInvoicesDto,
   MaxSubscriptionInvoicesResponseDto,
 } from './dto/max-subscription-invoice.dto';
+import {
+  CreateAppVersionDto,
+  UpdateAppVersionDto,
+  GetVersionsQueryDto,
+  AppVersionResponseDto,
+  ActivateVersionDto,
+} from './dto/app-version.dto';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -186,6 +194,7 @@ export class AdminController {
     private readonly authService: AuthService,
     private readonly campaignService: CampaignService,
     private readonly s3Service: S3Service,
+    private readonly appVersionService: AppVersionService,
   ) {}
 
   @Post('login')
@@ -2937,5 +2946,281 @@ export class AdminController {
       updateData,
       req.admin.id,
     );
+  }
+
+  // ============================================
+  // APP VERSION MANAGEMENT
+  // ============================================
+
+  @Get('app-versions/current')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get current live app versions',
+    description: 'Returns the current live versions for both iOS and Android platforms',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Current app versions retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        ios: {
+          type: 'object',
+          properties: {
+            version: { type: 'string', example: '5.0.0.8' },
+            liveDate: { type: 'string', format: 'date-time' },
+          },
+        },
+        android: {
+          type: 'object',
+          properties: {
+            version: { type: 'string', example: '5.0.0.8' },
+            liveDate: { type: 'string', format: 'date-time' },
+          },
+        },
+      },
+    },
+  })
+  async getCurrentVersions() {
+    return await this.appVersionService.getCurrentVersions();
+  }
+
+  @Get('app-versions')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get all app versions with metrics',
+    description: 'Returns paginated list of all app versions with system live count and penetration metrics',
+  })
+  @ApiQuery({
+    name: 'platform',
+    required: false,
+    enum: ['ios', 'android'],
+    description: 'Filter by platform',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20)',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'App versions retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        versions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              platform: { type: 'string', enum: ['ios', 'android'] },
+              version: { type: 'string', example: '5.0.0.8' },
+              versionCode: { type: 'number', example: 508 },
+              status: { type: 'string', enum: ['live', 'down'] },
+              updateType: { type: 'string', enum: ['mandatory', 'optional'] },
+              systemLive: { type: 'number', example: 10989 },
+              penetration: { type: 'number', example: 60.5 },
+              liveDate: { type: 'string', format: 'date-time' },
+              createdAt: { type: 'string', format: 'date-time' },
+              updatedAt: { type: 'string', format: 'date-time' },
+            },
+          },
+        },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        totalPages: { type: 'number' },
+      },
+    },
+  })
+  async getAllVersions(@Query() query: GetVersionsQueryDto) {
+    return await this.appVersionService.getAllVersionsWithMetrics(
+      query.platform,
+      query.page,
+      query.limit,
+    );
+  }
+
+  @Post('app-versions')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Create new app version',
+    description: 'Create a new app version for iOS or Android (created as inactive by default)',
+  })
+  @ApiBody({
+    type: CreateAppVersionDto,
+    description: 'App version details',
+  })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    description: 'App version created successfully',
+  })
+  @ApiBadRequestResponse({
+    description: 'Version already exists or invalid data',
+  })
+  async createVersion(@Body() dto: CreateAppVersionDto) {
+    return await this.appVersionService.createVersion({
+      platform: dto.platform,
+      version: dto.version,
+      versionCode: dto.versionCode,
+      isMandatory: dto.isMandatory,
+      updateMessage: dto.updateMessage,
+    });
+  }
+
+  @Post('app-versions/:id/activate')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Activate app version',
+    description: 'Make a specific app version live (deactivates other versions for the same platform)',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'Version ID',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        platform: {
+          type: 'string',
+          enum: ['ios', 'android'],
+        },
+      },
+      required: ['platform'],
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Version activated successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Version not found',
+  })
+  @ApiBadRequestResponse({
+    description: 'Version is already active',
+  })
+  async activateVersion(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { platform: 'ios' | 'android' },
+  ) {
+    return await this.appVersionService.activateVersion(id, body.platform);
+  }
+
+  @Post('app-versions/:id/deactivate')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Deactivate app version',
+    description: 'Mark a specific app version as inactive/down',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'Version ID',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        platform: {
+          type: 'string',
+          enum: ['ios', 'android'],
+        },
+      },
+      required: ['platform'],
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Version deactivated successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Version not found',
+  })
+  @ApiBadRequestResponse({
+    description: 'Version is already inactive',
+  })
+  async deactivateVersion(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { platform: 'ios' | 'android' },
+  ) {
+    return await this.appVersionService.deactivateVersion(id, body.platform);
+  }
+
+  @Put('app-versions/:id')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update app version',
+    description: 'Update details of an existing app version',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'Version ID',
+  })
+  @ApiBody({
+    type: UpdateAppVersionDto,
+    description: 'Fields to update',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Version updated successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Version not found',
+  })
+  async updateVersion(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateAppVersionDto,
+  ) {
+    return await this.appVersionService.updateVersion(id, dto);
+  }
+
+  @Delete('app-versions/:id')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Delete app version',
+    description: 'Delete an inactive app version (cannot delete active versions)',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'Version ID',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Version deleted successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Version not found',
+  })
+  @ApiBadRequestResponse({
+    description: 'Cannot delete active version',
+  })
+  async deleteVersion(@Param('id', ParseIntPipe) id: number) {
+    await this.appVersionService.deleteVersion(id);
+    return { message: 'Version deleted successfully' };
   }
 }
