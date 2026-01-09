@@ -7,7 +7,7 @@ import {
   Min,
   Matches,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 import type { PlatformType } from '../../shared/models/app-version.model';
 
 export class CreateAppVersionDto {
@@ -25,8 +25,12 @@ export class CreateAppVersionDto {
   @Type(() => Number)
   versionCode: number;
 
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
   @IsBoolean()
-  @Type(() => Boolean)
   isMandatory: boolean;
 
   @IsOptional()
@@ -49,8 +53,12 @@ export class UpdateAppVersionDto {
   versionCode?: number;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
   @IsBoolean()
-  @Type(() => Boolean)
   isMandatory?: boolean;
 
   @IsOptional()
@@ -58,8 +66,12 @@ export class UpdateAppVersionDto {
   updateMessage?: string;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
   @IsBoolean()
-  @Type(() => Boolean)
   isActive?: boolean;
 }
 
