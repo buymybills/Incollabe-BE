@@ -7,6 +7,7 @@ import { OtpService } from '../shared/services/otp.service';
 import { CustomNicheService } from '../shared/services/custom-niche.service';
 import { NotificationService } from '../shared/notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
+import { AppVersionService } from '../shared/services/app-version.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import {
   ProfileReview,
@@ -126,6 +127,37 @@ const mockDeviceTokenService = {
       updatedAt: new Date(),
     },
   ]),
+};
+
+const mockAppVersionService = {
+  getVersionConfig: jest.fn().mockResolvedValue({
+    platform: 'ios',
+    latestVersion: '7.0.0',
+    latestVersionCode: 7,
+    minimumVersion: '7.0.0',
+    minimumVersionCode: 7,
+    forceUpdate: false,
+    updateMessage: 'A new version is available. Please update to get the latest features and improvements.',
+    forceUpdateMessage: 'This version is no longer supported. Please update to continue using the app.',
+  }),
+  checkVersionStatus: jest.fn().mockResolvedValue({
+    updateAvailable: false,
+    forceUpdate: false,
+    updateMessage: 'A new version is available. Please update to get the latest features and improvements.',
+    config: {
+      platform: 'ios',
+      latestVersion: '7.0.0',
+      latestVersionCode: 7,
+      minimumVersion: '7.0.0',
+      minimumVersionCode: 7,
+      forceUpdate: false,
+      updateMessage: 'A new version is available. Please update to get the latest features and improvements.',
+      forceUpdateMessage: 'This version is no longer supported. Please update to continue using the app.',
+    },
+  }),
+  getAllVersionConfigs: jest.fn().mockResolvedValue([]),
+  updateVersionConfig: jest.fn(),
+  clearCache: jest.fn(),
 };
 
 describe('InfluencerService', () => {
@@ -256,6 +288,10 @@ describe('InfluencerService', () => {
           useValue: mockDeviceTokenService,
         },
         {
+          provide: AppVersionService,
+          useValue: mockAppVersionService,
+        },
+        {
           provide: 'CREDIT_TRANSACTION_MODEL',
           useValue: {
             findAll: jest.fn().mockResolvedValue([]),
@@ -369,8 +405,8 @@ describe('InfluencerService', () => {
         expect((result as any).appVersion).toHaveProperty('installedVersion');
         expect((result as any).appVersion).toHaveProperty('minimumVersion');
         expect((result as any).appVersion).toHaveProperty('latestVersion');
-        expect((result as any).appVersion).toHaveProperty('updateRequired');
         expect((result as any).appVersion).toHaveProperty('updateAvailable');
+        expect((result as any).appVersion).toHaveProperty('forceUpdate');
       }
       expect(influencerRepository.findById).toHaveBeenCalledWith(1);
     });

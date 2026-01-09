@@ -40,6 +40,8 @@ import { KeyBackupController } from './key-backup.controller';
 import { JwtAuthModule } from './jwt.module';
 import { DeviceToken } from './models/device-token.model';
 import { DeviceTokenService } from './device-token.service';
+import { AppVersion } from './models/app-version.model';
+import { AppVersionService } from './services/app-version.service';
 
 @Module({
   imports: [
@@ -59,6 +61,7 @@ import { DeviceTokenService } from './device-token.service';
       InstagramMedia,
       InstagramMediaInsight,
       DeviceToken,
+      AppVersion,
     ]),
   ],
   controllers: [
@@ -89,6 +92,7 @@ import { DeviceTokenService } from './device-token.service';
     // InstagramService, // DISABLED: Instagram functionality commented out for production
     // InstagramSyncCronService, // DISABLED: Instagram functionality commented out for production
     DeviceTokenService,
+    AppVersionService,
   ],
   exports: [
     SmsService,
@@ -109,6 +113,7 @@ import { DeviceTokenService } from './device-token.service';
     RazorpayService,
     // InstagramService, // DISABLED: Instagram functionality commented out for production
     DeviceTokenService,
+    AppVersionService,
   ],
 })
 export class SharedModule { }

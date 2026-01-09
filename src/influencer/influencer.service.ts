@@ -11,7 +11,7 @@ import { WhatsAppService } from '../shared/whatsapp.service';
 import { NotificationService } from '../shared/notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
 import { UserType as DeviceUserType } from '../shared/models/device-token.model';
-import { APP_VERSION } from '../shared/constants/app-version.constants';
+import { AppVersionService } from '../shared/services/app-version.service';
 import { OtpService } from '../shared/services/otp.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto';
@@ -97,6 +97,7 @@ export class InfluencerService {
     private readonly whatsAppService: WhatsAppService,
     private readonly notificationService: NotificationService,
     private readonly deviceTokenService: DeviceTokenService,
+    private readonly appVersionService: AppVersionService,
     @Inject('PROFILE_REVIEW_MODEL')
     private readonly profileReviewModel: typeof ProfileReview,
     @Inject('CAMPAIGN_MODEL')
@@ -353,7 +354,6 @@ export class InfluencerService {
         appVersion: string;
         versionCode: number;
       };
-      updateRequired: boolean;
       updateAvailable: boolean;
       forceUpdate: boolean;
       updateMessage: string;
@@ -385,40 +385,40 @@ export class InfluencerService {
       // Get the most recently used device for app version comparison
       const mostRecentDevice = selectedDevice || (devices.length > 0 ? devices[0] : null);
 
-      // Build app version info with constants and user's installed version
-      appVersionInfo = {
-        // User's currently installed app version (from their device)
-        installedVersion: {
-          appVersion: mostRecentDevice?.appVersion || null,
-          versionCode: mostRecentDevice?.versionCode || null,
-        },
-        // Minimum required version (from constants)
-        minimumVersion: {
-          appVersion: APP_VERSION.MINIMUM_VERSION,
-          versionCode: APP_VERSION.MINIMUM_VERSION_CODE,
-        },
-        // Latest available version (from constants)
-        latestVersion: {
-          appVersion: APP_VERSION.LATEST_VERSION,
-          versionCode: APP_VERSION.LATEST_VERSION_CODE,
-        },
-        // Update flags
-        updateRequired: mostRecentDevice?.versionCode
-          ? mostRecentDevice.versionCode < APP_VERSION.MINIMUM_VERSION_CODE
-          : false,
-        updateAvailable: mostRecentDevice?.versionCode
-          ? mostRecentDevice.versionCode < APP_VERSION.LATEST_VERSION_CODE
-          : false,
-        forceUpdate: APP_VERSION.FORCE_UPDATE && (mostRecentDevice?.versionCode
-          ? mostRecentDevice.versionCode < APP_VERSION.MINIMUM_VERSION_CODE
-          : false),
-        // Update messages
-        updateMessage: APP_VERSION.FORCE_UPDATE && (mostRecentDevice?.versionCode
-          ? mostRecentDevice.versionCode < APP_VERSION.MINIMUM_VERSION_CODE
-          : false)
-          ? APP_VERSION.FORCE_UPDATE_MESSAGE
-          : APP_VERSION.UPDATE_MESSAGE,
-      };
+      // Get version config from database based on device OS
+      if (mostRecentDevice?.deviceOs) {
+        const platform = mostRecentDevice.deviceOs as 'ios' | 'android';
+        const versionStatus = await this.appVersionService.checkVersionStatus(
+          platform,
+          mostRecentDevice.versionCode || 0,
+          mostRecentDevice.appVersion || undefined,
+        );
+
+        if (versionStatus.config) {
+          // Build app version info with database config and user's installed version
+          appVersionInfo = {
+            // User's currently installed app version (from their device)
+            installedVersion: {
+              appVersion: mostRecentDevice.appVersion || null,
+              versionCode: mostRecentDevice.versionCode || null,
+            },
+            // Minimum required version (from database)
+            minimumVersion: {
+              appVersion: versionStatus.config.minimumVersion,
+              versionCode: versionStatus.config.minimumVersionCode,
+            },
+            // Latest available version (from database)
+            latestVersion: {
+              appVersion: versionStatus.config.latestVersion,
+              versionCode: versionStatus.config.latestVersionCode,
+            },
+            // Update flags from service
+            updateAvailable: versionStatus.updateAvailable,
+            forceUpdate: versionStatus.forceUpdate,
+            updateMessage: versionStatus.updateMessage,
+          };
+        }
+      }
     }
 
     // Include private data only if not public view
@@ -494,6 +494,15 @@ export class InfluencerService {
             isPro = false;
           }
         }
+      }
+
+      // Log version check details for debugging
+      if (deviceToken || appVersionInfo) {
+        console.log('📱 Version Check Response for Influencer Profile:', JSON.stringify({
+          influencerId,
+          deviceToken,
+          appVersion: appVersionInfo,
+        }, null, 2));
       }
 
       return {
