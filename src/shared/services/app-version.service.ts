@@ -29,6 +29,11 @@ interface AppVersionRaw {
   updatedAt: Date;
 }
 
+interface CurrentVersionRaw {
+  latestVersion: string;
+  createdAt: Date;
+}
+
 @Injectable()
 export class AppVersionService {
   private readonly logger = new Logger(AppVersionService.name);
@@ -551,23 +556,27 @@ export class AppVersionService {
     const [iosVersion, androidVersion] = await Promise.all([
       this.appVersionModel.findOne({
         where: { platform: 'ios', isActive: true },
+        attributes: ['latestVersion', 'createdAt'],
+        raw: true,
       }),
       this.appVersionModel.findOne({
         where: { platform: 'android', isActive: true },
+        attributes: ['latestVersion', 'createdAt'],
+        raw: true,
       }),
     ]);
 
     return {
       ios: iosVersion
         ? {
-            version: iosVersion.latestVersion,
-            liveDate: iosVersion.createdAt,
+            version: (iosVersion as CurrentVersionRaw).latestVersion,
+            liveDate: (iosVersion as CurrentVersionRaw).createdAt,
           }
         : null,
       android: androidVersion
         ? {
-            version: androidVersion.latestVersion,
-            liveDate: androidVersion.createdAt,
+            version: (androidVersion as CurrentVersionRaw).latestVersion,
+            liveDate: (androidVersion as CurrentVersionRaw).createdAt,
           }
         : null,
     };
