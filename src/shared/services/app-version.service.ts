@@ -16,6 +16,19 @@ export interface AppVersionConfig {
   forceUpdateMessage: string;
 }
 
+interface AppVersionRaw {
+  id: number;
+  platform: PlatformType;
+  latestVersion: string;
+  latestVersionCode: number;
+  minimumVersion: string;
+  minimumVersionCode: number;
+  forceUpdate: boolean;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 @Injectable()
 export class AppVersionService {
   private readonly logger = new Logger(AppVersionService.name);
@@ -282,6 +295,18 @@ export class AppVersionService {
 
     const { count, rows } = await this.appVersionModel.findAndCountAll({
       where,
+      attributes: [
+        'id',
+        'platform',
+        'latestVersion',
+        'latestVersionCode',
+        'minimumVersion',
+        'minimumVersionCode',
+        'forceUpdate',
+        'isActive',
+        'createdAt',
+        'updatedAt',
+      ],
       order: [
         ['platform', 'ASC'],
         ['latestVersionCode', 'DESC'],
@@ -289,11 +314,12 @@ export class AppVersionService {
       ],
       limit,
       offset: (page - 1) * limit,
+      raw: true,
     });
 
     // Calculate metrics for each version
     const versionsWithMetrics = await Promise.all(
-      rows.map(async (version) => {
+      (rows as unknown as AppVersionRaw[]).map(async (version) => {
         const metrics = await this.calculateVersionMetrics(
           version.platform,
           version.latestVersion,

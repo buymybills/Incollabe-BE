@@ -3067,6 +3067,23 @@ export class AdminController {
   @ApiResponse({
     status: HttpStatus.CREATED,
     description: 'App version created successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', example: 1 },
+        platform: { type: 'string', enum: ['ios', 'android'], example: 'ios' },
+        latestVersion: { type: 'string', example: '5.0.0.9' },
+        latestVersionCode: { type: 'number', example: 509 },
+        minimumVersion: { type: 'string', example: '5.0.0.9' },
+        minimumVersionCode: { type: 'number', example: 509 },
+        forceUpdate: { type: 'boolean', example: false },
+        updateMessage: { type: 'string', example: 'A new version is available.' },
+        forceUpdateMessage: { type: 'string', example: 'This version is no longer supported.' },
+        isActive: { type: 'boolean', example: false },
+        createdAt: { type: 'string', format: 'date-time' },
+        updatedAt: { type: 'string', format: 'date-time' },
+      },
+    },
   })
   @ApiBadRequestResponse({
     description: 'Version already exists or invalid data',
@@ -3109,6 +3126,23 @@ export class AdminController {
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Version activated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', example: 1 },
+        platform: { type: 'string', enum: ['ios', 'android'], example: 'ios' },
+        latestVersion: { type: 'string', example: '5.0.0.9' },
+        latestVersionCode: { type: 'number', example: 509 },
+        minimumVersion: { type: 'string', example: '5.0.0.9' },
+        minimumVersionCode: { type: 'number', example: 509 },
+        forceUpdate: { type: 'boolean', example: false },
+        updateMessage: { type: 'string' },
+        forceUpdateMessage: { type: 'string' },
+        isActive: { type: 'boolean', example: true },
+        createdAt: { type: 'string', format: 'date-time' },
+        updatedAt: { type: 'string', format: 'date-time' },
+      },
+    },
   })
   @ApiNotFoundResponse({
     description: 'Version not found',
@@ -3151,6 +3185,18 @@ export class AdminController {
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Version deactivated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', example: 1 },
+        platform: { type: 'string', enum: ['ios', 'android'], example: 'ios' },
+        latestVersion: { type: 'string', example: '5.0.0.9' },
+        latestVersionCode: { type: 'number', example: 509 },
+        isActive: { type: 'boolean', example: false },
+        createdAt: { type: 'string', format: 'date-time' },
+        updatedAt: { type: 'string', format: 'date-time' },
+      },
+    },
   })
   @ApiNotFoundResponse({
     description: 'Version not found',
@@ -3185,6 +3231,23 @@ export class AdminController {
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Version updated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', example: 1 },
+        platform: { type: 'string', enum: ['ios', 'android'], example: 'ios' },
+        latestVersion: { type: 'string', example: '5.0.0.10' },
+        latestVersionCode: { type: 'number', example: 510 },
+        minimumVersion: { type: 'string', example: '5.0.0.10' },
+        minimumVersionCode: { type: 'number', example: 510 },
+        forceUpdate: { type: 'boolean', example: true },
+        updateMessage: { type: 'string' },
+        forceUpdateMessage: { type: 'string' },
+        isActive: { type: 'boolean' },
+        createdAt: { type: 'string', format: 'date-time' },
+        updatedAt: { type: 'string', format: 'date-time' },
+      },
+    },
   })
   @ApiNotFoundResponse({
     description: 'Version not found',
