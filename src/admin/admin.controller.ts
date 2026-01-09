@@ -3112,16 +3112,8 @@ export class AdminController {
     description: 'Version ID',
   })
   @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        platform: {
-          type: 'string',
-          enum: ['ios', 'android'],
-        },
-      },
-      required: ['platform'],
-    },
+    type: ActivateVersionDto,
+    description: 'Platform to activate version for',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -3152,63 +3144,9 @@ export class AdminController {
   })
   async activateVersion(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { platform: 'ios' | 'android' },
+    @Body() body: ActivateVersionDto,
   ) {
     return await this.appVersionService.activateVersion(id, body.platform);
-  }
-
-  @Post('app-versions/:id/deactivate')
-  @UseGuards(AdminAuthGuard, RolesGuard)
-  @Roles(AdminRole.SUPER_ADMIN)
-  @ApiBearerAuth()
-  @ApiOperation({
-    summary: 'Deactivate app version',
-    description: 'Mark a specific app version as inactive/down',
-  })
-  @ApiParam({
-    name: 'id',
-    type: Number,
-    description: 'Version ID',
-  })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        platform: {
-          type: 'string',
-          enum: ['ios', 'android'],
-        },
-      },
-      required: ['platform'],
-    },
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Version deactivated successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        id: { type: 'number', example: 1 },
-        platform: { type: 'string', enum: ['ios', 'android'], example: 'ios' },
-        latestVersion: { type: 'string', example: '5.0.0.9' },
-        latestVersionCode: { type: 'number', example: 509 },
-        isActive: { type: 'boolean', example: false },
-        createdAt: { type: 'string', format: 'date-time' },
-        updatedAt: { type: 'string', format: 'date-time' },
-      },
-    },
-  })
-  @ApiNotFoundResponse({
-    description: 'Version not found',
-  })
-  @ApiBadRequestResponse({
-    description: 'Version is already inactive',
-  })
-  async deactivateVersion(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: { platform: 'ios' | 'android' },
-  ) {
-    return await this.appVersionService.deactivateVersion(id, body.platform);
   }
 
   @Put('app-versions/:id')

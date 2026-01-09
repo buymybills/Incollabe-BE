@@ -152,7 +152,6 @@ const mockAppVersionService = {
   getAllVersionsWithMetrics: jest.fn(),
   createVersion: jest.fn(),
   activateVersion: jest.fn(),
-  deactivateVersion: jest.fn(),
   updateVersion: jest.fn(),
   deleteVersion: jest.fn(),
 };

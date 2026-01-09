@@ -258,9 +258,7 @@ export class AppVersionService {
       minimumVersionCode: data.versionCode,
       forceUpdate: data.isMandatory,
       updateMessage: data.updateMessage || 'A new version is available. Please update to get the latest features and improvements.',
-      forceUpdateMessage: data.isMandatory
-        ? 'This version is no longer supported. Please update to continue using the app.'
-        : 'A new version is available. Please update to get the latest features and improvements.',
+      forceUpdateMessage: 'This version is no longer supported. Please update to continue using the app.',
       isActive: false, // New versions are inactive by default
     } as any);
 
@@ -417,6 +415,20 @@ export class AppVersionService {
         id: versionId,
         platform,
       },
+      attributes: [
+        'id',
+        'platform',
+        'latestVersion',
+        'latestVersionCode',
+        'minimumVersion',
+        'minimumVersionCode',
+        'forceUpdate',
+        'updateMessage',
+        'forceUpdateMessage',
+        'isActive',
+        'createdAt',
+        'updatedAt',
+      ],
     });
 
     if (!version) {
@@ -424,7 +436,7 @@ export class AppVersionService {
     }
 
     if (version.isActive) {
-      throw new BadRequestException(`Version ${version.latestVersion} is already active`);
+      throw new BadRequestException(`Version ${version.latestVersion || 'Unknown'} is already active`);
     }
 
     // Deactivate all other versions for this platform
@@ -445,35 +457,6 @@ export class AppVersionService {
     this.clearCache(platform);
 
     this.logger.log(`Activated version: ${platform} ${version.latestVersion} (ID: ${versionId})`);
-    return version;
-  }
-
-  /**
-   * Deactivate a specific version
-   */
-  async deactivateVersion(versionId: number, platform: PlatformType): Promise<AppVersion> {
-    const version = await this.appVersionModel.findOne({
-      where: {
-        id: versionId,
-        platform,
-      },
-    });
-
-    if (!version) {
-      throw new NotFoundException(`Version with ID ${versionId} not found for platform ${platform}`);
-    }
-
-    if (!version.isActive) {
-      throw new BadRequestException(`Version ${version.latestVersion} is already inactive`);
-    }
-
-    // Deactivate this version
-    await version.update({ isActive: false });
-
-    // Clear cache
-    this.clearCache(platform);
-
-    this.logger.log(`Deactivated version: ${platform} ${version.latestVersion} (ID: ${versionId})`);
     return version;
   }
 
