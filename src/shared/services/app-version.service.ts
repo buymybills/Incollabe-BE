@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { AppVersion, PlatformType } from '../models/app-version.model';
+import { isVersionLessThan } from '../utils/version-compare.util';
 
 export interface AppVersionConfig {
   platform: PlatformType;
@@ -95,10 +96,19 @@ export class AppVersionService {
 
   /**
    * Check if an app version requires update
+   *
+   * Compares BOTH versionCode (numeric) and appVersion (semantic string)
+   * Update is needed if EITHER check indicates an older version
+   *
+   * @param platform - 'ios' or 'android'
+   * @param installedVersionCode - Numeric build code (e.g., 7)
+   * @param installedAppVersion - Semantic version string (e.g., "4.0.0")
+   * @returns Object with updateAvailable, forceUpdate flags
    */
   async checkVersionStatus(
     platform: PlatformType,
     installedVersionCode: number,
+    installedAppVersion?: string,
   ): Promise<{
     updateAvailable: boolean;
     forceUpdate: boolean;
@@ -116,8 +126,27 @@ export class AppVersionService {
       };
     }
 
-    const updateAvailable = installedVersionCode < config.latestVersionCode;
-    const forceUpdate = config.forceUpdate && (installedVersionCode < config.minimumVersionCode);
+    // Check 1: Compare numeric version codes
+    const versionCodeNeedsUpdate = installedVersionCode < config.latestVersionCode;
+    const versionCodeBelowMinimum = installedVersionCode < config.minimumVersionCode;
+
+    // Check 2: Compare semantic version strings (if provided)
+    let appVersionNeedsUpdate = false;
+    let appVersionBelowMinimum = false;
+
+    if (installedAppVersion) {
+      appVersionNeedsUpdate = isVersionLessThan(installedAppVersion, config.latestVersion);
+      appVersionBelowMinimum = isVersionLessThan(installedAppVersion, config.minimumVersion);
+    }
+
+    // Update available if EITHER check indicates older version
+    const updateAvailable = versionCodeNeedsUpdate || appVersionNeedsUpdate;
+
+    // Force update if:
+    // 1. forceUpdate flag is enabled in database
+    // 2. AND (versionCode OR appVersion is below minimum)
+    const belowMinimum = versionCodeBelowMinimum || appVersionBelowMinimum;
+    const forceUpdate = config.forceUpdate && belowMinimum;
 
     return {
       updateAvailable,

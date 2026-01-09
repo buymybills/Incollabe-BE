@@ -391,6 +391,7 @@ export class InfluencerService {
         const versionStatus = await this.appVersionService.checkVersionStatus(
           platform,
           mostRecentDevice.versionCode || 0,
+          mostRecentDevice.appVersion || undefined,
         );
 
         if (versionStatus.config) {
@@ -497,6 +498,15 @@ export class InfluencerService {
             isPro = false;
           }
         }
+      }
+
+      // Log version check details for debugging
+      if (deviceToken || appVersionInfo) {
+        console.log('📱 Version Check Response for Influencer Profile:', JSON.stringify({
+          influencerId,
+          deviceToken,
+          appVersion: appVersionInfo,
+        }, null, 2));
       }
 
       return {
