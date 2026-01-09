@@ -335,13 +335,24 @@ export class AppVersionService {
     const platformFilter = platform === 'ios' ? 'ios' : 'android';
 
     // Count devices on this specific version
+    // Build OR conditions, filtering out null/undefined values
+    const orConditions: Array<{ appVersion?: string; versionCode?: number }> = [];
+    if (version) {
+      orConditions.push({ appVersion: version });
+    }
+    if (versionCode) {
+      orConditions.push({ versionCode: versionCode });
+    }
+
+    // If no valid version identifiers, return 0
+    if (orConditions.length === 0) {
+      return { systemLive: 0, penetration: 0 };
+    }
+
     const systemLive = await this.deviceTokenModel.count({
       where: {
         deviceOs: platformFilter,
-        [Op.or]: [
-          { appVersion: version },
-          { versionCode: versionCode },
-        ],
+        [Op.or]: orConditions,
       },
     });
 
