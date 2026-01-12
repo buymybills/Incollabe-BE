@@ -1634,6 +1634,46 @@ export class AdminAuthService {
             b.brandName?.toLowerCase().includes(search) ||
             b.username?.toLowerCase().includes(search),
         );
+
+        // Sort by search relevance when search is active
+        const calculateSearchPriority = (
+          brandName: string,
+          username: string,
+          searchTerm: string,
+        ): number => {
+          const lowerSearchTerm = searchTerm.toLowerCase();
+          const lowerBrandName = brandName.toLowerCase();
+          const lowerUsername = username.toLowerCase();
+
+          const brandNameIndex = lowerBrandName.indexOf(lowerSearchTerm);
+          const usernameIndex = lowerUsername.indexOf(lowerSearchTerm);
+
+          if (brandNameIndex === 0 || usernameIndex === 0) {
+            return 1;
+          } else if (brandNameIndex > 0 || usernameIndex > 0) {
+            const minPosition = Math.min(
+              brandNameIndex >= 0 ? brandNameIndex : 999,
+              usernameIndex >= 0 ? usernameIndex : 999,
+            );
+            return minPosition + 1;
+          }
+
+          return 999;
+        };
+
+        filteredBrands.sort((a, b) => {
+          const aPriority = calculateSearchPriority(
+            a.brandName || '',
+            a.username || '',
+            search,
+          );
+          const bPriority = calculateSearchPriority(
+            b.brandName || '',
+            b.username || '',
+            search,
+          );
+          return aPriority - bPriority;
+        });
       }
 
       if (minCampaigns !== undefined) {
@@ -1778,6 +1818,42 @@ export class AdminAuthService {
       ], // Primary: displayOrder, Secondary: createdAt
     });
 
+    // Calculate search priority helper function
+    const calculateSearchPriority = (
+      brandName: string,
+      username: string,
+      searchTerm: string,
+    ): number => {
+      if (!searchTerm) return 0;
+
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      const lowerBrandName = brandName.toLowerCase();
+      const lowerUsername = username.toLowerCase();
+
+      // Check position in brand name
+      const brandNameIndex = lowerBrandName.indexOf(lowerSearchTerm);
+      // Check position in username
+      const usernameIndex = lowerUsername.indexOf(lowerSearchTerm);
+
+      // Priority based on earliest match position (lower = better)
+      // If match at position 0, priority = 1 (highest)
+      // If match at position 1, priority = 2
+      // etc.
+      // If no match, priority = 999 (shouldn't happen due to filtering)
+      if (brandNameIndex === 0 || usernameIndex === 0) {
+        return 1; // Starts with search term - highest priority
+      } else if (brandNameIndex > 0 || usernameIndex > 0) {
+        // Return the minimum position found (closest to start)
+        const minPosition = Math.min(
+          brandNameIndex >= 0 ? brandNameIndex : 999,
+          usernameIndex >= 0 ? usernameIndex : 999,
+        );
+        return minPosition + 1; // +1 so starting position gets priority 1
+      }
+
+      return 999; // No match found
+    };
+
     // Map brands and calculate metrics (including posts, followers, following)
     const mappedBrands = await Promise.all(
       allBrands.map(async (brand) => {
@@ -1889,12 +1965,20 @@ export class AdminAuthService {
             }
           : null;
 
+        // Calculate search priority
+        const searchPriority = calculateSearchPriority(
+          brand.brandName || '',
+          brand.username || '',
+          searchQuery?.trim() || '',
+        );
+
         // For non-top profiles, we don't calculate composite score
         // Set it to 0 for consistency
         const brandDto: TopBrandDto & {
           postsCount: number;
           followersCount: number;
           followingCount: number;
+          searchPriority: number;
           niches: Array<{
             id: number;
             name: string;
@@ -1921,6 +2005,7 @@ export class AdminAuthService {
           postsCount,
           followersCount,
           followingCount,
+          searchPriority, // Add search priority for sorting
           niches,
           headquarterCity,
           metrics: {
@@ -1944,6 +2029,7 @@ export class AdminAuthService {
         postsCount: number;
         followersCount: number;
         followingCount: number;
+        searchPriority: number;
         niches: Array<{
           id: number;
           name: string;
@@ -1960,24 +2046,49 @@ export class AdminAuthService {
     );
 
     // Apply sorting based on sortBy parameter
+    // When search query is present, prioritize by search relevance first
+    const hasSearchQuery = searchQuery && searchQuery.trim();
+
     switch (sortBy) {
       case BrandSortBy.POSTS:
-        validBrands.sort((a, b) => b.postsCount - a.postsCount);
+        validBrands.sort((a, b) => {
+          if (hasSearchQuery && a.searchPriority !== b.searchPriority) {
+            return a.searchPriority - b.searchPriority; // Lower priority number = higher relevance
+          }
+          return b.postsCount - a.postsCount;
+        });
         break;
       case BrandSortBy.FOLLOWERS:
-        validBrands.sort((a, b) => b.followersCount - a.followersCount);
+        validBrands.sort((a, b) => {
+          if (hasSearchQuery && a.searchPriority !== b.searchPriority) {
+            return a.searchPriority - b.searchPriority;
+          }
+          return b.followersCount - a.followersCount;
+        });
         break;
       case BrandSortBy.FOLLOWING:
-        validBrands.sort((a, b) => b.followingCount - a.followingCount);
+        validBrands.sort((a, b) => {
+          if (hasSearchQuery && a.searchPriority !== b.searchPriority) {
+            return a.searchPriority - b.searchPriority;
+          }
+          return b.followingCount - a.followingCount;
+        });
         break;
       case BrandSortBy.CAMPAIGNS:
-        validBrands.sort(
-          (a, b) => b.metrics.totalCampaigns - a.metrics.totalCampaigns,
-        );
+        validBrands.sort((a, b) => {
+          if (hasSearchQuery && a.searchPriority !== b.searchPriority) {
+            return a.searchPriority - b.searchPriority;
+          }
+          return b.metrics.totalCampaigns - a.metrics.totalCampaigns;
+        });
         break;
       case BrandSortBy.CREATED_AT:
       default:
-        // Already sorted by createdAt ASC from database query
+        // When search is active, sort by search priority first
+        if (hasSearchQuery) {
+          validBrands.sort((a, b) => a.searchPriority - b.searchPriority);
+        }
+        // Otherwise already sorted by createdAt ASC from database query
         break;
     }
 
@@ -1985,7 +2096,12 @@ export class AdminAuthService {
     const total = validBrands.length;
     const totalPages = Math.ceil(total / (limit ?? 20));
     const offset = (page - 1) * (limit ?? 20);
-    const paginatedBrands = validBrands.slice(offset, offset + (limit ?? 20));
+    const paginatedBrandsWithPriority = validBrands.slice(offset, offset + (limit ?? 20));
+
+    // Remove searchPriority from response (only used internally for sorting)
+    const paginatedBrands = paginatedBrandsWithPriority.map(
+      ({ searchPriority, ...brand }) => brand,
+    );
 
     return {
       brands: paginatedBrands,
