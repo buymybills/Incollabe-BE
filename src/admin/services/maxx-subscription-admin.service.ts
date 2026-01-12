@@ -289,18 +289,6 @@ export class MaxxSubscriptionAdminService {
       }
     }
 
-    // Build search clause
-    // When searching, we want to match profile name, username, OR location
-    // This requires using Sequelize's $or syntax at the query root level
-    if (search) {
-      // Add search conditions to main where clause using Sequelize's nested column syntax
-      whereClause[Op.or] = [
-        { '$influencer.name$': { [Op.iLike]: `%${search}%` } },
-        { '$influencer.username$': { [Op.iLike]: `%${search}%` } },
-        { '$influencer.city.name$': { [Op.iLike]: `%${search}%` } },
-      ];
-    }
-
     // Determine sort field
     let orderField: any = [['createdAt', sortOrder]];
     if (sortBy === 'usageMonths') {
@@ -312,7 +300,8 @@ export class MaxxSubscriptionAdminService {
     }
 
     // Get subscriptions with influencer details
-    const { count, rows: subscriptions } = await this.proSubscriptionModel.findAndCountAll({
+    // Note: We'll filter by search after fetching to enable priority-based sorting
+    const subscriptions = await this.proSubscriptionModel.findAll({
       where: whereClause,
       include: [
         {
@@ -329,15 +318,49 @@ export class MaxxSubscriptionAdminService {
           ],
         },
       ],
-      limit,
-      offset,
       order: orderField,
       subQuery: false,
-      distinct: true,
     });
 
-    // Build response data
-    const data: MaxxSubscriptionItemDto[] = subscriptions.map((subscription) => {
+    // Calculate search priority helper function
+    // Prioritizes matches by field (name first, then username, then city), then by position
+    const calculateSearchPriority = (
+      name: string,
+      username: string,
+      cityName: string,
+      searchTerm: string,
+    ): number => {
+      if (!searchTerm) return 0;
+
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      const lowerName = name.toLowerCase();
+      const lowerUsername = username.toLowerCase();
+      const lowerCity = cityName.toLowerCase();
+
+      const nameIndex = lowerName.indexOf(lowerSearchTerm);
+      const usernameIndex = lowerUsername.indexOf(lowerSearchTerm);
+      const cityIndex = lowerCity.indexOf(lowerSearchTerm);
+
+      // Priority tiers:
+      // 1000-1999: Match in name (1000 = starts with, 1001 = position 1, etc.)
+      // 2000-2999: Match in username (2000 = starts with, 2001 = position 1, etc.)
+      // 3000-3999: Match in city (3000 = starts with, 3001 = position 1, etc.)
+      // 9999: No match
+
+      if (nameIndex >= 0) {
+        return 1000 + nameIndex;
+      } else if (usernameIndex >= 0) {
+        return 2000 + usernameIndex;
+      } else if (cityIndex >= 0) {
+        return 3000 + cityIndex;
+      }
+
+      return 9999;
+    };
+
+    // Build response data with search filtering and priority
+    const allData: (MaxxSubscriptionItemDto & { searchPriority: number })[] = subscriptions
+      .map((subscription) => {
       const influencer = subscription.influencer;
 
       // Calculate usage months
@@ -367,12 +390,23 @@ export class MaxxSubscriptionAdminService {
       // Manual subscriptions will have upiMandateStatus as null
       const paymentType = subscription.upiMandateStatus ? 'autopay' : 'monthly';
 
+      // Calculate search priority
+      const profileName = influencer?.name || 'N/A';
+      const userName = influencer?.username || 'N/A';
+      const cityName = influencer?.city?.name || 'N/A';
+      const searchPriority = calculateSearchPriority(
+        profileName,
+        userName,
+        cityName,
+        search || '',
+      );
+
       return {
         id: subscription.id,
         influencerId: subscription.influencerId,
-        profileName: influencer?.name || 'N/A',
-        username: influencer?.username || 'N/A',
-        location: influencer?.city?.name || 'N/A',
+        profileName,
+        username: userName,
+        location: cityName,
         profileStatus,
         usageMonths,
         paymentType,
@@ -381,16 +415,35 @@ export class MaxxSubscriptionAdminService {
         profileImage: influencer?.profileImage,
         isAutoRenew: subscription.autoRenew,
         razorpaySubscriptionId: subscription.razorpaySubscriptionId,
+        searchPriority,
       };
+    })
+    .filter((item) => {
+      // Filter by search if provided
+      if (!search) return true;
+      return item.searchPriority < 9999; // Only include items that matched the search
     });
+
+    // Sort by search priority when search is active
+    if (search) {
+      allData.sort((a, b) => a.searchPriority - b.searchPriority);
+    }
+
+    // Apply pagination
+    const total = allData.length;
+    const totalPages = Math.ceil(total / limit);
+    const paginatedData = allData.slice(offset, offset + limit);
+
+    // Remove searchPriority from response
+    const data = paginatedData.map(({ searchPriority, ...item }) => item);
 
     return {
       data,
       pagination: {
         page,
         limit,
-        total: count,
-        totalPages: Math.ceil(count / limit),
+        total,
+        totalPages,
       },
     };
   }

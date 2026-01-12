@@ -330,15 +330,6 @@ export class MaxSubscriptionBrandService {
       }
     }
 
-    // Apply search at the main invoice level using nested field syntax
-    if (search) {
-      invoiceWhereClause[Op.or] = [
-        { '$brand.brandName$': { [Op.iLike]: `%${search}%` } },
-        { '$brand.username$': { [Op.iLike]: `%${search}%` } },
-        { '$campaign.name$': { [Op.iLike]: `%${search}%` } },
-      ];
-    }
-
     const invoices = await this.inviteOnlyCampaignInvoiceModel.findAll({
       where: invoiceWhereClause,
       include: [
@@ -362,7 +353,43 @@ export class MaxSubscriptionBrandService {
       subQuery: false,
     });
 
-    return invoices
+    // Calculate search priority helper function
+    // Prioritizes matches by field (brand name first, then username, then campaign name), then by position
+    const calculateSearchPriority = (
+      brandName: string,
+      username: string,
+      campaignName: string,
+      searchTerm: string,
+    ): number => {
+      if (!searchTerm) return 0;
+
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      const lowerBrandName = brandName.toLowerCase();
+      const lowerUsername = username.toLowerCase();
+      const lowerCampaignName = campaignName.toLowerCase();
+
+      const brandNameIndex = lowerBrandName.indexOf(lowerSearchTerm);
+      const usernameIndex = lowerUsername.indexOf(lowerSearchTerm);
+      const campaignNameIndex = lowerCampaignName.indexOf(lowerSearchTerm);
+
+      // Priority tiers:
+      // 1000-1999: Match in brand name
+      // 2000-2999: Match in username
+      // 3000-3999: Match in campaign name
+      // 9999: No match
+
+      if (brandNameIndex >= 0) {
+        return 1000 + brandNameIndex;
+      } else if (usernameIndex >= 0) {
+        return 2000 + usernameIndex;
+      } else if (campaignNameIndex >= 0) {
+        return 3000 + campaignNameIndex;
+      }
+
+      return 9999;
+    };
+
+    const mappedInvoices = invoices
       .filter((invoice) => invoice.campaign && invoice.brand)
       .map((invoice) => {
         const campaign = invoice.campaign;
@@ -386,6 +413,14 @@ export class MaxSubscriptionBrandService {
 
         const purchaseDateTime = `${time} | ${date}`;
 
+        // Calculate search priority
+        const searchPriority = calculateSearchPriority(
+          brand.brandName,
+          brand.username,
+          campaign.name,
+          search || '',
+        );
+
         return {
           id: invoice.id,
           campaignId: campaign.id,
@@ -398,8 +433,22 @@ export class MaxSubscriptionBrandService {
           status: campaign.status,
           invoiceNumber: invoice.invoiceNumber,
           paymentMethod: invoice.paymentMethod || 'razorpay',
+          searchPriority,
         };
+      })
+      .filter((item) => {
+        // Filter by search if provided
+        if (!search) return true;
+        return item.searchPriority < 9999;
       });
+
+    // Sort by search priority when search is active
+    if (search) {
+      mappedInvoices.sort((a, b) => a.searchPriority - b.searchPriority);
+    }
+
+    // Remove searchPriority from response
+    return mappedInvoices.map(({ searchPriority, ...item }) => item);
   }
 
   /**
@@ -466,15 +515,6 @@ export class MaxSubscriptionBrandService {
       }
     }
 
-    // Apply search at the main invoice level using nested field syntax
-    if (search) {
-      invoiceWhereClause[Op.or] = [
-        { '$brand.brandName$': { [Op.iLike]: `%${search}%` } },
-        { '$brand.username$': { [Op.iLike]: `%${search}%` } },
-        { '$campaign.name$': { [Op.iLike]: `%${search}%` } },
-      ];
-    }
-
     // Get invoices with related campaign and brand details
     const invoices = await this.maxCampaignInvoiceModel.findAll({
       where: invoiceWhereClause,
@@ -499,7 +539,43 @@ export class MaxSubscriptionBrandService {
       subQuery: false,
     });
 
-    return invoices.map((invoice) => {
+    // Calculate search priority helper function
+    // Prioritizes matches by field (brand name first, then username, then campaign name), then by position
+    const calculateSearchPriority = (
+      brandName: string,
+      username: string,
+      campaignName: string,
+      searchTerm: string,
+    ): number => {
+      if (!searchTerm) return 0;
+
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      const lowerBrandName = brandName.toLowerCase();
+      const lowerUsername = username.toLowerCase();
+      const lowerCampaignName = campaignName.toLowerCase();
+
+      const brandNameIndex = lowerBrandName.indexOf(lowerSearchTerm);
+      const usernameIndex = lowerUsername.indexOf(lowerSearchTerm);
+      const campaignNameIndex = lowerCampaignName.indexOf(lowerSearchTerm);
+
+      // Priority tiers:
+      // 1000-1999: Match in brand name
+      // 2000-2999: Match in username
+      // 3000-3999: Match in campaign name
+      // 9999: No match
+
+      if (brandNameIndex >= 0) {
+        return 1000 + brandNameIndex;
+      } else if (usernameIndex >= 0) {
+        return 2000 + usernameIndex;
+      } else if (campaignNameIndex >= 0) {
+        return 3000 + campaignNameIndex;
+      }
+
+      return 9999;
+    };
+
+    const mappedInvoices = invoices.map((invoice) => {
       const campaign = invoice.campaign;
       const brand = invoice.brand;
 
@@ -521,6 +597,14 @@ export class MaxSubscriptionBrandService {
 
       const purchaseDateTime = `${time} | ${date}`;
 
+      // Calculate search priority
+      const searchPriority = calculateSearchPriority(
+        brand.brandName,
+        brand.username,
+        campaign.name,
+        search || '',
+      );
+
       return {
         id: invoice.id,
         campaignId: campaign.id,
@@ -533,8 +617,22 @@ export class MaxSubscriptionBrandService {
         status: campaign.status,
         invoiceNumber: invoice.invoiceNumber,
         paymentMethod: invoice.paymentMethod || 'razorpay',
+        searchPriority,
       };
+    })
+    .filter((item) => {
+      // Filter by search if provided
+      if (!search) return true;
+      return item.searchPriority < 9999;
     });
+
+    // Sort by search priority when search is active
+    if (search) {
+      mappedInvoices.sort((a, b) => a.searchPriority - b.searchPriority);
+    }
+
+    // Remove searchPriority from response
+    return mappedInvoices.map(({ searchPriority, ...item }) => item);
   }
 
   /**
