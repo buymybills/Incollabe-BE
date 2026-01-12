@@ -1636,6 +1636,7 @@ export class AdminAuthService {
         );
 
         // Sort by search relevance when search is active
+        // Prioritizes matches by field (brandName first, then username), then by position
         const calculateSearchPriority = (
           brandName: string,
           username: string,
@@ -1648,17 +1649,18 @@ export class AdminAuthService {
           const brandNameIndex = lowerBrandName.indexOf(lowerSearchTerm);
           const usernameIndex = lowerUsername.indexOf(lowerSearchTerm);
 
-          if (brandNameIndex === 0 || usernameIndex === 0) {
-            return 1;
-          } else if (brandNameIndex > 0 || usernameIndex > 0) {
-            const minPosition = Math.min(
-              brandNameIndex >= 0 ? brandNameIndex : 999,
-              usernameIndex >= 0 ? usernameIndex : 999,
-            );
-            return minPosition + 1;
+          // Priority tiers:
+          // 1000-1999: Match in brandName (1000 = starts with, 1001 = position 1, etc.)
+          // 2000-2999: Match in username (2000 = starts with, 2001 = position 1, etc.)
+          // 9999: No match
+
+          if (brandNameIndex >= 0) {
+            return 1000 + brandNameIndex;
+          } else if (usernameIndex >= 0) {
+            return 2000 + usernameIndex;
           }
 
-          return 999;
+          return 9999;
         };
 
         filteredBrands.sort((a, b) => {
@@ -1819,6 +1821,7 @@ export class AdminAuthService {
     });
 
     // Calculate search priority helper function
+    // Prioritizes matches by field (brandName first, then username), then by position
     const calculateSearchPriority = (
       brandName: string,
       username: string,
@@ -1835,23 +1838,20 @@ export class AdminAuthService {
       // Check position in username
       const usernameIndex = lowerUsername.indexOf(lowerSearchTerm);
 
-      // Priority based on earliest match position (lower = better)
-      // If match at position 0, priority = 1 (highest)
-      // If match at position 1, priority = 2
-      // etc.
-      // If no match, priority = 999 (shouldn't happen due to filtering)
-      if (brandNameIndex === 0 || usernameIndex === 0) {
-        return 1; // Starts with search term - highest priority
-      } else if (brandNameIndex > 0 || usernameIndex > 0) {
-        // Return the minimum position found (closest to start)
-        const minPosition = Math.min(
-          brandNameIndex >= 0 ? brandNameIndex : 999,
-          usernameIndex >= 0 ? usernameIndex : 999,
-        );
-        return minPosition + 1; // +1 so starting position gets priority 1
+      // Priority tiers:
+      // 1000-1999: Match in brandName (1000 = starts with, 1001 = position 1, etc.)
+      // 2000-2999: Match in username (2000 = starts with, 2001 = position 1, etc.)
+      // 9999: No match (shouldn't happen due to filtering)
+
+      if (brandNameIndex >= 0) {
+        // Match found in brandName - highest priority tier
+        return 1000 + brandNameIndex;
+      } else if (usernameIndex >= 0) {
+        // Match found in username - lower priority tier
+        return 2000 + usernameIndex;
       }
 
-      return 999; // No match found
+      return 9999; // No match found
     };
 
     // Map brands and calculate metrics (including posts, followers, following)

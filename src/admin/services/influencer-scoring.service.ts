@@ -370,6 +370,7 @@ export class InfluencerScoringService {
       ]);
 
     // Calculate search priority helper function
+    // Prioritizes matches by field (name first, then username), then by position
     const calculateSearchPriority = (
       name: string,
       username: string,
@@ -386,23 +387,20 @@ export class InfluencerScoringService {
       // Check position in username
       const usernameIndex = lowerUsername.indexOf(lowerSearchTerm);
 
-      // Priority based on earliest match position (lower = better)
-      // If match at position 0, priority = 1 (highest)
-      // If match at position 1, priority = 2
-      // etc.
-      // If no match, priority = 999 (shouldn't happen due to filtering)
-      if (nameIndex === 0 || usernameIndex === 0) {
-        return 1; // Starts with search term - highest priority
-      } else if (nameIndex > 0 || usernameIndex > 0) {
-        // Return the minimum position found (closest to start)
-        const minPosition = Math.min(
-          nameIndex >= 0 ? nameIndex : 999,
-          usernameIndex >= 0 ? usernameIndex : 999,
-        );
-        return minPosition + 1; // +1 so starting position gets priority 1
+      // Priority tiers:
+      // 1000-1999: Match in name (1000 = starts with, 1001 = position 1, etc.)
+      // 2000-2999: Match in username (2000 = starts with, 2001 = position 1, etc.)
+      // 9999: No match (shouldn't happen due to filtering)
+
+      if (nameIndex >= 0) {
+        // Match found in name - highest priority tier
+        return 1000 + nameIndex;
+      } else if (usernameIndex >= 0) {
+        // Match found in username - lower priority tier
+        return 2000 + usernameIndex;
       }
 
-      return 999; // No match found
+      return 9999; // No match found
     };
 
     // Map influencers and apply follower filters
