@@ -31,6 +31,8 @@ export class MaxxSubscriptionAdminService {
     private readonly proInvoiceModel: typeof ProInvoice,
     @InjectModel(Influencer)
     private readonly influencerModel: typeof Influencer,
+    @InjectModel(City)
+    private readonly cityModel: typeof City,
   ) {}
 
   /**
@@ -303,7 +305,7 @@ export class MaxxSubscriptionAdminService {
           required: Object.keys(influencerWhereClause).length > 0,
           include: [
             {
-              model: City,
+              model: this.cityModel,
               attributes: ['name'],
             },
           ],
@@ -387,7 +389,7 @@ export class MaxxSubscriptionAdminService {
           attributes: ['id', 'name', 'username', 'profileImage', 'isVerified', 'cityId'],
           include: [
             {
-              model: City,
+              model: this.cityModel,
               attributes: ['name'],
             },
           ],
