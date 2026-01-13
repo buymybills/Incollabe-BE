@@ -1417,22 +1417,14 @@ export class ProSubscriptionService {
       throw new BadRequestException('You already have an active autopay subscription');
     }
 
-    // Create or get the Razorpay plan
-    const planResult = await this.razorpayService.createPlan(
-      'monthly',
-      1,
-      199,
-      'INR',
-      'CollabKaroo Pro - Monthly Subscription',
-      'Pro account subscription with unlimited campaigns and features',
-      { subscriptionType: 'pro_account' },
-    );
+    // Use existing Razorpay plan from environment
+    const planId = this.configService.get<string>('RAZORPAY_PRO_PLAN_ID');
 
-    if (!planResult.success) {
-      throw new BadRequestException(`Failed to create plan: ${planResult.error}`);
+    if (!planId) {
+      throw new BadRequestException(
+        'RAZORPAY_PRO_PLAN_ID is not configured. Please run the setup endpoint to create a plan first.'
+      );
     }
-
-    const planId = planResult.planId;
 
     // Check if influencer still has active Pro access from previous subscription
     const influencerData = await this.influencerModel.findByPk(influencerId);
