@@ -1059,6 +1059,29 @@ export class InfluencerController {
     };
   }
 
+  @Post('pro/cleanup-stale-pending')
+  @ApiOperation({
+    summary: '[ADMIN ONLY] Clean up stale pending subscriptions',
+    description: 'Automatically cancels all payment_pending subscriptions older than specified hours. Useful for cleaning up orphaned subscriptions from payment gateway migration or configuration issues.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Stale subscriptions cleaned up successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Cleaned up 5 stale pending subscription(s)',
+        cancelledCount: 5,
+      },
+    },
+  })
+  async cleanupStalePendingSubscriptions(
+    @Body() cleanupDto?: { olderThanHours?: number },
+  ) {
+    const hours = cleanupDto?.olderThanHours || 24;
+    return await this.proSubscriptionService.cleanupStalePendingSubscriptions(hours);
+  }
+
   @Post('pro/test-activate')
   @ApiOperation({
     summary: '[TEST MODE ONLY] Activate Pro subscription without payment',
@@ -1230,6 +1253,35 @@ export class InfluencerController {
     }
     // Redirect to cancelAutopay for proper Razorpay cancellation
     return await this.proSubscriptionService.cancelAutopay(
+      req.user.id,
+      cancelDto.reason,
+    );
+  }
+
+  @Post('pro/cancel-pending')
+  @ApiOperation({
+    summary: 'Cancel pending payment subscription',
+    description: 'Cancel a subscription that is stuck in payment_pending state. This allows you to create a new subscription if the previous payment attempt failed or was abandoned.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Pending subscription cancelled successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Pending subscription cancelled successfully. You can now create a new subscription.',
+        cancelledSubscriptionId: 123,
+      },
+    },
+  })
+  async cancelPendingSubscription(
+    @Req() req: RequestWithUser,
+    @Body() cancelDto: CancelProSubscriptionDto,
+  ) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can cancel subscriptions');
+    }
+    return await this.proSubscriptionService.cancelPendingSubscription(
       req.user.id,
       cancelDto.reason,
     );

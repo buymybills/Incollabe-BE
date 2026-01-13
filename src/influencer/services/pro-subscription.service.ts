@@ -535,6 +535,113 @@ export class ProSubscriptionService {
   }
 
   /**
+   * Cancel pending payment subscription
+   * This is useful for cleaning up orphaned payment_pending subscriptions
+   * that were created with old/invalid payment gateway configurations
+   */
+  async cancelPendingSubscription(influencerId: number, reason?: string) {
+    const subscription = await this.proSubscriptionModel.findOne({
+      where: {
+        influencerId,
+        status: SubscriptionStatus.PAYMENT_PENDING,
+      },
+      include: [
+        {
+          model: ProInvoice,
+          as: 'invoices',
+          where: { paymentStatus: InvoiceStatus.PENDING },
+          required: false,
+        },
+      ],
+    });
+
+    if (!subscription) {
+      throw new NotFoundException('No pending subscription found for this influencer');
+    }
+
+    // Update subscription to cancelled
+    await subscription.update({
+      status: SubscriptionStatus.CANCELLED,
+      cancelledAt: createDatabaseDate(),
+      cancelReason: reason || 'Pending payment cancelled - gateway configuration issue',
+    });
+
+    // Cancel any pending invoices
+    if (subscription.invoices && subscription.invoices.length > 0) {
+      await this.proInvoiceModel.update(
+        {
+          paymentStatus: InvoiceStatus.CANCELLED,
+          updatedAt: createDatabaseDate(),
+        },
+        {
+          where: {
+            subscriptionId: subscription.id,
+            paymentStatus: InvoiceStatus.PENDING,
+          },
+        },
+      );
+    }
+
+    console.log(`✅ Cancelled pending subscription ${subscription.id} for influencer ${influencerId}`);
+
+    return {
+      success: true,
+      message: 'Pending subscription cancelled successfully. You can now create a new subscription.',
+      cancelledSubscriptionId: subscription.id,
+    };
+  }
+
+  /**
+   * Clean up old stale pending subscriptions (older than specified hours)
+   * Useful for batch cleanup of orphaned subscriptions
+   */
+  async cleanupStalePendingSubscriptions(olderThanHours: number = 24) {
+    const cutoffDate = new Date();
+    cutoffDate.setHours(cutoffDate.getHours() - olderThanHours);
+
+    const staleSubscriptions = await this.proSubscriptionModel.findAll({
+      where: {
+        status: SubscriptionStatus.PAYMENT_PENDING,
+        createdAt: {
+          [Op.lt]: cutoffDate,
+        },
+      },
+    });
+
+    const cancelledCount = staleSubscriptions.length;
+
+    for (const subscription of staleSubscriptions) {
+      await subscription.update({
+        status: SubscriptionStatus.CANCELLED,
+        cancelledAt: createDatabaseDate(),
+        cancelReason: `Auto-cancelled: Payment pending for more than ${olderThanHours} hours`,
+      });
+
+      // Cancel related pending invoices
+      await this.proInvoiceModel.update(
+        {
+          paymentStatus: InvoiceStatus.CANCELLED,
+          updatedAt: createDatabaseDate(),
+        },
+        {
+          where: {
+            subscriptionId: subscription.id,
+            paymentStatus: InvoiceStatus.PENDING,
+          },
+        },
+      );
+    }
+
+    console.log(`🧹 Cleaned up ${cancelledCount} stale pending subscriptions older than ${olderThanHours} hours`);
+
+    return {
+      success: true,
+      message: `Cleaned up ${cancelledCount} stale pending subscription(s)`,
+      cancelledCount,
+    };
+  }
+
+  /**
    * Generate unique invoice number for Max influencer
    * Format: MAXXINV-YYYYMM-SEQ
    * Example: MAXXINV-202601-1 (1st invoice in Jan 2026)
