@@ -495,15 +495,23 @@ export class MaxxSubscriptionAdminService {
     const paidInvoices = subscription.invoices?.filter((inv) => inv.paymentStatus === 'paid') || [];
     const totalAmount = paidInvoices.reduce((sum, inv) => sum + (inv.totalAmount / 100), 0);
 
-    // Build payment history
-    const paymentHistory: PaymentHistoryItemDto[] = (subscription.invoices || []).map((invoice) => ({
-      invoiceId: invoice.id,
-      invoiceNumber: invoice.invoiceNumber,
-      amount: invoice.totalAmount / 100, // Convert from paise to Rs
-      paymentDate: invoice.paidAt ? toIST(invoice.paidAt) : null,
-      paymentStatus: invoice.paymentStatus,
-      razorpayPaymentId: invoice.razorpayPaymentId,
-    }));
+    // Build payment history - exclude only cancelled invoices that were never paid
+    const paymentHistory: PaymentHistoryItemDto[] = (subscription.invoices || [])
+      .filter((invoice) => {
+        // Exclude cancelled invoices only if they were never paid
+        if (invoice.paymentStatus === InvoiceStatus.CANCELLED && !invoice.paidAt) {
+          return false;
+        }
+        return true;
+      })
+      .map((invoice) => ({
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        amount: invoice.totalAmount / 100, // Convert from paise to Rs
+        paymentDate: invoice.paidAt ? toIST(invoice.paidAt) : null,
+        paymentStatus: invoice.paymentStatus,
+        razorpayPaymentId: invoice.razorpayPaymentId,
+      }));
 
     // Get last payment date
     const lastPaymentDate = paidInvoices.length > 0
