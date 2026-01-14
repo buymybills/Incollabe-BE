@@ -632,9 +632,11 @@ export class MaxxSubscriptionAdminService {
     }
 
     // Update subscription to cancelled
+    // Set currentPeriodEnd to now to ensure isPro becomes false immediately
     await subscription.update({
       status: SubscriptionStatus.CANCELLED,
       cancelledAt: createDatabaseDate(),
+      currentPeriodEnd: createDatabaseDate(),
       cancelReason: reason || 'Pending payment cancelled - gateway configuration issue',
     });
 
@@ -686,6 +688,7 @@ export class MaxxSubscriptionAdminService {
       await subscription.update({
         status: SubscriptionStatus.CANCELLED,
         cancelledAt: createDatabaseDate(),
+        currentPeriodEnd: createDatabaseDate(),
         cancelReason: `Auto-cancelled: Payment pending for more than ${olderThanHours} hours`,
       });
 

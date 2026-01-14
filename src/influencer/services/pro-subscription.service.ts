@@ -285,9 +285,19 @@ export class ProSubscriptionService {
     }
 
     // Get ALL invoices for this influencer across all subscriptions
+    // Exclude cancelled invoices that were never paid
     const allInvoices = await this.proInvoiceModel.findAll({
       where: { influencerId },
       order: [['createdAt', 'DESC']],
+    });
+
+    // Filter out cancelled invoices that were never paid
+    const filteredInvoices = allInvoices.filter((inv) => {
+      // Exclude cancelled invoices only if they were never paid
+      if (inv.paymentStatus === InvoiceStatus.CANCELLED && !inv.paidAt) {
+        return false;
+      }
+      return true;
     });
 
     // User has Pro access if:
@@ -370,7 +380,7 @@ export class ProSubscriptionService {
         isAutopay: subscription.autoRenew && !!subscription.razorpaySubscriptionId, // true if autopay, false if monthly
         subscriptionType: subscription.autoRenew && subscription.razorpaySubscriptionId ? 'autopay' : 'monthly',
       },
-      invoices: allInvoices.map((inv) => ({
+      invoices: filteredInvoices.map((inv) => ({
         id: inv.id,
         invoiceNumber: inv.invoiceNumber,
         amount: inv.totalAmount / 100,
@@ -399,7 +409,16 @@ export class ProSubscriptionService {
       order: [['createdAt', 'DESC']],
     });
 
-    if (!allInvoices || allInvoices.length === 0) {
+    // Filter out cancelled invoices that were never paid
+    const filteredInvoices = allInvoices.filter((inv) => {
+      // Exclude cancelled invoices only if they were never paid
+      if (inv.paymentStatus === InvoiceStatus.CANCELLED && !inv.paidAt) {
+        return false;
+      }
+      return true;
+    });
+
+    if (!filteredInvoices || filteredInvoices.length === 0) {
       return {
         invoices: [],
         totalInvoices: 0,
@@ -407,7 +426,7 @@ export class ProSubscriptionService {
     }
 
     return {
-      invoices: allInvoices.map((inv) => ({
+      invoices: filteredInvoices.map((inv) => ({
         id: inv.id,
         invoiceNumber: inv.invoiceNumber,
         amount: inv.totalAmount / 100, // Convert to Rs
@@ -423,7 +442,7 @@ export class ProSubscriptionService {
         paymentType: inv.razorpayPaymentId && inv.razorpayPaymentId.includes('sub_') ? 'Autopay' : 'Monthly',
         createdAt: toIST(inv.createdAt),
       })),
-      totalInvoices: allInvoices.length,
+      totalInvoices: filteredInvoices.length,
     };
   }
 
