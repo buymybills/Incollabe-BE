@@ -535,6 +535,63 @@ export class ProSubscriptionService {
   }
 
   /**
+   * Cancel pending payment subscription
+   * This is useful for cleaning up orphaned payment_pending subscriptions
+   * that were created with old/invalid payment gateway configurations
+   */
+  async cancelPendingSubscription(influencerId: number, reason?: string) {
+    const subscription = await this.proSubscriptionModel.findOne({
+      where: {
+        influencerId,
+        status: SubscriptionStatus.PAYMENT_PENDING,
+      },
+      include: [
+        {
+          model: ProInvoice,
+          as: 'invoices',
+          where: { paymentStatus: InvoiceStatus.PENDING },
+          required: false,
+        },
+      ],
+    });
+
+    if (!subscription) {
+      throw new NotFoundException('No pending subscription found for this influencer');
+    }
+
+    // Update subscription to cancelled
+    await subscription.update({
+      status: SubscriptionStatus.CANCELLED,
+      cancelledAt: createDatabaseDate(),
+      cancelReason: reason || 'Pending payment cancelled - gateway configuration issue',
+    });
+
+    // Cancel any pending invoices
+    if (subscription.invoices && subscription.invoices.length > 0) {
+      await this.proInvoiceModel.update(
+        {
+          paymentStatus: InvoiceStatus.CANCELLED,
+          updatedAt: createDatabaseDate(),
+        },
+        {
+          where: {
+            subscriptionId: subscription.id,
+            paymentStatus: InvoiceStatus.PENDING,
+          },
+        },
+      );
+    }
+
+    console.log(`✅ Cancelled pending subscription ${subscription.id} for influencer ${influencerId}`);
+
+    return {
+      success: true,
+      message: 'Pending subscription cancelled successfully. You can now create a new subscription.',
+      cancelledSubscriptionId: subscription.id,
+    };
+  }
+
+  /**
    * Generate unique invoice number for Max influencer
    * Format: MAXXINV-YYYYMM-SEQ
    * Example: MAXXINV-202601-1 (1st invoice in Jan 2026)

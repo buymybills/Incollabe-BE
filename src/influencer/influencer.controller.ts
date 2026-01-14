@@ -1235,6 +1235,35 @@ export class InfluencerController {
     );
   }
 
+  @Post('pro/cancel-pending')
+  @ApiOperation({
+    summary: 'Cancel pending payment subscription',
+    description: 'Cancel a subscription that is stuck in payment_pending state. This allows you to create a new subscription if the previous payment attempt failed or was abandoned.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Pending subscription cancelled successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Pending subscription cancelled successfully. You can now create a new subscription.',
+        cancelledSubscriptionId: 123,
+      },
+    },
+  })
+  async cancelPendingSubscription(
+    @Req() req: RequestWithUser,
+    @Body() cancelDto: CancelProSubscriptionDto,
+  ) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can cancel subscriptions');
+    }
+    return await this.proSubscriptionService.cancelPendingSubscription(
+      req.user.id,
+      cancelDto.reason,
+    );
+  }
+
   @Post('pro/invoices/:invoiceId')
   @ApiOperation({
     summary: 'Download Pro subscription invoice',
