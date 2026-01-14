@@ -592,56 +592,6 @@ export class ProSubscriptionService {
   }
 
   /**
-   * Clean up old stale pending subscriptions (older than specified hours)
-   * Useful for batch cleanup of orphaned subscriptions
-   */
-  async cleanupStalePendingSubscriptions(olderThanHours: number = 24) {
-    const cutoffDate = new Date();
-    cutoffDate.setHours(cutoffDate.getHours() - olderThanHours);
-
-    const staleSubscriptions = await this.proSubscriptionModel.findAll({
-      where: {
-        status: SubscriptionStatus.PAYMENT_PENDING,
-        createdAt: {
-          [Op.lt]: cutoffDate,
-        },
-      },
-    });
-
-    const cancelledCount = staleSubscriptions.length;
-
-    for (const subscription of staleSubscriptions) {
-      await subscription.update({
-        status: SubscriptionStatus.CANCELLED,
-        cancelledAt: createDatabaseDate(),
-        cancelReason: `Auto-cancelled: Payment pending for more than ${olderThanHours} hours`,
-      });
-
-      // Cancel related pending invoices
-      await this.proInvoiceModel.update(
-        {
-          paymentStatus: InvoiceStatus.CANCELLED,
-          updatedAt: createDatabaseDate(),
-        },
-        {
-          where: {
-            subscriptionId: subscription.id,
-            paymentStatus: InvoiceStatus.PENDING,
-          },
-        },
-      );
-    }
-
-    console.log(`🧹 Cleaned up ${cancelledCount} stale pending subscriptions older than ${olderThanHours} hours`);
-
-    return {
-      success: true,
-      message: `Cleaned up ${cancelledCount} stale pending subscription(s)`,
-      cancelledCount,
-    };
-  }
-
-  /**
    * Generate unique invoice number for Max influencer
    * Format: MAXXINV-YYYYMM-SEQ
    * Example: MAXXINV-202601-1 (1st invoice in Jan 2026)

@@ -1059,29 +1059,6 @@ export class InfluencerController {
     };
   }
 
-  @Post('pro/cleanup-stale-pending')
-  @ApiOperation({
-    summary: '[ADMIN ONLY] Clean up stale pending subscriptions',
-    description: 'Automatically cancels all payment_pending subscriptions older than specified hours. Useful for cleaning up orphaned subscriptions from payment gateway migration or configuration issues.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Stale subscriptions cleaned up successfully',
-    schema: {
-      example: {
-        success: true,
-        message: 'Cleaned up 5 stale pending subscription(s)',
-        cancelledCount: 5,
-      },
-    },
-  })
-  async cleanupStalePendingSubscriptions(
-    @Body() cleanupDto?: { olderThanHours?: number },
-  ) {
-    const hours = cleanupDto?.olderThanHours || 24;
-    return await this.proSubscriptionService.cleanupStalePendingSubscriptions(hours);
-  }
-
   @Post('pro/test-activate')
   @ApiOperation({
     summary: '[TEST MODE ONLY] Activate Pro subscription without payment',

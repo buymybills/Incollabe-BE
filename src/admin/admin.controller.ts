@@ -2327,6 +2327,107 @@ export class AdminController {
     return await this.maxxSubscriptionAdminService.cancelSubscription(id, dto);
   }
 
+  @Post('maxx-subscription/cleanup-stale-pending')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: '[ADMIN ONLY] Clean up stale pending subscriptions',
+    description: 'Automatically cancels all payment_pending subscriptions older than specified hours. Useful for cleaning up orphaned subscriptions from payment gateway migration or configuration issues.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        olderThanHours: {
+          type: 'number',
+          description: 'Cancel subscriptions pending for more than this many hours (default: 24)',
+          example: 24,
+        },
+      },
+    },
+    required: false,
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Stale subscriptions cleaned up successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Cleaned up 5 stale pending subscription(s)',
+        cancelledCount: 5,
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - Super Admin or Content Moderator only',
+  })
+  async cleanupStalePendingSubscriptions(
+    @Body() cleanupDto?: { olderThanHours?: number },
+  ) {
+    const hours = cleanupDto?.olderThanHours || 24;
+    return await this.maxxSubscriptionAdminService.cleanupStalePendingSubscriptions(hours);
+  }
+
+  @Post('maxx-subscription/influencer/:influencerId/cancel-pending')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: '[ADMIN ONLY] Cancel pending payment subscription for an influencer',
+    description: 'Cancel a subscription that is stuck in payment_pending state for a specific influencer. This allows the influencer to create a new subscription if the previous payment attempt failed or was abandoned.',
+  })
+  @ApiParam({
+    name: 'influencerId',
+    description: 'Influencer ID',
+    example: 123,
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        reason: {
+          type: 'string',
+          description: 'Reason for cancelling the pending subscription',
+          example: 'Payment gateway configuration issue',
+        },
+      },
+    },
+    required: false,
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Pending subscription cancelled successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Pending subscription cancelled successfully. You can now create a new subscription.',
+        cancelledSubscriptionId: 123,
+      },
+    },
+  })
+  @ApiNotFoundResponse({
+    description: 'No pending subscription found for this influencer',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - Super Admin or Content Moderator only',
+  })
+  async cancelInfluencerPendingSubscription(
+    @Param('influencerId', ParseIntPipe) influencerId: number,
+    @Body() cancelDto?: { reason?: string },
+  ) {
+    return await this.maxxSubscriptionAdminService.cancelPendingSubscription(
+      influencerId,
+      cancelDto?.reason,
+    );
+  }
+
   // ============================================
   // MAX SUBSCRIPTION BRAND
   // ============================================
