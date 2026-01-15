@@ -300,6 +300,9 @@ export class ProSubscriptionService {
       return true;
     });
 
+    // Check if subscription had any paid invoices (was ever active)
+    const hadPaidInvoices = allInvoices.some((inv) => inv.paymentStatus === InvoiceStatus.PAID && inv.paidAt);
+
     // User has Pro access if:
     // 1. Subscription is ACTIVE, OR
     // 2. Subscription is CANCELLED but current period hasn't ended yet, OR
@@ -329,18 +332,21 @@ export class ProSubscriptionService {
       }
     }
 
-    // Don't count subscriptions in pending/failed states as having a subscription
+    // Don't count subscriptions in pending/failed/inactive states as having a subscription
+    // Also don't count cancelled subscriptions that were never paid
     const hasSubscription = !(
       subscription.status === SubscriptionStatus.PAYMENT_PENDING ||
       subscription.status === SubscriptionStatus.PAYMENT_FAILED ||
-      subscription.status === SubscriptionStatus.INACTIVE
+      subscription.status === SubscriptionStatus.INACTIVE ||
+      (subscription.status === SubscriptionStatus.CANCELLED && !hadPaidInvoices)
     );
 
     // Calculate display status dynamically based on current time
     let displayStatus = subscription.status;
 
-    // If cancelled and current period has ended, show as expired
-    if (subscription.status === SubscriptionStatus.CANCELLED && subscription.currentPeriodEnd <= now) {
+    // If cancelled and current period has ended, show as expired ONLY if it was paid at some point
+    // If never paid, keep status as cancelled
+    if (subscription.status === SubscriptionStatus.CANCELLED && subscription.currentPeriodEnd <= now && hadPaidInvoices) {
       displayStatus = SubscriptionStatus.EXPIRED;
     }
     // If pause is scheduled but hasn't started yet (before currentPeriodEnd), show as active
