@@ -390,8 +390,9 @@ export class ProSubscriptionService {
       amount: subscription.subscriptionAmount / 100, // Convert to Rs
       autoRenew: subscription.autoRenew,
       paymentMethod: subscription.paymentMethod,
-      isAutopay: subscription.autoRenew && !!subscription.razorpaySubscriptionId, // true if autopay, false if monthly
-      subscriptionType: subscription.autoRenew && subscription.razorpaySubscriptionId ? 'autopay' : 'monthly',
+      // Autopay can be true if autoRenew is enabled OR razorpaySubscriptionId exists
+      isAutopay: subscription.autoRenew || !!subscription.razorpaySubscriptionId,
+      subscriptionType: (subscription.autoRenew || subscription.razorpaySubscriptionId) ? 'autopay' : 'monthly',
     } : null;
 
     return {
