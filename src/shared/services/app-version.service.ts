@@ -232,14 +232,12 @@ export class AppVersionService {
     isMandatory: boolean;
     updateMessage?: string;
   }): Promise<AppVersion> {
-    // Check if version already exists
+    // Check if the exact combination already exists
     const existing = await this.appVersionModel.findOne({
       where: {
         platform: data.platform,
-        [Op.or]: [
-          { latestVersion: data.version },
-          { latestVersionCode: data.versionCode },
-        ],
+        latestVersion: data.version,
+        latestVersionCode: data.versionCode,
       },
     });
 
