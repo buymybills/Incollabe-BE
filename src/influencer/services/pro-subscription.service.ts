@@ -811,8 +811,13 @@ export class ProSubscriptionService {
       ? this.encryptionService.decrypt(invoice.influencer.phone)
       : invoice.influencer.phone;
 
-    // Get city name for location
-    const cityName = (invoice.influencer as any).city?.name || 'N/A';
+    // Format location as "City, State"
+    const city = (invoice.influencer as any).city;
+    const cityName = city?.name || '';
+    const stateName = city?.state || '';
+    const location = cityName && stateName
+      ? `${cityName}, ${stateName}`
+      : cityName || stateName || 'N/A';
 
     // Store invoice data with tax breakdown
     const invoiceData = {
@@ -821,7 +826,7 @@ export class ProSubscriptionService {
       influencer: {
         name: invoice.influencer.name,
         phone: decryptedPhone || 'N/A',
-        location: cityName,
+        location: location,
       },
       items: [
         {
@@ -939,8 +944,7 @@ export class ProSubscriptionService {
           day: '2-digit',
           month: 'short',
           year: 'numeric'
-        }), col1X, detailsStartY + 18)
-        .text(invoiceData.influencer.location || 'N/A', col1X, detailsStartY + 35);
+        }), col1X, detailsStartY + 18);
 
       // Billed to
       doc
@@ -1084,6 +1088,17 @@ export class ProSubscriptionService {
 
       // Footer
       const footerY = doc.page.height - 100;
+
+      // Location in footer (above Thank you)
+      doc
+        .fontSize(11)
+        .font('Helvetica-Bold')
+        .fillColor('#000000')
+        .text('Location', margin, footerY - 30)
+        .font('Helvetica')
+        .fontSize(11)
+        .fillColor('#6b7280')
+        .text(invoiceData.influencer.location || 'N/A', margin, footerY - 12);
 
       doc
         .fontSize(11)

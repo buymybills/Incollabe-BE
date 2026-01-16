@@ -15,6 +15,7 @@ export interface BrandInvoiceData {
   date: Date | string;
   brand: {
     name: string;
+    location?: string;
   };
   items: Array<{
     description: string;
@@ -25,6 +26,9 @@ export interface BrandInvoiceData {
   }>;
   subtotal: number;
   tax: number;
+  cgst?: number;
+  sgst?: number;
+  igst?: number;
   total: number;
 }
 
@@ -203,12 +207,44 @@ export async function generateBrandInvoicePDF(
       });
 
     y += 25;
-    doc
-      .text('Tax (0%)', totalsX, y)
-      .text(`Rs. ${formatAmount(invoiceData.tax)}`, totalsValueX, y, {
-        align: 'right',
-        width: 80
-      });
+
+    // Show tax breakdown based on whether it's Delhi (CGST+SGST) or other location (IGST)
+    const hasIgst = invoiceData.igst && invoiceData.igst > 0;
+    const hasCgstSgst = (invoiceData.cgst && invoiceData.cgst > 0) || (invoiceData.sgst && invoiceData.sgst > 0);
+
+    if (hasCgstSgst) {
+      // For Delhi: Show CGST and SGST
+      doc
+        .text('CGST (9%)', totalsX, y)
+        .text(`Rs. ${formatAmount(invoiceData.cgst)}`, totalsValueX, y, {
+          align: 'right',
+          width: 80
+        });
+
+      y += 25;
+      doc
+        .text('SGST (9%)', totalsX, y)
+        .text(`Rs. ${formatAmount(invoiceData.sgst)}`, totalsValueX, y, {
+          align: 'right',
+          width: 80
+        });
+    } else if (hasIgst) {
+      // For other locations: Show IGST
+      doc
+        .text('IGST (18%)', totalsX, y)
+        .text(`Rs. ${formatAmount(invoiceData.igst)}`, totalsValueX, y, {
+          align: 'right',
+          width: 80
+        });
+    } else {
+      // Fallback: Show total tax (for backward compatibility)
+      doc
+        .text('Tax (18%)', totalsX, y)
+        .text(`Rs. ${formatAmount(invoiceData.tax)}`, totalsValueX, y, {
+          align: 'right',
+          width: 80
+        });
+    }
 
     y += 25;
     doc
@@ -242,6 +278,19 @@ export async function generateBrandInvoicePDF(
     /* ================= FOOTER ================= */
 
     const footerY = doc.page.height - 100;
+
+    // Location in footer (above Thank you)
+    if (invoiceData.brand.location) {
+      doc
+        .fontSize(11)
+        .font('Helvetica-Bold')
+        .fillColor('#000000')
+        .text('Location', margin, footerY - 30)
+        .font('Helvetica')
+        .fontSize(11)
+        .fillColor('#6b7280')
+        .text(invoiceData.brand.location, margin, footerY - 12);
+    }
 
     doc
       .fontSize(11)
