@@ -321,6 +321,15 @@ export class InfluencerService {
       // Verification status (available for both public and private)
       verificationStatus,
 
+      // Instagram connection status
+      instagram: {
+        isConnected: !!(influencer.instagramUserId && influencer.instagramAccessToken),
+        username: influencer.instagramUsername || null,
+        connectedAt: influencer.instagramConnectedAt
+          ? influencer.instagramConnectedAt.toISOString()
+          : null,
+      },
+
       // Collaboration costs (public)
       collaborationCosts: influencer.collaborationCosts || {},
 
@@ -521,6 +530,15 @@ export class InfluencerService {
           isPhoneVerified: influencer.isPhoneVerified,
           isWhatsappVerified: influencer.isWhatsappVerified,
           isProfileCompleted: influencer.isProfileCompleted,
+        },
+        instagram: {
+          ...baseProfile.instagram,
+          tokenExpiresAt: influencer.instagramTokenExpiresAt
+            ? influencer.instagramTokenExpiresAt.toISOString()
+            : null,
+          followersCount: influencer.instagramFollowersCount || 0,
+          followsCount: influencer.instagramFollowsCount || 0,
+          mediaCount: influencer.instagramMediaCount || 0,
         },
         proSubscription: {
           isPro,

@@ -1094,11 +1094,11 @@ export class ProSubscriptionService {
         .fontSize(11)
         .font('Helvetica-Bold')
         .fillColor('#000000')
-        .text('Location', margin, footerY - 30)
+        .text('Location', margin, footerY - 50)
         .font('Helvetica')
         .fontSize(11)
         .fillColor('#6b7280')
-        .text(invoiceData.influencer.location || 'N/A', margin, footerY - 12);
+        .text(invoiceData.influencer.location || 'N/A', margin, footerY - 32);
 
       doc
         .fontSize(11)
@@ -1110,7 +1110,7 @@ export class ProSubscriptionService {
           align: 'right',
           width: 200
         })
-        .text('contact.us@gobuybill.com', pageWidth - 250, footerY + 18, {
+        .text('contact.us@gobuymybills.com', pageWidth - 250, footerY + 18, {
           align: 'right',
           width: 200
         });
