@@ -109,18 +109,18 @@ export class ProSubscriptionService {
       ],
     });
 
-    // Calculate taxes - tax is calculated as percentage of total
+    // Calculate taxes
     // Total = 19900 paise (Rs 199)
-    // Base = 199 * 0.82 = 163.18 (in paise: 16318)
-    // CGST = 199 * 0.09 = 17.91 (in paise: 1791)
-    // SGST = 199 * 0.09 = 17.91 (in paise: 1791)
-    // IGST = 199 * 0.18 = 35.82 (in paise: 3582)
+    // Base = 168.64 (in paise: 16864)
+    // IGST = 30.35 (in paise: 3035)
+    // CGST = 30.35/2 = 15.175 (in paise: 1518)
+    // SGST = 30.35/2 = 15.175 (in paise: 1517)
     const totalAmount = this.PRO_SUBSCRIPTION_AMOUNT; // 19900 paise
+    const baseAmount = 16864; // Rs 168.64 in paise
 
     let cgst = 0;
     let sgst = 0;
     let igst = 0;
-    let baseAmount = 0;
     let totalTax = 0;
 
     // Check if influencer location is Delhi
@@ -128,16 +128,14 @@ export class ProSubscriptionService {
     const isDelhi = cityName === 'delhi' || cityName === 'new delhi';
 
     if (isDelhi) {
-      // For Delhi: CGST (9% of total) and SGST (9% of total)
-      cgst = Math.round(totalAmount * 0.09); // 1791
-      sgst = Math.round(totalAmount * 0.09); // 1791
-      totalTax = cgst + sgst;
-      baseAmount = totalAmount - totalTax; // 19900 - 3582 = 16318
+      // For Delhi: CGST and SGST (total tax = 3035 paise = Rs 30.35)
+      cgst = 1518; // Rs 15.18
+      sgst = 1517; // Rs 15.17 (total: 3035 paise)
+      totalTax = cgst + sgst; // 3035
     } else {
-      // For other locations: IGST (18% of total)
-      igst = Math.round(totalAmount * 0.18); // 3582
+      // For other locations: IGST
+      igst = 3035; // Rs 30.35
       totalTax = igst;
-      baseAmount = totalAmount - totalTax; // 19900 - 3582 = 16318
     }
 
     // Generate invoice number
@@ -790,7 +788,16 @@ export class ProSubscriptionService {
   private async generateInvoicePDF(invoiceId: number) {
     const invoice = await this.proInvoiceModel.findByPk(invoiceId, {
       include: [
-        { model: Influencer, as: 'influencer' },
+        {
+          model: Influencer,
+          as: 'influencer',
+          include: [
+            {
+              model: this.cityModel,
+              as: 'city',
+            },
+          ],
+        },
         { model: ProSubscription, as: 'subscription' },
       ],
     });
@@ -804,6 +811,9 @@ export class ProSubscriptionService {
       ? this.encryptionService.decrypt(invoice.influencer.phone)
       : invoice.influencer.phone;
 
+    // Get city name for location
+    const cityName = (invoice.influencer as any).city?.name || 'N/A';
+
     // Store invoice data with tax breakdown
     const invoiceData = {
       invoiceNumber: invoice.invoiceNumber,
@@ -811,6 +821,7 @@ export class ProSubscriptionService {
       influencer: {
         name: invoice.influencer.name,
         phone: decryptedPhone || 'N/A',
+        location: cityName,
       },
       items: [
         {
@@ -928,7 +939,8 @@ export class ProSubscriptionService {
           day: '2-digit',
           month: 'short',
           year: 'numeric'
-        }), col1X, detailsStartY + 18);
+        }), col1X, detailsStartY + 18)
+        .text(invoiceData.influencer.location || 'N/A', col1X, detailsStartY + 35);
 
       // Billed to
       doc
