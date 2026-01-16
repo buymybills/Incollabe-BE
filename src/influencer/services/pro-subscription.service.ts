@@ -5,6 +5,7 @@ import { ProSubscription, SubscriptionStatus, PaymentMethod, UpiMandateStatus } 
 import { ProInvoice, InvoiceStatus } from '../models/pro-invoice.model';
 import { ProPaymentTransaction, TransactionType, TransactionStatus } from '../models/pro-payment-transaction.model';
 import { Influencer } from '../../auth/model/influencer.model';
+import { City } from '../../shared/models/city.model';
 import { RazorpayService } from '../../shared/razorpay.service';
 import { S3Service } from '../../shared/s3.service';
 import { EncryptionService } from '../../shared/services/encryption.service';
@@ -29,6 +30,8 @@ export class ProSubscriptionService {
     private proPaymentTransactionModel: typeof ProPaymentTransaction,
     @InjectModel(Influencer)
     private influencerModel: typeof Influencer,
+    @InjectModel(City)
+    private cityModel: typeof City,
     private razorpayService: RazorpayService,
     private s3Service: S3Service,
     private configService: ConfigService,
@@ -96,19 +99,63 @@ export class ProSubscriptionService {
       autoRenew: false, // Only enable after first payment is successful
     });
 
+    // Get influencer with city information
+    const influencerWithCity = await this.influencerModel.findByPk(influencerId, {
+      include: [
+        {
+          model: this.cityModel,
+          as: 'city',
+        },
+      ],
+    });
+
+    // Calculate taxes - tax is calculated as percentage of total
+    // Total = 19900 paise (Rs 199)
+    // Base = 199 * 0.82 = 163.18 (in paise: 16318)
+    // CGST = 199 * 0.09 = 17.91 (in paise: 1791)
+    // SGST = 199 * 0.09 = 17.91 (in paise: 1791)
+    // IGST = 199 * 0.18 = 35.82 (in paise: 3582)
+    const totalAmount = this.PRO_SUBSCRIPTION_AMOUNT; // 19900 paise
+
+    let cgst = 0;
+    let sgst = 0;
+    let igst = 0;
+    let baseAmount = 0;
+    let totalTax = 0;
+
+    // Check if influencer location is Delhi
+    const cityName = influencerWithCity?.city?.name?.toLowerCase();
+    const isDelhi = cityName === 'delhi' || cityName === 'new delhi';
+
+    if (isDelhi) {
+      // For Delhi: CGST (9% of total) and SGST (9% of total)
+      cgst = Math.round(totalAmount * 0.09); // 1791
+      sgst = Math.round(totalAmount * 0.09); // 1791
+      totalTax = cgst + sgst;
+      baseAmount = totalAmount - totalTax; // 19900 - 3582 = 16318
+    } else {
+      // For other locations: IGST (18% of total)
+      igst = Math.round(totalAmount * 0.18); // 3582
+      totalTax = igst;
+      baseAmount = totalAmount - totalTax; // 19900 - 3582 = 16318
+    }
+
     // Generate invoice number
     const invoiceNumber = await this.generateInvoiceNumber(influencerId);
 
-    // Create invoice
+    // Create invoice with tax breakdown
     let invoice;
     try {
       invoice = await this.proInvoiceModel.create({
         invoiceNumber,
         subscriptionId: subscription.id,
         influencerId,
-        amount: this.PRO_SUBSCRIPTION_AMOUNT,
-        tax: 0, // No GST for services under Rs 20 lakh turnover
-        totalAmount: this.PRO_SUBSCRIPTION_AMOUNT,
+        amount: baseAmount,
+        tax: totalTax,
+        cgst,
+        sgst,
+        igst,
+        totalAmount: totalAmount,
         billingPeriodStart: startDate,
         billingPeriodEnd: endDate,
         paymentStatus: InvoiceStatus.PENDING,
@@ -123,9 +170,9 @@ export class ProSubscriptionService {
       throw new BadRequestException(`Failed to create invoice: ${error.message} - ${JSON.stringify(error.errors || error)}`);
     }
 
-    // Create Razorpay order
+    // Create Razorpay order (total remains 199)
     const razorpayOrder = await this.razorpayService.createOrder(
-      199, // Amount in Rs
+      totalAmount / 100, // Amount in Rs (199)
       'INR',
       `PRO_SUB_${subscription.id}_INV_${invoice.id}`,
       {
@@ -757,7 +804,7 @@ export class ProSubscriptionService {
       ? this.encryptionService.decrypt(invoice.influencer.phone)
       : invoice.influencer.phone;
 
-    // Store invoice data
+    // Store invoice data with tax breakdown
     const invoiceData = {
       invoiceNumber: invoice.invoiceNumber,
       date: invoice.paidAt || invoice.createdAt,
@@ -767,7 +814,7 @@ export class ProSubscriptionService {
       },
       items: [
         {
-          description: 'Maxx membership- Creator',
+          description: 'Maxx Subscription - Creator',
           quantity: 1,
           rate: invoice.amount / 100,
           amount: invoice.amount / 100,
@@ -777,6 +824,9 @@ export class ProSubscriptionService {
       ],
       subtotal: invoice.amount / 100,
       tax: invoice.tax / 100,
+      cgst: invoice.cgst / 100,
+      sgst: invoice.sgst / 100,
+      igst: invoice.igst / 100,
       total: invoice.totalAmount / 100,
       billingPeriod: {
         start: invoice.billingPeriodStart,
@@ -942,7 +992,7 @@ export class ProSubscriptionService {
         .fontSize(11)
         .font('Helvetica')
         .fillColor('#374151')
-        .text('Maxx membership- Creator', colPositions.service, yPosition)
+        .text('Maxx Subscription - Creator', colPositions.service, yPosition)
         .text(String(item.quantity), colPositions.qty, yPosition)
         .text(`Rs. ${item.rate.toFixed(2)}`, colPositions.rate, yPosition)
         .text(String(item.hscCode || 'N/A'), colPositions.hscCode, yPosition)
@@ -970,9 +1020,32 @@ export class ProSubscriptionService {
         .text(`Rs. ${invoiceData.subtotal.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
 
       yPosition += 25;
-      doc
-        .text('Tax (0%)', totalsX, yPosition)
-        .text(`Rs. ${invoiceData.tax.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
+
+      // Show tax breakdown based on whether it's Delhi (CGST+SGST) or other location (IGST)
+      const hasIgst = invoiceData.igst && invoiceData.igst > 0;
+      const hasCgstSgst = (invoiceData.cgst && invoiceData.cgst > 0) || (invoiceData.sgst && invoiceData.sgst > 0);
+
+      if (hasCgstSgst) {
+        // For Delhi: Show CGST and SGST
+        doc
+          .text('CGST (9%)', totalsX, yPosition)
+          .text(`Rs. ${invoiceData.cgst.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
+
+        yPosition += 25;
+        doc
+          .text('SGST (9%)', totalsX, yPosition)
+          .text(`Rs. ${invoiceData.sgst.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
+      } else if (hasIgst) {
+        // For other locations: Show IGST
+        doc
+          .text('IGST (18%)', totalsX, yPosition)
+          .text(`Rs. ${invoiceData.igst.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
+      } else {
+        // Fallback: Show total tax (for backward compatibility)
+        doc
+          .text('Tax (18%)', totalsX, yPosition)
+          .text(`Rs. ${invoiceData.tax.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
+      }
 
       yPosition += 25;
       doc
