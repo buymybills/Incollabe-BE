@@ -27,6 +27,8 @@ import { InstagramGrowthCronService } from './services/instagram-growth.cron';
 import { CredibilityScoreCronService } from './services/credibility-score.cron';
 import { InfluencerCredibilityScoringService } from './services/influencer-credibility-scoring.service';
 import { GeminiAIService } from './services/gemini-ai.service';
+import { AppReviewController } from './controllers/app-review.controller';
+import { AppReviewService } from './services/app-review.service';
 import { IsValidUsernameConstraint } from './validators/is-valid-username.validator';
 import { RazorpayService } from './razorpay.service';
 import { Otp } from '../auth/model/otp.model';
@@ -43,8 +45,10 @@ import { InstagramMediaInsight } from './models/instagram-media-insight.model';
 import { InstagramProfileGrowth } from './models/instagram-profile-growth.model';
 import { InstagramProfileAnalysis } from './models/instagram-profile-analysis.model';
 import { InfluencerCredibilityScore } from './models/influencer-credibility-score.model';
+import { AppReviewRequest } from './models/app-review-request.model';
 import { Campaign } from '../campaign/models/campaign.model';
 import { CampaignApplication } from '../campaign/models/campaign-application.model';
+import { CampaignInvitation } from '../campaign/models/campaign-invitation.model';
 import { KeyBackupService } from './services/key-backup.service';
 import { KeyBackupController } from './key-backup.controller';
 import { JwtAuthModule } from './jwt.module';
@@ -73,13 +77,15 @@ import { AppVersionService } from './services/app-version.service';
       InstagramProfileGrowth,
       InstagramProfileAnalysis,
       InfluencerCredibilityScore,
+      AppReviewRequest,
       Campaign,
       CampaignApplication,
+      CampaignInvitation,
       DeviceToken,
       AppVersion,
     ]),
   ],
-  controllers: [SearchController, ChatController, KeyBackupController, InstagramController],
+  controllers: [SearchController, ChatController, KeyBackupController, InstagramController, AppReviewController],
   providers: [
     SmsService,
     S3Service,
@@ -106,6 +112,7 @@ import { AppVersionService } from './services/app-version.service';
     CredibilityScoreCronService,
     InfluencerCredibilityScoringService,
     GeminiAIService,
+    AppReviewService,
     DeviceTokenService,
     AppVersionService,
   ],
@@ -129,6 +136,7 @@ import { AppVersionService } from './services/app-version.service';
     InstagramService,
     InfluencerCredibilityScoringService,
     GeminiAIService,
+    AppReviewService,
     DeviceTokenService,
     AppVersionService,
   ],

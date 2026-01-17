@@ -12,6 +12,7 @@ import { NotificationService } from '../shared/notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
 import { UserType as DeviceUserType } from '../shared/models/device-token.model';
 import { AppVersionService } from '../shared/services/app-version.service';
+import { AppReviewService } from '../shared/services/app-review.service';
 import { OtpService } from '../shared/services/otp.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto';
@@ -98,6 +99,7 @@ export class InfluencerService {
     private readonly notificationService: NotificationService,
     private readonly deviceTokenService: DeviceTokenService,
     private readonly appVersionService: AppVersionService,
+    private readonly appReviewService: AppReviewService,
     @Inject('PROFILE_REVIEW_MODEL')
     private readonly profileReviewModel: typeof ProfileReview,
     @Inject('CAMPAIGN_MODEL')
@@ -518,6 +520,12 @@ export class InfluencerService {
         }, null, 2));
       }
 
+      // Check if app review prompt should be shown
+      const appReviewPrompt = await this.appReviewService.shouldShowReviewPrompt(
+        influencerId,
+        'influencer',
+      );
+
       return {
         ...baseProfile,
         phone: influencer.phone,
@@ -561,6 +569,10 @@ export class InfluencerService {
         profileCompletion,
         deviceToken,
         appVersion: appVersionInfo,
+        appReview: {
+          shouldShow: appReviewPrompt.shouldShow,
+          campaignCount: appReviewPrompt.campaignCount,
+        },
       };
     }
 

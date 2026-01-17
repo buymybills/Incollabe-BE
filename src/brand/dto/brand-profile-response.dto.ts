@@ -314,6 +314,19 @@ export class BrandProfileResponseDto {
   })
   totalCampaigns: number;
 
+  @ApiProperty({
+    description: 'App review prompt information',
+    example: {
+      shouldShow: true,
+      campaignCount: 5,
+    },
+    required: false,
+  })
+  appReview?: {
+    shouldShow: boolean;
+    campaignCount?: number;
+  };
+
   @ApiProperty({ description: 'User type', example: 'brand' })
   userType: 'brand';
 

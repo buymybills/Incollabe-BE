@@ -1,0 +1,115 @@
+import { ApiProperty } from '@nestjs/swagger';
+import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
+
+export class CheckReviewPromptDto {
+  @ApiProperty({
+    description: 'User ID (influencer or brand ID)',
+    example: 123,
+  })
+  @IsNumber()
+  user_id: number;
+
+  @ApiProperty({
+    description: 'User type',
+    enum: ['influencer', 'brand'],
+    example: 'influencer',
+  })
+  @IsEnum(['influencer', 'brand'])
+  user_type: 'influencer' | 'brand';
+}
+
+export class CheckReviewPromptResponseDto {
+  @ApiProperty({
+    description: 'Whether the review prompt should be shown',
+    example: true,
+  })
+  shouldShow: boolean;
+
+  @ApiProperty({
+    description: 'Reason for the decision',
+    example: 'First prompt - user has reached campaign threshold',
+    required: false,
+  })
+  reason?: string;
+
+  @ApiProperty({
+    description: 'Number of campaigns the user has',
+    example: 5,
+    required: false,
+  })
+  campaignCount?: number;
+
+  @ApiProperty({
+    description: 'Whether the user has already reviewed',
+    example: false,
+  })
+  isReviewed: boolean;
+
+  @ApiProperty({
+    description: 'Date when the user was last prompted',
+    example: '2024-01-15T10:30:00Z',
+    required: false,
+  })
+  lastPromptedAt?: Date;
+
+  @ApiProperty({
+    description: 'Number of times the user has been prompted',
+    example: 2,
+    required: false,
+  })
+  promptCount?: number;
+}
+
+export class RecordPromptShownDto {
+  @ApiProperty({
+    description: 'User ID (influencer or brand ID)',
+    example: 123,
+  })
+  @IsNumber()
+  user_id: number;
+
+  @ApiProperty({
+    description: 'User type',
+    enum: ['influencer', 'brand'],
+    example: 'influencer',
+  })
+  @IsEnum(['influencer', 'brand'])
+  user_type: 'influencer' | 'brand';
+}
+
+export class MarkAsReviewedDto {
+  @ApiProperty({
+    description: 'User ID (influencer or brand ID)',
+    example: 123,
+  })
+  @IsNumber()
+  user_id: number;
+
+  @ApiProperty({
+    description: 'User type',
+    enum: ['influencer', 'brand'],
+    example: 'influencer',
+  })
+  @IsEnum(['influencer', 'brand'])
+  user_type: 'influencer' | 'brand';
+}
+
+export class MarkAsReviewedResponseDto {
+  @ApiProperty({
+    description: 'Success message',
+    example: 'Review status updated successfully',
+  })
+  message: string;
+
+  @ApiProperty({
+    description: 'Whether the user is now marked as reviewed',
+    example: true,
+  })
+  isReviewed: boolean;
+
+  @ApiProperty({
+    description: 'Date when the review was completed',
+    example: '2024-01-15T10:30:00Z',
+  })
+  reviewedAt: Date;
+}
