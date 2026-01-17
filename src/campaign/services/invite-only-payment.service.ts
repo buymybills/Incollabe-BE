@@ -382,7 +382,7 @@ export class InviteOnlyPaymentService {
       },
       items: [
         {
-          description: 'Maxx campaign - Brand',
+          description: 'Maxx campaign - Brand(Invite only campaign)',
           quantity: 1,
           rate: invoice.amount / 100,
           amount: invoice.amount / 100,
