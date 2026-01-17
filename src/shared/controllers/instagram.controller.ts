@@ -2,6 +2,7 @@ import { Controller, Post, Get, Body, Query, Param, HttpCode, HttpStatus, UseGua
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { InstagramService } from '../services/instagram.service';
 import { InstagramSyncCronService } from '../services/instagram-sync.cron';
+//import { InstagramGrowthCronService } from '../services/instagram-growth.cron';
 import { InfluencerCredibilityScoringService } from '../services/influencer-credibility-scoring.service';
 import {
   InstagramTokenDto,
@@ -21,6 +22,7 @@ export class InstagramController {
   constructor(
     private readonly instagramService: InstagramService,
     private readonly instagramSyncCronService: InstagramSyncCronService,
+    //private readonly instagramGrowthCronService: InstagramGrowthCronService,
     private readonly credibilityScoringService: InfluencerCredibilityScoringService,
   ) {}
 
@@ -856,10 +858,10 @@ export class InstagramController {
 
   /**
    * Calculate influencer credibility score
-   * POST /instagram/calculate-credibility-score
+   * GET /instagram/calculate-credibility-score
    */
   @Public()
-  @Post('calculate-credibility-score')
+  @Get('calculate-credibility-score')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Calculate influencer credibility score',
@@ -991,5 +993,24 @@ export class InstagramController {
       userType as 'influencer' | 'brand',
     );
   }
+
+  /**
+   * Manually trigger growth snapshot cron (for testing/debugging)
+   * POST /instagram/trigger-growth-snapshot
+   */
+  // @Public()
+  // @Post('trigger-growth-snapshot')
+  // @HttpCode(HttpStatus.OK)
+  // @ApiOperation({
+  //   summary: 'Manually trigger growth snapshot cron',
+  //   description: 'Triggers the daily growth snapshot cron job manually for testing/debugging purposes'
+  // })
+  // async triggerGrowthSnapshot() {
+  //   await this.instagramGrowthCronService.trackFollowerGrowthDaily();
+  //   return {
+  //     success: true,
+  //     message: 'Growth snapshot cron triggered successfully',
+  //   };
+  // }
 
 }
