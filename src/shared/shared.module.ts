@@ -22,6 +22,11 @@ import { ChatController } from './chat.controller';
 import { InstagramController } from './controllers/instagram.controller';
 import { InstagramService } from './services/instagram.service';
 import { InstagramSyncCronService } from './services/instagram-sync.cron';
+import { InstagramDemographicsCronService } from './services/instagram-demographics.cron';
+import { InstagramGrowthCronService } from './services/instagram-growth.cron';
+import { CredibilityScoreCronService } from './services/credibility-score.cron';
+import { InfluencerCredibilityScoringService } from './services/influencer-credibility-scoring.service';
+import { GeminiAIService } from './services/gemini-ai.service';
 import { IsValidUsernameConstraint } from './validators/is-valid-username.validator';
 import { RazorpayService } from './razorpay.service';
 import { Otp } from '../auth/model/otp.model';
@@ -35,6 +40,11 @@ import { Message } from './models/message.model';
 import { KeyBackup } from './models/key-backup.model';
 import { InstagramMedia } from './models/instagram-media.model';
 import { InstagramMediaInsight } from './models/instagram-media-insight.model';
+import { InstagramProfileGrowth } from './models/instagram-profile-growth.model';
+import { InstagramProfileAnalysis } from './models/instagram-profile-analysis.model';
+import { InfluencerCredibilityScore } from './models/influencer-credibility-score.model';
+import { Campaign } from '../campaign/models/campaign.model';
+import { CampaignApplication } from '../campaign/models/campaign-application.model';
 import { KeyBackupService } from './services/key-backup.service';
 import { KeyBackupController } from './key-backup.controller';
 import { JwtAuthModule } from './jwt.module';
@@ -60,6 +70,11 @@ import { AppVersionService } from './services/app-version.service';
       KeyBackup,
       InstagramMedia,
       InstagramMediaInsight,
+      InstagramProfileGrowth,
+      InstagramProfileAnalysis,
+      InfluencerCredibilityScore,
+      Campaign,
+      CampaignApplication,
       DeviceToken,
       AppVersion,
     ]),
@@ -86,6 +101,11 @@ import { AppVersionService } from './services/app-version.service';
     KeyBackupService,
     InstagramService,
     InstagramSyncCronService,
+    InstagramDemographicsCronService,
+    InstagramGrowthCronService,
+    CredibilityScoreCronService,
+    InfluencerCredibilityScoringService,
+    GeminiAIService,
     DeviceTokenService,
     AppVersionService,
   ],
@@ -107,6 +127,8 @@ import { AppVersionService } from './services/app-version.service';
     IsValidUsernameConstraint,
     RazorpayService,
     InstagramService,
+    InfluencerCredibilityScoringService,
+    GeminiAIService,
     DeviceTokenService,
     AppVersionService,
   ],

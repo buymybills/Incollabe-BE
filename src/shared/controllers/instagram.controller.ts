@@ -2,6 +2,7 @@ import { Controller, Post, Get, Body, Query, Param, HttpCode, HttpStatus, UseGua
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { InstagramService } from '../services/instagram.service';
 import { InstagramSyncCronService } from '../services/instagram-sync.cron';
+import { InfluencerCredibilityScoringService } from '../services/influencer-credibility-scoring.service';
 import {
   InstagramTokenDto,
   InstagramTokenResponseDto,
@@ -20,6 +21,7 @@ export class InstagramController {
   constructor(
     private readonly instagramService: InstagramService,
     private readonly instagramSyncCronService: InstagramSyncCronService,
+    private readonly credibilityScoringService: InfluencerCredibilityScoringService,
   ) {}
 
   /**
@@ -158,77 +160,6 @@ export class InstagramController {
     };
   }
 
-  /**
-   * Connect Instagram using Facebook access token (Graph API)
-   * GET /instagram/connect-facebook
-   */
-  @Public()
-  @Get('connect-facebook')
-  @ApiOperation({
-    summary: 'Connect Instagram using Facebook token',
-    description: 'Connects Instagram Business account using Facebook access token (Graph API). Requires facebook_access_token, user_id and user_type parameters.'
-  })
-  @ApiQuery({
-    name: 'facebook_access_token',
-    required: true,
-    description: 'Facebook access token from OAuth flow'
-  })
-  @ApiQuery({
-    name: 'user_id',
-    required: true,
-    description: 'User ID (influencer or brand ID)'
-  })
-  @ApiQuery({
-    name: 'user_type',
-    required: true,
-    enum: ['influencer', 'brand'],
-    description: 'User type: influencer or brand'
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Instagram connected successfully'
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'No Facebook Pages found or Instagram not connected to page'
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'User not found'
-  })
-  async connectFacebook(
-    @Query('facebook_access_token') facebookAccessToken: string,
-    @Query('user_id') userId: string,
-    @Query('user_type') userType: string,
-  ) {
-    if (!userId || !userType || !facebookAccessToken) {
-      throw new BadRequestException('facebook_access_token, user_id and user_type are required');
-    }
-
-    if (!['influencer', 'brand'].includes(userType)) {
-      throw new BadRequestException('user_type must be either "influencer" or "brand"');
-    }
-
-    const user = await this.instagramService.connectWithFacebookToken(
-      Number(userId),
-      userType as 'influencer' | 'brand',
-      facebookAccessToken,
-    );
-
-    return {
-      message: 'Instagram account connected successfully using Facebook',
-      profile: {
-        id: user.instagramUserId,
-        username: user.instagramUsername,
-        accountType: user.instagramAccountType,
-        followersCount: user.instagramFollowersCount,
-        followsCount: user.instagramFollowsCount,
-        mediaCount: user.instagramMediaCount,
-        profilePictureUrl: user.instagramProfilePictureUrl,
-        bio: user.instagramBio,
-      },
-    };
-  }
 
   /**
    * Get stored Instagram profile for a user
@@ -724,6 +655,341 @@ export class InstagramController {
       message: 'Stored insights retrieved successfully',
       ...result,
     };
+  }
+
+  /**
+   * Bulk sync all media insights for a user
+   * POST /instagram/sync-all-media-insights
+   */
+  @Public()
+  @Post('sync-all-media-insights')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Bulk sync all media insights',
+    description: 'Fetches all Instagram posts and their insights, then stores them in the database. This is a comprehensive sync operation that should be used when you need complete data for credibility scoring or analytics.'
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'User ID (influencer or brand ID)'
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    enum: ['influencer', 'brand'],
+    description: 'User type: influencer or brand'
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of posts to fetch (default: 50, max: 100)',
+    type: Number
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Bulk sync completed successfully'
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid parameters or no Instagram account connected'
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Bulk sync failed'
+  })
+  async syncAllMediaInsights(
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
+    @Query('limit') limit?: string,
+  ) {
+    if (!userId || !userType) {
+      throw new BadRequestException('user_id and user_type are required');
+    }
+
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException('user_type must be either "influencer" or "brand"');
+    }
+
+    const limitNum = limit ? parseInt(limit, 10) : 50;
+
+    // Ensure limit is within bounds
+    if (limitNum < 1 || limitNum > 100) {
+      throw new BadRequestException('limit must be between 1 and 100');
+    }
+
+    const result = await this.instagramService.syncAllMediaInsights(
+      Number(userId),
+      userType as 'influencer' | 'brand',
+      limitNum,
+    );
+
+    return {
+      message: result.message,
+      ...result,
+    };
+  }
+
+  /**
+   * Get audience demographics
+   * GET /instagram/audience-demographics
+   *
+   * IMPORTANT: This endpoint requires Instagram Business Account connected to a Facebook Page.
+   * Without Facebook Page integration, Instagram API does not provide demographic data.
+   * Alternative: Use Gemini AI to analyze content and engagement patterns for estimated demographics.
+   */
+  @Public()
+  @Get('audience-demographics')
+  @ApiOperation({
+    summary: 'Get audience demographics (requires Facebook Page)',
+    description: 'Fetches audience demographics including age/gender, cities, and countries. NOTE: Requires Instagram Business Account connected to a Facebook Page. Without Facebook Page integration, returns empty data with error details suggesting AI-based demographic estimation as alternative.'
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'User ID (influencer or brand ID)'
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    enum: ['influencer', 'brand'],
+    description: 'User type: influencer or brand'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Demographics fetched successfully (or returns empty data with error if Facebook Page not integrated)'
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid parameters or no Instagram account connected'
+  })
+  async getAudienceDemographics(
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
+  ) {
+    if (!userId || !userType) {
+      throw new BadRequestException('user_id and user_type are required');
+    }
+
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException('user_type must be either "influencer" or "brand"');
+    }
+
+    const demographics = await this.instagramService.getAudienceDemographics(
+      Number(userId),
+      userType as 'influencer' | 'brand',
+    );
+
+    // Provide different message based on data availability
+    const message = demographics.dataAvailable
+      ? 'Audience demographics retrieved successfully'
+      : 'Demographics not available - Facebook Page integration required';
+
+    return {
+      message,
+      ...demographics,
+    };
+  }
+
+  /**
+   * Get follower count history
+   * GET /instagram/follower-history
+   */
+  @Public()
+  @Get('follower-history')
+  @ApiOperation({
+    summary: 'Get follower count history',
+    description: 'Fetches historical follower count data. Requires user_id, user_type, since and until parameters.'
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'User ID (influencer or brand ID)'
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    enum: ['influencer', 'brand'],
+    description: 'User type: influencer or brand'
+  })
+  @ApiQuery({
+    name: 'since',
+    required: true,
+    description: 'Start timestamp (Unix timestamp)',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'until',
+    required: true,
+    description: 'End timestamp (Unix timestamp)',
+    type: Number
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Follower history retrieved successfully'
+  })
+  async getFollowerHistory(
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
+    @Query('since') since: string,
+    @Query('until') until: string,
+  ) {
+    if (!userId || !userType || !since || !until) {
+      throw new BadRequestException('user_id, user_type, since and until are required');
+    }
+
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException('user_type must be either "influencer" or "brand"');
+    }
+
+    const history = await this.instagramService.getFollowerCountHistory(
+      Number(userId),
+      userType as 'influencer' | 'brand',
+      Number(since),
+      Number(until),
+    );
+
+    return {
+      message: 'Follower history retrieved successfully',
+      data: history,
+    };
+  }
+
+  /**
+   * Calculate influencer credibility score
+   * POST /instagram/calculate-credibility-score
+   */
+  @Public()
+  @Post('calculate-credibility-score')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Calculate influencer credibility score',
+    description: 'Calculates comprehensive credibility score for an influencer based on 5 key categories: Audience Quality (25pts), Content Performance (25pts), Consistency & Reliability (20pts), Content Intelligence (20pts), and Brand Safety & Trust (10pts). Requires influencer_id parameter.'
+  })
+  @ApiQuery({
+    name: 'influencer_id',
+    required: true,
+    description: 'Influencer ID',
+    type: Number
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Credibility score calculated successfully'
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid influencer ID or Instagram not connected'
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Influencer not found'
+  })
+  async calculateCredibilityScore(
+    @Query('influencer_id') influencerId: string,
+  ) {
+    if (!influencerId) {
+      throw new BadRequestException('influencer_id is required');
+    }
+
+    const score = await this.credibilityScoringService.calculateCredibilityScore(
+      Number(influencerId),
+    );
+
+    return {
+      message: 'Credibility score calculated successfully',
+      score,
+    };
+  }
+
+  /**
+   * Get online followers data
+   * GET /instagram/online-followers
+   */
+  @Public()
+  @Get('online-followers')
+  @ApiOperation({
+    summary: 'Get when followers are online',
+    description: 'Fetches data about when followers are most active online. Requires user_id and user_type parameters.'
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'User ID (influencer or brand ID)'
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    enum: ['influencer', 'brand'],
+    description: 'User type: influencer or brand'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Online followers data retrieved successfully'
+  })
+  async getOnlineFollowers(
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
+  ) {
+    if (!userId || !userType) {
+      throw new BadRequestException('user_id and user_type are required');
+    }
+
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException('user_type must be either "influencer" or "brand"');
+    }
+
+    const data = await this.instagramService.getOnlineFollowers(
+      Number(userId),
+      userType as 'influencer' | 'brand',
+    );
+
+    return {
+      message: 'Online followers data retrieved successfully',
+      data,
+    };
+  }
+
+  /**
+   * Get comprehensive analytics for influencer/brand
+   * Returns all calculated metrics needed for the UI
+   */
+  @Public()
+  @Get('analytics')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get comprehensive analytics',
+    description:
+      'Returns profile summary, engagement metrics, content mix, best/worst posts, demographics, growth trends, and active followers data',
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'ID of the influencer or brand',
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    description: 'Type of user',
+    enum: ['influencer', 'brand'],
+  })
+  async getComprehensiveAnalytics(
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
+  ) {
+    if (!userId || !userType) {
+      throw new BadRequestException('user_id and user_type are required');
+    }
+
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException(
+        'user_type must be either "influencer" or "brand"',
+      );
+    }
+
+    return await this.instagramService.getComprehensiveAnalytics(
+      Number(userId),
+      userType as 'influencer' | 'brand',
+    );
   }
 
 }

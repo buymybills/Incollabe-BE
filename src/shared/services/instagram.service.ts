@@ -14,6 +14,7 @@ import { Influencer } from '../../auth/model/influencer.model';
 import { Brand } from '../../brand/model/brand.model';
 import { InstagramMedia } from '../models/instagram-media.model';
 import { InstagramMediaInsight } from '../models/instagram-media-insight.model';
+import { InstagramProfileAnalysis } from '../models/instagram-profile-analysis.model';
 
 export type UserType = 'influencer' | 'brand';
 
@@ -32,6 +33,8 @@ export class InstagramService {
     private instagramMediaModel: typeof InstagramMedia,
     @InjectModel(InstagramMediaInsight)
     private instagramMediaInsightModel: typeof InstagramMediaInsight,
+    @InjectModel(InstagramProfileAnalysis)
+    private instagramProfileAnalysisModel: typeof InstagramProfileAnalysis,
   ) {
     const clientId = this.configService.get<string>('INSTAGRAM_APP_ID');
     const clientSecret = this.configService.get<string>('INSTAGRAM_APP_SECRET');
@@ -398,101 +401,6 @@ export class InstagramService {
     });
   }
 
-  /**
-   * Connect Instagram Business account using Facebook access token (Graph API)
-   * @param userId - The user's ID (brand or influencer)
-   * @param userType - Type of user ('brand' or 'influencer')
-   * @param facebookAccessToken - Facebook access token from OAuth
-   * @returns User instance with updated Instagram data
-   */
-  async connectWithFacebookToken(
-    userId: number,
-    userType: UserType,
-    facebookAccessToken: string,
-  ): Promise<Influencer | Brand> {
-    try {
-      // Step 1: Get Facebook Pages
-      const pagesResponse = await axios.get(
-        'https://graph.facebook.com/v18.0/me/accounts',
-        {
-          params: {
-            fields: 'id,name,access_token,instagram_business_account',
-            access_token: facebookAccessToken,
-          },
-        }
-      );
-
-      if (!pagesResponse.data.data || pagesResponse.data.data.length === 0) {
-        throw new BadRequestException('No Facebook Pages found. Please create a Facebook Page and connect your Instagram Business account to it.');
-      }
-
-      // Step 2: Find page with Instagram Business Account
-      const pageWithIG = pagesResponse.data.data.find(
-        (page: any) => page.instagram_business_account
-      );
-
-      if (!pageWithIG) {
-        throw new BadRequestException('No Instagram Business Account found. Please connect your Instagram Business account to a Facebook Page.');
-      }
-
-      const instagramAccountId = pageWithIG.instagram_business_account.id;
-      const pageAccessToken = pageWithIG.access_token;
-
-      // Step 3: Get Instagram profile data
-      const fields = 'id,username,name,biography,website,followers_count,follows_count,media_count,profile_picture_url';
-      const profileResponse = await axios.get(
-        `https://graph.facebook.com/v18.0/${instagramAccountId}`,
-        {
-          params: {
-            fields,
-            access_token: pageAccessToken,
-          },
-        }
-      );
-
-      const profile = profileResponse.data;
-
-      // Step 4: Token expires in 60 days for long-lived tokens
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 59);
-
-      // Step 5: Save to database
-      const updateData = {
-        instagramAccessToken: pageAccessToken, // Use page access token for API calls
-        instagramUserId: profile.id,
-        instagramUsername: profile.username,
-        instagramAccountType: 'BUSINESS', // Graph API only works with business accounts
-        instagramFollowersCount: profile.followers_count || undefined,
-        instagramFollowsCount: profile.follows_count || undefined,
-        instagramMediaCount: profile.media_count || undefined,
-        instagramProfilePictureUrl: profile.profile_picture_url || undefined,
-        instagramBio: profile.biography || undefined,
-        instagramTokenExpiresAt: expiresAt,
-        instagramConnectedAt: new Date(),
-      };
-
-      if (userType === 'influencer') {
-        const influencer = await this.influencerModel.findByPk(userId);
-        if (!influencer) {
-          throw new NotFoundException(`Influencer with ID ${userId} not found`);
-        }
-        await influencer.update(updateData);
-        return influencer.reload();
-      } else {
-        const brand = await this.brandModel.findByPk(userId);
-        if (!brand) {
-          throw new NotFoundException(`Brand with ID ${userId} not found`);
-        }
-        await brand.update(updateData);
-        return brand.reload();
-      }
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        this.handleInstagramError(error, 'Failed to connect Instagram account with Facebook token');
-      }
-      throw error;
-    }
-  }
 
   /**
    * Get Instagram media/posts for a user
@@ -592,14 +500,14 @@ export class InstagramService {
       // Step 2: Select appropriate metrics based on media type
       let metrics: string;
 
-      if (mediaProductType === 'REELS' || mediaType === 'REELS') {
-        // Metrics for Reels
-        metrics = 'plays,reach,total_interactions,saved,shares,comments,likes';
-      } else if (mediaType === 'VIDEO') {
-        // Metrics for regular videos (not reels)
-        metrics = 'reach,saved,plays,likes,comments,shares';
+      // NOTE: Instagram's plays metric is inconsistently supported across different media types
+      // Even for Reels with product_type="REELS", plays often fails with permission errors
+      // So we exclude it entirely and use only reliably supported metrics
+      if (mediaProductType === 'REELS' || mediaProductType === 'CLIPS' || mediaType === 'REELS' || mediaType === 'VIDEO') {
+        // Metrics for videos and Reels (excluding plays due to inconsistent support)
+        metrics = 'reach,total_interactions,saved,shares,comments,likes';
       } else if (mediaType === 'IMAGE' || mediaType === 'CAROUSEL_ALBUM') {
-        // Metrics for images and carousels (impressions not supported for FEED posts)
+        // Metrics for images and carousels
         metrics = 'reach,saved,likes,comments,shares';
       } else {
         // Default fallback metrics
@@ -735,6 +643,85 @@ export class InstagramService {
   }
 
   /**
+   * Bulk sync all media insights for a user
+   * Fetches all media posts and their insights from Instagram, then stores them in the database
+   * @param userId - The user's ID (brand or influencer)
+   * @param userType - Type of user ('brand' or 'influencer')
+   * @param limit - Number of posts to fetch (default: 50, max: 100)
+   * @returns Summary of sync operation
+   */
+  async syncAllMediaInsights(
+    userId: number,
+    userType: UserType,
+    limit: number = 50,
+  ): Promise<any> {
+    console.log(`🔄 Starting bulk media insights sync for ${userType} ${userId}...`);
+
+    try {
+      // Step 1: Fetch all media from Instagram
+      const mediaResponse = await this.getInstagramMedia(userId, userType, limit);
+      const mediaPosts = mediaResponse.data || [];
+
+      console.log(`📥 Found ${mediaPosts.length} media posts`);
+
+      if (mediaPosts.length === 0) {
+        return {
+          success: true,
+          totalPosts: 0,
+          synced: 0,
+          failed: 0,
+          errors: [],
+          message: 'No media posts found',
+        };
+      }
+
+      // Step 2: Fetch and store insights for each post
+      const results = {
+        totalPosts: mediaPosts.length,
+        synced: 0,
+        failed: 0,
+        errors: [] as Array<{ mediaId: string; error: string }>,
+      };
+
+      for (const post of mediaPosts) {
+        const mediaId = post.id;
+
+        try {
+          // Fetch and store insights for this specific post
+          await this.getMediaInsights(userId, userType, mediaId);
+          results.synced++;
+          console.log(`✅ Synced insights for media ${mediaId}`);
+
+          // Rate limiting: wait 100ms between requests to avoid API throttling
+          await new Promise(resolve => setTimeout(resolve, 100));
+
+        } catch (error) {
+          results.failed++;
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          results.errors.push({ mediaId, error: errorMessage });
+          console.log(`❌ Failed to sync media ${mediaId}: ${errorMessage}`);
+        }
+      }
+
+      console.log(`✅ Bulk sync completed: ${results.synced} synced, ${results.failed} failed`);
+
+      return {
+        success: true,
+        ...results,
+        message: `Successfully synced ${results.synced} out of ${results.totalPosts} posts`,
+      };
+
+    } catch (error) {
+      console.error('❌ Bulk sync failed:', error);
+      throw new InternalServerErrorException({
+        error: 'bulk_sync_failed',
+        message: 'Failed to perform bulk media insights sync',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  /**
    * Get stored media insights from database with post data
    * @param userId - The user's ID (brand or influencer)
    * @param userType - Type of user ('brand' or 'influencer')
@@ -838,6 +825,618 @@ export class InstagramService {
       };
     } catch (error) {
       this.handleInstagramError(error, 'Failed to check insights permissions');
+    }
+  }
+
+  /**
+   * Get audience demographics (age/gender breakdown)
+   * NOTE: This endpoint requires Instagram Business Account connected to a Facebook Page
+   * Instagram API does NOT provide demographics without Facebook Page integration
+   * @param userId - The user's ID (brand or influencer)
+   * @param userType - Type of user ('brand' or 'influencer')
+   * @returns Audience demographics data or error message
+   */
+  async getAudienceDemographics(
+    userId: number,
+    userType: UserType,
+  ): Promise<any> {
+    // Get user
+    let user: Influencer | Brand | null;
+    if (userType === 'influencer') {
+      user = await this.influencerModel.findByPk(userId);
+      if (!user) {
+        throw new NotFoundException(`Influencer with ID ${userId} not found`);
+      }
+    } else {
+      user = await this.brandModel.findByPk(userId);
+      if (!user) {
+        throw new NotFoundException(`Brand with ID ${userId} not found`);
+      }
+    }
+
+    if (!user.instagramAccessToken || !user.instagramUserId) {
+      throw new BadRequestException('No Instagram account connected');
+    }
+
+    try {
+      // Fetch age/gender demographics
+      const ageGenderResponse = await axios.get(
+        `https://graph.instagram.com/me/insights`,
+        {
+          params: {
+            metric: 'follower_demographics',
+            period: 'lifetime',
+            metric_type: 'total_value',
+            breakdown: 'age,gender',
+            access_token: user.instagramAccessToken,
+          },
+        }
+      );
+
+      // Fetch city demographics
+      const cityResponse = await axios.get(
+        `https://graph.instagram.com/me/insights`,
+        {
+          params: {
+            metric: 'follower_demographics',
+            period: 'lifetime',
+            metric_type: 'total_value',
+            breakdown: 'city',
+            access_token: user.instagramAccessToken,
+          },
+        }
+      );
+
+      // Fetch country demographics
+      const countryResponse = await axios.get(
+        `https://graph.instagram.com/me/insights`,
+        {
+          params: {
+            metric: 'follower_demographics',
+            period: 'lifetime',
+            metric_type: 'total_value',
+            breakdown: 'country',
+            access_token: user.instagramAccessToken,
+          },
+        }
+      );
+
+      // Process age/gender data
+      const ageGenderData = ageGenderResponse.data.data[0]?.total_value?.breakdowns?.[0]?.results || [];
+      const totalFollowers = user.instagramFollowersCount || 1;
+
+      const ageGender = ageGenderData.map((item: any) => ({
+        ageRange: item.dimension_values?.[0] || 'unknown',
+        gender: item.dimension_values?.[1] || 'unknown',
+        count: item.value || 0,
+        percentage: Number(((item.value / totalFollowers) * 100).toFixed(2)),
+      }));
+
+      // Process city data
+      const cityData = cityResponse.data.data[0]?.total_value?.breakdowns?.[0]?.results || [];
+      const cities = cityData
+        .map((item: any) => ({
+          name: item.dimension_values?.[0] || 'unknown',
+          count: item.value || 0,
+          percentage: Number(((item.value / totalFollowers) * 100).toFixed(2)),
+        }))
+        .sort((a: any, b: any) => b.count - a.count)
+        .slice(0, 10);
+
+      // Process country data
+      const countryData = countryResponse.data.data[0]?.total_value?.breakdowns?.[0]?.results || [];
+      const countries = countryData
+        .map((item: any) => ({
+          code: item.dimension_values?.[0] || 'unknown',
+          count: item.value || 0,
+          percentage: Number(((item.value / totalFollowers) * 100).toFixed(2)),
+        }))
+        .sort((a: any, b: any) => b.count - a.count)
+        .slice(0, 10);
+
+      // Store demographic snapshot for variance tracking
+      try {
+        const audienceAgeGender = ageGender.map((item: any) => ({
+          ageRange: item.ageRange,
+          gender: item.gender,
+          percentage: item.percentage,
+        }));
+
+        const audienceCities = cities.map((item: any) => ({
+          location: item.name,
+          percentage: item.percentage,
+        }));
+
+        const audienceCountries = countries.map((item: any) => ({
+          location: item.code,
+          percentage: item.percentage,
+        }));
+
+        await this.instagramProfileAnalysisModel.create({
+          influencerId: userType === 'influencer' ? userId : undefined,
+          brandId: userType === 'brand' ? userId : undefined,
+          instagramUserId: user.instagramUserId,
+          instagramUsername: user.instagramUsername,
+          audienceAgeGender,
+          audienceCities,
+          audienceCountries,
+        });
+
+        console.log(`📊 Stored demographic snapshot for ${userType} ${userId}`);
+      } catch (snapshotError) {
+        console.error('Failed to store demographic snapshot:', snapshotError);
+        // Don't throw - continue to return demographics even if storage fails
+      }
+
+      return {
+        ageGender,
+        cities,
+        countries,
+        totalFollowers,
+        dataAvailable: true,
+      };
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const errorMessage = error.response?.data?.error?.message || '';
+        console.error('Demographics API error:', error.response?.data);
+
+        // Check if error is due to missing Facebook Page integration
+        const isFacebookPageRequired =
+          errorMessage.includes('Unsupported get request') ||
+          errorMessage.includes('requires a Facebook Page') ||
+          errorMessage.includes('Instagram Business Account') ||
+          error.response?.status === 400;
+
+        // Return structured response with helpful error message
+        return {
+          ageGender: [],
+          cities: [],
+          countries: [],
+          totalFollowers: user.instagramFollowersCount || 0,
+          dataAvailable: false,
+          error: {
+            code: 'FACEBOOK_PAGE_REQUIRED',
+            message: 'Audience demographics require Instagram Business Account connected to a Facebook Page',
+            details: 'Instagram API does not provide follower demographics without Facebook Page integration. Alternative: Use AI analysis of content engagement patterns to estimate demographics.',
+            recommendation: 'For accurate demographics, connect Instagram Business Account to a Facebook Page, or use Gemini AI to analyze content and engagement patterns.',
+          },
+        };
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Get follower count history
+   * @param userId - The user's ID (brand or influencer)
+   * @param userType - Type of user ('brand' or 'influencer')
+   * @param since - Start timestamp (Unix timestamp)
+   * @param until - End timestamp (Unix timestamp)
+   * @returns Follower count history
+   */
+  async getFollowerCountHistory(
+    userId: number,
+    userType: UserType,
+    since: number,
+    until: number,
+  ): Promise<any> {
+    const user = await this.getUser(userId, userType);
+
+    if (!user.instagramAccessToken || !user.instagramUserId) {
+      throw new BadRequestException('No Instagram account connected');
+    }
+
+    try {
+      const response = await axios.get(
+        `https://graph.instagram.com/me/insights`,
+        {
+          params: {
+            metric: 'follower_count',
+            period: 'day',
+            since,
+            until,
+            access_token: user.instagramAccessToken,
+          },
+        }
+      );
+
+      const data = response.data.data[0]?.values || [];
+      return data.map((item: any) => ({
+        date: item.end_time,
+        count: item.value,
+      }));
+    } catch (error) {
+      this.handleInstagramError(error, 'Failed to fetch follower count history');
+    }
+  }
+
+  /**
+   * Get daily reach history
+   * @param userId - The user's ID (brand or influencer)
+   * @param userType - Type of user ('brand' or 'influencer')
+   * @param since - Start timestamp (Unix timestamp)
+   * @param until - End timestamp (Unix timestamp)
+   * @returns Daily reach history
+   */
+  async getReachHistory(
+    userId: number,
+    userType: UserType,
+    since: number,
+    until: number,
+  ): Promise<any> {
+    const user = await this.getUser(userId, userType);
+
+    if (!user.instagramAccessToken || !user.instagramUserId) {
+      throw new BadRequestException('No Instagram account connected');
+    }
+
+    try {
+      const response = await axios.get(
+        `https://graph.instagram.com/me/insights`,
+        {
+          params: {
+            metric: 'reach',
+            period: 'day',
+            since,
+            until,
+            access_token: user.instagramAccessToken,
+          },
+        }
+      );
+
+      const data = response.data.data[0]?.values || [];
+      return data.map((item: any) => ({
+        date: item.end_time,
+        reach: item.value,
+      }));
+    } catch (error) {
+      this.handleInstagramError(error, 'Failed to fetch reach history');
+    }
+  }
+
+  /**
+   * Get when followers are online
+   * @param userId - The user's ID (brand or influencer)
+   * @param userType - Type of user ('brand' or 'influencer')
+   * @returns Online followers data
+   */
+  async getOnlineFollowers(
+    userId: number,
+    userType: UserType,
+  ): Promise<any> {
+    const user = await this.getUser(userId, userType);
+
+    if (!user.instagramAccessToken || !user.instagramUserId) {
+      throw new BadRequestException('No Instagram account connected');
+    }
+
+    try {
+      const response = await axios.get(
+        `https://graph.instagram.com/me/insights`,
+        {
+          params: {
+            metric: 'online_followers',
+            period: 'lifetime',
+            access_token: user.instagramAccessToken,
+          },
+        }
+      );
+
+      const data = response.data.data[0]?.values?.[0]?.value || {};
+      return data;
+    } catch (error) {
+      this.handleInstagramError(error, 'Failed to fetch online followers');
+    }
+  }
+
+  /**
+   * Helper method to get user
+   */
+  private async getUser(userId: number, userType: UserType): Promise<Influencer | Brand> {
+    if (userType === 'influencer') {
+      const user = await this.influencerModel.findByPk(userId);
+      if (!user) {
+        throw new NotFoundException(`Influencer with ID ${userId} not found`);
+      }
+      return user;
+    } else {
+      const user = await this.brandModel.findByPk(userId);
+      if (!user) {
+        throw new NotFoundException(`Brand with ID ${userId} not found`);
+      }
+      return user;
+    }
+  }
+
+  /**
+   * Get comprehensive analytics for influencer/brand
+   * Includes all calculated metrics for the UI
+   */
+  async getComprehensiveAnalytics(
+    userId: number,
+    userType: UserType,
+  ): Promise<any> {
+    try {
+      // 1. Get profile data
+      const profile = await this.getStoredInstagramProfile(userId, userType);
+
+      // 2. Get stored insights with media data
+      const insightsData = await this.getStoredMediaInsights(
+        userId,
+        userType,
+        undefined, // No specific mediaId - get all
+        1000, // Limit - get up to 1000 posts
+      );
+      const insights = insightsData.data || [];
+
+      // 3. Get demographics
+      const demographics = await this.getAudienceDemographics(userId, userType);
+
+      // 4. Get follower history (last 30 days)
+      let growth: any = null;
+      try {
+        const now = Math.floor(Date.now() / 1000);
+        const thirtyDaysAgo = now - (30 * 24 * 60 * 60);
+        growth = await this.getFollowerCountHistory(userId, userType, thirtyDaysAgo, now);
+      } catch (error) {
+        console.log('Follower history not available:', error.message);
+      }
+
+      // 5. Get online followers
+      let activeFollowersData: any = null;
+      try {
+        activeFollowersData = await this.getOnlineFollowers(userId, userType);
+      } catch (error) {
+        console.log('Online followers not available:', error.message);
+      }
+
+      // Calculate metrics
+      const postsAnalyzed = insights.length;
+      const followersCount = profile.instagramFollowersCount || 0;
+      const followsCount = profile.instagramFollowsCount || 0;
+
+      // Profile Summary
+      const profileSummary = {
+        username: profile.instagramUsername,
+        biography: profile.instagramBio,
+        media_count: profile.instagramMediaCount,
+        followers_count: followersCount,
+        follows_count: followsCount,
+        follow_ratio:
+          followersCount > 0
+            ? Math.round((followsCount / followersCount) * 10000) / 100
+            : 0,
+        posts_analyzed: postsAnalyzed,
+      };
+
+      // Calculate engagement metrics
+      let totalLikes = 0;
+      let totalComments = 0;
+      let totalShares = 0;
+      let totalSaves = 0;
+      let totalReach = 0;
+
+      insights.forEach((insight) => {
+        totalLikes += insight.likes || 0;
+        totalComments += insight.comments || 0;
+        totalShares += insight.shares || 0;
+        totalSaves += insight.saved || 0;
+        totalReach += insight.reach || 0;
+      });
+
+      const totalEngagement =
+        totalLikes + totalComments + totalShares + totalSaves;
+      const engagementRate =
+        postsAnalyzed > 0 && followersCount > 0
+          ? Math.round(
+              (totalEngagement / postsAnalyzed / followersCount) * 1000000,
+            ) / 100
+          : 0;
+
+      const avgLikes = postsAnalyzed > 0 ? Math.round(totalLikes / postsAnalyzed) : 0;
+      const avgComments =
+        postsAnalyzed > 0
+          ? Math.round((totalComments / postsAnalyzed) * 10) / 10
+          : 0;
+      const avgShares =
+        postsAnalyzed > 0 ? Math.round((totalShares / postsAnalyzed) * 10) / 10 : 0;
+      const avgSaves =
+        postsAnalyzed > 0 ? Math.round((totalSaves / postsAnalyzed) * 10) / 10 : 0;
+      const saveRate =
+        totalReach > 0 ? Math.round((totalSaves / totalReach) * 10000) / 100 : 0;
+      const viralityScore =
+        totalReach > 0 ? Math.round((totalShares / totalReach) * 10000) / 100 : 0;
+
+      let engagementRating = 'Low';
+      if (engagementRate >= 6) engagementRating = 'Excellent';
+      else if (engagementRate >= 3) engagementRating = 'Good';
+      else if (engagementRate >= 1) engagementRating = 'Average';
+
+      const engagement = {
+        engagementRate,
+        avgLikes,
+        avgComments,
+        avgShares,
+        avgSaves,
+        saveRate,
+        viralityScore,
+        engagementRating,
+      };
+
+      // Content Mix - using mediaProductType to properly identify Reels
+      let reelsCount = 0;
+      let videosCount = 0;
+      let imagesCount = 0;
+      let carouselsCount = 0;
+
+      insights.forEach((insight) => {
+        const mediaType = insight.instagramMedia?.mediaType;
+        const productType = insight.instagramMedia?.mediaProductType;
+
+        if (productType === 'REELS' || productType === 'CLIPS') {
+          reelsCount++;
+        } else if (mediaType === 'VIDEO') {
+          videosCount++;
+        } else if (mediaType === 'IMAGE') {
+          imagesCount++;
+        } else if (mediaType === 'CAROUSEL_ALBUM') {
+          carouselsCount++;
+        }
+      });
+
+      const contentMix = {
+        reels: reelsCount,
+        videos: videosCount,
+        images: imagesCount,
+        carousels: carouselsCount,
+      };
+
+      // Best and Worst Posts
+      const sortedByEngagement = [...insights].sort((a, b) => {
+        const engagementA =
+          (a.likes || 0) +
+          (a.comments || 0) +
+          (a.shares || 0) +
+          (a.saved || 0);
+        const engagementB =
+          (b.likes || 0) +
+          (b.comments || 0) +
+          (b.shares || 0) +
+          (b.saved || 0);
+        return engagementB - engagementA;
+      });
+
+      const bestPost = sortedByEngagement[0] || null;
+      const worstPost = sortedByEngagement[sortedByEngagement.length - 1] || null;
+
+      // Format best/worst posts
+      const formatPost = (post) => {
+        if (!post) return null;
+        return {
+          mediaId: post.mediaId,
+          mediaType: post.mediaType,
+          mediaProductType: post.mediaProductType,
+          reach: post.reach,
+          likes: post.likes,
+          comments: post.comments,
+          shares: post.shares,
+          saved: post.saved,
+          totalEngagement:
+            (post.likes || 0) +
+            (post.comments || 0) +
+            (post.shares || 0) +
+            (post.saved || 0),
+          instagramMedia: post.instagramMedia,
+        };
+      };
+
+      // Demographics with gender split
+      let genderSplit = { male: 0, female: 0, other: 0 };
+      if (demographics.dataAvailable && demographics.ageGender) {
+        const totalFollowers = demographics.totalFollowers || 1;
+        let totalMale = 0;
+        let totalFemale = 0;
+        let totalOther = 0;
+
+        demographics.ageGender.forEach((ageGroup) => {
+          totalMale += ageGroup.male || 0;
+          totalFemale += ageGroup.female || 0;
+          totalOther += ageGroup.other || 0;
+        });
+
+        genderSplit = {
+          male: Math.round((totalMale / totalFollowers) * 100),
+          female: Math.round((totalFemale / totalFollowers) * 100),
+          other: Math.round((totalOther / totalFollowers) * 100),
+        };
+      }
+
+      const demographicsData = {
+        gender_split: genderSplit,
+        age_gender: demographics.ageGender || [],
+        countries: demographics.countries || [],
+        cities: demographics.cities || [],
+      };
+
+      // Growth Trend (if available)
+      let growthData: any = null;
+      if (growth && growth.length > 0) {
+        const midpoint = Math.floor(growth.length / 2);
+        const firstHalf = growth
+          .slice(0, midpoint)
+          .reduce((sum, day) => sum + day.count, 0);
+        const secondHalf = growth
+          .slice(midpoint)
+          .reduce((sum, day) => sum + day.count, 0);
+
+        let trendDirection = 'Stable';
+        if (secondHalf > firstHalf * 1.1) trendDirection = 'Growing';
+        else if (secondHalf < firstHalf * 0.9) trendDirection = 'Declining';
+
+        const totalNewFollowers = growth.reduce((sum, day) => sum + day.count, 0);
+        const avgDailyFollowers =
+          growth.length > 0
+            ? Math.round((totalNewFollowers / growth.length) * 10) / 10
+            : 0;
+
+        const growthPercentage =
+          firstHalf > 0
+            ? Math.round(((secondHalf - firstHalf) / firstHalf) * 100)
+            : 0;
+
+        const peakDay = growth.reduce(
+          (max, day) => (day.count > max.count ? day : max),
+          { date: '', count: 0 },
+        );
+
+        growthData = {
+          trendDirection,
+          total_new_followers: totalNewFollowers,
+          average_daily_followers: avgDailyFollowers,
+          growthPercentage,
+          peakDay: peakDay.date,
+          follower_count_history: growth,
+        };
+      }
+
+      // Active Followers (if available)
+      let activeFollowers: any = null;
+      if (activeFollowersData && Object.keys(activeFollowersData).length > 0) {
+        const maxOnline = Math.max(
+          ...Object.values(activeFollowersData).map((v: any) => v || 0),
+        );
+        const percentage =
+          followersCount > 0
+            ? Math.round((maxOnline / followersCount) * 1000) / 10
+            : 0;
+
+        activeFollowers = {
+          active_followers_count: maxOnline,
+          active_followers_percentage: percentage,
+        };
+      }
+
+      // Return comprehensive analytics
+      return {
+        success: true,
+        data: {
+          profile: profileSummary,
+          engagement,
+          contentMix,
+          bestPost: formatPost(bestPost),
+          worstPost: formatPost(worstPost),
+          demographics: demographicsData,
+          growth: growthData,
+          activeFollowers,
+        },
+      };
+    } catch (error) {
+      console.error('Error fetching comprehensive analytics:', error);
+      throw new InternalServerErrorException({
+        success: false,
+        message: 'Failed to fetch comprehensive analytics',
+        error: error.message,
+      });
     }
   }
 
