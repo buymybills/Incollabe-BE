@@ -2047,9 +2047,9 @@ export class AdminController {
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Get list of influencers who have referred others',
+    summary: 'Get list of all influencers with referral codes',
     description:
-      'Get paginated list of influencers who have referral codes and have referred other users. Includes total referrals count, earnings, redeemed and pending amounts. Supports search and sorting.',
+      'Get paginated list of all influencers who have generated referral codes, regardless of whether they have referred other users. Includes total referrals count (can be 0), earnings, redeemed and pending amounts. Supports search and sorting.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
