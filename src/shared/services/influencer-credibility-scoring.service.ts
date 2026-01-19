@@ -10,6 +10,7 @@ import { InstagramProfileAnalysis } from '../models/instagram-profile-analysis.m
 import { Campaign } from '../../campaign/models/campaign.model';
 import { CampaignApplication } from '../../campaign/models/campaign-application.model';
 import { InstagramMedia } from '../models/instagram-media.model';
+import { InfluencerCredibilityScore } from '../models/influencer-credibility-score.model';
 
 export interface CredibilityScore {
   // Overall Score
@@ -104,6 +105,8 @@ export class InfluencerCredibilityScoringService {
     private campaignApplicationModel: typeof CampaignApplication,
     @InjectModel(InstagramMedia)
     private instagramMediaModel: typeof InstagramMedia,
+    @InjectModel(InfluencerCredibilityScore)
+    private influencerCredibilityScoreModel: typeof InfluencerCredibilityScore,
     private instagramService: InstagramService,
     private geminiAIService: GeminiAIService,
   ) {}
@@ -293,13 +296,22 @@ export class InfluencerCredibilityScoringService {
    * Formula: Engagement Score = min(Engagement Rate / Benchmark, 1) × 7
    */
   private async calculateEngagementRatio(influencer: Influencer): Promise<{ score: number; maxPoints: 7; details: any }> {
-    const recentInsights = await this.getRecentMediaInsights(influencer.id, 20);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const recentInsights = await this.instagramMediaInsightModel.findAll({
+      where: {
+        influencerId: influencer.id,
+        fetchedAt: { [Op.gte]: thirtyDaysAgo },
+      },
+      order: [['fetchedAt', 'DESC']],
+    });
 
     if (recentInsights.length === 0 || !influencer.instagramFollowersCount) {
       return {
         score: 0,
         maxPoints: 7,
-        details: { engagementRate: 0, benchmark: 3 },
+        details: { engagementRate: 0, benchmark: 3, timeWindow: 'Last 30 days' },
       };
     }
 
@@ -315,6 +327,7 @@ export class InfluencerCredibilityScoringService {
         engagementRate: Number(avgEngagement.toFixed(2)),
         benchmark,
         totalPosts: recentInsights.length,
+        timeWindow: 'Last 30 days',
       },
     };
   }
@@ -547,13 +560,22 @@ export class InfluencerCredibilityScoringService {
    * Formula: Virality Ratio = Avg Reach / Followers, Score = min(Ratio / 1.0, 1) × 8
    */
   private async calculateReachToFollowerRatio(influencer: Influencer): Promise<{ score: number; maxPoints: 8; details: any }> {
-    const recentInsights = await this.getRecentMediaInsights(influencer.id, 20);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const recentInsights = await this.instagramMediaInsightModel.findAll({
+      where: {
+        influencerId: influencer.id,
+        fetchedAt: { [Op.gte]: thirtyDaysAgo },
+      },
+      order: [['fetchedAt', 'DESC']],
+    });
 
     if (recentInsights.length === 0 || !influencer.instagramFollowersCount) {
       return {
         score: 0,
         maxPoints: 8,
-        details: { viralityRatio: 0 },
+        details: { viralityRatio: 0, timeWindow: 'Last 30 days' },
       };
     }
 
@@ -570,6 +592,8 @@ export class InfluencerCredibilityScoringService {
         viralityRatio: Number(viralityRatio.toFixed(2)),
         avgReach: Math.round(avgReach),
         followers: influencer.instagramFollowersCount,
+        postsAnalyzed: recentInsights.length,
+        timeWindow: 'Last 30 days',
       },
     };
   }
@@ -579,13 +603,22 @@ export class InfluencerCredibilityScoringService {
    * Formula: Save+Share Rate = (Avg Saves + Shares) / Reach, Score = min(Rate / Benchmark, 1) × 7
    */
   private async calculateSaveShareImpact(influencer: Influencer): Promise<{ score: number; maxPoints: 7; details: any }> {
-    const recentInsights = await this.getRecentMediaInsights(influencer.id, 20);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const recentInsights = await this.instagramMediaInsightModel.findAll({
+      where: {
+        influencerId: influencer.id,
+        fetchedAt: { [Op.gte]: thirtyDaysAgo },
+      },
+      order: [['fetchedAt', 'DESC']],
+    });
 
     if (recentInsights.length === 0) {
       return {
         score: 0,
         maxPoints: 7,
-        details: { saveShareRate: 0 },
+        details: { saveShareRate: 0, timeWindow: 'Last 30 days' },
       };
     }
 
@@ -606,133 +639,66 @@ export class InfluencerCredibilityScoringService {
         benchmark,
         avgSaves: Math.round(totalSaves / recentInsights.length),
         avgShares: Math.round(totalShares / recentInsights.length),
+        postsAnalyzed: recentInsights.length,
+        timeWindow: 'Last 30 days',
       },
     };
   }
 
   /**
    * 2.3 Retention Proxy (5 points)
-   * Enhanced: Videos use play-to-reach ratio, Images use saves+comments as retention indicator
+   * TEMPORARY: Full points awarded to all influencers
+   * TODO: Implement proper retention tracking when video insights are available
    */
-  private async calculateRetentionProxy(influencer: Influencer): Promise<{ score: number; maxPoints: 5; details: any }> {
-    const recentInsights = await this.getRecentMediaInsights(influencer.id, 20);
-
-    if (recentInsights.length === 0) {
-      return {
-        score: 2.5, // Default score if no data
-        maxPoints: 5,
-        details: { method: 'No media data, default score' },
-      };
-    }
-
-    const videoInsights = recentInsights.filter(i => (i.plays || 0) > 0);
-    const imageInsights = recentInsights.filter(i => (i.plays || 0) === 0);
-
-    let score = 0;
-    let method = '';
-    const details: any = {};
-
-    // If we have video data, prioritize that
-    if (videoInsights.length > 0) {
-      const totalPlays = videoInsights.reduce((sum, insight) => sum + (insight.plays || 0), 0);
-      const totalReach = videoInsights.reduce((sum, insight) => sum + (insight.reach || 1), 0);
-      const playToReachRatio = (totalPlays / totalReach) * 100;
-      const benchmark = 80; // 80% play-to-reach ratio is good
-
-      score = Math.min(playToReachRatio / benchmark, 1) * 5;
-      method = 'Video play-to-reach ratio';
-      details.playToReachRatio = Number(playToReachRatio.toFixed(2));
-      details.benchmark = benchmark;
-      details.videoPostsAnalyzed = videoInsights.length;
-    }
-    // If no videos, use image retention indicators
-    else if (imageInsights.length > 0) {
-      // For images: saves indicate people want to come back, comments indicate engagement depth
-      const totalSaves = imageInsights.reduce((sum, insight) => sum + (insight.saved || 0), 0);
-      const totalComments = imageInsights.reduce((sum, insight) => sum + (insight.comments || 0), 0);
-      const totalReach = imageInsights.reduce((sum, insight) => sum + (insight.reach || 1), 0);
-
-      // Retention indicator = (saves + comments×2) / reach
-      // Comments weighted 2x because they show deeper engagement
-      const retentionIndicator = ((totalSaves + totalComments * 2) / totalReach) * 100;
-      const benchmark = 5; // 5% saves+comments rate is good for images
-
-      score = Math.min(retentionIndicator / benchmark, 1) * 5;
-      method = 'Image retention indicator (saves + comments)';
-      details.retentionIndicator = Number(retentionIndicator.toFixed(2));
-      details.benchmark = benchmark;
-      details.imagePostsAnalyzed = imageInsights.length;
-      details.avgSaves = Math.round(totalSaves / imageInsights.length);
-      details.avgComments = Math.round(totalComments / imageInsights.length);
-    }
-    // Mix of both
-    else {
-      score = 2.5;
-      method = 'Default score - mixed media';
-    }
-
+  private async calculateRetentionProxy(_influencer: Influencer): Promise<{ score: number; maxPoints: 5; details: any }> {
     return {
-      score: Number(score.toFixed(2)),
+      score: 5.0,
       maxPoints: 5,
       details: {
-        method,
-        ...details,
+        method: 'Default full score - retention tracking not yet implemented',
+        note: 'All influencers receive full 5 points until video play metrics are properly tracked',
       },
     };
   }
 
   /**
    * 2.4 Story Engagement (3 points)
-   * Formula: Story Score = min(Rate / Benchmark, 1) × 3
-   * Estimated from feed engagement (stories typically get 50% of feed engagement)
+   * TEMPORARY: Full points awarded to all influencers
+   * TODO: Implement proper story insights tracking when Facebook Page connection is available
    */
-  private async calculateStoryEngagement(influencer: Influencer): Promise<{ score: number; maxPoints: 3; details: any }> {
-    const recentInsights = await this.getRecentMediaInsights(influencer.id, 20);
-
-    if (recentInsights.length === 0 || !influencer.instagramFollowersCount) {
-      return {
-        score: 1.5, // Default mid-range score
-        maxPoints: 3,
-        details: { method: 'No data available for estimation' },
-      };
-    }
-
-    // Calculate feed engagement rate
-    const feedEngagement = this.calculateAverageEngagement(recentInsights, influencer.instagramFollowersCount);
-
-    // Industry insight: Stories typically get 50% of feed engagement rate
-    // This is because stories are viewed by fewer people but engage more deeply
-    const estimatedStoryEngagement = feedEngagement * 0.5;
-
-    const benchmark = 2; // 2% story engagement rate is considered good
-    const score = Math.min(estimatedStoryEngagement / benchmark, 1) * 3;
-
+  private async calculateStoryEngagement(_influencer: Influencer): Promise<{ score: number; maxPoints: 3; details: any }> {
     return {
-      score: Number(score.toFixed(2)),
+      score: 3.0,
       maxPoints: 3,
       details: {
-        method: 'Estimated from feed engagement',
-        feedEngagementRate: Number(feedEngagement.toFixed(2)),
-        estimatedStoryEngagement: Number(estimatedStoryEngagement.toFixed(2)),
-        benchmark,
-        note: 'Instagram API limitation - using correlation analysis',
-        formula: 'Story Engagement ≈ Feed Engagement × 0.5',
+        method: 'Default full score - story insights not yet available',
+        note: 'All influencers receive full 3 points until Instagram Story insights are properly tracked',
       },
     };
   }
 
   /**
    * 2.5 Performance Consistency (2 points)
-   * Formula: Consistency Index = 1 – (Std Dev of Reach / Avg Reach)
+   * Formula: Consistency Score = 1 / (1 + CV) × 2
+   * CV (Coefficient of Variation) = Std Dev / Avg Reach
    */
   private async calculatePerformanceConsistency(influencer: Influencer): Promise<{ score: number; maxPoints: 2; details: any }> {
-    const recentInsights = await this.getRecentMediaInsights(influencer.id, 20);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const recentInsights = await this.instagramMediaInsightModel.findAll({
+      where: {
+        influencerId: influencer.id,
+        fetchedAt: { [Op.gte]: thirtyDaysAgo },
+      },
+      order: [['fetchedAt', 'DESC']],
+    });
 
     if (recentInsights.length < 5) {
       return {
         score: 0,
         maxPoints: 2,
-        details: { message: 'Insufficient data for consistency calculation' },
+        details: { message: 'Insufficient data for consistency calculation (need at least 5 posts in last 30 days)' },
       };
     }
 
@@ -741,16 +707,24 @@ export class InfluencerCredibilityScoringService {
     const variance = reaches.reduce((sum, r) => sum + Math.pow(r - avgReach, 2), 0) / reaches.length;
     const stdDev = Math.sqrt(variance);
 
-    const consistencyIndex = avgReach > 0 ? 1 - (stdDev / avgReach) : 0;
-    const score = Math.max(0, consistencyIndex) * 2;
+    // Calculate Coefficient of Variation (CV)
+    const cv = avgReach > 0 ? stdDev / avgReach : 0;
+
+    // Apply corrected formula: Consistency Score = 1 / (1 + CV)
+    const consistencyScore = 1 / (1 + cv);
+    const score = consistencyScore * 2;
 
     return {
       score: Number(score.toFixed(2)),
       maxPoints: 2,
       details: {
-        consistencyIndex: Number(consistencyIndex.toFixed(2)),
+        coefficientOfVariation: Number(cv.toFixed(3)),
+        consistencyScore: Number((consistencyScore * 100).toFixed(2)),
         avgReach: Math.round(avgReach),
         stdDev: Math.round(stdDev),
+        postsAnalyzed: reaches.length,
+        timeWindow: 'Last 30 days',
+        formula: 'Consistency Score = 1 / (1 + CV) × 2',
       },
     };
   }
@@ -1772,5 +1746,119 @@ export class InfluencerCredibilityScoringService {
         caption: m.caption || '',
         mediaUrl: m.mediaUrl || '',
       }));
+  }
+
+  /**
+   * Get aggregate analytics for influencer (last 30 days with growth comparison)
+   */
+  async getAggregateAnalytics(influencerId: number) {
+    const influencer = await this.influencerModel.findByPk(influencerId);
+    if (!influencer) {
+      throw new NotFoundException(`Influencer with ID ${influencerId} not found`);
+    }
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+    // Get insights for current period (last 30 days)
+    const currentInsights = await this.instagramMediaInsightModel.findAll({
+      where: {
+        influencerId,
+        fetchedAt: { [Op.gte]: thirtyDaysAgo },
+      },
+    });
+
+    // Get insights for previous period (31-60 days ago)
+    const previousInsights = await this.instagramMediaInsightModel.findAll({
+      where: {
+        influencerId,
+        fetchedAt: {
+          [Op.gte]: sixtyDaysAgo,
+          [Op.lt]: thirtyDaysAgo,
+        },
+      },
+    });
+
+    // Calculate current period totals
+    const currentTotalPosts = currentInsights.length;
+    const currentTotalReach = currentInsights.reduce((sum, insight) => sum + (insight.reach || 0), 0);
+    const currentTotalLikes = currentInsights.reduce((sum, insight) => sum + (insight.likes || 0), 0);
+    const currentTotalShares = currentInsights.reduce((sum, insight) => sum + (insight.shares || 0), 0);
+    const currentTotalSaves = currentInsights.reduce((sum, insight) => sum + (insight.saved || 0), 0);
+    const currentTotalComments = currentInsights.reduce((sum, insight) => sum + (insight.comments || 0), 0);
+
+    // Calculate previous period totals
+    const previousTotalPosts = previousInsights.length;
+    const previousTotalReach = previousInsights.reduce((sum, insight) => sum + (insight.reach || 0), 0);
+    const previousTotalLikes = previousInsights.reduce((sum, insight) => sum + (insight.likes || 0), 0);
+    const previousTotalShares = previousInsights.reduce((sum, insight) => sum + (insight.shares || 0), 0);
+    const previousTotalSaves = previousInsights.reduce((sum, insight) => sum + (insight.saved || 0), 0);
+    const previousTotalComments = previousInsights.reduce((sum, insight) => sum + (insight.comments || 0), 0);
+
+    // Get follower growth (compare with 30 days ago snapshot)
+    const growthSnapshot = await this.instagramProfileGrowthModel.findOne({
+      where: {
+        influencerId,
+        snapshotDate: { [Op.gte]: thirtyDaysAgo },
+      },
+      order: [['snapshotDate', 'ASC']],
+    });
+
+    const followersGrowth = growthSnapshot
+      ? (influencer.instagramFollowersCount || 0) - (growthSnapshot.followersCount || 0)
+      : 0;
+    const followingGrowth = growthSnapshot
+      ? (influencer.instagramFollowsCount || 0) - (growthSnapshot.followsCount || 0)
+      : 0;
+
+    return {
+      timeWindow: 'Last 30 days',
+      profile: {
+        followers: {
+          current: influencer.instagramFollowersCount || 0,
+          growth: followersGrowth,
+        },
+        following: {
+          current: influencer.instagramFollowsCount || 0,
+          growth: followingGrowth,
+        },
+        posts: {
+          current: currentTotalPosts,
+          growth: currentTotalPosts - previousTotalPosts,
+        },
+        username: influencer.instagramUsername || '',
+      },
+      engagement: {
+        views: {
+          current: currentTotalReach,
+          growth: currentTotalReach - previousTotalReach,
+        },
+        likes: {
+          current: currentTotalLikes,
+          growth: currentTotalLikes - previousTotalLikes,
+        },
+        shares: {
+          current: currentTotalShares,
+          growth: currentTotalShares - previousTotalShares,
+        },
+        saves: {
+          current: currentTotalSaves,
+          growth: currentTotalSaves - previousTotalSaves,
+        },
+        comments: {
+          current: currentTotalComments,
+          growth: currentTotalComments - previousTotalComments,
+        },
+      },
+      averages: {
+        avgReach: currentTotalPosts > 0 ? Math.round(currentTotalReach / currentTotalPosts) : 0,
+        avgLikes: currentTotalPosts > 0 ? Math.round(currentTotalLikes / currentTotalPosts) : 0,
+        avgComments: currentTotalPosts > 0 ? Math.round(currentTotalComments / currentTotalPosts) : 0,
+        avgShares: currentTotalPosts > 0 ? Math.round(currentTotalShares / currentTotalPosts) : 0,
+        avgSaves: currentTotalPosts > 0 ? Math.round(currentTotalSaves / currentTotalPosts) : 0,
+      },
+    };
   }
 }

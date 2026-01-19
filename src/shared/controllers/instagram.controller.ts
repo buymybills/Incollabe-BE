@@ -896,9 +896,15 @@ export class InstagramController {
       Number(influencerId),
     );
 
+    // Get aggregate analytics
+    const analytics = await this.credibilityScoringService.getAggregateAnalytics(
+      Number(influencerId),
+    );
+
     return {
       message: 'Credibility score calculated successfully',
       score,
+      analytics,
     };
   }
 
