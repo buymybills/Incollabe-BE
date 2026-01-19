@@ -463,6 +463,7 @@ export class InstagramService {
     userId: number,
     userType: UserType,
     mediaId: string,
+    mediaData?: any, // Optional: full media data from getInstagramMedia()
   ): Promise<any> {
     // Get user
     let user: Influencer | Brand | null;
@@ -527,7 +528,7 @@ export class InstagramService {
       );
 
       // Step 4: Save/update the post in instagram_media table
-      const [instagramMediaRecord] = await this.instagramMediaModel.findOrCreate({
+      const [instagramMediaRecord, created] = await this.instagramMediaModel.findOrCreate({
         where: { mediaId },
         defaults: {
           influencerId: userType === 'influencer' ? userId : undefined,
@@ -535,17 +536,29 @@ export class InstagramService {
           mediaId,
           mediaType,
           mediaProductType,
+          // Save caption, timestamp, and URLs if provided in mediaData
+          caption: mediaData?.caption || undefined,
+          timestamp: mediaData?.timestamp ? new Date(mediaData.timestamp) : undefined,
+          mediaUrl: mediaData?.media_url || undefined,
+          thumbnailUrl: mediaData?.thumbnail_url || undefined,
+          permalink: mediaData?.permalink || undefined,
           firstFetchedAt: new Date(),
           lastSyncedAt: new Date(),
         },
       });
 
-      // Update last synced time if record already existed
-      if (instagramMediaRecord) {
+      // Update existing record with latest data
+      if (!created) {
         await instagramMediaRecord.update({
           lastSyncedAt: new Date(),
           mediaType,
           mediaProductType,
+          // Update caption, timestamp, and URLs if provided
+          caption: mediaData?.caption || instagramMediaRecord.caption,
+          timestamp: mediaData?.timestamp ? new Date(mediaData.timestamp) : instagramMediaRecord.timestamp,
+          mediaUrl: mediaData?.media_url || instagramMediaRecord.mediaUrl,
+          thumbnailUrl: mediaData?.thumbnail_url || instagramMediaRecord.thumbnailUrl,
+          permalink: mediaData?.permalink || instagramMediaRecord.permalink,
         });
       }
 
@@ -687,8 +700,8 @@ export class InstagramService {
         const mediaId = post.id;
 
         try {
-          // Fetch and store insights for this specific post
-          await this.getMediaInsights(userId, userType, mediaId);
+          // Fetch and store insights for this specific post (pass full post data)
+          await this.getMediaInsights(userId, userType, mediaId, post);
           results.synced++;
           console.log(`✅ Synced insights for media ${mediaId}`);
 

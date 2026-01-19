@@ -25,6 +25,7 @@ export interface AppReviewRequestCreationAttributes {
 @Table({
   tableName: 'app_review_requests',
   timestamps: true,
+  underscored: true,
   indexes: [
     {
       unique: true,

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectModel } from '@nestjs/sequelize';
+import { Op } from 'sequelize';
 import { Influencer } from '../../auth/model/influencer.model';
 import { InstagramProfileGrowth } from '../models/instagram-profile-growth.model';
 
@@ -25,8 +26,8 @@ export class InstagramGrowthCronService {
     try {
       const influencers = await this.influencerModel.findAll({
         where: {
-          instagramUserId: { $ne: null },
-          instagramFollowersCount: { $ne: null },
+          instagramUserId: { [Op.ne]: null },
+          instagramFollowersCount: { [Op.ne]: null },
         },
       });
 
@@ -37,6 +38,7 @@ export class InstagramGrowthCronService {
           await this.growthModel.create({
             influencerId: influencer.id,
             instagramUserId: influencer.instagramUserId,
+            instagramUsername: influencer.instagramUsername,
             followersCount: influencer.instagramFollowersCount,
             followsCount: influencer.instagramFollowsCount || 0,
             mediaCount: influencer.instagramMediaCount || 0,
