@@ -20,6 +20,7 @@ import { EmailService } from '../shared/email.service';
 import { MasterDataService } from '../shared/services/master-data.service';
 import { ProfileReviewService } from '../admin/profile-review.service';
 import { EncryptionService } from '../shared/services/encryption.service';
+import { AppReviewService } from '../shared/services/app-review.service';
 import { ProfileType } from '../admin/models/profile-review.model';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { UpdateBrandProfileDto } from './dto/update-brand-profile.dto';
@@ -77,6 +78,12 @@ const mockEncryptionService = {
   decrypt: jest.fn((text: string) => text.replace('encrypted:', '')),
   encryptFields: jest.fn(),
   decryptFields: jest.fn(),
+};
+
+const mockAppReviewService = {
+  trackReviewPrompt: jest.fn(),
+  shouldShowReviewPrompt: jest.fn().mockResolvedValue(false),
+  markAsReviewed: jest.fn(),
 };
 
 describe('BrandService', () => {
@@ -180,6 +187,10 @@ describe('BrandService', () => {
         {
           provide: EncryptionService,
           useValue: mockEncryptionService,
+        },
+        {
+          provide: AppReviewService,
+          useValue: mockAppReviewService,
         },
       ],
     }).compile();

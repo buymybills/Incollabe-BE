@@ -8,6 +8,7 @@ import { CustomNicheService } from '../shared/services/custom-niche.service';
 import { NotificationService } from '../shared/notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
 import { AppVersionService } from '../shared/services/app-version.service';
+import { AppReviewService } from '../shared/services/app-review.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import {
   ProfileReview,
@@ -158,6 +159,12 @@ const mockAppVersionService = {
   getAllVersionConfigs: jest.fn().mockResolvedValue([]),
   updateVersionConfig: jest.fn(),
   clearCache: jest.fn(),
+};
+
+const mockAppReviewService = {
+  trackReviewPrompt: jest.fn(),
+  shouldShowReviewPrompt: jest.fn().mockResolvedValue(false),
+  markAsReviewed: jest.fn(),
 };
 
 describe('InfluencerService', () => {
@@ -326,6 +333,10 @@ describe('InfluencerService', () => {
             create: jest.fn(),
             update: jest.fn(),
           },
+        },
+        {
+          provide: AppReviewService,
+          useValue: mockAppReviewService,
         },
       ],
     }).compile();
