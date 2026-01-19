@@ -629,18 +629,27 @@ export class InstagramService {
         media_product_type: mediaProductType,
       };
     } catch (error) {
-      // Log the actual error for debugging
-      console.error('❌ Error in getMediaInsights:', error);
-      if (error instanceof Error) {
-        console.error('Error message:', error.message);
-        console.error('Error stack:', error.stack);
-      }
-
-      // Enhanced error handling for permission issues
+      // Enhanced error handling
       if (axios.isAxiosError(error)) {
         const axiosError = error as AxiosError;
         const errorData = axiosError.response?.data as any;
+        const wwwAuthHeader = axiosError.response?.headers?.['www-authenticate'] || '';
 
+        // Check for "media posted before business account conversion" error
+        if (
+          axiosError.response?.status === 400 &&
+          wwwAuthHeader.includes('posted before the most recent time')
+        ) {
+          // This is an expected error - media was posted before account became business account
+          // Instagram API cannot provide insights for such media
+          throw new BadRequestException({
+            error: 'media_posted_before_business_conversion',
+            message: 'This media was posted before the Instagram account was converted to a business account. Insights are only available for media posted after the conversion.',
+            mediaId,
+          });
+        }
+
+        // Check for permission issues
         if (errorData?.error?.message?.includes('permission')) {
           throw new BadRequestException({
             error: 'instagram_permission_error',
@@ -649,6 +658,13 @@ export class InstagramService {
             requiredPermissions: ['instagram_basic', 'instagram_manage_insights', 'pages_show_list', 'pages_read_engagement'],
           });
         }
+      }
+
+      // Log the actual error for debugging (only for unexpected errors)
+      console.error('❌ Error in getMediaInsights:', error);
+      if (error instanceof Error) {
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
       }
 
       this.handleInstagramError(error, 'Failed to fetch media insights');
@@ -709,10 +725,21 @@ export class InstagramService {
           await new Promise(resolve => setTimeout(resolve, 100));
 
         } catch (error) {
-          results.failed++;
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          results.errors.push({ mediaId, error: errorMessage });
-          console.log(`❌ Failed to sync media ${mediaId}: ${errorMessage}`);
+          // Check if this is the expected "media posted before business account conversion" error
+          const isPreBusinessConversionError =
+            error instanceof BadRequestException &&
+            (error.getResponse() as any)?.error === 'media_posted_before_business_conversion';
+
+          if (isPreBusinessConversionError) {
+            // This is expected - skip counting as failed, just log info
+            console.log(`ℹ️  Skipping media ${mediaId}: Posted before business account conversion`);
+          } else {
+            // This is an actual error we should track
+            results.failed++;
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            results.errors.push({ mediaId, error: errorMessage });
+            console.log(`❌ Failed to sync media ${mediaId}: ${errorMessage}`);
+          }
         }
       }
 
