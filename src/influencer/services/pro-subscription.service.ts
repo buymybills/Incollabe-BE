@@ -967,7 +967,7 @@ export class ProSubscriptionService {
         .font('Helvetica')
         .fontSize(11)
         .fillColor('#374151')
-        .text('Deshanta Marketing Solutions Pvt. Ltd', col3X, detailsStartY + 18, { width: 200 })
+        .text('Depshanta Marketing Solutions Pvt. Ltd', col3X, detailsStartY + 18, { width: 200 })
         .text('Plot A-18, Manjeet farm', col3X, detailsStartY + 31, { width: 200 })
         .text('Uttam Nagar, Delhi', col3X, detailsStartY + 44, { width: 200 })
         .text('West Delhi, Delhi, 110059, IN', col3X, detailsStartY + 57, { width: 200 })
