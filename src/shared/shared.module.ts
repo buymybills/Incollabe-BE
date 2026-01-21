@@ -26,9 +26,11 @@ import { InstagramDemographicsCronService } from './services/instagram-demograph
 import { InstagramGrowthCronService } from './services/instagram-growth.cron';
 import { CredibilityScoreCronService } from './services/credibility-score.cron';
 import { InfluencerCredibilityScoringService } from './services/influencer-credibility-scoring.service';
+import { InfluencerProfileScoringService } from './services/influencer-profile-scoring.service';
 import { GeminiAIService } from './services/gemini-ai.service';
 import { AppReviewController } from './controllers/app-review.controller';
 import { AppReviewService } from './services/app-review.service';
+import { InfluencerProfileScoringController } from './controllers/influencer-profile-scoring.controller';
 import { IsValidUsernameConstraint } from './validators/is-valid-username.validator';
 import { RazorpayService } from './razorpay.service';
 import { Otp } from '../auth/model/otp.model';
@@ -85,7 +87,7 @@ import { AppVersionService } from './services/app-version.service';
       AppVersion,
     ]),
   ],
-  controllers: [SearchController, ChatController, KeyBackupController, InstagramController, AppReviewController],
+  controllers: [SearchController, ChatController, KeyBackupController, InstagramController, AppReviewController, InfluencerProfileScoringController],
   providers: [
     SmsService,
     S3Service,
@@ -111,6 +113,7 @@ import { AppVersionService } from './services/app-version.service';
     InstagramGrowthCronService,
     CredibilityScoreCronService,
     InfluencerCredibilityScoringService,
+    InfluencerProfileScoringService,
     GeminiAIService,
     AppReviewService,
     DeviceTokenService,
@@ -135,6 +138,7 @@ import { AppVersionService } from './services/app-version.service';
     RazorpayService,
     InstagramService,
     InfluencerCredibilityScoringService,
+    InfluencerProfileScoringService,
     GeminiAIService,
     AppReviewService,
     DeviceTokenService,

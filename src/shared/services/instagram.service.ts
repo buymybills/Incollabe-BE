@@ -308,6 +308,37 @@ export class InstagramService {
       throw new BadRequestException('No Instagram account connected');
     }
 
+    // Check if last sync was less than 30 days ago (only for influencers)
+    if (userType === 'influencer') {
+      const latestAnalysis = await this.instagramProfileAnalysisModel.findOne({
+        where: { influencerId: userId },
+        order: [['syncDate', 'DESC']],
+      });
+
+      if (latestAnalysis && latestAnalysis.syncDate) {
+        const now = new Date();
+        const lastSync = new Date(latestAnalysis.syncDate);
+        const diffInMs = now.getTime() - lastSync.getTime();
+        const daysSinceLastSync = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+
+        if (daysSinceLastSync < 30) {
+          const daysRemaining = 30 - daysSinceLastSync;
+          const nextSyncDate = new Date(lastSync.getTime() + (30 * 24 * 60 * 60 * 1000));
+
+          throw new BadRequestException({
+            error: 'sync_throttled',
+            message: `Instagram profile sync is limited to once every 30 days. Please wait ${daysRemaining} more day(s).`,
+            details: {
+              lastSyncDate: lastSync.toISOString(),
+              nextAllowedSyncDate: nextSyncDate.toISOString(),
+              daysSinceLastSync,
+              daysRemaining,
+            },
+          });
+        }
+      }
+    }
+
     // Fetch fresh profile data
     const profile = await this.getUserProfile(user.instagramAccessToken);
 
@@ -483,6 +514,21 @@ export class InstagramService {
       throw new BadRequestException('No Instagram account connected');
     }
 
+    // Check if account is Business or Creator account
+    // Instagram API returns: BUSINESS, MEDIA_CREATOR, or PERSONAL
+    const validAccountTypes = ['BUSINESS', 'MEDIA_CREATOR', 'CREATOR'];
+    if (!user.instagramAccountType || !validAccountTypes.includes(user.instagramAccountType)) {
+      throw new BadRequestException({
+        error: 'invalid_account_type',
+        message: 'Instagram insights are only available for Business or Creator accounts. Please convert your Instagram account to a Professional account.',
+        details: {
+          currentAccountType: user.instagramAccountType || 'PERSONAL',
+          requiredAccountTypes: validAccountTypes,
+          instructions: 'To convert your account: 1) Go to Instagram app Settings, 2) Tap "Account", 3) Tap "Switch to Professional Account", 4) Choose Business or Creator account type',
+        },
+      });
+    }
+
     try {
       // Step 1: Fetch media details to determine media type
       const mediaResponse = await axios.get(
@@ -649,13 +695,19 @@ export class InstagramService {
           });
         }
 
-        // Check for permission issues
-        if (errorData?.error?.message?.includes('permission')) {
+        // Check for permission issues or account type errors
+        if (errorData?.error?.message?.includes('permission') ||
+            errorData?.error?.message?.includes('Unsupported get request') ||
+            errorData?.error?.message?.includes('Instagram Business Account')) {
           throw new BadRequestException({
-            error: 'instagram_permission_error',
-            message: 'Instagram app does not have permission to access insights. Please ensure: 1) The Instagram account is a Business or Creator account, 2) Your app has instagram_manage_insights permission, 3) The permission is approved by Meta for production use.',
-            details: errorData,
-            requiredPermissions: ['instagram_basic', 'instagram_manage_insights', 'pages_show_list', 'pages_read_engagement'],
+            error: 'instagram_insights_unavailable',
+            message: 'Instagram insights are not available. Please ensure your Instagram account is a Business or Creator account (not Personal account).',
+            details: {
+              reason: errorData?.error?.message || 'Permission denied',
+              requiredAccountType: 'BUSINESS or CREATOR (Professional Account)',
+              instructions: 'To enable insights: 1) Open Instagram app, 2) Go to Settings → Account, 3) Switch to Professional Account, 4) Choose Business or Creator',
+            },
+            technicalDetails: errorData,
           });
         }
       }
@@ -745,9 +797,22 @@ export class InstagramService {
 
       console.log(`✅ Bulk sync completed: ${results.synced} synced, ${results.failed} failed`);
 
+      // Step 3: Store active followers snapshot for this 30-day period
+      let activeFollowersSnapshot: any = null;
+      try {
+        activeFollowersSnapshot = await this.storeActiveFollowersSnapshot(userId, userType);
+        if (activeFollowersSnapshot) {
+          console.log(`✅ Stored active followers snapshot: ${activeFollowersSnapshot.activeFollowers} / ${activeFollowersSnapshot.totalFollowers} (${activeFollowersSnapshot.percentage}%)`);
+        }
+      } catch (error) {
+        console.warn(`⚠️ Could not store active followers snapshot:`, error.message);
+        // Don't fail the entire sync if this fails
+      }
+
       return {
         success: true,
         ...results,
+        activeFollowersSnapshot,
         message: `Successfully synced ${results.synced} out of ${results.totalPosts} posts`,
       };
 
@@ -759,6 +824,154 @@ export class InstagramService {
         details: error instanceof Error ? error.message : 'Unknown error',
       });
     }
+  }
+
+  /**
+   * Store active followers snapshot during 30-day sync
+   * This creates a historical record for authenticity tracking
+   */
+  private async storeActiveFollowersSnapshot(
+    userId: number,
+    userType: UserType,
+  ): Promise<any> {
+    // Get user
+    const user = await this.getUser(userId, userType);
+
+    if (!user.instagramAccessToken || !user.instagramUserId) {
+      throw new BadRequestException('No Instagram account connected');
+    }
+
+    const totalFollowers = user.instagramFollowersCount || 0;
+
+    // Fetch online followers data
+    let activeFollowers = 0;
+    let onlineFollowersData = {};
+
+    try {
+      onlineFollowersData = await this.getOnlineFollowers(userId, userType);
+
+      if (onlineFollowersData && Object.keys(onlineFollowersData).length > 0) {
+        // Get peak hour (maximum online followers)
+        activeFollowers = Math.max(
+          ...Object.values(onlineFollowersData).map((v: any) => v || 0)
+        );
+      }
+    } catch (error) {
+      console.warn('Could not fetch online followers:', error.message);
+      // Store with 0 active followers if API fails
+    }
+
+    // Calculate active followers percentage
+    const activeFollowersPercentage = totalFollowers > 0
+      ? Number(((activeFollowers / totalFollowers) * 100).toFixed(2))
+      : 0;
+
+    // Calculate engagement rate and reach from recent media insights (last 30 days)
+    let avgEngagementRate = 0;
+    let avgReach = 0;
+    let totalPosts = 0;
+    let totalLikes = 0;
+    let totalComments = 0;
+    let totalShares = 0;
+    let totalSaves = 0;
+
+    try {
+      // Get recent media insights (last 30 days)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const recentInsights = await this.instagramMediaInsightModel.findAll({
+        where: userType === 'influencer'
+          ? { influencerId: userId }
+          : { brandId: userId },
+        include: [{
+          model: this.instagramMediaModel,
+          required: true,
+          where: {
+            timestamp: { [Op.gte]: thirtyDaysAgo },
+          },
+        }],
+        order: [['fetchedAt', 'DESC']],
+      });
+
+      if (recentInsights.length > 0 && totalFollowers > 0) {
+        totalPosts = recentInsights.length;
+
+        // Calculate totals
+        let totalReach = 0;
+
+        const totalEngagement = recentInsights.reduce((sum, insight) => {
+          totalLikes += insight.likes || 0;
+          totalComments += insight.comments || 0;
+          totalShares += insight.shares || 0;
+          totalSaves += insight.saved || 0;
+          totalReach += insight.reach || 0;
+          return sum + (insight.likes || 0)
+                     + (insight.comments || 0)
+                     + (insight.shares || 0)
+                     + (insight.saved || 0);
+        }, 0);
+
+        const avgEngagement = totalEngagement / recentInsights.length;
+        avgEngagementRate = Number(((avgEngagement / totalFollowers) * 100).toFixed(2));
+        avgReach = Math.round(totalReach / recentInsights.length);
+      }
+    } catch (error) {
+      console.warn('Could not calculate engagement metrics:', error.message);
+      // Continue with 0 values if calculation fails
+    }
+
+    // Determine period (last 30 days from today)
+    const periodEnd = new Date();
+    const periodStart = new Date();
+    periodStart.setDate(periodStart.getDate() - 30);
+
+    // Get current sync count for this influencer
+    const previousSyncs = await this.instagramProfileAnalysisModel.count({
+      where: userType === 'influencer'
+        ? { influencerId: userId }
+        : { brandId: userId }
+    });
+
+    const syncNumber = previousSyncs + 1;
+
+    // Store snapshot with all metrics
+    await this.instagramProfileAnalysisModel.create({
+      influencerId: userType === 'influencer' ? userId : undefined,
+      brandId: userType === 'brand' ? userId : undefined,
+      instagramUserId: user.instagramUserId,
+      instagramUsername: user.instagramUsername,
+      syncNumber,
+      syncDate: new Date(),
+      analysisPeriodStart: periodStart,
+      analysisPeriodEnd: periodEnd,
+      postsAnalyzed: totalPosts,
+      totalFollowers,
+      activeFollowers,
+      activeFollowersPercentage,
+      onlineFollowersHourlyData: onlineFollowersData,
+      avgEngagementRate,
+      avgReach,
+      totalLikes,
+      totalComments,
+      totalShares,
+      totalSaves,
+      analyzedAt: new Date(),
+    });
+
+    console.log(`📊 Stored sync #${syncNumber} for ${userType} ${userId}`);
+
+    return {
+      syncNumber,
+      totalFollowers,
+      activeFollowers,
+      percentage: activeFollowersPercentage,
+      avgEngagementRate,
+      avgReach,
+      totalPosts,
+      periodStart,
+      periodEnd,
+    };
   }
 
   /**
@@ -1020,27 +1233,35 @@ export class InstagramService {
         const errorMessage = error.response?.data?.error?.message || '';
         console.error('Demographics API error:', error.response?.data);
 
-        // Check if error is due to missing Facebook Page integration
+        // Check if error is due to missing Facebook Page integration or account type
         const isFacebookPageRequired =
           errorMessage.includes('Unsupported get request') ||
           errorMessage.includes('requires a Facebook Page') ||
           errorMessage.includes('Instagram Business Account') ||
+          errorMessage.includes('permission') ||
           error.response?.status === 400;
 
-        // Return structured response with helpful error message
-        return {
-          ageGender: [],
-          cities: [],
-          countries: [],
-          totalFollowers: user.instagramFollowersCount || 0,
-          dataAvailable: false,
-          error: {
-            code: 'FACEBOOK_PAGE_REQUIRED',
-            message: 'Audience demographics require Instagram Business Account connected to a Facebook Page',
-            details: 'Instagram API does not provide follower demographics without Facebook Page integration. Alternative: Use AI analysis of content engagement patterns to estimate demographics.',
-            recommendation: 'For accurate demographics, connect Instagram Business Account to a Facebook Page, or use Gemini AI to analyze content and engagement patterns.',
-          },
-        };
+        if (isFacebookPageRequired) {
+          // Return structured response with helpful error message
+          return {
+            ageGender: [],
+            cities: [],
+            countries: [],
+            totalFollowers: user.instagramFollowersCount || 0,
+            dataAvailable: false,
+            error: {
+              code: 'FACEBOOK_PAGE_REQUIRED',
+              message: 'Audience demographics require Instagram Business Account connected to a Facebook Page',
+              details: 'Instagram API does not provide follower demographics without Facebook Page integration.',
+              instructions: [
+                '1. Ensure your Instagram account is a Business account (not Creator or Personal)',
+                '2. Create or connect a Facebook Page to your Instagram Business account',
+                '3. In Instagram Settings → Account → Linked Accounts → Facebook, link your Facebook Page',
+              ],
+              alternative: 'Without Facebook Page connection, demographics data will not be available via Instagram API.',
+            },
+          };
+        }
       }
       throw error;
     }

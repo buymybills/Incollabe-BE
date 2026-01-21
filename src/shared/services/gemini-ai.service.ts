@@ -44,16 +44,38 @@ export class GeminiAIService {
   private readonly logger = new Logger(GeminiAIService.name);
   private genAI: GoogleGenerativeAI | null = null;
   private model: any | null = null;
+  private visionModel: any | null = null;
 
   constructor(private configService: ConfigService) {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
 
     if (apiKey) {
       this.genAI = new GoogleGenerativeAI(apiKey);
-      this.model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-      this.logger.log('✅ Gemini AI service initialized');
+
+      // Try to initialize both text and vision models
+      try {
+        // Using Gemini 3 Pro Preview for best performance
+        // This model supports both text-only and image+text inputs
+        const modelName = 'gemini-3-pro-preview';
+
+        // For text-only analysis (niche, language, sentiment)
+        this.model = this.genAI.getGenerativeModel({ model: modelName });
+
+        // For image analysis (visual quality, brand safety) - same model supports multimodal
+        this.visionModel = this.genAI.getGenerativeModel({ model: modelName });
+
+        this.logger.log(`✅ Gemini AI service initialized with ${modelName}`);
+      } catch (error) {
+        this.logger.error('Failed to initialize Gemini models:', error.message);
+        this.model = null;
+        this.visionModel = null;
+      }
     } else {
-      this.logger.warn('⚠️ GEMINI_API_KEY not found. AI features will be disabled.');
+      this.logger.warn('⚠️ GEMINI_API_KEY not found. AI features disabled - using fallback scoring.');
+      this.logger.warn('   To enable AI features:');
+      this.logger.warn('   1. Get an API key from https://makersuite.google.com/app/apikey');
+      this.logger.warn('   2. Add GEMINI_API_KEY=your-key to .env');
+      this.logger.warn('   3. Ensure billing is enabled for your Google Cloud project');
     }
   }
 
@@ -65,11 +87,18 @@ export class GeminiAIService {
   }
 
   /**
+   * Check if vision model is available
+   */
+  isVisionAvailable(): boolean {
+    return this.visionModel !== null;
+  }
+
+  /**
    * Analyze visual quality of an Instagram post image
    */
   async analyzeVisualQuality(imageUrl: string): Promise<VisualAnalysisResult> {
-    if (!this.isAvailable()) {
-      this.logger.warn('Gemini AI not available, returning default scores');
+    if (!this.isVisionAvailable()) {
+      this.logger.warn('Gemini Vision AI not available, returning default scores');
       return this.getDefaultVisualAnalysis();
     }
 
@@ -104,7 +133,7 @@ Return your analysis in this exact JSON format:
   "objects": ["person", "phone", "coffee"]
 }`;
 
-      const result = await this.model.generateContent([
+      const result = await this.visionModel.generateContent([
         {
           inlineData: {
             mimeType: 'image/jpeg',
@@ -143,7 +172,7 @@ Return your analysis in this exact JSON format:
 
       return this.getDefaultVisualAnalysis();
     } catch (error) {
-      this.logger.error('Error analyzing visual quality:', error);
+      this.logger.debug(`Visual analysis unavailable (using defaults): ${error.message}`);
       return this.getDefaultVisualAnalysis();
     }
   }
@@ -202,7 +231,7 @@ Return JSON format:
         keywords: [],
       };
     } catch (error) {
-      this.logger.error('Error detecting niche:', error);
+      this.logger.debug(`Niche detection unavailable (using defaults): ${error.message}`);
       return {
         primaryNiche: 'general',
         secondaryNiches: [],
@@ -258,7 +287,7 @@ Return JSON format:
         marketFit: 50,
       };
     } catch (error) {
-      this.logger.error('Error analyzing language:', error);
+      this.logger.debug(`Language analysis unavailable (using defaults): ${error.message}`);
       return {
         primaryLanguage: 'English',
         languagePercentages: { English: 100 },
@@ -391,8 +420,264 @@ Return just a single number between -100 and +100.`;
 
       return 70; // Default if parsing fails
     } catch (error) {
-      this.logger.error('Error analyzing sentiment:', error);
+      this.logger.debug(`Sentiment analysis unavailable (using default): ${error.message}`);
       return 70;
+    }
+  }
+
+  /**
+   * Analyze trend relevance - AI rates content on scale of 1-10 based on trends, topics, niche relevance
+   */
+  async analyzeTrendRelevance(captions: string[]): Promise<{ score: number; [key: string]: any }> {
+    if (!this.isAvailable()) {
+      return { score: 7.0, message: 'AI not available' };
+    }
+
+    try {
+      const allCaptions = captions.join('\n---\n');
+
+      const prompt = `Analyze these Instagram captions for trend relevance:
+
+${allCaptions}
+
+Rate the content on a scale from 1-10 based on:
+- Alignment with current social media trends
+- Relevance of topics discussed
+- Niche clarity and consistency
+- Use of trending keywords/phrases
+- Timeliness and cultural relevance
+
+Return JSON with:
+{
+  "score": <number 1-10>,
+  "trends": ["<trend1>", "<trend2>"],
+  "relevanceReason": "<explanation>"
+}`;
+
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text().trim();
+
+      // Try to parse JSON response
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return {
+          score: Math.max(1, Math.min(10, parsed.score || 7)),
+          trends: parsed.trends || [],
+          relevanceReason: parsed.relevanceReason || '',
+        };
+      }
+
+      return { score: 7.0, message: 'Failed to parse AI response' };
+    } catch (error) {
+      this.logger.debug(`Trend relevance analysis unavailable: ${error.message}`);
+      return { score: 7.0, message: 'AI analysis failed' };
+    }
+  }
+
+  /**
+   * Detect if content has face/person
+   */
+  async detectFaceInContent(imageUrl: string): Promise<boolean> {
+    if (!this.isVisionAvailable()) {
+      return true; // Default assume face present
+    }
+
+    try {
+      // Fetch image and convert to base64
+      const axios = (await import('axios')).default;
+      const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+      const imageData = Buffer.from(imageResponse.data).toString('base64');
+
+      const prompt = `Does this image contain a human face or person? Answer only: YES or NO`;
+
+      const imagePart = {
+        inlineData: {
+          data: imageData,
+          mimeType: 'image/jpeg',
+        },
+      };
+
+      const result = await this.visionModel.generateContent([prompt, imagePart]);
+      const response = await result.response;
+      const text = response.text().trim().toUpperCase();
+
+      return text.includes('YES');
+    } catch (error) {
+      this.logger.debug(`Face detection unavailable: ${error.message}`);
+      return true; // Default assume face present
+    }
+  }
+
+  /**
+   * Analyze hashtag effectiveness
+   */
+  async analyzeHashtagEffectiveness(captions: string[]): Promise<{ rating: string; [key: string]: any }> {
+    if (!this.isAvailable()) {
+      return { rating: 'effective', message: 'AI not available' };
+    }
+
+    try {
+      const allCaptions = captions.join('\n---\n');
+
+      const prompt = `Analyze the hashtag strategy in these Instagram captions:
+
+${allCaptions}
+
+Rate the hashtag effectiveness as one of:
+- "outperforming" (excellent hashtag strategy, well-researched, trending, niche-specific)
+- "effective" (good hashtag use, decent mix)
+- "medium" (average hashtag strategy)
+- "need_improvement" (poor hashtag strategy or none)
+
+Return JSON with:
+{
+  "rating": "<one of the above>",
+  "totalHashtags": <number>,
+  "avgHashtagsPerPost": <number>,
+  "recommendations": "<brief suggestions>"
+}`;
+
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text().trim();
+
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return {
+          rating: parsed.rating || 'effective',
+          totalHashtags: parsed.totalHashtags || 0,
+          avgHashtagsPerPost: parsed.avgHashtagsPerPost || 0,
+          recommendations: parsed.recommendations || '',
+        };
+      }
+
+      return { rating: 'effective', message: 'Failed to parse AI response' };
+    } catch (error) {
+      this.logger.debug(`Hashtag analysis unavailable: ${error.message}`);
+      return { rating: 'effective', message: 'AI analysis failed' };
+    }
+  }
+
+  /**
+   * Analyze color palette and mood consistency
+   */
+  async analyzeColorPaletteMood(imageUrls: string[]): Promise<{ rating: number; [key: string]: any }> {
+    if (!this.isVisionAvailable()) {
+      return { rating: 14, message: 'AI not available' }; // Default 14/20
+    }
+
+    try {
+      const axios = (await import('axios')).default;
+
+      // Analyze first 5 images
+      const imageParts: Array<{ inlineData: { data: string; mimeType: string } }> = [];
+      for (const url of imageUrls.slice(0, 5)) {
+        try {
+          const imageResponse = await axios.get(url, { responseType: 'arraybuffer' });
+          const imageData = Buffer.from(imageResponse.data).toString('base64');
+          imageParts.push({
+            inlineData: {
+              data: imageData,
+              mimeType: 'image/jpeg',
+            },
+          });
+        } catch (error) {
+          // Skip failed images
+        }
+      }
+
+      if (imageParts.length === 0) {
+        return { rating: 14, message: 'No images loaded' };
+      }
+
+      const prompt = `Analyze the color palette and mood consistency across these Instagram images.
+
+Rate on a scale from 1-20 based on:
+- Color scheme consistency
+- Mood and aesthetic coherence
+- Visual branding strength
+- Overall aesthetic appeal
+
+Return JSON with:
+{
+  "rating": <number 1-20>,
+  "dominantColors": ["<color1>", "<color2>"],
+  "mood": "<mood description>",
+  "consistency": "<high/medium/low>"
+}`;
+
+      const result = await this.visionModel.generateContent([prompt, ...imageParts]);
+      const response = await result.response;
+      const text = response.text().trim();
+
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return {
+          rating: Math.max(1, Math.min(20, parsed.rating || 14)),
+          dominantColors: parsed.dominantColors || [],
+          mood: parsed.mood || '',
+          consistency: parsed.consistency || 'medium',
+        };
+      }
+
+      return { rating: 14, message: 'Failed to parse AI response' };
+    } catch (error) {
+      this.logger.debug(`Color palette analysis unavailable: ${error.message}`);
+      return { rating: 14, message: 'AI analysis failed' };
+    }
+  }
+
+  /**
+   * Analyze CTA (Call-to-Action) usage effectiveness
+   */
+  async analyzeCTAUsage(captions: string[]): Promise<{ rating: string; [key: string]: any }> {
+    if (!this.isAvailable()) {
+      return { rating: 'medium', message: 'AI not available' };
+    }
+
+    try {
+      const allCaptions = captions.join('\n---\n');
+
+      const prompt = `Analyze the Call-to-Action (CTA) usage in these Instagram captions:
+
+${allCaptions}
+
+Rate the CTA effectiveness as one of:
+- "good" (strong CTAs, clear next steps, engagement-driving)
+- "medium" (some CTAs present, could be stronger)
+- "less" (weak or no CTAs, no clear action)
+
+Return JSON with:
+{
+  "rating": "<one of the above>",
+  "ctaCount": <number of captions with CTAs>,
+  "examples": ["<example CTA 1>", "<example CTA 2>"],
+  "recommendations": "<suggestions for improvement>"
+}`;
+
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text().trim();
+
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return {
+          rating: parsed.rating || 'medium',
+          ctaCount: parsed.ctaCount || 0,
+          examples: parsed.examples || [],
+          recommendations: parsed.recommendations || '',
+        };
+      }
+
+      return { rating: 'medium', message: 'Failed to parse AI response' };
+    } catch (error) {
+      this.logger.debug(`CTA analysis unavailable: ${error.message}`);
+      return { rating: 'medium', message: 'AI analysis failed' };
     }
   }
 

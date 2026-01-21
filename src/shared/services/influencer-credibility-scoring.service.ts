@@ -201,92 +201,187 @@ export class InfluencerCredibilityScoringService {
 
   /**
    * 1.1 Follower Authenticity (8 points)
-   * Formula: Authenticity Score = (% Real Followers) × 8
-   * Enhanced with multiple signals: engagement rate, follower/following ratio, growth pattern
+   * Formula: Authenticity Score = (Active Followers / Total Followers) × 100 × 8
+   * Uses stored 30-day snapshots of online_followers metric
    */
   private async calculateFollowerAuthenticity(influencer: Influencer): Promise<{ score: number; maxPoints: 8; details: any }> {
-    const recentInsights = await this.getRecentMediaInsights(influencer.id, 10);
+    // Get sync history (30-day snapshots)
+    const syncHistory = await this.instagramProfileAnalysisModel.findAll({
+      where: { influencerId: influencer.id },
+      order: [['syncDate', 'DESC']],
+      limit: 5, // Get last 5 syncs for trend analysis
+    });
 
-    if (recentInsights.length === 0 || !influencer.instagramFollowersCount) {
+    if (syncHistory.length === 0) {
       return {
         score: 0,
         maxPoints: 8,
-        details: { authenticityPercentage: 0, method: 'No data available' },
+        details: {
+          authenticityPercentage: 0,
+          method: 'No sync data available',
+          message: 'Please run a 30-day sync first to calculate authenticity score',
+        },
       };
     }
 
-    // Signal 1: Engagement Rate (40% weight)
-    const avgEngagement = this.calculateAverageEngagement(recentInsights, influencer.instagramFollowersCount);
-    let engagementScore = 0.5; // Default 50%
-    if (avgEngagement > 5) engagementScore = 0.9;
-    else if (avgEngagement >= 3) engagementScore = 0.7;
-    else if (avgEngagement >= 1) engagementScore = 0.6;
+    // Get latest sync data
+    const latestSync = syncHistory[0];
+    const totalFollowers = latestSync.totalFollowers || 0;
+    const activeFollowers = latestSync.activeFollowers || 0;
+    const authenticityPercentage = latestSync.activeFollowersPercentage || 0;
 
-    // Signal 2: Follower/Following Ratio (30% weight)
-    const followersCount = influencer.instagramFollowersCount || 1;
-    const followingCount = influencer.instagramFollowsCount || 1;
-    const ratio = followersCount / followingCount;
-    let ratioScore = 0.5; // Default 50%
-    if (ratio > 10) ratioScore = 1.0; // Strong signal of authenticity
-    else if (ratio > 5) ratioScore = 0.85;
-    else if (ratio > 2) ratioScore = 0.7;
-    else if (ratio > 1) ratioScore = 0.6;
-    else ratioScore = 0.4; // Following more than followers = suspicious
+    if (totalFollowers === 0) {
+      return {
+        score: 0,
+        maxPoints: 8,
+        details: {
+          authenticityPercentage: 0,
+          method: 'No follower data available',
+        },
+      };
+    }
 
-    // Signal 3: Growth Pattern (30% weight)
-    const growthData = await this.instagramProfileGrowthModel.findAll({
-      where: { influencerId: influencer.id },
-      order: [['snapshotDate', 'DESC']],
-      limit: 30, // Last 30 days
-    });
+    // Calculate base score: (Authenticity % / 100) × 8 points
+    let score = Math.min((authenticityPercentage / 100) * 8, 8);
 
-    let growthScore = 0.75; // Default assuming organic growth
-    if (growthData.length >= 7) {
-      // Check for sudden spikes (indicating bought followers)
-      const dailyGrowths: number[] = [];
-      for (let i = 0; i < growthData.length - 1; i++) {
-        const growth = (growthData[i].followersCount || 0) - (growthData[i + 1].followersCount || 0);
-        dailyGrowths.push(growth);
-      }
+    // Determine rating based on percentage
+    let rating = 'Very Low';
+    if (authenticityPercentage >= 25) rating = 'Excellent';
+    else if (authenticityPercentage >= 15) rating = 'Good';
+    else if (authenticityPercentage >= 10) rating = 'Average';
+    else if (authenticityPercentage >= 5) rating = 'Low';
 
-      if (dailyGrowths.length > 0) {
-        const avgDailyGrowth = dailyGrowths.reduce((sum, g) => sum + g, 0) / dailyGrowths.length;
-        const maxGrowth = Math.max(...dailyGrowths);
+    // Interpretation message
+    let interpretation = '';
+    if (authenticityPercentage >= 25) {
+      interpretation = 'Highly engaged real followers. Excellent authenticity.';
+    } else if (authenticityPercentage >= 15) {
+      interpretation = 'Good authenticity. Most followers are real and active.';
+    } else if (authenticityPercentage >= 10) {
+      interpretation = 'Average authenticity. Some inactive or fake followers may exist.';
+    } else if (authenticityPercentage >= 5) {
+      interpretation = 'Low authenticity. Significant portion may be fake/inactive followers.';
+    } else {
+      interpretation = 'Very low authenticity. High likelihood of purchased followers.';
+    }
 
-        // If any day has >10x average growth, suspicious
-        if (maxGrowth > avgDailyGrowth * 10 && avgDailyGrowth > 0) {
-          growthScore = 0.5; // Suspicious spike
-        } else if (maxGrowth > avgDailyGrowth * 5) {
-          growthScore = 0.65; // Moderate spike
-        } else {
-          growthScore = 0.9; // Steady organic growth
-        }
+    // ENHANCED: Compare with previous syncs if available
+    let growthAnalysis: any = null;
+    let suspiciousPatternDetected = false;
+
+    if (syncHistory.length >= 2) {
+      const previousSync = syncHistory[1];
+      growthAnalysis = this.analyzeActiveFollowersGrowth(previousSync, latestSync, syncHistory);
+
+      // Apply penalty if suspicious pattern detected
+      if (growthAnalysis && (growthAnalysis.pattern === 'suspicious_spike' || growthAnalysis.pattern === 'bought_followers')) {
+        score = score * 0.5; // 50% penalty for suspicious patterns
+        suspiciousPatternDetected = true;
+        interpretation = `⚠️ ${growthAnalysis.interpretation}`;
+        rating = 'Suspicious';
+      } else if (growthAnalysis && growthAnalysis.pattern === 'follower_cleanup') {
+        // Bonus for cleaning up fake followers
+        score = Math.min(score * 1.1, 8); // 10% bonus, capped at 8
+        interpretation = `✅ ${growthAnalysis.interpretation}`;
       }
     }
 
-    // Weighted average: engagement (40%) + ratio (30%) + growth (30%)
-    const authenticityPercentage = (
-      engagementScore * 0.4 +
-      ratioScore * 0.3 +
-      growthScore * 0.3
-    ) * 100;
-
-    const score = (authenticityPercentage / 100) * 8;
+    // Calculate days until next sync
+    const daysSinceLastSync = Math.floor(
+      (new Date().getTime() - new Date(latestSync.syncDate).getTime()) / (1000 * 60 * 60 * 24)
+    );
+    const daysUntilNextSync = Math.max(0, 30 - daysSinceLastSync);
 
     return {
       score: Number(score.toFixed(2)),
       maxPoints: 8,
       details: {
         authenticityPercentage: Number(authenticityPercentage.toFixed(2)),
-        method: 'Multi-signal authenticity analysis',
-        avgEngagement: Number(avgEngagement.toFixed(2)),
-        followerFollowingRatio: Number(ratio.toFixed(2)),
-        growthPattern: growthScore > 0.8 ? 'organic' : growthScore > 0.6 ? 'moderate' : 'suspicious',
-        signals: {
-          engagementScore: Number((engagementScore * 100).toFixed(1)),
-          ratioScore: Number((ratioScore * 100).toFixed(1)),
-          growthScore: Number((growthScore * 100).toFixed(1)),
-        },
+        method: 'Active Followers Analysis (30-day snapshots)',
+        totalFollowers,
+        activeFollowers,
+        peakOnlinePercentage: Number(authenticityPercentage.toFixed(2)),
+        rating,
+        interpretation,
+        syncCount: syncHistory.length,
+        latestSyncDate: latestSync.syncDate,
+        daysSinceLastSync,
+        daysUntilNextSync,
+        growthAnalysis,
+        suspiciousPatternDetected,
+        dataMaturity: syncHistory.length >= 3 ? 'mature' : syncHistory.length >= 2 ? 'developing' : 'initial',
+      },
+    };
+  }
+
+  /**
+   * Analyze active followers growth between syncs to detect suspicious patterns
+   */
+  private analyzeActiveFollowersGrowth(previousSync: any, currentSync: any, allSyncs: any[]): any {
+    const followerGrowth = currentSync.totalFollowers - previousSync.totalFollowers;
+    const followerGrowthPercent = previousSync.totalFollowers > 0
+      ? (followerGrowth / previousSync.totalFollowers) * 100
+      : 0;
+
+    const activeFollowersChange = currentSync.activeFollowersPercentage - previousSync.activeFollowersPercentage;
+
+    let pattern = 'normal';
+    let interpretation = '';
+    let severity = 'none';
+
+    // RED FLAG: Followers increased but active followers % dropped significantly
+    if (followerGrowth > 0 && activeFollowersChange < -5) {
+      pattern = 'bought_followers';
+      severity = 'high';
+      interpretation = `Suspicious: Gained ${followerGrowth} followers but active followers dropped from ${previousSync.activeFollowersPercentage}% to ${currentSync.activeFollowersPercentage}%. Likely bought fake followers.`;
+    }
+    // RED FLAG: Massive follower spike
+    else if (followerGrowthPercent > 100 && activeFollowersChange < 0) {
+      pattern = 'suspicious_spike';
+      severity = 'high';
+      interpretation = `Suspicious: Followers doubled (+${followerGrowthPercent.toFixed(1)}%) but engagement quality dropped. Indicates purchased followers.`;
+    }
+    // YELLOW FLAG: Large growth but active % stable or slight drop
+    else if (followerGrowthPercent > 50 && activeFollowersChange >= -2) {
+      pattern = 'rapid_growth';
+      severity = 'medium';
+      interpretation = `Rapid growth (+${followerGrowthPercent.toFixed(1)}%). Monitor for authenticity in next sync.`;
+    }
+    // GOOD: Followers dropped but active % increased (cleaning fake followers)
+    else if (followerGrowth < 0 && activeFollowersChange > 3) {
+      pattern = 'follower_cleanup';
+      severity = 'none';
+      interpretation = `Positive: Removed ${Math.abs(followerGrowth)} followers and active % improved from ${previousSync.activeFollowersPercentage}% to ${currentSync.activeFollowersPercentage}%. Cleaned up fake followers.`;
+    }
+    // GOOD: Organic growth
+    else if (followerGrowthPercent > 0 && followerGrowthPercent <= 50 && activeFollowersChange >= -1) {
+      pattern = 'organic_growth';
+      severity = 'none';
+      interpretation = `Healthy growth: +${followerGrowth} followers with stable active follower ratio.`;
+    }
+    // NEUTRAL: Stagnant
+    else if (Math.abs(followerGrowthPercent) < 5) {
+      pattern = 'stagnant';
+      severity = 'none';
+      interpretation = `Stable follower count with minimal change.`;
+    }
+
+    return {
+      pattern,
+      severity,
+      interpretation,
+      followerGrowth,
+      followerGrowthPercent: Number(followerGrowthPercent.toFixed(2)),
+      activeFollowersChange: Number(activeFollowersChange.toFixed(2)),
+      previousSync: {
+        totalFollowers: previousSync.totalFollowers,
+        activePercentage: previousSync.activeFollowersPercentage,
+        syncDate: previousSync.syncDate,
+      },
+      currentSync: {
+        totalFollowers: currentSync.totalFollowers,
+        activePercentage: currentSync.activeFollowersPercentage,
+        syncDate: currentSync.syncDate,
       },
     };
   }
@@ -294,40 +389,44 @@ export class InfluencerCredibilityScoringService {
   /**
    * 1.2 Engagement Ratio (7 points)
    * Formula: Engagement Score = min(Engagement Rate / Benchmark, 1) × 7
+   * Uses stored 30-day snapshots and includes saves in calculation
    */
   private async calculateEngagementRatio(influencer: Influencer): Promise<{ score: number; maxPoints: 7; details: any }> {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const recentInsights = await this.instagramMediaInsightModel.findAll({
-      where: {
-        influencerId: influencer.id,
-        fetchedAt: { [Op.gte]: thirtyDaysAgo },
-      },
-      order: [['fetchedAt', 'DESC']],
+    // Get latest sync snapshot
+    const latestSync = await this.instagramProfileAnalysisModel.findOne({
+      where: { influencerId: influencer.id },
+      order: [['syncDate', 'DESC']],
     });
 
-    if (recentInsights.length === 0 || !influencer.instagramFollowersCount) {
+    if (!latestSync || !latestSync.avgEngagementRate) {
       return {
         score: 0,
         maxPoints: 7,
-        details: { engagementRate: 0, benchmark: 3, timeWindow: 'Last 30 days' },
+        details: {
+          engagementRate: 0,
+          benchmark: 3,
+          totalPosts: 0,
+          timeWindow: 'Last 30 days',
+          message: 'No engagement data available. Please run a 30-day sync first.',
+        },
       };
     }
 
-    const avgEngagement = this.calculateAverageEngagement(recentInsights, influencer.instagramFollowersCount);
-    const benchmark = 3; // 3% is a good engagement rate benchmark
+    const engagementRate = latestSync.avgEngagementRate;
+    const benchmark = 3; // Fixed 3% benchmark
 
-    const score = Math.min(avgEngagement / benchmark, 1) * 7;
+    const score = Math.min(engagementRate / benchmark, 1) * 7;
 
     return {
       score: Number(score.toFixed(2)),
       maxPoints: 7,
       details: {
-        engagementRate: Number(avgEngagement.toFixed(2)),
+        engagementRate: Number(engagementRate.toFixed(2)),
         benchmark,
-        totalPosts: recentInsights.length,
+        totalPosts: latestSync.postsAnalyzed || 0,
         timeWindow: 'Last 30 days',
+        syncDate: latestSync.syncDate,
+        includesSaves: true, // Now includes saves in calculation
       },
     };
   }
@@ -335,45 +434,67 @@ export class InfluencerCredibilityScoringService {
   /**
    * 1.3 Follower Growth Trend (5 points)
    * Formula: Growth Score = clamp(Growth Rate / Expected Growth, 0, 1) × 5
+   * Uses 30-day snapshots from instagram_profile_analysis
+   * Gives full points if only 1 snapshot exists (first sync)
    */
   private async calculateFollowerGrowthTrend(influencer: Influencer): Promise<{ score: number; maxPoints: 5; details: any }> {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const growthData = await this.instagramProfileGrowthModel.findAll({
-      where: {
-        influencerId: influencer.id,
-        snapshotDate: { [Op.gte]: thirtyDaysAgo },
-      },
-      order: [['snapshotDate', 'ASC']],
+    // Get latest 2 snapshots (30 days apart)
+    const snapshots = await this.instagramProfileAnalysisModel.findAll({
+      where: { influencerId: influencer.id },
+      order: [['syncDate', 'DESC']],
+      limit: 2,
     });
 
-    if (growthData.length < 2) {
+    // If only 1 snapshot exists, give full points (first sync, calculate next month)
+    if (snapshots.length < 2) {
       return {
-        score: 0,
+        score: 5, // Full points temporarily
         maxPoints: 5,
-        details: { growthRate: 0, message: 'Insufficient growth data' },
+        details: {
+          growthRate: null,
+          benchmark: 2,
+          message: 'First sync completed. Growth trend will be calculated after next sync (30 days).',
+          nextCalculationDate: snapshots[0] ? new Date(new Date(snapshots[0].syncDate).getTime() + 30 * 24 * 60 * 60 * 1000) : null,
+        },
       };
     }
 
-    const oldestFollowers = growthData[0].followersCount || 0;
-    const latestFollowers = growthData[growthData.length - 1].followersCount || 0;
+    // Get follower counts from latest 2 snapshots
+    const latestSnapshot = snapshots[0]; // Most recent
+    const previousSnapshot = snapshots[1]; // 30 days ago
 
-    const growthRate = oldestFollowers > 0
-      ? ((latestFollowers - oldestFollowers) / oldestFollowers) * 100
-      : 0;
+    const latestFollowers = latestSnapshot.totalFollowers || influencer.instagramFollowersCount || 0;
+    const previousFollowers = previousSnapshot.totalFollowers || 0;
 
-    const expectedGrowth = 5; // 5% monthly growth is good
-    const score = Math.max(0, Math.min(growthRate / expectedGrowth, 1)) * 5;
+    if (previousFollowers === 0) {
+      return {
+        score: 5, // Give full points if no baseline
+        maxPoints: 5,
+        details: {
+          growthRate: null,
+          benchmark: 2,
+          message: 'Previous snapshot has no follower data. Will calculate on next sync.',
+        },
+      };
+    }
+
+    // Calculate growth rate (30-day period)
+    const growthRate = ((latestFollowers - previousFollowers) / previousFollowers) * 100;
+
+    const benchmark = 2; // 2% monthly growth benchmark
+    const score = Math.max(0, Math.min(growthRate / benchmark, 1)) * 5;
 
     return {
       score: Number(score.toFixed(2)),
       maxPoints: 5,
       details: {
         growthRate: Number(growthRate.toFixed(2)),
-        expectedGrowth,
-        followersStart: oldestFollowers,
+        benchmark,
+        followersStart: previousFollowers,
         followersEnd: latestFollowers,
+        timeWindow: '30 days',
+        latestSyncDate: latestSnapshot.syncDate,
+        previousSyncDate: previousSnapshot.syncDate,
       },
     };
   }
@@ -381,68 +502,77 @@ export class InfluencerCredibilityScoringService {
   /**
    * 1.4 Audience Geo Relevance (3 points)
    * Formula: Geo Score = (% Target Geography Audience) × 3
+   * Uses stored 30-day snapshot demographics
    */
   private async calculateAudienceGeoRelevance(influencer: Influencer): Promise<{ score: number; maxPoints: 3; details: any }> {
-    try {
-      const demographics = await this.instagramService.getAudienceDemographics(influencer.id, 'influencer');
+    // Get latest snapshot with demographic data
+    const latestSnapshot = await this.instagramProfileAnalysisModel.findOne({
+      where: { influencerId: influencer.id },
+      order: [['syncDate', 'DESC']],
+    });
 
-      const indiaAudience = demographics.countries.find((c: any) => c.code === 'IN');
-      const indiaPercentage = indiaAudience?.percentage || 0;
-
-      const score = (indiaPercentage / 100) * 3;
-
-      return {
-        score: Number(score.toFixed(2)),
-        maxPoints: 3,
-        details: {
-          targetCountry: 'India',
-          targetAudiencePercentage: indiaPercentage,
-          topCountries: demographics.countries.slice(0, 5),
-        },
-      };
-    } catch (error) {
+    if (!latestSnapshot || !latestSnapshot.audienceCountries || latestSnapshot.audienceCountries.length === 0) {
       return {
         score: 0,
         maxPoints: 3,
-        details: { error: 'Unable to fetch demographics' },
+        details: {
+          targetCountry: 'India',
+          targetAudiencePercentage: 0,
+          message: 'No demographic data available. Please run a 30-day sync first.',
+        },
       };
     }
+
+    // Find India audience percentage
+    const indiaAudience = latestSnapshot.audienceCountries.find((c: any) => c.location === 'IN');
+    const indiaPercentage = indiaAudience?.percentage || 0;
+
+    const score = (indiaPercentage / 100) * 3;
+
+    return {
+      score: Number(score.toFixed(2)),
+      maxPoints: 3,
+      details: {
+        targetCountry: 'India',
+        targetAudiencePercentage: indiaPercentage,
+        topCountries: latestSnapshot.audienceCountries.slice(0, 5),
+        syncDate: latestSnapshot.syncDate,
+        timeWindow: '30 days',
+      },
+    };
   }
 
   /**
    * 1.5 Demographic Stability (2 points)
    * Formula: Stability Score = (1 – Demographic Variance Index) × 2
-   * Measures volatility in age/gender mix over time
+   * Measures volatility in age/gender mix over time using 30-day snapshots
+   * Gives full points if only 1 snapshot exists (first sync)
    */
   private async calculateDemographicStability(influencer: Influencer): Promise<{ score: number; maxPoints: 2; details: any }> {
     try {
-      // Fetch historical demographic snapshots (last 30 days, need at least 2 snapshots)
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-      const allSnapshots = await this.instagramProfileAnalysisModel.findAll({
-        where: {
-          influencerId: influencer.id,
-          createdAt: { [Op.gte]: thirtyDaysAgo },
-        },
-        order: [['createdAt', 'ASC']],
-        limit: 10, // Last 10 snapshots max
+      // Get latest 5 snapshots (up to 5 months of 30-day data)
+      const snapshots = await this.instagramProfileAnalysisModel.findAll({
+        where: { influencerId: influencer.id },
+        order: [['syncDate', 'DESC']],
+        limit: 5,
       });
 
       // Filter to only include snapshots with demographic data
-      const historicalSnapshots = allSnapshots.filter(
+      const historicalSnapshots = snapshots.filter(
         snapshot => snapshot.audienceAgeGender && snapshot.audienceAgeGender.length > 0
       );
 
-      // Need at least 2 snapshots to calculate variance
+      // If only 1 snapshot, give full points (first sync, calculate next month)
       if (historicalSnapshots.length < 2) {
         return {
-          score: 1.5, // Default score when insufficient data
+          score: 2, // Full points temporarily
           maxPoints: 2,
           details: {
-            method: 'Insufficient historical data (need at least 2 snapshots)',
+            message: 'First sync completed. Demographic stability will be calculated after next sync (30 days).',
             snapshotsFound: historicalSnapshots.length,
-            variance: 0.25,
+            nextCalculationDate: historicalSnapshots[0]?.syncDate
+              ? new Date(new Date(historicalSnapshots[0].syncDate).getTime() + 30 * 24 * 60 * 60 * 1000)
+              : null,
           },
         };
       }
@@ -465,7 +595,7 @@ export class InfluencerCredibilityScoringService {
       // Calculate variance for each demographic segment
       const varianceScores: number[] = [];
 
-      for (const [segmentKey, percentages] of Object.entries(segmentVariances)) {
+      for (const percentages of Object.values(segmentVariances)) {
         if (percentages.length < 2) continue; // Need at least 2 data points
 
         // Calculate standard deviation
@@ -495,11 +625,12 @@ export class InfluencerCredibilityScoringService {
         score: Number(stabilityScore.toFixed(2)),
         maxPoints: 2,
         details: {
-          method: 'Calculated from historical demographic variance',
           snapshotsAnalyzed: historicalSnapshots.length,
           segmentsTracked: Object.keys(segmentVariances).length,
           varianceIndex: Number(varianceIndex.toFixed(4)),
-          formula: 'Stability Score = (1 – Demographic Variance Index) × 2',
+          timeWindow: `${historicalSnapshots.length} 30-day snapshots`,
+          latestSyncDate: historicalSnapshots[0]?.syncDate,
+          oldestSyncDate: historicalSnapshots[historicalSnapshots.length - 1]?.syncDate,
         },
       };
     } catch (error) {
@@ -508,8 +639,7 @@ export class InfluencerCredibilityScoringService {
         score: 1.5,
         maxPoints: 2,
         details: {
-          method: 'Error calculating variance, using default',
-          error: error.message,
+          error: 'Error calculating variance, using default',
           variance: 0.25,
         },
       };
@@ -558,77 +688,83 @@ export class InfluencerCredibilityScoringService {
   /**
    * 2.1 Reach-to-Follower Ratio (8 points)
    * Formula: Virality Ratio = Avg Reach / Followers, Score = min(Ratio / 1.0, 1) × 8
+   * Uses stored 30-day snapshot data
    */
   private async calculateReachToFollowerRatio(influencer: Influencer): Promise<{ score: number; maxPoints: 8; details: any }> {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const recentInsights = await this.instagramMediaInsightModel.findAll({
-      where: {
-        influencerId: influencer.id,
-        fetchedAt: { [Op.gte]: thirtyDaysAgo },
-      },
-      order: [['fetchedAt', 'DESC']],
+    // Get latest snapshot with reach data
+    const latestSnapshot = await this.instagramProfileAnalysisModel.findOne({
+      where: { influencerId: influencer.id },
+      order: [['syncDate', 'DESC']],
     });
 
-    if (recentInsights.length === 0 || !influencer.instagramFollowersCount) {
+    if (!latestSnapshot || !latestSnapshot.avgReach || !latestSnapshot.totalFollowers) {
       return {
         score: 0,
         maxPoints: 8,
-        details: { viralityRatio: 0, timeWindow: 'Last 30 days' },
+        details: {
+          viralityRatio: 0,
+          message: 'No reach data available. Please run a 30-day sync first.',
+        },
       };
     }
 
-    const totalReach = recentInsights.reduce((sum, insight) => sum + (insight.reach || 0), 0);
-    const avgReach = totalReach / recentInsights.length;
-    const viralityRatio = avgReach / influencer.instagramFollowersCount;
+    const avgReach = latestSnapshot.avgReach;
+    const followers = latestSnapshot.totalFollowers;
+    const viralityRatio = avgReach / followers;
 
-    const score = Math.min(viralityRatio / 1.0, 1) * 8;
+    const benchmark = 1.0; // 100% reach-to-follower ratio benchmark
+    const score = Math.min(viralityRatio / benchmark, 1) * 8;
 
     return {
       score: Number(score.toFixed(2)),
       maxPoints: 8,
       details: {
-        viralityRatio: Number(viralityRatio.toFixed(2)),
-        avgReach: Math.round(avgReach),
-        followers: influencer.instagramFollowersCount,
-        postsAnalyzed: recentInsights.length,
-        timeWindow: 'Last 30 days',
+        viralityRatio: Number(viralityRatio.toFixed(4)),
+        avgReach,
+        followers,
+        benchmark,
+        postsAnalyzed: latestSnapshot.postsAnalyzed || 0,
+        timeWindow: '30 days',
+        syncDate: latestSnapshot.syncDate,
       },
     };
   }
 
   /**
    * 2.2 Saves & Shares Impact (7 points)
-   * Formula: Save+Share Rate = (Avg Saves + Shares) / Reach, Score = min(Rate / Benchmark, 1) × 7
+   * Formula: Save+Share Rate = ((Avg Saves + Avg Shares) / Avg Reach) × 100, Score = min(Rate / Benchmark, 1) × 7
+   * Uses stored 30-day snapshot data
    */
   private async calculateSaveShareImpact(influencer: Influencer): Promise<{ score: number; maxPoints: 7; details: any }> {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const recentInsights = await this.instagramMediaInsightModel.findAll({
-      where: {
-        influencerId: influencer.id,
-        fetchedAt: { [Op.gte]: thirtyDaysAgo },
-      },
-      order: [['fetchedAt', 'DESC']],
+    // Get latest snapshot with saves/shares data
+    const latestSnapshot = await this.instagramProfileAnalysisModel.findOne({
+      where: { influencerId: influencer.id },
+      order: [['syncDate', 'DESC']],
     });
 
-    if (recentInsights.length === 0) {
+    if (!latestSnapshot || !latestSnapshot.avgReach || !latestSnapshot.postsAnalyzed) {
       return {
         score: 0,
         maxPoints: 7,
-        details: { saveShareRate: 0, timeWindow: 'Last 30 days' },
+        details: {
+          saveShareRate: 0,
+          message: 'No saves/shares data available. Please run a 30-day sync first.',
+        },
       };
     }
 
-    const totalSaves = recentInsights.reduce((sum, insight) => sum + (insight.saved || 0), 0);
-    const totalShares = recentInsights.reduce((sum, insight) => sum + (insight.shares || 0), 0);
-    const totalReach = recentInsights.reduce((sum, insight) => sum + (insight.reach || 1), 0);
+    const totalSaves = latestSnapshot.totalSaves || 0;
+    const totalShares = latestSnapshot.totalShares || 0;
+    const avgReach = latestSnapshot.avgReach;
+    const postsAnalyzed = latestSnapshot.postsAnalyzed;
 
-    const saveShareRate = ((totalSaves + totalShares) / totalReach) * 100;
+    const avgSaves = postsAnalyzed > 0 ? totalSaves / postsAnalyzed : 0;
+    const avgShares = postsAnalyzed > 0 ? totalShares / postsAnalyzed : 0;
+
+    // Calculate save+share rate: (avg saves + avg shares) / avg reach × 100
+    const saveShareRate = ((avgSaves + avgShares) / avgReach) * 100;
+
     const benchmark = 5; // 5% save+share rate is good
-
     const score = Math.min(saveShareRate / benchmark, 1) * 7;
 
     return {
@@ -637,42 +773,44 @@ export class InfluencerCredibilityScoringService {
       details: {
         saveShareRate: Number(saveShareRate.toFixed(2)),
         benchmark,
-        avgSaves: Math.round(totalSaves / recentInsights.length),
-        avgShares: Math.round(totalShares / recentInsights.length),
-        postsAnalyzed: recentInsights.length,
-        timeWindow: 'Last 30 days',
+        avgSaves: Number(avgSaves.toFixed(2)),
+        avgShares: Number(avgShares.toFixed(2)),
+        avgReach,
+        postsAnalyzed,
+        timeWindow: '30 days',
+        syncDate: latestSnapshot.syncDate,
       },
     };
   }
 
   /**
    * 2.3 Retention Proxy (5 points)
-   * TEMPORARY: Full points awarded to all influencers
-   * TODO: Implement proper retention tracking when video insights are available
+   * Measures video retention rate (average watch time)
+   * Currently gives full points - will be implemented when video insights are available
    */
   private async calculateRetentionProxy(_influencer: Influencer): Promise<{ score: number; maxPoints: 5; details: any }> {
     return {
       score: 5.0,
       maxPoints: 5,
       details: {
-        method: 'Default full score - retention tracking not yet implemented',
-        note: 'All influencers receive full 5 points until video play metrics are properly tracked',
+        message: 'Full points awarded. Video retention tracking will be implemented when Instagram video insights become available.',
+        note: 'Requires video play metrics (average watch time, completion rate)',
       },
     };
   }
 
   /**
    * 2.4 Story Engagement (3 points)
-   * TEMPORARY: Full points awarded to all influencers
-   * TODO: Implement proper story insights tracking when Facebook Page connection is available
+   * Measures Instagram Story engagement (views, replies, shares)
+   * Currently gives full points - will be implemented when story insights are available
    */
   private async calculateStoryEngagement(_influencer: Influencer): Promise<{ score: number; maxPoints: 3; details: any }> {
     return {
       score: 3.0,
       maxPoints: 3,
       details: {
-        method: 'Default full score - story insights not yet available',
-        note: 'All influencers receive full 3 points until Instagram Story insights are properly tracked',
+        message: 'Full points awarded. Story engagement tracking will be implemented when Instagram Story insights become available.',
+        note: 'Requires story-specific metrics (views, taps forward/back, replies, shares)',
       },
     };
   }
@@ -681,24 +819,32 @@ export class InfluencerCredibilityScoringService {
    * 2.5 Performance Consistency (2 points)
    * Formula: Consistency Score = 1 / (1 + CV) × 2
    * CV (Coefficient of Variation) = Std Dev / Avg Reach
+   * Uses 30-day window aligned with snapshot system
    */
   private async calculatePerformanceConsistency(influencer: Influencer): Promise<{ score: number; maxPoints: 2; details: any }> {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     const recentInsights = await this.instagramMediaInsightModel.findAll({
-      where: {
-        influencerId: influencer.id,
-        fetchedAt: { [Op.gte]: thirtyDaysAgo },
-      },
-      order: [['fetchedAt', 'DESC']],
+      where: { influencerId: influencer.id },
+      include: [{
+        model: this.instagramMediaModel,
+        required: true,
+        where: {
+          timestamp: { [Op.gte]: thirtyDaysAgo },
+        },
+      }],
+      order: [['instagramMedia', 'timestamp', 'DESC']],
     });
 
     if (recentInsights.length < 5) {
       return {
-        score: 0,
+        score: 0, // 0 points if insufficient data
         maxPoints: 2,
-        details: { message: 'Insufficient data for consistency calculation (need at least 5 posts in last 30 days)' },
+        details: {
+          message: 'Insufficient posts for consistency calculation. Need at least 5 posts in last 30 days.',
+          postsFound: recentInsights.length,
+        },
       };
     }
 
@@ -710,7 +856,7 @@ export class InfluencerCredibilityScoringService {
     // Calculate Coefficient of Variation (CV)
     const cv = avgReach > 0 ? stdDev / avgReach : 0;
 
-    // Apply corrected formula: Consistency Score = 1 / (1 + CV)
+    // Apply formula: Consistency Score = 1 / (1 + CV) × 2
     const consistencyScore = 1 / (1 + cv);
     const score = consistencyScore * 2;
 
@@ -723,7 +869,7 @@ export class InfluencerCredibilityScoringService {
         avgReach: Math.round(avgReach),
         stdDev: Math.round(stdDev),
         postsAnalyzed: reaches.length,
-        timeWindow: 'Last 30 days',
+        timeWindow: '30 days',
         formula: 'Consistency Score = 1 / (1 + CV) × 2',
       },
     };
@@ -770,29 +916,52 @@ export class InfluencerCredibilityScoringService {
 
   /**
    * 3.1 Posting Consistency (6 points)
-   * Formula: Posting Score = min(Actual Posts / Ideal Posts, 1) × 6
+   * Formula: Posting Score = min(Actual Frequency / Ideal Frequency, 1) × 6
+   * Ideal = 4 posts/week = 0.571 posts/day
+   * Uses 30-day window aligned with snapshot system
    */
   private async calculatePostingConsistency(influencer: Influencer): Promise<{ score: number; maxPoints: 6; details: any }> {
+    // Step 1: Count posts in last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const recentPosts = await this.instagramMediaInsightModel.count({
+    const recentPosts = await this.instagramMediaModel.count({
       where: {
         influencerId: influencer.id,
-        fetchedAt: { [Op.gte]: thirtyDaysAgo },
+        timestamp: { [Op.gte]: thirtyDaysAgo },
       },
     });
 
-    const idealPosts = 12; // 3-4 posts per week
-    const score = Math.min(recentPosts / idealPosts, 1) * 6;
+    // Step 2: Days in period
+    const daysInPeriod = 30;
+
+    // Step 3: Calculate actual posting frequency (posts per day)
+    const actualFrequency = recentPosts / daysInPeriod;
+
+    // Step 4: Ideal frequency = 4 posts/week = 4/7 posts/day
+    const idealFrequency = 4 / 7; // 0.571 posts/day
+
+    // Step 5: Calculate ratio
+    const ratio = actualFrequency / idealFrequency;
+
+    // Step 6: Cap at 1
+    const cappedRatio = Math.min(ratio, 1);
+
+    // Step 7: Multiply by 6 points
+    const score = cappedRatio * 6;
 
     return {
       score: Number(score.toFixed(2)),
       maxPoints: 6,
       details: {
         actualPosts: recentPosts,
-        idealPosts,
-        period: '30 days',
+        daysInPeriod,
+        actualFrequency: Number(actualFrequency.toFixed(3)),
+        idealFrequency: Number(idealFrequency.toFixed(3)),
+        ratio: Number(ratio.toFixed(3)),
+        timeWindow: '30 days',
+        formula: 'Score = min(Actual Frequency / Ideal Frequency, 1) × 6',
+        note: 'Ideal = 4 posts/week = 0.571 posts/day',
       },
     };
   }
@@ -845,64 +1014,28 @@ export class InfluencerCredibilityScoringService {
   /**
    * 3.3 Income Consistency (4 points)
    * Formula: Income Score = (1 – Income Variance) × 4
-   * Using campaign completion rate + posting consistency as proxy
+   * Measures month-to-month consistency of campaign earnings on CollabKaroo platform
+   * Currently gives full points until payment tracking is implemented
    */
-  private async calculateIncomeConsistency(influencer: Influencer): Promise<{ score: number; maxPoints: 4; details: any }> {
-    // Proxy approach: High campaign completion + consistent posting = consistent income
+  private async calculateIncomeConsistency(_influencer: Influencer): Promise<{ score: number; maxPoints: 4; details: any }> {
+    // TODO: Implement actual earnings tracking
+    // This metric should measure consistency of influencer earnings on the platform
+    // Calculate coefficient of variation of monthly earnings over 6-month period
+    // Lower variance = higher consistency = better score
 
-    // Get campaign completion rate
-    const selectedApplications = await this.campaignApplicationModel.count({
-      where: {
-        influencerId: influencer.id,
-        status: 'selected',
-      },
-    });
-
-    const withdrawnApplications = await this.campaignApplicationModel.count({
-      where: {
-        influencerId: influencer.id,
-        status: 'withdrawn',
-      },
-    });
-
-    let campaignCompletionRate = 1; // Default 100%
-    const totalCampaigns = selectedApplications + withdrawnApplications;
-    if (totalCampaigns > 0) {
-      campaignCompletionRate = selectedApplications / totalCampaigns;
-    }
-
-    // Get posting consistency (from last 30 days)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const recentPosts = await this.instagramMediaInsightModel.count({
-      where: {
-        influencerId: influencer.id,
-        fetchedAt: { [Op.gte]: thirtyDaysAgo },
-      },
-    });
-
-    const idealPosts = 12; // 3-4 posts per week
-    const postingConsistencyRate = Math.min(recentPosts / idealPosts, 1);
-
-    // Income consistency = 70% campaign completion + 30% posting consistency
-    // Consistent campaigns + consistent output = consistent income
-    const consistencyScore = campaignCompletionRate * 0.7 + postingConsistencyRate * 0.3;
-    const score = consistencyScore * 4;
-
+    // For now, give full points to all users until payment tracking is implemented
     return {
-      score: Number(score.toFixed(2)),
+      score: 4.0,
       maxPoints: 4,
       details: {
-        method: 'Campaign completion + posting consistency proxy',
-        campaignCompletionRate: Number((campaignCompletionRate * 100).toFixed(2)),
-        postingConsistencyRate: Number((postingConsistencyRate * 100).toFixed(2)),
-        totalCampaigns,
-        selectedCampaigns: selectedApplications,
-        withdrawnCampaigns: withdrawnApplications,
-        recentPosts,
-        formula: 'Income Consistency ≈ (Campaign Completion × 0.7) + (Posting Consistency × 0.3)',
-        note: 'Using proxy until earnings tracking is implemented',
+        message: 'Full points awarded. Income consistency will be calculated after implementing platform payment tracking.',
+        note: 'This metric should track month-to-month variance in campaign earnings on CollabKaroo platform',
+        futureImplementation: {
+          dataSource: 'Platform campaign payments to influencers',
+          formula: 'Income Score = (1 – Income Variance) × 4',
+          calculationMethod: 'Calculate coefficient of variation (CV) of monthly earnings over 6-month rolling window',
+          example: 'CV = Standard Deviation / Mean Monthly Earnings',
+        },
       },
     };
   }
@@ -910,61 +1043,28 @@ export class InfluencerCredibilityScoringService {
   /**
    * 3.4 Responsiveness (2 points)
    * Formula: Response Time Score = (1 – Avg Response Time / Max Acceptable Time) × 2
-   * Using last login activity + posting frequency as proxy
+   * Measures how quickly influencer responds to brand messages on CollabKaroo platform
+   * Currently gives full points until message response tracking is implemented
    */
-  private async calculateResponsiveness(influencer: Influencer): Promise<{ score: number; maxPoints: 2; details: any }> {
-    // Proxy approach: Recent activity = likely responsive
+  private async calculateResponsiveness(_influencer: Influencer): Promise<{ score: number; maxPoints: 2; details: any }> {
+    // TODO: Implement actual message response time tracking
+    // This metric should measure how quickly influencers respond to brand messages on platform
+    // Calculate average response time for brand inquiries and campaign communications
+    // Faster response = higher score
 
-    const now = Date.now();
-    const lastLogin = influencer.updatedAt.getTime();
-    const daysSinceLogin = Math.floor((now - lastLogin) / (1000 * 60 * 60 * 24));
-
-    // Score based on last login
-    let loginScore = 0;
-    if (daysSinceLogin < 3) loginScore = 1.0; // Very active
-    else if (daysSinceLogin < 7) loginScore = 0.85; // Active
-    else if (daysSinceLogin < 14) loginScore = 0.65; // Moderately active
-    else if (daysSinceLogin < 30) loginScore = 0.45; // Less active
-    else loginScore = 0.25; // Inactive
-
-    // Check posting frequency (recent activity indicator)
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-    const recentPosts = await this.instagramMediaInsightModel.count({
-      where: {
-        influencerId: influencer.id,
-        fetchedAt: { [Op.gte]: sevenDaysAgo },
-      },
-    });
-
-    let postingScore = 0;
-    if (recentPosts >= 3) postingScore = 1.0; // Very active poster
-    else if (recentPosts >= 2) postingScore = 0.8; // Active poster
-    else if (recentPosts >= 1) postingScore = 0.6; // Moderate poster
-    else postingScore = 0.4; // Less active
-
-    // Responsiveness = 60% login activity + 40% posting activity
-    const responsivenessScore = loginScore * 0.6 + postingScore * 0.4;
-    const score = responsivenessScore * 2;
-
-    let activityLevel = 'inactive';
-    if (responsivenessScore > 0.8) activityLevel = 'very active';
-    else if (responsivenessScore > 0.6) activityLevel = 'active';
-    else if (responsivenessScore > 0.4) activityLevel = 'moderate';
-
+    // For now, give full points to all users until message tracking is implemented
     return {
-      score: Number(score.toFixed(2)),
+      score: 2.0,
       maxPoints: 2,
       details: {
-        method: 'Last login + posting activity proxy',
-        daysSinceLogin,
-        recentPosts: recentPosts,
-        activityLevel,
-        loginScore: Number((loginScore * 100).toFixed(1)),
-        postingScore: Number((postingScore * 100).toFixed(1)),
-        formula: 'Responsiveness ≈ (Login Activity × 0.6) + (Posting Activity × 0.4)',
-        note: 'Using proxy until message tracking is implemented',
+        message: 'Full points awarded. Responsiveness will be calculated after implementing platform message tracking.',
+        note: 'This metric should track response time to brand messages and campaign communications on CollabKaroo platform',
+        futureImplementation: {
+          dataSource: 'Platform message/chat response times between influencers and brands',
+          formula: 'Response Time Score = (1 – Avg Response Time / Max Acceptable Time) × 2',
+          calculationMethod: 'Track time between brand message sent and influencer first response',
+          example: 'Max acceptable time: 24 hours. Response in <6 hours = full points, 24+ hours = 0 points',
+        },
       },
     };
   }
@@ -972,20 +1072,17 @@ export class InfluencerCredibilityScoringService {
   /**
    * 3.5 Inactivity Penalty (2 points)
    * Formula: Inactivity Score = max(0, 1 – Inactive Days / Threshold) × 2
+   * Benchmark: 30 days
+   * Currently gives full points - will be implemented with proper activity tracking
    */
-  private async calculateInactivityPenalty(influencer: Influencer): Promise<{ score: number; maxPoints: 2; details: any }> {
-    const lastLogin = influencer.updatedAt; // Using updatedAt as proxy
-    const daysSinceLogin = Math.floor((Date.now() - lastLogin.getTime()) / (1000 * 60 * 60 * 24));
-
-    const threshold = 30; // 30 days threshold
-    const score = Math.max(0, 1 - (daysSinceLogin / threshold)) * 2;
-
+  private async calculateInactivityPenalty(_influencer: Influencer): Promise<{ score: number; maxPoints: 2; details: any }> {
     return {
-      score: Number(score.toFixed(2)),
+      score: 2.0,
       maxPoints: 2,
       details: {
-        daysSinceLogin,
-        threshold,
+        message: 'Full points awarded. Inactivity tracking will be implemented with daily app activity logging.',
+        note: 'Requires tracking unique active days in 30-day rolling window',
+        futureFormula: 'Inactivity Score = max(0, 1 – Inactive Days / 30) × 2',
       },
     };
   }
@@ -1705,30 +1802,6 @@ export class InfluencerCredibilityScoringService {
     };
   }
 
-  /**
-   * Helper: Get recent media insights
-   */
-  private async getRecentMediaInsights(influencerId: number, limit: number): Promise<InstagramMediaInsight[]> {
-    return await this.instagramMediaInsightModel.findAll({
-      where: { influencerId },
-      order: [['fetchedAt', 'DESC']],
-      limit,
-    });
-  }
-
-  /**
-   * Helper: Calculate average engagement rate
-   */
-  private calculateAverageEngagement(insights: InstagramMediaInsight[], followers: number): number {
-    if (insights.length === 0 || followers === 0) return 0;
-
-    const totalEngagement = insights.reduce((sum, insight) => {
-      return sum + (insight.likes || 0) + (insight.comments || 0) + (insight.shares || 0);
-    }, 0);
-
-    const avgEngagement = totalEngagement / insights.length;
-    return (avgEngagement / followers) * 100;
-  }
 
   /**
    * Helper: Get recent media with captions and URLs for AI analysis
@@ -1749,7 +1822,7 @@ export class InfluencerCredibilityScoringService {
   }
 
   /**
-   * Get aggregate analytics for influencer (last 30 days with growth comparison)
+   * Get aggregate analytics for influencer (all-time totals with 90-day growth comparison)
    */
   async getAggregateAnalytics(influencerId: number) {
     const influencer = await this.influencerModel.findByPk(influencerId);
@@ -1757,31 +1830,52 @@ export class InfluencerCredibilityScoringService {
       throw new NotFoundException(`Influencer with ID ${influencerId} not found`);
     }
 
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const sixtyDaysAgo = new Date();
-    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    const oneEightyDaysAgo = new Date();
+    oneEightyDaysAgo.setDate(oneEightyDaysAgo.getDate() - 180);
 
-    // Get insights for current period (last 30 days)
+    // Get ALL insights for account (all-time totals)
+    const allInsights = await this.instagramMediaInsightModel.findAll({
+      where: { influencerId },
+    });
+
+    // Get insights for last 90 days (for growth comparison)
     const currentInsights = await this.instagramMediaInsightModel.findAll({
-      where: {
-        influencerId,
-        fetchedAt: { [Op.gte]: thirtyDaysAgo },
-      },
-    });
-
-    // Get insights for previous period (31-60 days ago)
-    const previousInsights = await this.instagramMediaInsightModel.findAll({
-      where: {
-        influencerId,
-        fetchedAt: {
-          [Op.gte]: sixtyDaysAgo,
-          [Op.lt]: thirtyDaysAgo,
+      where: { influencerId },
+      include: [{
+        model: this.instagramMediaModel,
+        required: true,
+        where: {
+          timestamp: { [Op.gte]: ninetyDaysAgo },
         },
-      },
+      }],
     });
 
-    // Calculate current period totals
+    // Get insights for previous period (91-180 days ago) for growth comparison
+    const previousInsights = await this.instagramMediaInsightModel.findAll({
+      where: { influencerId },
+      include: [{
+        model: this.instagramMediaModel,
+        required: true,
+        where: {
+          timestamp: {
+            [Op.gte]: oneEightyDaysAgo,
+            [Op.lt]: ninetyDaysAgo,
+          },
+        },
+      }],
+    });
+
+    // Calculate ALL-TIME totals
+    const totalPosts = allInsights.length;
+    const totalReach = allInsights.reduce((sum, insight) => sum + (insight.reach || 0), 0);
+    const totalLikes = allInsights.reduce((sum, insight) => sum + (insight.likes || 0), 0);
+    const totalShares = allInsights.reduce((sum, insight) => sum + (insight.shares || 0), 0);
+    const totalSaves = allInsights.reduce((sum, insight) => sum + (insight.saved || 0), 0);
+    const totalComments = allInsights.reduce((sum, insight) => sum + (insight.comments || 0), 0);
+
+    // Calculate last 90 days totals
     const currentTotalPosts = currentInsights.length;
     const currentTotalReach = currentInsights.reduce((sum, insight) => sum + (insight.reach || 0), 0);
     const currentTotalLikes = currentInsights.reduce((sum, insight) => sum + (insight.likes || 0), 0);
@@ -1797,11 +1891,11 @@ export class InfluencerCredibilityScoringService {
     const previousTotalSaves = previousInsights.reduce((sum, insight) => sum + (insight.saved || 0), 0);
     const previousTotalComments = previousInsights.reduce((sum, insight) => sum + (insight.comments || 0), 0);
 
-    // Get follower growth (compare with 30 days ago snapshot)
+    // Get follower growth (compare with 90 days ago snapshot)
     const growthSnapshot = await this.instagramProfileGrowthModel.findOne({
       where: {
         influencerId,
-        snapshotDate: { [Op.gte]: thirtyDaysAgo },
+        snapshotDate: { [Op.gte]: ninetyDaysAgo },
       },
       order: [['snapshotDate', 'ASC']],
     });
@@ -1814,50 +1908,57 @@ export class InfluencerCredibilityScoringService {
       : 0;
 
     return {
-      timeWindow: 'Last 30 days',
       profile: {
         followers: {
-          current: influencer.instagramFollowersCount || 0,
+          total: influencer.instagramFollowersCount || 0,
           growth: followersGrowth,
         },
         following: {
-          current: influencer.instagramFollowsCount || 0,
+          total: influencer.instagramFollowsCount || 0,
           growth: followingGrowth,
         },
         posts: {
-          current: currentTotalPosts,
-          growth: currentTotalPosts - previousTotalPosts,
+          total: totalPosts, // All-time total posts
+          growth: currentTotalPosts - previousTotalPosts, // Growth in last 90 days
         },
         username: influencer.instagramUsername || '',
       },
       engagement: {
         views: {
-          current: currentTotalReach,
-          growth: currentTotalReach - previousTotalReach,
+          total: totalReach, // All-time total
+          growth: currentTotalReach - previousTotalReach, // Last 90 days growth
         },
         likes: {
-          current: currentTotalLikes,
-          growth: currentTotalLikes - previousTotalLikes,
+          total: totalLikes, // All-time total
+          growth: currentTotalLikes - previousTotalLikes, // Last 90 days growth
         },
         shares: {
-          current: currentTotalShares,
-          growth: currentTotalShares - previousTotalShares,
+          total: totalShares, // All-time total
+          growth: currentTotalShares - previousTotalShares, // Last 90 days growth
         },
         saves: {
-          current: currentTotalSaves,
-          growth: currentTotalSaves - previousTotalSaves,
+          total: totalSaves, // All-time total
+          growth: currentTotalSaves - previousTotalSaves, // Last 90 days growth
         },
         comments: {
-          current: currentTotalComments,
-          growth: currentTotalComments - previousTotalComments,
+          total: totalComments, // All-time total
+          growth: currentTotalComments - previousTotalComments, // Last 90 days growth
         },
       },
-      averages: {
-        avgReach: currentTotalPosts > 0 ? Math.round(currentTotalReach / currentTotalPosts) : 0,
-        avgLikes: currentTotalPosts > 0 ? Math.round(currentTotalLikes / currentTotalPosts) : 0,
-        avgComments: currentTotalPosts > 0 ? Math.round(currentTotalComments / currentTotalPosts) : 0,
-        avgShares: currentTotalPosts > 0 ? Math.round(currentTotalShares / currentTotalPosts) : 0,
-        avgSaves: currentTotalPosts > 0 ? Math.round(currentTotalSaves / currentTotalPosts) : 0,
+      last90Days: {
+        posts: currentTotalPosts,
+        views: currentTotalReach,
+        likes: currentTotalLikes,
+        shares: currentTotalShares,
+        saves: currentTotalSaves,
+        comments: currentTotalComments,
+        averages: {
+          avgReach: currentTotalPosts > 0 ? Math.round(currentTotalReach / currentTotalPosts) : 0,
+          avgLikes: currentTotalPosts > 0 ? Math.round(currentTotalLikes / currentTotalPosts) : 0,
+          avgComments: currentTotalPosts > 0 ? Math.round(currentTotalComments / currentTotalPosts) : 0,
+          avgShares: currentTotalPosts > 0 ? Math.round(currentTotalShares / currentTotalPosts) : 0,
+          avgSaves: currentTotalPosts > 0 ? Math.round(currentTotalSaves / currentTotalPosts) : 0,
+        },
       },
     };
   }

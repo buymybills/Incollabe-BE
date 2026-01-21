@@ -68,9 +68,15 @@ export interface InstagramProfileAnalysisCreationAttributes {
   brandId?: number;
   instagramUserId: string;
   instagramUsername?: string;
+  syncNumber?: number;
+  syncDate?: Date;
   postsAnalyzed?: number;
   analysisPeriodStart?: Date;
   analysisPeriodEnd?: Date;
+  totalFollowers?: number;
+  activeFollowers?: number;
+  activeFollowersPercentage?: number;
+  onlineFollowersHourlyData?: any;
   topNiches?: NichePerformance[];
   nichePerformance?: NichePerformance[];
   contentStyles?: any;
@@ -139,6 +145,18 @@ export class InstagramProfileAnalysis extends Model<InstagramProfileAnalysis, In
 
   @Column({
     type: DataType.INTEGER,
+    allowNull: true,
+  })
+  declare syncNumber: number;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare syncDate: Date;
+
+  @Column({
+    type: DataType.INTEGER,
     defaultValue: 0,
   })
   declare postsAnalyzed: number;
@@ -154,6 +172,30 @@ export class InstagramProfileAnalysis extends Model<InstagramProfileAnalysis, In
     allowNull: true,
   })
   declare analysisPeriodEnd: Date;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  declare totalFollowers: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  declare activeFollowers: number;
+
+  @Column({
+    type: DataType.DECIMAL(5, 2),
+    allowNull: true,
+  })
+  declare activeFollowersPercentage: number;
+
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  declare onlineFollowersHourlyData: any;
 
   @Column({
     type: DataType.JSONB,

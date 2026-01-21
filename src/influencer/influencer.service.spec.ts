@@ -335,6 +335,15 @@ describe('InfluencerService', () => {
           },
         },
         {
+          provide: 'INSTAGRAM_PROFILE_ANALYSIS_MODEL',
+          useValue: {
+            findOne: jest.fn().mockResolvedValue(null),
+            findAll: jest.fn().mockResolvedValue([]),
+            create: jest.fn(),
+            update: jest.fn(),
+          },
+        },
+        {
           provide: AppReviewService,
           useValue: mockAppReviewService,
         },
