@@ -1087,33 +1087,31 @@ export class InfluencerProfileScoringService {
   async calculateGrowthMomentum(influencer: Influencer): Promise<GrowthMomentumScore> {
     const [
       growthTrend,
-      peakFollowerGain,
       postingBehaviour,
     ] = await Promise.all([
       this.calculateGrowthTrend(influencer),
-      this.calculatePeakFollowerGain(influencer),
       this.calculatePostingBehaviour(influencer),
     ]);
 
     const score =
-      (growthTrend.score * 0.50) +
-      (peakFollowerGain.score * 0.30) +
-      (postingBehaviour.score * 0.20);
+      (growthTrend.score * 0.60) +
+      (postingBehaviour.score * 0.40);
 
     return {
       score: Number(score.toFixed(2)),
       maxScore: 10,
       breakdown: {
-        growthTrend: { score: growthTrend.score, weight: 50, details: growthTrend.details },
-        peakFollowerGain: { score: peakFollowerGain.score, weight: 30, details: peakFollowerGain.details },
-        postingBehaviour: { score: postingBehaviour.score, weight: 20, details: postingBehaviour.details },
+        growthTrend: { score: growthTrend.score, weight: 60, details: growthTrend.details },
+        postingBehaviour: { score: postingBehaviour.score, weight: 40, details: postingBehaviour.details },
       },
     };
   }
 
   /**
-   * 5.1 Growth Trend (50%)
-   * 30-day follower growth rate
+   * 5.1 Growth Trend (60%)
+   * 30-day follower growth rate with tiered scoring
+   * >30%: 10/10 | 25-30%: 8.33/10 | 20-25%: 6.67/10 | 15-20%: 5.83/10
+   * 10-15%: 5/10 | 5-10%: 4.17/10 | 0-5%: 3.33/10 | negative: 0/10
    */
   private async calculateGrowthTrend(influencer: Influencer): Promise<{ score: number; details: any }> {
     const snapshots = await this.instagramProfileAnalysisModel.findAll({
@@ -1124,7 +1122,7 @@ export class InfluencerProfileScoringService {
 
     if (snapshots.length < 2) {
       return {
-        score: 10, // Full points for new accounts
+        score: 5.0, // Mid-range for new accounts (cannot determine growth yet)
         details: { message: 'First sync. Growth will be calculated after next sync.' },
       };
     }
@@ -1133,74 +1131,53 @@ export class InfluencerProfileScoringService {
     const previousFollowers = snapshots[1].totalFollowers || 0;
 
     if (previousFollowers === 0) {
-      return { score: 10, details: { message: 'No baseline data' } };
+      return { score: 5.0, details: { message: 'No baseline data' } };
     }
 
     const growthRate = ((latestFollowers - previousFollowers) / previousFollowers) * 100;
-    const benchmark = 2; // 2% monthly growth is good
 
-    // Convert to 0-10 scale (2% or higher = 10/10)
-    const score = Math.max(0, Math.min((growthRate / benchmark) * 10, 10));
+    // Tiered scoring based on growth rate
+    let score = 0;
+    if (growthRate > 30) {
+      score = 10.0; // 60 points out of 60
+    } else if (growthRate >= 25) {
+      score = 8.33; // 50 points out of 60
+    } else if (growthRate >= 20) {
+      score = 6.67; // 40 points out of 60
+    } else if (growthRate >= 15) {
+      score = 5.83; // 35 points out of 60
+    } else if (growthRate >= 10) {
+      score = 5.0; // 30 points out of 60
+    } else if (growthRate >= 5) {
+      score = 4.17; // 25 points out of 60
+    } else if (growthRate >= 0) {
+      score = 3.33; // 20 points out of 60
+    } else {
+      score = 0; // Negative growth = 0 points
+    }
 
     return {
       score: Number(score.toFixed(2)),
       details: {
         growthRate: Number(growthRate.toFixed(2)),
-        benchmark,
         followersStart: previousFollowers,
         followersEnd: latestFollowers,
         growth: latestFollowers - previousFollowers,
+        tier: growthRate > 30 ? '>30%' :
+              growthRate >= 25 ? '25-30%' :
+              growthRate >= 20 ? '20-25%' :
+              growthRate >= 15 ? '15-20%' :
+              growthRate >= 10 ? '10-15%' :
+              growthRate >= 5 ? '5-10%' :
+              growthRate >= 0 ? '0-5%' : 'negative',
       },
     };
   }
 
   /**
-   * 5.2 Peak Follower Gain (30%)
-   * Detect viral spike moments
-   */
-  private async calculatePeakFollowerGain(influencer: Influencer): Promise<{ score: number; details: any }> {
-    const snapshots = await this.instagramProfileGrowthModel.findAll({
-      where: { influencerId: influencer.id },
-      order: [['snapshotDate', 'DESC']],
-      limit: 30, // Last 30 snapshots
-    });
-
-    if (snapshots.length < 2) {
-      return {
-        score: 5.0, // Mid-range for new accounts
-        details: { message: 'Insufficient growth history' },
-      };
-    }
-
-    let maxGain = 0;
-    for (let i = 0; i < snapshots.length - 1; i++) {
-      const gain = (snapshots[i].followersCount || 0) - (snapshots[i + 1].followersCount || 0);
-      if (gain > maxGain) maxGain = gain;
-    }
-
-    const currentFollowers = influencer.instagramFollowersCount || 0;
-    const peakGainPercentage = currentFollowers > 0 ? (maxGain / currentFollowers) * 100 : 0;
-
-    // Score based on peak gain (higher % = viral moments = better score)
-    let score = 5.0; // Base score
-    if (peakGainPercentage >= 5) score = 10;
-    else if (peakGainPercentage >= 2) score = 8;
-    else if (peakGainPercentage >= 1) score = 6;
-
-    return {
-      score: Number(score.toFixed(2)),
-      details: {
-        maxGain,
-        peakGainPercentage: Number(peakGainPercentage.toFixed(2)),
-        currentFollowers,
-        snapshotsAnalyzed: snapshots.length,
-      },
-    };
-  }
-
-  /**
-   * 5.3 Posting Behaviour (20%)
-   * Posting frequency consistency
+   * 5.2 Posting Behaviour (40%)
+   * Posting frequency consistency based on weekly posts
+   * 6-7 posts/week: 10/10 | 4-5: 7.86/10 | 2-3: 5.71/10 | 0-1: 2.86/10
    */
   private async calculatePostingBehaviour(influencer: Influencer): Promise<{ score: number; details: any }> {
     const thirtyDaysAgo = new Date();
@@ -1213,18 +1190,29 @@ export class InfluencerProfileScoringService {
       },
     });
 
-    const actualFrequency = recentPosts / 30; // posts per day
-    const idealFrequency = 4 / 7; // 4 posts/week
+    // Calculate average posts per week (30 days ≈ 4.3 weeks)
+    const postsPerWeek = (recentPosts / 30) * 7;
 
-    // Convert to 0-10 scale (ideal frequency = 10/10)
-    const score = Math.min((actualFrequency / idealFrequency) * 10, 10);
+    // Tiered scoring based on weekly posting frequency
+    let score = 0;
+    if (postsPerWeek >= 6) {
+      score = 10.0; // 70 points out of 70 = 10/10
+    } else if (postsPerWeek >= 4) {
+      score = 7.86; // 55 points out of 70 = 7.86/10
+    } else if (postsPerWeek >= 2) {
+      score = 5.71; // 40 points out of 70 = 5.71/10
+    } else {
+      score = 2.86; // 20 points out of 70 = 2.86/10
+    }
 
     return {
       score: Number(score.toFixed(2)),
       details: {
-        actualPosts: recentPosts,
-        actualFrequency: Number(actualFrequency.toFixed(3)),
-        idealFrequency: Number(idealFrequency.toFixed(3)),
+        totalPosts30Days: recentPosts,
+        postsPerWeek: Number(postsPerWeek.toFixed(2)),
+        tier: postsPerWeek >= 6 ? '6-7 posts/week' :
+              postsPerWeek >= 4 ? '4-5 posts/week' :
+              postsPerWeek >= 2 ? '2-3 posts/week' : '0-1 posts/week',
       },
     };
   }
