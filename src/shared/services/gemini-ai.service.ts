@@ -682,6 +682,168 @@ Return JSON with:
   }
 
   /**
+   * Predict monetisation potential on 1-50 scale
+   */
+  async predictMonetisationPotential(profileContext: {
+    followerCount: number;
+    engagementRate: number;
+    accountType: string;
+    captions: string[];
+  }): Promise<number> {
+    if (!this.isAvailable()) {
+      return 25; // Default mid-range score
+    }
+
+    try {
+      const allCaptions = profileContext.captions.slice(0, 10).join('\n---\n');
+
+      const prompt = `Predict the monetisation potential of this Instagram influencer on a scale from 1-50:
+
+PROFILE DATA:
+- Follower Count: ${profileContext.followerCount}
+- Engagement Rate: ${profileContext.engagementRate}%
+- Account Type: ${profileContext.accountType}
+
+RECENT CAPTIONS:
+${allCaptions}
+
+Rate monetisation potential (1-50) based on:
+- Follower size and quality
+- Engagement rate strength
+- Content professionalism
+- Brand collaboration signals
+- Commercial appeal
+- Niche profitability
+- Account credibility
+
+Scale:
+- 40-50: High monetisation potential (ready for premium brand deals)
+- 25-39: Medium potential (good for mid-tier collaborations)
+- 10-24: Low potential (emerging influencer)
+- 1-9: Very low potential (needs growth)
+
+Return just a single number between 1 and 50.`;
+
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text().trim();
+
+      // Extract number from response
+      const numberMatch = text.match(/\d+/);
+      if (numberMatch) {
+        const rating = parseInt(numberMatch[0], 10);
+        return Math.max(1, Math.min(50, rating)); // Clamp to 1-50
+      }
+
+      return 25; // Default if parsing fails
+    } catch (error) {
+      this.logger.debug(`Monetisation prediction unavailable: ${error.message}`);
+      return 25;
+    }
+  }
+
+  /**
+   * Predict influencer payout based on active followers and avg views
+   * Considers rate of 0.2-0.5 rupees per view
+   */
+  async predictInfluencerPayout(profileData: {
+    activeFollowers: number;
+    avgViews: number;
+    engagementRate: number;
+  }): Promise<number> {
+    if (!this.isAvailable()) {
+      return 500; // Default mid-range payout
+    }
+
+    try {
+      const prompt = `Predict the appropriate payout (in INR) for an Instagram influencer collaboration:
+
+PROFILE METRICS:
+- Active Followers: ${profileData.activeFollowers}
+- Average Views per Post: ${profileData.avgViews}
+- Engagement Rate: ${profileData.engagementRate}%
+
+PRICING GUIDELINES:
+- Industry standard: ₹0.2 to ₹0.5 per view
+- Consider engagement quality (higher engagement = higher rate)
+- Account for active follower percentage
+- Factor in overall reach and impressions
+
+Calculate a fair payout amount based on:
+1. Average views × rate per view (₹0.2-0.5)
+2. Engagement quality multiplier
+3. Active follower quality
+
+Return just a single number representing the predicted payout in INR (Indian Rupees).`;
+
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text().trim();
+
+      // Extract number from response
+      const numberMatch = text.match(/\d+/);
+      if (numberMatch) {
+        const payout = parseInt(numberMatch[0], 10);
+        return Math.max(0, payout); // Must be non-negative
+      }
+
+      return 500; // Default if parsing fails
+    } catch (error) {
+      this.logger.debug(`Payout prediction unavailable: ${error.message}`);
+      return 500;
+    }
+  }
+
+  /**
+   * Analyze audience sentiment on 1-20 scale
+   */
+  async analyzeAudienceSentiment(captions: string[]): Promise<number> {
+    if (!this.isAvailable() || captions.length === 0) {
+      return 12; // Default mid-positive sentiment
+    }
+
+    try {
+      const allCaptions = captions.slice(0, 20).join('\n---\n');
+
+      const prompt = `Analyze the audience sentiment for these Instagram captions on a scale from 1-20:
+
+${allCaptions}
+
+Rate audience sentiment (1-20) based on:
+- Overall tone and emotional appeal
+- Positivity and authenticity
+- Audience connection strength
+- Community engagement potential
+- Trust and credibility signals
+- Relatability factor
+
+Scale:
+- 15-20: Very positive sentiment (highly engaging, authentic, trustworthy)
+- 10-14: Positive sentiment (good connection, relatable)
+- 5-9: Neutral sentiment (average appeal)
+- 1-4: Negative sentiment (weak connection, low trust)
+
+Return just a single number between 1 and 20.`;
+
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text().trim();
+
+      // Extract number from response
+      const numberMatch = text.match(/\d+/);
+      if (numberMatch) {
+        const sentiment = parseInt(numberMatch[0], 10);
+        return Math.max(1, Math.min(20, sentiment)); // Clamp to 1-20
+      }
+
+      return 12; // Default if parsing fails
+    } catch (error) {
+      this.logger.debug(`Audience sentiment analysis unavailable: ${error.message}`);
+      return 12;
+    }
+  }
+
+  /**
    * Get default visual analysis when AI is not available
    */
   private getDefaultVisualAnalysis(): VisualAnalysisResult {

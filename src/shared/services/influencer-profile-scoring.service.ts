@@ -82,9 +82,8 @@ export interface GrowthMomentumScore {
   score: number; // 0-10
   maxScore: 10;
   breakdown: {
-    growthTrend: { score: number; weight: 50; details: any };
-    peakFollowerGain: { score: number; weight: 30; details: any };
-    postingBehaviour: { score: number; weight: 20; details: any };
+    growthTrend: { score: number; weight: 60; details: any };
+    postingBehaviour: { score: number; weight: 40; details: any };
   };
 }
 
@@ -93,10 +92,9 @@ export interface MonetisationScore {
   score: number; // 0-10
   maxScore: 10;
   breakdown: {
-    monetisationSignals: { score: number; weight: 40; details: any };
+    monetisationSignals: { score: number; weight: 50; details: any };
     brandTrustSignal: { score: number; weight: 30; details: any };
     audienceSentiment: { score: number; weight: 20; details: any };
-    brandAlignment: { score: number; weight: 10; details: any };
   };
 }
 
@@ -1224,135 +1222,185 @@ export class InfluencerProfileScoringService {
       monetisationSignals,
       brandTrustSignal,
       audienceSentiment,
-      brandAlignment,
     ] = await Promise.all([
       this.calculateMonetisationSignals(influencer),
       this.calculateBrandTrustSignal(influencer),
       this.calculateAudienceSentiment(influencer),
-      this.calculateBrandAlignmentScore(influencer),
     ]);
 
     const score =
-      (monetisationSignals.score * 0.40) +
+      (monetisationSignals.score * 0.50) +
       (brandTrustSignal.score * 0.30) +
-      (audienceSentiment.score * 0.20) +
-      (brandAlignment.score * 0.10);
+      (audienceSentiment.score * 0.20);
 
     return {
       score: Number(score.toFixed(2)),
       maxScore: 10,
       breakdown: {
-        monetisationSignals: { score: monetisationSignals.score, weight: 40, details: monetisationSignals.details },
+        monetisationSignals: { score: monetisationSignals.score, weight: 50, details: monetisationSignals.details },
         brandTrustSignal: { score: brandTrustSignal.score, weight: 30, details: brandTrustSignal.details },
         audienceSentiment: { score: audienceSentiment.score, weight: 20, details: audienceSentiment.details },
-        brandAlignment: { score: brandAlignment.score, weight: 10, details: brandAlignment.details },
       },
     };
   }
 
   /**
-   * 6.1 Monetisation Signals (40%)
-   * Frequency of branded content and disclosure practices
+   * 6.1 Monetisation Signals (50%)
+   * AI predicts monetisation scale on 1-50 rating
    */
   private async calculateMonetisationSignals(influencer: Influencer): Promise<{ score: number; details: any }> {
-    const allMedia = await this.instagramMediaModel.findAll({
-      where: { influencerId: influencer.id },
-      order: [['timestamp', 'DESC']],
-      limit: 100,
-    });
-
-    if (allMedia.length === 0) {
+    if (!this.geminiAIService.isAvailable()) {
       return {
         score: 5.0,
-        details: { message: 'No posts available' },
+        details: { message: 'AI not available - using default score' },
       };
     }
 
-    const disclosureKeywords = [
-      '#ad', '#sponsored', '#partnership', '#collab', '#collaboration',
-      '#gifted', '#paidpartnership', '#ambassador', '#brandpartner'
-    ];
-
-    const paidContentIndicators = [
-      'use code', 'discount code', 'promo code', 'link in bio',
-      'shop now', 'swipe up', 'check out', 'available at'
-    ];
-
-    let brandedPostsCount = 0;
-    let properDisclosureCount = 0;
-
-    for (const media of allMedia) {
-      const caption = (media.caption || '').toLowerCase();
-
-      const hasDisclosure = disclosureKeywords.some(kw => caption.includes(kw.toLowerCase()));
-      const appearsPaid = paidContentIndicators.some(ind => caption.includes(ind.toLowerCase()));
-
-      if (hasDisclosure || appearsPaid) {
-        brandedPostsCount++;
-        if (hasDisclosure) properDisclosureCount++;
+    try {
+      const recentMedia = await this.getRecentMediaForAI(influencer.id, 20);
+      if (recentMedia.length === 0) {
+        return { score: 0, details: { message: 'No media available for analysis' } };
       }
+
+      // Get profile data for context
+      const latestSync = await this.instagramProfileAnalysisModel.findOne({
+        where: { influencerId: influencer.id },
+        order: [['syncDate', 'DESC']],
+      });
+
+      const profileContext = {
+        followerCount: influencer.instagramFollowersCount || 0,
+        engagementRate: latestSync?.avgEngagementRate || 0,
+        accountType: influencer.instagramAccountType,
+        captions: recentMedia.map(m => m.caption),
+      };
+
+      // Ask AI to predict monetisation potential on 1-50 scale
+      const monetisationRating = await this.geminiAIService.predictMonetisationPotential(profileContext);
+
+      // Convert 1-50 scale to 0-10 scale
+      const score = (monetisationRating / 50) * 10;
+
+      return {
+        score: Number(score.toFixed(2)),
+        details: {
+          monetisationRating, // 1-50 scale
+          followerCount: profileContext.followerCount,
+          engagementRate: profileContext.engagementRate,
+          prediction: monetisationRating >= 40 ? 'High' : monetisationRating >= 25 ? 'Medium' : 'Low',
+        },
+      };
+    } catch (error) {
+      return {
+        score: 5.0,
+        details: { message: 'AI analysis failed - using default', error: error.message },
+      };
     }
-
-    const brandedPercentage = (brandedPostsCount / allMedia.length) * 100;
-    const disclosureRate = brandedPostsCount > 0 ? (properDisclosureCount / brandedPostsCount) * 100 : 100;
-
-    // Score: balance between having branded content (shows monetization) and proper disclosure
-    let score = 5.0;
-    if (brandedPercentage > 10 && disclosureRate >= 80) score = 10;
-    else if (brandedPercentage > 5 && disclosureRate >= 60) score = 8;
-    else if (brandedPercentage > 0) score = 6;
-
-    return {
-      score: Number(score.toFixed(2)),
-      details: {
-        totalPosts: allMedia.length,
-        brandedPostsCount,
-        properDisclosureCount,
-        brandedPercentage: Number(brandedPercentage.toFixed(2)),
-        disclosureRate: Number(disclosureRate.toFixed(2)),
-      },
-    };
   }
 
   /**
-   * 6.2 Brand Trust Signal (30%)
-   * Policy compliance and account credibility
+   * 6.2 Brand Trust Signal Score (30%)
+   * AI predicts payout based on 0.2-0.5 rupees per view and active followers
+   * Tiers: 100-500: 10, 500-1500: 20, 1500-3000: 25, 3000+: 30
    */
   private async calculateBrandTrustSignal(influencer: Influencer): Promise<{ score: number; details: any }> {
-    let trustScore = 5.0; // Base score
-
-    // Account type bonus
-    if (influencer.instagramAccountType === 'BUSINESS' || influencer.instagramAccountType === 'CREATOR') {
-      trustScore += 2.0;
+    if (!this.geminiAIService.isAvailable()) {
+      return {
+        score: 5.0,
+        details: { message: 'AI not available - using default score' },
+      };
     }
 
-    // Follower count bonus
-    if (influencer.instagramFollowersCount && influencer.instagramFollowersCount > 50000) {
-      trustScore += 2.0;
-    } else if (influencer.instagramFollowersCount && influencer.instagramFollowersCount > 10000) {
-      trustScore += 1.0;
+    try {
+      // Get active followers and average reach data
+      const latestSync = await this.instagramProfileAnalysisModel.findOne({
+        where: { influencerId: influencer.id },
+        order: [['syncDate', 'DESC']],
+      });
+
+      if (!latestSync) {
+        return { score: 0, details: { message: 'No profile sync data available' } };
+      }
+
+      const activeFollowers = latestSync.activeFollowers || 0;
+
+      // Get average views from recent posts
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const recentInsights = await this.instagramMediaInsightModel.findAll({
+        where: { influencerId: influencer.id },
+        include: [{
+          model: this.instagramMediaModel,
+          required: true,
+          where: { timestamp: { [Op.gte]: thirtyDaysAgo } },
+        }],
+        limit: 20,
+      });
+
+      const avgViews = recentInsights.length > 0
+        ? recentInsights.reduce((sum, i) => sum + (i.reach || 0), 0) / recentInsights.length
+        : 0;
+
+      const profileData = {
+        activeFollowers,
+        avgViews,
+        engagementRate: latestSync.avgEngagementRate || 0,
+      };
+
+      // Ask AI to predict payout considering 0.2-0.5 rupees per view
+      const predictedPayout = await this.geminiAIService.predictInfluencerPayout(profileData);
+
+      // Tiered scoring based on predicted payout
+      let tierScore = 0;
+      let tier = '';
+      if (predictedPayout >= 3000) {
+        tierScore = 30;
+        tier = '3000+';
+      } else if (predictedPayout >= 1500) {
+        tierScore = 25;
+        tier = '1500-3000';
+      } else if (predictedPayout >= 500) {
+        tierScore = 20;
+        tier = '500-1500';
+      } else if (predictedPayout >= 100) {
+        tierScore = 10;
+        tier = '100-500';
+      } else {
+        tierScore = 5;
+        tier = '<100';
+      }
+
+      // Convert to 0-10 scale (max 30 points)
+      const score = (tierScore / 30) * 10;
+
+      return {
+        score: Number(score.toFixed(2)),
+        details: {
+          predictedPayout: Math.round(predictedPayout),
+          tier,
+          tierScore,
+          activeFollowers,
+          avgViews: Math.round(avgViews),
+          rateRange: '₹0.2-0.5 per view',
+        },
+      };
+    } catch (error) {
+      return {
+        score: 5.0,
+        details: { message: 'AI analysis failed - using default', error: error.message },
+      };
     }
-
-    const score = Math.min(trustScore, 10);
-
-    return {
-      score: Number(score.toFixed(2)),
-      details: {
-        accountType: influencer.instagramAccountType,
-        followers: influencer.instagramFollowersCount,
-        trustLevel: score >= 8 ? 'High' : score >= 6 ? 'Medium' : 'Low',
-      },
-    };
   }
 
   /**
-   * 6.3 Audience Sentiment (20%)
-   * Positive sentiment in content
+   * 6.3 Audience Sentiment Score (20%)
+   * AI analyzes audience sentiment on 1-20 scale
    */
   private async calculateAudienceSentiment(influencer: Influencer): Promise<{ score: number; details: any }> {
     if (!this.geminiAIService.isAvailable()) {
       return {
-        score: 8.0,
+        score: 5.0,
         details: { message: 'AI not available - using default score' },
       };
     }
@@ -1368,74 +1416,25 @@ export class InfluencerProfileScoringService {
         return { score: 0, details: { message: 'No captions available' } };
       }
 
-      const sentimentScore = await this.geminiAIService.analyzeSentiment(captions);
+      // Ask AI to analyze audience sentiment on 1-20 scale
+      const sentimentRating = await this.geminiAIService.analyzeAudienceSentiment(captions);
 
-      // Convert -100 to +100 scale to 0-10 scale
-      const positiveSentimentRatio = (sentimentScore + 100) / 200;
-      const score = positiveSentimentRatio * 10;
-
-      return {
-        score: Number(score.toFixed(2)),
-        details: {
-          sentimentScore,
-          positiveSentimentRatio: Number((positiveSentimentRatio * 100).toFixed(2)),
-        },
-      };
-    } catch (error) {
-      return {
-        score: 8.0,
-        details: { message: 'AI analysis failed - using default', error: error.message },
-      };
-    }
-  }
-
-  /**
-   * 6.4 Brand Alignment (10%)
-   * Brand safety score from AI
-   */
-  private async calculateBrandAlignmentScore(influencer: Influencer): Promise<{ score: number; details: any }> {
-    if (!this.geminiAIService.isAvailable()) {
-      return {
-        score: 9.0,
-        details: { message: 'AI not available - using default score' },
-      };
-    }
-
-    try {
-      const recentMedia = await this.getRecentMediaForAI(influencer.id, 10);
-      if (recentMedia.length === 0) {
-        return { score: 0, details: { message: 'No media available' } };
-      }
-
-      const brandSafetyScores: number[] = [];
-      for (const media of recentMedia.slice(0, 10)) {
-        try {
-          const visual = await this.geminiAIService.analyzeVisualQuality(media.mediaUrl);
-          brandSafetyScores.push(visual.brandSafetyScore);
-        } catch (error) {
-          // Continue on error
-        }
-      }
-
-      if (brandSafetyScores.length === 0) {
-        return { score: 0, details: { message: 'Brand safety analysis failed' } };
-      }
-
-      const avgBrandSafetyScore = brandSafetyScores.reduce((sum, s) => sum + s, 0) / brandSafetyScores.length;
-
-      // Convert 0-100 to 0-10 scale
-      const score = (avgBrandSafetyScore / 100) * 10;
+      // Convert 1-20 scale to 0-10 scale
+      const score = (sentimentRating / 20) * 10;
 
       return {
         score: Number(score.toFixed(2)),
         details: {
-          avgBrandSafetyScore: Number(avgBrandSafetyScore.toFixed(2)),
-          imagesAnalyzed: brandSafetyScores.length,
+          sentimentRating, // 1-20 scale
+          sentiment: sentimentRating >= 15 ? 'Very Positive' :
+                     sentimentRating >= 10 ? 'Positive' :
+                     sentimentRating >= 5 ? 'Neutral' : 'Negative',
+          captionsAnalyzed: captions.length,
         },
       };
     } catch (error) {
       return {
-        score: 9.0,
+        score: 5.0,
         details: { message: 'AI analysis failed - using default', error: error.message },
       };
     }
