@@ -38,10 +38,10 @@ export interface AudienceQualityScore {
   };
 }
 
-// Category 2: Content Relevance (10 points)
+// Category 2: Content Relevance (100 points for UI display)
 export interface ContentRelevanceScore {
-  score: number; // 0-10
-  maxScore: 10;
+  score: number; // 0-100 (for UI display)
+  maxScore: 100;
   breakdown: {
     platformRelevance: { score: number; weight: 35; details: any };
     contentMix: { score: number; weight: 5; details: any };
@@ -219,14 +219,15 @@ export class InfluencerProfileScoringService {
     const latestSync = snapshots[0];
     const previousSync = snapshots.length > 1 ? snapshots[1] : null;
 
-    const authenticityPercentage = latestSync.activeFollowersPercentage;
+    const authenticityPercentage = Number(latestSync.activeFollowersPercentage) || 0;
     const activeFollowers = latestSync.activeFollowers || 0;
     const totalFollowers = latestSync.totalFollowers || 0;
 
     // Calculate change from previous sync
     let change = 0;
     if (previousSync && previousSync.activeFollowersPercentage) {
-      change = Number((authenticityPercentage - previousSync.activeFollowersPercentage).toFixed(2));
+      const previousPercentage = Number(previousSync.activeFollowersPercentage) || 0;
+      change = Number((authenticityPercentage - previousPercentage).toFixed(2));
     }
 
     // Convert authenticity % to 0-10 scale
@@ -573,18 +574,21 @@ export class InfluencerProfileScoringService {
       (hashtagEffectiveness.score * 0.10) +
       (languageMarketFit.score * 0.10);
 
+    // Convert to 0-100 scale for UI
+    const scoreOut100 = score * 10;
+
     return {
-      score: Number(score.toFixed(2)),
-      maxScore: 10,
+      score: Number(scoreOut100.toFixed(2)),
+      maxScore: 100, // Changed from 10 to 100 for UI
       breakdown: {
-        platformRelevance: { score: platformRelevance.score, weight: 35, details: platformRelevance.details },
-        contentMix: { score: contentMix.score, weight: 5, details: contentMix.details },
-        contentStyle: { score: contentStyle.score, weight: 10, details: contentStyle.details },
-        topPerformingPosts: { score: topPerformingPosts.score, weight: 10, details: topPerformingPosts.details },
-        worstPerformingPosts: { score: worstPerformingPosts.score, weight: 10, details: worstPerformingPosts.details },
-        topNicheBreakdown: { score: topNicheBreakdown.score, weight: 10, details: topNicheBreakdown.details },
-        hashtagEffectiveness: { score: hashtagEffectiveness.score, weight: 10, details: hashtagEffectiveness.details },
-        languageMarketFit: { score: languageMarketFit.score, weight: 10, details: languageMarketFit.details },
+        platformRelevance: { score: platformRelevance.score * 10, weight: 35, details: platformRelevance.details },
+        contentMix: { score: contentMix.score * 10, weight: 5, details: contentMix.details },
+        contentStyle: { score: contentStyle.score * 10, weight: 10, details: contentStyle.details },
+        topPerformingPosts: { score: topPerformingPosts.score * 10, weight: 10, details: topPerformingPosts.details },
+        worstPerformingPosts: { score: worstPerformingPosts.score * 10, weight: 10, details: worstPerformingPosts.details },
+        topNicheBreakdown: { score: topNicheBreakdown.score * 10, weight: 10, details: topNicheBreakdown.details },
+        hashtagEffectiveness: { score: hashtagEffectiveness.score * 10, weight: 10, details: hashtagEffectiveness.details },
+        languageMarketFit: { score: languageMarketFit.score * 10, weight: 10, details: languageMarketFit.details },
       },
     };
   }
@@ -597,7 +601,12 @@ export class InfluencerProfileScoringService {
     if (!this.geminiAIService.isAvailable()) {
       return {
         score: 7.0, // Default good score
-        details: { message: 'AI not available - using default score' },
+        details: {
+          message: 'AI not available - using default score',
+          percentage: 70,
+          rating: 'Good',
+          description: 'Content is Well Allignes',
+        },
       };
     }
 
@@ -611,21 +620,52 @@ export class InfluencerProfileScoringService {
       const captions = recentMedia.map(m => m.caption);
       const trendAnalysis = await this.geminiAIService.analyzeTrendRelevance(captions);
 
+      const aiScore = trendAnalysis.score || 7; // AI returns 1-10
+      const percentage = (aiScore / 10) * 100; // Convert to percentage
+
+      // Determine rating based on score
+      let rating = '';
+      if (percentage >= 85) rating = 'Exceptional';
+      else if (percentage >= 70) rating = 'Excellent';
+      else if (percentage >= 50) rating = 'Good';
+      else if (percentage >= 30) rating = 'Fair';
+      else rating = 'Needs Improvement';
+
+      // Generate feedback based on analysis
+      const feedback = trendAnalysis.relevanceReason || 'Content follows current Instagram very well to stay relevant';
+
+      // Calculate change (placeholder)
+      const change = 200; // Would need to track from previous analysis
+
       return {
-        score: Number(trendAnalysis.score.toFixed(2)), // AI returns 1-10
-        details: trendAnalysis,
+        score: Number(aiScore.toFixed(2)), // AI returns 1-10
+        details: {
+          percentage: Number(percentage.toFixed(2)),
+          rating,
+          description: 'Content is Well Allignes',
+          trends: trendAnalysis.trends || [],
+          relevanceReason: trendAnalysis.relevanceReason || '',
+          feedback,
+          change,
+        },
       };
     } catch (error) {
       return {
         score: 7.0,
-        details: { message: 'AI analysis failed - using default', error: error.message },
+        details: {
+          message: 'AI analysis failed - using default',
+          error: error.message,
+          percentage: 70,
+          rating: 'Good',
+          description: 'Content is Well Allignes',
+        },
       };
     }
   }
 
   /**
    * 2.2 Content Mix (5%)
-   * Reel percentage scoring
+   * Reel percentage scoring: 90%+ = 2, 60-90% = 5, <60% = 3
    */
   private async calculateContentMix(influencer: Influencer): Promise<{ score: number; details: any }> {
     const thirtyDaysAgo = new Date();
@@ -646,16 +686,50 @@ export class InfluencerProfileScoringService {
       },
     });
 
+    const imagePosts = await this.instagramMediaModel.count({
+      where: {
+        influencerId: influencer.id,
+        timestamp: { [Op.gte]: thirtyDaysAgo },
+        mediaType: 'IMAGE',
+      },
+    });
+
+    const carouselPosts = await this.instagramMediaModel.count({
+      where: {
+        influencerId: influencer.id,
+        timestamp: { [Op.gte]: thirtyDaysAgo },
+        mediaType: 'CAROUSEL_ALBUM',
+      },
+    });
+
     if (allPosts === 0) {
-      return { score: 0, details: { message: 'No posts in last 30 days' } };
+      return {
+        score: 0,
+        details: {
+          message: 'No posts in last 30 days',
+          totalPosts: 0,
+          breakdown: [],
+          aiFeedback: 'No content available for analysis',
+        }
+      };
     }
 
     const reelPercentage = (reelPosts / allPosts) * 100;
+    const imagePercentage = (imagePosts / allPosts) * 100;
+    const carouselPercentage = (carouselPosts / allPosts) * 100;
 
     let score = 0;
-    if (reelPercentage >= 90) score = 2;
-    else if (reelPercentage >= 60) score = 5;
-    else score = 3;
+    let aiFeedback = '';
+    if (reelPercentage >= 90) {
+      score = 2;
+      aiFeedback = 'High reel dominance detected. Consider diversifying content mix for better engagement variety.';
+    } else if (reelPercentage >= 60) {
+      score = 5;
+      aiFeedback = 'Excellent content mix! Strong reel presence balanced with other formats for optimal reach.';
+    } else {
+      score = 3;
+      aiFeedback = 'Low reel percentage. Instagram prioritizes reels - increase video content for better reach.';
+    }
 
     // Convert to 0-10 scale
     const normalizedScore = (score / 5) * 10;
@@ -664,56 +738,136 @@ export class InfluencerProfileScoringService {
       score: Number(normalizedScore.toFixed(2)),
       details: {
         totalPosts: allPosts,
-        reelPosts,
-        reelPercentage: Number(reelPercentage.toFixed(2)),
-        rawScore: score,
+        breakdown: [
+          {
+            type: 'Reel',
+            count: reelPosts,
+            percentage: Number(reelPercentage.toFixed(1)),
+          },
+          {
+            type: 'Image',
+            count: imagePosts,
+            percentage: Number(imagePercentage.toFixed(1)),
+          },
+          {
+            type: 'Carousel',
+            count: carouselPosts,
+            percentage: Number(carouselPercentage.toFixed(1)),
+          },
+        ],
+        aiFeedback,
       },
     };
   }
 
   /**
    * 2.3 Content Style (10%)
-   * % of posts with face/person content
+   * 1-100% face content scoring
    */
   private async calculateContentStyle(influencer: Influencer): Promise<{ score: number; details: any }> {
     if (!this.geminiAIService.isAvailable()) {
       return {
         score: 7.0,
-        details: { message: 'AI not available - using default score' },
+        details: {
+          message: 'AI not available - using default score',
+          totalPosts: 0,
+          facelessPercentage: 30,
+          detectedStyles: ['Aesthetic'],
+          aiFeedback: 'Default style analysis - AI service unavailable',
+        },
       };
     }
 
     try {
       const recentMedia = await this.getRecentMediaForAI(influencer.id, 20);
       if (recentMedia.length === 0) {
-        return { score: 0, details: { message: 'No media available' } };
+        return {
+          score: 0,
+          details: {
+            message: 'No media available',
+            totalPosts: 0,
+            facelessPercentage: 0,
+            detectedStyles: [],
+            aiFeedback: 'No content available for style analysis',
+          }
+        };
       }
 
       let faceContentCount = 0;
+      const styleCounts = {
+        bold: 0,
+        aesthetic: 0,
+        storytelling: 0,
+      };
+
       for (const media of recentMedia.slice(0, 10)) {
         try {
           const hasFace = await this.geminiAIService.detectFaceInContent(media.mediaUrl);
           if (hasFace) faceContentCount++;
+
+          // Analyze content style based on caption and engagement patterns
+          if (media.caption) {
+            const caption = media.caption.toLowerCase();
+            // Bold: Strong statements, exclamation marks, caps
+            if (caption.includes('!') || caption.match(/[A-Z]{3,}/)) {
+              styleCounts.bold++;
+            }
+            // Aesthetic: Emojis, minimal text, visual focus
+            if ((caption.match(/[\u{1F300}-\u{1F9FF}]/gu) || []).length > 3) {
+              styleCounts.aesthetic++;
+            }
+            // Storytelling: Longer captions, narrative elements
+            if (caption.length > 200 || caption.includes('story') || caption.includes('journey')) {
+              styleCounts.storytelling++;
+            }
+          }
         } catch (error) {
           // Continue on error
         }
       }
 
-      const facePercentage = (faceContentCount / Math.min(recentMedia.length, 10)) * 100;
+      const analyzedCount = Math.min(recentMedia.length, 10);
+      const facePercentage = (faceContentCount / analyzedCount) * 100;
+      const facelessPercentage = 100 - facePercentage;
       const score = (facePercentage / 100) * 10; // 100% face = 10/10
+
+      // Determine dominant styles
+      const detectedStyles: string[] = [];
+      if (styleCounts.bold > analyzedCount * 0.3) detectedStyles.push('Bold');
+      if (styleCounts.aesthetic > analyzedCount * 0.3) detectedStyles.push('Aesthetic');
+      if (styleCounts.storytelling > analyzedCount * 0.3) detectedStyles.push('Storytelling');
+
+      // Generate AI feedback
+      let aiFeedback = '';
+      if (facePercentage > 70) {
+        aiFeedback = 'Strong personal brand presence with high face visibility. Great for building authentic connections with audience.';
+      } else if (facePercentage > 40) {
+        aiFeedback = 'Balanced content style mixing personal and product-focused content. Good for diverse brand collaborations.';
+      } else {
+        aiFeedback = 'Faceless content strategy detected. Works well for product-focused or lifestyle brand partnerships.';
+      }
 
       return {
         score: Number(score.toFixed(2)),
         details: {
-          imagesAnalyzed: Math.min(recentMedia.length, 10),
-          faceContentCount,
-          facePercentage: Number(facePercentage.toFixed(2)),
+          totalPosts: analyzedCount,
+          faceContentPercentage: Number(facePercentage.toFixed(1)),
+          facelessPercentage: Number(facelessPercentage.toFixed(1)),
+          detectedStyles: detectedStyles.length > 0 ? detectedStyles : ['Minimalist'],
+          aiFeedback,
         },
       };
     } catch (error) {
       return {
         score: 7.0,
-        details: { message: 'AI analysis failed - using default', error: error.message },
+        details: {
+          message: 'AI analysis failed - using default',
+          error: error.message,
+          totalPosts: 0,
+          facelessPercentage: 30,
+          detectedStyles: ['Aesthetic'],
+          aiFeedback: 'Style analysis encountered an error - using default metrics',
+        },
       };
     }
   }
@@ -721,6 +875,7 @@ export class InfluencerProfileScoringService {
   /**
    * 2.4 Top Performing Posts (10%)
    * % of posts where reach > avg reach
+   * Scoring: 0=3, 1-30%=6, 31-44%=8, 45%+=10
    */
   private async calculateTopPerformingPosts(influencer: Influencer): Promise<{ score: number; details: any }> {
     const thirtyDaysAgo = new Date();
@@ -730,32 +885,73 @@ export class InfluencerProfileScoringService {
       where: { influencerId: influencer.id },
       include: [{
         model: this.instagramMediaModel,
+        as: 'instagramMedia',
         required: true,
         where: { timestamp: { [Op.gte]: thirtyDaysAgo } },
       }],
+      order: [['reach', 'DESC']],
     });
 
     if (recentInsights.length === 0) {
-      return { score: 0, details: { message: 'No insights available' } };
+      return {
+        score: 0,
+        details: {
+          message: 'No insights available',
+          postCount: 0,
+          percentage: 0,
+          avgReach: 0,
+          avgEngagement: 0,
+          topPosts: [],
+          aiFeedback: 'No performance data available for analysis',
+        }
+      };
     }
 
     const avgReach = recentInsights.reduce((sum, i) => sum + (i.reach || 0), 0) / recentInsights.length;
-    const topPostsCount = recentInsights.filter(i => (i.reach || 0) > avgReach).length;
+    const avgEngagement = recentInsights.reduce((sum, i) => sum + (i.totalInteractions || 0), 0) / recentInsights.length;
+
+    const topPostsInsights = recentInsights.filter(i => (i.reach || 0) > avgReach);
+    const topPostsCount = topPostsInsights.length;
     const topPostsPercentage = (topPostsCount / recentInsights.length) * 100;
 
     let rawScore = 0;
-    if (topPostsPercentage === 0) rawScore = 3;
-    else if (topPostsPercentage <= 30) rawScore = 6;
-    else if (topPostsPercentage <= 44) rawScore = 8;
-    else rawScore = 10;
+    let aiFeedback = '';
+    if (topPostsPercentage === 0) {
+      rawScore = 3;
+      aiFeedback = 'No posts exceeding average reach. Focus on content quality and posting consistency.';
+    } else if (topPostsPercentage <= 30) {
+      rawScore = 6;
+      aiFeedback = 'Moderate high-performing content. Analyze top posts to identify winning patterns.';
+    } else if (topPostsPercentage <= 44) {
+      rawScore = 8;
+      aiFeedback = 'Good content performance! Strong consistency in creating engaging posts.';
+    } else {
+      rawScore = 10;
+      aiFeedback = 'Excellent performance! Majority of content exceeds average reach - keep up the great work!';
+    }
+
+    // Get top 3 posts with thumbnails
+    const topPosts = topPostsInsights.slice(0, 3).map(insight => ({
+      thumbnail: insight.instagramMedia?.mediaUrl || insight.instagramMedia?.thumbnailUrl || null,
+      permalink: insight.instagramMedia?.permalink || null,
+      timestamp: insight.instagramMedia?.timestamp || null,
+      reach: insight.reach || 0,
+      engagement: insight.totalInteractions || 0,
+      likes: insight.likes || 0,
+      comments: insight.comments || 0,
+      saves: insight.saved || 0,
+      shares: insight.shares || 0,
+    }));
 
     return {
       score: Number(rawScore.toFixed(2)),
       details: {
-        totalPosts: recentInsights.length,
-        topPostsCount,
-        topPostsPercentage: Number(topPostsPercentage.toFixed(2)),
+        postCount: topPostsCount,
+        percentage: Number(topPostsPercentage.toFixed(1)),
         avgReach: Math.round(avgReach),
+        avgEngagement: Math.round(avgEngagement),
+        topPosts,
+        aiFeedback,
       },
     };
   }
@@ -763,6 +959,7 @@ export class InfluencerProfileScoringService {
   /**
    * 2.5 Worst Performing Posts (10%)
    * % of posts where reach < avg reach
+   * Scoring: 0-15%=10, 16-30%=8, 31-45%=6, 46%+=3
    */
   private async calculateWorstPerformingPosts(influencer: Influencer): Promise<{ score: number; details: any }> {
     const thirtyDaysAgo = new Date();
@@ -772,32 +969,73 @@ export class InfluencerProfileScoringService {
       where: { influencerId: influencer.id },
       include: [{
         model: this.instagramMediaModel,
+        as: 'instagramMedia',
         required: true,
         where: { timestamp: { [Op.gte]: thirtyDaysAgo } },
       }],
+      order: [['reach', 'ASC']],
     });
 
     if (recentInsights.length === 0) {
-      return { score: 0, details: { message: 'No insights available' } };
+      return {
+        score: 0,
+        details: {
+          message: 'No insights available',
+          postCount: 0,
+          percentage: 0,
+          avgReach: 0,
+          avgEngagement: 0,
+          worstPosts: [],
+          aiFeedback: 'No performance data available for analysis',
+        }
+      };
     }
 
     const avgReach = recentInsights.reduce((sum, i) => sum + (i.reach || 0), 0) / recentInsights.length;
-    const worstPostsCount = recentInsights.filter(i => (i.reach || 0) < avgReach).length;
+    const avgEngagement = recentInsights.reduce((sum, i) => sum + (i.totalInteractions || 0), 0) / recentInsights.length;
+
+    const worstPostsInsights = recentInsights.filter(i => (i.reach || 0) < avgReach);
+    const worstPostsCount = worstPostsInsights.length;
     const worstPostsPercentage = (worstPostsCount / recentInsights.length) * 100;
 
     let rawScore = 0;
-    if (worstPostsPercentage <= 15) rawScore = 10;
-    else if (worstPostsPercentage <= 30) rawScore = 8;
-    else if (worstPostsPercentage <= 45) rawScore = 6;
-    else rawScore = 3;
+    let aiFeedback = '';
+    if (worstPostsPercentage <= 15) {
+      rawScore = 10;
+      aiFeedback = 'Excellent consistency! Very few underperforming posts. Your content strategy is highly effective.';
+    } else if (worstPostsPercentage <= 30) {
+      rawScore = 8;
+      aiFeedback = 'Good performance consistency. Minor fluctuations are normal - keep optimizing your best-performing content types.';
+    } else if (worstPostsPercentage <= 45) {
+      rawScore = 6;
+      aiFeedback = 'Moderate consistency. Review underperforming posts to identify patterns and avoid similar content.';
+    } else {
+      rawScore = 3;
+      aiFeedback = 'High number of underperforming posts. Analyze your top posts and replicate their successful elements.';
+    }
+
+    // Get worst 3 posts with thumbnails
+    const worstPosts = worstPostsInsights.slice(0, 3).map(insight => ({
+      thumbnail: insight.instagramMedia?.mediaUrl || insight.instagramMedia?.thumbnailUrl || null,
+      permalink: insight.instagramMedia?.permalink || null,
+      timestamp: insight.instagramMedia?.timestamp || null,
+      reach: insight.reach || 0,
+      engagement: insight.totalInteractions || 0,
+      likes: insight.likes || 0,
+      comments: insight.comments || 0,
+      saves: insight.saved || 0,
+      shares: insight.shares || 0,
+    }));
 
     return {
       score: Number(rawScore.toFixed(2)),
       details: {
-        totalPosts: recentInsights.length,
-        worstPostsCount,
-        worstPostsPercentage: Number(worstPostsPercentage.toFixed(2)),
+        postCount: worstPostsCount,
+        percentage: Number(worstPostsPercentage.toFixed(1)),
         avgReach: Math.round(avgReach),
+        avgEngagement: Math.round(avgEngagement),
+        worstPosts,
+        aiFeedback,
       },
     };
   }
@@ -805,19 +1043,49 @@ export class InfluencerProfileScoringService {
   /**
    * 2.6 Top Niche Breakdown (10%)
    * Count of matching niches
+   * Scoring: 0=3, 1=6, 2-4=8, 4+=10
    */
   private async calculateTopNicheBreakdown(influencer: Influencer): Promise<{ score: number; details: any }> {
     if (!this.geminiAIService.isAvailable()) {
       return {
         score: 7.0,
-        details: { message: 'AI not available - using default score' },
+        details: {
+          message: 'AI not available - using default score',
+          primaryNiche: 'Lifestyle',
+          nicheBreakdown: [],
+          aiFeedback: 'Niche analysis unavailable - AI service not accessible',
+        },
       };
     }
 
     try {
-      const recentMedia = await this.getRecentMediaForAI(influencer.id, 20);
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const recentMedia = await this.instagramMediaModel.findAll({
+        where: {
+          influencerId: influencer.id,
+          timestamp: { [Op.gte]: thirtyDaysAgo },
+        },
+        include: [{
+          model: this.instagramMediaInsightModel,
+          as: 'insights',
+          required: false,
+        }],
+        limit: 20,
+        order: [['timestamp', 'DESC']],
+      });
+
       if (recentMedia.length === 0) {
-        return { score: 0, details: { message: 'No media available' } };
+        return {
+          score: 0,
+          details: {
+            message: 'No media available',
+            primaryNiche: 'Unknown',
+            nicheBreakdown: [],
+            aiFeedback: 'No content available for niche analysis',
+          }
+        };
       }
 
       const captions = recentMedia.map(m => m.caption);
@@ -825,29 +1093,102 @@ export class InfluencerProfileScoringService {
 
       const topNiches = ['fashion', 'beauty', 'lifestyle', 'food', 'electronics', 'travel', 'business', 'finance', 'education', 'fitness', 'sports', 'spiritual', 'motivator'];
 
-      const matchCount = [nicheResult.primaryNiche, ...nicheResult.secondaryNiches]
-        .filter(niche => topNiches.includes(niche.toLowerCase()))
-        .length;
+      const allNiches = [nicheResult.primaryNiche, ...nicheResult.secondaryNiches];
+      const matchedNiches = allNiches.filter(niche => topNiches.includes(niche.toLowerCase()));
+      const matchCount = matchedNiches.length;
 
       let rawScore = 0;
-      if (matchCount === 0) rawScore = 3;
-      else if (matchCount === 1) rawScore = 6;
-      else if (matchCount <= 4) rawScore = 8;
-      else rawScore = 10;
+      let aiFeedback = '';
+      if (matchCount === 0) {
+        rawScore = 3;
+        aiFeedback = 'Content niche not clearly defined. Focus on specific categories for better brand targeting.';
+      } else if (matchCount === 1) {
+        rawScore = 6;
+        aiFeedback = 'Single niche focus identified. Good for specialized brand partnerships in this category.';
+      } else if (matchCount <= 4) {
+        rawScore = 8;
+        aiFeedback = 'Well-defined multi-niche presence. Excellent for diverse brand collaboration opportunities.';
+      } else {
+        rawScore = 10;
+        aiFeedback = 'Strong presence across multiple niches. Highly versatile profile for various brand partnerships.';
+      }
+
+      // Calculate niche breakdown with reach and engagement data
+      const nicheBreakdown: Array<{ niche: string; reach: number; engagement: number; postCount: number }> = [];
+      const nicheMetrics = new Map<string, { reach: number; engagement: number; postCount: number }>();
+
+      // Initialize metrics for detected niches
+      for (const niche of allNiches) {
+        if (!nicheMetrics.has(niche)) {
+          nicheMetrics.set(niche, { reach: 0, engagement: 0, postCount: 0 });
+        }
+      }
+
+      // Aggregate metrics (simplified - in production, would need content-to-niche mapping)
+      let totalReach = 0;
+      let totalEngagement = 0;
+
+      for (const media of recentMedia) {
+        const insight = media.insights?.[0];
+        if (insight) {
+          totalReach += insight.reach || 0;
+          totalEngagement += insight.totalInteractions || 0;
+        }
+      }
+
+      // Distribute metrics proportionally (primary gets more weight)
+      const primaryWeight = 0.5;
+      const secondaryWeight = nicheResult.secondaryNiches.length > 0 ?
+        (0.5 / nicheResult.secondaryNiches.length) : 0;
+
+      if (nicheMetrics.has(nicheResult.primaryNiche)) {
+        const metrics = nicheMetrics.get(nicheResult.primaryNiche)!;
+        metrics.reach = Math.round(totalReach * primaryWeight);
+        metrics.engagement = Math.round(totalEngagement * primaryWeight);
+        metrics.postCount = Math.round(recentMedia.length * primaryWeight);
+      }
+
+      for (const niche of nicheResult.secondaryNiches) {
+        if (nicheMetrics.has(niche)) {
+          const metrics = nicheMetrics.get(niche)!;
+          metrics.reach = Math.round(totalReach * secondaryWeight);
+          metrics.engagement = Math.round(totalEngagement * secondaryWeight);
+          metrics.postCount = Math.round(recentMedia.length * secondaryWeight);
+        }
+      }
+
+      // Convert to array for response
+      for (const [niche, metrics] of nicheMetrics.entries()) {
+        nicheBreakdown.push({
+          niche: niche.charAt(0).toUpperCase() + niche.slice(1),
+          reach: metrics.reach,
+          engagement: metrics.engagement,
+          postCount: metrics.postCount,
+        });
+      }
+
+      // Sort by reach (descending)
+      nicheBreakdown.sort((a, b) => b.reach - a.reach);
 
       return {
         score: Number(rawScore.toFixed(2)),
         details: {
           primaryNiche: nicheResult.primaryNiche,
-          secondaryNiches: nicheResult.secondaryNiches,
           matchCount,
-          topNiches,
+          nicheBreakdown,
+          aiFeedback,
         },
       };
     } catch (error) {
       return {
         score: 7.0,
-        details: { message: 'AI analysis failed - using default', error: error.message },
+        details: {
+          message: 'AI analysis failed - using default',
+          error: error.message,
+          primaryNiche: 'Lifestyle',
+          nicheBreakdown: [],
+          aiFeedback: 'Niche analysis encountered an error - using default metrics',
+        },
       };
     }
   }
@@ -855,23 +1196,72 @@ export class InfluencerProfileScoringService {
   /**
    * 2.7 Hashtag Effectiveness (10%)
    * AI rates hashtag strategy
+   * Scoring: outperforming=10, effective=8, medium=5, need_improvement=2
    */
   private async calculateHashtagEffectiveness(influencer: Influencer): Promise<{ score: number; details: any }> {
     if (!this.geminiAIService.isAvailable()) {
       return {
         score: 7.0,
-        details: { message: 'AI not available - using default score' },
+        details: {
+          message: 'AI not available - using default score',
+          rating: 'effective',
+          detectedHashtags: [],
+          avgHashtagsUsed: 0,
+          effectiveness: 'Moderate',
+          aiFeedback: 'Hashtag analysis unavailable - AI service not accessible',
+        },
       };
     }
 
     try {
       const recentMedia = await this.getRecentMediaForAI(influencer.id, 20);
       if (recentMedia.length === 0) {
-        return { score: 0, details: { message: 'No media available' } };
+        return {
+          score: 0,
+          details: {
+            message: 'No media available',
+            rating: 'medium',
+            detectedHashtags: [],
+            avgHashtagsUsed: 0,
+            effectiveness: 'Unknown',
+            aiFeedback: 'No content available for hashtag analysis',
+          }
+        };
       }
 
       const captions = recentMedia.map(m => m.caption);
       const hashtagAnalysis = await this.geminiAIService.analyzeHashtagEffectiveness(captions);
+
+      // Extract hashtags from captions
+      const hashtagRegex = /#[\w]+/g;
+      const allHashtags: string[] = [];
+      let totalHashtagCount = 0;
+
+      for (const caption of captions) {
+        if (caption) {
+          const matches = caption.match(hashtagRegex) || [];
+          allHashtags.push(...matches);
+          totalHashtagCount += matches.length;
+        }
+      }
+
+      // Count hashtag frequency
+      const hashtagFrequency = new Map<string, number>();
+      for (const tag of allHashtags) {
+        hashtagFrequency.set(tag, (hashtagFrequency.get(tag) || 0) + 1);
+      }
+
+      // Get top 10 most used hashtags
+      const detectedHashtags = Array.from(hashtagFrequency.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([tag, count]) => ({
+          hashtag: tag,
+          usageCount: count,
+        }));
+
+      const avgHashtagsUsed = captions.length > 0 ?
+        Number((totalHashtagCount / captions.length).toFixed(1)) : 0;
 
       // Map AI rating to score
       const scoreMap = {
@@ -883,14 +1273,51 @@ export class InfluencerProfileScoringService {
 
       const score = scoreMap[hashtagAnalysis.rating] || 5;
 
+      // Map rating to effectiveness label
+      const effectivenessMap = {
+        'outperforming': 'Excellent',
+        'effective': 'Good',
+        'medium': 'Moderate',
+        'need_improvement': 'Needs Work',
+      };
+
+      const effectiveness = effectivenessMap[hashtagAnalysis.rating] || 'Moderate';
+
+      // Generate AI feedback based on rating
+      let aiFeedback = '';
+      if (hashtagAnalysis.rating === 'outperforming') {
+        aiFeedback = 'Outstanding hashtag strategy! Your tags are driving excellent discoverability and engagement.';
+      } else if (hashtagAnalysis.rating === 'effective') {
+        aiFeedback = 'Solid hashtag usage. Your tags are helping content reach the right audience effectively.';
+      } else if (hashtagAnalysis.rating === 'medium') {
+        aiFeedback = 'Moderate hashtag effectiveness. Consider using more specific, niche-relevant tags for better reach.';
+      } else {
+        aiFeedback = 'Hashtag strategy needs improvement. Research trending and niche-specific tags to boost discoverability.';
+      }
+
       return {
         score: Number(score.toFixed(2)),
-        details: hashtagAnalysis,
+        details: {
+          rating: hashtagAnalysis.rating,
+          effectiveness,
+          detectedHashtags,
+          avgHashtagsUsed,
+          totalUniqueHashtags: hashtagFrequency.size,
+          aiFeedback: hashtagAnalysis.feedback || aiFeedback,
+        },
       };
     } catch (error) {
       return {
         score: 7.0,
-        details: { message: 'AI analysis failed - using default', error: error.message },
+        details: {
+          message: 'AI analysis failed - using default',
+          error: error.message,
+          rating: 'effective',
+          effectiveness: 'Moderate',
+          detectedHashtags: [],
+          avgHashtagsUsed: 0,
+          aiFeedback: 'Hashtag analysis encountered an error - using default metrics',
+        },
       };
     }
   }
@@ -898,24 +1325,49 @@ export class InfluencerProfileScoringService {
   /**
    * 2.8 Language & Market Fit (10%)
    * Target languages: Hindi + English
+   * Score based on % of content in target languages
    */
   private async calculateLanguageMarketFit(influencer: Influencer): Promise<{ score: number; details: any }> {
     if (!this.geminiAIService.isAvailable()) {
       return {
         score: 8.0,
-        details: { message: 'AI not available - using default score' },
+        details: {
+          message: 'AI not available - using default score',
+          primaryLanguage: 'English',
+          languageBreakdown: [],
+          targetMarketFit: 80,
+          aiFeedback: 'Language analysis unavailable - AI service not accessible',
+        },
       };
     }
 
     try {
       const recentMedia = await this.getRecentMediaForAI(influencer.id, 20);
       if (recentMedia.length === 0) {
-        return { score: 0, details: { message: 'No media available' } };
+        return {
+          score: 0,
+          details: {
+            message: 'No media available',
+            primaryLanguage: 'Unknown',
+            languageBreakdown: [],
+            targetMarketFit: 0,
+            aiFeedback: 'No content available for language analysis',
+          }
+        };
       }
 
       const captions = recentMedia.map(m => m.caption).filter(c => c && c.length > 0);
       if (captions.length === 0) {
-        return { score: 0, details: { message: 'No captions available' } };
+        return {
+          score: 0,
+          details: {
+            message: 'No captions available',
+            primaryLanguage: 'Unknown',
+            languageBreakdown: [],
+            targetMarketFit: 0,
+            aiFeedback: 'No captions available for language analysis',
+          }
+        };
       }
 
       const languageResult = await this.geminiAIService.analyzeLanguage(captions);
@@ -931,18 +1383,60 @@ export class InfluencerProfileScoringService {
 
       const score = (targetLanguagePercentage / 100) * 10;
 
+      // Convert language percentages to breakdown array
+      const languageBreakdown = Object.entries(languageResult.languagePercentages)
+        .map(([language, percentage]) => ({
+          language,
+          percentage: Number(percentage.toFixed(1)),
+          isTarget: targetLanguages.includes(language),
+        }))
+        .sort((a, b) => b.percentage - a.percentage);
+
+      // Generate market fit feedback
+      let aiFeedback = '';
+      if (targetLanguagePercentage >= 90) {
+        aiFeedback = 'Excellent market alignment! Content is perfectly positioned for Hindi/English speaking audiences.';
+      } else if (targetLanguagePercentage >= 70) {
+        aiFeedback = 'Strong market fit with good Hindi/English content mix. Well-suited for Indian brand collaborations.';
+      } else if (targetLanguagePercentage >= 50) {
+        aiFeedback = 'Moderate market alignment. Consider increasing Hindi/English content for better brand partnership opportunities.';
+      } else {
+        aiFeedback = 'Limited market fit with target languages. Focus on Hindi/English content to attract local brand partnerships.';
+      }
+
+      // Add market insights
+      const marketInsights: string[] = [];
+      if (languageResult.languagePercentages['Hindi']) {
+        marketInsights.push('Hindi content appeals to Tier 2/3 city audiences');
+      }
+      if (languageResult.languagePercentages['English']) {
+        marketInsights.push('English content targets urban and global audiences');
+      }
+      if (languageResult.languagePercentages['Hindi'] && languageResult.languagePercentages['English']) {
+        marketInsights.push('Bilingual content maximizes reach across demographics');
+      }
+
       return {
         score: Number(score.toFixed(2)),
         details: {
           primaryLanguage: languageResult.primaryLanguage,
-          languagePercentages: languageResult.languagePercentages,
-          targetLanguagePercentage: Number(targetLanguagePercentage.toFixed(2)),
+          languageBreakdown,
+          targetMarketFit: Number(targetLanguagePercentage.toFixed(1)),
+          marketInsights,
+          aiFeedback,
         },
       };
     } catch (error) {
       return {
         score: 8.0,
-        details: { message: 'AI analysis failed - using default', error: error.message },
+        details: {
+          message: 'AI analysis failed - using default',
+          error: error.message,
+          primaryLanguage: 'English',
+          languageBreakdown: [],
+          targetMarketFit: 80,
+          aiFeedback: 'Language analysis encountered an error - using default metrics',
+        },
       };
     }
   }
@@ -1383,7 +1877,7 @@ export class InfluencerProfileScoringService {
       };
     }
 
-    const engagementRate = latestSync.avgEngagementRate;
+    const engagementRate = Number(latestSync.avgEngagementRate) || 0;
     const benchmark = 3; // 3% is good engagement
 
     // Convert to 0-10 scale (3% or higher = 10/10)

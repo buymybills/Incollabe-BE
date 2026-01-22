@@ -228,7 +228,7 @@ export class InfluencerCredibilityScoringService {
     const latestSync = syncHistory[0];
     const totalFollowers = latestSync.totalFollowers || 0;
     const activeFollowers = latestSync.activeFollowers || 0;
-    const authenticityPercentage = latestSync.activeFollowersPercentage || 0;
+    const authenticityPercentage = Number(latestSync.activeFollowersPercentage) || 0;
 
     if (totalFollowers === 0) {
       return {
@@ -412,7 +412,7 @@ export class InfluencerCredibilityScoringService {
       };
     }
 
-    const engagementRate = latestSync.avgEngagementRate;
+    const engagementRate = Number(latestSync.avgEngagementRate) || 0;
     const benchmark = 3; // Fixed 3% benchmark
 
     const score = Math.min(engagementRate / benchmark, 1) * 7;
