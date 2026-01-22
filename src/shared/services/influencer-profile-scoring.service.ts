@@ -1971,7 +1971,7 @@ export class InfluencerProfileScoringService {
       }],
     });
 
-    if (recentInsights.length < 5) {
+    if (recentInsights.length < 2) {
       return {
         score: 0,
         details: {
@@ -1981,7 +1981,7 @@ export class InfluencerProfileScoringService {
           industryAvg: 60,
           consistentPostsCount: 0,
           totalPostsAnalyzed: recentInsights.length,
-          aiFeedback: 'Need at least 5 posts in the last 30 days to calculate performance consistency',
+          aiFeedback: 'Need at least 2 posts in the last 30 days to calculate performance consistency',
         },
       };
     }

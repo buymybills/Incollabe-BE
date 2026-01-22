@@ -887,12 +887,12 @@ export class InfluencerCredibilityScoringService {
       order: [['instagramMedia', 'timestamp', 'DESC']],
     });
 
-    if (recentInsights.length < 5) {
+    if (recentInsights.length < 2) {
       return {
         score: 0, // 0 points if insufficient data
         maxPoints: 2,
         details: {
-          message: 'Insufficient posts for consistency calculation. Need at least 5 posts in last 30 days.',
+          message: 'Insufficient posts for consistency calculation. Need at least 2 posts in last 30 days.',
           postsFound: recentInsights.length,
         },
       };
