@@ -67,14 +67,13 @@ export interface ContentQualityScore {
   };
 }
 
-// Category 4: Engagement Strength (10 points)
+// Category 4: Engagement Strength (100 points for UI display)
 export interface EngagementStrengthScore {
-  score: number; // 0-10
-  maxScore: 10;
+  score: number; // 0-100 (for UI display)
+  maxScore: 100;
   breakdown: {
-    engagementOverview: { score: number; weight: 50; details: any };
+    engagementOverview: { score: number; weight: 70; details: any };
     performanceConsistency: { score: number; weight: 30; details: any };
-    retentionOverview: { score: number; weight: 20; details: any };
   };
 }
 
@@ -1837,32 +1836,33 @@ export class InfluencerProfileScoringService {
     const [
       engagementOverview,
       performanceConsistency,
-      retentionOverview,
     ] = await Promise.all([
       this.calculateEngagementOverview(influencer),
       this.calculatePerformanceConsistency(influencer),
-      this.calculateRetentionOverview(influencer),
     ]);
 
+    // Calculate score on 0-10 scale
     const score =
-      (engagementOverview.score * 0.50) +
-      (performanceConsistency.score * 0.30) +
-      (retentionOverview.score * 0.20);
+      (engagementOverview.score * 0.70) +
+      (performanceConsistency.score * 0.30);
+
+    // Convert to 0-100 scale for UI
+    const scoreOut100 = score * 10;
 
     return {
-      score: Number(score.toFixed(2)),
-      maxScore: 10,
+      score: Number(scoreOut100.toFixed(2)),
+      maxScore: 100, // Changed from 10 to 100 for UI
       breakdown: {
-        engagementOverview: { score: engagementOverview.score, weight: 50, details: engagementOverview.details },
-        performanceConsistency: { score: performanceConsistency.score, weight: 30, details: performanceConsistency.details },
-        retentionOverview: { score: retentionOverview.score, weight: 20, details: retentionOverview.details },
+        engagementOverview: { score: engagementOverview.score * 10, weight: 70, details: engagementOverview.details },
+        performanceConsistency: { score: performanceConsistency.score * 10, weight: 30, details: performanceConsistency.details },
       },
     };
   }
 
   /**
-   * 4.1 Engagement Overview (50%)
+   * 4.1 Engagement Overview (70%)
    * Overall engagement rate (likes + comments + saves + shares / reach)
+   * Enhanced with detailed metrics for UI display
    */
   private async calculateEngagementOverview(influencer: Influencer): Promise<{ score: number; details: any }> {
     const latestSync = await this.instagramProfileAnalysisModel.findOne({
@@ -1873,22 +1873,82 @@ export class InfluencerProfileScoringService {
     if (!latestSync || !latestSync.avgEngagementRate) {
       return {
         score: 0,
-        details: { message: 'No engagement data available' },
+        details: {
+          message: 'No engagement data available',
+          engagementRate: 0,
+          rating: 'Unknown',
+          industryAvg: 3.0,
+          avgReach: 0,
+          avgRepost: 0,
+          avgLike: 0,
+          avgComments: 0,
+          avgShare: 0,
+          avgSaves: 0,
+          reachToFollowerRatio: 0,
+          aiFeedback: 'No engagement data available to analyze',
+        },
       };
     }
 
     const engagementRate = Number(latestSync.avgEngagementRate) || 0;
-    const benchmark = 3; // 3% is good engagement
+    const benchmark = 3; // 3% is good engagement (industry avg for micro-influencers)
 
     // Convert to 0-10 scale (3% or higher = 10/10)
     const score = Math.min((engagementRate / benchmark) * 10, 10);
+
+    // Determine rating based on engagement rate
+    let rating = '';
+    if (engagementRate >= 5) rating = 'Exceptional';
+    else if (engagementRate >= 3) rating = 'Excellent';
+    else if (engagementRate >= 2) rating = 'Good';
+    else if (engagementRate >= 1) rating = 'Fair';
+    else rating = 'Needs Improvement';
+
+    // Calculate detailed metrics
+    const avgReach = latestSync.avgReach || 0;
+    const avgLike = Math.round((latestSync.totalLikes || 0) / (latestSync.postsAnalyzed || 1));
+    const avgComments = Math.round((latestSync.totalComments || 0) / (latestSync.postsAnalyzed || 1));
+    const avgShare = Math.round((latestSync.totalShares || 0) / (latestSync.postsAnalyzed || 1));
+    const avgSaves = Math.round((latestSync.totalSaves || 0) / (latestSync.postsAnalyzed || 1));
+
+    // Calculate reach to follower ratio
+    const totalFollowers = latestSync.totalFollowers || 1;
+    const reachToFollowerRatio = avgReach > 0 ? Number((avgReach / totalFollowers).toFixed(2)) : 0;
+
+    // Generate AI feedback based on engagement patterns
+    let aiFeedback = '';
+    if (engagementRate >= 5) {
+      aiFeedback = 'Outstanding engagement! Your audience is highly active and responsive to your content.';
+    } else if (engagementRate >= 3) {
+      aiFeedback = 'Your follower base shows healthy activity with no abnormal spikes.';
+    } else if (engagementRate >= 1.5) {
+      aiFeedback = 'Moderate engagement levels. Consider experimenting with content formats to boost interaction.';
+    } else {
+      aiFeedback = 'Engagement needs improvement. Focus on creating more compelling CTAs and interactive content.';
+    }
+
+    // Add specific insights based on reach ratio
+    if (reachToFollowerRatio >= 2) {
+      aiFeedback += ' Excellent reach extending beyond your follower base.';
+    } else if (reachToFollowerRatio < 0.5) {
+      aiFeedback += ' Low reach-to-follower ratio suggests content may need optimization for discovery.';
+    }
 
     return {
       score: Number(score.toFixed(2)),
       details: {
         engagementRate: Number(engagementRate.toFixed(2)),
-        benchmark,
-        postsAnalyzed: latestSync.postsAnalyzed,
+        rating,
+        industryAvg: benchmark,
+        avgReach: Math.round(avgReach),
+        avgRepost: Math.round(avgShare), // Repost = Share for Instagram
+        avgLike,
+        avgComments,
+        avgShare,
+        avgSaves,
+        reachToFollowerRatio,
+        postsAnalyzed: latestSync.postsAnalyzed || 0,
+        aiFeedback,
       },
     };
   }
@@ -1896,6 +1956,7 @@ export class InfluencerProfileScoringService {
   /**
    * 4.2 Performance Consistency (30%)
    * Coefficient of variation in reach
+   * Enhanced with rating, benchmarks, and AI feedback
    */
   private async calculatePerformanceConsistency(influencer: Influencer): Promise<{ score: number; details: any }> {
     const thirtyDaysAgo = new Date();
@@ -1913,7 +1974,15 @@ export class InfluencerProfileScoringService {
     if (recentInsights.length < 5) {
       return {
         score: 0,
-        details: { message: 'Insufficient posts for consistency calculation' },
+        details: {
+          message: 'Insufficient posts for consistency calculation',
+          performance: 0,
+          rating: 'Unknown',
+          industryAvg: 60,
+          consistentPostsCount: 0,
+          totalPostsAnalyzed: recentInsights.length,
+          aiFeedback: 'Need at least 5 posts in the last 30 days to calculate performance consistency',
+        },
       };
     }
 
@@ -1928,29 +1997,73 @@ export class InfluencerProfileScoringService {
     const consistencyScore = 1 / (1 + cv);
     const score = consistencyScore * 10;
 
+    // Convert consistency score to percentage (0-100)
+    const performancePercentage = consistencyScore * 100;
+
+    // Determine rating based on consistency
+    let rating = '';
+    if (performancePercentage >= 80) rating = 'Exceptional';
+    else if (performancePercentage >= 60) rating = 'Excellent';
+    else if (performancePercentage >= 40) rating = 'Good';
+    else if (performancePercentage >= 20) rating = 'Fair';
+    else rating = 'Needs Improvement';
+
+    // Count posts with consistent performance (within 80% of avg reach)
+    const consistencyThreshold = avgReach * 0.8;
+    const consistentPostsCount = reaches.filter(r => r >= consistencyThreshold).length;
+
+    // Calculate percentage change indicator
+    const firstHalfAvg = reaches.slice(0, Math.floor(reaches.length / 2))
+      .reduce((sum, r) => sum + r, 0) / Math.floor(reaches.length / 2);
+    const secondHalfAvg = reaches.slice(Math.floor(reaches.length / 2))
+      .reduce((sum, r) => sum + r, 0) / (reaches.length - Math.floor(reaches.length / 2));
+    const trendPercentage = firstHalfAvg > 0 ?
+      Number((((secondHalfAvg - firstHalfAvg) / firstHalfAvg) * 100).toFixed(1)) : 0;
+
+    // Generate AI feedback
+    let aiFeedback = '';
+    if (performancePercentage >= 70) {
+      aiFeedback = 'Your follower base shows healthy activity with no abnormal spikes.';
+    } else if (performancePercentage >= 50) {
+      aiFeedback = 'Moderate consistency. Some posts underperform - analyze top performers for insights.';
+    } else if (performancePercentage >= 30) {
+      aiFeedback = 'High variability in post performance. Review content strategy for more consistent results.';
+    } else {
+      aiFeedback = 'Inconsistent performance detected. Focus on understanding what content resonates with your audience.';
+    }
+
+    // Add trend insight
+    if (trendPercentage > 10) {
+      aiFeedback += ' Positive trend: recent posts showing improved performance.';
+    } else if (trendPercentage < -10) {
+      aiFeedback += ' Declining trend: recent posts underperforming compared to earlier ones.';
+    }
+
     return {
       score: Number(score.toFixed(2)),
       details: {
+        performance: Number(performancePercentage.toFixed(1)),
+        rating,
+        industryAvg: 60, // Industry average consistency benchmark
         coefficientOfVariation: Number(cv.toFixed(3)),
+        consistentPostsCount,
+        totalPostsAnalyzed: reaches.length,
         avgReach: Math.round(avgReach),
         stdDev: Math.round(stdDev),
-        postsAnalyzed: reaches.length,
+        trendPercentage,
+        aiFeedback,
       },
     };
   }
 
   /**
-   * 4.3 Retention Overview (20%)
-   * Placeholder - video watch time when available
+   * 4.3 Retention Overview - REMOVED
+   * This metric has been removed from Engagement Strength calculation as per UI design requirements.
+   * Retention metrics are no longer included in the engagement strength score.
+   *
+   * Previous implementation awarded full points as a placeholder until Instagram video insights became available.
+   * If retention metrics are needed in the future, they should be implemented as a separate category.
    */
-  private async calculateRetentionOverview(_influencer: Influencer): Promise<{ score: number; details: any }> {
-    return {
-      score: 10.0, // Full points for now
-      details: {
-        message: 'Full points awarded. Video retention tracking will be implemented when Instagram video insights become available.',
-      },
-    };
-  }
 
   // ==================== CATEGORY 5: GROWTH MOMENTUM (10 pts) ====================
 
