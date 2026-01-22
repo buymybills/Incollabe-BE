@@ -12,8 +12,11 @@ import { GeminiAIService } from './gemini-ai.service';
 // ==================== INTERFACES ====================
 
 export interface ProfileScore {
-  totalScore: number;
-  maxScore: 60; // 10 points per category × 6 categories
+  totalScore: number; // 0-100 (average of all 6 categories)
+  maxScore: 100;
+  scoreChange: number; // Change from previous week (e.g., -3, +5)
+  grade: string; // A+, A, B+, B, C+, C, D, F
+  profileSummary: string; // AI-generated summary (e.g., "Strong niche clarity • Weak growth momentum")
   categories: {
     audienceQuality: AudienceQualityScore;
     contentRelevance: ContentRelevanceScore;
@@ -77,10 +80,10 @@ export interface EngagementStrengthScore {
   };
 }
 
-// Category 5: Growth Momentum (10 points)
+// Category 5: Growth Momentum (100 points for UI display)
 export interface GrowthMomentumScore {
-  score: number; // 0-10
-  maxScore: 10;
+  score: number; // 0-100 (for UI display)
+  maxScore: 100;
   breakdown: {
     growthTrend: { score: number; weight: 60; details: any };
     postingBehaviour: { score: number; weight: 40; details: any };
@@ -142,17 +145,38 @@ export class InfluencerProfileScoringService {
       this.calculateMonetisation(influencer),
     ]);
 
-    const totalScore =
+    // Calculate average of all categories (each is 0-100) to get final score out of 100
+    const totalScore = (
       audienceQuality.score +
       contentRelevance.score +
       contentQuality.score +
       engagementStrength.score +
       growthMomentum.score +
-      monetisation.score;
+      monetisation.score
+    ) / 6;
+
+    // Calculate score change from previous week
+    const scoreChange = await this.calculateScoreChange(influencerId, totalScore);
+
+    // Generate grade based on total score
+    const grade = this.calculateGrade(totalScore);
+
+    // Generate AI profile summary
+    const profileSummary = this.generateProfileSummary({
+      audienceQuality,
+      contentRelevance,
+      contentQuality,
+      engagementStrength,
+      growthMomentum,
+      monetisation,
+    });
 
     return {
       totalScore: Number(totalScore.toFixed(2)),
-      maxScore: 60,
+      maxScore: 100,
+      scoreChange,
+      grade,
+      profileSummary,
       categories: {
         audienceQuality,
         contentRelevance,
@@ -2076,16 +2100,20 @@ export class InfluencerProfileScoringService {
       this.calculatePostingBehaviour(influencer),
     ]);
 
+    // Calculate on 0-10 scale, then convert to 0-100 for UI
     const score =
       (growthTrend.score * 0.60) +
       (postingBehaviour.score * 0.40);
 
+    // Convert to 0-100 scale for UI
+    const scoreOut100 = score * 10;
+
     return {
-      score: Number(score.toFixed(2)),
-      maxScore: 10,
+      score: Number(scoreOut100.toFixed(2)),
+      maxScore: 100, // Changed from 10 to 100 for UI
       breakdown: {
-        growthTrend: { score: growthTrend.score, weight: 60, details: growthTrend.details },
-        postingBehaviour: { score: postingBehaviour.score, weight: 40, details: postingBehaviour.details },
+        growthTrend: { score: growthTrend.score * 10, weight: 60, details: growthTrend.details },
+        postingBehaviour: { score: postingBehaviour.score * 10, weight: 40, details: postingBehaviour.details },
       },
     };
   }
@@ -2747,5 +2775,83 @@ export class InfluencerProfileScoringService {
         caption: m.caption || '',
         mediaUrl: m.mediaUrl || '',
       }));
+  }
+
+  /**
+   * Calculate score change from previous calculation
+   * Compares current total score with the last calculated score
+   */
+  private async calculateScoreChange(influencerId: number, currentScore: number): Promise<number> {
+    // TODO: Implement score history tracking in database
+    // For now, return 0 as placeholder
+    // Future implementation:
+    // 1. Store each calculation in a score_history table with timestamp
+    // 2. Query the last calculation from 7 days ago (or closest)
+    // 3. Return the difference: currentScore - previousScore
+    return 0;
+  }
+
+  /**
+   * Calculate letter grade based on total score
+   * A+: 95-100, A: 90-94, B+: 85-89, B: 80-84, C+: 75-79
+   * C: 70-74, D: 60-69, F: 0-59
+   */
+  private calculateGrade(score: number): string {
+    if (score >= 95) return 'A+';
+    if (score >= 90) return 'A';
+    if (score >= 85) return 'B+';
+    if (score >= 80) return 'B';
+    if (score >= 75) return 'C+';
+    if (score >= 70) return 'C';
+    if (score >= 60) return 'D';
+    return 'F';
+  }
+
+  /**
+   * Generate AI profile summary based on category scores
+   * Returns a summary like "Strong niche clarity • Weak growth momentum"
+   */
+  private generateProfileSummary(categories: {
+    audienceQuality: AudienceQualityScore;
+    contentRelevance: ContentRelevanceScore;
+    contentQuality: ContentQualityScore;
+    engagementStrength: EngagementStrengthScore;
+    growthMomentum: GrowthMomentumScore;
+    monetisation: MonetisationScore;
+  }): string {
+    const insights: string[] = [];
+
+    // Analyze each category and identify strengths/weaknesses
+    const categoryAnalysis = [
+      { name: 'niche clarity', score: categories.contentRelevance.score },
+      { name: 'audience quality', score: categories.audienceQuality.score },
+      { name: 'content quality', score: categories.contentQuality.score },
+      { name: 'engagement', score: categories.engagementStrength.score },
+      { name: 'growth momentum', score: categories.growthMomentum.score },
+      { name: 'monetisation readiness', score: categories.monetisation.score },
+    ];
+
+    // Find strongest (≥75) and weakest (<60) areas
+    const strengths = categoryAnalysis.filter(c => c.score >= 75);
+    const weaknesses = categoryAnalysis.filter(c => c.score < 60);
+
+    // Add one strong area if available
+    if (strengths.length > 0) {
+      const strongest = strengths.sort((a, b) => b.score - a.score)[0];
+      insights.push(`Strong ${strongest.name}`);
+    }
+
+    // Add one weak area if available
+    if (weaknesses.length > 0) {
+      const weakest = weaknesses.sort((a, b) => a.score - b.score)[0];
+      insights.push(`Weak ${weakest.name}`);
+    }
+
+    // If no clear strengths/weaknesses, provide balanced summary
+    if (insights.length === 0) {
+      insights.push('Balanced profile across all areas');
+    }
+
+    return insights.join(' • ');
   }
 }
