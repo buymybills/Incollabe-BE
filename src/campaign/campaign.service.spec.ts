@@ -343,8 +343,6 @@ describe('CampaignService', () => {
         },
         include: expect.any(Array),
         order: [['createdAt', 'DESC']],
-        limit: 10,
-        offset: 0,
         distinct: true,
       });
     });
@@ -718,6 +716,13 @@ describe('CampaignService', () => {
           username: 'testinfluencer',
           isProfileCompleted: true,
           isWhatsappVerified: true,
+          toJSON: jest.fn().mockReturnValue({
+            id: 1,
+            name: 'Test Influencer',
+            username: 'testinfluencer',
+            isProfileCompleted: true,
+            isWhatsappVerified: true,
+          }),
         },
       ];
 
@@ -729,7 +734,15 @@ describe('CampaignService', () => {
       const result = await service.searchInfluencers(searchDto);
 
       expect(result).toEqual({
-        influencers: mockInfluencers,
+        influencers: [
+          {
+            id: 1,
+            name: 'Test Influencer',
+            username: 'testinfluencer',
+            isProfileCompleted: true,
+            isWhatsappVerified: true,
+          },
+        ],
         total: 1,
         page: 1,
         limit: 20,
@@ -743,8 +756,6 @@ describe('CampaignService', () => {
         include: expect.any(Array),
         attributes: expect.any(Array),
         order: [['createdAt', 'DESC']],
-        limit: 20,
-        offset: 0,
         distinct: true,
       });
     });
