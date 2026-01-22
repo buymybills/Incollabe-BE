@@ -15,7 +15,7 @@ export interface ProfileScore {
   totalScore: number; // 0-100 (average of all 6 categories)
   maxScore: 100;
   scoreChange: number; // Change from previous week (e.g., -3, +5)
-  grade: string; // A+, A, B+, B, C+, C, D, F
+  grade: string; // "Strong Profile", "Good Profile", "Average Profile", or "Weak Profile"
   profileSummary: string; // AI-generated summary (e.g., "Strong niche clarity • Weak growth momentum")
   categories: {
     audienceQuality: AudienceQualityScore;
@@ -2792,19 +2792,14 @@ export class InfluencerProfileScoringService {
   }
 
   /**
-   * Calculate letter grade based on total score
-   * A+: 95-100, A: 90-94, B+: 85-89, B: 80-84, C+: 75-79
-   * C: 70-74, D: 60-69, F: 0-59
+   * Calculate profile strength based on total score
+   * 100-75: Strong, 75-50: Good, 50-25: Average, 25-0: Weak
    */
   private calculateGrade(score: number): string {
-    if (score >= 95) return 'A+';
-    if (score >= 90) return 'A';
-    if (score >= 85) return 'B+';
-    if (score >= 80) return 'B';
-    if (score >= 75) return 'C+';
-    if (score >= 70) return 'C';
-    if (score >= 60) return 'D';
-    return 'F';
+    if (score >= 75) return 'Strong Profile';
+    if (score >= 50) return 'Good Profile';
+    if (score >= 25) return 'Average Profile';
+    return 'Weak Profile';
   }
 
   /**
