@@ -1187,6 +1187,31 @@ export class InstagramService {
         .sort((a: any, b: any) => b.count - a.count)
         .slice(0, 10);
 
+      // Check if all demographic data is empty (indicates Facebook Page not connected)
+      const isAllDataEmpty = ageGender.length === 0 && cities.length === 0 && countries.length === 0;
+
+      if (isAllDataEmpty) {
+        console.log(`⚠️  Empty demographics data for ${userType} ${userId} - Facebook Page likely not connected`);
+        return {
+          ageGender: [],
+          cities: [],
+          countries: [],
+          totalFollowers: user.instagramFollowersCount || 0,
+          dataAvailable: false,
+          error: {
+            code: 'FACEBOOK_PAGE_REQUIRED',
+            message: 'Audience demographics require Instagram Business Account connected to a Facebook Page',
+            details: 'Instagram API does not provide follower demographics without Facebook Page integration.',
+            instructions: [
+              '1. Ensure your Instagram account is a Business account (not Creator or Personal)',
+              '2. Create or connect a Facebook Page to your Instagram Business account',
+              '3. In Instagram Settings → Account → Linked Accounts → Facebook, link your Facebook Page',
+            ],
+            alternative: 'Without Facebook Page connection, demographics data will not be available via Instagram API.',
+          },
+        };
+      }
+
       // Store demographic snapshot for variance tracking
       try {
         const audienceAgeGender = ageGender.map((item: any) => ({
