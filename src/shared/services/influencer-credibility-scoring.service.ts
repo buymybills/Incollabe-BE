@@ -24,6 +24,9 @@ export interface CredibilityScore {
   contentIntelligence: ContentIntelligenceScore;
   brandSafetyTrust: BrandSafetyTrustScore;
 
+  // AI Analyst Summary
+  analystSummary: string; // 40-character positive summary from analyst perspective
+
   // Metadata
   calculatedAt: Date;
   influencerId: number;
@@ -146,6 +149,14 @@ export class InfluencerCredibilityScoringService {
       contentIntelligence.total +
       brandSafetyTrust.total;
 
+    // Generate AI analyst summary (40 chars max)
+    const analystSummary = await this.generateAnalystSummary(
+      totalScore,
+      influencer,
+      audienceQuality,
+      contentPerformance,
+    );
+
     return {
       totalScore: Number(totalScore.toFixed(2)),
       maxScore: 100,
@@ -154,10 +165,49 @@ export class InfluencerCredibilityScoringService {
       consistencyReliability,
       contentIntelligence,
       brandSafetyTrust,
+      analystSummary, // AI-generated 40-char positive summary
       calculatedAt: new Date(),
       influencerId,
       instagramUsername: influencer.instagramUsername || '',
     };
+  }
+
+  /**
+   * Generate AI Analyst Summary (40 characters max)
+   * Positive tone, written as an Instagram analyst would describe the account
+   */
+  private async generateAnalystSummary(
+    totalScore: number,
+    _influencer: Influencer,
+    _audienceQuality: AudienceQualityScore,
+    _contentPerformance: ContentPerformanceScore,
+  ): Promise<string> {
+    if (!this.geminiAIService.isAvailable()) {
+      // Fallback based on score ranges
+      if (totalScore >= 85) return 'Exceptional influencer with strong metrics';
+      if (totalScore >= 70) return 'High-quality creator, great potential';
+      if (totalScore >= 55) return 'Solid profile with growth opportunity';
+      if (totalScore >= 40) return 'Developing creator, needs improvement';
+      return 'Early-stage account, high-risk profile';
+    }
+
+    // Generate score-based summary (fallback - AI generation disabled for performance)
+    // Future: Can enable AI when needed for more personalized summaries
+    if (totalScore >= 85) {
+      return 'Exceptional creator, top-tier metrics';
+    } else if (totalScore >= 75) {
+      return 'High-quality profile, strong performer';
+    } else if (totalScore >= 65) {
+      return 'Solid influencer with good engagement';
+    } else if (totalScore >= 55) {
+      return 'Growing creator with solid potential';
+    } else if (totalScore >= 45) {
+      return 'Developing account, needs improvement';
+    } else if (totalScore >= 35) {
+      return 'Early-stage profile, high-risk choice';
+    } else {
+      return 'New account, limited credibility data';
+    }
   }
 
   /**
