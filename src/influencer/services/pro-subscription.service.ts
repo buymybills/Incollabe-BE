@@ -1355,17 +1355,57 @@ export class ProSubscriptionService {
         if (existingChargeInvoice) {
           console.log(`✅ Invoice already exists for this period: ${existingChargeInvoice.invoiceNumber}`);
         } else {
-          // Create invoice for this charge
-          const chargeAmount = subscriptionEntity.amount || this.PRO_SUBSCRIPTION_AMOUNT;
+          // Get influencer with city information for tax calculation
+          const influencerWithCity = await this.influencerModel.findByPk(subscription.influencerId, {
+            include: [
+              {
+                model: this.cityModel,
+                as: 'city',
+              },
+            ],
+          });
+
+          // Calculate taxes based on location
+          // Total = 19900 paise (Rs 199)
+          // Base = 168.64 (in paise: 16864)
+          // IGST = 30.35 (in paise: 3035)
+          // CGST = 30.35/2 = 15.175 (in paise: 1518)
+          // SGST = 30.35/2 = 15.175 (in paise: 1517)
+          const totalAmount = this.PRO_SUBSCRIPTION_AMOUNT; // 19900 paise
+          const baseAmount = 16864; // Rs 168.64 in paise
+
+          let cgst = 0;
+          let sgst = 0;
+          let igst = 0;
+          let totalTax = 0;
+
+          // Check if influencer location is Delhi
+          const cityName = influencerWithCity?.city?.name?.toLowerCase();
+          const isDelhi = cityName === 'delhi' || cityName === 'new delhi';
+
+          if (isDelhi) {
+            // For Delhi: CGST and SGST (total tax = 3035 paise = Rs 30.35)
+            cgst = 1518; // Rs 15.18
+            sgst = 1517; // Rs 15.17 (total: 3035 paise)
+            totalTax = cgst + sgst; // 3035
+          } else {
+            // For other locations: IGST
+            igst = 3035; // Rs 30.35
+            totalTax = igst;
+          }
+
           const invoiceNumber = await this.generateInvoiceNumber(subscription.influencerId);
 
           const newInvoice = await this.proInvoiceModel.create({
             invoiceNumber,
             subscriptionId: subscription.id,
             influencerId: subscription.influencerId,
-            amount: chargeAmount,
-            tax: 0,
-            totalAmount: chargeAmount,
+            amount: baseAmount,
+            tax: totalTax,
+            cgst,
+            sgst,
+            igst,
+            totalAmount: totalAmount,
             billingPeriodStart: subscription.currentPeriodStart,
             billingPeriodEnd: subscription.currentPeriodEnd,
             paymentStatus: 'paid',
@@ -1374,7 +1414,7 @@ export class ProSubscriptionService {
             paidAt: createDatabaseDate(),
           });
 
-          console.log(`✅ Recurring charge invoice created: ${newInvoice.invoiceNumber}`);
+          console.log(`✅ Recurring charge invoice created: ${newInvoice.invoiceNumber} (CGST: ${cgst}, SGST: ${sgst}, IGST: ${igst})`);
 
           // Generate invoice PDF
           try {
