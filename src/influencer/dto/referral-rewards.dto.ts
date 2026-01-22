@@ -53,7 +53,7 @@ export class ReferralHistoryItemDto {
   })
   joinedAt: Date;
 
-  @ApiProperty({ example: 100, description: 'Reward earned for this referral (in Rs)' })
+  @ApiProperty({ example: 25, description: 'Reward earned for this referral (in Rs)' })
   rewardEarned: number;
 
   @ApiProperty({

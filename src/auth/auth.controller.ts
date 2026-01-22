@@ -1141,7 +1141,7 @@ export class AuthController {
   @ApiOperation({
     summary: 'Validate referral code',
     description:
-      'Check if a referral code is valid and within monthly usage limit. This endpoint can be called before signup to validate the referral code.',
+      'Check if a referral code is valid and within monthly usage limit (max 20 per month). This endpoint can be called before signup to validate the referral code.',
   })
   @ApiBody({
     schema: {
@@ -1174,7 +1174,7 @@ export class AuthController {
                 referrerName: { type: 'string', example: 'Dhruv Bhatia' },
                 referrerUsername: { type: 'string', example: 'dhruv_1109' },
                 usageCount: { type: 'number', example: 2 },
-                monthlyLimit: { type: 'number', example: 5 },
+                monthlyLimit: { type: 'number', example: 20 },
               },
             },
           },

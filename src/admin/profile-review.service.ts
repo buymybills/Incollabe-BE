@@ -394,7 +394,7 @@ export class ProfileReviewService {
             if (referrer) {
               // Update referrer's credits
               const currentCredits = referrer.referralCredits || 0;
-              const newCredits = currentCredits + 100;
+              const newCredits = currentCredits + 25;
 
               await this.influencerModel.update(
                 { referralCredits: newCredits },
@@ -405,7 +405,7 @@ export class ProfileReviewService {
               await this.creditTransactionModel.create({
                 influencerId: referrer.id,
                 transactionType: CreditTransactionType.REFERRAL_BONUS,
-                amount: 100,
+                amount: 25,
                 paymentStatus: PaymentStatus.PENDING,
                 description: `Referral bonus for referring user ID ${influencer.id}`,
                 referredUserId: influencer.id,
@@ -422,7 +422,7 @@ export class ProfileReviewService {
                 `├─ Referee ID: ${influencer.id} (${influencer.name})`,
               );
               console.log(
-                `├─ Amount Earned: Rs 100`,
+                `├─ Amount Earned: Rs 25`,
               );
               console.log(
                 `├─ Total Credits Now: Rs ${newCredits}`,
@@ -432,7 +432,7 @@ export class ProfileReviewService {
               );
 
               // Send notification to referrer
-              let notificationMsg = `Congratulations! You have earned Rs 100 credit through the referral programme. Your total referral credits are now Rs ${newCredits}.`;
+              let notificationMsg = `Congratulations! You have earned Rs 25 credit through the referral programme. Your total referral credits are now Rs ${newCredits}.`;
 
               if (!referrer.upiId) {
                 notificationMsg +=

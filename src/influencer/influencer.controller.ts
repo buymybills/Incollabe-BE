@@ -1630,7 +1630,7 @@ export class InfluencerController {
             profileImage: 'https://incollabstaging.s3.ap-south-1.amazonaws.com/...',
             isVerified: true,
             joinedAt: '2025-11-10T01:23:00.000Z',
-            rewardEarned: 100,
+            rewardEarned: 25,
             rewardStatus: 'paid',
             creditTransactionId: 123,
           },
