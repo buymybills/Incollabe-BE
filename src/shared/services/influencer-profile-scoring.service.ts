@@ -27,10 +27,10 @@ export interface ProfileScore {
   instagramUsername: string;
 }
 
-// Category 1: Audience Quality (10 points)
+// Category 1: Audience Quality (100 points for UI display)
 export interface AudienceQualityScore {
-  score: number; // 0-10
-  maxScore: 10;
+  score: number; // 0-100 (for UI display)
+  maxScore: 100;
   breakdown: {
     followerAuthenticity: { score: number; weight: 65; details: any };
     demographicsSnapshot: { score: number; weight: 20; details: any };
@@ -181,13 +181,16 @@ export class InfluencerProfileScoringService {
       (demographicsSnapshot.score * 0.20) +
       (geoRelevance.score * 0.15);
 
+    // Convert to 0-100 scale for UI
+    const scoreOut100 = score * 10;
+
     return {
-      score: Number(score.toFixed(2)),
-      maxScore: 10,
+      score: Number(scoreOut100.toFixed(2)),
+      maxScore: 100, // Changed from 10 to 100 for UI
       breakdown: {
-        followerAuthenticity: { score: followerAuthenticity.score, weight: 65, details: followerAuthenticity.details },
-        demographicsSnapshot: { score: demographicsSnapshot.score, weight: 20, details: demographicsSnapshot.details },
-        geoRelevance: { score: geoRelevance.score, weight: 15, details: geoRelevance.details },
+        followerAuthenticity: { score: followerAuthenticity.score * 10, weight: 65, details: followerAuthenticity.details },
+        demographicsSnapshot: { score: demographicsSnapshot.score * 10, weight: 20, details: demographicsSnapshot.details },
+        geoRelevance: { score: geoRelevance.score * 10, weight: 15, details: geoRelevance.details },
       },
     };
   }
@@ -197,12 +200,13 @@ export class InfluencerProfileScoringService {
    * Uses stored 30-day snapshots from credibility scoring
    */
   private async calculateFollowerAuthenticity(influencer: Influencer): Promise<{ score: number; details: any }> {
-    const latestSync = await this.instagramProfileAnalysisModel.findOne({
+    const snapshots = await this.instagramProfileAnalysisModel.findAll({
       where: { influencerId: influencer.id },
       order: [['syncDate', 'DESC']],
+      limit: 2,
     });
 
-    if (!latestSync || !latestSync.activeFollowersPercentage) {
+    if (snapshots.length === 0 || !snapshots[0].activeFollowersPercentage) {
       return {
         score: 0,
         details: {
@@ -212,18 +216,60 @@ export class InfluencerProfileScoringService {
       };
     }
 
+    const latestSync = snapshots[0];
+    const previousSync = snapshots.length > 1 ? snapshots[1] : null;
+
     const authenticityPercentage = latestSync.activeFollowersPercentage;
+    const activeFollowers = latestSync.activeFollowers || 0;
+    const totalFollowers = latestSync.totalFollowers || 0;
+
+    // Calculate change from previous sync
+    let change = 0;
+    if (previousSync && previousSync.activeFollowersPercentage) {
+      change = Number((authenticityPercentage - previousSync.activeFollowersPercentage).toFixed(2));
+    }
 
     // Convert authenticity % to 0-10 scale
     // 25%+ active = 10/10, scales down linearly
     const score = Math.min((authenticityPercentage / 25) * 10, 10);
 
+    // Determine rating title based on percentage
+    let rating = '';
+    if (authenticityPercentage >= 70) {
+      rating = 'Excellent Follower Base';
+    } else if (authenticityPercentage >= 50) {
+      rating = 'Strong Follower Base';
+    } else if (authenticityPercentage >= 30) {
+      rating = 'Good Follower Base';
+    } else if (authenticityPercentage >= 15) {
+      rating = 'Moderate Follower Base';
+    } else {
+      rating = 'Weak Follower Base';
+    }
+
+    // Generate AI feedback
+    let feedback = '';
+    if (authenticityPercentage >= 60 && Math.abs(change) < 5) {
+      feedback = 'Your follower base shows healthy activity with no abnormal spikes.';
+    } else if (authenticityPercentage >= 60 && change > 5) {
+      feedback = 'Strong follower growth with healthy engagement patterns.';
+    } else if (authenticityPercentage < 30) {
+      feedback = 'Low active follower percentage may indicate fake followers or inactive audience.';
+    } else if (change < -5) {
+      feedback = 'Declining active follower rate - review content strategy and engagement.';
+    } else {
+      feedback = 'Stable follower base with room for improvement in engagement.';
+    }
+
     return {
       score: Number(score.toFixed(2)),
       details: {
         authenticityPercentage: Number(authenticityPercentage.toFixed(2)),
-        totalFollowers: latestSync.totalFollowers,
-        activeFollowers: latestSync.activeFollowers,
+        totalFollowers,
+        activeFollowers,
+        rating,
+        feedback,
+        change,
         syncDate: latestSync.syncDate,
       },
     };
@@ -231,7 +277,7 @@ export class InfluencerProfileScoringService {
 
   /**
    * 1.2 Demographics Snapshot (20%)
-   * Uses demographic stability from credibility scoring
+   * Uses demographic stability from credibility scoring with detailed breakdown
    */
   private async calculateDemographicsSnapshot(influencer: Influencer): Promise<{ score: number; details: any }> {
     const snapshots = await this.instagramProfileAnalysisModel.findAll({
@@ -244,53 +290,166 @@ export class InfluencerProfileScoringService {
       snapshot => snapshot.audienceAgeGender && snapshot.audienceAgeGender.length > 0
     );
 
-    if (historicalSnapshots.length < 2) {
-      return {
-        score: 10, // Full points for new accounts
-        details: {
-          message: 'First sync completed. Demographic stability will be calculated after next sync.',
-          snapshotsFound: historicalSnapshots.length,
-        },
-      };
+    const latestSnapshot = historicalSnapshots[0];
+    const totalFollowers = latestSnapshot?.totalFollowers || influencer.instagramFollowersCount || 0;
+
+    // Calculate gender breakdown
+    const genderBreakdown = {
+      male: { count: 0, percentage: 0 },
+      female: { count: 0, percentage: 0 },
+      others: { count: 0, percentage: 0 },
+    };
+
+    const ageBreakdown: Array<{
+      ageRange: string;
+      percentage: number;
+      malePercentage: number;
+      femalePercentage: number;
+      othersPercentage: number;
+    }> = [];
+
+    if (latestSnapshot && latestSnapshot.audienceAgeGender) {
+      // Aggregate by gender
+      const genderTotals: { [key: string]: number } = {};
+      const ageRangeTotals: { [key: string]: { total: number; male: number; female: number; others: number } } = {};
+
+      for (const segment of latestSnapshot.audienceAgeGender) {
+        const gender = segment.gender?.toLowerCase() || 'unknown';
+        const ageRange = segment.ageRange || 'unknown';
+        const percentage = segment.percentage || 0;
+
+        // Gender totals
+        if (gender === 'male' || gender === 'm') {
+          genderTotals.male = (genderTotals.male || 0) + percentage;
+        } else if (gender === 'female' || gender === 'f') {
+          genderTotals.female = (genderTotals.female || 0) + percentage;
+        } else {
+          genderTotals.others = (genderTotals.others || 0) + percentage;
+        }
+
+        // Age range breakdown
+        if (!ageRangeTotals[ageRange]) {
+          ageRangeTotals[ageRange] = { total: 0, male: 0, female: 0, others: 0 };
+        }
+        ageRangeTotals[ageRange].total += percentage;
+
+        if (gender === 'male' || gender === 'm') {
+          ageRangeTotals[ageRange].male += percentage;
+        } else if (gender === 'female' || gender === 'f') {
+          ageRangeTotals[ageRange].female += percentage;
+        } else {
+          ageRangeTotals[ageRange].others += percentage;
+        }
+      }
+
+      // Calculate gender breakdown with counts
+      genderBreakdown.male.percentage = Number((genderTotals.male || 0).toFixed(2));
+      genderBreakdown.male.count = Math.round((totalFollowers * genderBreakdown.male.percentage) / 100);
+
+      genderBreakdown.female.percentage = Number((genderTotals.female || 0).toFixed(2));
+      genderBreakdown.female.count = Math.round((totalFollowers * genderBreakdown.female.percentage) / 100);
+
+      genderBreakdown.others.percentage = Number((genderTotals.others || 0).toFixed(2));
+      genderBreakdown.others.count = Math.round((totalFollowers * genderBreakdown.others.percentage) / 100);
+
+      // Build age breakdown
+      const ageOrder = ['13-17', '18-24', '25-34', '35-44', '45-54', '55-64', '65+'];
+      for (const ageRange of Object.keys(ageRangeTotals)) {
+        const data = ageRangeTotals[ageRange];
+        ageBreakdown.push({
+          ageRange,
+          percentage: Number(data.total.toFixed(2)),
+          malePercentage: Number(data.male.toFixed(2)),
+          femalePercentage: Number(data.female.toFixed(2)),
+          othersPercentage: Number(data.others.toFixed(2)),
+        });
+      }
+
+      // Sort by age order
+      ageBreakdown.sort((a, b) => {
+        const aIndex = ageOrder.findIndex(range => a.ageRange.includes(range.split('-')[0]));
+        const bIndex = ageOrder.findIndex(range => b.ageRange.includes(range.split('-')[0]));
+        return aIndex - bIndex;
+      });
     }
 
-    // Calculate variance across demographics
-    const segmentVariances: { [key: string]: number[] } = {};
+    // Calculate variance/stability score
+    let score = 10;
+    let varianceIndex = 0;
+    let change = 0;
 
-    for (const snapshot of historicalSnapshots) {
-      if (!snapshot.audienceAgeGender) continue;
+    if (historicalSnapshots.length >= 2) {
+      const segmentVariances: { [key: string]: number[] } = {};
 
-      for (const segment of snapshot.audienceAgeGender) {
-        const key = `${segment.ageRange}_${segment.gender || 'ALL'}`;
-        if (!segmentVariances[key]) {
-          segmentVariances[key] = [];
+      for (const snapshot of historicalSnapshots) {
+        if (!snapshot.audienceAgeGender) continue;
+
+        for (const segment of snapshot.audienceAgeGender) {
+          const key = `${segment.ageRange}_${segment.gender || 'ALL'}`;
+          if (!segmentVariances[key]) {
+            segmentVariances[key] = [];
+          }
+          segmentVariances[key].push(segment.percentage);
         }
-        segmentVariances[key].push(segment.percentage);
+      }
+
+      const varianceScores: number[] = [];
+
+      for (const percentages of Object.values(segmentVariances)) {
+        if (percentages.length < 2) continue;
+
+        const mean = percentages.reduce((sum, val) => sum + val, 0) / percentages.length;
+        const variance = percentages.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / percentages.length;
+        const stdDev = Math.sqrt(variance);
+        const normalizedVariance = Math.min(stdDev / 10, 1);
+        varianceScores.push(normalizedVariance);
+      }
+
+      varianceIndex = varianceScores.length > 0
+        ? varianceScores.reduce((sum, v) => sum + v, 0) / varianceScores.length
+        : 0.25;
+
+      // Convert to 0-10 scale (lower variance = higher score)
+      score = (1 - varianceIndex) * 10;
+
+      // Calculate change indicator (simple difference in largest segment)
+      const previousSnapshot = historicalSnapshots[1];
+      if (previousSnapshot) {
+        const latestTotal = totalFollowers;
+        const previousTotal = previousSnapshot.totalFollowers || latestTotal;
+        change = latestTotal - previousTotal;
       }
     }
 
-    const varianceScores: number[] = [];
+    // Identify core audience (highest percentage segment)
+    let coreAudience = 'Unknown';
+    let coreFeedback = 'Analyzing audience demographics...';
 
-    for (const percentages of Object.values(segmentVariances)) {
-      if (percentages.length < 2) continue;
+    if (ageBreakdown.length > 0) {
+      const topSegment = ageBreakdown.reduce((max, curr) => curr.percentage > max.percentage ? curr : max);
+      const topGender = topSegment.malePercentage > topSegment.femalePercentage ? 'Male' :
+                        topSegment.femalePercentage > topSegment.othersPercentage ? 'Female' : 'Others';
 
-      const mean = percentages.reduce((sum, val) => sum + val, 0) / percentages.length;
-      const variance = percentages.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / percentages.length;
-      const stdDev = Math.sqrt(variance);
-      const normalizedVariance = Math.min(stdDev / 10, 1);
-      varianceScores.push(normalizedVariance);
+      coreAudience = `${topGender} ${topSegment.ageRange}`;
+
+      if (score >= 8) {
+        coreFeedback = `Core audience (${coreAudience}) has remained stable for 90 days.`;
+      } else if (score >= 6) {
+        coreFeedback = `Core audience (${coreAudience}) shows moderate stability.`;
+      } else {
+        coreFeedback = `Significant demographic shifts detected in ${coreAudience} segment.`;
+      }
     }
-
-    const varianceIndex = varianceScores.length > 0
-      ? varianceScores.reduce((sum, v) => sum + v, 0) / varianceScores.length
-      : 0.25;
-
-    // Convert to 0-10 scale (lower variance = higher score)
-    const score = (1 - varianceIndex) * 10;
 
     return {
       score: Number(score.toFixed(2)),
       details: {
+        totalFollowers,
+        genderBreakdown,
+        ageBreakdown,
+        coreAudience,
+        feedback: coreFeedback,
+        change,
         snapshotsAnalyzed: historicalSnapshots.length,
         varianceIndex: Number(varianceIndex.toFixed(4)),
         stability: score >= 8 ? 'High' : score >= 6 ? 'Medium' : 'Low',
@@ -300,7 +459,7 @@ export class InfluencerProfileScoringService {
 
   /**
    * 1.3 Geo Relevance (15%)
-   * Target geography: India
+   * Target geography: India with city-level insights
    */
   private async calculateGeoRelevance(influencer: Influencer): Promise<{ score: number; details: any }> {
     const latestSnapshot = await this.instagramProfileAnalysisModel.findOne({
@@ -325,12 +484,58 @@ export class InfluencerProfileScoringService {
     // Convert India % to 0-10 scale (100% India = 10/10)
     const score = (indiaPercentage / 100) * 10;
 
+    // Format top countries with proper names
+    const countryNames: { [key: string]: string } = {
+      'IN': 'India',
+      'NP': 'Nepal',
+      'BT': 'Bhutan',
+      'BD': 'Bangladesh',
+      'PK': 'Pakistan',
+      'US': 'United States',
+      'GB': 'United Kingdom',
+      'CA': 'Canada',
+      'AU': 'Australia',
+      'AE': 'UAE',
+    };
+
+    const topCountries = latestSnapshot.audienceCountries
+      .slice(0, 5)
+      .map((country: any) => ({
+        code: country.location,
+        name: countryNames[country.location] || country.location,
+        percentage: Number(country.percentage.toFixed(2)),
+      }));
+
+    // Get top cities from snapshot
+    const topCities = latestSnapshot.audienceCities
+      ? latestSnapshot.audienceCities
+          .slice(0, 4)
+          .map((city: any) => ({
+            name: city.location,
+            percentage: Number(city.percentage.toFixed(2)),
+          }))
+      : [];
+
+    // Generate AI feedback based on India percentage
+    let feedback = '';
+    if (indiaPercentage >= 75) {
+      feedback = 'Audience geography strongly aligns with Indian consumer brands.';
+    } else if (indiaPercentage >= 50) {
+      feedback = 'Good Indian market presence with some international reach.';
+    } else if (indiaPercentage >= 25) {
+      feedback = 'Moderate Indian audience - consider geo-targeted content for better brand alignment.';
+    } else {
+      feedback = 'Low Indian audience percentage may limit collaboration with India-focused brands.';
+    }
+
     return {
       score: Number(score.toFixed(2)),
       details: {
         targetCountry: 'India',
-        targetAudiencePercentage: indiaPercentage,
-        topCountries: latestSnapshot.audienceCountries.slice(0, 5),
+        targetAudiencePercentage: Number(indiaPercentage.toFixed(2)),
+        topCountries,
+        topCities,
+        feedback,
       },
     };
   }
