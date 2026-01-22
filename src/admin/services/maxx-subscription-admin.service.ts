@@ -358,6 +358,11 @@ export class MaxxSubscriptionAdminService {
       return 9999;
     };
 
+    // Helper function to format status (remove underscores, convert to camelCase)
+    const formatStatus = (status: string): string => {
+      return status.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    };
+
     // Build response data with search filtering and priority
     const allData: (MaxxSubscriptionItemDto & { searchPriority: number })[] = subscriptions
       .map((subscription) => {
@@ -407,7 +412,7 @@ export class MaxxSubscriptionAdminService {
         profileName,
         username: userName,
         location: cityName,
-        profileStatus,
+        profileStatus: formatStatus(profileStatus),
         usageMonths,
         paymentType,
         validTillDate: toIST(subscription.currentPeriodEnd),
@@ -495,6 +500,11 @@ export class MaxxSubscriptionAdminService {
     const paidInvoices = subscription.invoices?.filter((inv) => inv.paymentStatus === 'paid') || [];
     const totalAmount = paidInvoices.reduce((sum, inv) => sum + (inv.totalAmount / 100), 0);
 
+    // Helper function to format status (remove underscores, convert to camelCase)
+    const formatStatus = (status: string): string => {
+      return status.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    };
+
     // Build payment history - exclude only cancelled invoices that were never paid
     const paymentHistory: PaymentHistoryItemDto[] = (subscription.invoices || [])
       .filter((invoice) => {
@@ -509,7 +519,7 @@ export class MaxxSubscriptionAdminService {
         invoiceNumber: invoice.invoiceNumber,
         amount: invoice.totalAmount / 100, // Convert from paise to Rs
         paymentDate: invoice.paidAt ? toIST(invoice.paidAt) : null,
-        paymentStatus: invoice.paymentStatus,
+        paymentStatus: formatStatus(invoice.paymentStatus),
         razorpayPaymentId: invoice.razorpayPaymentId,
       }));
 
@@ -529,7 +539,7 @@ export class MaxxSubscriptionAdminService {
         profileImage: influencer.profileImage,
         isVerified: influencer.isVerified,
       },
-      subscriptionStatus: subscription.status,
+      subscriptionStatus: formatStatus(subscription.status),
       // Check upiMandateStatus to identify autopay even if cancelled
       // Autopay subscriptions will have upiMandateStatus set (pending/authenticated/paused/cancelled)
       // Manual subscriptions will have upiMandateStatus as null

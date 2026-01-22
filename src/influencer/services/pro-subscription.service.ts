@@ -415,11 +415,16 @@ export class ProSubscriptionService {
       displayStatus = SubscriptionStatus.ACTIVE;
     }
 
+    // Helper function to format status (remove underscores, convert to camelCase)
+    const formatStatus = (status: string): string => {
+      return status.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    };
+
     // Don't return subscription details if it's cancelled and never paid
     // This prevents showing confusing subscription data for abandoned payment attempts
     const subscriptionData = hasSubscription ? {
       id: subscription.id,
-      status: displayStatus,
+      status: formatStatus(displayStatus),
       isCancelled: subscription.status === SubscriptionStatus.CANCELLED || displayStatus === SubscriptionStatus.EXPIRED,
       isPaused: subscription.isPaused,  // True if pause is scheduled OR active
       pausedAt: subscription.pausedAt ? toIST(subscription.pausedAt) : null,
@@ -456,7 +461,7 @@ export class ProSubscriptionService {
           id: inv.id,
           invoiceNumber: inv.invoiceNumber,
           amount: inv.totalAmount / 100,
-          status: inv.paymentStatus,
+          status: formatStatus(inv.paymentStatus),
           billingPeriod: {
             start: toIST(inv.billingPeriodStart),
             end: toIST(inv.billingPeriodEnd),
@@ -497,12 +502,17 @@ export class ProSubscriptionService {
       };
     }
 
+    // Helper function to format status (remove underscores, convert to camelCase)
+    const formatStatus = (status: string): string => {
+      return status.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    };
+
     return {
       invoices: filteredInvoices.map((inv) => ({
         id: inv.id,
         invoiceNumber: inv.invoiceNumber,
         amount: inv.totalAmount / 100, // Convert to Rs
-        status: inv.paymentStatus,
+        status: formatStatus(inv.paymentStatus),
         billingPeriod: {
           start: toIST(inv.billingPeriodStart),
           end: toIST(inv.billingPeriodEnd),
