@@ -340,11 +340,11 @@ export class CampaignService {
       filtersToApply.push(earlyAccessFilter);
     }
 
-    if (search) {
+    if (search && search.trim()) {
       const searchCondition = {
         [Op.or]: [
-          { name: { [Op.iLike]: `%${search}%` } },
-          { description: { [Op.iLike]: `%${search}%` } },
+          { name: { [Op.iLike]: `%${search.trim()}%` } },
+          { description: { [Op.iLike]: `%${search.trim()}%` } },
         ]
       };
       filtersToApply.push(searchCondition);
@@ -374,7 +374,8 @@ export class CampaignService {
       console.log('📋 Final WHERE Condition:', JSON.stringify(whereCondition, null, 2));
     }
 
-    const { count, rows: campaigns } = await this.campaignModel.findAndCountAll(
+    // Fetch all campaigns without pagination first (to apply search priority sorting)
+    const { rows: allCampaigns } = await this.campaignModel.findAndCountAll(
       {
         where: whereCondition,
         include: [
@@ -398,16 +399,45 @@ export class CampaignService {
           },
         ],
         order: [['createdAt', 'DESC']],
-        limit,
-        offset,
         distinct: true,
       },
     );
 
-    const totalPages = Math.ceil(count / limit);
+    // Calculate search priority for each campaign
+    const calculateCampaignSearchPriority = (
+      name: string,
+      description: string,
+      searchTerm: string,
+    ): number => {
+      if (!searchTerm || !searchTerm.trim()) return 0;
 
-    // Transform each campaign in the list
-    const transformedCampaigns = campaigns.map((campaign) => {
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      const lowerName = (name || '').toLowerCase();
+      const lowerDescription = (description || '').toLowerCase();
+
+      // Check position in name
+      const nameIndex = lowerName.indexOf(lowerSearchTerm);
+      // Check position in description
+      const descriptionIndex = lowerDescription.indexOf(lowerSearchTerm);
+
+      // Priority tiers:
+      // 1000-1999: Match in name (1000 = starts with, 1001 = position 1, etc.)
+      // 2000-2999: Match in description (2000 = starts with, 2001 = position 1, etc.)
+      // 9999: No match (shouldn't happen due to filtering)
+
+      if (nameIndex >= 0) {
+        // Match found in name - highest priority tier
+        return 1000 + nameIndex;
+      } else if (descriptionIndex >= 0) {
+        // Match found in description - lower priority tier
+        return 2000 + descriptionIndex;
+      }
+
+      return 9999; // No match found
+    };
+
+    // Transform campaigns and add search priority
+    const campaignsWithPriority = allCampaigns.map((campaign) => {
       const campaignData = campaign.toJSON();
 
       // Transform cities to array of objects
@@ -426,12 +456,33 @@ export class CampaignService {
         (campaignData as any).cities = [];
       }
 
-      return this.transformCampaignResponse(campaignData);
+      const transformedCampaign = this.transformCampaignResponse(campaignData);
+
+      return {
+        ...transformedCampaign,
+        searchPriority: calculateCampaignSearchPriority(
+          campaign.name || '',
+          campaign.description || '',
+          search?.trim() || '',
+        ),
+      };
     });
 
+    // Sort by search priority when search query is present
+    if (search && search.trim()) {
+      campaignsWithPriority.sort((a, b) => a.searchPriority - b.searchPriority);
+    }
+
+    // Apply pagination after sorting
+    const total = campaignsWithPriority.length;
+    const totalPages = Math.ceil(total / limit);
+    const paginatedCampaigns = campaignsWithPriority
+      .slice(offset, offset + limit)
+      .map(({ searchPriority, ...campaign }) => campaign); // Remove searchPriority from response
+
     return {
-      campaigns: transformedCampaigns,
-      total: count,
+      campaigns: paginatedCampaigns,
+      total,
       page,
       limit,
       totalPages,
@@ -986,17 +1037,16 @@ export class CampaignService {
       limit = 20,
     } = searchDto;
 
-    const offset = (page - 1) * limit;
     const whereCondition: any = {
       isProfileCompleted: true,
       isWhatsappVerified: true,
     };
 
     // Search by name or username
-    if (search) {
+    if (search && search.trim()) {
       whereCondition[Op.or] = [
-        { name: { [Op.iLike]: `%${search}%` } },
-        { username: { [Op.iLike]: `%${search}%` } },
+        { name: { [Op.iLike]: `%${search.trim()}%` } },
+        { username: { [Op.iLike]: `%${search.trim()}%` } },
       ];
     }
 
@@ -1063,7 +1113,8 @@ export class CampaignService {
       });
     }
 
-    const { count, rows: influencers } =
+    // Fetch all matching influencers without pagination first
+    const { rows: allInfluencers } =
       await this.influencerModel.findAndCountAll({
         where: whereCondition,
         include: includeOptions,
@@ -1084,16 +1135,68 @@ export class CampaignService {
           'createdAt',
         ],
         order: [['createdAt', 'DESC']],
-        limit,
-        offset,
         distinct: true,
       });
 
-    const totalPages = Math.ceil(count / limit);
+    // Calculate search priority for each influencer
+    const calculateSearchPriority = (
+      name: string,
+      username: string,
+      searchTerm: string,
+    ): number => {
+      if (!searchTerm || !searchTerm.trim()) return 0;
+
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      const lowerName = (name || '').toLowerCase();
+      const lowerUsername = (username || '').toLowerCase();
+
+      // Check position in name
+      const nameIndex = lowerName.indexOf(lowerSearchTerm);
+      // Check position in username
+      const usernameIndex = lowerUsername.indexOf(lowerSearchTerm);
+
+      // Priority tiers:
+      // 1000-1999: Match in name (1000 = starts with, 1001 = position 1, etc.)
+      // 2000-2999: Match in username (2000 = starts with, 2001 = position 1, etc.)
+      // 9999: No match (shouldn't happen due to filtering)
+
+      if (nameIndex >= 0) {
+        // Match found in name - highest priority tier
+        return 1000 + nameIndex;
+      } else if (usernameIndex >= 0) {
+        // Match found in username - lower priority tier
+        return 2000 + usernameIndex;
+      }
+
+      return 9999; // No match found
+    };
+
+    // Map influencers with search priority
+    const influencersWithPriority = allInfluencers.map((influencer) => ({
+      ...influencer.toJSON(),
+      searchPriority: calculateSearchPriority(
+        influencer.name || '',
+        influencer.username || '',
+        search?.trim() || '',
+      ),
+    }));
+
+    // Sort by search priority when search query is present
+    if (search && search.trim()) {
+      influencersWithPriority.sort((a, b) => a.searchPriority - b.searchPriority);
+    }
+
+    // Apply pagination after sorting
+    const total = influencersWithPriority.length;
+    const totalPages = Math.ceil(total / limit);
+    const offset = (page - 1) * limit;
+    const paginatedInfluencers = influencersWithPriority
+      .slice(offset, offset + limit)
+      .map(({ searchPriority, ...influencer }) => influencer); // Remove searchPriority from response
 
     return {
-      influencers,
-      total: count,
+      influencers: paginatedInfluencers as any,
+      total,
       page,
       limit,
       totalPages,
