@@ -16,7 +16,7 @@ export interface ProfileScore {
   maxScore: 100;
   scoreChange: number; // Change from previous week (e.g., -3, +5)
   grade: string; // "Strong Profile", "Good Profile", "Average Profile", or "Weak Profile"
-  profileSummary: string; // AI-generated summary (e.g., "Strong niche clarity • Weak growth momentum")
+  profileSummary: string; // AI-generated summary (e.g., "Strong in: niche clarity, engagement. Focus on improving: growth momentum.")
   categories: {
     audienceQuality: AudienceQualityScore;
     contentRelevance: ContentRelevanceScore;
@@ -1568,6 +1568,7 @@ export class InfluencerProfileScoringService {
           lighting: 75,
           editing: 75,
           aesthetics: 75,
+          aiFeedback: 'Visual quality analysis unavailable - AI service not accessible.',
         },
       };
     }
@@ -1608,13 +1609,21 @@ export class InfluencerProfileScoringService {
       const score = ((lightingScore + editingScore + aestheticsScore) / 300) * 10;
 
       // Generate AI feedback
-      let feedback = '';
-      if (editingScore >= 80 && aestheticsScore < 40) {
-        feedback = 'Your editing is strong, but weaker aesthetic reduce Reel retention';
+      let aiFeedback = '';
+      if (editingScore >= 80 && aestheticsScore >= 80 && lightingScore >= 80) {
+        aiFeedback = 'Excellent visual quality across all aspects - professional production value.';
+      } else if (editingScore >= 80 && aestheticsScore < 40) {
+        aiFeedback = 'Strong editing, but weaker aesthetics reduce reel retention.';
+      } else if (lightingScore >= 80 && aestheticsScore >= 70) {
+        aiFeedback = 'Good lighting and composition create appealing visuals.';
       } else if (lightingScore < 40) {
-        feedback = 'Improve lighting quality for better visual appeal';
-      } else if (aestheticsScore >= 80) {
-        feedback = 'Excellent visual consistency and aesthetic quality';
+        aiFeedback = 'Improve lighting quality for better visual appeal.';
+      } else if (aestheticsScore < 40) {
+        aiFeedback = 'Focus on composition and framing to enhance visual impact.';
+      } else if (editingScore < 40) {
+        aiFeedback = 'Enhance editing quality with better transitions and effects.';
+      } else {
+        aiFeedback = 'Moderate visual quality - refine lighting, editing, and composition.';
       }
 
       return {
@@ -1624,7 +1633,7 @@ export class InfluencerProfileScoringService {
           lighting: Number(lightingScore.toFixed(2)),
           editing: Number(editingScore.toFixed(2)),
           aesthetics: Number(aestheticsScore.toFixed(2)),
-          feedback,
+          aiFeedback,
           change: 0, // Could track change from previous sync
         },
       };
@@ -1637,6 +1646,7 @@ export class InfluencerProfileScoringService {
           lighting: 75,
           editing: 75,
           aesthetics: 75,
+          aiFeedback: 'Visual analysis unavailable - using default metrics.',
         },
       };
     }
@@ -1653,8 +1663,9 @@ export class InfluencerProfileScoringService {
         details: {
           message: 'AI not available - using default score',
           mood: 'Neutral',
-          dominantColors: ['Blue', 'Grey'],
+          dominantColors: [],
           rating: 70,
+          aiFeedback: 'Color palette analysis unavailable - AI service not accessible.',
         },
       };
     }
@@ -1671,16 +1682,23 @@ export class InfluencerProfileScoringService {
       const score = (aestheticAnalysis.rating / 20) * 10;
 
       // Generate AI feedback based on mood and rating
-      let feedback = '';
       const mood = aestheticAnalysis.mood || 'Neutral';
       const rating = aestheticAnalysis.rating || 14;
+      const consistency = aestheticAnalysis.consistency || 'medium';
+      let aiFeedback = '';
 
-      if (mood.toLowerCase().includes('cool') && mood.toLowerCase().includes('muted')) {
-        feedback = 'Consistent cool tones help brand recall, but muted accents reduce scroll-stopping impact.';
-      } else if (rating >= 18) {
-        feedback = 'Excellent color consistency creating strong brand recognition';
-      } else if (rating < 10) {
-        feedback = 'Improve color palette consistency for better aesthetic appeal';
+      if (rating >= 18 && consistency === 'high') {
+        aiFeedback = 'Excellent color consistency creating strong brand recognition and aesthetic appeal.';
+      } else if (rating >= 15 && consistency === 'high') {
+        aiFeedback = 'Strong color palette consistency helps with brand recall.';
+      } else if (mood.toLowerCase().includes('cool') && mood.toLowerCase().includes('muted')) {
+        aiFeedback = 'Consistent cool tones help brand recall, but muted accents reduce scroll-stopping impact.';
+      } else if (mood.toLowerCase().includes('vibrant') || mood.toLowerCase().includes('warm')) {
+        aiFeedback = 'Vibrant colors create eye-catching content that stands out in feeds.';
+      } else if (rating < 10 || consistency === 'low') {
+        aiFeedback = 'Improve color palette consistency for better aesthetic appeal and brand recognition.';
+      } else {
+        aiFeedback = 'Moderate color consistency - consider developing a signature palette.';
       }
 
       return {
@@ -1688,9 +1706,11 @@ export class InfluencerProfileScoringService {
         details: {
           rating: aestheticAnalysis.rating,
           mood: aestheticAnalysis.mood || 'Neutral',
-          dominantColors: aestheticAnalysis.dominantColors || ['Blue', 'Grey', 'Yellow'],
+          dominantColors: aestheticAnalysis.dominantColors && aestheticAnalysis.dominantColors.length > 0
+            ? aestheticAnalysis.dominantColors
+            : [],
           consistency: aestheticAnalysis.consistency || 'Medium',
-          feedback,
+          aiFeedback,
           change: 0, // Could track change from previous analysis
         },
       };
@@ -1701,8 +1721,9 @@ export class InfluencerProfileScoringService {
           message: 'AI analysis failed - using default',
           error: error.message,
           mood: 'Neutral',
-          dominantColors: ['Blue', 'Grey'],
+          dominantColors: [],
           rating: 14,
+          aiFeedback: 'Color palette analysis encountered an error - using default metrics.',
         },
       };
     }
@@ -2964,7 +2985,7 @@ export class InfluencerProfileScoringService {
 
   /**
    * Generate AI profile summary based on category scores
-   * Returns a summary like "Strong niche clarity • Weak growth momentum"
+   * Returns a concise summary like "Strong in: niche clarity, engagement. Focus on improving: growth momentum."
    */
   private generateProfileSummary(categories: {
     audienceQuality: AudienceQualityScore;
@@ -2974,8 +2995,6 @@ export class InfluencerProfileScoringService {
     growthMomentum: GrowthMomentumScore;
     monetisation: MonetisationScore;
   }): string {
-    const insights: string[] = [];
-
     // Analyze each category and identify strengths/weaknesses
     const categoryAnalysis = [
       { name: 'niche clarity', score: categories.contentRelevance.score },
@@ -2986,27 +3005,24 @@ export class InfluencerProfileScoringService {
       { name: 'monetisation readiness', score: categories.monetisation.score },
     ];
 
-    // Find strongest (≥75) and weakest (<60) areas
-    const strengths = categoryAnalysis.filter(c => c.score >= 75);
-    const weaknesses = categoryAnalysis.filter(c => c.score < 60);
+    // Find strongest (≥70) and weakest (<60) areas
+    const strengths = categoryAnalysis.filter(c => c.score >= 70).map(c => c.name);
+    const weaknesses = categoryAnalysis.filter(c => c.score < 60).map(c => c.name);
 
-    // Add one strong area if available
+    // Build concise feedback message
+    let summary = '';
     if (strengths.length > 0) {
-      const strongest = strengths.sort((a, b) => b.score - a.score)[0];
-      insights.push(`Strong ${strongest.name}`);
+      summary += `Strong in: ${strengths.join(', ')}. `;
     }
-
-    // Add one weak area if available
     if (weaknesses.length > 0) {
-      const weakest = weaknesses.sort((a, b) => a.score - b.score)[0];
-      insights.push(`Weak ${weakest.name}`);
+      summary += `Focus on improving: ${weaknesses.join(', ')}.`;
     }
 
     // If no clear strengths/weaknesses, provide balanced summary
-    if (insights.length === 0) {
-      insights.push('Balanced profile across all areas');
+    if (summary.trim() === '') {
+      summary = 'Balanced profile across all areas.';
     }
 
-    return insights.join(' • ');
+    return summary.trim();
   }
 }

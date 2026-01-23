@@ -39,37 +39,57 @@ export interface ContentIntelligenceResult {
   engagementPotential: number; // 0-100
 }
 
+// Model configuration with fallback priority
+interface ModelConfig {
+  name: string;
+  tier: 'free' | 'paid';
+  priority: number; // Lower = higher priority
+  description: string;
+}
+
 @Injectable()
 export class GeminiAIService {
   private readonly logger = new Logger(GeminiAIService.name);
   private genAI: GoogleGenerativeAI | null = null;
-  private model: any | null = null;
-  private visionModel: any | null = null;
+
+  // Model fallback configuration (in priority order)
+  private readonly modelConfigs: ModelConfig[] = [
+    {
+      name: 'gemini-flash-lite-latest',
+      tier: 'free',
+      priority: 1,
+      description: 'Free - Gemini Flash-Lite (fastest)',
+    },
+    {
+      name: 'gemini-flash-latest',
+      tier: 'free',
+      priority: 2,
+      description: 'Free - Gemini Flash',
+    },
+    {
+      name: 'gemini-pro-latest',
+      tier: 'free',
+      priority: 3,
+      description: 'Free - Gemini Pro',
+    },
+    {
+      name: 'gemini-2.5-pro',
+      tier: 'paid',
+      priority: 4,
+      description: 'Paid - Gemini 2.5 Pro (final fallback)',
+    },
+  ];
+
+  // Track failed models to avoid retrying in the same session
+  private failedModels: Set<string> = new Set();
 
   constructor(private configService: ConfigService) {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
 
     if (apiKey) {
       this.genAI = new GoogleGenerativeAI(apiKey);
-
-      // Try to initialize both text and vision models
-      try {
-        // Using Gemini 1.5 Flash for faster, cost-effective performance
-        // This model supports both text-only and image+text inputs
-        const modelName = 'gemini-1.5-flash-latest';
-
-        // For text-only analysis (niche, language, sentiment)
-        this.model = this.genAI.getGenerativeModel({ model: modelName });
-
-        // For image analysis (visual quality, brand safety) - same model supports multimodal
-        this.visionModel = this.genAI.getGenerativeModel({ model: modelName });
-
-        this.logger.log(`✅ Gemini AI service initialized with ${modelName}`);
-      } catch (error) {
-        this.logger.error('Failed to initialize Gemini models:', error.message);
-        this.model = null;
-        this.visionModel = null;
-      }
+      this.logger.log('✅ Gemini AI service initialized with fallback support');
+      this.logger.log(`   Available models: ${this.modelConfigs.map(m => `${m.name} (${m.tier})`).join(', ')}`);
     } else {
       this.logger.warn('⚠️ GEMINI_API_KEY not found. AI features disabled - using fallback scoring.');
       this.logger.warn('   To enable AI features:');
@@ -80,17 +100,108 @@ export class GeminiAIService {
   }
 
   /**
+   * Execute AI request with automatic fallback to next available model
+   */
+  private async executeWithFallback<T>(
+    operation: (model: any) => Promise<T>,
+    operationName: string,
+  ): Promise<T> {
+    if (!this.genAI) {
+      throw new Error('Gemini AI not initialized');
+    }
+
+    const availableModels = this.modelConfigs
+      .filter(config => !this.failedModels.has(config.name))
+      .sort((a, b) => a.priority - b.priority);
+
+    if (availableModels.length === 0) {
+      this.logger.error('❌ All Gemini models exhausted. Resetting failed models list.');
+      this.failedModels.clear();
+      throw new Error('All Gemini models quota exhausted. Please try again later.');
+    }
+
+    for (const config of availableModels) {
+      try {
+        this.logger.debug(`🔄 Trying ${config.name} (${config.tier}) for ${operationName}...`);
+
+        const model = this.genAI.getGenerativeModel({ model: config.name });
+        const result = await operation(model);
+
+        this.logger.debug(`✅ Success with ${config.name} (${config.tier})`);
+        return result;
+      } catch (error) {
+        const errorMessage = error.message || String(error);
+
+        // Check if it's a rate limit or quota error
+        const isQuotaError =
+          errorMessage.includes('quota') ||
+          errorMessage.includes('rate limit') ||
+          errorMessage.includes('429') ||
+          errorMessage.includes('RESOURCE_EXHAUSTED');
+
+        if (isQuotaError) {
+          this.logger.warn(`⚠️ ${config.name} (${config.tier}) quota exhausted: ${errorMessage}`);
+          this.failedModels.add(config.name);
+
+          // Try next model
+          continue;
+        } else {
+          // Non-quota error (e.g., invalid request) - don't try other models
+          this.logger.error(`❌ ${config.name} failed with non-quota error: ${errorMessage}`);
+          throw error;
+        }
+      }
+    }
+
+    // All models failed
+    throw new Error(`All available Gemini models failed for ${operationName}`);
+  }
+
+  /**
    * Check if Gemini AI is available
    */
   isAvailable(): boolean {
-    return this.model !== null;
+    return this.genAI !== null;
   }
 
   /**
    * Check if vision model is available
    */
   isVisionAvailable(): boolean {
-    return this.visionModel !== null;
+    return this.genAI !== null;
+  }
+
+  /**
+   * Get current model status and availability
+   */
+  getModelStatus(): { available: string[]; failed: string[]; nextModel: string | null } {
+    const available = this.modelConfigs
+      .filter(config => !this.failedModels.has(config.name))
+      .map(config => `${config.name} (${config.tier})`);
+
+    const failed = Array.from(this.failedModels);
+
+    const nextModel = this.modelConfigs
+      .filter(config => !this.failedModels.has(config.name))
+      .sort((a, b) => a.priority - b.priority)[0]?.name || null;
+
+    return { available, failed, nextModel };
+  }
+
+  /**
+   * Reset failed models list (useful for testing or after quota resets)
+   */
+  resetFailedModels(): void {
+    this.logger.log('🔄 Resetting failed models list');
+    this.failedModels.clear();
+  }
+
+  /**
+   * Manually mark a model as failed (useful for testing)
+   */
+  markModelAsFailed(modelName: string): void {
+    this.failedModels.add(modelName);
+    this.logger.log(`❌ Manually marked ${modelName} as failed`);
   }
 
   /**
@@ -103,74 +214,48 @@ export class GeminiAIService {
     }
 
     try {
-      const prompt = `Analyze this Instagram post image and provide a detailed quality assessment.
+      // Optimized: 80% shorter prompt
+      const prompt = `Rate image 0-10: composition, lighting, colorHarmony, clarity. Identify: contentType(product/lifestyle/selfie/food/travel/fashion/fitness), profScore(0-100), brandScore(0-100), textOverlay(bool), faces(int), objects(array). JSON only.`;
 
-Rate the following aspects on a scale of 0-10:
-1. Composition (framing, rule of thirds, balance)
-2. Lighting (natural/artificial, exposure, shadows)
-3. Color harmony (color scheme, saturation, contrast)
-4. Clarity (sharpness, focus, resolution)
+      const imageData = await this.fetchImageAsBase64(imageUrl);
 
-Also identify:
-- Content type (product, lifestyle, selfie, food, travel, fashion, fitness, etc.)
-- Professional quality score (0-100)
-- Brand safety score (0-100, where 100 is completely safe)
-- Whether there's text overlay (yes/no)
-- Number of faces visible
-- Main objects/subjects in the image
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{
+            role: 'user',
+            parts: [
+              { inlineData: { mimeType: 'image/jpeg', data: imageData } },
+              { text: prompt }
+            ]
+          }],
+          generationConfig: {
+            response_mime_type: "application/json",
+            temperature: 0.3,
+          }
+        });
+        return await response.response;
+      }, 'analyzeVisualQuality');
 
-Return your analysis in this exact JSON format:
-{
-  "composition": 8,
-  "lighting": 7,
-  "colorHarmony": 9,
-  "clarity": 8,
-  "contentType": "lifestyle",
-  "professionalScore": 75,
-  "brandSafetyScore": 95,
-  "textOverlay": true,
-  "faces": 2,
-  "objects": ["person", "phone", "coffee"]
-}`;
+      const text = result.text();
+      const analysis = JSON.parse(text);
 
-      const result = await this.visionModel.generateContent([
-        {
-          inlineData: {
-            mimeType: 'image/jpeg',
-            data: await this.fetchImageAsBase64(imageUrl),
-          },
+      return {
+        overallQuality: Math.round(
+          (analysis.composition + analysis.lighting + analysis.colorHarmony + analysis.clarity) * 2.5
+        ),
+        aesthetics: {
+          composition: analysis.composition,
+          lighting: analysis.lighting,
+          colorHarmony: analysis.colorHarmony,
+          clarity: analysis.clarity,
         },
-        { text: prompt },
-      ]);
-
-      const response = await result.response;
-      const text = response.text();
-
-      // Parse JSON from response
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const analysis = JSON.parse(jsonMatch[0]);
-
-        return {
-          overallQuality: Math.round(
-            (analysis.composition + analysis.lighting + analysis.colorHarmony + analysis.clarity) * 2.5
-          ),
-          aesthetics: {
-            composition: analysis.composition,
-            lighting: analysis.lighting,
-            colorHarmony: analysis.colorHarmony,
-            clarity: analysis.clarity,
-          },
-          contentType: analysis.contentType,
-          professionalScore: analysis.professionalScore,
-          brandSafetyScore: analysis.brandSafetyScore,
-          textOverlay: analysis.textOverlay,
-          faces: analysis.faces,
-          objects: analysis.objects || [],
-        };
-      }
-
-      return this.getDefaultVisualAnalysis();
+        contentType: analysis.contentType,
+        professionalScore: analysis.profScore || analysis.professionalScore,
+        brandSafetyScore: analysis.brandScore || analysis.brandSafetyScore,
+        textOverlay: analysis.textOverlay,
+        faces: analysis.faces,
+        objects: analysis.objects || [],
+      };
     } catch (error) {
       this.logger.debug(`Visual analysis unavailable (using defaults): ${error.message}`);
       return this.getDefaultVisualAnalysis();
@@ -191,38 +276,25 @@ Return your analysis in this exact JSON format:
     }
 
     try {
-      const contentTypes = visualAnalyses.map(v => v.contentType).join(', ');
-      const allCaptions = captions.slice(0, 20).join('\n---\n');
+      const contentTypes = visualAnalyses.map(v => v.contentType).join(',');
+      const allCaptions = captions.slice(0, 15).join('\n');
 
-      const prompt = `Analyze these Instagram post captions and content types to determine the influencer's niche:
+      // Optimized: 70% shorter
+      const prompt = `Captions: ${allCaptions}\nTypes: ${contentTypes}\nIdentify: primaryNiche(fashion/fitness/food/travel/tech/beauty/lifestyle/business), secondaryNiches(2-3), confidence(0-100), keywords(5-10). JSON only.`;
 
-CAPTIONS:
-${allCaptions}
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            response_mime_type: "application/json",
+            temperature: 0.3,
+          }
+        });
+        return await response.response;
+      }, 'detectNiche');
 
-CONTENT TYPES: ${contentTypes}
-
-Based on this content, identify:
-1. Primary niche (main category: fashion, fitness, food, travel, tech, beauty, lifestyle, business, etc.)
-2. Secondary niches (2-3 related categories)
-3. Confidence level (0-100)
-4. Top 5-10 keywords that define their content
-
-Return JSON format:
-{
-  "primaryNiche": "fitness",
-  "secondaryNiches": ["nutrition", "wellness"],
-  "confidence": 85,
-  "keywords": ["workout", "health", "training", "nutrition", "wellness"]
-}`;
-
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
+      const text = result.text();
+      return JSON.parse(text);
 
       return {
         primaryNiche: 'general',
@@ -254,32 +326,24 @@ Return JSON format:
     }
 
     try {
-      const allCaptions = captions.slice(0, 20).join('\n---\n');
+      const allCaptions = captions.slice(0, 15).join('\n');
 
-      const prompt = `Analyze the language usage in these Instagram captions:
+      // Optimized: 75% shorter
+      const prompt = `Captions: ${allCaptions}\nIdentify: primaryLanguage, languagePercentages(%), marketFit(0-100). JSON only.`;
 
-${allCaptions}
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            response_mime_type: "application/json",
+            temperature: 0.3,
+          }
+        });
+        return await response.response;
+      }, 'analyzeLanguage');
 
-Identify:
-1. Primary language used
-2. Percentage breakdown of all languages used (must add up to 100%)
-3. Market fit score (0-100) - how well the language mix matches the target audience
-
-Return JSON format:
-{
-  "primaryLanguage": "Hindi",
-  "languagePercentages": {"Hindi": 60, "English": 40},
-  "marketFit": 85
-}`;
-
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
+      const text = result.text();
+      return JSON.parse(text);
 
       return {
         primaryLanguage: 'English',
@@ -393,23 +457,17 @@ Return JSON format:
     }
 
     try {
-      const allCaptions = captions.slice(0, 20).join('\n---\n');
+      const allCaptions = captions.slice(0, 15).join('\n');
 
-      const prompt = `Analyze the overall sentiment of these Instagram captions:
+      // Optimized: 80% shorter
+      const prompt = `Captions: ${allCaptions}\nRate sentiment -100 to +100. Return single number.`;
 
-${allCaptions}
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent(prompt);
+        return await response.response;
+      }, 'generateRetentionCurve');
 
-Rate the sentiment on a scale from -100 (very negative) to +100 (very positive).
-Consider:
-- Emotional tone (happy, sad, angry, neutral, etc.)
-- Positivity vs negativity of language
-- Overall vibe and energy
-
-Return just a single number between -100 and +100.`;
-
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text().trim();
+      const text = result.text().trim();
 
       // Try to extract number from response
       const numberMatch = text.match(/-?\d+/);
@@ -434,40 +492,29 @@ Return just a single number between -100 and +100.`;
     }
 
     try {
-      const allCaptions = captions.join('\n---\n');
+      const allCaptions = captions.join('\n');
 
-      const prompt = `Analyze these Instagram captions for trend relevance:
+      // Optimized: 80% shorter
+      const prompt = `Captions: ${allCaptions}\nRate trend relevance 1-10: score, trends(array), reason. JSON only.`;
 
-${allCaptions}
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            response_mime_type: "application/json",
+            temperature: 0.3,
+          }
+        });
+        return await response.response;
+      }, 'generateRetentionCurve');
 
-Rate the content on a scale from 1-10 based on:
-- Alignment with current social media trends
-- Relevance of topics discussed
-- Niche clarity and consistency
-- Use of trending keywords/phrases
-- Timeliness and cultural relevance
-
-Return JSON with:
-{
-  "score": <number 1-10>,
-  "trends": ["<trend1>", "<trend2>"],
-  "relevanceReason": "<explanation>"
-}`;
-
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text().trim();
-
-      // Try to parse JSON response
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        return {
-          score: Math.max(1, Math.min(10, parsed.score || 7)),
-          trends: parsed.trends || [],
-          relevanceReason: parsed.relevanceReason || '',
-        };
-      }
+      const text = result.text().trim();
+      const parsed = JSON.parse(text);
+      return {
+        score: Math.max(1, Math.min(10, parsed.score || 7)),
+        trends: parsed.trends || [],
+        relevanceReason: parsed.reason || parsed.relevanceReason || '',
+      };
 
       return { score: 7.0, message: 'Failed to parse AI response' };
     } catch (error) {
@@ -490,7 +537,8 @@ Return JSON with:
       const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
       const imageData = Buffer.from(imageResponse.data).toString('base64');
 
-      const prompt = `Does this image contain a human face or person? Answer only: YES or NO`;
+      // Optimized: 50% shorter
+      const prompt = `Face/person in image? YES or NO only.`;
 
       const imagePart = {
         inlineData: {
@@ -499,9 +547,12 @@ Return JSON with:
         },
       };
 
-      const result = await this.visionModel.generateContent([prompt, imagePart]);
-      const response = await result.response;
-      const text = response.text().trim().toUpperCase();
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent([prompt, imagePart]);
+        return await response.response;
+      }, 'detectFaceInContent');
+
+      const text = result.text().trim().toUpperCase();
 
       return text.includes('YES');
     } catch (error) {
@@ -519,40 +570,30 @@ Return JSON with:
     }
 
     try {
-      const allCaptions = captions.join('\n---\n');
+      const allCaptions = captions.join('\n');
 
-      const prompt = `Analyze the hashtag strategy in these Instagram captions:
+      // Optimized: 80% shorter
+      const prompt = `Captions: ${allCaptions}\nRate hashtags: outperforming/effective/medium/need_improvement. Return: rating, totalHashtags, avgHashtagsPerPost, recommendations. JSON only.`;
 
-${allCaptions}
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            response_mime_type: "application/json",
+            temperature: 0.3,
+          }
+        });
+        return await response.response;
+      }, 'generateRetentionCurve');
 
-Rate the hashtag effectiveness as one of:
-- "outperforming" (excellent hashtag strategy, well-researched, trending, niche-specific)
-- "effective" (good hashtag use, decent mix)
-- "medium" (average hashtag strategy)
-- "need_improvement" (poor hashtag strategy or none)
-
-Return JSON with:
-{
-  "rating": "<one of the above>",
-  "totalHashtags": <number>,
-  "avgHashtagsPerPost": <number>,
-  "recommendations": "<brief suggestions>"
-}`;
-
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text().trim();
-
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        return {
-          rating: parsed.rating || 'effective',
-          totalHashtags: parsed.totalHashtags || 0,
-          avgHashtagsPerPost: parsed.avgHashtagsPerPost || 0,
-          recommendations: parsed.recommendations || '',
-        };
-      }
+      const text = result.text().trim();
+      const parsed = JSON.parse(text);
+      return {
+        rating: parsed.rating || 'effective',
+        totalHashtags: parsed.totalHashtags || 0,
+        avgHashtagsPerPost: parsed.avgHashtagsPerPost || 0,
+        recommendations: parsed.recommendations || '',
+      };
 
       return { rating: 'effective', message: 'Failed to parse AI response' };
     } catch (error) {
@@ -593,36 +634,31 @@ Return JSON with:
         return { rating: 14, message: 'No images loaded' };
       }
 
-      const prompt = `Analyze the color palette and mood consistency across these Instagram images.
+      // Optimized: 75% shorter
+      const prompt = `Analyze these images for color palette. Rate consistency 1-20. Return JSON: {"rating": number, "dominantColors": ["Color1", "Color2", "Color3"], "mood": "Cool/Warm/Vibrant/Muted/Neutral", "consistency": "high/medium/low"}. List 3-5 main colors detected.`;
 
-Rate on a scale from 1-20 based on:
-- Color scheme consistency
-- Mood and aesthetic coherence
-- Visual branding strength
-- Overall aesthetic appeal
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{
+            role: 'user',
+            parts: [{ text: prompt }, ...imageParts]
+          }],
+          generationConfig: {
+            response_mime_type: "application/json",
+            temperature: 0.3,
+          }
+        });
+        return await response.response;
+      }, 'analyzeColorPaletteMood');
 
-Return JSON with:
-{
-  "rating": <number 1-20>,
-  "dominantColors": ["<color1>", "<color2>"],
-  "mood": "<mood description>",
-  "consistency": "<high/medium/low>"
-}`;
-
-      const result = await this.visionModel.generateContent([prompt, ...imageParts]);
-      const response = await result.response;
-      const text = response.text().trim();
-
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        return {
-          rating: Math.max(1, Math.min(20, parsed.rating || 14)),
-          dominantColors: parsed.dominantColors || [],
-          mood: parsed.mood || '',
-          consistency: parsed.consistency || 'medium',
-        };
-      }
+      const text = result.text().trim();
+      const parsed = JSON.parse(text);
+      return {
+        rating: Math.max(1, Math.min(20, parsed.rating || 14)),
+        dominantColors: parsed.dominantColors || [],
+        mood: parsed.mood || '',
+        consistency: parsed.consistency || 'medium',
+      };
 
       return { rating: 14, message: 'Failed to parse AI response' };
     } catch (error) {
@@ -640,39 +676,30 @@ Return JSON with:
     }
 
     try {
-      const allCaptions = captions.join('\n---\n');
+      const allCaptions = captions.join('\n');
 
-      const prompt = `Analyze the Call-to-Action (CTA) usage in these Instagram captions:
+      // Optimized: 80% shorter
+      const prompt = `Captions: ${allCaptions}\nRate CTA: good/medium/less. Return: rating, ctaCount, examples(array), recommendations. JSON only.`;
 
-${allCaptions}
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            response_mime_type: "application/json",
+            temperature: 0.3,
+          }
+        });
+        return await response.response;
+      }, 'generateRetentionCurve');
 
-Rate the CTA effectiveness as one of:
-- "good" (strong CTAs, clear next steps, engagement-driving)
-- "medium" (some CTAs present, could be stronger)
-- "less" (weak or no CTAs, no clear action)
-
-Return JSON with:
-{
-  "rating": "<one of the above>",
-  "ctaCount": <number of captions with CTAs>,
-  "examples": ["<example CTA 1>", "<example CTA 2>"],
-  "recommendations": "<suggestions for improvement>"
-}`;
-
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text().trim();
-
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        return {
-          rating: parsed.rating || 'medium',
-          ctaCount: parsed.ctaCount || 0,
-          examples: parsed.examples || [],
-          recommendations: parsed.recommendations || '',
-        };
-      }
+      const text = result.text().trim();
+      const parsed = JSON.parse(text);
+      return {
+        rating: parsed.rating || 'medium',
+        ctaCount: parsed.ctaCount || 0,
+        examples: parsed.examples || [],
+        recommendations: parsed.recommendations || '',
+      };
 
       return { rating: 'medium', message: 'Failed to parse AI response' };
     } catch (error) {
@@ -695,38 +722,17 @@ Return JSON with:
     }
 
     try {
-      const allCaptions = profileContext.captions.slice(0, 10).join('\n---\n');
+      const allCaptions = profileContext.captions.slice(0, 8).join('\n');
 
-      const prompt = `Predict the monetisation potential of this Instagram influencer on a scale from 1-50:
+      // Optimized: 85% shorter
+      const prompt = `Followers:${profileContext.followerCount}, Eng:${profileContext.engagementRate}%, Type:${profileContext.accountType}. Captions: ${allCaptions}\nRate monetisation 1-50. Return single number.`;
 
-PROFILE DATA:
-- Follower Count: ${profileContext.followerCount}
-- Engagement Rate: ${profileContext.engagementRate}%
-- Account Type: ${profileContext.accountType}
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent(prompt);
+        return await response.response;
+      }, 'generateRetentionCurve');
 
-RECENT CAPTIONS:
-${allCaptions}
-
-Rate monetisation potential (1-50) based on:
-- Follower size and quality
-- Engagement rate strength
-- Content professionalism
-- Brand collaboration signals
-- Commercial appeal
-- Niche profitability
-- Account credibility
-
-Scale:
-- 40-50: High monetisation potential (ready for premium brand deals)
-- 25-39: Medium potential (good for mid-tier collaborations)
-- 10-24: Low potential (emerging influencer)
-- 1-9: Very low potential (needs growth)
-
-Return just a single number between 1 and 50.`;
-
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text().trim();
+      const text = result.text().trim();
 
       // Extract number from response
       const numberMatch = text.match(/\d+/);
@@ -756,29 +762,15 @@ Return just a single number between 1 and 50.`;
     }
 
     try {
-      const prompt = `Predict the appropriate payout (in INR) for an Instagram influencer collaboration:
+      // Optimized: 85% shorter
+      const prompt = `Active:${profileData.activeFollowers}, Views:${profileData.avgViews}, Eng:${profileData.engagementRate}%. Calc INR payout: ₹0.2-0.5/view. Return single number.`;
 
-PROFILE METRICS:
-- Active Followers: ${profileData.activeFollowers}
-- Average Views per Post: ${profileData.avgViews}
-- Engagement Rate: ${profileData.engagementRate}%
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent(prompt);
+        return await response.response;
+      }, 'generateRetentionCurve');
 
-PRICING GUIDELINES:
-- Industry standard: ₹0.2 to ₹0.5 per view
-- Consider engagement quality (higher engagement = higher rate)
-- Account for active follower percentage
-- Factor in overall reach and impressions
-
-Calculate a fair payout amount based on:
-1. Average views × rate per view (₹0.2-0.5)
-2. Engagement quality multiplier
-3. Active follower quality
-
-Return just a single number representing the predicted payout in INR (Indian Rupees).`;
-
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text().trim();
+      const text = result.text().trim();
 
       // Extract number from response
       const numberMatch = text.match(/\d+/);
@@ -803,31 +795,17 @@ Return just a single number representing the predicted payout in INR (Indian Rup
     }
 
     try {
-      const allCaptions = captions.slice(0, 20).join('\n---\n');
+      const allCaptions = captions.slice(0, 15).join('\n');
 
-      const prompt = `Analyze the audience sentiment for these Instagram captions on a scale from 1-20:
+      // Optimized: 85% shorter
+      const prompt = `Captions: ${allCaptions}\nRate audience sentiment 1-20. Return single number.`;
 
-${allCaptions}
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent(prompt);
+        return await response.response;
+      }, 'generateRetentionCurve');
 
-Rate audience sentiment (1-20) based on:
-- Overall tone and emotional appeal
-- Positivity and authenticity
-- Audience connection strength
-- Community engagement potential
-- Trust and credibility signals
-- Relatability factor
-
-Scale:
-- 15-20: Very positive sentiment (highly engaging, authentic, trustworthy)
-- 10-14: Positive sentiment (good connection, relatable)
-- 5-9: Neutral sentiment (average appeal)
-- 1-4: Negative sentiment (weak connection, low trust)
-
-Return just a single number between 1 and 20.`;
-
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text().trim();
+      const text = result.text().trim();
 
       // Extract number from response
       const numberMatch = text.match(/\d+/);
@@ -859,54 +837,27 @@ Return just a single number between 1 and 20.`;
     }
 
     try {
-      const prompt = `Generate a realistic Instagram Reels retention curve data based on these metrics:
+      // Optimized: 85% shorter
+      const qualityText = params.contentQuality ? `, quality:${params.contentQuality}` : '';
+      const prompt = `Gen retention curve: retention:${params.retentionRate}%, dur:${params.avgDuration}, eng:${params.engagementRate}%${qualityText}. 8 points 0:00-0:30, start:100, end:~${params.retentionRate}. Realistic drop. JSON array only.`;
 
-- Overall Retention Rate: ${params.retentionRate}%
-- Average Reel Duration: ${params.avgDuration}
-- Engagement Rate: ${params.engagementRate}%
-${params.contentQuality ? `- Content Quality Score: ${params.contentQuality}/100` : ''}
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            response_mime_type: "application/json",
+            temperature: 0.4,
+          }
+        });
+        return await response.response;
+      }, 'generateRetentionCurve');
 
-REQUIREMENTS:
-1. Generate 8-10 data points showing retention percentage at different time intervals
-2. Start at time 0:00 with 100% retention
-3. End retention should be close to the overall retention rate (${params.retentionRate}%)
-4. Time intervals should span from 0:00 to approximately 0:30 (or match avg duration)
-5. Drop-off pattern should be realistic:
-   - High engagement = gradual drop-off (good hook retention)
-   - Low engagement = steeper initial drop-off (weak hooks)
-   - Content quality affects mid-video retention
+      const text = result.text().trim();
+      const curveData = JSON.parse(text);
 
-REALISTIC PATTERNS:
-- First 3 seconds: Typically 5-15% drop (hook quality)
-- 3-10 seconds: Moderate drop (content engagement)
-- 10-20 seconds: Gradual stabilization
-- 20-30 seconds: Final retention plateau
-
-Return ONLY a JSON array in this exact format (no other text):
-[
-  {"time": "0:00", "retention": 100},
-  {"time": "0:03", "retention": 92},
-  {"time": "0:05", "retention": 85},
-  {"time": "0:10", "retention": 78},
-  {"time": "0:15", "retention": 75},
-  {"time": "0:20", "retention": 73},
-  {"time": "0:25", "retention": 72},
-  {"time": "0:30", "retention": 72}
-]`;
-
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text().trim();
-
-      // Extract JSON array from response
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        const curveData = JSON.parse(jsonMatch[0]);
-
-        // Validate the data structure
-        if (Array.isArray(curveData) && curveData.length > 0 && curveData[0].time && curveData[0].retention !== undefined) {
-          return curveData;
-        }
+      // Validate the data structure
+      if (Array.isArray(curveData) && curveData.length > 0 && curveData[0].time && curveData[0].retention !== undefined) {
+        return curveData;
       }
 
       // Fallback to default curve if parsing fails
@@ -920,7 +871,7 @@ Return ONLY a JSON array in this exact format (no other text):
   /**
    * Generate a default retention curve when AI is not available
    */
-  private getDefaultRetentionCurve(retentionRate: number, avgDuration: string): Array<{ time: string; retention: number }> {
+  private getDefaultRetentionCurve(retentionRate: number, _avgDuration: string): Array<{ time: string; retention: number }> {
     // Create a realistic drop-off curve that ends at the retention rate
     const startRetention = 100;
     const endRetention = retentionRate;
