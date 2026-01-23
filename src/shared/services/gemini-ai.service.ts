@@ -297,13 +297,6 @@ export class GeminiAIService {
 
       const text = result.text();
       return JSON.parse(text);
-
-      return {
-        primaryNiche: 'general',
-        secondaryNiches: [],
-        confidence: 0,
-        keywords: [],
-      };
     } catch (error) {
       this.logger.debug(`Niche detection unavailable (using defaults): ${error.message}`);
       return {
@@ -346,12 +339,6 @@ export class GeminiAIService {
 
       const text = result.text();
       return JSON.parse(text);
-
-      return {
-        primaryLanguage: 'English',
-        languagePercentages: { English: 100 },
-        marketFit: 50,
-      };
     } catch (error) {
       this.logger.debug(`Language analysis unavailable (using defaults): ${error.message}`);
       return {
@@ -439,12 +426,34 @@ export class GeminiAIService {
    */
   private async fetchImageAsBase64(url: string): Promise<string> {
     try {
+      // Validate URL
+      if (!url || url.trim().length === 0) {
+        throw new Error('Invalid image URL: empty or null');
+      }
+
       const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+      }
+
+      // Check content type
+      const contentType = response.headers.get('content-type');
+      if (contentType && !contentType.startsWith('image/')) {
+        throw new Error(`Invalid content type: ${contentType}. Expected image/*`);
+      }
+
       const arrayBuffer = await response.arrayBuffer();
+
+      // Check if image is too large (max 20MB for Gemini)
+      if (arrayBuffer.byteLength > 20 * 1024 * 1024) {
+        throw new Error(`Image too large: ${arrayBuffer.byteLength} bytes. Max 20MB.`);
+      }
+
       const buffer = Buffer.from(arrayBuffer);
       return buffer.toString('base64');
     } catch (error) {
-      this.logger.error(`Failed to fetch image ${url}:`, error);
+      this.logger.error(`Failed to fetch image ${url}:`, error.message);
       throw error;
     }
   }
@@ -598,8 +607,6 @@ export class GeminiAIService {
         avgHashtagsPerPost: parsed.avgHashtagsPerPost || 0,
         feedback: parsed.feedback || 'Moderate hashtag usage.',
       };
-
-      return { rating: 'effective', message: 'Failed to parse AI response' };
     } catch (error) {
       this.logger.debug(`Hashtag analysis unavailable: ${error.message}`);
       return { rating: 'effective', message: 'AI analysis failed' };
@@ -703,8 +710,6 @@ export class GeminiAIService {
         examples: parsed.examples || [],
         feedback: parsed.feedback || 'Moderate CTA usage.',
       };
-
-      return { rating: 'medium', message: 'Failed to parse AI response' };
     } catch (error) {
       this.logger.debug(`CTA analysis unavailable: ${error.message}`);
       return { rating: 'medium', message: 'AI analysis failed' };

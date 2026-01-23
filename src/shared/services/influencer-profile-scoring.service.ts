@@ -34,7 +34,9 @@ export interface ProfileScore {
 export interface AudienceQualityScore {
   score: number; // 0-100 (for UI display)
   maxScore: 100;
-  breakdown: {
+  facebookPageConnected: boolean; // Indicates if Facebook Page is connected for demographics
+  message?: string; // Optional message when no data available
+  breakdown?: {
     followerAuthenticity: { score: number; weight: 65; details: any };
     demographicsSnapshot: { score: number; weight: 20; details: any };
     geoRelevance: { score: number; weight: 15; details: any };
@@ -208,6 +210,9 @@ export class InfluencerProfileScoringService {
     const demographicsSnapshot = await this.calculateDemographicsSnapshot(influencer);
     const geoRelevance = await this.calculateGeoRelevance(influencer);
 
+    // Check if Facebook page is connected based on demographic data availability
+    const facebookPageConnected = !!(demographicsSnapshot.details?.ageBreakdown?.length > 0);
+
     // Weighted average: 65% + 20% + 15% = 100%
     const score =
       (followerAuthenticity.score * 0.65) +
@@ -217,9 +222,20 @@ export class InfluencerProfileScoringService {
     // Convert to 0-100 scale for UI
     const scoreOut100 = score * 10;
 
+    // If all scores are 0 (no data available), return simplified response
+    if (scoreOut100 === 0 && followerAuthenticity.score === 0 && demographicsSnapshot.score === 0 && geoRelevance.score === 0) {
+      return {
+        score: 0,
+        maxScore: 100,
+        facebookPageConnected: false,
+        message: 'No audience data available. Please sync your Instagram account to get audience quality metrics.',
+      } as any;
+    }
+
     return {
       score: Number(scoreOut100.toFixed(2)),
       maxScore: 100, // Changed from 10 to 100 for UI
+      facebookPageConnected,
       breakdown: {
         followerAuthenticity: { score: followerAuthenticity.score * 10, weight: 65, details: followerAuthenticity.details },
         demographicsSnapshot: { score: demographicsSnapshot.score * 10, weight: 20, details: demographicsSnapshot.details },
@@ -1580,12 +1596,19 @@ export class InfluencerProfileScoringService {
       }
 
       const visualAnalyses: any[] = [];
-      for (const media of recentMedia.slice(0, 10)) {
+      // Only analyze IMAGE and CAROUSEL_ALBUM media, skip VIDEO
+      const imageMedia = recentMedia.filter(m =>
+        (m.mediaType === 'IMAGE' || m.mediaType === 'CAROUSEL_ALBUM') &&
+        m.mediaUrl &&
+        m.mediaUrl.trim().length > 0
+      ).slice(0, 10);
+
+      for (const media of imageMedia) {
         try {
           const visual = await this.geminiAIService.analyzeVisualQuality(media.mediaUrl);
           visualAnalyses.push(visual);
         } catch (error) {
-          // Continue on error
+          // Continue on error - skip this media
         }
       }
 
@@ -3125,11 +3148,11 @@ export class InfluencerProfileScoringService {
   private async calculateMonetisationSignals(influencer: Influencer): Promise<{ score: number; details: any }> {
     if (!this.geminiAIService.isAvailable()) {
       return {
-        score: 5.0,
+        score: 10.0,
         details: {
-          message: 'AI not available - using default score',
-          percentage: 50,
-          rating: 'Medium',
+          message: 'AI not available - using full score',
+          percentage: 100,
+          rating: 'Excellent',
           campaignTypes: ['Barter', 'Paid'],
         },
       };
@@ -3138,7 +3161,15 @@ export class InfluencerProfileScoringService {
     try {
       const recentMedia = await this.getRecentMediaForAI(influencer.id, 20);
       if (recentMedia.length === 0) {
-        return { score: 0, details: { message: 'No media available for analysis' } };
+        return {
+          score: 10.0,
+          details: {
+            message: 'No media available for analysis - using full score',
+            percentage: 100,
+            rating: 'Excellent',
+            campaignTypes: ['Barter', 'Paid'],
+          }
+        };
       }
 
       // Get profile data for context
@@ -3148,7 +3179,8 @@ export class InfluencerProfileScoringService {
       });
 
       const activeFollowers = latestSync?.activeFollowers || 0;
-      const avgEngagementRate = latestSync?.avgEngagementRate || 0;
+      // Convert Sequelize Decimal to number properly
+      const avgEngagementRate = latestSync?.avgEngagementRate ? Number(latestSync.avgEngagementRate) : 0;
 
       // Get average views from recent posts
       const thirtyDaysAgo = new Date();
@@ -3244,12 +3276,12 @@ export class InfluencerProfileScoringService {
       };
     } catch (error) {
       return {
-        score: 5.0,
+        score: 10.0,
         details: {
-          message: 'AI analysis failed - using default',
+          message: 'AI analysis failed - using full score',
           error: error.message,
-          percentage: 50,
-          rating: 'Medium',
+          percentage: 100,
+          rating: 'Excellent',
           campaignTypes: ['Barter', 'Paid'],
         },
       };
@@ -3270,7 +3302,14 @@ export class InfluencerProfileScoringService {
       });
 
       if (!latestSync) {
-        return { score: 0, details: { message: 'No profile sync data available' } };
+        return {
+          score: 10.0,
+          details: {
+            message: 'No profile sync data available - using full score',
+            percentage: 100,
+            rating: 'Excellent',
+          }
+        };
       }
 
       const activeFollowers = latestSync.activeFollowers || 0;
@@ -3296,7 +3335,7 @@ export class InfluencerProfileScoringService {
       const profileData = {
         activeFollowers,
         avgViews,
-        engagementRate: latestSync.avgEngagementRate || 0,
+        engagementRate: latestSync.avgEngagementRate ? Number(latestSync.avgEngagementRate) : 0,
       };
 
       // Ask AI to predict payout considering 0.2-0.5 rupees per view (if available)
@@ -3442,13 +3481,13 @@ export class InfluencerProfileScoringService {
       };
     } catch (error) {
       return {
-        score: 5.0,
+        score: 10.0,
         details: {
-          message: 'AI analysis failed - using default',
+          message: 'AI analysis failed - using full score',
           error: error.message,
-          percentage: 50,
-          rating: 'Fair',
-          aiFeedback: 'Brand trust analysis encountered an error - using default metrics.',
+          percentage: 100,
+          rating: 'Excellent',
+          aiFeedback: 'Brand trust analysis encountered an error - using full score.',
         },
       };
     }
@@ -3461,12 +3500,12 @@ export class InfluencerProfileScoringService {
   private async calculateAudienceSentiment(influencer: Influencer): Promise<{ score: number; details: any }> {
     if (!this.geminiAIService.isAvailable()) {
       return {
-        score: 5.0,
+        score: 10.0,
         details: {
-          message: 'AI not available - using default score',
-          positive: { percentage: 70 },
-          negative: { percentage: 20 },
-          neutral: { percentage: 10 },
+          message: 'AI not available - using full score',
+          positive: { percentage: 90 },
+          negative: { percentage: 5 },
+          neutral: { percentage: 5 },
         },
       };
     }
@@ -3474,12 +3513,28 @@ export class InfluencerProfileScoringService {
     try {
       const recentMedia = await this.getRecentMediaForAI(influencer.id, 20);
       if (recentMedia.length === 0) {
-        return { score: 0, details: { message: 'No media available' } };
+        return {
+          score: 10.0,
+          details: {
+            message: 'No media available - using full score',
+            positive: { percentage: 90 },
+            negative: { percentage: 5 },
+            neutral: { percentage: 5 },
+          }
+        };
       }
 
       const captions = recentMedia.map(m => m.caption).filter(c => c && c.length > 0);
       if (captions.length === 0) {
-        return { score: 0, details: { message: 'No captions available' } };
+        return {
+          score: 10.0,
+          details: {
+            message: 'No captions available - using full score',
+            positive: { percentage: 90 },
+            negative: { percentage: 5 },
+            neutral: { percentage: 5 },
+          }
+        };
       }
 
       // Ask AI to analyze audience sentiment on 1-20 scale
@@ -3550,13 +3605,13 @@ export class InfluencerProfileScoringService {
       };
     } catch (error) {
       return {
-        score: 5.0,
+        score: 10.0,
         details: {
-          message: 'AI analysis failed - using default',
+          message: 'AI analysis failed - using full score',
           error: error.message,
-          positive: { percentage: 70 },
-          negative: { percentage: 20 },
-          neutral: { percentage: 10 },
+          positive: { percentage: 90 },
+          negative: { percentage: 5 },
+          neutral: { percentage: 5 },
         },
       };
     }
@@ -3636,7 +3691,7 @@ export class InfluencerProfileScoringService {
   /**
    * Get recent media with captions and URLs for AI analysis
    */
-  private async getRecentMediaForAI(influencerId: number, limit: number = 20): Promise<Array<{ caption: string; mediaUrl: string }>> {
+  private async getRecentMediaForAI(influencerId: number, limit: number = 20): Promise<Array<{ id: number; caption: string; mediaUrl: string; mediaType: string }>> {
     const mediaRecords = await this.instagramMediaModel.findAll({
       where: { influencerId },
       order: [['timestamp', 'DESC']],
@@ -3646,8 +3701,10 @@ export class InfluencerProfileScoringService {
     return mediaRecords
       .filter(m => m.mediaUrl) // Include all media types (images, videos, carousels)
       .map(m => ({
+        id: m.id,
         caption: m.caption || '',
         mediaUrl: m.mediaUrl || '',
+        mediaType: m.mediaType || 'IMAGE',
       }));
   }
 

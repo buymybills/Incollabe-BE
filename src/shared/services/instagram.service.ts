@@ -1518,6 +1518,7 @@ export class InstagramService {
           countries: [],
           totalFollowers: user.instagramFollowersCount || 0,
           dataAvailable: false,
+          facebookPageConnected: false,
           error: {
             code: 'FACEBOOK_PAGE_REQUIRED',
             message: 'Audience demographics require Instagram Business Account connected to a Facebook Page',
@@ -1572,6 +1573,7 @@ export class InstagramService {
         countries,
         totalFollowers,
         dataAvailable: true,
+        facebookPageConnected: true,
       };
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -1594,6 +1596,7 @@ export class InstagramService {
             countries: [],
             totalFollowers: user.instagramFollowersCount || 0,
             dataAvailable: false,
+            facebookPageConnected: false,
             error: {
               code: 'FACEBOOK_PAGE_REQUIRED',
               message: 'Audience demographics require Instagram Business Account connected to a Facebook Page',
