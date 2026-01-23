@@ -712,12 +712,32 @@ export class InstagramService {
         if (errorData?.error?.message?.includes('permission') ||
             errorData?.error?.message?.includes('Unsupported get request') ||
             errorData?.error?.message?.includes('Instagram Business Account')) {
+
+          // Log account type for debugging
+          console.log(`⚠️ Insights permission error for media ${mediaId}. Account type: ${user.instagramAccountType}`);
+          console.log(`Error details: ${errorData?.error?.message}`);
+
+          // If account is already a professional account (BUSINESS, CREATOR, or MEDIA_CREATOR),
+          // treat this as a "posted before conversion" error (skip gracefully)
+          const isProfessionalAccount = ['BUSINESS', 'CREATOR', 'MEDIA_CREATOR'].includes(user.instagramAccountType?.toUpperCase());
+
+          if (isProfessionalAccount) {
+            // This is likely an old post from before conversion - treat as skippable
+            throw new BadRequestException({
+              error: 'media_posted_before_business_conversion',
+              message: 'This media was posted before the Instagram account was converted to a professional account. Insights are only available for media posted after the conversion.',
+              mediaId,
+            });
+          }
+
+          // Account is not professional - this is a real access error
           throw new BadRequestException({
             error: 'instagram_insights_unavailable',
-            message: 'Instagram insights are not available. Please ensure your Instagram account is a Business or Creator account (not Personal account).',
+            message: 'Instagram insights are not available. Please ensure your Instagram account is a Business, Creator, or Media Creator account (not Personal account).',
             details: {
               reason: errorData?.error?.message || 'Permission denied',
-              requiredAccountType: 'BUSINESS or CREATOR (Professional Account)',
+              accountType: user.instagramAccountType || 'Unknown',
+              requiredAccountType: 'BUSINESS, CREATOR, or MEDIA_CREATOR (Professional Account)',
               instructions: 'To enable insights: 1) Open Instagram app, 2) Go to Settings → Account, 3) Switch to Professional Account, 4) Choose Business or Creator',
             },
             technicalDetails: errorData,
@@ -1369,13 +1389,11 @@ export class InstagramService {
         accountType: accountType,
         username: profileResponse.data.username,
         message: isBusinessOrCreator
-          ? 'Account has Business/Creator access and can request insights'
-          : 'Account must be converted to Business or Creator account to access insights',
+          ? `Account has ${accountType} access and can request insights`
+          : 'Account must be converted to Business, Creator, or Media Creator account to access insights',
         requiredPermissions: [
           'instagram_basic',
           'instagram_manage_insights',
-          'pages_show_list',
-          'pages_read_engagement',
         ],
       };
     } catch (error) {
