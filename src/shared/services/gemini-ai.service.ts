@@ -54,9 +54,9 @@ export class GeminiAIService {
 
       // Try to initialize both text and vision models
       try {
-        // Using Gemini 1.5 Pro for better quality and accuracy
+        // Using Gemini 1.5 Flash for faster, cost-effective performance
         // This model supports both text-only and image+text inputs
-        const modelName = 'gemini-1.5-pro';
+        const modelName = 'gemini-1.5-flash-latest';
 
         // For text-only analysis (niche, language, sentiment)
         this.model = this.genAI.getGenerativeModel({ model: modelName });
@@ -841,6 +841,101 @@ Return just a single number between 1 and 20.`;
       this.logger.debug(`Audience sentiment analysis unavailable: ${error.message}`);
       return 12;
     }
+  }
+
+  /**
+   * Generate realistic retention curve data for reels/videos
+   * Returns time-series data points showing how retention drops over time
+   */
+  async generateRetentionCurve(params: {
+    retentionRate: number; // Overall retention rate (e.g., 72.22)
+    avgDuration: string; // Average duration (e.g., "25-45 Sec")
+    engagementRate: number; // Engagement rate percentage
+    contentQuality?: number; // Optional content quality score (0-100)
+  }): Promise<Array<{ time: string; retention: number }>> {
+    if (!this.isAvailable()) {
+      // Return default curve pattern if AI not available
+      return this.getDefaultRetentionCurve(params.retentionRate, params.avgDuration);
+    }
+
+    try {
+      const prompt = `Generate a realistic Instagram Reels retention curve data based on these metrics:
+
+- Overall Retention Rate: ${params.retentionRate}%
+- Average Reel Duration: ${params.avgDuration}
+- Engagement Rate: ${params.engagementRate}%
+${params.contentQuality ? `- Content Quality Score: ${params.contentQuality}/100` : ''}
+
+REQUIREMENTS:
+1. Generate 8-10 data points showing retention percentage at different time intervals
+2. Start at time 0:00 with 100% retention
+3. End retention should be close to the overall retention rate (${params.retentionRate}%)
+4. Time intervals should span from 0:00 to approximately 0:30 (or match avg duration)
+5. Drop-off pattern should be realistic:
+   - High engagement = gradual drop-off (good hook retention)
+   - Low engagement = steeper initial drop-off (weak hooks)
+   - Content quality affects mid-video retention
+
+REALISTIC PATTERNS:
+- First 3 seconds: Typically 5-15% drop (hook quality)
+- 3-10 seconds: Moderate drop (content engagement)
+- 10-20 seconds: Gradual stabilization
+- 20-30 seconds: Final retention plateau
+
+Return ONLY a JSON array in this exact format (no other text):
+[
+  {"time": "0:00", "retention": 100},
+  {"time": "0:03", "retention": 92},
+  {"time": "0:05", "retention": 85},
+  {"time": "0:10", "retention": 78},
+  {"time": "0:15", "retention": 75},
+  {"time": "0:20", "retention": 73},
+  {"time": "0:25", "retention": 72},
+  {"time": "0:30", "retention": 72}
+]`;
+
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text().trim();
+
+      // Extract JSON array from response
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const curveData = JSON.parse(jsonMatch[0]);
+
+        // Validate the data structure
+        if (Array.isArray(curveData) && curveData.length > 0 && curveData[0].time && curveData[0].retention !== undefined) {
+          return curveData;
+        }
+      }
+
+      // Fallback to default curve if parsing fails
+      return this.getDefaultRetentionCurve(params.retentionRate, params.avgDuration);
+    } catch (error) {
+      this.logger.debug(`Retention curve generation unavailable: ${error.message}`);
+      return this.getDefaultRetentionCurve(params.retentionRate, params.avgDuration);
+    }
+  }
+
+  /**
+   * Generate a default retention curve when AI is not available
+   */
+  private getDefaultRetentionCurve(retentionRate: number, avgDuration: string): Array<{ time: string; retention: number }> {
+    // Create a realistic drop-off curve that ends at the retention rate
+    const startRetention = 100;
+    const endRetention = retentionRate;
+
+    // Calculate drop points (steeper at start, gradual later)
+    return [
+      { time: '0:00', retention: 100 },
+      { time: '0:03', retention: Math.round(startRetention - (startRetention - endRetention) * 0.1) },
+      { time: '0:05', retention: Math.round(startRetention - (startRetention - endRetention) * 0.2) },
+      { time: '0:10', retention: Math.round(startRetention - (startRetention - endRetention) * 0.4) },
+      { time: '0:15', retention: Math.round(startRetention - (startRetention - endRetention) * 0.6) },
+      { time: '0:20', retention: Math.round(startRetention - (startRetention - endRetention) * 0.8) },
+      { time: '0:25', retention: Math.round(startRetention - (startRetention - endRetention) * 0.9) },
+      { time: '0:30', retention: Math.round(endRetention) },
+    ];
   }
 
   /**
