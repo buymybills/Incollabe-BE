@@ -2289,64 +2289,225 @@ export class InfluencerProfileScoringService {
    * 30-day follower growth rate with tiered scoring
    * >30%: 10/10 | 25-30%: 8.33/10 | 20-25%: 6.67/10 | 15-20%: 5.83/10
    * 10-15%: 5/10 | 5-10%: 4.17/10 | 0-5%: 3.33/10 | negative: 0/10
+   * Enhanced with chart data and detailed metrics
    */
   private async calculateGrowthTrend(influencer: Influencer): Promise<{ score: number; details: any }> {
-    const snapshots = await this.instagramProfileAnalysisModel.findAll({
-      where: { influencerId: influencer.id },
-      order: [['syncDate', 'DESC']],
-      limit: 2,
+    // Fetch growth snapshots from last 60 days (to calculate previous period comparison)
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+    const growthSnapshots = await this.instagramProfileGrowthModel.findAll({
+      where: {
+        influencerId: influencer.id,
+        snapshotDate: { [Op.gte]: sixtyDaysAgo },
+      },
+      order: [['snapshotDate', 'ASC']],
     });
 
-    if (snapshots.length < 2) {
+
+    // Fallback to profile analysis if no growth snapshots
+    if (growthSnapshots.length < 2) {
+      // Fetch ALL snapshots to build chart data
+      const snapshots = await this.instagramProfileAnalysisModel.findAll({
+        where: { influencerId: influencer.id },
+        order: [['syncNumber', 'ASC']],
+      });
+
+      if (snapshots.length < 2) {
+        return {
+          score: 5.0,
+          details: {
+            message: 'First sync. Growth will be calculated after next sync.',
+            newFollowers: 0,
+            newFollowersChange: 0,
+            avgGrowthPerDay: 0,
+            avgGrowthChange: 0,
+            rating: 'Unknown',
+            chartData: [],
+          },
+        };
+      }
+
+      // Calculate growth from latest and previous snapshot
+      const latestFollowers = snapshots[snapshots.length - 1].totalFollowers || 0;
+      const previousFollowers = snapshots[snapshots.length - 2].totalFollowers || 0;
+      const growth = latestFollowers - previousFollowers;
+      const growthRate = previousFollowers > 0 ? ((growth / previousFollowers) * 100) : 0;
+
+      let score = 0;
+      let rating = '';
+      if (growthRate > 30) { score = 10.0; rating = 'Exceptional'; }
+      else if (growthRate >= 25) { score = 8.33; rating = 'Excellent'; }
+      else if (growthRate >= 20) { score = 6.67; rating = 'Very Good'; }
+      else if (growthRate >= 15) { score = 5.83; rating = 'Good'; }
+      else if (growthRate >= 10) { score = 5.0; rating = 'Moderate'; }
+      else if (growthRate >= 5) { score = 4.17; rating = 'Fair'; }
+      else if (growthRate >= 0) { score = 3.33; rating = 'Weak'; }
+      else { score = 0; rating = 'Declining'; }
+
+      // Build chart data from snapshots
+      const chartData = snapshots.map(snapshot => {
+        const date = snapshot.analysisPeriodEnd || snapshot.syncDate || snapshot.createdAt;
+        const dateObj = new Date(date);
+        const formattedDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return {
+          date: formattedDate,
+          followers: snapshot.totalFollowers || 0,
+        };
+      });
+
       return {
-        score: 5.0, // Mid-range for new accounts (cannot determine growth yet)
-        details: { message: 'First sync. Growth will be calculated after next sync.' },
+        score: Number(score.toFixed(2)),
+        details: {
+          growthRate: Number(growthRate.toFixed(2)),
+          followersStart: previousFollowers,
+          followersEnd: latestFollowers,
+          growth,
+          newFollowers: growth,
+          newFollowersChange: 0,
+          avgGrowthPerDay: 0,
+          avgGrowthChange: 0,
+          rating,
+          tier: growthRate > 30 ? '>30%' :
+                growthRate >= 25 ? '25-30%' :
+                growthRate >= 20 ? '20-25%' :
+                growthRate >= 15 ? '15-20%' :
+                growthRate >= 10 ? '10-15%' :
+                growthRate >= 5 ? '5-10%' :
+                growthRate >= 0 ? '0-5%' : 'negative',
+          chartData,
+          note: 'Chart data generated from profile analysis snapshots. Daily growth tracking will provide more detailed charts.',
+        },
       };
     }
 
-    const latestFollowers = snapshots[0].totalFollowers || 0;
-    const previousFollowers = snapshots[1].totalFollowers || 0;
+    // Split snapshots into current period (last 30 days) and previous period (31-60 days ago)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    if (previousFollowers === 0) {
-      return { score: 5.0, details: { message: 'No baseline data' } };
+    const currentPeriodSnapshots = growthSnapshots.filter(s => new Date(s.snapshotDate) >= thirtyDaysAgo);
+    const previousPeriodSnapshots = growthSnapshots.filter(s => new Date(s.snapshotDate) < thirtyDaysAgo);
+
+    // Build chart data from ALL snapshots (not just last 30 days)
+    const chartData = growthSnapshots.map(snapshot => {
+      const date = new Date(snapshot.snapshotDate);
+      const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return {
+        date: formattedDate,
+        followers: snapshot.followersCount || 0,
+      };
+    });
+
+    // If insufficient data in last 30 days, calculate from all available snapshots
+    if (currentPeriodSnapshots.length < 2) {
+      // Use all snapshots for calculation
+      const firstSnapshot = growthSnapshots[0];
+      const lastSnapshot = growthSnapshots[growthSnapshots.length - 1];
+      const totalGrowth = (lastSnapshot.followersCount || 0) - (firstSnapshot.followersCount || 0);
+      const growthRate = (firstSnapshot.followersCount || 0) > 0
+        ? ((totalGrowth / (firstSnapshot.followersCount || 0)) * 100)
+        : 0;
+
+      let score = 0;
+      let rating = '';
+      if (growthRate > 30) { score = 10.0; rating = 'Exceptional'; }
+      else if (growthRate >= 25) { score = 8.33; rating = 'Excellent'; }
+      else if (growthRate >= 20) { score = 6.67; rating = 'Very Good'; }
+      else if (growthRate >= 15) { score = 5.83; rating = 'Good'; }
+      else if (growthRate >= 10) { score = 5.0; rating = 'Moderate'; }
+      else if (growthRate >= 5) { score = 4.17; rating = 'Fair'; }
+      else if (growthRate >= 0) { score = 3.33; rating = 'Weak'; }
+      else { score = 0; rating = 'Declining'; }
+
+      return {
+        score: Number(score.toFixed(2)),
+        details: {
+          growthRate: Number(growthRate.toFixed(2)),
+          followersStart: firstSnapshot.followersCount || 0,
+          followersEnd: lastSnapshot.followersCount || 0,
+          growth: totalGrowth,
+          newFollowers: totalGrowth,
+          newFollowersChange: 0,
+          avgGrowthPerDay: 0,
+          avgGrowthChange: 0,
+          rating,
+          tier: growthRate > 30 ? '>30%' :
+                growthRate >= 25 ? '25-30%' :
+                growthRate >= 20 ? '20-25%' :
+                growthRate >= 15 ? '15-20%' :
+                growthRate >= 10 ? '10-15%' :
+                growthRate >= 5 ? '5-10%' :
+                growthRate >= 0 ? '0-5%' : 'negative',
+          chartData,
+          note: 'Growth calculated from all available snapshots. More snapshots in the last 30 days will improve accuracy.',
+        },
+      };
     }
 
-    const growthRate = ((latestFollowers - previousFollowers) / previousFollowers) * 100;
+    // Calculate current period growth
+    const currentStart = currentPeriodSnapshots[0].followersCount || 0;
+    const currentEnd = currentPeriodSnapshots[currentPeriodSnapshots.length - 1].followersCount || 0;
+    const currentGrowth = currentEnd - currentStart;
+    const currentDays = Math.max(1, currentPeriodSnapshots.length);
+    const currentAvgPerDay = Math.round(currentGrowth / currentDays);
+    const currentGrowthRate = currentStart > 0 ? ((currentGrowth / currentStart) * 100) : 0;
+
+    // Calculate previous period growth for comparison
+    let newFollowersChange = 0;
+    let avgGrowthChange = 0;
+    if (previousPeriodSnapshots.length >= 2) {
+      const previousStart = previousPeriodSnapshots[0].followersCount || 0;
+      const previousEnd = previousPeriodSnapshots[previousPeriodSnapshots.length - 1].followersCount || 0;
+      const previousGrowth = previousEnd - previousStart;
+      const previousDays = Math.max(1, previousPeriodSnapshots.length);
+      const previousAvgPerDay = Math.round(previousGrowth / previousDays);
+
+      newFollowersChange = currentGrowth - previousGrowth;
+      avgGrowthChange = currentAvgPerDay - previousAvgPerDay;
+    }
+
+    // Determine rating based on growth rate
+    let rating = '';
+    if (currentGrowthRate > 30) rating = 'Exceptional';
+    else if (currentGrowthRate >= 25) rating = 'Excellent';
+    else if (currentGrowthRate >= 20) rating = 'Very Good';
+    else if (currentGrowthRate >= 15) rating = 'Good';
+    else if (currentGrowthRate >= 10) rating = 'Moderate';
+    else if (currentGrowthRate >= 5) rating = 'Fair';
+    else if (currentGrowthRate >= 0) rating = 'Weak';
+    else rating = 'Declining';
 
     // Tiered scoring based on growth rate
     let score = 0;
-    if (growthRate > 30) {
-      score = 10.0; // 60 points out of 60
-    } else if (growthRate >= 25) {
-      score = 8.33; // 50 points out of 60
-    } else if (growthRate >= 20) {
-      score = 6.67; // 40 points out of 60
-    } else if (growthRate >= 15) {
-      score = 5.83; // 35 points out of 60
-    } else if (growthRate >= 10) {
-      score = 5.0; // 30 points out of 60
-    } else if (growthRate >= 5) {
-      score = 4.17; // 25 points out of 60
-    } else if (growthRate >= 0) {
-      score = 3.33; // 20 points out of 60
-    } else {
-      score = 0; // Negative growth = 0 points
-    }
+    if (currentGrowthRate > 30) score = 10.0;
+    else if (currentGrowthRate >= 25) score = 8.33;
+    else if (currentGrowthRate >= 20) score = 6.67;
+    else if (currentGrowthRate >= 15) score = 5.83;
+    else if (currentGrowthRate >= 10) score = 5.0;
+    else if (currentGrowthRate >= 5) score = 4.17;
+    else if (currentGrowthRate >= 0) score = 3.33;
+    else score = 0;
 
     return {
       score: Number(score.toFixed(2)),
       details: {
-        growthRate: Number(growthRate.toFixed(2)),
-        followersStart: previousFollowers,
-        followersEnd: latestFollowers,
-        growth: latestFollowers - previousFollowers,
-        tier: growthRate > 30 ? '>30%' :
-              growthRate >= 25 ? '25-30%' :
-              growthRate >= 20 ? '20-25%' :
-              growthRate >= 15 ? '15-20%' :
-              growthRate >= 10 ? '10-15%' :
-              growthRate >= 5 ? '5-10%' :
-              growthRate >= 0 ? '0-5%' : 'negative',
+        growthRate: Number(currentGrowthRate.toFixed(2)),
+        followersStart: currentStart,
+        followersEnd: currentEnd,
+        growth: currentGrowth,
+        newFollowers: currentGrowth,
+        newFollowersChange,
+        avgGrowthPerDay: currentAvgPerDay,
+        avgGrowthChange,
+        rating,
+        tier: currentGrowthRate > 30 ? '>30%' :
+              currentGrowthRate >= 25 ? '25-30%' :
+              currentGrowthRate >= 20 ? '20-25%' :
+              currentGrowthRate >= 15 ? '15-20%' :
+              currentGrowthRate >= 10 ? '10-15%' :
+              currentGrowthRate >= 5 ? '5-10%' :
+              currentGrowthRate >= 0 ? '0-5%' : 'negative',
+        chartData,
       },
     };
   }
