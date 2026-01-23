@@ -1864,7 +1864,7 @@ export class InfluencerCredibilityScoringService {
     });
 
     return mediaRecords
-      .filter(m => m.mediaUrl && m.mediaType !== 'VIDEO') // Filter videos for now (images only)
+      .filter(m => m.mediaUrl) // Include all media types (images, videos, carousels)
       .map(m => ({
         caption: m.caption || '',
         mediaUrl: m.mediaUrl || '',

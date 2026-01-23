@@ -45,6 +45,16 @@ export interface AudienceQualityScore {
 export interface ContentRelevanceScore {
   score: number; // 0-100 (for UI display)
   maxScore: 100;
+  details: {
+    rating: string;
+    totalPostsAnalyzed: number;
+    primaryNiche: string;
+    contentMixScore: number;
+    platformRelevanceScore: number;
+    hashtagEffectivenessRating: string;
+    languageFit: string;
+    aiFeedback: string;
+  };
   breakdown: {
     platformRelevance: { score: number; weight: 35; details: any };
     contentMix: { score: number; weight: 5; details: any };
@@ -600,9 +610,51 @@ export class InfluencerProfileScoringService {
     // Convert to 0-100 scale for UI
     const scoreOut100 = score * 10;
 
+    // Determine overall rating based on score
+    let rating = '';
+    if (scoreOut100 >= 85) rating = 'Exceptional';
+    else if (scoreOut100 >= 70) rating = 'Excellent';
+    else if (scoreOut100 >= 50) rating = 'Good';
+    else if (scoreOut100 >= 30) rating = 'Fair';
+    else rating = 'Needs Improvement';
+
+    // Generate AI feedback based on scores
+    const strengths: string[] = [];
+    const improvements: string[] = [];
+
+    if (platformRelevance.score * 10 >= 70) strengths.push('platform relevance');
+    else improvements.push('platform relevance');
+
+    if (contentMix.score * 10 >= 70) strengths.push('content mix');
+    else improvements.push('content mix (increase reel percentage)');
+
+    if (contentStyle.score * 10 >= 70) strengths.push('content style');
+    else improvements.push('content style');
+
+    if (hashtagEffectiveness.score * 10 >= 70) strengths.push('hashtag effectiveness');
+    else improvements.push('hashtag usage');
+
+    let aiFeedback = '';
+    if (strengths.length > 0) {
+      aiFeedback += `Strong in: ${strengths.join(', ')}. `;
+    }
+    if (improvements.length > 0) {
+      aiFeedback += `Focus on improving: ${improvements.join(', ')}.`;
+    }
+
     return {
       score: Number(scoreOut100.toFixed(2)),
       maxScore: 100, // Changed from 10 to 100 for UI
+      details: {
+        rating,
+        totalPostsAnalyzed: contentMix.details.totalPosts || 0,
+        primaryNiche: topNicheBreakdown.details.primaryNiche || 'Unknown',
+        contentMixScore: Number((contentMix.score * 10).toFixed(2)),
+        platformRelevanceScore: Number((platformRelevance.score * 10).toFixed(2)),
+        hashtagEffectivenessRating: hashtagEffectiveness.details.effectiveness || 'Unknown',
+        languageFit: languageMarketFit.details.primaryLanguage || 'Unknown',
+        aiFeedback: aiFeedback.trim(),
+      },
       breakdown: {
         platformRelevance: { score: platformRelevance.score * 10, weight: 35, details: platformRelevance.details },
         contentMix: { score: contentMix.score * 10, weight: 5, details: contentMix.details },
@@ -2770,7 +2822,7 @@ export class InfluencerProfileScoringService {
     });
 
     return mediaRecords
-      .filter(m => m.mediaUrl && m.mediaType !== 'VIDEO')
+      .filter(m => m.mediaUrl) // Include all media types (images, videos, carousels)
       .map(m => ({
         caption: m.caption || '',
         mediaUrl: m.mediaUrl || '',
