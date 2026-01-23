@@ -16,6 +16,7 @@ export interface VisualAnalysisResult {
   textOverlay: boolean;
   faces: number;
   objects: string[];
+  feedback?: string; // AI-generated 4-6 word feedback
 }
 
 export interface NicheDetectionResult {
@@ -214,8 +215,8 @@ export class GeminiAIService {
     }
 
     try {
-      // Optimized: 80% shorter prompt
-      const prompt = `Rate image 0-10: composition, lighting, colorHarmony, clarity. Identify: contentType(product/lifestyle/selfie/food/travel/fashion/fitness), profScore(0-100), brandScore(0-100), textOverlay(bool), faces(int), objects(array). JSON only.`;
+      // Optimized: 80% shorter prompt with feedback
+      const prompt = `Rate image 0-10: composition, lighting, colorHarmony, clarity. Identify: contentType(product/lifestyle/selfie/food/travel/fashion/fitness), profScore(0-100), brandScore(0-100), textOverlay(bool), faces(int), objects(array), feedback(4-6 words actionable). JSON only.`;
 
       const imageData = await this.fetchImageAsBase64(imageUrl);
 
@@ -255,6 +256,7 @@ export class GeminiAIService {
         textOverlay: analysis.textOverlay,
         faces: analysis.faces,
         objects: analysis.objects || [],
+        feedback: analysis.feedback || '',
       };
     } catch (error) {
       this.logger.debug(`Visual analysis unavailable (using defaults): ${error.message}`);
@@ -279,8 +281,8 @@ export class GeminiAIService {
       const contentTypes = visualAnalyses.map(v => v.contentType).join(',');
       const allCaptions = captions.slice(0, 15).join('\n');
 
-      // Optimized: 70% shorter
-      const prompt = `Captions: ${allCaptions}\nTypes: ${contentTypes}\nIdentify: primaryNiche(fashion/fitness/food/travel/tech/beauty/lifestyle/business), secondaryNiches(2-3), confidence(0-100), keywords(5-10). JSON only.`;
+      // Optimized: 70% shorter with feedback
+      const prompt = `Captions: ${allCaptions}\nTypes: ${contentTypes}\nIdentify: primaryNiche(fashion/fitness/food/travel/tech/beauty/lifestyle/business), secondaryNiches(2-3), confidence(0-100), keywords(5-10), feedback(4-6 words actionable). JSON only.`;
 
       const result = await this.executeWithFallback(async (model) => {
         const response = await model.generateContent({
@@ -329,7 +331,7 @@ export class GeminiAIService {
       const allCaptions = captions.slice(0, 15).join('\n');
 
       // Optimized: 75% shorter
-      const prompt = `Captions: ${allCaptions}\nIdentify: primaryLanguage, languagePercentages(%), marketFit(0-100). JSON only.`;
+      const prompt = `Captions: ${allCaptions}\nIdentify: primaryLanguage, languagePercentages(%), marketFit(0-100), feedback(4-6 words actionable). JSON only.`;
 
       const result = await this.executeWithFallback(async (model) => {
         const response = await model.generateContent({
@@ -449,37 +451,40 @@ export class GeminiAIService {
 
   /**
    * Analyze sentiment from captions
-   * Returns sentiment score from -100 (very negative) to +100 (very positive)
+   * Returns sentiment score from -100 (very negative) to +100 (very positive) with feedback
    */
-  async analyzeSentiment(captions: string[]): Promise<number> {
+  async analyzeSentiment(captions: string[]): Promise<{ score: number; feedback: string }> {
     if (!this.isAvailable() || captions.length === 0) {
-      return 70; // Default positive sentiment
+      return { score: 70, feedback: 'Sentiment analysis unavailable.' };
     }
 
     try {
       const allCaptions = captions.slice(0, 15).join('\n');
 
-      // Optimized: 80% shorter
-      const prompt = `Captions: ${allCaptions}\nRate sentiment -100 to +100. Return single number.`;
+      // Optimized with feedback
+      const prompt = `Captions: ${allCaptions}\nRate sentiment -100 to +100. Return JSON: {"score": number, "feedback": "4-6 words actionable"}`;
 
       const result = await this.executeWithFallback(async (model) => {
-        const response = await model.generateContent(prompt);
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            response_mime_type: "application/json",
+            temperature: 0.3,
+          }
+        });
         return await response.response;
-      }, 'generateRetentionCurve');
+      }, 'analyzeSentiment');
 
       const text = result.text().trim();
+      const parsed = JSON.parse(text);
 
-      // Try to extract number from response
-      const numberMatch = text.match(/-?\d+/);
-      if (numberMatch) {
-        const sentiment = parseInt(numberMatch[0], 10);
-        return Math.max(-100, Math.min(100, sentiment)); // Clamp to -100 to +100
-      }
-
-      return 70; // Default if parsing fails
+      return {
+        score: Math.max(-100, Math.min(100, parsed.score || 70)),
+        feedback: parsed.feedback || 'Moderate sentiment detected.',
+      };
     } catch (error) {
       this.logger.debug(`Sentiment analysis unavailable (using default): ${error.message}`);
-      return 70;
+      return { score: 70, feedback: 'Sentiment analysis unavailable.' };
     }
   }
 
@@ -494,8 +499,8 @@ export class GeminiAIService {
     try {
       const allCaptions = captions.join('\n');
 
-      // Optimized: 80% shorter
-      const prompt = `Captions: ${allCaptions}\nRate trend relevance 1-10: score, trends(array), reason. JSON only.`;
+      // Optimized: 80% shorter with feedback
+      const prompt = `Captions: ${allCaptions}\nRate trend relevance 1-10. Return JSON: {"score": number, "trends": ["trend1", "trend2"], "feedback": "4-6 words actionable"}`;
 
       const result = await this.executeWithFallback(async (model) => {
         const response = await model.generateContent({
@@ -513,13 +518,12 @@ export class GeminiAIService {
       return {
         score: Math.max(1, Math.min(10, parsed.score || 7)),
         trends: parsed.trends || [],
-        relevanceReason: parsed.reason || parsed.relevanceReason || '',
+        feedback: parsed.feedback || 'Moderate trend relevance.',
+        relevanceReason: parsed.reason || parsed.relevanceReason || parsed.feedback || '',
       };
-
-      return { score: 7.0, message: 'Failed to parse AI response' };
     } catch (error) {
       this.logger.debug(`Trend relevance analysis unavailable: ${error.message}`);
-      return { score: 7.0, message: 'AI analysis failed' };
+      return { score: 7.0, message: 'AI analysis failed', feedback: 'Trend analysis unavailable.' };
     }
   }
 
@@ -572,8 +576,8 @@ export class GeminiAIService {
     try {
       const allCaptions = captions.join('\n');
 
-      // Optimized: 80% shorter
-      const prompt = `Captions: ${allCaptions}\nRate hashtags: outperforming/effective/medium/need_improvement. Return: rating, totalHashtags, avgHashtagsPerPost, recommendations. JSON only.`;
+      // Optimized: 80% shorter with feedback
+      const prompt = `Captions: ${allCaptions}\nRate hashtags: outperforming/effective/medium/need_improvement. Return JSON: {"rating": "outperforming/effective/medium/need_improvement", "totalHashtags": number, "avgHashtagsPerPost": number, "feedback": "4-6 words actionable"}`;
 
       const result = await this.executeWithFallback(async (model) => {
         const response = await model.generateContent({
@@ -584,7 +588,7 @@ export class GeminiAIService {
           }
         });
         return await response.response;
-      }, 'generateRetentionCurve');
+      }, 'analyzeHashtagEffectiveness');
 
       const text = result.text().trim();
       const parsed = JSON.parse(text);
@@ -592,7 +596,7 @@ export class GeminiAIService {
         rating: parsed.rating || 'effective',
         totalHashtags: parsed.totalHashtags || 0,
         avgHashtagsPerPost: parsed.avgHashtagsPerPost || 0,
-        recommendations: parsed.recommendations || '',
+        feedback: parsed.feedback || 'Moderate hashtag usage.',
       };
 
       return { rating: 'effective', message: 'Failed to parse AI response' };
@@ -634,8 +638,8 @@ export class GeminiAIService {
         return { rating: 14, message: 'No images loaded' };
       }
 
-      // Optimized: 75% shorter
-      const prompt = `Analyze these images for color palette. Rate consistency 1-20. Return JSON: {"rating": number, "dominantColors": ["Color1", "Color2", "Color3"], "mood": "Cool/Warm/Vibrant/Muted/Neutral", "consistency": "high/medium/low"}. List 3-5 main colors detected.`;
+      // Optimized: 75% shorter with feedback
+      const prompt = `Analyze these images for color palette. Rate consistency 1-20. Return JSON: {"rating": number, "dominantColors": ["Color1", "Color2", "Color3"], "mood": "Cool/Warm/Vibrant/Muted/Neutral", "consistency": "high/medium/low", "feedback": "4-6 words actionable"}. List 3-5 main colors.`;
 
       const result = await this.executeWithFallback(async (model) => {
         const response = await model.generateContent({
@@ -658,12 +662,11 @@ export class GeminiAIService {
         dominantColors: parsed.dominantColors || [],
         mood: parsed.mood || '',
         consistency: parsed.consistency || 'medium',
+        feedback: parsed.feedback || 'Moderate color consistency.',
       };
-
-      return { rating: 14, message: 'Failed to parse AI response' };
     } catch (error) {
       this.logger.debug(`Color palette analysis unavailable: ${error.message}`);
-      return { rating: 14, message: 'AI analysis failed' };
+      return { rating: 14, message: 'AI analysis failed', feedback: 'Color analysis unavailable.' };
     }
   }
 
@@ -678,8 +681,149 @@ export class GeminiAIService {
     try {
       const allCaptions = captions.join('\n');
 
-      // Optimized: 80% shorter
-      const prompt = `Captions: ${allCaptions}\nRate CTA: good/medium/less. Return: rating, ctaCount, examples(array), recommendations. JSON only.`;
+      // Optimized: 80% shorter with feedback
+      const prompt = `Captions: ${allCaptions}\nRate CTA: good/medium/less. Return JSON: {"rating": "good/medium/less", "ctaCount": number, "examples": ["ex1", "ex2"], "feedback": "4-6 words actionable"}`;
+
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            response_mime_type: "application/json",
+            temperature: 0.3,
+          }
+        });
+        return await response.response;
+      }, 'analyzeCTAUsage');
+
+      const text = result.text().trim();
+      const parsed = JSON.parse(text);
+      return {
+        rating: parsed.rating || 'medium',
+        ctaCount: parsed.ctaCount || 0,
+        examples: parsed.examples || [],
+        feedback: parsed.feedback || 'Moderate CTA usage.',
+      };
+
+      return { rating: 'medium', message: 'Failed to parse AI response' };
+    } catch (error) {
+      this.logger.debug(`CTA analysis unavailable: ${error.message}`);
+      return { rating: 'medium', message: 'AI analysis failed' };
+    }
+  }
+
+  /**
+   * Predict monetisation potential on 1-50 scale with feedback
+   */
+  async predictMonetisationPotential(profileContext: {
+    followerCount: number;
+    engagementRate: number;
+    accountType: string;
+    captions: string[];
+  }): Promise<{ rating: number; feedback: string }> {
+    if (!this.isAvailable()) {
+      return { rating: 25, feedback: 'Monetization analysis unavailable.' };
+    }
+
+    try {
+      const allCaptions = profileContext.captions.slice(0, 8).join('\n');
+
+      // Optimized with feedback
+      const prompt = `Followers:${profileContext.followerCount}, Eng:${profileContext.engagementRate}%, Type:${profileContext.accountType}. Captions: ${allCaptions}\nRate monetisation 1-50. Return JSON: {"rating": number, "feedback": "4-6 words actionable"}`;
+
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            response_mime_type: "application/json",
+            temperature: 0.3,
+          }
+        });
+        return await response.response;
+      }, 'predictMonetisationPotential');
+
+      const text = result.text().trim();
+      const parsed = JSON.parse(text);
+
+      return {
+        rating: Math.max(1, Math.min(50, parsed.rating || 25)),
+        feedback: parsed.feedback || 'Moderate monetization potential.',
+      };
+    } catch (error) {
+      this.logger.debug(`Monetisation prediction unavailable: ${error.message}`);
+      return { rating: 25, feedback: 'Monetization analysis unavailable.' };
+    }
+  }
+
+  /**
+   * Predict influencer payout based on active followers and avg views
+   * Considers rate of 0.2-0.5 rupees per view
+   */
+  async predictInfluencerPayout(profileData: {
+    activeFollowers: number;
+    avgViews: number;
+    engagementRate: number;
+  }): Promise<{ payout: number; feedback: string }> {
+    if (!this.isAvailable()) {
+      // Fallback calculation: avgViews * 0.35 (average of 0.2-0.5 range)
+      return {
+        payout: Math.round(profileData.avgViews * 0.35),
+        feedback: 'Payout analysis unavailable.',
+      };
+    }
+
+    try {
+      // Optimized prompt with JSON mode and feedback
+      const prompt = `Calculate influencer payout in INR. Profile: Active followers=${profileData.activeFollowers}, Avg views=${profileData.avgViews}, Engagement=${profileData.engagementRate}%. Rate: ₹0.2-0.5 per view. Consider: higher engagement = higher rate (0.4-0.5), lower engagement = lower rate (0.2-0.3). Return JSON: {"payout": number, "rateUsed": number, "feedback": "4-6 words actionable"}`;
+
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            response_mime_type: "application/json",
+            temperature: 0.3,
+          }
+        });
+        return await response.response;
+      }, 'predictInfluencerPayout');
+
+      const text = result.text().trim();
+      const parsed = JSON.parse(text);
+
+      if (parsed.payout && typeof parsed.payout === 'number') {
+        return {
+          payout: Math.max(0, Math.round(parsed.payout)),
+          feedback: parsed.feedback || 'Moderate payout potential.',
+        };
+      }
+
+      // Fallback calculation
+      return {
+        payout: Math.round(profileData.avgViews * 0.35),
+        feedback: 'Calculated from average views.',
+      };
+    } catch (error) {
+      this.logger.debug(`Payout prediction unavailable: ${error.message}`);
+      // Fallback calculation
+      return {
+        payout: Math.round(profileData.avgViews * 0.35),
+        feedback: 'Payout analysis unavailable.',
+      };
+    }
+  }
+
+  /**
+   * Analyze audience sentiment on 1-20 scale with feedback
+   */
+  async analyzeAudienceSentiment(captions: string[]): Promise<{ rating: number; feedback: string }> {
+    if (!this.isAvailable() || captions.length === 0) {
+      return { rating: 12, feedback: 'Audience sentiment unavailable.' };
+    }
+
+    try {
+      const allCaptions = captions.slice(0, 15).join('\n');
+
+      // Optimized with feedback
+      const prompt = `Captions: ${allCaptions}\nRate audience sentiment 1-20. Return JSON: {"rating": number, "feedback": "4-6 words actionable"}`;
 
       const result = await this.executeWithFallback(async (model) => {
         const response = await model.generateContent({
@@ -694,130 +838,14 @@ export class GeminiAIService {
 
       const text = result.text().trim();
       const parsed = JSON.parse(text);
+
       return {
-        rating: parsed.rating || 'medium',
-        ctaCount: parsed.ctaCount || 0,
-        examples: parsed.examples || [],
-        recommendations: parsed.recommendations || '',
+        rating: Math.max(1, Math.min(20, parsed.rating || 12)),
+        feedback: parsed.feedback || 'Moderate audience sentiment.',
       };
-
-      return { rating: 'medium', message: 'Failed to parse AI response' };
-    } catch (error) {
-      this.logger.debug(`CTA analysis unavailable: ${error.message}`);
-      return { rating: 'medium', message: 'AI analysis failed' };
-    }
-  }
-
-  /**
-   * Predict monetisation potential on 1-50 scale
-   */
-  async predictMonetisationPotential(profileContext: {
-    followerCount: number;
-    engagementRate: number;
-    accountType: string;
-    captions: string[];
-  }): Promise<number> {
-    if (!this.isAvailable()) {
-      return 25; // Default mid-range score
-    }
-
-    try {
-      const allCaptions = profileContext.captions.slice(0, 8).join('\n');
-
-      // Optimized: 85% shorter
-      const prompt = `Followers:${profileContext.followerCount}, Eng:${profileContext.engagementRate}%, Type:${profileContext.accountType}. Captions: ${allCaptions}\nRate monetisation 1-50. Return single number.`;
-
-      const result = await this.executeWithFallback(async (model) => {
-        const response = await model.generateContent(prompt);
-        return await response.response;
-      }, 'generateRetentionCurve');
-
-      const text = result.text().trim();
-
-      // Extract number from response
-      const numberMatch = text.match(/\d+/);
-      if (numberMatch) {
-        const rating = parseInt(numberMatch[0], 10);
-        return Math.max(1, Math.min(50, rating)); // Clamp to 1-50
-      }
-
-      return 25; // Default if parsing fails
-    } catch (error) {
-      this.logger.debug(`Monetisation prediction unavailable: ${error.message}`);
-      return 25;
-    }
-  }
-
-  /**
-   * Predict influencer payout based on active followers and avg views
-   * Considers rate of 0.2-0.5 rupees per view
-   */
-  async predictInfluencerPayout(profileData: {
-    activeFollowers: number;
-    avgViews: number;
-    engagementRate: number;
-  }): Promise<number> {
-    if (!this.isAvailable()) {
-      return 500; // Default mid-range payout
-    }
-
-    try {
-      // Optimized: 85% shorter
-      const prompt = `Active:${profileData.activeFollowers}, Views:${profileData.avgViews}, Eng:${profileData.engagementRate}%. Calc INR payout: ₹0.2-0.5/view. Return single number.`;
-
-      const result = await this.executeWithFallback(async (model) => {
-        const response = await model.generateContent(prompt);
-        return await response.response;
-      }, 'generateRetentionCurve');
-
-      const text = result.text().trim();
-
-      // Extract number from response
-      const numberMatch = text.match(/\d+/);
-      if (numberMatch) {
-        const payout = parseInt(numberMatch[0], 10);
-        return Math.max(0, payout); // Must be non-negative
-      }
-
-      return 500; // Default if parsing fails
-    } catch (error) {
-      this.logger.debug(`Payout prediction unavailable: ${error.message}`);
-      return 500;
-    }
-  }
-
-  /**
-   * Analyze audience sentiment on 1-20 scale
-   */
-  async analyzeAudienceSentiment(captions: string[]): Promise<number> {
-    if (!this.isAvailable() || captions.length === 0) {
-      return 12; // Default mid-positive sentiment
-    }
-
-    try {
-      const allCaptions = captions.slice(0, 15).join('\n');
-
-      // Optimized: 85% shorter
-      const prompt = `Captions: ${allCaptions}\nRate audience sentiment 1-20. Return single number.`;
-
-      const result = await this.executeWithFallback(async (model) => {
-        const response = await model.generateContent(prompt);
-        return await response.response;
-      }, 'generateRetentionCurve');
-
-      const text = result.text().trim();
-
-      // Extract number from response
-      const numberMatch = text.match(/\d+/);
-      if (numberMatch) {
-        const sentiment = parseInt(numberMatch[0], 10);
-        return Math.max(1, Math.min(20, sentiment)); // Clamp to 1-20
-      }
-
-      return 12; // Default if parsing fails
     } catch (error) {
       this.logger.debug(`Audience sentiment analysis unavailable: ${error.message}`);
-      return 12;
+      return { rating: 12, feedback: 'Audience sentiment unavailable.' };
     }
   }
 

@@ -1689,7 +1689,8 @@ export class InfluencerCredibilityScoringService {
       }
 
       // Analyze sentiment using Gemini AI
-      const sentimentScore = await this.geminiAIService.analyzeSentiment(captions);
+      const sentimentResult = await this.geminiAIService.analyzeSentiment(captions);
+      const sentimentScore = sentimentResult.score;
 
       // Convert sentiment score (-100 to +100) to positive ratio (0 to 1)
       // -100 = 0% positive, 0 = 50% positive, +100 = 100% positive

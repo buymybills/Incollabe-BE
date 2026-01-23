@@ -706,8 +706,8 @@ export class InfluencerProfileScoringService {
       else if (percentage >= 30) rating = 'Fair';
       else rating = 'Needs Improvement';
 
-      // Generate feedback based on analysis
-      const feedback = trendAnalysis.relevanceReason || 'Content follows current Instagram very well to stay relevant';
+      // Use AI-generated feedback
+      const aiFeedback = trendAnalysis.feedback || 'Content follows current trends well.';
 
       // Calculate change (placeholder)
       const change = 200; // Would need to track from previous analysis
@@ -720,7 +720,7 @@ export class InfluencerProfileScoringService {
           description: 'Content is Well Allignes',
           trends: trendAnalysis.trends || [],
           relevanceReason: trendAnalysis.relevanceReason || '',
-          feedback,
+          aiFeedback,
           change,
         },
       };
@@ -1757,7 +1757,9 @@ export class InfluencerProfileScoringService {
         return { score: 0, details: { message: 'No captions available' } };
       }
 
-      const sentimentScore = await this.geminiAIService.analyzeSentiment(captions);
+      const sentimentResult = await this.geminiAIService.analyzeSentiment(captions);
+      const sentimentScore = sentimentResult.score;
+      const aiFeedback = sentimentResult.feedback;
 
       // Convert overall sentiment to distribution
       // sentimentScore ranges from -100 to +100
@@ -1795,15 +1797,7 @@ export class InfluencerProfileScoringService {
       else if (positivePercentage <= 75) rawScore = 8;
       else rawScore = 10;
 
-      // Generate AI feedback
-      let feedback = '';
-      if (positivePercentage >= 70 && negativePercentage > 20) {
-        feedback = 'Your captions are positive but seen and increase in negatives which hamper the growth';
-      } else if (positivePercentage >= 80) {
-        feedback = 'Excellent positive sentiment driving strong audience engagement';
-      } else if (positivePercentage < 40) {
-        feedback = 'Consider using more positive and uplifting language in captions';
-      }
+      // Use AI-generated feedback (already set from analyzeSentiment result)
 
       return {
         score: Number(rawScore.toFixed(2)),
@@ -1821,7 +1815,7 @@ export class InfluencerProfileScoringService {
             percentage: Number(neutralPercentage.toFixed(2)),
           },
           captionsAnalyzed: captions.length,
-          feedback,
+          aiFeedback,
         },
       };
     } catch (error) {
@@ -1889,16 +1883,8 @@ export class InfluencerProfileScoringService {
         'Follow For More',
       ];
 
-      // Generate AI feedback
-      let feedback = '';
-      const faceContentPercentage = 30; // Could be calculated from content style analysis
-      if (faceContentPercentage < 40) {
-        feedback = 'High faceless content reduces trust signals. Adding 1-2 face-led reels weekly can improve reach.';
-      } else if (usagePercentage >= 70) {
-        feedback = `Good CTA usage! You effectively use CTAs in ${ctaCount} Reel and Post`;
-      } else if (usagePercentage < 40) {
-        feedback = 'Add more clear calls-to-action to boost engagement';
-      }
+      // Use AI-generated feedback
+      const aiFeedback = ctaAnalysis.feedback || 'Moderate CTA usage detected.';
 
       return {
         score: Number(score.toFixed(2)),
@@ -1908,8 +1894,7 @@ export class InfluencerProfileScoringService {
           totalPosts: captions.length,
           ctaCount,
           detectedCTAs: commonCTAs,
-          recommendations: ctaAnalysis.recommendations || '',
-          feedback,
+          aiFeedback,
           change: 0, // Could track change from previous analysis
         },
       };
@@ -2499,7 +2484,9 @@ export class InfluencerProfileScoringService {
       };
 
       // Ask AI to predict monetisation potential on 1-50 scale
-      const monetisationRating = await this.geminiAIService.predictMonetisationPotential(profileContext);
+      const monetisationResult = await this.geminiAIService.predictMonetisationPotential(profileContext);
+      const monetisationRating = monetisationResult.rating;
+      const aiFeedback = monetisationResult.feedback;
 
       // Convert 1-50 scale to 0-10 scale
       const score = (monetisationRating / 50) * 10;
@@ -2559,7 +2546,7 @@ export class InfluencerProfileScoringService {
           activeFollowers,
           avgViews: Math.round(avgViews),
           engagementRate: Number(avgEngagementRate.toFixed(2)),
-          feedback,
+          aiFeedback,
           change,
         },
       };
@@ -2622,15 +2609,20 @@ export class InfluencerProfileScoringService {
 
       // Ask AI to predict payout considering 0.2-0.5 rupees per view (if available)
       let predictedPayout = 0;
+      let payoutFeedback = '';
       if (this.geminiAIService.isAvailable()) {
         try {
-          predictedPayout = await this.geminiAIService.predictInfluencerPayout(profileData);
+          const payoutResult = await this.geminiAIService.predictInfluencerPayout(profileData);
+          predictedPayout = payoutResult.payout;
+          payoutFeedback = payoutResult.feedback;
         } catch (error) {
           // Fallback calculation
           predictedPayout = avgViews * 0.35; // Average of 0.2-0.5
+          payoutFeedback = 'Calculated from average views.';
         }
       } else {
         predictedPayout = avgViews * 0.35;
+        payoutFeedback = 'AI unavailable - basic calculation.';
       }
 
       // Tiered scoring based on predicted payout
@@ -2716,14 +2708,20 @@ export class InfluencerProfileScoringService {
         trustSignals.push('Moderate use of Reels format');
       }
 
-      // Generate AI feedback
-      let feedback = '';
-      if (percentage < 40) {
-        feedback = 'Build trust through consistent posting and platform-preferred formats.';
+      // Generate AI feedback based on brand trust signals
+      let aiFeedback = '';
+      if (percentage >= 85) {
+        aiFeedback = 'Exceptional brand trust - ideal for premium brand partnerships and higher payouts.';
+      } else if (percentage >= 65) {
+        aiFeedback = 'Strong brand trust signals - suitable for established brands and consistent collaborations.';
+      } else if (percentage >= 40) {
+        aiFeedback = 'Good brand trust foundation - focus on consistent posting to attract more brands.';
       } else if (reelPercentage < 50) {
-        feedback = 'Your hooks lack movement or curiosity in the first 3 seconds. Faster cuts improve retention.';
+        aiFeedback = 'Improve brand trust by increasing Reels usage (platform-preferred format) and posting consistency.';
+      } else if (postingHistory === 'Inconsistent') {
+        aiFeedback = 'Build brand trust through consistent posting schedule and engagement with audience.';
       } else {
-        feedback = 'Strong brand trust signals with consistent content delivery.';
+        aiFeedback = 'Moderate brand trust - focus on increasing views and engagement for better payout potential.';
       }
 
       // Calculate change (placeholder)
@@ -2746,7 +2744,7 @@ export class InfluencerProfileScoringService {
           accountAgeYears: Number(accountAgeYears.toFixed(1)),
           postingHistory,
           reelPercentage: Number(reelPercentage.toFixed(2)),
-          feedback,
+          aiFeedback,
           change,
         },
       };
@@ -2758,6 +2756,7 @@ export class InfluencerProfileScoringService {
           error: error.message,
           percentage: 50,
           rating: 'Fair',
+          aiFeedback: 'Brand trust analysis encountered an error - using default metrics.',
         },
       };
     }
@@ -2792,7 +2791,9 @@ export class InfluencerProfileScoringService {
       }
 
       // Ask AI to analyze audience sentiment on 1-20 scale
-      const sentimentRating = await this.geminiAIService.analyzeAudienceSentiment(captions);
+      const sentimentResult = await this.geminiAIService.analyzeAudienceSentiment(captions);
+      const sentimentRating = sentimentResult.rating;
+      const aiFeedback = sentimentResult.feedback;
 
       // Convert 1-20 scale to 0-10 scale
       const score = (sentimentRating / 20) * 10;
@@ -2852,7 +2853,7 @@ export class InfluencerProfileScoringService {
                      sentimentRating >= 10 ? 'Positive' :
                      sentimentRating >= 5 ? 'Neutral' : 'Negative',
           captionsAnalyzed: captions.length,
-          feedback,
+          aiFeedback,
         },
       };
     } catch (error) {
