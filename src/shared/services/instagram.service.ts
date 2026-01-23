@@ -574,6 +574,9 @@ export class InstagramService {
       );
 
       // Step 4: Save/update the post in instagram_media table
+      // Use media_url if available, otherwise fallback to thumbnail_url for Reels/Videos
+      const resolvedMediaUrl = mediaData?.media_url || mediaData?.thumbnail_url || undefined;
+
       const [instagramMediaRecord, created] = await this.instagramMediaModel.findOrCreate({
         where: { mediaId },
         defaults: {
@@ -585,7 +588,7 @@ export class InstagramService {
           // Save caption, timestamp, and URLs if provided in mediaData
           caption: mediaData?.caption || undefined,
           timestamp: mediaData?.timestamp ? new Date(mediaData.timestamp) : undefined,
-          mediaUrl: mediaData?.media_url || undefined,
+          mediaUrl: resolvedMediaUrl,
           thumbnailUrl: mediaData?.thumbnail_url || undefined,
           permalink: mediaData?.permalink || undefined,
           firstFetchedAt: new Date(),
@@ -595,6 +598,8 @@ export class InstagramService {
 
       // Update existing record with latest data
       if (!created) {
+        const updatedMediaUrl = mediaData?.media_url || mediaData?.thumbnail_url || instagramMediaRecord.mediaUrl;
+
         await instagramMediaRecord.update({
           lastSyncedAt: new Date(),
           mediaType,
@@ -602,7 +607,7 @@ export class InstagramService {
           // Update caption, timestamp, and URLs if provided
           caption: mediaData?.caption || instagramMediaRecord.caption,
           timestamp: mediaData?.timestamp ? new Date(mediaData.timestamp) : instagramMediaRecord.timestamp,
-          mediaUrl: mediaData?.media_url || instagramMediaRecord.mediaUrl,
+          mediaUrl: updatedMediaUrl,
           thumbnailUrl: mediaData?.thumbnail_url || instagramMediaRecord.thumbnailUrl,
           permalink: mediaData?.permalink || instagramMediaRecord.permalink,
         });

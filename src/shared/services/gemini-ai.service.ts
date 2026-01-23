@@ -54,9 +54,9 @@ export class GeminiAIService {
 
       // Try to initialize both text and vision models
       try {
-        // Using Gemini 1.5 Flash for faster, cost-effective performance
+        // Using Gemini 1.5 Pro for better quality and accuracy
         // This model supports both text-only and image+text inputs
-        const modelName = 'gemini-1.5-flash';
+        const modelName = 'gemini-1.5-pro';
 
         // For text-only analysis (niche, language, sentiment)
         this.model = this.genAI.getGenerativeModel({ model: modelName });
