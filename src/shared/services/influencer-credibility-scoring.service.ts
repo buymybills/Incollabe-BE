@@ -1202,11 +1202,18 @@ export class InfluencerCredibilityScoringService {
         };
       }
 
-      // Extract captions and analyze first 5 images
+      // Extract captions and analyze first 5 images (skip videos)
       const captions = recentMedia.map(m => m.caption);
       const visualAnalyses: any[] = [];
 
-      for (const media of recentMedia.slice(0, 5)) {
+      // Only analyze IMAGE and CAROUSEL_ALBUM media, skip VIDEO
+      const imageMedia = recentMedia.filter(m =>
+        (m.mediaType === 'IMAGE' || m.mediaType === 'CAROUSEL_ALBUM') &&
+        m.mediaUrl &&
+        m.mediaUrl.trim().length > 0
+      ).slice(0, 5);
+
+      for (const media of imageMedia) {
         try {
           const visual = await this.geminiAIService.analyzeVisualQuality(media.mediaUrl);
           visualAnalyses.push(visual);
@@ -1284,9 +1291,17 @@ export class InfluencerCredibilityScoringService {
         };
       }
 
-      // Analyze visual quality of first 5-10 images
+      // Analyze visual quality of first 5-10 images (skip videos)
       const visualAnalyses: any[] = [];
-      for (const media of recentMedia.slice(0, 10)) {
+
+      // Only analyze IMAGE and CAROUSEL_ALBUM media, skip VIDEO
+      const imageMedia = recentMedia.filter(m =>
+        (m.mediaType === 'IMAGE' || m.mediaType === 'CAROUSEL_ALBUM') &&
+        m.mediaUrl &&
+        m.mediaUrl.trim().length > 0
+      ).slice(0, 10);
+
+      for (const media of imageMedia) {
         try {
           const visual = await this.geminiAIService.analyzeVisualQuality(media.mediaUrl);
           visualAnalyses.push(visual);
@@ -1472,9 +1487,17 @@ export class InfluencerCredibilityScoringService {
         };
       }
 
-      // Analyze visual quality and brand safety
+      // Analyze visual quality and brand safety (skip videos)
       const brandSafetyScores: number[] = [];
-      for (const media of recentMedia.slice(0, 10)) {
+
+      // Only analyze IMAGE and CAROUSEL_ALBUM media, skip VIDEO
+      const imageMedia = recentMedia.filter(m =>
+        (m.mediaType === 'IMAGE' || m.mediaType === 'CAROUSEL_ALBUM') &&
+        m.mediaUrl &&
+        m.mediaUrl.trim().length > 0
+      ).slice(0, 10);
+
+      for (const media of imageMedia) {
         try {
           const visual = await this.geminiAIService.analyzeVisualQuality(media.mediaUrl);
           brandSafetyScores.push(visual.brandSafetyScore); // 0-100 score
@@ -1857,7 +1880,7 @@ export class InfluencerCredibilityScoringService {
   /**
    * Helper: Get recent media with captions and URLs for AI analysis
    */
-  private async getRecentMediaForAI(influencerId: number, limit: number = 20): Promise<Array<{ caption: string; mediaUrl: string }>> {
+  private async getRecentMediaForAI(influencerId: number, limit: number = 20): Promise<Array<{ id: number; caption: string; mediaUrl: string; mediaType: string }>> {
     const mediaRecords = await this.instagramMediaModel.findAll({
       where: { influencerId },
       order: [['timestamp', 'DESC']],
@@ -1867,8 +1890,10 @@ export class InfluencerCredibilityScoringService {
     return mediaRecords
       .filter(m => m.mediaUrl) // Include all media types (images, videos, carousels)
       .map(m => ({
+        id: m.id,
         caption: m.caption || '',
         mediaUrl: m.mediaUrl || '',
+        mediaType: m.mediaType || 'IMAGE',
       }));
   }
 
