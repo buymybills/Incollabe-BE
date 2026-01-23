@@ -2588,14 +2588,12 @@ export class InfluencerProfileScoringService {
     });
 
     // Generate weekly points (7-day intervals)
-    let currentDate = new Date(firstDate);
-    while (true) {
-      currentDate.setDate(currentDate.getDate() + 7);
-      if (currentDate >= lastDate) break;
+    for (let i = 7; i < daysDiff; i += 7) {
+      const currentDate = new Date(firstDate);
+      currentDate.setDate(firstDate.getDate() + i);
 
       // Linear interpolation for follower count
-      const daysFromStart = Math.floor((currentDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
-      const progress = daysFromStart / daysDiff;
+      const progress = i / daysDiff;
       const interpolatedFollowers = Math.round(firstFollowers + (lastFollowers - firstFollowers) * progress);
 
       weeklyData.push({
@@ -2643,14 +2641,12 @@ export class InfluencerProfileScoringService {
     });
 
     // Generate weekly points (7-day intervals)
-    let currentDate = new Date(firstDate);
-    while (true) {
-      currentDate.setDate(currentDate.getDate() + 7);
-      if (currentDate >= lastDate) break;
+    for (let i = 7; i < daysDiff; i += 7) {
+      const currentDate = new Date(firstDate);
+      currentDate.setDate(firstDate.getDate() + i);
 
       // Linear interpolation for follower count
-      const daysFromStart = Math.floor((currentDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
-      const progress = daysFromStart / daysDiff;
+      const progress = i / daysDiff;
       const interpolatedFollowers = Math.round(firstFollowers + (lastFollowers - firstFollowers) * progress);
 
       weeklyData.push({
