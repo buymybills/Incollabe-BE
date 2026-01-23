@@ -1947,6 +1947,13 @@ export class InfluencerProfileScoringService {
     });
 
     if (!latestSync || !latestSync.avgEngagementRate) {
+      // Generate default retention curve even when no data
+      const defaultRetentionCurve = await this.geminiAIService.generateRetentionCurve({
+        retentionRate: 0,
+        avgDuration: '20-30 Sec',
+        engagementRate: 0,
+      });
+
       return {
         score: 0,
         details: {
@@ -1967,7 +1974,8 @@ export class InfluencerProfileScoringService {
             skipRate: 0,
             retentionRating: 'Unknown',
             avgReelDuration: 'N/A',
-            note: 'Retention metrics are estimated based on available data. Instagram API does not provide actual retention/skip rate data.',
+            retentionCurve: defaultRetentionCurve,
+            note: 'Retention metrics are AI-estimated based on engagement patterns. Instagram API does not provide actual retention/skip rate data.',
           },
         },
       };
@@ -2041,6 +2049,14 @@ export class InfluencerProfileScoringService {
       aiFeedback += ' Low retention suggests viewers are leaving early - consider stronger hooks and pacing.';
     }
 
+    // Generate AI-powered retention curve data
+    const retentionCurve = await this.geminiAIService.generateRetentionCurve({
+      retentionRate,
+      avgDuration: avgReelDuration,
+      engagementRate: Number(engagementRate.toFixed(2)),
+      contentQuality: latestSync.avgEngagementRate ? Math.min(100, latestSync.avgEngagementRate * 20) : undefined,
+    });
+
     return {
       score: Number(score.toFixed(2)),
       details: {
@@ -2062,7 +2078,8 @@ export class InfluencerProfileScoringService {
           skipRate,
           retentionRating,
           avgReelDuration,
-          note: 'Retention metrics are estimated based on available data. Instagram API does not provide actual retention/skip rate data.',
+          retentionCurve, // AI-generated time-series data
+          note: 'Retention metrics are AI-estimated based on engagement patterns. Instagram API does not provide actual retention/skip rate data.',
         },
       },
     };
