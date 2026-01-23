@@ -660,15 +660,39 @@ export class InstagramController {
   }
 
   /**
-   * Bulk sync all media insights for a user
+   * Bulk sync all media insights with progressive growth tracking
    * POST /instagram/sync-all-media-insights
    */
   @Public()
   @Post('sync-all-media-insights')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Bulk sync all media insights',
-    description: 'Fetches all Instagram posts and their insights, then stores them in the database. This is a comprehensive sync operation that should be used when you need complete data for credibility scoring or analytics.'
+    summary: 'Bulk sync media insights with progressive growth tracking',
+    description: `Comprehensive media insights sync with intelligent snapshot management:
+
+    **How it works:**
+    1. **Checks last snapshot date** - Finds the most recent snapshot for this user
+    2. **30-day throttle** - If last snapshot was less than 30 days ago, returns error with days remaining
+    3. **Fetches media** - Gets all posts from Instagram API (up to limit)
+    4. **Stores insights** - Fetches detailed insights for each post
+    5. **Creates new snapshot** - Snapshot period depends on last sync:
+       - **First time:** Creates snapshot for last 30 days
+       - **Subsequent syncs:** Creates snapshot from (last snapshot end date + 1 day) to today
+       - Example: If last snapshot ended on Dec 31 and you sync on Feb 10 (41 days later), new snapshot will cover Jan 1 - Feb 10 (41 days)
+    6. **Compares growth** - Calculates growth metrics by comparing new snapshot with previous snapshot
+
+    **Key Features:**
+    - Progressive snapshot tracking (keeps all historical snapshots)
+    - Dynamic snapshot periods (30, 40, 50+ days based on when user syncs)
+    - Prevents sync abuse with 30-day minimum interval
+    - Complete growth comparison metrics
+
+    **Growth metrics:**
+    - Followers growth (count & percentage)
+    - Engagement rate change
+    - Average reach change
+    - Posts activity comparison
+    - Active followers percentage change`
   })
   @ApiQuery({
     name: 'user_id',
@@ -684,16 +708,160 @@ export class InstagramController {
   @ApiQuery({
     name: 'limit',
     required: false,
-    description: 'Number of posts to fetch (default: 50, max: 100)',
+    description: 'Number of posts to fetch from Instagram API (default: 50, max: 100)',
     type: Number
   })
   @ApiResponse({
     status: 200,
-    description: 'Bulk sync completed successfully'
+    description: 'Bulk sync completed successfully with progressive growth tracking',
+    schema: {
+      examples: {
+        'Subsequent Sync (with growth)': {
+          value: {
+            success: true,
+            message: 'Successfully synced 48 posts and created snapshot #3',
+            syncedAt: '2025-02-10T10:30:00Z',
+            mediaSync: {
+              totalPosts: 50,
+              synced: 48,
+              failed: 2,
+              errors: [
+                {
+                  mediaId: '12345',
+                  error: 'Media posted before business account conversion'
+                }
+              ]
+            },
+            currentSnapshot: {
+              snapshotId: 52,
+              syncNumber: 3,
+              period: {
+                start: '2025-01-01',
+                end: '2025-02-10',
+                days: 41
+              },
+              metrics: {
+                postsAnalyzed: 25,
+                totalFollowers: 15820,
+                activeFollowers: 1740,
+                activeFollowersPercentage: 11.0,
+                avgEngagementRate: 4.12,
+                avgReach: 6200,
+                totalLikes: 12450,
+                totalComments: 628,
+                totalShares: 156,
+                totalSaves: 412
+              }
+            },
+            previousSnapshot: {
+              snapshotId: 51,
+              syncNumber: 2,
+              period: {
+                start: '2024-12-02',
+                end: '2024-12-31',
+                days: 30
+              },
+              metrics: {
+                postsAnalyzed: 18,
+                totalFollowers: 14800,
+                activeFollowers: 1480,
+                activeFollowersPercentage: 10.0,
+                avgEngagementRate: 3.45,
+                avgReach: 5200,
+                totalLikes: 8640,
+                totalComments: 432,
+                totalShares: 89,
+                totalSaves: 267
+              }
+            },
+            growth: {
+              followers: {
+                previous: 14800,
+                current: 15820,
+                change: 1020,
+                changePercentage: 6.89
+              },
+              engagement: {
+                previous: 3.45,
+                current: 4.12,
+                change: 0.67,
+                changePercentage: 19.42
+              },
+              reach: {
+                previous: 5200,
+                current: 6200,
+                change: 1000,
+                changePercentage: 19.23
+              },
+              posts: {
+                previous: 18,
+                current: 25,
+                change: 7
+              },
+              activeFollowers: {
+                previous: 10.0,
+                current: 11.0,
+                change: 1.0
+              }
+            }
+          }
+        },
+        'Initial Sync (first time)': {
+          value: {
+            success: true,
+            message: 'Initial snapshot created with 32 posts',
+            syncedAt: '2025-01-23T10:30:00Z',
+            mediaSync: {
+              totalPosts: 35,
+              synced: 32,
+              failed: 3,
+              errors: []
+            },
+            currentSnapshot: {
+              snapshotId: 1,
+              syncNumber: 1,
+              period: {
+                start: '2024-12-24',
+                end: '2025-01-23',
+                days: 30
+              },
+              metrics: {
+                postsAnalyzed: 15,
+                totalFollowers: 12500,
+                activeFollowers: 1125,
+                activeFollowersPercentage: 9.0,
+                avgEngagementRate: 2.85,
+                avgReach: 4200,
+                totalLikes: 5340,
+                totalComments: 267,
+                totalShares: 45,
+                totalSaves: 178
+              }
+            }
+          }
+        }
+      }
+    }
   })
   @ApiResponse({
     status: 400,
-    description: 'Invalid parameters or no Instagram account connected'
+    description: 'Invalid parameters, no Instagram account connected, or sync throttled',
+    schema: {
+      examples: {
+        'Sync Throttled (too soon)': {
+          value: {
+            error: 'sync_throttled',
+            message: 'Instagram profile sync is limited to once every 30 days. Please wait 12 more day(s).',
+            details: {
+              lastSnapshotDate: '2025-01-10',
+              nextAllowedSyncDate: '2025-02-09',
+              daysSinceLastSnapshot: 18,
+              daysRemaining: 12
+            }
+          }
+        }
+      }
+    }
   })
   @ApiResponse({
     status: 500,
@@ -725,10 +893,248 @@ export class InstagramController {
       limitNum,
     );
 
-    return {
-      message: result.message,
-      ...result,
-    };
+    return result;
+  }
+
+  /**
+   * Comprehensive sync of all Instagram insights with progressive growth tracking
+   * POST /instagram/sync-all-insights
+   */
+  @Public()
+  @Post('sync-all-insights')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Comprehensive sync with progressive growth tracking (MASTER SYNC API)',
+    description: `Complete Instagram insights sync with intelligent snapshot management:
+
+    **How it works:**
+    1. **Checks last snapshot date** - Finds the most recent snapshot for this user
+    2. **30-day throttle** - If last snapshot was less than 30 days ago, returns error with days remaining
+    3. **Fetches profile** - Updates basic profile data (username, followers, account type, etc.)
+    4. **Creates new snapshot** - Snapshot period depends on last sync:
+       - **First time:** Creates snapshot for last 30 days
+       - **Subsequent syncs:** Creates snapshot from (last snapshot end date + 1 day) to today
+       - Example: If last snapshot ended on Dec 31 and you sync on Feb 10 (41 days later), new snapshot will cover Jan 1 - Feb 10 (41 days)
+    5. **Fetches demographics** - Gets audience demographics and geographic data (requires Facebook connection)
+    6. **Compares growth** - Calculates growth metrics by comparing new snapshot with previous snapshot
+
+    **Key Features:**
+    - Progressive snapshot tracking (keeps all historical snapshots)
+    - Dynamic snapshot periods (adapts to when user syncs)
+    - Prevents sync abuse with 30-day minimum interval
+    - Complete profile + demographics + growth metrics
+
+    **Growth metrics:**
+    - Followers growth (count & percentage)
+    - Engagement rate change
+    - Average reach change
+    - Posts activity comparison
+    - Active followers percentage change
+
+    **Note:** Demographics and geographic data require Instagram Business Account connected to Facebook Page.`
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'User ID (influencer or brand ID)'
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    enum: ['influencer', 'brand'],
+    description: 'User type: influencer or brand'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Comprehensive sync completed with progressive growth tracking',
+    schema: {
+      examples: {
+        'Subsequent Sync (with growth)': {
+          value: {
+            message: 'Instagram insights snapshot #3 created with growth analysis',
+            syncedAt: '2025-02-10T10:30:00Z',
+            basicProfile: {
+              status: 'success',
+              data: {
+                username: 'example_influencer',
+                followersCount: 15820,
+                followsCount: 530,
+                mediaCount: 135,
+                accountType: 'BUSINESS'
+              }
+            },
+            currentSnapshot: {
+              snapshotId: 53,
+              syncNumber: 3,
+              period: {
+                start: '2025-01-01',
+                end: '2025-02-10',
+                days: 41
+              },
+              metrics: {
+                postsAnalyzed: 22,
+                totalFollowers: 15820,
+                activeFollowers: 1740,
+                activeFollowersPercentage: 11.0,
+                avgEngagementRate: 4.12,
+                avgReach: 6200,
+                totalLikes: 11250,
+                totalComments: 564,
+                totalShares: 142,
+                totalSaves: 385
+              }
+            },
+            previousSnapshot: {
+              snapshotId: 52,
+              syncNumber: 2,
+              period: {
+                start: '2024-12-02',
+                end: '2024-12-31',
+                days: 30
+              },
+              metrics: {
+                postsAnalyzed: 15,
+                totalFollowers: 14800,
+                activeFollowers: 1480,
+                activeFollowersPercentage: 10.0,
+                avgEngagementRate: 3.45,
+                avgReach: 5200,
+                totalLikes: 6840,
+                totalComments: 342,
+                totalShares: 72,
+                totalSaves: 228
+              }
+            },
+            growth: {
+              followers: {
+                previous: 14800,
+                current: 15820,
+                change: 1020,
+                changePercentage: 6.89
+              },
+              engagement: {
+                previous: 3.45,
+                current: 4.12,
+                change: 0.67,
+                changePercentage: 19.42
+              },
+              reach: {
+                previous: 5200,
+                current: 6200,
+                change: 1000,
+                changePercentage: 19.23
+              },
+              posts: {
+                previous: 15,
+                current: 22,
+                change: 7
+              },
+              activeFollowers: {
+                previous: 10.0,
+                current: 11.0,
+                change: 1.0
+              }
+            },
+            audienceDemographics: {
+              status: 'success',
+              data: []
+            },
+            geographicData: {
+              status: 'success',
+              data: []
+            }
+          }
+        },
+        'Initial Sync (first time)': {
+          value: {
+            message: 'Initial Instagram insights snapshot created',
+            syncedAt: '2025-01-23T10:30:00Z',
+            basicProfile: {
+              status: 'success',
+              data: {
+                username: 'example_influencer',
+                followersCount: 12500,
+                followsCount: 485,
+                mediaCount: 98,
+                accountType: 'BUSINESS'
+              }
+            },
+            currentSnapshot: {
+              snapshotId: 1,
+              syncNumber: 1,
+              period: {
+                start: '2024-12-24',
+                end: '2025-01-23',
+                days: 30
+              },
+              metrics: {
+                postsAnalyzed: 12,
+                totalFollowers: 12500,
+                activeFollowers: 1125,
+                activeFollowersPercentage: 9.0,
+                avgEngagementRate: 2.85,
+                avgReach: 4200,
+                totalLikes: 4260,
+                totalComments: 213,
+                totalShares: 36,
+                totalSaves: 142
+              }
+            },
+            audienceDemographics: {
+              status: 'success',
+              data: []
+            },
+            geographicData: {
+              status: 'success',
+              data: []
+            }
+          }
+        }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'No Instagram account connected, invalid parameters, or sync throttled',
+    schema: {
+      examples: {
+        'Sync Throttled (too soon)': {
+          value: {
+            error: 'sync_throttled',
+            message: 'Instagram profile sync is limited to once every 30 days. Please wait 8 more day(s).',
+            details: {
+              lastSnapshotDate: '2025-01-15',
+              nextAllowedSyncDate: '2025-02-14',
+              daysSinceLastSnapshot: 22,
+              daysRemaining: 8
+            }
+          }
+        }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found'
+  })
+  async syncAllInsights(
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
+  ) {
+    if (!userId || !userType) {
+      throw new BadRequestException('user_id and user_type are required');
+    }
+
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException('user_type must be either "influencer" or "brand"');
+    }
+
+    const result = await this.instagramService.syncAllInsights(
+      Number(userId),
+      userType as 'influencer' | 'brand',
+    );
+
+    return result;
   }
 
   /**

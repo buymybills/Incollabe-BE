@@ -408,7 +408,7 @@ export class InfluencerProfileScoringService {
     }
 
     // Calculate variance/stability score
-    let score = 10;
+    let score = 0; // Default to 0 when no data available
     let varianceIndex = 0;
     let change = 0;
 
@@ -457,7 +457,7 @@ export class InfluencerProfileScoringService {
 
     // Identify core audience (highest percentage segment)
     let coreAudience = 'Unknown';
-    let coreFeedback = 'Analyzing audience demographics...';
+    let coreFeedback = 'Connect your Instagram to Facebook to access audience demographics data.';
 
     if (ageBreakdown.length > 0) {
       const topSegment = ageBreakdown.reduce((max, curr) => curr.percentage > max.percentage ? curr : max);
@@ -486,7 +486,7 @@ export class InfluencerProfileScoringService {
         change,
         snapshotsAnalyzed: historicalSnapshots.length,
         varianceIndex: Number(varianceIndex.toFixed(4)),
-        stability: score >= 8 ? 'High' : score >= 6 ? 'Medium' : 'Low',
+        stability: score === 0 ? 'Unknown' : score >= 8 ? 'High' : score >= 6 ? 'Medium' : 'Low',
       },
     };
   }
@@ -507,7 +507,7 @@ export class InfluencerProfileScoringService {
         details: {
           targetCountry: 'India',
           targetAudiencePercentage: 0,
-          message: 'No demographic data available',
+          message: 'Connect your Instagram to Facebook to access geographic audience data',
         },
       };
     }
@@ -1962,6 +1962,13 @@ export class InfluencerProfileScoringService {
           avgSaves: 0,
           reachToFollowerRatio: 0,
           aiFeedback: 'No engagement data available to analyze',
+          retentionOverview: {
+            retentionRate: 0,
+            skipRate: 0,
+            retentionRating: 'Unknown',
+            avgReelDuration: 'N/A',
+            note: 'Retention metrics are estimated based on available data. Instagram API does not provide actual retention/skip rate data.',
+          },
         },
       };
     }
@@ -1991,6 +1998,23 @@ export class InfluencerProfileScoringService {
     const totalFollowers = latestSync.totalFollowers || 1;
     const reachToFollowerRatio = avgReach > 0 ? Number((avgReach / totalFollowers).toFixed(2)) : 0;
 
+    // Calculate approximate retention metrics (Instagram doesn't provide actual retention data)
+    const totalInteractions = avgLike + avgComments + avgShare + avgSaves;
+    const retentionRate = avgReach > 0 ? Number(((totalInteractions / avgReach) * 100).toFixed(2)) : 0;
+    const skipRate = Math.max(0, Number((100 - retentionRate).toFixed(2))); // Skip rate = inverse of retention
+
+    // Estimate average reel duration based on content type distribution
+    // Note: Instagram API doesn't provide video duration, this is an estimate
+    const avgReelDuration = await this.estimateAvgReelDuration(influencer.id);
+
+    // Generate retention rating
+    let retentionRating = '';
+    if (retentionRate >= 80) retentionRating = 'Exceptional';
+    else if (retentionRate >= 60) retentionRating = 'Excellent';
+    else if (retentionRate >= 40) retentionRating = 'Good';
+    else if (retentionRate >= 20) retentionRating = 'Fair';
+    else retentionRating = 'Needs Improvement';
+
     // Generate AI feedback based on engagement patterns
     let aiFeedback = '';
     if (engagementRate >= 5) {
@@ -2010,6 +2034,13 @@ export class InfluencerProfileScoringService {
       aiFeedback += ' Low reach-to-follower ratio suggests content may need optimization for discovery.';
     }
 
+    // Add retention insights
+    if (retentionRate >= 60) {
+      aiFeedback += ' High retention indicates compelling content that keeps viewers engaged.';
+    } else if (retentionRate < 30) {
+      aiFeedback += ' Low retention suggests viewers are leaving early - consider stronger hooks and pacing.';
+    }
+
     return {
       score: Number(score.toFixed(2)),
       details: {
@@ -2025,8 +2056,68 @@ export class InfluencerProfileScoringService {
         reachToFollowerRatio,
         postsAnalyzed: latestSync.postsAnalyzed || 0,
         aiFeedback,
+        // Retention metrics (approximate)
+        retentionOverview: {
+          retentionRate,
+          skipRate,
+          retentionRating,
+          avgReelDuration,
+          note: 'Retention metrics are estimated based on available data. Instagram API does not provide actual retention/skip rate data.',
+        },
       },
     };
+  }
+
+  /**
+   * Estimate average reel duration based on content type distribution
+   * Note: Instagram API doesn't provide video duration, this is an approximation
+   */
+  private async estimateAvgReelDuration(influencerId: number): Promise<string> {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const recentInsights = await this.instagramMediaInsightModel.findAll({
+      where: { influencerId },
+      include: [{
+        model: this.instagramMediaModel,
+        required: true,
+        where: { timestamp: { [Op.gte]: thirtyDaysAgo } },
+      }],
+      limit: 30,
+    });
+
+    if (recentInsights.length === 0) {
+      return '20-30 Sec'; // Default estimate
+    }
+
+    // Count reels vs other content types
+    let reelsCount = 0;
+    let totalPosts = 0;
+
+    for (const insight of recentInsights) {
+      totalPosts++;
+      const mediaProductType = insight.mediaProductType;
+      if (mediaProductType === 'REELS' || mediaProductType === 'CLIPS') {
+        reelsCount++;
+      }
+    }
+
+    const reelsPercentage = totalPosts > 0 ? (reelsCount / totalPosts) * 100 : 0;
+
+    // Estimate duration based on content mix
+    // Higher reel percentage = likely shorter durations (15-30s)
+    // Lower reel percentage = likely mix of longer content (30-60s)
+    if (reelsPercentage >= 70) {
+      return '15-25 Sec'; // High reel content, likely short-form
+    } else if (reelsPercentage >= 40) {
+      return '20-35 Sec'; // Mixed content
+    } else if (reelsPercentage >= 20) {
+      return '25-45 Sec'; // More diverse content
+    } else if (reelsPercentage > 0) {
+      return '30-60 Sec'; // Occasional reels, likely longer
+    } else {
+      return 'N/A'; // No reels detected
+    }
   }
 
   /**

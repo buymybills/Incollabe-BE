@@ -724,39 +724,128 @@ export class InstagramService {
   }
 
   /**
-   * Bulk sync all media insights for a user
-   * Fetches all media posts and their insights from Instagram, then stores them in the database
+   * Bulk sync all media insights with progressive growth tracking
+   * Fetches all media posts and their insights from Instagram, creates new snapshot, and compares with last snapshot
    * @param userId - The user's ID (brand or influencer)
    * @param userType - Type of user ('brand' or 'influencer')
    * @param limit - Number of posts to fetch (default: 50, max: 100)
-   * @returns Summary of sync operation
+   * @returns Summary of sync operation with snapshots and growth comparison
    */
   async syncAllMediaInsights(
     userId: number,
     userType: UserType,
     limit: number = 50,
   ): Promise<any> {
-    console.log(`🔄 Starting bulk media insights sync for ${userType} ${userId}...`);
+    console.log(`🔄 Starting bulk media insights sync with progressive growth tracking for ${userType} ${userId}...`);
+
+    const syncedAt = new Date();
+
+    console.log(`\n${'#'.repeat(100)}`);
+    console.log(`${'#'.repeat(100)}`);
+    console.log(`##${' '.repeat(96)}##`);
+    console.log(`##  🚀 STARTING MEDIA INSIGHTS SYNC WITH PROGRESSIVE GROWTH TRACKING${' '.repeat(29)}##`);
+    console.log(`##${' '.repeat(96)}##`);
+    console.log(`${'#'.repeat(100)}`);
+    console.log(`${'#'.repeat(100)}\n`);
+    console.log(`👤 User: ${userType} ID ${userId}`);
+    console.log(`⏰ Sync started at: ${syncedAt.toISOString()}\n`);
 
     try {
-      // Step 1: Fetch all media from Instagram
+      // STEP 1: Check for existing snapshots and determine if sync is allowed
+      console.log(`📂 STEP 1: Checking for existing snapshots...`);
+      const lastSnapshot = await this.instagramProfileAnalysisModel.findOne({
+        where: userType === 'influencer'
+          ? { influencerId: userId }
+          : { brandId: userId },
+        order: [['analysisPeriodEnd', 'DESC']],
+      });
+
+      if (lastSnapshot) {
+        console.log(`   ✅ Found last snapshot: ID ${lastSnapshot.id}, Sync #${lastSnapshot.syncNumber}`);
+        console.log(`   📅 Last snapshot period: ${new Date(lastSnapshot.analysisPeriodStart).toISOString().split('T')[0]} to ${new Date(lastSnapshot.analysisPeriodEnd).toISOString().split('T')[0]}`);
+      } else {
+        console.log(`   ℹ️  No previous snapshots found - this will be the initial sync`);
+      }
+
+      const today = new Date();
+      today.setHours(23, 59, 59, 999);
+
+      // Determine date ranges based on last snapshot
+      let newSnapshotStart: Date;
+      let newSnapshotEnd: Date;
+      let syncNumber: number;
+      let isInitialSnapshot = false;
+
+      console.log(`\n⏱️  STEP 2: Calculating snapshot date ranges...`);
+      if (lastSnapshot && lastSnapshot.analysisPeriodEnd) {
+        // Check if 30 days have passed since last snapshot
+        const lastSnapshotEnd = new Date(lastSnapshot.analysisPeriodEnd);
+        const daysSinceLastSnapshot = Math.floor((today.getTime() - lastSnapshotEnd.getTime()) / (1000 * 60 * 60 * 24));
+
+        console.log(`   📆 Days since last snapshot: ${daysSinceLastSnapshot}`);
+
+        if (daysSinceLastSnapshot < 30) {
+          const daysRemaining = 30 - daysSinceLastSnapshot;
+          const nextSyncDate = new Date(lastSnapshotEnd.getTime() + (30 * 24 * 60 * 60 * 1000));
+
+          console.log(`   ❌ THROTTLED: Only ${daysSinceLastSnapshot} days passed, need to wait ${daysRemaining} more days`);
+          console.log(`   ⏰ Next allowed sync: ${nextSyncDate.toISOString().split('T')[0]}\n`);
+
+          throw new BadRequestException({
+            error: 'sync_throttled',
+            message: `Instagram profile sync is limited to once every 30 days. Please wait ${daysRemaining} more day(s).`,
+            details: {
+              lastSnapshotDate: lastSnapshotEnd.toISOString().split('T')[0],
+              nextAllowedSyncDate: nextSyncDate.toISOString().split('T')[0],
+              daysSinceLastSnapshot,
+              daysRemaining,
+            },
+          });
+        }
+
+        // Create new snapshot from last snapshot end + 1 day to today
+        newSnapshotStart = new Date(lastSnapshotEnd);
+        newSnapshotStart.setDate(newSnapshotStart.getDate() + 1);
+        newSnapshotStart.setHours(0, 0, 0, 0);
+        newSnapshotEnd = new Date(today);
+        syncNumber = (lastSnapshot.syncNumber || 0) + 1;
+
+        const daysCovered = Math.ceil((newSnapshotEnd.getTime() - newSnapshotStart.getTime()) / (1000 * 60 * 60 * 24));
+        console.log(`   ✅ Throttle check passed! Proceeding with sync...`);
+        console.log(`   🆕 Creating PROGRESSIVE snapshot #${syncNumber}`);
+        console.log(`   📅 New snapshot period: ${newSnapshotStart.toISOString().split('T')[0]} to ${newSnapshotEnd.toISOString().split('T')[0]}`);
+        console.log(`   ⏱️  Days covered: ${daysCovered} days (${daysSinceLastSnapshot} days since last snapshot)\n`);
+      } else {
+        // No previous snapshot - create TWO initial snapshots for growth comparison
+        isInitialSnapshot = true;
+        syncNumber = 2; // We'll create snapshots 1 and 2
+
+        console.log(`   🆕 INITIAL CONNECT: Creating 2 snapshots for immediate growth comparison`);
+        console.log(`   📅 Snapshot 1: 60-30 days ago (for baseline)`);
+        console.log(`   📅 Snapshot 2: Last 30 days (current performance)\n`);
+      }
+
+      // STEP 3: Fetch all media from Instagram API
+      console.log(`📥 STEP 3: Fetching media posts from Instagram API (limit: ${limit})...`);
       const mediaResponse = await this.getInstagramMedia(userId, userType, limit);
       const mediaPosts = mediaResponse.data || [];
 
-      console.log(`📥 Found ${mediaPosts.length} media posts`);
+      console.log(`   ✅ Found ${mediaPosts.length} media posts from Instagram API\n`);
 
       if (mediaPosts.length === 0) {
         return {
           success: true,
+          message: 'No media posts found',
+          syncedAt: syncedAt.toISOString(),
           totalPosts: 0,
           synced: 0,
           failed: 0,
           errors: [],
-          message: 'No media posts found',
         };
       }
 
-      // Step 2: Fetch and store insights for each post
+      // STEP 4: Fetch and store insights for each post
+      console.log(`🔍 STEP 4: Fetching insights for ${mediaPosts.length} media posts...`);
       const results = {
         totalPosts: mediaPosts.length,
         synced: 0,
@@ -795,29 +884,229 @@ export class InstagramService {
         }
       }
 
-      console.log(`✅ Bulk sync completed: ${results.synced} synced, ${results.failed} failed`);
+      console.log(`   ✅ Insights sync completed: ${results.synced} synced, ${results.failed} failed\n`);
 
-      // Step 3: Store active followers snapshot for this 30-day period
-      let activeFollowersSnapshot: any = null;
-      try {
-        activeFollowersSnapshot = await this.storeActiveFollowersSnapshot(userId, userType);
-        if (activeFollowersSnapshot) {
-          console.log(`✅ Stored active followers snapshot: ${activeFollowersSnapshot.activeFollowers} / ${activeFollowersSnapshot.totalFollowers} (${activeFollowersSnapshot.percentage}%)`);
+      // STEP 5: Create snapshot(s) from stored data
+      console.log(`📊 STEP 5: Creating snapshot(s) from stored media insights...`);
+      let snapshot1Data: any = null;
+      let snapshot2Data: any = null;
+
+      if (isInitialSnapshot) {
+        // Initial connect: Create TWO snapshots
+        console.log(`   🔄 Initial connect detected - creating 2 snapshots...\n`);
+
+        // Snapshot 1: 60-30 days ago
+        const snapshot1End = new Date(today);
+        snapshot1End.setDate(snapshot1End.getDate() - 30);
+        snapshot1End.setHours(23, 59, 59, 999);
+        const snapshot1Start = new Date(snapshot1End);
+        snapshot1Start.setDate(snapshot1Start.getDate() - 29);
+        snapshot1Start.setHours(0, 0, 0, 0);
+
+        // Snapshot 2: Last 30 days
+        const snapshot2End = new Date(today);
+        const snapshot2Start = new Date(today);
+        snapshot2Start.setDate(snapshot2Start.getDate() - 30);
+        snapshot2Start.setHours(0, 0, 0, 0);
+
+        try {
+          snapshot1Data = await this.fetchSnapshotForPeriod(userId, userType, snapshot1Start, snapshot1End, 1);
+        } catch (error) {
+          console.error('❌ Failed to create snapshot 1:', error.message);
+          snapshot1Data = {
+            error: 'Failed to create first snapshot',
+            message: error.message,
+          };
         }
-      } catch (error) {
-        console.warn(`⚠️ Could not store active followers snapshot:`, error.message);
-        // Don't fail the entire sync if this fails
+
+        try {
+          snapshot2Data = await this.fetchSnapshotForPeriod(userId, userType, snapshot2Start, snapshot2End, 2);
+        } catch (error) {
+          console.error('❌ Failed to create snapshot 2:', error.message);
+          snapshot2Data = {
+            error: 'Failed to create second snapshot',
+            message: error.message,
+          };
+        }
+      } else {
+        // Progressive sync: Create ONE new snapshot
+        // TypeScript: newSnapshotStart and newSnapshotEnd are guaranteed to be set
+        // because isInitialSnapshot is false, meaning we went through the
+        // lastSnapshot branch above where these are assigned
+        try {
+          snapshot2Data = await this.fetchSnapshotForPeriod(
+            userId,
+            userType,
+            newSnapshotStart!,
+            newSnapshotEnd!,
+            syncNumber
+          );
+        } catch (error) {
+          console.error('❌ Failed to create new snapshot:', error.message);
+          throw new InternalServerErrorException({
+            error: 'snapshot_creation_failed',
+            message: 'Failed to create snapshot from media insights',
+            details: error.message,
+          });
+        }
       }
 
-      return {
+      // STEP 6: Calculate growth metrics
+      console.log(`\n📈 STEP 6: Calculating growth metrics...`);
+      let growthComparison: any = null;
+
+      // Determine which snapshots to compare
+      let previousSnapshot: any = null;
+      let currentSnapshot: any = null;
+
+      if (isInitialSnapshot) {
+        // Initial: Compare snapshot1 vs snapshot2
+        if (snapshot1Data?.metrics && snapshot2Data?.metrics) {
+          previousSnapshot = snapshot1Data;
+          currentSnapshot = snapshot2Data;
+          console.log(`   📊 Comparing INITIAL snapshots: #1 vs #2...`);
+        }
+      } else {
+        // Progressive: Compare last snapshot vs new snapshot
+        if (lastSnapshot && snapshot2Data?.metrics) {
+          previousSnapshot = {
+            syncNumber: lastSnapshot.syncNumber,
+            metrics: {
+              totalFollowers: lastSnapshot.totalFollowers || 0,
+              avgEngagementRate: Number(lastSnapshot.avgEngagementRate) || 0,
+              avgReach: lastSnapshot.avgReach || 0,
+              postsAnalyzed: lastSnapshot.postsAnalyzed || 0,
+              activeFollowersPercentage: Number(lastSnapshot.activeFollowersPercentage) || 0,
+            },
+          };
+          currentSnapshot = snapshot2Data;
+          console.log(`   📊 Comparing snapshot #${lastSnapshot.syncNumber} vs snapshot #${syncNumber}...`);
+        }
+      }
+
+      if (previousSnapshot && currentSnapshot) {
+        const previous = previousSnapshot.metrics;
+        const current = currentSnapshot.metrics;
+
+        const calculateGrowth = (oldVal: number, newVal: number) => {
+          if (oldVal === 0) return newVal > 0 ? 100 : 0;
+          return Number((((newVal - oldVal) / oldVal) * 100).toFixed(2));
+        };
+
+        growthComparison = {
+          followers: {
+            previous: previous.totalFollowers,
+            current: current.totalFollowers,
+            change: current.totalFollowers - previous.totalFollowers,
+            changePercentage: calculateGrowth(previous.totalFollowers, current.totalFollowers),
+          },
+          engagement: {
+            previous: previous.avgEngagementRate,
+            current: current.avgEngagementRate,
+            change: Number((current.avgEngagementRate - previous.avgEngagementRate).toFixed(2)),
+            changePercentage: calculateGrowth(previous.avgEngagementRate, current.avgEngagementRate),
+          },
+          reach: {
+            previous: previous.avgReach,
+            current: current.avgReach,
+            change: current.avgReach - previous.avgReach,
+            changePercentage: calculateGrowth(previous.avgReach, current.avgReach),
+          },
+          posts: {
+            previous: previous.postsAnalyzed,
+            current: current.postsAnalyzed,
+            change: current.postsAnalyzed - previous.postsAnalyzed,
+          },
+          activeFollowers: {
+            previous: previous.activeFollowersPercentage,
+            current: current.activeFollowersPercentage,
+            change: Number((current.activeFollowersPercentage - previous.activeFollowersPercentage).toFixed(2)),
+          },
+        };
+
+        console.log(`\n   📊 GROWTH COMPARISON RESULTS:`);
+        console.log(`   ${'─'.repeat(70)}`);
+        console.log(`   📸 Snapshot:      #${previousSnapshot.syncNumber} → #${currentSnapshot.syncNumber}`);
+        console.log(`   👥 Followers:     ${previous.totalFollowers} → ${current.totalFollowers} (${growthComparison.followers.change >= 0 ? '+' : ''}${growthComparison.followers.change}, ${growthComparison.followers.changePercentage >= 0 ? '+' : ''}${growthComparison.followers.changePercentage}%)`);
+        console.log(`   💬 Engagement:    ${previous.avgEngagementRate}% → ${current.avgEngagementRate}% (${growthComparison.engagement.change >= 0 ? '+' : ''}${growthComparison.engagement.change}%, ${growthComparison.engagement.changePercentage >= 0 ? '+' : ''}${growthComparison.engagement.changePercentage}%)`);
+        console.log(`   📡 Reach:         ${previous.avgReach} → ${current.avgReach} (${growthComparison.reach.change >= 0 ? '+' : ''}${growthComparison.reach.change}, ${growthComparison.reach.changePercentage >= 0 ? '+' : ''}${growthComparison.reach.changePercentage}%)`);
+        console.log(`   📝 Posts:         ${previous.postsAnalyzed} → ${current.postsAnalyzed} (${growthComparison.posts.change >= 0 ? '+' : ''}${growthComparison.posts.change})`);
+        console.log(`   ⚡ Active:        ${previous.activeFollowersPercentage}% → ${current.activeFollowersPercentage}% (${growthComparison.activeFollowers.change >= 0 ? '+' : ''}${growthComparison.activeFollowers.change}%)`);
+        console.log(`   ${'─'.repeat(70)}\n`);
+      } else {
+        console.log(`   ℹ️  No growth comparison available (missing snapshots)\n`);
+      }
+
+      console.log(`\n${'#'.repeat(100)}`);
+      console.log(`${'#'.repeat(100)}`);
+      console.log(`##${' '.repeat(96)}##`);
+      console.log(`##  ✅ MEDIA INSIGHTS SYNC COMPLETED SUCCESSFULLY${' '.repeat(48)}##`);
+      console.log(`##${' '.repeat(96)}##`);
+      console.log(`${'#'.repeat(100)}`);
+      console.log(`${'#'.repeat(100)}\n`);
+
+      const response: any = {
         success: true,
-        ...results,
-        activeFollowersSnapshot,
-        message: `Successfully synced ${results.synced} out of ${results.totalPosts} posts`,
+        message: isInitialSnapshot
+          ? `Initial snapshots created (#1 and #2) with ${results.synced} posts`
+          : `Successfully synced ${results.synced} posts and created snapshot #${syncNumber}`,
+        syncedAt: syncedAt.toISOString(),
+        mediaSync: {
+          totalPosts: results.totalPosts,
+          synced: results.synced,
+          failed: results.failed,
+          errors: results.errors,
+        },
       };
 
+      // Add snapshots to response
+      if (isInitialSnapshot) {
+        response.snapshots = {
+          baseline: snapshot1Data,
+          current: snapshot2Data,
+        };
+      } else {
+        response.currentSnapshot = snapshot2Data;
+      }
+
+      // Add growth comparison if available
+      if (growthComparison) {
+        response.growth = growthComparison;
+      }
+
+      // Add previous snapshot info for progressive syncs
+      if (!isInitialSnapshot && lastSnapshot) {
+        response.previousSnapshot = {
+          snapshotId: lastSnapshot.id,
+          syncNumber: lastSnapshot.syncNumber,
+          period: {
+            start: lastSnapshot.analysisPeriodStart ? new Date(lastSnapshot.analysisPeriodStart).toISOString().split('T')[0] : null,
+            end: lastSnapshot.analysisPeriodEnd ? new Date(lastSnapshot.analysisPeriodEnd).toISOString().split('T')[0] : null,
+          },
+          metrics: {
+            postsAnalyzed: lastSnapshot.postsAnalyzed,
+            totalFollowers: lastSnapshot.totalFollowers,
+            activeFollowers: lastSnapshot.activeFollowers,
+            activeFollowersPercentage: Number(lastSnapshot.activeFollowersPercentage),
+            avgEngagementRate: Number(lastSnapshot.avgEngagementRate),
+            avgReach: lastSnapshot.avgReach,
+            totalLikes: lastSnapshot.totalLikes,
+            totalComments: lastSnapshot.totalComments,
+            totalShares: lastSnapshot.totalShares,
+            totalSaves: lastSnapshot.totalSaves,
+          },
+        };
+      }
+
+      return response;
+
     } catch (error) {
-      console.error('❌ Bulk sync failed:', error);
+      // Re-throw BadRequestException (like throttle errors)
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      console.error('❌ Bulk media insights sync failed:', error);
       throw new InternalServerErrorException({
         error: 'bulk_sync_failed',
         message: 'Failed to perform bulk media insights sync',
@@ -1724,6 +2013,439 @@ export class InstagramService {
         error: error.message,
       });
     }
+  }
+
+  /**
+   * Fetch and store snapshot data for a specific 30-day period
+   * @param userId - The user's ID (brand or influencer)
+   * @param userType - Type of user ('brand' or 'influencer')
+   * @param periodStart - Start date of the period
+   * @param periodEnd - End date of the period
+   * @param syncNumber - Snapshot number (1 or 2)
+   * @returns Snapshot data with all metrics
+   */
+  private async fetchSnapshotForPeriod(
+    userId: number,
+    userType: UserType,
+    periodStart: Date,
+    periodEnd: Date,
+    syncNumber: number,
+  ): Promise<any> {
+    const user = await this.getUser(userId, userType);
+
+    const daysCovered = Math.ceil((periodEnd.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24));
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`📊 SNAPSHOT #${syncNumber} - FETCHING DATA`);
+    console.log(`${'='.repeat(80)}`);
+    console.log(`👤 User: ${userType} ID ${userId} (@${user.instagramUsername || 'unknown'})`);
+    console.log(`📅 Period Start: ${periodStart.toISOString()}`);
+    console.log(`📅 Period End:   ${periodEnd.toISOString()}`);
+    console.log(`⏱️  Days Covered: ${daysCovered} days`);
+    console.log(`${'='.repeat(80)}\n`);
+
+    // Get media insights for this specific period
+    const mediaInsights = await this.instagramMediaInsightModel.findAll({
+      where: userType === 'influencer'
+        ? { influencerId: userId }
+        : { brandId: userId },
+      include: [{
+        model: this.instagramMediaModel,
+        required: true,
+        where: {
+          timestamp: {
+            [Op.gte]: periodStart,
+            [Op.lte]: periodEnd,
+          },
+        },
+      }],
+      order: [['fetchedAt', 'DESC']],
+    });
+
+    const totalFollowers = user.instagramFollowersCount || 0;
+    const postsAnalyzed = mediaInsights.length;
+
+    console.log(`📝 Posts found in this period: ${postsAnalyzed}`);
+
+    // Calculate metrics for this period
+    let totalLikes = 0;
+    let totalComments = 0;
+    let totalShares = 0;
+    let totalSaves = 0;
+    let totalReach = 0;
+
+    mediaInsights.forEach((insight) => {
+      totalLikes += insight.likes || 0;
+      totalComments += insight.comments || 0;
+      totalShares += insight.shares || 0;
+      totalSaves += insight.saved || 0;
+      totalReach += insight.reach || 0;
+    });
+
+    const totalEngagement = totalLikes + totalComments + totalShares + totalSaves;
+    const avgEngagementRate = postsAnalyzed > 0 && totalFollowers > 0
+      ? Number(((totalEngagement / postsAnalyzed / totalFollowers) * 100).toFixed(2))
+      : 0;
+    const avgReach = postsAnalyzed > 0 ? Math.round(totalReach / postsAnalyzed) : 0;
+
+    // Get active followers data (current data, as historical data is not available)
+    let activeFollowers = 0;
+    let onlineFollowersData = {};
+    try {
+      onlineFollowersData = await this.getOnlineFollowers(userId, userType);
+      if (onlineFollowersData && Object.keys(onlineFollowersData).length > 0) {
+        activeFollowers = Math.max(...Object.values(onlineFollowersData).map((v: any) => v || 0));
+      }
+    } catch (error) {
+      console.warn('Could not fetch online followers:', error.message);
+    }
+
+    const activeFollowersPercentage = totalFollowers > 0
+      ? Number(((activeFollowers / totalFollowers) * 100).toFixed(2))
+      : 0;
+
+    // Store snapshot
+    const snapshot = await this.instagramProfileAnalysisModel.create({
+      influencerId: userType === 'influencer' ? userId : undefined,
+      brandId: userType === 'brand' ? userId : undefined,
+      instagramUserId: user.instagramUserId,
+      instagramUsername: user.instagramUsername,
+      syncNumber,
+      syncDate: new Date(),
+      analysisPeriodStart: periodStart,
+      analysisPeriodEnd: periodEnd,
+      postsAnalyzed,
+      totalFollowers,
+      activeFollowers,
+      activeFollowersPercentage,
+      onlineFollowersHourlyData: onlineFollowersData,
+      avgEngagementRate,
+      avgReach,
+      totalLikes,
+      totalComments,
+      totalShares,
+      totalSaves,
+      analyzedAt: new Date(),
+    });
+
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`✅ SNAPSHOT #${syncNumber} - STORED SUCCESSFULLY`);
+    console.log(`${'='.repeat(80)}`);
+    console.log(`🆔 Snapshot ID: ${snapshot.id}`);
+    console.log(`📊 Metrics Stored:`);
+    console.log(`   - Posts Analyzed: ${postsAnalyzed}`);
+    console.log(`   - Total Followers: ${totalFollowers}`);
+    console.log(`   - Active Followers: ${activeFollowers} (${activeFollowersPercentage}%)`);
+    console.log(`   - Avg Engagement Rate: ${avgEngagementRate}%`);
+    console.log(`   - Avg Reach: ${avgReach}`);
+    console.log(`   - Total Likes: ${totalLikes}`);
+    console.log(`   - Total Comments: ${totalComments}`);
+    console.log(`   - Total Shares: ${totalShares}`);
+    console.log(`   - Total Saves: ${totalSaves}`);
+    console.log(`⏰ Stored at: ${new Date().toISOString()}`);
+    console.log(`${'='.repeat(80)}\n`);
+
+    return {
+      snapshotId: snapshot.id,
+      syncNumber,
+      period: {
+        start: periodStart.toISOString().split('T')[0],
+        end: periodEnd.toISOString().split('T')[0],
+        days: Math.ceil((periodEnd.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24)),
+      },
+      metrics: {
+        postsAnalyzed,
+        totalFollowers,
+        activeFollowers,
+        activeFollowersPercentage,
+        avgEngagementRate,
+        avgReach,
+        totalLikes,
+        totalComments,
+        totalShares,
+        totalSaves,
+      },
+    };
+  }
+
+  /**
+   * Comprehensive sync of all Instagram insights with progressive growth tracking
+   * Creates new snapshot and compares with last snapshot if 30+ days have passed
+   * @param userId - The user's ID (brand or influencer)
+   * @param userType - Type of user ('brand' or 'influencer')
+   * @returns Comprehensive sync result with new snapshot and growth comparison
+   */
+  async syncAllInsights(
+    userId: number,
+    userType: UserType,
+  ): Promise<any> {
+    const user = await this.getUser(userId, userType);
+
+    if (!user.instagramAccessToken || !user.instagramUserId) {
+      throw new BadRequestException('No Instagram account connected');
+    }
+
+    const syncedAt = new Date();
+    console.log(`🔄 Starting comprehensive sync with progressive growth tracking for ${userType} ${userId}...`);
+
+    // STEP 1: Check for existing snapshots and determine if sync is allowed
+    const lastSnapshot = await this.instagramProfileAnalysisModel.findOne({
+      where: userType === 'influencer'
+        ? { influencerId: userId }
+        : { brandId: userId },
+      order: [['analysisPeriodEnd', 'DESC']],
+    });
+
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+
+    // Determine date ranges based on last snapshot
+    let newSnapshotStart: Date;
+    let newSnapshotEnd: Date;
+    let syncNumber: number;
+    let isInitialSnapshot = false;
+
+    if (lastSnapshot && lastSnapshot.analysisPeriodEnd) {
+      // Check if 30 days have passed since last snapshot
+      const lastSnapshotEnd = new Date(lastSnapshot.analysisPeriodEnd);
+      const daysSinceLastSnapshot = Math.floor((today.getTime() - lastSnapshotEnd.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (daysSinceLastSnapshot < 30) {
+        const daysRemaining = 30 - daysSinceLastSnapshot;
+        const nextSyncDate = new Date(lastSnapshotEnd.getTime() + (30 * 24 * 60 * 60 * 1000));
+
+        throw new BadRequestException({
+          error: 'sync_throttled',
+          message: `Instagram profile sync is limited to once every 30 days. Please wait ${daysRemaining} more day(s).`,
+          details: {
+            lastSnapshotDate: lastSnapshotEnd.toISOString().split('T')[0],
+            nextAllowedSyncDate: nextSyncDate.toISOString().split('T')[0],
+            daysSinceLastSnapshot,
+            daysRemaining,
+          },
+        });
+      }
+
+      // Create new snapshot from last snapshot end + 1 day to today
+      newSnapshotStart = new Date(lastSnapshotEnd);
+      newSnapshotStart.setDate(newSnapshotStart.getDate() + 1);
+      newSnapshotStart.setHours(0, 0, 0, 0);
+      newSnapshotEnd = new Date(today);
+      syncNumber = (lastSnapshot.syncNumber || 0) + 1;
+
+      console.log(`📊 Creating snapshot #${syncNumber} from ${newSnapshotStart.toISOString().split('T')[0]} to ${newSnapshotEnd.toISOString().split('T')[0]} (${daysSinceLastSnapshot} days since last snapshot)`);
+    } else {
+      // No previous snapshot - create initial snapshot for last 30 days
+      isInitialSnapshot = true;
+      newSnapshotEnd = new Date(today);
+      newSnapshotStart = new Date(today);
+      newSnapshotStart.setDate(newSnapshotStart.getDate() - 30);
+      newSnapshotStart.setHours(0, 0, 0, 0);
+      syncNumber = 1;
+
+      console.log(`📊 Creating initial snapshot #${syncNumber} for last 30 days`);
+    }
+
+    // STEP 2: Fetch basic profile first
+    let profileData: any = {};
+    try {
+      const profile = await this.getUserProfile(user.instagramAccessToken);
+      await user.update({
+        instagramUsername: profile.username,
+        instagramAccountType: profile.account_type || undefined,
+        instagramFollowersCount: profile.followers_count || undefined,
+        instagramFollowsCount: profile.follows_count || undefined,
+        instagramMediaCount: profile.media_count || undefined,
+        instagramProfilePictureUrl: profile.profile_picture_url || undefined,
+        instagramBio: profile.biography || undefined,
+      });
+
+      profileData = {
+        status: 'success',
+        data: {
+          username: profile.username,
+          followersCount: profile.followers_count,
+          followsCount: profile.follows_count,
+          mediaCount: profile.media_count,
+          accountType: profile.account_type,
+        },
+      };
+    } catch (error) {
+      profileData = {
+        status: 'error',
+        message: 'Failed to fetch basic profile data',
+        error: error.message,
+      };
+    }
+
+    // STEP 3: Create new snapshot
+    let newSnapshot: any = null;
+    try {
+      newSnapshot = await this.fetchSnapshotForPeriod(userId, userType, newSnapshotStart, newSnapshotEnd, syncNumber);
+    } catch (error) {
+      console.error('❌ Failed to create new snapshot:', error.message);
+      throw new InternalServerErrorException({
+        error: 'snapshot_creation_failed',
+        message: 'Failed to create snapshot',
+        details: error.message,
+      });
+    }
+
+    // STEP 4: Calculate growth metrics (compare with last snapshot if exists)
+    let growthComparison: any = null;
+    if (!isInitialSnapshot && lastSnapshot && newSnapshot?.metrics) {
+      const previous = {
+        totalFollowers: lastSnapshot.totalFollowers || 0,
+        avgEngagementRate: Number(lastSnapshot.avgEngagementRate) || 0,
+        avgReach: lastSnapshot.avgReach || 0,
+        postsAnalyzed: lastSnapshot.postsAnalyzed || 0,
+        activeFollowersPercentage: Number(lastSnapshot.activeFollowersPercentage) || 0,
+      };
+      const current = newSnapshot.metrics;
+
+      const calculateGrowth = (oldVal: number, newVal: number) => {
+        if (oldVal === 0) return newVal > 0 ? 100 : 0;
+        return Number((((newVal - oldVal) / oldVal) * 100).toFixed(2));
+      };
+
+      growthComparison = {
+        followers: {
+          previous: previous.totalFollowers,
+          current: current.totalFollowers,
+          change: current.totalFollowers - previous.totalFollowers,
+          changePercentage: calculateGrowth(previous.totalFollowers, current.totalFollowers),
+        },
+        engagement: {
+          previous: previous.avgEngagementRate,
+          current: current.avgEngagementRate,
+          change: Number((current.avgEngagementRate - previous.avgEngagementRate).toFixed(2)),
+          changePercentage: calculateGrowth(previous.avgEngagementRate, current.avgEngagementRate),
+        },
+        reach: {
+          previous: previous.avgReach,
+          current: current.avgReach,
+          change: current.avgReach - previous.avgReach,
+          changePercentage: calculateGrowth(previous.avgReach, current.avgReach),
+        },
+        posts: {
+          previous: previous.postsAnalyzed,
+          current: current.postsAnalyzed,
+          change: current.postsAnalyzed - previous.postsAnalyzed,
+        },
+        activeFollowers: {
+          previous: previous.activeFollowersPercentage,
+          current: current.activeFollowersPercentage,
+          change: Number((current.activeFollowersPercentage - previous.activeFollowersPercentage).toFixed(2)),
+        },
+      };
+
+      console.log(`📈 Growth: Followers ${growthComparison.followers.changePercentage}%, Engagement ${growthComparison.engagement.changePercentage}%`);
+    }
+
+    // STEP 5: Fetch additional insights (demographics, geographic data, etc.)
+    let demographicsData: any = null;
+    try {
+      const ageGenderResponse = await axios.get(
+        `https://graph.instagram.com/me/insights`,
+        {
+          params: {
+            metric: 'follower_demographics',
+            period: 'lifetime',
+            metric_type: 'total_value',
+            breakdown: 'age,gender',
+            access_token: user.instagramAccessToken,
+          },
+        }
+      );
+
+      const demographics = ageGenderResponse.data.data[0]?.total_value?.breakdowns?.[0]?.results || [];
+      demographicsData = {
+        status: 'success',
+        data: demographics,
+      };
+    } catch (error) {
+      const isFacebookError = error.response?.data?.error?.message?.toLowerCase().includes('instagram') ||
+                             error.response?.data?.error?.message?.toLowerCase().includes('permission');
+      demographicsData = {
+        status: 'unavailable',
+        reason: isFacebookError ? 'facebook_not_connected' : 'api_error',
+        message: isFacebookError
+          ? 'Connect your Instagram to Facebook to access audience demographics'
+          : 'Failed to fetch demographics',
+        data: null,
+      };
+    }
+
+    let geographicData: any = null;
+    try {
+      const countriesResponse = await axios.get(
+        `https://graph.instagram.com/me/insights`,
+        {
+          params: {
+            metric: 'follower_demographics',
+            period: 'lifetime',
+            metric_type: 'total_value',
+            breakdown: 'country',
+            access_token: user.instagramAccessToken,
+          },
+        }
+      );
+
+      const countries = countriesResponse.data.data[0]?.total_value?.breakdowns?.[0]?.results || [];
+      geographicData = {
+        status: 'success',
+        data: countries,
+      };
+    } catch (error) {
+      const isFacebookError = error.response?.data?.error?.message?.toLowerCase().includes('instagram') ||
+                             error.response?.data?.error?.message?.toLowerCase().includes('permission');
+      geographicData = {
+        status: 'unavailable',
+        reason: isFacebookError ? 'facebook_not_connected' : 'api_error',
+        message: isFacebookError
+          ? 'Connect your Instagram to Facebook to access geographic data'
+          : 'Failed to fetch geographic data',
+        data: null,
+      };
+    }
+
+    console.log(`✅ Comprehensive sync completed for ${userType} ${userId}`);
+
+    const response: any = {
+      message: isInitialSnapshot
+        ? 'Initial Instagram insights snapshot created'
+        : `Instagram insights snapshot #${syncNumber} created with growth analysis`,
+      syncedAt: syncedAt.toISOString(),
+      basicProfile: profileData,
+      currentSnapshot: newSnapshot,
+      audienceDemographics: demographicsData,
+      geographicData: geographicData,
+    };
+
+    if (!isInitialSnapshot && lastSnapshot) {
+      response.previousSnapshot = {
+        snapshotId: lastSnapshot.id,
+        syncNumber: lastSnapshot.syncNumber,
+        period: {
+          start: lastSnapshot.analysisPeriodStart ? new Date(lastSnapshot.analysisPeriodStart).toISOString().split('T')[0] : null,
+          end: lastSnapshot.analysisPeriodEnd ? new Date(lastSnapshot.analysisPeriodEnd).toISOString().split('T')[0] : null,
+        },
+        metrics: {
+          postsAnalyzed: lastSnapshot.postsAnalyzed,
+          totalFollowers: lastSnapshot.totalFollowers,
+          activeFollowers: lastSnapshot.activeFollowers,
+          activeFollowersPercentage: Number(lastSnapshot.activeFollowersPercentage),
+          avgEngagementRate: Number(lastSnapshot.avgEngagementRate),
+          avgReach: lastSnapshot.avgReach,
+          totalLikes: lastSnapshot.totalLikes,
+          totalComments: lastSnapshot.totalComments,
+          totalShares: lastSnapshot.totalShares,
+          totalSaves: lastSnapshot.totalSaves,
+        },
+      };
+      response.growth = growthComparison;
+    }
+
+    return response;
   }
 
 }
