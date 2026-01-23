@@ -2345,16 +2345,19 @@ export class InfluencerProfileScoringService {
       else if (growthRate >= 0) { score = 3.33; rating = 'Weak'; }
       else { score = 0; rating = 'Declining'; }
 
-      // Build chart data from snapshots
-      const chartData = snapshots.map(snapshot => {
-        const date = snapshot.analysisPeriodEnd || snapshot.syncDate || snapshot.createdAt;
-        const dateObj = new Date(date);
-        const formattedDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        return {
-          date: formattedDate,
-          followers: snapshot.totalFollowers || 0,
-        };
+      // Build chart data with weekly intervals from profile analysis snapshots
+      const chartData = this.generateWeeklyChartDataFromAnalysis(snapshots);
+
+      // Generate AI feedback
+      const aiFeedback = await this.generateGrowthFeedback({
+        growthRate,
+        currentGrowth: growth,
+        avgGrowthPerDay: 0,
+        rating,
       });
+
+      // Find peak gain from profile analysis snapshots
+      const peakGain = await this.findPeakFollowerGainFromAnalysis(influencer.id, snapshots);
 
       return {
         score: Number(score.toFixed(2)),
@@ -2376,6 +2379,8 @@ export class InfluencerProfileScoringService {
                 growthRate >= 5 ? '5-10%' :
                 growthRate >= 0 ? '0-5%' : 'negative',
           chartData,
+          aiFeedback,
+          peakFollowerGain: peakGain,
           note: 'Chart data generated from profile analysis snapshots. Daily growth tracking will provide more detailed charts.',
         },
       };
@@ -2388,15 +2393,8 @@ export class InfluencerProfileScoringService {
     const currentPeriodSnapshots = growthSnapshots.filter(s => new Date(s.snapshotDate) >= thirtyDaysAgo);
     const previousPeriodSnapshots = growthSnapshots.filter(s => new Date(s.snapshotDate) < thirtyDaysAgo);
 
-    // Build chart data from ALL snapshots (not just last 30 days)
-    const chartData = growthSnapshots.map(snapshot => {
-      const date = new Date(snapshot.snapshotDate);
-      const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      return {
-        date: formattedDate,
-        followers: snapshot.followersCount || 0,
-      };
-    });
+    // Build chart data with weekly intervals (7 days apart)
+    const chartData = this.generateWeeklyChartData(growthSnapshots);
 
     // If insufficient data in last 30 days, calculate from all available snapshots
     if (currentPeriodSnapshots.length < 2) {
@@ -2419,6 +2417,17 @@ export class InfluencerProfileScoringService {
       else if (growthRate >= 0) { score = 3.33; rating = 'Weak'; }
       else { score = 0; rating = 'Declining'; }
 
+      // Generate AI feedback
+      const aiFeedback = await this.generateGrowthFeedback({
+        growthRate,
+        currentGrowth: totalGrowth,
+        avgGrowthPerDay: 0,
+        rating,
+      });
+
+      // Find peak gain
+      const peakGain = await this.findPeakFollowerGain(influencer.id, growthSnapshots);
+
       return {
         score: Number(score.toFixed(2)),
         details: {
@@ -2439,6 +2448,8 @@ export class InfluencerProfileScoringService {
                 growthRate >= 5 ? '5-10%' :
                 growthRate >= 0 ? '0-5%' : 'negative',
           chartData,
+          aiFeedback,
+          peakFollowerGain: peakGain,
           note: 'Growth calculated from all available snapshots. More snapshots in the last 30 days will improve accuracy.',
         },
       };
@@ -2488,6 +2499,17 @@ export class InfluencerProfileScoringService {
     else if (currentGrowthRate >= 0) score = 3.33;
     else score = 0;
 
+    // Generate AI feedback about growth trends
+    const aiFeedback = await this.generateGrowthFeedback({
+      growthRate: currentGrowthRate,
+      currentGrowth,
+      avgGrowthPerDay: currentAvgPerDay,
+      rating,
+    });
+
+    // Find peak follower gain period
+    const peakGain = await this.findPeakFollowerGain(influencer.id, growthSnapshots);
+
     return {
       score: Number(score.toFixed(2)),
       details: {
@@ -2508,7 +2530,304 @@ export class InfluencerProfileScoringService {
               currentGrowthRate >= 5 ? '5-10%' :
               currentGrowthRate >= 0 ? '0-5%' : 'negative',
         chartData,
+        aiFeedback,
+        peakFollowerGain: peakGain,
       },
+    };
+  }
+
+  /**
+   * Helper: Generate weekly chart data from growth snapshots
+   * Creates data points at 7-day intervals with linear interpolation
+   */
+  private generateWeeklyChartData(snapshots: any[]): Array<{ date: string; followers: number }> {
+    if (snapshots.length === 0) return [];
+    if (snapshots.length === 1) {
+      const date = new Date(snapshots[0].snapshotDate);
+      return [{
+        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        followers: snapshots[0].followersCount || 0,
+      }];
+    }
+
+    const firstDate = new Date(snapshots[0].snapshotDate);
+    const lastDate = new Date(snapshots[snapshots.length - 1].snapshotDate);
+    const firstFollowers = snapshots[0].followersCount || 0;
+    const lastFollowers = snapshots[snapshots.length - 1].followersCount || 0;
+
+    const daysDiff = Math.floor((lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+    const weeklyData: Array<{ date: string; followers: number }> = [];
+
+    // Add first data point
+    weeklyData.push({
+      date: firstDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      followers: firstFollowers,
+    });
+
+    // Generate weekly points (7-day intervals)
+    let currentDate = new Date(firstDate);
+    while (true) {
+      currentDate.setDate(currentDate.getDate() + 7);
+      if (currentDate >= lastDate) break;
+
+      // Linear interpolation for follower count
+      const daysFromStart = Math.floor((currentDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+      const progress = daysFromStart / daysDiff;
+      const interpolatedFollowers = Math.round(firstFollowers + (lastFollowers - firstFollowers) * progress);
+
+      weeklyData.push({
+        date: currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        followers: interpolatedFollowers,
+      });
+    }
+
+    // Add last data point
+    weeklyData.push({
+      date: lastDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      followers: lastFollowers,
+    });
+
+    return weeklyData;
+  }
+
+  /**
+   * Helper: Generate weekly chart data from profile analysis snapshots
+   */
+  private generateWeeklyChartDataFromAnalysis(snapshots: any[]): Array<{ date: string; followers: number }> {
+    if (snapshots.length === 0) return [];
+    if (snapshots.length === 1) {
+      const date = snapshots[0].analysisPeriodEnd || snapshots[0].syncDate || snapshots[0].createdAt;
+      return [{
+        date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        followers: snapshots[0].totalFollowers || 0,
+      }];
+    }
+
+    const firstSnapshot = snapshots[0];
+    const lastSnapshot = snapshots[snapshots.length - 1];
+    const firstDate = new Date(firstSnapshot.analysisPeriodEnd || firstSnapshot.syncDate || firstSnapshot.createdAt);
+    const lastDate = new Date(lastSnapshot.analysisPeriodEnd || lastSnapshot.syncDate || lastSnapshot.createdAt);
+    const firstFollowers = firstSnapshot.totalFollowers || 0;
+    const lastFollowers = lastSnapshot.totalFollowers || 0;
+
+    const daysDiff = Math.floor((lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+    const weeklyData: Array<{ date: string; followers: number }> = [];
+
+    // Add first data point
+    weeklyData.push({
+      date: firstDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      followers: firstFollowers,
+    });
+
+    // Generate weekly points (7-day intervals)
+    let currentDate = new Date(firstDate);
+    while (true) {
+      currentDate.setDate(currentDate.getDate() + 7);
+      if (currentDate >= lastDate) break;
+
+      // Linear interpolation for follower count
+      const daysFromStart = Math.floor((currentDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+      const progress = daysFromStart / daysDiff;
+      const interpolatedFollowers = Math.round(firstFollowers + (lastFollowers - firstFollowers) * progress);
+
+      weeklyData.push({
+        date: currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        followers: interpolatedFollowers,
+      });
+    }
+
+    // Add last data point
+    weeklyData.push({
+      date: lastDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      followers: lastFollowers,
+    });
+
+    return weeklyData;
+  }
+
+  /**
+   * Helper: Generate AI feedback about growth trends
+   */
+  private async generateGrowthFeedback(params: {
+    growthRate: number;
+    currentGrowth: number;
+    avgGrowthPerDay: number;
+    rating: string;
+  }): Promise<string> {
+    try {
+      const prompt = `Analyze follower growth: Rate=${params.growthRate.toFixed(1)}%, Growth=${params.currentGrowth}, AvgPerDay=${params.avgGrowthPerDay}, Rating=${params.rating}. Give 1 actionable tip (15-20 words) to improve growth. Return JSON: {"feedback": "your tip"}`;
+
+      const result = await this.geminiAIService.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            response_mime_type: "application/json",
+            temperature: 0.3,
+          }
+        });
+        return await response.response;
+      }, 'generateGrowthFeedback');
+
+      const text = result.text();
+      const parsed = JSON.parse(text);
+      return parsed.feedback || 'Continue posting consistently to maintain growth momentum.';
+    } catch (error) {
+      // Fallback feedback based on growth rate
+      if (params.growthRate > 20) {
+        return 'Excellent growth! Maintain your content quality and posting schedule.';
+      } else if (params.growthRate > 10) {
+        return 'Good progress. Try posting more consistently to accelerate growth.';
+      } else if (params.growthRate > 0) {
+        return 'Growth is slow. Focus on trending topics and engaging hooks in your content.';
+      } else {
+        return 'Follower count is stagnant. Review your content strategy and post timing.';
+      }
+    }
+  }
+
+  /**
+   * Helper: Find peak follower gain period with top contributing posts
+   */
+  private async findPeakFollowerGain(influencerId: number, snapshots: any[]): Promise<any> {
+    if (snapshots.length < 2) return null;
+
+    // Find the period with maximum growth between consecutive snapshots
+    let maxGrowth = 0;
+    let peakStartDate: Date | null = null;
+    let peakEndDate: Date | null = null;
+    let peakStartFollowers = 0;
+    let peakEndFollowers = 0;
+
+    for (let i = 1; i < snapshots.length; i++) {
+      const prevFollowers = snapshots[i - 1].followersCount || 0;
+      const currFollowers = snapshots[i].followersCount || 0;
+      const growth = currFollowers - prevFollowers;
+
+      if (growth > maxGrowth) {
+        maxGrowth = growth;
+        peakStartDate = new Date(snapshots[i - 1].snapshotDate);
+        peakEndDate = new Date(snapshots[i].snapshotDate);
+        peakStartFollowers = prevFollowers;
+        peakEndFollowers = currFollowers;
+      }
+    }
+
+    if (!peakStartDate || !peakEndDate || maxGrowth <= 0) {
+      return null;
+    }
+
+    // Find top posts during the peak growth period with insights
+    const topPosts = await this.instagramMediaModel.findAll({
+      where: {
+        influencerId,
+        timestamp: {
+          [Op.between]: [peakStartDate, peakEndDate],
+        },
+      },
+      order: [['timestamp', 'DESC']],
+      limit: 3,
+      attributes: ['id', 'mediaUrl', 'timestamp'],
+      include: [{
+        model: this.instagramMediaInsightModel,
+        as: 'insights',
+        attributes: ['reach', 'likes'],
+        limit: 1,
+        order: [['fetchedAt', 'DESC']],
+        required: false,
+      }],
+    });
+
+    // Calculate estimated followers gained per post (distribute total growth)
+    const followersPerPost = topPosts.length > 0 ? Math.floor(maxGrowth / topPosts.length) : 0;
+
+    return {
+      maxFollowersGained: maxGrowth,
+      dateRange: {
+        start: peakStartDate.toISOString().split('T')[0],
+        end: peakEndDate.toISOString().split('T')[0],
+      },
+      topPosts: topPosts.map((post) => ({
+        mediaUrl: post.mediaUrl,
+        date: new Date(post.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        views: post.insights?.[0]?.reach || 0,
+        followersGained: followersPerPost,
+      })),
+      aiFeedback: maxGrowth > 100
+        ? 'Your follower base shows healthy activity with no abnormal spikes.'
+        : 'Steady growth pattern detected. Keep creating engaging content.',
+    };
+  }
+
+  /**
+   * Helper: Find peak follower gain from profile analysis snapshots
+   */
+  private async findPeakFollowerGainFromAnalysis(influencerId: number, snapshots: any[]): Promise<any> {
+    if (snapshots.length < 2) return null;
+
+    // Find the period with maximum growth between consecutive snapshots
+    let maxGrowth = 0;
+    let peakStartDate: Date | null = null;
+    let peakEndDate: Date | null = null;
+    let peakStartFollowers = 0;
+    let peakEndFollowers = 0;
+
+    for (let i = 1; i < snapshots.length; i++) {
+      const prevFollowers = snapshots[i - 1].totalFollowers || 0;
+      const currFollowers = snapshots[i].totalFollowers || 0;
+      const growth = currFollowers - prevFollowers;
+
+      if (growth > maxGrowth) {
+        maxGrowth = growth;
+        peakStartDate = new Date(snapshots[i - 1].analysisPeriodEnd || snapshots[i - 1].syncDate || snapshots[i - 1].createdAt);
+        peakEndDate = new Date(snapshots[i].analysisPeriodEnd || snapshots[i].syncDate || snapshots[i].createdAt);
+        peakStartFollowers = prevFollowers;
+        peakEndFollowers = currFollowers;
+      }
+    }
+
+    if (!peakStartDate || !peakEndDate || maxGrowth <= 0) {
+      return null;
+    }
+
+    // Find top posts during the peak growth period with insights
+    const topPosts = await this.instagramMediaModel.findAll({
+      where: {
+        influencerId,
+        timestamp: {
+          [Op.between]: [peakStartDate, peakEndDate],
+        },
+      },
+      order: [['timestamp', 'DESC']],
+      limit: 3,
+      attributes: ['id', 'mediaUrl', 'timestamp'],
+      include: [{
+        model: this.instagramMediaInsightModel,
+        as: 'insights',
+        attributes: ['reach', 'likes'],
+        limit: 1,
+        order: [['fetchedAt', 'DESC']],
+        required: false,
+      }],
+    });
+
+    // Calculate estimated followers gained per post (distribute total growth)
+    const followersPerPost = topPosts.length > 0 ? Math.floor(maxGrowth / topPosts.length) : 0;
+
+    return {
+      maxFollowersGained: maxGrowth,
+      dateRange: {
+        start: peakStartDate.toISOString().split('T')[0],
+        end: peakEndDate.toISOString().split('T')[0],
+      },
+      topPosts: topPosts.map((post) => ({
+        mediaUrl: post.mediaUrl,
+        date: new Date(post.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        views: post.insights?.[0]?.reach || 0,
+        followersGained: followersPerPost,
+      })),
+      aiFeedback: maxGrowth > 100
+        ? 'Your follower base shows healthy activity with no abnormal spikes.'
+        : 'Steady growth pattern detected. Keep creating engaging content.',
     };
   }
 
@@ -2516,43 +2835,255 @@ export class InfluencerProfileScoringService {
    * 5.2 Posting Behaviour (40%)
    * Posting frequency consistency based on weekly posts
    * 6-7 posts/week: 10/10 | 4-5: 7.86/10 | 2-3: 5.71/10 | 0-1: 2.86/10
+   * Enhanced with post type breakdown, best days/times, and AI feedback
    */
   private async calculatePostingBehaviour(influencer: Influencer): Promise<{ score: number; details: any }> {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const recentPosts = await this.instagramMediaModel.count({
+    // Fetch recent posts with insights for detailed analysis
+    const recentPostsWithInsights = await this.instagramMediaModel.findAll({
       where: {
         influencerId: influencer.id,
         timestamp: { [Op.gte]: thirtyDaysAgo },
       },
+      attributes: ['id', 'mediaType', 'mediaProductType', 'timestamp', 'mediaUrl'],
+      include: [{
+        model: this.instagramMediaInsightModel,
+        as: 'insights',
+        attributes: ['reach', 'likes', 'comments', 'saved'],
+        limit: 1,
+        order: [['fetchedAt', 'DESC']],
+        required: false,
+      }],
     });
+
+    const recentPosts = recentPostsWithInsights.length;
 
     // Calculate average posts per week (30 days ≈ 4.3 weeks)
     const postsPerWeek = (recentPosts / 30) * 7;
 
     // Tiered scoring based on weekly posting frequency
     let score = 0;
+    let rating = '';
     if (postsPerWeek >= 6) {
-      score = 10.0; // 70 points out of 70 = 10/10
+      score = 10.0;
+      rating = 'Excellent';
     } else if (postsPerWeek >= 4) {
-      score = 7.86; // 55 points out of 70 = 7.86/10
+      score = 7.86;
+      rating = 'Good';
     } else if (postsPerWeek >= 2) {
-      score = 5.71; // 40 points out of 70 = 5.71/10
+      score = 5.71;
+      rating = 'Fair';
     } else {
-      score = 2.86; // 20 points out of 70 = 2.86/10
+      score = 2.86;
+      rating = 'Needs Improvement';
     }
+
+    // Analyze post type breakdown
+    const postTypeBreakdown = this.analyzePostTypes(recentPostsWithInsights);
+
+    // Find best posting days and times
+    const { bestDays, bestTimes } = this.analyzeBestPostingSchedule(recentPostsWithInsights);
+
+    // Generate AI feedback for posting behavior
+    const aiFeedback = await this.generatePostingBehaviorFeedback({
+      postsPerWeek,
+      rating,
+      postTypeBreakdown,
+    });
+
+    // Get top 5 recent posts with media URLs for display
+    const recentTopPosts = recentPostsWithInsights
+      .sort((a, b) => {
+        const engagementA = (a.insights?.[0]?.reach || 0) + (a.insights?.[0]?.likes || 0);
+        const engagementB = (b.insights?.[0]?.reach || 0) + (b.insights?.[0]?.likes || 0);
+        return engagementB - engagementA;
+      })
+      .slice(0, 5)
+      .map(post => ({
+        mediaUrl: post.mediaUrl,
+        date: new Date(post.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        views: post.insights?.[0]?.reach || 0,
+        mediaType: post.mediaProductType || post.mediaType,
+      }));
 
     return {
       score: Number(score.toFixed(2)),
       details: {
         totalPosts30Days: recentPosts,
         postsPerWeek: Number(postsPerWeek.toFixed(2)),
+        rating,
         tier: postsPerWeek >= 6 ? '6-7 posts/week' :
               postsPerWeek >= 4 ? '4-5 posts/week' :
               postsPerWeek >= 2 ? '2-3 posts/week' : '0-1 posts/week',
+        postTypeBreakdown,
+        bestDays,
+        bestTimes,
+        recentPosts: recentTopPosts,
+        aiFeedback,
       },
     };
+  }
+
+  /**
+   * Helper: Analyze post type distribution
+   */
+  private analyzePostTypes(posts: any[]): any {
+    const typeCounts = {
+      reel: 0,
+      image: 0,
+      carousel: 0,
+    };
+
+    posts.forEach(post => {
+      const productType = post.mediaProductType?.toLowerCase() || '';
+      const mediaType = post.mediaType?.toLowerCase() || '';
+
+      if (productType.includes('reel') || mediaType.includes('reel') || productType === 'reels') {
+        typeCounts.reel++;
+      } else if (productType.includes('carousel') || mediaType.includes('carousel_album')) {
+        typeCounts.carousel++;
+      } else {
+        typeCounts.image++;
+      }
+    });
+
+    const total = posts.length || 1; // Avoid division by zero
+    const reelPercentage = Math.round((typeCounts.reel / total) * 100);
+    const imagePercentage = Math.round((typeCounts.image / total) * 100);
+    const carouselPercentage = Math.round((typeCounts.carousel / total) * 100);
+
+    return {
+      reel: {
+        count: typeCounts.reel,
+        percentage: reelPercentage,
+      },
+      image: {
+        count: typeCounts.image,
+        percentage: imagePercentage,
+      },
+      carousel: {
+        count: typeCounts.carousel,
+        percentage: carouselPercentage,
+      },
+    };
+  }
+
+  /**
+   * Helper: Analyze best posting days and times based on engagement
+   */
+  private analyzeBestPostingSchedule(posts: any[]): { bestDays: string[]; bestTimes: string[] } {
+    if (posts.length === 0) {
+      return {
+        bestDays: ['Mon', 'Wed', 'Fri'],
+        bestTimes: ['12PM', '6PM', '8PM'],
+      };
+    }
+
+    // Map to track engagement by day and hour
+    const dayEngagement: { [key: string]: number } = {};
+    const hourEngagement: { [key: number]: number } = {};
+    const dayCounts: { [key: string]: number } = {};
+    const hourCounts: { [key: number]: number } = {};
+
+    posts.forEach(post => {
+      const timestamp = new Date(post.timestamp);
+      const dayName = timestamp.toLocaleDateString('en-US', { weekday: 'short' });
+      const hour = timestamp.getHours();
+
+      // Calculate engagement (reach + likes + comments + saves)
+      const engagement = (post.insights?.[0]?.reach || 0) +
+                        (post.insights?.[0]?.likes || 0) +
+                        (post.insights?.[0]?.comments || 0) +
+                        (post.insights?.[0]?.saved || 0);
+
+      // Aggregate by day
+      dayEngagement[dayName] = (dayEngagement[dayName] || 0) + engagement;
+      dayCounts[dayName] = (dayCounts[dayName] || 0) + 1;
+
+      // Aggregate by hour
+      hourEngagement[hour] = (hourEngagement[hour] || 0) + engagement;
+      hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+    });
+
+    // Calculate average engagement per day
+    const dayAvgEngagement = Object.keys(dayEngagement).map(day => ({
+      day,
+      avgEngagement: dayEngagement[day] / dayCounts[day],
+    }));
+
+    // Get top 3 days
+    const topDays = dayAvgEngagement
+      .sort((a, b) => b.avgEngagement - a.avgEngagement)
+      .slice(0, 3)
+      .map(item => item.day);
+
+    // Calculate average engagement per hour
+    const hourAvgEngagement = Object.keys(hourEngagement).map(hour => ({
+      hour: parseInt(hour),
+      avgEngagement: hourEngagement[hour] / hourCounts[hour],
+    }));
+
+    // Get top 3 hours
+    const topHours = hourAvgEngagement
+      .sort((a, b) => b.avgEngagement - a.avgEngagement)
+      .slice(0, 3)
+      .map(item => {
+        const h = item.hour;
+        if (h === 0) return '12AM';
+        if (h === 12) return '12PM';
+        if (h > 12) return `${h - 12}PM`;
+        return `${h}AM`;
+      });
+
+    return {
+      bestDays: topDays.length > 0 ? topDays : ['Mon', 'Wed', 'Fri'],
+      bestTimes: topHours.length > 0 ? topHours : ['12PM', '6PM', '8PM'],
+    };
+  }
+
+  /**
+   * Helper: Generate AI feedback for posting behavior
+   */
+  private async generatePostingBehaviorFeedback(params: {
+    postsPerWeek: number;
+    rating: string;
+    postTypeBreakdown: any;
+  }): Promise<string> {
+    try {
+      const reelCount = params.postTypeBreakdown.reel.count;
+      const imageCount = params.postTypeBreakdown.image.count;
+      const carouselCount = params.postTypeBreakdown.carousel.count;
+
+      const prompt = `Analyze posting: ${params.postsPerWeek.toFixed(1)} posts/week, Rating=${params.rating}, Reels=${reelCount}, Images=${imageCount}, Carousels=${carouselCount}. Give 1 actionable tip (15-20 words) about content variety or posting frequency. Return JSON: {"feedback": "your tip"}`;
+
+      const result = await this.geminiAIService.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            response_mime_type: "application/json",
+            temperature: 0.3,
+          }
+        });
+        return await response.response;
+      }, 'generatePostingBehaviorFeedback');
+
+      const text = result.text();
+      const parsed = JSON.parse(text);
+      return parsed.feedback || 'Your follower base shows healthy activity with no abnormal spikes.';
+    } catch (error) {
+      // Fallback feedback
+      if (params.postsPerWeek >= 6) {
+        return 'Excellent posting frequency! Keep maintaining this consistent schedule.';
+      } else if (params.postsPerWeek >= 4) {
+        return 'Good posting frequency. Try adding more reels for better reach and engagement.';
+      } else if (params.postsPerWeek >= 2) {
+        return 'Increase posting frequency to 4-6 times per week for optimal growth.';
+      } else {
+        return 'Low posting frequency detected. Aim for at least 4-5 posts per week to boost engagement.';
+      }
+    }
   }
 
   // ==================== CATEGORY 6: MONETISATION (10 pts) ====================

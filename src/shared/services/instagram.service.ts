@@ -1362,7 +1362,7 @@ export class InstagramService {
       );
 
       const accountType = profileResponse.data.account_type;
-      const isBusinessOrCreator = accountType === 'BUSINESS' || accountType === 'CREATOR';
+      const isBusinessOrCreator = accountType === 'BUSINESS' || accountType === 'CREATOR' || accountType === 'MEDIA_CREATOR';
 
       return {
         hasInsightsAccess: isBusinessOrCreator,

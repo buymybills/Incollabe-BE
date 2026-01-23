@@ -103,7 +103,7 @@ export class GeminiAIService {
   /**
    * Execute AI request with automatic fallback to next available model
    */
-  private async executeWithFallback<T>(
+  async executeWithFallback<T>(
     operation: (model: any) => Promise<T>,
     operationName: string,
   ): Promise<T> {
