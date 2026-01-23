@@ -577,8 +577,16 @@ export class InstagramService {
       // Use media_url if available, otherwise fallback to thumbnail_url for Reels/Videos
       const resolvedMediaUrl = mediaData?.media_url || mediaData?.thumbnail_url || undefined;
 
+      // Build where clause to find media for specific user (not just by mediaId)
+      const whereClause: any = { mediaId };
+      if (userType === 'influencer') {
+        whereClause.influencerId = userId;
+      } else {
+        whereClause.brandId = userId;
+      }
+
       const [instagramMediaRecord, created] = await this.instagramMediaModel.findOrCreate({
-        where: { mediaId },
+        where: whereClause,
         defaults: {
           influencerId: userType === 'influencer' ? userId : undefined,
           brandId: userType === 'brand' ? userId : undefined,
@@ -634,8 +642,8 @@ export class InstagramService {
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
-      // Build where clause conditionally
-      const whereClause: any = {
+      // Build where clause conditionally for insights
+      const insightWhereClause: any = {
         mediaId,
         fetchedAt: {
           [Op.gte]: today,
@@ -643,15 +651,15 @@ export class InstagramService {
         },
       };
 
-      if (userType === 'influencer') { 
-        whereClause.influencerId = userId;
+      if (userType === 'influencer') {
+        insightWhereClause.influencerId = userId;
       } else {
-        whereClause.brandId = userId;
+        insightWhereClause.brandId = userId;
       }
 
       // Try to find today's insight record
       const existingInsight = await this.instagramMediaInsightModel.findOne({
-        where: whereClause,
+        where: insightWhereClause,
       });
 
       if (existingInsight) {
