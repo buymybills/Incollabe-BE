@@ -982,6 +982,19 @@ export class InfluencerService {
   }
 
   private async getVerificationStatus(influencerId: number) {
+    // Check if Instagram is connected - if yes, auto-verify
+    const influencer = await this.influencerRepository.findById(influencerId);
+    const isInstagramConnected = !!(influencer?.instagramUserId && influencer?.instagramAccessToken);
+
+    if (isInstagramConnected) {
+      return {
+        status: 'approved',
+        message: 'Profile Verified via Instagram',
+        description: 'Your profile has been verified through Instagram connection',
+        isNew: false,
+      };
+    }
+
     // Check if profile has been submitted for review
     const profileReview = await this.profileReviewModel.findOne({
       where: {
