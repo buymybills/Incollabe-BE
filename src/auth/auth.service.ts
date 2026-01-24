@@ -2444,7 +2444,7 @@ export class AuthService {
 
   /**
    * Validate referral code
-   * Checks if referral code exists and is within monthly usage limit
+   * Checks if referral code exists and is within monthly usage limit (max 20 per month)
    */
   async validateReferralCode(referralCode: string) {
     console.log(`🔍 Validating referral code: ${referralCode}`);
@@ -2486,9 +2486,13 @@ export class AuthService {
       },
     });
 
-    console.log(`📊 Referral code monthly usage: ${usageCount}/5 for ${referralCode}`);
+    console.log(`📊 Referral code monthly usage: ${usageCount}/20 for ${referralCode}`);
 
-    if (usageCount >= 5) {
+    // Calculate next reset date (1st of next month at 00:00:00)
+    const nextResetDate = new Date(startOfMonth);
+    nextResetDate.setMonth(nextResetDate.getMonth() + 1);
+
+    if (usageCount >= 20) {
       console.log(`⚠️ Referral code usage limit reached for ${referralCode}`);
       return {
         valid: false,
@@ -2503,7 +2507,9 @@ export class AuthService {
         referrerName: referrer.name,
         referrerUsername: referrer.username,
         usageCount,
-        monthlyLimit: 5,
+        monthlyLimit: 20,
+        remainingSlots: 20 - usageCount,
+        nextResetDate: nextResetDate.toISOString(),
       },
     };
   }
