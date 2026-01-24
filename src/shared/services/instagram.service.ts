@@ -172,12 +172,45 @@ export class InstagramService {
     // Step 1: Fetch user profile from Instagram
     const profile = await this.getUserProfile(accessToken);
 
-    // Step 2: Long-lived tokens typically expire in 60 days
+    // Step 2: Check if this Instagram account is already connected to another user
+    const existingInfluencer = await this.influencerModel.findOne({
+      where: {
+        instagramUserId: profile.id,
+        id: { [Op.ne]: userType === 'influencer' ? userId : -1 }, // Exclude current user
+      },
+    });
+
+    const existingBrand = await this.brandModel.findOne({
+      where: {
+        instagramUserId: profile.id,
+        id: { [Op.ne]: userType === 'brand' ? userId : -1 }, // Exclude current user
+      },
+    });
+
+    if (existingInfluencer) {
+      throw new BadRequestException({
+        error: 'instagram_account_already_connected',
+        message: `This Instagram account (@${profile.username}) is already connected to another influencer account.`,
+        instagramUsername: profile.username,
+        connectedTo: 'influencer',
+      });
+    }
+
+    if (existingBrand) {
+      throw new BadRequestException({
+        error: 'instagram_account_already_connected',
+        message: `This Instagram account (@${profile.username}) is already connected to another brand account.`,
+        instagramUsername: profile.username,
+        connectedTo: 'brand',
+      });
+    }
+
+    // Step 3: Long-lived tokens typically expire in 60 days
     // We'll set a conservative expiry of 59 days from now
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 59);
 
-    // Step 3: Save to database
+    // Step 4: Save to database
     const updateData = {
       instagramAccessToken: accessToken,
       instagramUserId: profile.id,
@@ -551,8 +584,8 @@ export class InstagramService {
       // Even for Reels with product_type="REELS", plays often fails with permission errors
       // So we exclude it entirely and use only reliably supported metrics
       if (mediaProductType === 'REELS' || mediaProductType === 'CLIPS' || mediaType === 'REELS' || mediaType === 'VIDEO') {
-        // Metrics for videos and Reels (excluding plays due to inconsistent support)
-        metrics = 'reach,total_interactions,saved,shares,comments,likes';
+        // Metrics for videos and Reels (including video retention metrics)
+        metrics = 'reach,total_interactions,saved,shares,comments,likes,total_video_views,total_video_complete_views,avg_time_watched,total_video_view_total_time,clips_replays_count';
       } else if (mediaType === 'IMAGE' || mediaType === 'CAROUSEL_ALBUM') {
         // Metrics for images and carousels
         metrics = 'reach,saved,likes,comments,shares';
@@ -633,6 +666,11 @@ export class InstagramService {
           if (metric.name === 'plays') insightsData.plays = value;
           if (metric.name === 'shares') insightsData.shares = value;
           if (metric.name === 'total_interactions') insightsData.totalInteractions = value;
+          if (metric.name === 'total_video_views') insightsData.totalVideoViews = value;
+          if (metric.name === 'total_video_complete_views') insightsData.totalVideoCompleteViews = value;
+          if (metric.name === 'avg_time_watched') insightsData.avgTimeWatched = value;
+          if (metric.name === 'total_video_view_total_time') insightsData.totalVideoViewTotalTime = value;
+          if (metric.name === 'clips_replays_count') insightsData.clipsReplaysCount = value;
         }
       });
 
