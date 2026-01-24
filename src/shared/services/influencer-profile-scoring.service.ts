@@ -8,6 +8,7 @@ import { InstagramMedia } from '../models/instagram-media.model';
 import { InstagramProfileGrowth } from '../models/instagram-profile-growth.model';
 import { CampaignApplication } from '../../campaign/models/campaign-application.model';
 import { GeminiAIService } from './gemini-ai.service';
+import { InstagramService } from './instagram.service';
 
 // ==================== INTERFACES ====================
 
@@ -40,6 +41,10 @@ export interface AudienceQualityScore {
     followerAuthenticity: { score: number; weight: 65; details: any };
     demographicsSnapshot: { score: number; weight: 20; details: any };
     geoRelevance: { score: number; weight: 15; details: any };
+  };
+  onlinePresence?: {
+    hourlyActivity: any[];
+    aiInsights: string;
   };
 }
 
@@ -129,6 +134,7 @@ export class InfluencerProfileScoringService {
     @InjectModel(CampaignApplication)
     private campaignApplicationModel: typeof CampaignApplication,
     private geminiAIService: GeminiAIService,
+    private instagramService: InstagramService,
   ) {}
 
   /**
@@ -209,6 +215,7 @@ export class InfluencerProfileScoringService {
     const followerAuthenticity = await this.calculateFollowerAuthenticity(influencer);
     const demographicsSnapshot = await this.calculateDemographicsSnapshot(influencer);
     const geoRelevance = await this.calculateGeoRelevance(influencer);
+    const onlinePresence = await this.calculateOnlinePresence(influencer);
 
     // Check if Facebook page is connected based on demographic data availability
     const facebookPageConnected = !!(demographicsSnapshot.details?.ageBreakdown?.length > 0);
@@ -229,6 +236,7 @@ export class InfluencerProfileScoringService {
         maxScore: 100,
         facebookPageConnected: false,
         message: 'No audience data available. Please sync your Instagram account to get audience quality metrics.',
+        onlinePresence,
       } as any;
     }
 
@@ -241,6 +249,7 @@ export class InfluencerProfileScoringService {
         demographicsSnapshot: { score: demographicsSnapshot.score * 10, weight: 20, details: demographicsSnapshot.details },
         geoRelevance: { score: geoRelevance.score * 10, weight: 15, details: geoRelevance.details },
       },
+      onlinePresence,
     };
   }
 
@@ -588,6 +597,102 @@ export class InfluencerProfileScoringService {
         feedback,
       },
     };
+  }
+
+  /**
+   * 1.4 Online Presence
+   * Fetches when followers are online and provides posting time insights
+   */
+  private async calculateOnlinePresence(influencer: Influencer): Promise<{ hourlyActivity: any[]; aiInsights: string }> {
+    try {
+      const onlineFollowers = await this.instagramService.getOnlineFollowers(influencer.id, 'influencer');
+
+      if (!onlineFollowers || Object.keys(onlineFollowers).length === 0) {
+        return {
+          hourlyActivity: [],
+          aiInsights: 'Online follower activity data not available. This metric requires Instagram Business account with sufficient follower count.',
+        };
+      }
+
+      // Format data for chart
+      const hourlyActivity: any[] = [];
+      const hasGenderBreakdown = Object.keys(onlineFollowers).some(key => key.includes('.'));
+
+      if (hasGenderBreakdown) {
+        // Gender-based breakdown
+        for (let hour = 0; hour < 24; hour++) {
+          const male = onlineFollowers[`M.${hour}`] || 0;
+          const female = onlineFollowers[`F.${hour}`] || 0;
+          const unknown = onlineFollowers[`U.${hour}`] || 0;
+
+          hourlyActivity.push({
+            hour,
+            male,
+            female,
+            others: unknown,
+            total: male + female + unknown,
+          });
+        }
+      } else {
+        // Simple hour-based breakdown
+        for (let hour = 0; hour < 24; hour++) {
+          const count = onlineFollowers[hour.toString()] || 0;
+          hourlyActivity.push({
+            hour,
+            total: count,
+          });
+        }
+      }
+
+      // Find peak activity hours
+      const sortedByActivity = [...hourlyActivity].sort((a, b) => b.total - a.total);
+      const peakHours = sortedByActivity.slice(0, 3);
+
+      let aiInsights = 'Insufficient online follower activity data.';
+
+      if (peakHours[0] && peakHours[0].total > 0) {
+        const peakHour = peakHours[0].hour;
+        const timeRange = this.getTimeRangeDescription(peakHour);
+        const formattedHour = this.formatHour(peakHour);
+
+        aiInsights = `Posting during ${timeRange} aligns best with follower activity. Peak engagement occurs around ${formattedHour}.`;
+      }
+
+      return {
+        hourlyActivity,
+        aiInsights,
+      };
+    } catch (error) {
+      console.log('Online followers data not available:', error.message);
+      return {
+        hourlyActivity: [],
+        aiInsights: 'Online follower activity data not available.',
+      };
+    }
+  }
+
+  /**
+   * Get time range description for peak hours
+   */
+  private getTimeRangeDescription(hour: number): string {
+    if (hour >= 7 && hour <= 9) return '7-9 AM';
+    if (hour >= 10 && hour <= 12) return '10 AM-12 PM';
+    if (hour >= 13 && hour <= 15) return '1-3 PM';
+    if (hour >= 16 && hour <= 18) return '4-6 PM';
+    if (hour >= 19 && hour <= 21) return '7-9 PM';
+    if (hour >= 22 || hour <= 2) return '10 PM-2 AM';
+    if (hour >= 3 && hour <= 6) return '3-6 AM';
+    return `${hour}:00`;
+  }
+
+  /**
+   * Format hour to 12-hour format
+   */
+  private formatHour(hour: number): string {
+    if (hour === 0) return '12 AM';
+    if (hour === 12) return '12 PM';
+    if (hour < 12) return `${hour} AM`;
+    return `${hour - 12} PM`;
   }
 
   // ==================== CATEGORY 2: CONTENT RELEVANCE (10 pts) ====================
