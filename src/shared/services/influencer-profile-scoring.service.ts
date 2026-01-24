@@ -2313,9 +2313,11 @@ export class InfluencerProfileScoringService {
    * Enhanced with detailed metrics for UI display
    */
   private async calculateEngagementOverview(influencer: Influencer): Promise<{ score: number; details: any }> {
+    // Query for latest snapshot, ordered by ID DESC instead of syncDate DESC
+    // (since sync-all-insights creates multiple snapshots with same syncDate)
     const latestSync = await this.instagramProfileAnalysisModel.findOne({
       where: { influencerId: influencer.id },
-      order: [['syncDate', 'DESC']],
+      order: [['id', 'DESC']],
     });
 
     if (!latestSync || !latestSync.avgEngagementRate) {
