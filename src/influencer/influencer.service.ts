@@ -534,7 +534,7 @@ export class InfluencerService {
         verification: {
           isPhoneVerified: influencer.isPhoneVerified,
           isWhatsappVerified: influencer.isWhatsappVerified,
-          isProfileCompleted: influencer.isProfileCompleted,
+          isProfileCompleted: !!influencer.instagramUserId || !!influencer.instagramAccessToken, // True if Instagram is connected
         },
         instagram: {
           ...baseProfile.instagram,
