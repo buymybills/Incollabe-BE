@@ -2506,6 +2506,77 @@ export class InstagramService {
       };
     }
 
+    // STEP 5: Update snapshots with demographics and geographic data
+    if (demographicsData?.status === 'success' && demographicsData.data) {
+      console.log(`📊 Saving demographics to snapshots...`);
+
+      // Parse demographics into the format expected by the database
+      const ageGenderData = demographicsData.data.map((item: any) => ({
+        ageRange: item.dimension_values[0],
+        gender: item.dimension_values[1],
+        percentage: (item.value / profileData.data.followersCount * 100).toFixed(2),
+      }));
+
+      // Parse geographic data
+      let countriesData = [];
+      let citiesData = [];
+
+      if (geographicData?.status === 'success' && geographicData.data) {
+        countriesData = geographicData.data.map((item: any) => ({
+          countryCode: item.dimension_values[0],
+          percentage: (item.value / profileData.data.followersCount * 100).toFixed(2),
+        }));
+      }
+
+      // Update snapshot 2 (current snapshot) with demographics
+      if (snapshot2Data?.snapshotId) {
+        try {
+          const updateData: any = {
+            audienceAgeGender: ageGenderData,
+            audienceCountries: countriesData,
+          };
+          if (citiesData.length > 0) {
+            updateData.audienceCities = citiesData;
+          }
+
+          await this.instagramProfileAnalysisModel.update(
+            updateData,
+            {
+              where: { id: snapshot2Data.snapshotId },
+            }
+          );
+          console.log(`✅ Updated snapshot #${snapshot2Data.syncNumber} with demographics`);
+        } catch (error) {
+          console.error(`❌ Failed to update snapshot #${snapshot2Data.syncNumber} with demographics:`, error.message);
+        }
+      }
+
+      // Update snapshot 1 (baseline) with same demographics if it exists
+      if (isInitialSnapshot && snapshot1Data?.snapshotId) {
+        try {
+          const updateData: any = {
+            audienceAgeGender: ageGenderData,
+            audienceCountries: countriesData,
+          };
+          if (citiesData.length > 0) {
+            updateData.audienceCities = citiesData;
+          }
+
+          await this.instagramProfileAnalysisModel.update(
+            updateData,
+            {
+              where: { id: snapshot1Data.snapshotId },
+            }
+          );
+          console.log(`✅ Updated snapshot #${snapshot1Data.syncNumber} with demographics`);
+        } catch (error) {
+          console.error(`❌ Failed to update snapshot #${snapshot1Data.syncNumber} with demographics:`, error.message);
+        }
+      }
+    } else {
+      console.log(`⚠️  Skipping demographics save - data not available`);
+    }
+
     console.log(`✅ Comprehensive sync completed for ${userType} ${userId}`);
 
     const response: any = {
