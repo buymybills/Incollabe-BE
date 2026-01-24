@@ -2268,15 +2268,13 @@ export class InstagramService {
 
       console.log(`📊 Creating snapshot #${syncNumber} from ${newSnapshotStart.toISOString().split('T')[0]} to ${newSnapshotEnd.toISOString().split('T')[0]} (${daysSinceLastSnapshot} days since last snapshot)`);
     } else {
-      // No previous snapshot - create initial snapshot for last 30 days
+      // No previous snapshot - create TWO initial snapshots for growth comparison
       isInitialSnapshot = true;
-      newSnapshotEnd = new Date(today);
-      newSnapshotStart = new Date(today);
-      newSnapshotStart.setDate(newSnapshotStart.getDate() - 30);
-      newSnapshotStart.setHours(0, 0, 0, 0);
-      syncNumber = 1;
+      syncNumber = 2; // We'll create snapshots 1 and 2
 
-      console.log(`📊 Creating initial snapshot #${syncNumber} for last 30 days`);
+      console.log(`🆕 INITIAL CONNECT: Creating 2 snapshots for immediate growth comparison`);
+      console.log(`📅 Snapshot 1: 60-30 days ago (for baseline)`);
+      console.log(`📅 Snapshot 2: Last 30 days (current performance)`);
     }
 
     // STEP 2: Fetch basic profile first
@@ -2311,30 +2309,96 @@ export class InstagramService {
       };
     }
 
-    // STEP 3: Create new snapshot
-    let newSnapshot: any = null;
-    try {
-      newSnapshot = await this.fetchSnapshotForPeriod(userId, userType, newSnapshotStart, newSnapshotEnd, syncNumber);
-    } catch (error) {
-      console.error('❌ Failed to create new snapshot:', error.message);
-      throw new InternalServerErrorException({
-        error: 'snapshot_creation_failed',
-        message: 'Failed to create snapshot',
-        details: error.message,
-      });
+    // STEP 3: Create snapshot(s)
+    let snapshot1Data: any = null;
+    let snapshot2Data: any = null;
+
+    if (isInitialSnapshot) {
+      // Initial connect: Create TWO snapshots
+      console.log(`🔄 Creating 2 initial snapshots...`);
+
+      // Snapshot 1: 60-30 days ago (baseline)
+      const snapshot1End = new Date(today);
+      snapshot1End.setDate(snapshot1End.getDate() - 30);
+      snapshot1End.setHours(23, 59, 59, 999);
+      const snapshot1Start = new Date(snapshot1End);
+      snapshot1Start.setDate(snapshot1Start.getDate() - 29);
+      snapshot1Start.setHours(0, 0, 0, 0);
+
+      // Snapshot 2: Last 30 days (current)
+      const snapshot2End = new Date(today);
+      const snapshot2Start = new Date(today);
+      snapshot2Start.setDate(snapshot2Start.getDate() - 30);
+      snapshot2Start.setHours(0, 0, 0, 0);
+
+      try {
+        snapshot1Data = await this.fetchSnapshotForPeriod(userId, userType, snapshot1Start, snapshot1End, 1);
+      } catch (error) {
+        console.error('❌ Failed to create snapshot 1:', error.message);
+        snapshot1Data = {
+          error: 'Failed to create first snapshot',
+          message: error.message,
+        };
+      }
+
+      try {
+        snapshot2Data = await this.fetchSnapshotForPeriod(userId, userType, snapshot2Start, snapshot2End, 2);
+      } catch (error) {
+        console.error('❌ Failed to create snapshot 2:', error.message);
+        snapshot2Data = {
+          error: 'Failed to create second snapshot',
+          message: error.message,
+        };
+      }
+    } else {
+      // Progressive sync: Create ONE new snapshot
+      // newSnapshotStart and newSnapshotEnd are guaranteed to be set because
+      // isInitialSnapshot is false, meaning we went through the lastSnapshot branch above
+      try {
+        snapshot2Data = await this.fetchSnapshotForPeriod(userId, userType, newSnapshotStart!, newSnapshotEnd!, syncNumber);
+      } catch (error) {
+        console.error('❌ Failed to create new snapshot:', error.message);
+        throw new InternalServerErrorException({
+          error: 'snapshot_creation_failed',
+          message: 'Failed to create snapshot',
+          details: error.message,
+        });
+      }
     }
 
-    // STEP 4: Calculate growth metrics (compare with last snapshot if exists)
+    // STEP 4: Calculate growth metrics
     let growthComparison: any = null;
-    if (!isInitialSnapshot && lastSnapshot && newSnapshot?.metrics) {
-      const previous = {
-        totalFollowers: lastSnapshot.totalFollowers || 0,
-        avgEngagementRate: Number(lastSnapshot.avgEngagementRate) || 0,
-        avgReach: lastSnapshot.avgReach || 0,
-        postsAnalyzed: lastSnapshot.postsAnalyzed || 0,
-        activeFollowersPercentage: Number(lastSnapshot.activeFollowersPercentage) || 0,
-      };
-      const current = newSnapshot.metrics;
+    let previousSnapshot: any = null;
+    let currentSnapshot: any = null;
+
+    if (isInitialSnapshot) {
+      // Initial: Compare snapshot1 vs snapshot2
+      if (snapshot1Data?.metrics && snapshot2Data?.metrics) {
+        previousSnapshot = snapshot1Data;
+        currentSnapshot = snapshot2Data;
+        console.log(`📊 Comparing INITIAL snapshots: #1 vs #2...`);
+      }
+    } else {
+      // Progressive: Compare last snapshot vs new snapshot
+      if (lastSnapshot && snapshot2Data?.metrics) {
+        previousSnapshot = {
+          syncNumber: lastSnapshot.syncNumber,
+          metrics: {
+            totalFollowers: lastSnapshot.totalFollowers || 0,
+            avgEngagementRate: Number(lastSnapshot.avgEngagementRate) || 0,
+            avgReach: lastSnapshot.avgReach || 0,
+            postsAnalyzed: lastSnapshot.postsAnalyzed || 0,
+            activeFollowersPercentage: Number(lastSnapshot.activeFollowersPercentage) || 0,
+          },
+        };
+        currentSnapshot = snapshot2Data;
+        console.log(`📊 Comparing snapshot #${lastSnapshot.syncNumber} vs snapshot #${syncNumber}...`);
+      }
+    }
+
+    if (previousSnapshot && currentSnapshot) {
+      const previous = previousSnapshot.metrics;
+      const current = currentSnapshot.metrics;
 
       const calculateGrowth = (oldVal: number, newVal: number) => {
         if (oldVal === 0) return newVal > 0 ? 100 : 0;
@@ -2446,16 +2510,22 @@ export class InstagramService {
 
     const response: any = {
       message: isInitialSnapshot
-        ? 'Initial Instagram insights snapshot created'
+        ? `Initial Instagram insights snapshots created (#1 and #2)`
         : `Instagram insights snapshot #${syncNumber} created with growth analysis`,
       syncedAt: syncedAt.toISOString(),
       basicProfile: profileData,
-      currentSnapshot: newSnapshot,
+      currentSnapshot: snapshot2Data,
       audienceDemographics: demographicsData,
       geographicData: geographicData,
     };
 
-    if (!isInitialSnapshot && lastSnapshot) {
+    if (isInitialSnapshot && snapshot1Data) {
+      // For initial sync, return both snapshots
+      response.snapshots = {
+        baseline: snapshot1Data,
+        current: snapshot2Data,
+      };
+    } else if (!isInitialSnapshot && lastSnapshot) {
       response.previousSnapshot = {
         snapshotId: lastSnapshot.id,
         syncNumber: lastSnapshot.syncNumber,
