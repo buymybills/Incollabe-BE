@@ -187,7 +187,7 @@ export class InstagramService {
     if (existingInfluencer) {
       throw new BadRequestException({
         error: 'instagram_account_already_connected',
-        message: `This Instagram account (@${profile.username}) is already connected to another influencer account.`,
+        message: `@${profile.username} is already connected to another account`,
         instagramUsername: profile.username,
         connectedTo: 'influencer',
       });
@@ -196,7 +196,7 @@ export class InstagramService {
     if (existingBrand) {
       throw new BadRequestException({
         error: 'instagram_account_already_connected',
-        message: `This Instagram account (@${profile.username}) is already connected to another brand account.`,
+        message: `@${profile.username} is already connected to another account`,
         instagramUsername: profile.username,
         connectedTo: 'brand',
       });
