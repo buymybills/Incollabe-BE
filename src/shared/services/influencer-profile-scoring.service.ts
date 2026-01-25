@@ -405,13 +405,16 @@ export class InfluencerProfileScoringService {
       }
 
       // Calculate gender breakdown with counts
-      genderBreakdown.male.percentage = Number((genderTotals.male || 0).toFixed(2));
+      const malePercentage = Number(genderTotals.male || 0);
+      genderBreakdown.male.percentage = Number(malePercentage.toFixed(2));
       genderBreakdown.male.count = Math.round((totalFollowers * genderBreakdown.male.percentage) / 100);
 
-      genderBreakdown.female.percentage = Number((genderTotals.female || 0).toFixed(2));
+      const femalePercentage = Number(genderTotals.female || 0);
+      genderBreakdown.female.percentage = Number(femalePercentage.toFixed(2));
       genderBreakdown.female.count = Math.round((totalFollowers * genderBreakdown.female.percentage) / 100);
 
-      genderBreakdown.others.percentage = Number((genderTotals.others || 0).toFixed(2));
+      const othersPercentage = Number(genderTotals.others || 0);
+      genderBreakdown.others.percentage = Number(othersPercentage.toFixed(2));
       genderBreakdown.others.count = Math.round((totalFollowers * genderBreakdown.others.percentage) / 100);
 
       // Build age breakdown
@@ -420,10 +423,10 @@ export class InfluencerProfileScoringService {
         const data = ageRangeTotals[ageRange];
         ageBreakdown.push({
           ageRange,
-          percentage: Number(data.total.toFixed(2)),
-          malePercentage: Number(data.male.toFixed(2)),
-          femalePercentage: Number(data.female.toFixed(2)),
-          othersPercentage: Number(data.others.toFixed(2)),
+          percentage: Number(Number(data.total || 0).toFixed(2)),
+          malePercentage: Number(Number(data.male || 0).toFixed(2)),
+          femalePercentage: Number(Number(data.female || 0).toFixed(2)),
+          othersPercentage: Number(Number(data.others || 0).toFixed(2)),
         });
       }
 
@@ -566,7 +569,7 @@ export class InfluencerProfileScoringService {
       .map((country: any) => ({
         code: country.location,
         name: countryNames[country.location] || country.location,
-        percentage: Number(country.percentage.toFixed(2)),
+        percentage: Number(Number(country.percentage || 0).toFixed(2)),
       }));
 
     // Get top cities from snapshot
@@ -575,7 +578,7 @@ export class InfluencerProfileScoringService {
           .slice(0, 4)
           .map((city: any) => ({
             name: city.location,
-            percentage: Number(city.percentage.toFixed(2)),
+            percentage: Number(Number(city.percentage || 0).toFixed(2)),
           }))
       : [];
 
@@ -2349,7 +2352,7 @@ export class InfluencerProfileScoringService {
             retentionRating: 'Unknown',
             avgReelDuration: 'N/A',
             retentionCurve: defaultRetentionCurve,
-            note: 'Retention metrics are AI-estimated based on engagement patterns. Instagram API does not provide actual retention/skip rate data.',
+            note: 'No engagement data available. Retention metrics require Instagram Business/Creator account with Facebook Page connection for accurate data.',
           },
         },
       };
@@ -2380,10 +2383,72 @@ export class InfluencerProfileScoringService {
     const totalFollowers = latestSync.totalFollowers || 1;
     const reachToFollowerRatio = avgReach > 0 ? Number((avgReach / totalFollowers).toFixed(2)) : 0;
 
-    // Calculate approximate retention metrics (Instagram doesn't provide actual retention data)
-    const totalInteractions = avgLike + avgComments + avgShare + avgSaves;
-    const retentionRate = avgReach > 0 ? Number(((totalInteractions / avgReach) * 100).toFixed(2)) : 0;
-    const skipRate = Math.max(0, Number((100 - retentionRate).toFixed(2))); // Skip rate = inverse of retention
+    // Calculate retention metrics from actual Instagram video data
+    // Query recent video insights to get average retention rate
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const videoInsights = await this.instagramMediaInsightModel.findAll({
+      where: { influencerId: influencer.id },
+      include: [{
+        model: this.instagramMediaModel,
+        required: true,
+        where: {
+          timestamp: { [Op.gte]: thirtyDaysAgo },
+          mediaProductType: ['REELS', 'CLIPS', 'VIDEO'],
+        },
+      }],
+    });
+
+    let retentionRate = 0;
+    let skipRate = 100;
+
+    // Calculate average retention from videos that have retention data
+    const videosWithRetention = videoInsights.filter(v => v.totalVideoViews && v.totalVideoViews > 0);
+    if (videosWithRetention.length > 0) {
+      const totalRetention = videosWithRetention.reduce((sum, v) => {
+        const videoRetention = (v.totalVideoCompleteViews || 0) / (v.totalVideoViews || 1) * 100;
+        return sum + videoRetention;
+      }, 0);
+      retentionRate = Number((totalRetention / videosWithRetention.length).toFixed(2));
+      skipRate = Math.max(0, Number((100 - retentionRate).toFixed(2)));
+    } else {
+      // Improved fallback: estimate retention using engagement quality indicators
+      // High-value engagements (saves, shares, comments) indicate higher retention
+
+      if (avgReach > 0) {
+        // Base engagement rate
+        const totalInteractions = avgLike + avgComments + avgShare + avgSaves;
+        const engagementRate = (totalInteractions / avgReach) * 100;
+
+        // Weight different engagement types (higher value = more retention)
+        const saveWeight = 3.0;  // Saves indicate high retention (watched to value it)
+        const shareWeight = 2.5;  // Shares indicate completion (watched to recommend)
+        const commentWeight = 2.0;  // Comments indicate engagement with content
+        const likeWeight = 1.0;  // Likes are passive, less indicative of retention
+
+        const weightedEngagement = (
+          (avgSaves * saveWeight) +
+          (avgShare * shareWeight) +
+          (avgComments * commentWeight) +
+          (avgLike * likeWeight)
+        );
+
+        const weightedEngagementRate = (weightedEngagement / avgReach) * 100;
+
+        // Estimate retention using weighted engagement + industry benchmarks
+        // Average Instagram reel retention: 40-60% (we'll use engagement as modifier)
+        const baseRetention = 45; // Industry average baseline
+        const engagementBonus = Math.min(weightedEngagementRate * 5, 35); // Max +35% bonus
+        const estimatedRetention = baseRetention + engagementBonus;
+
+        retentionRate = Math.min(Number(estimatedRetention.toFixed(2)), 90); // Cap at 90%
+        skipRate = Math.max(0, Number((100 - retentionRate).toFixed(2)));
+      } else {
+        retentionRate = 0;
+        skipRate = 100;
+      }
+    }
 
     // Estimate average reel duration based on content type distribution
     // Note: Instagram API doesn't provide video duration, this is an estimate
@@ -2446,14 +2511,16 @@ export class InfluencerProfileScoringService {
         reachToFollowerRatio,
         postsAnalyzed: latestSync.postsAnalyzed || 0,
         aiFeedback,
-        // Retention metrics (approximate)
+        // Retention metrics (from Instagram API or approximated)
         retentionOverview: {
           retentionRate,
           skipRate,
           retentionRating,
           avgReelDuration,
           retentionCurve, // AI-generated time-series data
-          note: 'Retention metrics are AI-estimated based on engagement patterns. Instagram API does not provide actual retention/skip rate data.',
+          note: videosWithRetention?.length > 0
+            ? `Retention rate calculated from ${videosWithRetention.length} video${videosWithRetention.length > 1 ? 's' : ''} with completion data from Instagram API. Retention curve is AI-estimated for visualization.`
+            : 'Retention metrics are AI-estimated using engagement quality (saves, shares, comments). For accurate data, convert Instagram to Business/Creator account and connect to Facebook Page.',
         },
       },
     };

@@ -28,6 +28,11 @@ export interface InstagramMediaInsightCreationAttributes {
   plays?: number;
   shares?: number;
   totalInteractions?: number;
+  totalVideoViews?: number;
+  totalVideoCompleteViews?: number;
+  avgTimeWatched?: number;
+  totalVideoViewTotalTime?: number;
+  clipsReplaysCount?: number;
   fetchedAt?: Date;
 }
 
@@ -118,6 +123,36 @@ export class InstagramMediaInsight extends Model<InstagramMediaInsight, Instagra
     allowNull: true,
   })
   declare totalInteractions: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  declare totalVideoViews: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  declare totalVideoCompleteViews: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  declare avgTimeWatched: number;
+
+  @Column({
+    type: DataType.BIGINT,
+    allowNull: true,
+  })
+  declare totalVideoViewTotalTime: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  declare clipsReplaysCount: number;
 
   @Column({
     type: DataType.DATE,
