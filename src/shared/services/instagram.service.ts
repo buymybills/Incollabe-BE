@@ -15,6 +15,7 @@ import { Brand } from '../../brand/model/brand.model';
 import { InstagramMedia } from '../models/instagram-media.model';
 import { InstagramMediaInsight } from '../models/instagram-media-insight.model';
 import { InstagramProfileAnalysis } from '../models/instagram-profile-analysis.model';
+import { InstagramProfileGrowth } from '../models/instagram-profile-growth.model';
 
 export type UserType = 'influencer' | 'brand';
 
@@ -35,6 +36,8 @@ export class InstagramService {
     private instagramMediaInsightModel: typeof InstagramMediaInsight,
     @InjectModel(InstagramProfileAnalysis)
     private instagramProfileAnalysisModel: typeof InstagramProfileAnalysis,
+    @InjectModel(InstagramProfileGrowth)
+    private instagramProfileGrowthModel: typeof InstagramProfileGrowth,
   ) {
     const clientId = this.configService.get<string>('INSTAGRAM_APP_ID');
     const clientSecret = this.configService.get<string>('INSTAGRAM_APP_SECRET');
@@ -1673,6 +1676,10 @@ export class InstagramService {
       throw new BadRequestException('No Instagram account connected');
     }
 
+    console.log(`\n📊 Fetching follower count history...`);
+    console.log(`   Account: ${user.instagramUsername} (${user.instagramAccountType})`);
+    console.log(`   Period: ${new Date(since * 1000).toISOString().split('T')[0]} to ${new Date(until * 1000).toISOString().split('T')[0]}`);
+
     try {
       const response = await axios.get(
         `https://graph.instagram.com/me/insights`,
@@ -1687,12 +1694,31 @@ export class InstagramService {
         }
       );
 
+      console.log(`   ✅ API Response Status: ${response.status}`);
+      console.log(`   Response data:`, JSON.stringify(response.data, null, 2));
+
       const data = response.data.data[0]?.values || [];
+      console.log(`   Data points received: ${data.length}`);
+
+      if (data.length > 0) {
+        console.log(`   First data point:`, data[0]);
+        console.log(`   Last data point:`, data[data.length - 1]);
+
+        // Note: follower_count metric returns DAILY NEW FOLLOWERS, not total count
+        const totalNewFollowers = data.reduce((sum, item) => sum + (item.value || 0), 0);
+        console.log(`   Total new followers in period: ${totalNewFollowers}`);
+      }
+
+      // Return daily new follower counts (these will be summed to calculate historical total)
       return data.map((item: any) => ({
         date: item.end_time,
-        count: item.value,
+        count: item.value, // This is NEW followers for that day
       }));
     } catch (error) {
+      console.log(`   ❌ API Error:`, error.response?.data || error.message);
+      if (error.response?.data) {
+        console.log(`   Error details:`, JSON.stringify(error.response.data, null, 2));
+      }
       this.handleInstagramError(error, 'Failed to fetch follower count history');
     }
   }
@@ -2133,7 +2159,98 @@ export class InstagramService {
       order: [['fetchedAt', 'DESC']],
     });
 
-    const totalFollowers = user.instagramFollowersCount || 0;
+    // Fetch historical follower count for this period from Instagram Insights API
+    // Note: This API is only available for BUSINESS/CREATOR accounts with Facebook Page
+    let totalFollowers = user.instagramFollowersCount || 0;
+    let usedHistoricalData = false;
+
+    try {
+      const since = Math.floor(periodStart.getTime() / 1000);
+      const until = Math.floor(periodEnd.getTime() / 1000);
+      const followerHistory = await this.getFollowerCountHistory(userId, userType, since, until);
+
+      if (followerHistory && followerHistory.length > 0) {
+        // follower_count metric returns DAILY NEW FOLLOWERS, not total count
+        // To get the total follower count at the end of this period:
+        // Total at period end = Current total - (new followers gained AFTER this period)
+
+        const newFollowersInPeriod = followerHistory.reduce((sum, item) => sum + (item.count || 0), 0);
+
+        // Calculate how many followers were gained AFTER this period ends (from periodEnd to now)
+        let newFollowersAfterPeriod = 0;
+        try {
+          const afterPeriodSince = Math.floor(periodEnd.getTime() / 1000);
+          const afterPeriodUntil = Math.floor(new Date().getTime() / 1000);
+
+          if (afterPeriodUntil > afterPeriodSince) {
+            const afterHistory = await this.getFollowerCountHistory(userId, userType, afterPeriodSince, afterPeriodUntil);
+            if (afterHistory && afterHistory.length > 0) {
+              newFollowersAfterPeriod = afterHistory.reduce((sum, item) => sum + (item.count || 0), 0);
+              console.log(`   New followers from ${periodEnd.toISOString().split('T')[0]} to now: ${newFollowersAfterPeriod}`);
+            }
+          }
+        } catch (error) {
+          console.warn(`   Could not fetch followers after period: ${error.message}`);
+        }
+
+        // Total at period end = Current total - new followers gained after period
+        const historicalCount = (user.instagramFollowersCount || 0) - newFollowersAfterPeriod;
+
+        if (historicalCount > 10) {
+          totalFollowers = historicalCount;
+          usedHistoricalData = true;
+          console.log(`📊 Calculated historical follower count from API data:`);
+          console.log(`   New followers in period (${periodStart.toISOString().split('T')[0]} to ${periodEnd.toISOString().split('T')[0]}): ${newFollowersInPeriod}`);
+          console.log(`   Current total: ${user.instagramFollowersCount}`);
+          console.log(`   Followers at end of period: ${totalFollowers}`);
+        } else {
+          console.log(`⚠️  Historical data calculation resulted in invalid count (${historicalCount})`);
+          console.log(`   Attempting to use daily growth snapshots as fallback...`);
+        }
+      } else {
+        console.log(`⚠️  No follower history data available`);
+        console.log(`   Attempting to use daily growth snapshots as fallback...`);
+      }
+    } catch (error) {
+      console.warn(`⚠️  Could not fetch follower history: ${error.message}`);
+      console.warn(`   Attempting to use daily growth snapshots as fallback...`);
+    }
+
+    // Fallback: Use instagram_profile_growth table for MEDIA_CREATOR accounts
+    if (!usedHistoricalData) {
+      try {
+        // Find the closest growth snapshot to the end of this period
+        const growthSnapshot = await this.instagramProfileGrowthModel.findOne({
+          where: {
+            influencerId: user.id,
+            snapshotDate: {
+              [Op.lte]: periodEnd,
+              [Op.gte]: periodStart,
+            },
+          },
+          order: [['snapshotDate', 'DESC']],
+        });
+
+        if (growthSnapshot && growthSnapshot.followersCount > 10) {
+          totalFollowers = growthSnapshot.followersCount;
+          usedHistoricalData = true;
+          console.log(`📊 Using growth snapshot from ${growthSnapshot.snapshotDate}: ${totalFollowers} followers`);
+        } else {
+          console.log(`⚠️  No growth snapshots found for this period`);
+          console.log(`   Using current follower count: ${totalFollowers}`);
+        }
+      } catch (error) {
+        console.warn(`⚠️  Could not fetch growth snapshot: ${error.message}`);
+        console.warn(`   Using current follower count: ${totalFollowers}`);
+      }
+    }
+
+    // Log account type limitation for awareness
+    if (!usedHistoricalData && user.instagramAccountType === 'MEDIA_CREATOR') {
+      console.log(`ℹ️  Account type: MEDIA_CREATOR - historical follower data not available from Instagram API`);
+      console.log(`   Growth tracking will use current follower count snapshots from different dates`);
+    }
+
     const postsAnalyzed = mediaInsights.length;
 
     console.log(`📝 Posts found in this period: ${postsAnalyzed}`);
