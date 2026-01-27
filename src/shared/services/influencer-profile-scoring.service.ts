@@ -1809,6 +1809,20 @@ export class InfluencerProfileScoringService {
 
       const languageResult = await this.geminiAIService.analyzeLanguage(captions);
 
+      // Check if language analysis returned valid data
+      if (!languageResult || !languageResult.languagePercentages || typeof languageResult.languagePercentages !== 'object') {
+        return {
+          score: 8.0,
+          details: {
+            message: 'AI language analysis returned invalid data - using default',
+            primaryLanguage: 'English',
+            languageBreakdown: [],
+            targetMarketFit: 80,
+            aiFeedback: 'Language analysis unavailable - assuming English content',
+          },
+        };
+      }
+
       const targetLanguages = ['Hindi', 'English'];
       let targetLanguagePercentage = 0;
 
@@ -2763,9 +2777,9 @@ export class InfluencerProfileScoringService {
         };
       }
 
-      // Calculate growth from latest and previous snapshot
+      // Calculate growth from FIRST and LAST snapshot (not last two)
       const latestFollowers = snapshots[snapshots.length - 1].totalFollowers || 0;
-      const previousFollowers = snapshots[snapshots.length - 2].totalFollowers || 0;
+      const previousFollowers = snapshots[0].totalFollowers || 0;  // Use FIRST snapshot, not second-to-last
       const growth = latestFollowers - previousFollowers;
       const growthRate = previousFollowers > 0 ? ((growth / previousFollowers) * 100) : 0;
 
@@ -2783,13 +2797,34 @@ export class InfluencerProfileScoringService {
       // Build chart data with weekly intervals from profile analysis snapshots
       const chartData = this.generateWeeklyChartDataFromAnalysis(snapshots);
 
-      // Generate AI feedback
+      // Get AI feedback from cache or generate new one
+      // TEMPORARILY DISABLED FOR TESTING - Always generate fresh feedback
+      // const latestSnapshot = snapshots[snapshots.length - 1];
+      // let aiFeedback: string;
+
+      // if (latestSnapshot?.aiGrowthFeedback && latestSnapshot?.aiFeedbackGeneratedAt) {
+      //   // Use cached feedback to save AI costs
+      //   aiFeedback = latestSnapshot.aiGrowthFeedback;
+      //   console.log(`📦 Using cached growth feedback from ${latestSnapshot.aiFeedbackGeneratedAt}`);
+      // } else {
+      //   // Generate new AI feedback (will be cached during next snapshot creation)
+      //   aiFeedback = await this.generateGrowthFeedback({
+      //     growthRate,
+      //     currentGrowth: growth,
+      //     avgGrowthPerDay: 0,
+      //     rating,
+      //   });
+      //   console.log(`🤖 Generated new growth feedback (not cached)`);
+      // }
+
+      // Always generate fresh AI feedback for testing
       const aiFeedback = await this.generateGrowthFeedback({
         growthRate,
         currentGrowth: growth,
         avgGrowthPerDay: 0,
         rating,
       });
+      console.log(`🤖 Generated new growth feedback (cache disabled for testing)`);
 
       // Find peak gain from profile analysis snapshots
       const peakGain = await this.findPeakFollowerGainFromAnalysis(influencer.id, snapshots);
@@ -3317,12 +3352,36 @@ export class InfluencerProfileScoringService {
     // Find best posting days and times
     const { bestDays, bestTimes } = this.analyzeBestPostingSchedule(recentPostsWithInsights);
 
-    // Generate AI feedback for posting behavior
+    // Get AI feedback from cache or generate new one
+    // TEMPORARILY DISABLED FOR TESTING - Always generate fresh feedback
+    // const latestSnapshot = await this.instagramProfileAnalysisModel.findOne({
+    //   where: { influencerId: influencer.id },
+    //   order: [['syncNumber', 'DESC']],
+    // });
+
+    // let aiFeedback: string;
+
+    // if (latestSnapshot?.aiPostingFeedback && latestSnapshot?.aiFeedbackGeneratedAt) {
+    //   // Use cached feedback to save AI costs
+    //   aiFeedback = latestSnapshot.aiPostingFeedback;
+    //   console.log(`📦 Using cached posting feedback from ${latestSnapshot.aiFeedbackGeneratedAt}`);
+    // } else {
+    //   // Generate new AI feedback (will be cached during next snapshot creation)
+    //   aiFeedback = await this.generatePostingBehaviorFeedback({
+    //     postsPerWeek,
+    //     rating,
+    //     postTypeBreakdown,
+    //   });
+    //   console.log(`🤖 Generated new posting feedback (not cached)`);
+    // }
+
+    // Always generate fresh AI feedback for testing
     const aiFeedback = await this.generatePostingBehaviorFeedback({
       postsPerWeek,
       rating,
       postTypeBreakdown,
     });
+    console.log(`🤖 Generated new posting feedback (cache disabled for testing)`);
 
     // Get top 5 recent posts with media URLs for display
     const recentTopPosts = recentPostsWithInsights

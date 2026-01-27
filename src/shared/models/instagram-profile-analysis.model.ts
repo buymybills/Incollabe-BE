@@ -107,6 +107,12 @@ export interface InstagramProfileAnalysisCreationAttributes {
   growthMetrics?: GrowthMetrics;
   relevanceScore?: number;
   trendingTopics?: any;
+  aiGrowthFeedback?: string;
+  aiPostingFeedback?: string;
+  aiEngagementFeedback?: string;
+  aiContentFeedback?: string;
+  aiFeedbackGeneratedAt?: Date;
+  aiFeedbackVersion?: number;
   analyzedAt?: Date;
 }
 
@@ -378,6 +384,43 @@ export class InstagramProfileAnalysis extends Model<InstagramProfileAnalysis, In
     allowNull: true,
   })
   declare visualAnalysisSummary: string;
+
+  // AI Feedback Cache - Store generated feedback to avoid repeated AI calls
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+  })
+  declare aiGrowthFeedback: string;
+
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+  })
+  declare aiPostingFeedback: string;
+
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+  })
+  declare aiEngagementFeedback: string;
+
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+  })
+  declare aiContentFeedback: string;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare aiFeedbackGeneratedAt: Date;
+
+  @Column({
+    type: DataType.INTEGER,
+    defaultValue: 1,
+  })
+  declare aiFeedbackVersion: number;
 
   @Column({
     type: DataType.DATE,
