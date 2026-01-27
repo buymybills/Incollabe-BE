@@ -588,8 +588,10 @@ export class InstagramService {
       // Even for Reels with product_type="REELS", plays often fails with permission errors
       // So we exclude it entirely and use only reliably supported metrics
       if (mediaProductType === 'REELS' || mediaProductType === 'CLIPS' || mediaType === 'REELS' || mediaType === 'VIDEO') {
-        // Metrics for videos and Reels (including video retention metrics)
-        metrics = 'reach,total_interactions,saved,shares,comments,likes,total_video_views,total_video_complete_views,avg_time_watched,total_video_view_total_time,clips_replays_count';
+        // Metrics for videos and Reels (using updated Instagram API metric names)
+        // Note: Instagram deprecated total_video_views, avg_time_watched, total_video_view_total_time
+        // Replaced with: ig_reels_aggregated_all_plays_count, ig_reels_avg_watch_time, ig_reels_video_view_total_time
+        metrics = 'reach,total_interactions,saved,shares,comments,likes,ig_reels_aggregated_all_plays_count,ig_reels_avg_watch_time,ig_reels_video_view_total_time,clips_replays_count';
       } else if (mediaType === 'IMAGE' || mediaType === 'CAROUSEL_ALBUM') {
         // Metrics for images and carousels
         metrics = 'reach,saved,likes,comments,shares';
@@ -670,10 +672,11 @@ export class InstagramService {
           if (metric.name === 'plays') insightsData.plays = value;
           if (metric.name === 'shares') insightsData.shares = value;
           if (metric.name === 'total_interactions') insightsData.totalInteractions = value;
-          if (metric.name === 'total_video_views') insightsData.totalVideoViews = value;
+          // Handle both old and new Instagram API metric names
+          if (metric.name === 'total_video_views' || metric.name === 'ig_reels_aggregated_all_plays_count') insightsData.totalVideoViews = value;
           if (metric.name === 'total_video_complete_views') insightsData.totalVideoCompleteViews = value;
-          if (metric.name === 'avg_time_watched') insightsData.avgTimeWatched = value;
-          if (metric.name === 'total_video_view_total_time') insightsData.totalVideoViewTotalTime = value;
+          if (metric.name === 'avg_time_watched' || metric.name === 'ig_reels_avg_watch_time') insightsData.avgTimeWatched = value;
+          if (metric.name === 'total_video_view_total_time' || metric.name === 'ig_reels_video_view_total_time') insightsData.totalVideoViewTotalTime = value;
           if (metric.name === 'clips_replays_count') insightsData.clipsReplaysCount = value;
         }
       });
