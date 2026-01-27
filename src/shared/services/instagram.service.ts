@@ -602,15 +602,36 @@ export class InstagramService {
 
       // Step 3: Fetch insights with appropriate metrics
       // Use Instagram Graph API v24.0 for better compatibility
-      const response = await axios.get(
-        `https://graph.instagram.com/v24.0/${mediaId}/insights`,
-        {
-          params: {
-            metric: metrics,
-            access_token: user.instagramAccessToken,
-          },
+      let response;
+      try {
+        response = await axios.get(
+          `https://graph.instagram.com/v24.0/${mediaId}/insights`,
+          {
+            params: {
+              metric: metrics,
+              access_token: user.instagramAccessToken,
+            },
+          }
+        );
+      } catch (error) {
+        // Fallback: If reel metrics fail, retry with basic metrics only
+        if (error.response?.status === 400 &&
+            (metrics.includes('ig_reels') || metrics.includes('clips_replays_count'))) {
+          console.warn(`⚠️  Reel metrics not supported for media ${mediaId}, retrying with basic metrics...`);
+          metrics = 'reach,saved,likes,comments,shares';
+          response = await axios.get(
+            `https://graph.instagram.com/v24.0/${mediaId}/insights`,
+            {
+              params: {
+                metric: metrics,
+                access_token: user.instagramAccessToken,
+              },
+            }
+          );
+        } else {
+          throw error;
         }
-      );
+      }
 
       // Step 4: Save/update the post in instagram_media table
       // Use media_url if available, otherwise fallback to thumbnail_url for Reels/Videos
@@ -2682,8 +2703,8 @@ export class InstagramService {
 
       if (geographicData?.status === 'success' && geographicData.data) {
         countriesData = geographicData.data.map((item: any) => ({
-          countryCode: item.dimension_values[0],
-          percentage: (item.value / profileData.data.followersCount * 100).toFixed(2),
+          location: item.dimension_values[0], // Use 'location' field name to match scoring service expectation
+          percentage: Number(((item.value / profileData.data.followersCount) * 100).toFixed(2)),
         }));
       }
 
