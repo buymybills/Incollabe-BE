@@ -190,23 +190,24 @@ export class InstagramService {
       },
     });
 
-    if (existingInfluencer) {
-      throw new BadRequestException({
-        error: 'instagram_account_already_connected',
-        message: `@${profile.username} is already connected to another account`,
-        instagramUsername: profile.username,
-        connectedTo: 'influencer',
-      });
-    }
+    // TEMPORARILY DISABLED FOR TESTING - RE-ENABLE IN PRODUCTION!
+    // if (existingInfluencer) {
+    //   throw new BadRequestException({
+    //     error: 'instagram_account_already_connected',
+    //     message: `@${profile.username} is already connected to another account`,
+    //     instagramUsername: profile.username,
+    //     connectedTo: 'influencer',
+    //   });
+    // }
 
-    if (existingBrand) {
-      throw new BadRequestException({
-        error: 'instagram_account_already_connected',
-        message: `@${profile.username} is already connected to another account`,
-        instagramUsername: profile.username,
-        connectedTo: 'brand',
-      });
-    }
+    // if (existingBrand) {
+    //   throw new BadRequestException({
+    //     error: 'instagram_account_already_connected',
+    //     message: `@${profile.username} is already connected to another account`,
+    //     instagramUsername: profile.username,
+    //     connectedTo: 'brand',
+    //   });
+    // }
 
     // Step 3: Long-lived tokens typically expire in 60 days
     // We'll set a conservative expiry of 59 days from now
