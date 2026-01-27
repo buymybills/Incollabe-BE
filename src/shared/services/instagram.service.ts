@@ -1460,6 +1460,7 @@ export class InstagramService {
         requiredPermissions: [
           'instagram_basic',
           'instagram_manage_insights',
+          'pages_read_engagement'
         ],
       };
     } catch (error) {
@@ -2641,6 +2642,7 @@ export class InstagramService {
         data: demographics,
       };
     } catch (error) {
+      console.error('❌ Demographics fetch error:', error.response?.data || error.message);
       const isFacebookError = error.response?.data?.error?.message?.toLowerCase().includes('instagram') ||
                              error.response?.data?.error?.message?.toLowerCase().includes('permission');
       demographicsData = {
@@ -2674,6 +2676,7 @@ export class InstagramService {
         data: countries,
       };
     } catch (error) {
+      console.error('❌ Geographic data fetch error:', error.response?.data || error.message);
       const isFacebookError = error.response?.data?.error?.message?.toLowerCase().includes('instagram') ||
                              error.response?.data?.error?.message?.toLowerCase().includes('permission');
       geographicData = {
