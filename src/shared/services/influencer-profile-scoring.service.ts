@@ -2756,11 +2756,20 @@ export class InfluencerProfileScoringService {
 
     // Fallback to profile analysis if no growth snapshots
     if (growthSnapshots.length < 2) {
-      // Fetch ALL snapshots to build chart data
-      const snapshots = await this.instagramProfileAnalysisModel.findAll({
+      // Fetch ALL snapshots to build chart data (exclude incomplete snapshots without syncNumber or totalFollowers)
+      const allSnapshots = await this.instagramProfileAnalysisModel.findAll({
         where: { influencerId: influencer.id },
         order: [['syncNumber', 'ASC']],
       });
+
+      // Filter out incomplete snapshots (demographics-only records without growth metrics)
+      const snapshots = allSnapshots.filter(s => s.syncNumber != null && s.totalFollowers != null);
+
+      console.log(`📊 Growth Trend Debug: Found ${allSnapshots.length} total snapshots, ${snapshots.length} valid snapshots with growth data`);
+      if (snapshots.length > 0) {
+        console.log(`   First snapshot: syncNumber=${snapshots[0].syncNumber}, followers=${snapshots[0].totalFollowers}`);
+        console.log(`   Last snapshot: syncNumber=${snapshots[snapshots.length - 1].syncNumber}, followers=${snapshots[snapshots.length - 1].totalFollowers}`);
+      }
 
       if (snapshots.length < 2) {
         return {
