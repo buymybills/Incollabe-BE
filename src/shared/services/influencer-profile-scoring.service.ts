@@ -261,11 +261,13 @@ export class InfluencerProfileScoringService {
    * Uses stored 30-day snapshots from credibility scoring
    */
   private async calculateFollowerAuthenticity(influencer: Influencer): Promise<{ score: number; details: any }> {
-    const snapshots = await this.instagramProfileAnalysisModel.findAll({
+    const allSnapshots = await this.instagramProfileAnalysisModel.findAll({
       where: { influencerId: influencer.id },
-      order: [['syncDate', 'DESC']],
-      limit: 2,
+      order: [['syncNumber', 'DESC']],
     });
+
+    // Filter to only complete snapshots with follower data
+    const snapshots = allSnapshots.filter(s => s.syncNumber != null && s.activeFollowersPercentage != null).slice(0, 2);
 
     if (snapshots.length === 0 || !snapshots[0].activeFollowersPercentage) {
       return {
@@ -633,12 +635,14 @@ export class InfluencerProfileScoringService {
         }
       }
 
-      // Fallback: Try to get from profile analysis snapshot
+      // Fallback: Try to get from profile analysis snapshot (exclude demographics-only snapshots)
       if (!onlineFollowers || Object.keys(onlineFollowers).length === 0) {
-        const latestSnapshot = await this.instagramProfileAnalysisModel.findOne({
+        const allSnapshots = await this.instagramProfileAnalysisModel.findAll({
           where: { influencerId: influencer.id },
-          order: [['syncDate', 'DESC']],
+          order: [['syncNumber', 'DESC']],
         });
+        const validSnapshots = allSnapshots.filter(s => s.syncNumber != null && s.onlineFollowersHourlyData != null);
+        const latestSnapshot = validSnapshots.length > 0 ? validSnapshots[0] : null;
 
         onlineFollowers = latestSnapshot?.onlineFollowersHourlyData;
       }
@@ -2330,12 +2334,21 @@ export class InfluencerProfileScoringService {
    * Enhanced with detailed metrics for UI display
    */
   private async calculateEngagementOverview(influencer: Influencer): Promise<{ score: number; details: any }> {
-    // Query for latest snapshot, ordered by ID DESC instead of syncDate DESC
-    // (since sync-all-insights creates multiple snapshots with same syncDate)
-    const latestSync = await this.instagramProfileAnalysisModel.findOne({
+    // Query for all snapshots and filter to get latest with complete engagement data
+    // This excludes demographics-only snapshots without engagement metrics
+    const allSnapshots = await this.instagramProfileAnalysisModel.findAll({
       where: { influencerId: influencer.id },
-      order: [['id', 'DESC']],
+      order: [['syncNumber', 'DESC']],
     });
+
+    // Filter to only complete snapshots with engagement data
+    const validSnapshots = allSnapshots.filter(s => s.syncNumber != null && s.avgEngagementRate != null);
+    const latestSync = validSnapshots.length > 0 ? validSnapshots[0] : null;
+
+    console.log(`📊 Engagement Overview Debug: Found ${allSnapshots.length} total snapshots, ${validSnapshots.length} valid snapshots`);
+    if (latestSync) {
+      console.log(`   Latest valid snapshot: syncNumber=${latestSync.syncNumber}, avgEngagementRate=${latestSync.avgEngagementRate}%`);
+    }
 
     if (!latestSync || !latestSync.avgEngagementRate) {
       // Generate default retention curve even when no data
@@ -3648,11 +3661,13 @@ export class InfluencerProfileScoringService {
         };
       }
 
-      // Get profile data for context
-      const latestSync = await this.instagramProfileAnalysisModel.findOne({
+      // Get profile data for context (exclude demographics-only snapshots)
+      const allSnapshots = await this.instagramProfileAnalysisModel.findAll({
         where: { influencerId: influencer.id },
-        order: [['syncDate', 'DESC']],
+        order: [['syncNumber', 'DESC']],
       });
+      const validSnapshots = allSnapshots.filter(s => s.syncNumber != null && s.activeFollowers != null);
+      const latestSync = validSnapshots.length > 0 ? validSnapshots[0] : null;
 
       const activeFollowers = latestSync?.activeFollowers || 0;
       // Convert Sequelize Decimal to number properly
@@ -3771,11 +3786,13 @@ export class InfluencerProfileScoringService {
    */
   private async calculateBrandTrustSignal(influencer: Influencer): Promise<{ score: number; details: any }> {
     try {
-      // Get active followers and average reach data
-      const latestSync = await this.instagramProfileAnalysisModel.findOne({
+      // Get active followers and average reach data (exclude demographics-only snapshots)
+      const allSnapshots = await this.instagramProfileAnalysisModel.findAll({
         where: { influencerId: influencer.id },
-        order: [['syncDate', 'DESC']],
+        order: [['syncNumber', 'DESC']],
       });
+      const validSnapshots = allSnapshots.filter(s => s.syncNumber != null && s.activeFollowers != null);
+      const latestSync = validSnapshots.length > 0 ? validSnapshots[0] : null;
 
       if (!latestSync) {
         return {
