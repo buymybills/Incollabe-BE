@@ -142,7 +142,7 @@ export class InvoiceExcelExportService {
         },
         {
           model: Campaign,
-          attributes: ['id', 'name', 'campaignType'],
+          attributes: ['id', 'name', 'type'],
         },
       ],
       order: [['createdAt', 'DESC']],
@@ -222,7 +222,7 @@ export class InvoiceExcelExportService {
         },
         {
           model: Campaign,
-          attributes: ['id', 'name', 'campaignType'],
+          attributes: ['id', 'name', 'type'],
         },
       ],
       order: [['createdAt', 'DESC']],
