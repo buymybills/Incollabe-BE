@@ -3438,7 +3438,11 @@ export class AdminController {
   ) {
     const filters: any = {};
     if (startDate) filters.startDate = new Date(startDate);
-    if (endDate) filters.endDate = new Date(endDate);
+    if (endDate) {
+      const endDateTime = new Date(endDate);
+      endDateTime.setHours(23, 59, 59, 999);
+      filters.endDate = endDateTime;
+    }
     if (paymentStatus) filters.paymentStatus = paymentStatus;
     if (influencerId) filters.influencerId = Number(influencerId);
 
@@ -3478,7 +3482,11 @@ export class AdminController {
   ) {
     const filters: any = {};
     if (startDate) filters.startDate = new Date(startDate);
-    if (endDate) filters.endDate = new Date(endDate);
+    if (endDate) {
+      const endDateTime = new Date(endDate);
+      endDateTime.setHours(23, 59, 59, 999);
+      filters.endDate = endDateTime;
+    }
     if (paymentStatus) filters.paymentStatus = paymentStatus;
     if (brandId) filters.brandId = Number(brandId);
     if (campaignId) filters.campaignId = Number(campaignId);
@@ -3519,7 +3527,11 @@ export class AdminController {
   ) {
     const filters: any = {};
     if (startDate) filters.startDate = new Date(startDate);
-    if (endDate) filters.endDate = new Date(endDate);
+    if (endDate) {
+      const endDateTime = new Date(endDate);
+      endDateTime.setHours(23, 59, 59, 999);
+      filters.endDate = endDateTime;
+    }
     if (paymentStatus) filters.paymentStatus = paymentStatus;
     if (brandId) filters.brandId = Number(brandId);
     if (campaignId) filters.campaignId = Number(campaignId);
