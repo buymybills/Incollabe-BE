@@ -1159,7 +1159,7 @@ export class ProSubscriptionService {
           align: 'right',
           width: 200
         })
-        .text('contact.us@gobuymybills.com', pageWidth - 250, footerY + 18, {
+        .text('contact.us@collabkaroo.com', pageWidth - 250, footerY + 18, {
           align: 'right',
           width: 200
         });
