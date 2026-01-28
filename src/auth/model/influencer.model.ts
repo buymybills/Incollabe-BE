@@ -292,6 +292,19 @@ export class Influencer extends Model {
   @Column(DataType.DATE)
   declare proExpiresAt: Date;
 
+  // Profile Scoring Access Control
+  @AllowNull(true)
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+    field: 'has_profile_scoring_access',
+  })
+  declare hasProfileScoringAccess: boolean;
+
+  @AllowNull(true)
+  @Column({ type: DataType.DATE, field: 'profile_scoring_enabled_at' })
+  declare profileScoringEnabledAt: Date;
+
   @AllowNull(true)
   @Column(DataType.DATE)
   declare lastLoginAt: Date;

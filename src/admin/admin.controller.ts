@@ -47,12 +47,15 @@ import { AuthService } from '../auth/auth.service';
 import { CampaignService } from '../campaign/campaign.service';
 import { S3Service } from '../shared/s3.service';
 import { AppVersionService } from '../shared/services/app-version.service';
+import { InvoiceExcelExportService } from './services/invoice-excel-export.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import type { RequestWithAdmin } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
 import { AdminRole, AdminStatus } from './models/admin.model';
 import { ProfileType } from './models/profile-review.model';
+import { Influencer } from '../auth/model/influencer.model';
+import { InjectModel } from '@nestjs/sequelize';
 
 // DTOs
 import { AdminLoginDto, AdminLoginResponseDto } from './dto/admin-login.dto';
@@ -195,6 +198,9 @@ export class AdminController {
     private readonly campaignService: CampaignService,
     private readonly s3Service: S3Service,
     private readonly appVersionService: AppVersionService,
+    private readonly invoiceExcelExportService: InvoiceExcelExportService,
+    @InjectModel(Influencer)
+    private readonly influencerModel: typeof Influencer,
   ) {}
 
   @Post('login')
@@ -3324,5 +3330,206 @@ export class AdminController {
   async deleteVersion(@Param('id', ParseIntPipe) id: number) {
     await this.appVersionService.deleteVersion(id);
     return { message: 'Version deleted successfully' };
+  }
+
+  // ==================== Profile Scoring Access Control ====================
+
+  @Put('influencer/:influencerId/profile-scoring-access')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Toggle profile scoring access for influencer',
+    description: 'Enable or disable advanced profile scoring features for a specific influencer',
+  })
+  @ApiParam({
+    name: 'influencerId',
+    type: Number,
+    description: 'Influencer ID',
+    example: 151,
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        hasAccess: {
+          type: 'boolean',
+          description: 'Enable or disable profile scoring access',
+          example: true,
+        },
+      },
+      required: ['hasAccess'],
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Profile scoring access updated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        message: { type: 'string', example: 'Profile scoring access enabled for influencer' },
+        data: {
+          type: 'object',
+          properties: {
+            influencerId: { type: 'number', example: 151 },
+            hasProfileScoringAccess: { type: 'boolean', example: true },
+            profileScoringEnabledAt: { type: 'string', format: 'date-time', example: '2026-01-27T10:30:00Z' },
+          },
+        },
+      },
+    },
+  })
+  @ApiNotFoundResponse({
+    description: 'Influencer not found',
+  })
+  async toggleProfileScoringAccess(
+    @Param('influencerId', ParseIntPipe) id: number,
+    @Body() body: { hasAccess: boolean },
+  ) {
+    const influencer = await this.influencerModel.findByPk(id);
+
+    if (!influencer) {
+      throw new NotFoundException(`Influencer with ID ${id} not found`);
+    }
+
+    await influencer.update({
+      hasProfileScoringAccess: body.hasAccess,
+      profileScoringEnabledAt: body.hasAccess ? new Date() : null,
+    });
+
+    return {
+      success: true,
+      message: body.hasAccess
+        ? 'Profile scoring access enabled for influencer'
+        : 'Profile scoring access disabled for influencer',
+      data: {
+        influencerId: influencer.id,
+        hasProfileScoringAccess: influencer.hasProfileScoringAccess,
+        profileScoringEnabledAt: influencer.profileScoringEnabledAt,
+      },
+    };
+  }
+
+  // ==================== Invoice Excel Export ====================
+
+  @Get('invoices/export/max-influencer')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Export MaxX Influencer invoices to Excel (GST Format)',
+    description: 'Download all MaxX Pro subscription invoices in Excel format with GST details',
+  })
+  @ApiQuery({ name: 'startDate', required: false, type: String, description: 'Start date filter (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'endDate', required: false, type: String, description: 'End date filter (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'paymentStatus', required: false, enum: ['pending', 'paid', 'failed'], description: 'Payment status filter' })
+  @ApiQuery({ name: 'influencerId', required: false, type: Number, description: 'Filter by influencer ID' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Excel file downloaded successfully',
+  })
+  async exportMaxInfluencerInvoices(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('paymentStatus') paymentStatus?: string,
+    @Query('influencerId') influencerId?: string,
+    @Res() res?: any,
+  ) {
+    const filters: any = {};
+    if (startDate) filters.startDate = new Date(startDate);
+    if (endDate) filters.endDate = new Date(endDate);
+    if (paymentStatus) filters.paymentStatus = paymentStatus;
+    if (influencerId) filters.influencerId = Number(influencerId);
+
+    const excelBuffer = await this.invoiceExcelExportService.exportMaxInfluencerInvoices(filters);
+
+    const fileName = `MaxX_Influencer_Invoices_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(excelBuffer);
+  }
+
+  @Get('invoices/export/max-campaign')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Export MaxX Campaign invoices to Excel (GST Format)',
+    description: 'Download all MaxX Campaign invoices in Excel format with GST details',
+  })
+  @ApiQuery({ name: 'startDate', required: false, type: String, description: 'Start date filter (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'endDate', required: false, type: String, description: 'End date filter (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'paymentStatus', required: false, enum: ['pending', 'paid', 'failed'], description: 'Payment status filter' })
+  @ApiQuery({ name: 'brandId', required: false, type: Number, description: 'Filter by brand ID' })
+  @ApiQuery({ name: 'campaignId', required: false, type: Number, description: 'Filter by campaign ID' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Excel file downloaded successfully',
+  })
+  async exportMaxCampaignInvoices(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('paymentStatus') paymentStatus?: string,
+    @Query('brandId') brandId?: string,
+    @Query('campaignId') campaignId?: string,
+    @Res() res?: any,
+  ) {
+    const filters: any = {};
+    if (startDate) filters.startDate = new Date(startDate);
+    if (endDate) filters.endDate = new Date(endDate);
+    if (paymentStatus) filters.paymentStatus = paymentStatus;
+    if (brandId) filters.brandId = Number(brandId);
+    if (campaignId) filters.campaignId = Number(campaignId);
+
+    const excelBuffer = await this.invoiceExcelExportService.exportMaxCampaignInvoices(filters);
+
+    const fileName = `MaxX_Campaign_Invoices_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(excelBuffer);
+  }
+
+  @Get('invoices/export/invite-only')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Export Invite-Only Campaign invoices to Excel (GST Format)',
+    description: 'Download all Invite-Only Campaign invoices in Excel format with GST details',
+  })
+  @ApiQuery({ name: 'startDate', required: false, type: String, description: 'Start date filter (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'endDate', required: false, type: String, description: 'End date filter (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'paymentStatus', required: false, enum: ['pending', 'paid', 'failed'], description: 'Payment status filter' })
+  @ApiQuery({ name: 'brandId', required: false, type: Number, description: 'Filter by brand ID' })
+  @ApiQuery({ name: 'campaignId', required: false, type: Number, description: 'Filter by campaign ID' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Excel file downloaded successfully',
+  })
+  async exportInviteOnlyInvoices(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('paymentStatus') paymentStatus?: string,
+    @Query('brandId') brandId?: string,
+    @Query('campaignId') campaignId?: string,
+    @Res() res?: any,
+  ) {
+    const filters: any = {};
+    if (startDate) filters.startDate = new Date(startDate);
+    if (endDate) filters.endDate = new Date(endDate);
+    if (paymentStatus) filters.paymentStatus = paymentStatus;
+    if (brandId) filters.brandId = Number(brandId);
+    if (campaignId) filters.campaignId = Number(campaignId);
+
+    const excelBuffer = await this.invoiceExcelExportService.exportInviteOnlyInvoices(filters);
+
+    const fileName = `Invite_Only_Campaign_Invoices_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(excelBuffer);
   }
 }
