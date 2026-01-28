@@ -4,6 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
+import { Op } from 'sequelize';
 import { Brand } from './model/brand.model';
 import { BrandNiche } from './model/brand-niche.model';
 import { Niche } from '../auth/model/niche.model';
@@ -13,7 +14,7 @@ import { Region } from '../shared/models/region.model';
 import { CompanyType } from '../shared/models/company-type.model';
 import { Follow, FollowingType } from '../post/models/follow.model';
 import { Post, UserType } from '../post/models/post.model';
-import { Campaign } from '../campaign/models/campaign.model';
+import { Campaign, CampaignStatus } from '../campaign/models/campaign.model';
 import { S3Service } from '../shared/s3.service';
 import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../shared/email.service';
@@ -986,11 +987,14 @@ export class BrandService {
           },
         }),
 
-        // Count all active campaigns (ongoing + completed, excluding closed/deleted)
+        // Count all active campaigns (ongoing + completed, excluding drafts and deleted)
         this.campaignModel.count({
           where: {
             brandId: brandId,
             isActive: true,
+            status: {
+              [Op.ne]: CampaignStatus.DRAFT,
+            },
           },
         }),
       ]);
