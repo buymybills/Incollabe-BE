@@ -28,6 +28,7 @@ import { SubscriptionSchedulerService } from './services/subscription-scheduler.
 import { CreditTransaction } from '../admin/models/credit-transaction.model';
 import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
 import { InfluencerUpi } from './models/influencer-upi.model';
+import { HomePageHistory } from './models/home-page-history.model';
 import { CampaignModule } from '../campaign/campaign.module';
 import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
 
@@ -57,6 +58,7 @@ import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-ana
       InfluencerReferralUsage,
       InfluencerUpi,
       InstagramProfileAnalysis,
+      HomePageHistory,
     ]),
     SharedModule,
     CampaignModule,
@@ -134,6 +136,10 @@ import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-ana
     {
       provide: 'INSTAGRAM_PROFILE_ANALYSIS_MODEL',
       useValue: InstagramProfileAnalysis,
+    },
+    {
+      provide: 'HOME_PAGE_HISTORY_MODEL',
+      useValue: HomePageHistory,
     },
   ],
   exports: [InfluencerService, InfluencerRepository, ProSubscriptionService],

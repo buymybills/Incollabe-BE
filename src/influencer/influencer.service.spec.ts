@@ -344,6 +344,19 @@ describe('InfluencerService', () => {
           },
         },
         {
+          provide: 'HOME_PAGE_HISTORY_MODEL',
+          useValue: {
+            create: jest.fn().mockResolvedValue({
+              id: 1,
+              influencerId: 1,
+              actionType: 'app_open',
+              createdAt: new Date(),
+            }),
+            findAll: jest.fn().mockResolvedValue([]),
+            count: jest.fn().mockResolvedValue(0),
+          },
+        },
+        {
           provide: AppReviewService,
           useValue: mockAppReviewService,
         },

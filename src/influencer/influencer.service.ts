@@ -63,6 +63,8 @@ import { InfluencerReferralUsage } from 'src/auth/model/influencer-referral-usag
 import { InfluencerUpi } from './models/influencer-upi.model';
 import { ProSubscription, SubscriptionStatus } from './models/pro-subscription.model';
 import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
+import { HomePageHistory, HomePageActionType } from './models/home-page-history.model';
+import { TrackHomePageActivityDto } from './dto/track-home-page-activity.dto';
 
 // Private types for InfluencerService
 type WhatsAppOtpRequest = {
@@ -136,6 +138,8 @@ export class InfluencerService {
     private readonly proSubscriptionModel: typeof ProSubscription,
     @Inject('INSTAGRAM_PROFILE_ANALYSIS_MODEL')
     private readonly instagramProfileAnalysisModel: typeof InstagramProfileAnalysis,
+    @Inject('HOME_PAGE_HISTORY_MODEL')
+    private readonly homePageHistoryModel: typeof HomePageHistory,
   ) {}
 
   /**
@@ -3125,6 +3129,39 @@ export class InfluencerService {
     return {
       weeklyCredits: influencer.weeklyCredits || 0,
       weeklyCreditsResetDate: influencer.weeklyCreditsResetDate || this.getNextMondayResetDate(),
+    };
+  }
+
+  /**
+   * Track influencer home page activity
+   */
+  async trackHomePageActivity(
+    influencerId: number,
+    data: TrackHomePageActivityDto,
+  ) {
+    // Verify influencer exists
+    const influencer = await this.influencerRepository.findById(influencerId);
+    if (!influencer) {
+      throw new NotFoundException('Influencer not found');
+    }
+
+    // Create activity record
+    const activity = await this.homePageHistoryModel.create({
+      influencerId,
+      actionType: data.actionType,
+      deviceId: data.deviceId,
+      appVersion: data.appVersion,
+    });
+
+    return {
+      success: true,
+      message: 'Activity tracked successfully',
+      data: {
+        id: activity.id,
+        influencerId: activity.influencerId,
+        actionType: activity.actionType,
+        timestamp: activity.createdAt.toISOString(),
+      },
     };
   }
 }

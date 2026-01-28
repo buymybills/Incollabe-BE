@@ -52,6 +52,7 @@ import {
   CancelProSubscriptionDto,
 } from './dto/pro-subscription.dto';
 import { RedeemRewardsDto, RedeemRewardsResponseDto } from './dto/redeem-rewards.dto';
+import { TrackHomePageActivityDto, TrackHomePageActivityResponseDto } from './dto/track-home-page-activity.dto';
 import {
   AddUpiIdDto,
   SelectUpiIdDto,
@@ -1813,5 +1814,33 @@ export class InfluencerController {
     }
     const influencerId = req.user.id;
     return await this.influencerService.selectUpiAndRedeemRewards(influencerId, upiIdRecordId);
+  }
+
+  // ==================== Home Page Activity Tracking ====================
+
+  @Post('home-page-activity')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Track influencer home page activity',
+    description: 'Records influencer activity on the home page including app opens, scrolls, and refreshes for analytics purposes',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Activity tracked successfully',
+    type: TrackHomePageActivityResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request data' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Only influencers can track activity' })
+  @ApiResponse({ status: 404, description: 'Influencer not found' })
+  async trackHomePageActivity(
+    @Req() req: RequestWithUser,
+    @Body() data: TrackHomePageActivityDto,
+  ) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can track home page activity');
+    }
+    const influencerId = req.user.id;
+    return await this.influencerService.trackHomePageActivity(influencerId, data);
   }
 }
