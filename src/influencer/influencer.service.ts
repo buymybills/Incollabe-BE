@@ -564,6 +564,10 @@ export class InfluencerService {
         monthlyReferralResetDate: nextResetDate.toISOString(),
         upiId: influencer.upiId || null,
         profileCompletion,
+        profileScoringAccess: {
+          hasAccess: influencer.hasProfileScoringAccess || false,
+          enabledAt: influencer.profileScoringEnabledAt || null,
+        },
         deviceToken,
         appVersion: appVersionInfo,
         appReview: {
