@@ -7,6 +7,8 @@ import { InviteOnlyCampaignInvoice } from '../../campaign/models/invite-only-cam
 import { Influencer } from '../../auth/model/influencer.model';
 import { Brand } from '../../brand/model/brand.model';
 import { Campaign } from '../../campaign/models/campaign.model';
+import { City } from '../../shared/models/city.model';
+import { Country } from '../../shared/models/country.model';
 import { Op } from 'sequelize';
 
 export interface InvoiceExportFilters {
@@ -54,7 +56,13 @@ export class InvoiceExcelExportService {
       include: [
         {
           model: Influencer,
-          attributes: ['id', 'name', 'username', 'phone'],
+          attributes: ['id', 'name', 'username', 'phone', 'cityId'],
+          include: [
+            {
+              model: City,
+              attributes: ['id', 'name', 'state'],
+            },
+          ],
         },
       ],
       order: [['createdAt', 'DESC']],
@@ -66,10 +74,13 @@ export class InvoiceExcelExportService {
       const cgstRate = invoice.cgst > 0 ? 9 : 0;
       const sgstRate = invoice.sgst > 0 ? 9 : 0;
 
+      const state = invoice.influencer?.city?.state || '';
+      const pos = state; // POS (Place of Supply) is the state where service is provided
+
       return {
         'NAME OF PARTY': invoice.influencer?.name || 'N/A',
-        'STATE': '', // To be filled manually
-        'POS': '', // Place of Supply - to be filled manually
+        'STATE': state,
+        'POS': pos,
         'INVOICE NO.': invoice.invoiceNumber,
         'DATE': this.formatDateShort(invoice.createdAt),
         'ITEM VALUE': invoice.amount / 100,
@@ -120,11 +131,18 @@ export class InvoiceExcelExportService {
       include: [
         {
           model: Brand,
-          attributes: ['id', 'name', 'username', 'email'],
+          attributes: ['id', 'brandName', 'username', 'email', 'headquarterCityId'],
+          include: [
+            {
+              model: City,
+              as: 'headquarterCity',
+              attributes: ['id', 'name', 'state'],
+            },
+          ],
         },
         {
           model: Campaign,
-          attributes: ['id', 'title', 'campaignType'],
+          attributes: ['id', 'name', 'campaignType'],
         },
       ],
       order: [['createdAt', 'DESC']],
@@ -136,10 +154,13 @@ export class InvoiceExcelExportService {
       const cgstRate = invoice.cgst > 0 ? 9 : 0;
       const sgstRate = invoice.sgst > 0 ? 9 : 0;
 
+      const state = invoice.brand?.headquarterCity?.state || '';
+      const pos = state; // POS (Place of Supply) is the state where service is provided
+
       return {
         'NAME OF PARTY': invoice.brand?.brandName || 'N/A',
-        'STATE': '', // To be filled manually
-        'POS': '', // Place of Supply - to be filled manually
+        'STATE': state,
+        'POS': pos,
         'INVOICE NO.': invoice.invoiceNumber,
         'DATE': this.formatDateShort(invoice.createdAt),
         'ITEM VALUE': invoice.amount / 100,
@@ -190,11 +211,18 @@ export class InvoiceExcelExportService {
       include: [
         {
           model: Brand,
-          attributes: ['id', 'name', 'username', 'email'],
+          attributes: ['id', 'brandName', 'username', 'email', 'headquarterCityId'],
+          include: [
+            {
+              model: City,
+              as: 'headquarterCity',
+              attributes: ['id', 'name', 'state'],
+            },
+          ],
         },
         {
           model: Campaign,
-          attributes: ['id', 'title', 'campaignType'],
+          attributes: ['id', 'name', 'campaignType'],
         },
       ],
       order: [['createdAt', 'DESC']],
@@ -206,10 +234,13 @@ export class InvoiceExcelExportService {
       const cgstRate = invoice.cgst > 0 ? 9 : 0;
       const sgstRate = invoice.sgst > 0 ? 9 : 0;
 
+      const state = invoice.brand?.headquarterCity?.state || '';
+      const pos = state; // POS (Place of Supply) is the state where service is provided
+
       return {
         'NAME OF PARTY': invoice.brand?.brandName || 'N/A',
-        'STATE': '', // To be filled manually
-        'POS': '', // Place of Supply - to be filled manually
+        'STATE': state,
+        'POS': pos,
         'INVOICE NO.': invoice.invoiceNumber,
         'DATE': this.formatDateShort(invoice.createdAt),
         'ITEM VALUE': invoice.amount / 100,
