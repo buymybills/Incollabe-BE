@@ -20,6 +20,7 @@ import { ChatGateway } from './chat.gateway';
 import { SearchController } from './controllers/search.controller';
 import { ChatController } from './chat.controller';
 import { InstagramController } from './controllers/instagram.controller';
+import { ConfigController } from './controllers/config.controller';
 import { InstagramService } from './services/instagram.service';
 import { InstagramSyncCronService } from './services/instagram-sync.cron';
 import { InstagramDemographicsCronService } from './services/instagram-demographics.cron';
@@ -89,7 +90,7 @@ import { AppVersionService } from './services/app-version.service';
       AppVersion,
     ]),
   ],
-  controllers: [SearchController, ChatController, KeyBackupController, InstagramController, AppReviewController, InfluencerProfileScoringController],
+  controllers: [SearchController, ChatController, KeyBackupController, InstagramController, AppReviewController, InfluencerProfileScoringController, ConfigController],
   providers: [
     SmsService,
     S3Service,
