@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/sequelize';
 import { Campaign } from '../models/campaign.model';
 import { Brand } from '../../brand/model/brand.model';
 import { InviteOnlyCampaignInvoice, InvoiceStatus, PaymentMethod } from '../models/invite-only-campaign-invoice.model';
+import { City } from '../../shared/models/city.model';
 import { RazorpayService } from '../../shared/razorpay.service';
 import { S3Service } from '../../shared/s3.service';
 import { EncryptionService } from '../../shared/services/encryption.service';
@@ -22,6 +23,8 @@ export class InviteOnlyPaymentService {
     private brandModel: typeof Brand,
     @InjectModel(InviteOnlyCampaignInvoice)
     private inviteOnlyInvoiceModel: typeof InviteOnlyCampaignInvoice,
+    @InjectModel(City)
+    private cityModel: typeof City,
     private razorpayService: RazorpayService,
     private s3Service: S3Service,
     private encryptionService: EncryptionService,
@@ -73,30 +76,69 @@ export class InviteOnlyPaymentService {
       } as any);
     }
 
-    // Get brand details
-    const brand = await this.brandModel.findByPk(brandId);
+    // Get brand details with city information
+    const brand = await this.brandModel.findByPk(brandId, {
+      include: [
+        {
+          model: this.cityModel,
+          as: 'headquarterCity',
+        },
+      ],
+    });
     if (!brand) {
       throw new NotFoundException('Brand not found');
+    }
+
+    // Calculate taxes
+    // Total = 49900 paise (Rs 499)
+    // Base = 422.88 (in paise: 42288)
+    // IGST = 76.12 (in paise: 7612)
+    // CGST = 76.12/2 = 38.06 (in paise: 3806)
+    // SGST = 76.12/2 = 38.06 (in paise: 3806)
+    const totalAmount = this.INVITE_ONLY_AMOUNT; // 49900 paise
+    const baseAmount = 42288; // Rs 422.88 in paise
+
+    let cgst = 0;
+    let sgst = 0;
+    let igst = 0;
+    let taxAmount = 0;
+
+    // Check if brand location is Delhi
+    const cityName = brand.headquarterCity?.name?.toLowerCase();
+    const isDelhi = cityName === 'delhi' || cityName === 'new delhi';
+
+    if (isDelhi) {
+      // For Delhi: CGST and SGST (total tax = 7612 paise = Rs 76.12)
+      cgst = 3806; // Rs 38.06
+      sgst = 3806; // Rs 38.06 (total: 7612 paise)
+      taxAmount = cgst + sgst; // 7612
+    } else {
+      // For other locations: IGST
+      igst = 7612; // Rs 76.12
+      taxAmount = igst;
     }
 
     // Generate invoice number
     const invoiceNumber = await this.generateInvoiceNumber();
 
-    // Create invoice
+    // Create invoice with tax breakdown
     const invoice = await this.inviteOnlyInvoiceModel.create({
       invoiceNumber,
       campaignId,
       brandId,
-      amount: this.INVITE_ONLY_AMOUNT,
-      tax: 0, // No GST for services under Rs 20 lakh turnover
-      totalAmount: this.INVITE_ONLY_AMOUNT,
+      amount: baseAmount,
+      tax: taxAmount,
+      cgst,
+      sgst,
+      igst,
+      totalAmount: totalAmount,
       paymentStatus: InvoiceStatus.PENDING,
       paymentMethod: PaymentMethod.RAZORPAY,
     });
 
-    // Create Razorpay order
+    // Create Razorpay order (total remains 499)
     const razorpayOrder = await this.razorpayService.createOrder(
-      499, // Amount in Rs
+      invoice.totalAmount / 100, // Amount in Rs (499)
       'INR',
       `INVITE_ONLY_${campaignId}_INV_${invoice.id}`,
       {
@@ -122,7 +164,7 @@ export class InviteOnlyPaymentService {
     await campaign.update({
       inviteOnlyPaymentStatus: 'pending',
       inviteOnlyOrderId: razorpayOrder.orderId,
-      inviteOnlyAmount: this.INVITE_ONLY_AMOUNT,
+      inviteOnlyAmount: invoice.totalAmount,
       status: 'draft' as any, // Campaign will be DRAFT until payment is completed
     });
 
@@ -290,7 +332,16 @@ export class InviteOnlyPaymentService {
     const invoice = await this.inviteOnlyInvoiceModel.findByPk(invoiceId, {
       include: [
         { model: Campaign, as: 'campaign' },
-        { model: Brand, as: 'brand' },
+        {
+          model: Brand,
+          as: 'brand',
+          include: [
+            {
+              model: this.cityModel,
+              as: 'headquarterCity',
+            },
+          ],
+        },
       ],
     });
 
@@ -309,20 +360,29 @@ export class InviteOnlyPaymentService {
       ? this.encryptionService.decrypt(invoice.brand.email)
       : invoice.brand.email;
 
-    // Store invoice data
+    // Format location as "City, State"
+    const city = (invoice.brand as any).headquarterCity;
+    const cityName = city?.name || '';
+    const stateName = city?.state || '';
+    const location = cityName && stateName
+      ? `${cityName}, ${stateName}`
+      : cityName || stateName || 'N/A';
+
+    // Store invoice data with tax breakdown
     const invoiceData = {
       invoiceNumber: invoice.invoiceNumber,
       date: invoice.paidAt || invoice.createdAt,
       brand: {
         name: invoice.brand.brandName,
         email: decryptedEmail,
+        location: location,
       },
       campaign: {
         name: invoice.campaign.name,
       },
       items: [
         {
-          description: 'Maxx campaign - Brand',
+          description: 'Maxx campaign - Brand(Invite only campaign)',
           quantity: 1,
           rate: invoice.amount / 100,
           amount: invoice.amount / 100,
@@ -332,6 +392,9 @@ export class InviteOnlyPaymentService {
       ],
       subtotal: invoice.amount / 100,
       tax: invoice.tax / 100,
+      cgst: invoice.cgst / 100,
+      sgst: invoice.sgst / 100,
+      igst: invoice.igst / 100,
       total: invoice.totalAmount / 100,
     };
 

@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/sequelize';
 import { Campaign } from '../models/campaign.model';
 import { Brand } from '../../brand/model/brand.model';
 import { MaxCampaignInvoice, InvoiceStatus, PaymentMethod } from '../models/max-campaign-invoice.model';
+import { City } from '../../shared/models/city.model';
 import { RazorpayService } from '../../shared/razorpay.service';
 import { S3Service } from '../../shared/s3.service';
 import { EmailService } from '../../shared/email.service';
@@ -47,6 +48,8 @@ export class MaxCampaignPaymentService {
     private brandModel: typeof Brand,
     @InjectModel(MaxCampaignInvoice)
     private maxCampaignInvoiceModel: typeof MaxCampaignInvoice,
+    @InjectModel(City)
+    private cityModel: typeof City,
     private razorpayService: RazorpayService,
     private s3Service: S3Service,
     private emailService: EmailService,
@@ -98,30 +101,69 @@ export class MaxCampaignPaymentService {
       } as any);
     }
 
-    // Get brand details
-    const brand = await this.brandModel.findByPk(brandId);
+    // Get brand details with city information
+    const brand = await this.brandModel.findByPk(brandId, {
+      include: [
+        {
+          model: this.cityModel,
+          as: 'headquarterCity',
+        },
+      ],
+    });
     if (!brand) {
       throw new NotFoundException('Brand not found');
+    }
+
+    // Calculate taxes
+    // Total = 29900 paise (Rs 299)
+    // Base = 253.39 (in paise: 25339)
+    // IGST = 45.61 (in paise: 4561)
+    // CGST = 45.61/2 = 22.805 (in paise: 2281)
+    // SGST = 45.61/2 = 22.805 (in paise: 2280)
+    const totalAmount = this.MAX_CAMPAIGN_AMOUNT; // 29900 paise
+    const baseAmount = 25339; // Rs 253.39 in paise
+
+    let cgst = 0;
+    let sgst = 0;
+    let igst = 0;
+    let taxAmount = 0;
+
+    // Check if brand location is Delhi
+    const cityName = brand.headquarterCity?.name?.toLowerCase();
+    const isDelhi = cityName === 'delhi' || cityName === 'new delhi';
+
+    if (isDelhi) {
+      // For Delhi: CGST and SGST (total tax = 4561 paise = Rs 45.61)
+      cgst = 2281; // Rs 22.81
+      sgst = 2280; // Rs 22.80 (total: 4561 paise)
+      taxAmount = cgst + sgst; // 4561
+    } else {
+      // For other locations: IGST
+      igst = 4561; // Rs 45.61
+      taxAmount = igst;
     }
 
     // Generate invoice number
     const invoiceNumber = await this.generateInvoiceNumber();
 
-    // Create invoice
+    // Create invoice with tax breakdown
     const invoice = await this.maxCampaignInvoiceModel.create({
       invoiceNumber,
       campaignId,
       brandId,
-      amount: this.MAX_CAMPAIGN_AMOUNT,
-      tax: 0, // No GST for services under Rs 20 lakh turnover
-      totalAmount: this.MAX_CAMPAIGN_AMOUNT,
+      amount: baseAmount,
+      tax: taxAmount,
+      cgst,
+      sgst,
+      igst,
+      totalAmount: totalAmount,
       paymentStatus: InvoiceStatus.PENDING,
       paymentMethod: PaymentMethod.RAZORPAY,
     });
 
-    // Create Razorpay order
+    // Create Razorpay order (totalAmount is in paise, convert to rupees)
     const razorpayOrder = await this.razorpayService.createOrder(
-      299, // Amount in Rs
+      invoice.totalAmount / 100, // Amount in Rs
       'INR',
       `MAX_CAMPAIGN_${campaignId}_INV_${invoice.id}`,
       {
@@ -147,7 +189,7 @@ export class MaxCampaignPaymentService {
     await campaign.update({
       maxCampaignPaymentStatus: 'pending',
       maxCampaignOrderId: razorpayOrder.orderId,
-      maxCampaignAmount: this.MAX_CAMPAIGN_AMOUNT,
+      maxCampaignAmount: invoice.totalAmount,
       status: 'draft' as any, // Campaign will be DRAFT until payment is completed
     });
 
@@ -397,7 +439,16 @@ export class MaxCampaignPaymentService {
     const invoice = await this.maxCampaignInvoiceModel.findByPk(invoiceId, {
       include: [
         { model: Campaign, as: 'campaign' },
-        { model: Brand, as: 'brand' },
+        {
+          model: Brand,
+          as: 'brand',
+          include: [
+            {
+              model: this.cityModel,
+              as: 'headquarterCity',
+            },
+          ],
+        },
       ],
     });
 
@@ -416,13 +467,22 @@ export class MaxCampaignPaymentService {
       ? this.encryptionService.decrypt(invoice.brand.email)
       : invoice.brand.email;
 
-    // Store invoice data
+    // Format location as "City, State"
+    const city = (invoice.brand as any).headquarterCity;
+    const cityName = city?.name || '';
+    const stateName = city?.state || '';
+    const location = cityName && stateName
+      ? `${cityName}, ${stateName}`
+      : cityName || stateName || 'N/A';
+
+    // Store invoice data with tax breakdown
     const invoiceData = {
       invoiceNumber: invoice.invoiceNumber,
       date: invoice.paidAt || invoice.createdAt,
       brand: {
         name: invoice.brand.brandName,
         email: decryptedEmail,
+        location: location,
       },
       campaign: {
         name: invoice.campaign.name,
@@ -439,6 +499,9 @@ export class MaxCampaignPaymentService {
       ],
       subtotal: invoice.amount / 100,
       tax: invoice.tax / 100,
+      cgst: invoice.cgst / 100,
+      sgst: invoice.sgst / 100,
+      igst: invoice.igst / 100,
       total: invoice.totalAmount / 100,
     };
 

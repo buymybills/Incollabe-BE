@@ -5,6 +5,7 @@ import { ProSubscription, SubscriptionStatus, PaymentMethod, UpiMandateStatus } 
 import { ProInvoice, InvoiceStatus } from '../models/pro-invoice.model';
 import { ProPaymentTransaction, TransactionType, TransactionStatus } from '../models/pro-payment-transaction.model';
 import { Influencer } from '../../auth/model/influencer.model';
+import { City } from '../../shared/models/city.model';
 import { RazorpayService } from '../../shared/razorpay.service';
 import { S3Service } from '../../shared/s3.service';
 import { EncryptionService } from '../../shared/services/encryption.service';
@@ -29,6 +30,8 @@ export class ProSubscriptionService {
     private proPaymentTransactionModel: typeof ProPaymentTransaction,
     @InjectModel(Influencer)
     private influencerModel: typeof Influencer,
+    @InjectModel(City)
+    private cityModel: typeof City,
     private razorpayService: RazorpayService,
     private s3Service: S3Service,
     private configService: ConfigService,
@@ -96,19 +99,61 @@ export class ProSubscriptionService {
       autoRenew: false, // Only enable after first payment is successful
     });
 
+    // Get influencer with city information
+    const influencerWithCity = await this.influencerModel.findByPk(influencerId, {
+      include: [
+        {
+          model: this.cityModel,
+          as: 'city',
+        },
+      ],
+    });
+
+    // Calculate taxes
+    // Total = 19900 paise (Rs 199)
+    // Base = 168.64 (in paise: 16864)
+    // IGST = 30.35 (in paise: 3035)
+    // CGST = 30.35/2 = 15.175 (in paise: 1518)
+    // SGST = 30.35/2 = 15.175 (in paise: 1517)
+    const totalAmount = this.PRO_SUBSCRIPTION_AMOUNT; // 19900 paise
+    const baseAmount = 16864; // Rs 168.64 in paise
+
+    let cgst = 0;
+    let sgst = 0;
+    let igst = 0;
+    let totalTax = 0;
+
+    // Check if influencer location is Delhi
+    const cityName = influencerWithCity?.city?.name?.toLowerCase();
+    const isDelhi = cityName === 'delhi' || cityName === 'new delhi';
+
+    if (isDelhi) {
+      // For Delhi: CGST and SGST (total tax = 3035 paise = Rs 30.35)
+      cgst = 1518; // Rs 15.18
+      sgst = 1517; // Rs 15.17 (total: 3035 paise)
+      totalTax = cgst + sgst; // 3035
+    } else {
+      // For other locations: IGST
+      igst = 3035; // Rs 30.35
+      totalTax = igst;
+    }
+
     // Generate invoice number
     const invoiceNumber = await this.generateInvoiceNumber(influencerId);
 
-    // Create invoice
+    // Create invoice with tax breakdown
     let invoice;
     try {
       invoice = await this.proInvoiceModel.create({
         invoiceNumber,
         subscriptionId: subscription.id,
         influencerId,
-        amount: this.PRO_SUBSCRIPTION_AMOUNT,
-        tax: 0, // No GST for services under Rs 20 lakh turnover
-        totalAmount: this.PRO_SUBSCRIPTION_AMOUNT,
+        amount: baseAmount,
+        tax: totalTax,
+        cgst,
+        sgst,
+        igst,
+        totalAmount: totalAmount,
         billingPeriodStart: startDate,
         billingPeriodEnd: endDate,
         paymentStatus: InvoiceStatus.PENDING,
@@ -123,9 +168,9 @@ export class ProSubscriptionService {
       throw new BadRequestException(`Failed to create invoice: ${error.message} - ${JSON.stringify(error.errors || error)}`);
     }
 
-    // Create Razorpay order
+    // Create Razorpay order (total remains 199)
     const razorpayOrder = await this.razorpayService.createOrder(
-      199, // Amount in Rs
+      totalAmount / 100, // Amount in Rs (199)
       'INR',
       `PRO_SUB_${subscription.id}_INV_${invoice.id}`,
       {
@@ -485,15 +530,52 @@ export class ProSubscriptionService {
       };
     }
 
+    // Get influencer with city information for tax calculation
+    const influencerWithCity = await this.influencerModel.findByPk(influencerId, {
+      include: [
+        {
+          model: this.cityModel,
+          as: 'city',
+        },
+      ],
+    });
+
+    // Calculate taxes based on location
+    const totalAmount = this.PRO_SUBSCRIPTION_AMOUNT; // 19900 paise
+    const baseAmount = 16864; // Rs 168.64 in paise
+
+    let cgst = 0;
+    let sgst = 0;
+    let igst = 0;
+    let totalTax = 0;
+
+    // Check if influencer location is Delhi
+    const cityName = influencerWithCity?.city?.name?.toLowerCase();
+    const isDelhi = cityName === 'delhi' || cityName === 'new delhi';
+
+    if (isDelhi) {
+      // For Delhi: CGST and SGST (total tax = 3035 paise = Rs 30.35)
+      cgst = 1518; // Rs 15.18
+      sgst = 1517; // Rs 15.17 (total: 3035 paise)
+      totalTax = cgst + sgst; // 3035
+    } else {
+      // For other locations: IGST
+      igst = 3035; // Rs 30.35
+      totalTax = igst;
+    }
+
     // Create invoice
     const invoiceNumber = await this.generateInvoiceNumber(influencerId);
     const invoice = await this.proInvoiceModel.create({
       invoiceNumber,
       subscriptionId: subscription.id,
       influencerId,
-      amount: subscription.subscriptionAmount,
-      tax: 0,
-      totalAmount: subscription.subscriptionAmount,
+      amount: baseAmount,
+      tax: totalTax,
+      cgst,
+      sgst,
+      igst,
+      totalAmount: totalAmount,
       billingPeriodStart: subscription.currentPeriodStart,
       billingPeriodEnd: subscription.currentPeriodEnd,
       paymentStatus: InvoiceStatus.PAID,
@@ -501,6 +583,8 @@ export class ProSubscriptionService {
       razorpayPaymentId: subscription.razorpaySubscriptionId || `manual_${Date.now()}`,
       paidAt: createDatabaseDate(),
     });
+
+    console.log(`✅ Manual invoice created: ${invoice.invoiceNumber} (CGST: ${cgst}, SGST: ${sgst}, IGST: ${igst})`);
 
     // Generate PDF
     try {
@@ -653,7 +737,16 @@ export class ProSubscriptionService {
   private async generateInvoicePDF(invoiceId: number) {
     const invoice = await this.proInvoiceModel.findByPk(invoiceId, {
       include: [
-        { model: Influencer, as: 'influencer' },
+        {
+          model: Influencer,
+          as: 'influencer',
+          include: [
+            {
+              model: this.cityModel,
+              as: 'city',
+            },
+          ],
+        },
         { model: ProSubscription, as: 'subscription' },
       ],
     });
@@ -667,17 +760,26 @@ export class ProSubscriptionService {
       ? this.encryptionService.decrypt(invoice.influencer.phone)
       : invoice.influencer.phone;
 
-    // Store invoice data
+    // Format location as "City, State"
+    const city = (invoice.influencer as any).city;
+    const cityName = city?.name || '';
+    const stateName = city?.state || '';
+    const location = cityName && stateName
+      ? `${cityName}, ${stateName}`
+      : cityName || stateName || 'N/A';
+
+    // Store invoice data with tax breakdown
     const invoiceData = {
       invoiceNumber: invoice.invoiceNumber,
       date: invoice.paidAt || invoice.createdAt,
       influencer: {
         name: invoice.influencer.name,
         phone: decryptedPhone || 'N/A',
+        location: location,
       },
       items: [
         {
-          description: 'Maxx membership- Creator',
+          description: 'Maxx Subscription - Creator',
           quantity: 1,
           rate: invoice.amount / 100,
           amount: invoice.amount / 100,
@@ -687,6 +789,9 @@ export class ProSubscriptionService {
       ],
       subtotal: invoice.amount / 100,
       tax: invoice.tax / 100,
+      cgst: invoice.cgst / 100,
+      sgst: invoice.sgst / 100,
+      igst: invoice.igst / 100,
       total: invoice.totalAmount / 100,
       billingPeriod: {
         start: invoice.billingPeriodStart,
@@ -811,7 +916,7 @@ export class ProSubscriptionService {
         .font('Helvetica')
         .fontSize(11)
         .fillColor('#374151')
-        .text('Deshanta Marketing Solutions Pvt. Ltd', col3X, detailsStartY + 18, { width: 200 })
+        .text('Depshanta Marketing Solutions Pvt. Ltd', col3X, detailsStartY + 18, { width: 200 })
         .text('Plot A-18, Manjeet farm', col3X, detailsStartY + 31, { width: 200 })
         .text('Uttam Nagar, Delhi', col3X, detailsStartY + 44, { width: 200 })
         .text('West Delhi, Delhi, 110059, IN', col3X, detailsStartY + 57, { width: 200 })
@@ -852,7 +957,7 @@ export class ProSubscriptionService {
         .fontSize(11)
         .font('Helvetica')
         .fillColor('#374151')
-        .text('Maxx membership- Creator', colPositions.service, yPosition)
+        .text('Maxx Subscription - Creator', colPositions.service, yPosition)
         .text(String(item.quantity), colPositions.qty, yPosition)
         .text(`Rs. ${item.rate.toFixed(2)}`, colPositions.rate, yPosition)
         .text(String(item.hscCode || 'N/A'), colPositions.hscCode, yPosition)
@@ -880,9 +985,32 @@ export class ProSubscriptionService {
         .text(`Rs. ${invoiceData.subtotal.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
 
       yPosition += 25;
-      doc
-        .text('Tax (0%)', totalsX, yPosition)
-        .text(`Rs. ${invoiceData.tax.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
+
+      // Show tax breakdown based on whether it's Delhi (CGST+SGST) or other location (IGST)
+      const hasIgst = invoiceData.igst && invoiceData.igst > 0;
+      const hasCgstSgst = (invoiceData.cgst && invoiceData.cgst > 0) || (invoiceData.sgst && invoiceData.sgst > 0);
+
+      if (hasCgstSgst) {
+        // For Delhi: Show CGST and SGST
+        doc
+          .text('CGST (9%)', totalsX, yPosition)
+          .text(`Rs. ${invoiceData.cgst.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
+
+        yPosition += 25;
+        doc
+          .text('SGST (9%)', totalsX, yPosition)
+          .text(`Rs. ${invoiceData.sgst.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
+      } else if (hasIgst) {
+        // For other locations: Show IGST
+        doc
+          .text('IGST (18%)', totalsX, yPosition)
+          .text(`Rs. ${invoiceData.igst.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
+      } else {
+        // Fallback: Show total tax (for backward compatibility)
+        doc
+          .text('Tax (18%)', totalsX, yPosition)
+          .text(`Rs. ${invoiceData.tax.toFixed(2)}`, totalsValueX, yPosition, { align: 'right', width: 80 });
+      }
 
       yPosition += 25;
       doc
@@ -910,6 +1038,17 @@ export class ProSubscriptionService {
       // Footer
       const footerY = doc.page.height - 100;
 
+      // Location in footer (above Thank you)
+      doc
+        .fontSize(11)
+        .font('Helvetica-Bold')
+        .fillColor('#000000')
+        .text('Location', margin, footerY - 50)
+        .font('Helvetica')
+        .fontSize(11)
+        .fillColor('#6b7280')
+        .text(invoiceData.influencer.location || 'N/A', margin, footerY - 32);
+
       doc
         .fontSize(11)
         .font('Helvetica')
@@ -920,7 +1059,7 @@ export class ProSubscriptionService {
           align: 'right',
           width: 200
         })
-        .text('contact.us@gobuybill.com', pageWidth - 250, footerY + 18, {
+        .text('contact.us@collabkaroo.com', pageWidth - 250, footerY + 18, {
           align: 'right',
           width: 200
         });
@@ -1112,17 +1251,52 @@ export class ProSubscriptionService {
         if (existingActivationInvoice) {
           console.log(`✅ Invoice already exists for this period: ${existingActivationInvoice.invoiceNumber}`);
         } else {
-          // Create invoice for first payment
-          const activationAmount = subscriptionEntity.amount || this.PRO_SUBSCRIPTION_AMOUNT;
+          // Get influencer with city information for tax calculation
+          const influencerWithCity = await this.influencerModel.findByPk(subscription.influencerId, {
+            include: [
+              {
+                model: this.cityModel,
+                as: 'city',
+              },
+            ],
+          });
+
+          // Calculate taxes based on location
+          const totalAmount = this.PRO_SUBSCRIPTION_AMOUNT; // 19900 paise
+          const baseAmount = 16864; // Rs 168.64 in paise
+
+          let cgst = 0;
+          let sgst = 0;
+          let igst = 0;
+          let totalTax = 0;
+
+          // Check if influencer location is Delhi
+          const cityName = influencerWithCity?.city?.name?.toLowerCase();
+          const isDelhi = cityName === 'delhi' || cityName === 'new delhi';
+
+          if (isDelhi) {
+            // For Delhi: CGST and SGST (total tax = 3035 paise = Rs 30.35)
+            cgst = 1518; // Rs 15.18
+            sgst = 1517; // Rs 15.17 (total: 3035 paise)
+            totalTax = cgst + sgst; // 3035
+          } else {
+            // For other locations: IGST
+            igst = 3035; // Rs 30.35
+            totalTax = igst;
+          }
+
           const activationInvoiceNumber = await this.generateInvoiceNumber(subscription.influencerId);
 
           const activationInvoice = await this.proInvoiceModel.create({
             invoiceNumber: activationInvoiceNumber,
             subscriptionId: subscription.id,
             influencerId: subscription.influencerId,
-            amount: activationAmount,
-            tax: 0,
-            totalAmount: activationAmount,
+            amount: baseAmount,
+            tax: totalTax,
+            cgst,
+            sgst,
+            igst,
+            totalAmount: totalAmount,
             billingPeriodStart: subscription.currentPeriodStart,
             billingPeriodEnd: subscription.currentPeriodEnd,
             paymentStatus: 'paid',
@@ -1131,7 +1305,7 @@ export class ProSubscriptionService {
             paidAt: createDatabaseDate(),
           });
 
-          console.log(`✅ Subscription ${subscription.id} activated with invoice ${activationInvoice.invoiceNumber}`);
+          console.log(`✅ Subscription ${subscription.id} activated with invoice ${activationInvoice.invoiceNumber} (CGST: ${cgst}, SGST: ${sgst}, IGST: ${igst})`);
 
           // Generate PDF for newly created invoice
           try {
@@ -1139,7 +1313,7 @@ export class ProSubscriptionService {
             console.log(`📄 Invoice PDF generated for activation: ${activationInvoice.invoiceNumber}`);
           } catch (pdfError) {
             console.error('Failed to generate activation invoice PDF:', pdfError);
-          } 
+          }
         }
         break;
 
@@ -1165,17 +1339,57 @@ export class ProSubscriptionService {
         if (existingChargeInvoice) {
           console.log(`✅ Invoice already exists for this period: ${existingChargeInvoice.invoiceNumber}`);
         } else {
-          // Create invoice for this charge
-          const chargeAmount = subscriptionEntity.amount || this.PRO_SUBSCRIPTION_AMOUNT;
+          // Get influencer with city information for tax calculation
+          const influencerWithCity = await this.influencerModel.findByPk(subscription.influencerId, {
+            include: [
+              {
+                model: this.cityModel,
+                as: 'city',
+              },
+            ],
+          });
+
+          // Calculate taxes based on location
+          // Total = 19900 paise (Rs 199)
+          // Base = 168.64 (in paise: 16864)
+          // IGST = 30.35 (in paise: 3035)
+          // CGST = 30.35/2 = 15.175 (in paise: 1518)
+          // SGST = 30.35/2 = 15.175 (in paise: 1517)
+          const totalAmount = this.PRO_SUBSCRIPTION_AMOUNT; // 19900 paise
+          const baseAmount = 16864; // Rs 168.64 in paise
+
+          let cgst = 0;
+          let sgst = 0;
+          let igst = 0;
+          let totalTax = 0;
+
+          // Check if influencer location is Delhi
+          const cityName = influencerWithCity?.city?.name?.toLowerCase();
+          const isDelhi = cityName === 'delhi' || cityName === 'new delhi';
+
+          if (isDelhi) {
+            // For Delhi: CGST and SGST (total tax = 3035 paise = Rs 30.35)
+            cgst = 1518; // Rs 15.18
+            sgst = 1517; // Rs 15.17 (total: 3035 paise)
+            totalTax = cgst + sgst; // 3035
+          } else {
+            // For other locations: IGST
+            igst = 3035; // Rs 30.35
+            totalTax = igst;
+          }
+
           const invoiceNumber = await this.generateInvoiceNumber(subscription.influencerId);
 
           const newInvoice = await this.proInvoiceModel.create({
             invoiceNumber,
             subscriptionId: subscription.id,
             influencerId: subscription.influencerId,
-            amount: chargeAmount,
-            tax: 0,
-            totalAmount: chargeAmount,
+            amount: baseAmount,
+            tax: totalTax,
+            cgst,
+            sgst,
+            igst,
+            totalAmount: totalAmount,
             billingPeriodStart: subscription.currentPeriodStart,
             billingPeriodEnd: subscription.currentPeriodEnd,
             paymentStatus: 'paid',
@@ -1184,7 +1398,7 @@ export class ProSubscriptionService {
             paidAt: createDatabaseDate(),
           });
 
-          console.log(`✅ Recurring charge invoice created: ${newInvoice.invoiceNumber}`);
+          console.log(`✅ Recurring charge invoice created: ${newInvoice.invoiceNumber} (CGST: ${cgst}, SGST: ${sgst}, IGST: ${igst})`);
 
           // Generate invoice PDF
           try {
@@ -1378,15 +1592,52 @@ export class ProSubscriptionService {
       razorpaySubscriptionId: `test_sub_${Date.now()}`, // Dummy subscription ID
     });
 
+    // Get influencer with city information for tax calculation
+    const influencerWithCity = await this.influencerModel.findByPk(influencerId, {
+      include: [
+        {
+          model: this.cityModel,
+          as: 'city',
+        },
+      ],
+    });
+
+    // Calculate taxes based on location
+    const totalAmount = this.PRO_SUBSCRIPTION_AMOUNT; // 19900 paise
+    const baseAmount = 16864; // Rs 168.64 in paise
+
+    let cgst = 0;
+    let sgst = 0;
+    let igst = 0;
+    let totalTax = 0;
+
+    // Check if influencer location is Delhi
+    const cityName = influencerWithCity?.city?.name?.toLowerCase();
+    const isDelhi = cityName === 'delhi' || cityName === 'new delhi';
+
+    if (isDelhi) {
+      // For Delhi: CGST and SGST (total tax = 3035 paise = Rs 30.35)
+      cgst = 1518; // Rs 15.18
+      sgst = 1517; // Rs 15.17 (total: 3035 paise)
+      totalTax = cgst + sgst; // 3035
+    } else {
+      // For other locations: IGST
+      igst = 3035; // Rs 30.35
+      totalTax = igst;
+    }
+
     // Create test invoice
     const invoiceNumber = await this.generateInvoiceNumber(influencerId);
     const invoice = await this.proInvoiceModel.create({
       invoiceNumber,
       subscriptionId: subscription.id,
       influencerId,
-      amount: this.PRO_SUBSCRIPTION_AMOUNT,
-      tax: 0,
-      totalAmount: this.PRO_SUBSCRIPTION_AMOUNT,
+      amount: baseAmount,
+      tax: totalTax,
+      cgst,
+      sgst,
+      igst,
+      totalAmount: totalAmount,
       billingPeriodStart: startDate,
       billingPeriodEnd: endDate,
       paymentStatus: InvoiceStatus.PAID,
@@ -1395,6 +1646,8 @@ export class ProSubscriptionService {
       razorpayOrderId: `test_order_${Date.now()}`,
       paidAt: startDate,
     });
+
+    console.log(`✅ Test invoice created: ${invoice.invoiceNumber} (CGST: ${cgst}, SGST: ${sgst}, IGST: ${igst})`);
 
     // Update influencer isPro status
     await this.influencerModel.update(

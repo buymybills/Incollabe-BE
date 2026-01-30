@@ -62,6 +62,24 @@ export class ProInvoice extends Model {
 
   @Column({
     type: DataType.INTEGER,
+    defaultValue: 0,
+  })
+  declare cgst: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    defaultValue: 0,
+  })
+  declare sgst: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    defaultValue: 0,
+  })
+  declare igst: number;
+
+  @Column({
+    type: DataType.INTEGER,
     allowNull: false,
   })
   declare totalAmount: number;
