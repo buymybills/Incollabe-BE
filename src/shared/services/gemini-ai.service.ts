@@ -902,6 +902,675 @@ export class GeminiAIService {
   }
 
   /**
+   * Generate concise engagement feedback (4-6 words max)
+   */
+  async generateEngagementFeedback(params: {
+    engagementRate: number; // Engagement rate percentage
+    reachRatio: number; // Reach to follower ratio
+    retentionRate: number; // Retention rate percentage
+    rating: string; // Rating like "Excellent", "Good", etc.
+  }): Promise<string> {
+    if (!this.isAvailable()) {
+      // Return default feedback if AI not available
+      return params.rating === 'Exceptional' ? 'Exceptional engagement and retention' :
+             params.rating === 'Excellent' ? 'Strong engagement and reach' :
+             params.rating === 'Good' ? 'Healthy audience engagement' :
+             params.rating === 'Fair' ? 'Moderate engagement levels' :
+             'Low engagement needs work';
+    }
+
+    try {
+      const prompt = `Generate EXACTLY 4-6 word feedback for engagement: rate:${params.engagementRate}%, reach:${params.reachRatio}x, retention:${params.retentionRate}%, rating:${params.rating}. Be concise. Return JSON: {"feedback":"..."}`;
+
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            response_mime_type: "application/json",
+            temperature: 0.3,
+          }
+        });
+        return await response.response;
+      }, 'generateEngagementFeedback');
+
+      const text = result.text().trim();
+      const parsed = JSON.parse(text);
+
+      // Validate word count (4-6 words)
+      const feedback = parsed.feedback || '';
+      const wordCount = feedback.split(' ').length;
+
+      if (wordCount >= 4 && wordCount <= 6) {
+        return feedback;
+      }
+
+      // Fallback if validation fails
+      return params.rating === 'Exceptional' ? 'Exceptional engagement and retention' :
+             params.rating === 'Excellent' ? 'Strong engagement and reach' :
+             params.rating === 'Good' ? 'Healthy audience engagement' :
+             params.rating === 'Fair' ? 'Moderate engagement levels' :
+             'Low engagement needs work';
+    } catch (error) {
+      this.logger.debug(`Engagement feedback generation unavailable: ${error.message}`);
+      return params.rating === 'Exceptional' ? 'Exceptional engagement and retention' :
+             params.rating === 'Excellent' ? 'Strong engagement and reach' :
+             params.rating === 'Good' ? 'Healthy audience engagement' :
+             params.rating === 'Fair' ? 'Moderate engagement levels' :
+             'Low engagement needs work';
+    }
+  }
+
+  /**
+   * Generate concise performance consistency feedback (4-6 words max)
+   */
+  async generatePerformanceConsistencyFeedback(params: {
+    consistencyPercent: number; // Consistency percentage
+    trendPercent: number; // Trend percentage
+    rating: string; // Rating like "Excellent", "Good", etc.
+  }): Promise<string> {
+    if (!this.isAvailable()) {
+      if (params.consistencyPercent >= 70) return 'Highly consistent post performance';
+      if (params.consistencyPercent >= 50) return 'Moderate performance consistency';
+      return 'Inconsistent post performance detected';
+    }
+
+    try {
+      const prompt = `Generate EXACTLY 4-6 word feedback for consistency: ${params.consistencyPercent}%, trend:${params.trendPercent}%, rating:${params.rating}. Be concise. Return JSON: {"feedback":"..."}`;
+
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            response_mime_type: "application/json",
+            temperature: 0.3,
+          }
+        });
+        return await response.response;
+      }, 'generatePerformanceConsistencyFeedback');
+
+      const text = result.text().trim();
+      const parsed = JSON.parse(text);
+
+      const feedback = parsed.feedback || '';
+      const wordCount = feedback.split(' ').length;
+
+      if (wordCount >= 4 && wordCount <= 6) {
+        return feedback;
+      }
+
+      if (params.consistencyPercent >= 70) return 'Highly consistent post performance';
+      if (params.consistencyPercent >= 50) return 'Moderate performance consistency';
+      return 'Inconsistent post performance detected';
+    } catch (error) {
+      this.logger.debug(`Performance consistency feedback generation unavailable: ${error.message}`);
+      if (params.consistencyPercent >= 70) return 'Highly consistent post performance';
+      if (params.consistencyPercent >= 50) return 'Moderate performance consistency';
+      return 'Inconsistent post performance detected';
+    }
+  }
+
+  /**
+   * Generate concise growth trend feedback (4-6 words max)
+   */
+  async generateGrowthFeedback(params: {
+    growthRate: number;
+    currentGrowth: number;
+    avgGrowthPerDay: number;
+    rating: string;
+  }): Promise<string> {
+    if (!this.isAvailable()) {
+      if (params.growthRate > 20) return 'Excellent follower growth momentum';
+      if (params.growthRate > 10) return 'Good steady growth rate';
+      if (params.growthRate > 0) return 'Slow growth needs boost';
+      return 'Stagnant follower count detected';
+    }
+
+    try {
+      const prompt = `Generate EXACTLY 4-6 word feedback for growth: rate=${params.growthRate.toFixed(1)}%, growth=${params.currentGrowth}, avg/day=${params.avgGrowthPerDay}, rating=${params.rating}. Be concise. Return JSON: {"feedback":"..."}`;
+
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            response_mime_type: "application/json",
+            temperature: 0.3,
+          }
+        });
+        return await response.response;
+      }, 'generateGrowthFeedback');
+
+      const text = result.text().trim();
+      const parsed = JSON.parse(text);
+
+      const feedback = parsed.feedback || '';
+      const wordCount = feedback.split(' ').length;
+
+      if (wordCount >= 4 && wordCount <= 6) {
+        return feedback;
+      }
+
+      if (params.growthRate > 20) return 'Excellent follower growth momentum';
+      if (params.growthRate > 10) return 'Good steady growth rate';
+      if (params.growthRate > 0) return 'Slow growth needs boost';
+      return 'Stagnant follower count detected';
+    } catch (error) {
+      this.logger.debug(`Growth feedback generation unavailable: ${error.message}`);
+      if (params.growthRate > 20) return 'Excellent follower growth momentum';
+      if (params.growthRate > 10) return 'Good steady growth rate';
+      if (params.growthRate > 0) return 'Slow growth needs boost';
+      return 'Stagnant follower count detected';
+    }
+  }
+
+  /**
+   * Generate concise posting behavior feedback (4-6 words max)
+   */
+  async generatePostingBehaviorFeedback(params: {
+    postsPerWeek: number;
+    rating: string;
+    postTypeBreakdown: any;
+  }): Promise<string> {
+    if (!this.isAvailable()) {
+      if (params.postsPerWeek >= 6) return 'Excellent posting frequency maintained';
+      if (params.postsPerWeek >= 4) return 'Good consistent posting schedule';
+      if (params.postsPerWeek >= 2) return 'Moderate posting needs improvement';
+      return 'Low posting frequency detected';
+    }
+
+    try {
+      const reelCount = params.postTypeBreakdown.reel?.count || 0;
+      const imageCount = params.postTypeBreakdown.image?.count || 0;
+      const carouselCount = params.postTypeBreakdown.carousel?.count || 0;
+
+      const prompt = `Generate EXACTLY 4-6 word feedback for posting: ${params.postsPerWeek.toFixed(1)} posts/week, rating=${params.rating}, reels=${reelCount}, images=${imageCount}, carousels=${carouselCount}. Be concise. Return JSON: {"feedback":"..."}`;
+
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            response_mime_type: "application/json",
+            temperature: 0.3,
+          }
+        });
+        return await response.response;
+      }, 'generatePostingBehaviorFeedback');
+
+      const text = result.text().trim();
+      const parsed = JSON.parse(text);
+
+      const feedback = parsed.feedback || '';
+      const wordCount = feedback.split(' ').length;
+
+      if (wordCount >= 4 && wordCount <= 6) {
+        return feedback;
+      }
+
+      if (params.postsPerWeek >= 6) return 'Excellent posting frequency maintained';
+      if (params.postsPerWeek >= 4) return 'Good consistent posting schedule';
+      if (params.postsPerWeek >= 2) return 'Moderate posting needs improvement';
+      return 'Low posting frequency detected';
+    } catch (error) {
+      this.logger.debug(`Posting behavior feedback generation unavailable: ${error.message}`);
+      if (params.postsPerWeek >= 6) return 'Excellent posting frequency maintained';
+      if (params.postsPerWeek >= 4) return 'Good consistent posting schedule';
+      if (params.postsPerWeek >= 2) return 'Moderate posting needs improvement';
+      return 'Low posting frequency detected';
+    }
+  }
+
+  /**
+   * Generate concise niche clarity feedback (4-6 words max)
+   */
+  async generateNicheFeedback(params: {
+    nicheCount: number;
+    topNiches: string[];
+    rating: string;
+  }): Promise<string> {
+    if (!this.isAvailable()) {
+      if (params.nicheCount === 0) return 'No clear content niche';
+      if (params.nicheCount === 1) return 'Strong single niche focus';
+      if (params.nicheCount <= 3) return 'Well-defined multi-niche presence';
+      return 'Versatile across multiple niches';
+    }
+
+    try {
+      const prompt = `Generate EXACTLY 4-6 word feedback for niche: count=${params.nicheCount}, niches=${params.topNiches.join(',')}, rating=${params.rating}. Be concise. Return JSON: {"feedback":"..."}`;
+
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { response_mime_type: "application/json", temperature: 0.3 }
+        });
+        return await response.response;
+      }, 'generateNicheFeedback');
+
+      const parsed = JSON.parse(result.text().trim());
+      const feedback = parsed.feedback || '';
+      if (feedback.split(' ').length >= 4 && feedback.split(' ').length <= 6) return feedback;
+
+      if (params.nicheCount === 0) return 'No clear content niche';
+      if (params.nicheCount === 1) return 'Strong single niche focus';
+      if (params.nicheCount <= 3) return 'Well-defined multi-niche presence';
+      return 'Versatile across multiple niches';
+    } catch (error) {
+      this.logger.debug(`Niche feedback generation unavailable: ${error.message}`);
+      if (params.nicheCount === 0) return 'No clear content niche';
+      if (params.nicheCount === 1) return 'Strong single niche focus';
+      if (params.nicheCount <= 3) return 'Well-defined multi-niche presence';
+      return 'Versatile across multiple niches';
+    }
+  }
+
+  /**
+   * Generate concise hashtag strategy feedback (4-6 words max)
+   */
+  async generateHashtagFeedback(params: {
+    effectiveness: string;
+    rating: string;
+  }): Promise<string> {
+    if (!this.isAvailable()) {
+      if (params.effectiveness === 'high') return 'Excellent hashtag strategy working';
+      if (params.effectiveness === 'good') return 'Good hashtag usage detected';
+      return 'Improve hashtag selection strategy';
+    }
+
+    try {
+      const prompt = `Generate EXACTLY 4-6 word feedback for hashtags: effectiveness=${params.effectiveness}, rating=${params.rating}. Be concise. Return JSON: {"feedback":"..."}`;
+
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { response_mime_type: "application/json", temperature: 0.3 }
+        });
+        return await response.response;
+      }, 'generateHashtagFeedback');
+
+      const parsed = JSON.parse(result.text().trim());
+      const feedback = parsed.feedback || '';
+      if (feedback.split(' ').length >= 4 && feedback.split(' ').length <= 6) return feedback;
+
+      if (params.effectiveness === 'high') return 'Excellent hashtag strategy working';
+      if (params.effectiveness === 'good') return 'Good hashtag usage detected';
+      return 'Improve hashtag selection strategy';
+    } catch (error) {
+      this.logger.debug(`Hashtag feedback generation unavailable: ${error.message}`);
+      if (params.effectiveness === 'high') return 'Excellent hashtag strategy working';
+      if (params.effectiveness === 'good') return 'Good hashtag usage detected';
+      return 'Improve hashtag selection strategy';
+    }
+  }
+
+  /**
+   * Generate concise content mix feedback (4-6 words max)
+   */
+  async generateContentMixFeedback(params: {
+    reelPercent: number;
+    imagePercent: number;
+    carouselPercent: number;
+    rating: string;
+  }): Promise<string> {
+    if (!this.isAvailable()) {
+      if (params.reelPercent >= 70) return 'High reel dominance detected';
+      if (params.reelPercent >= 40) return 'Excellent balanced content mix';
+      return 'Increase reel content percentage';
+    }
+
+    try {
+      const prompt = `Generate EXACTLY 4-6 word feedback for content mix: reels=${params.reelPercent}%, images=${params.imagePercent}%, carousels=${params.carouselPercent}%, rating=${params.rating}. Be concise. Return JSON: {"feedback":"..."}`;
+
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { response_mime_type: "application/json", temperature: 0.3 }
+        });
+        return await response.response;
+      }, 'generateContentMixFeedback');
+
+      const parsed = JSON.parse(result.text().trim());
+      const feedback = parsed.feedback || '';
+      if (feedback.split(' ').length >= 4 && feedback.split(' ').length <= 6) return feedback;
+
+      if (params.reelPercent >= 70) return 'High reel dominance detected';
+      if (params.reelPercent >= 40) return 'Excellent balanced content mix';
+      return 'Increase reel content percentage';
+    } catch (error) {
+      this.logger.debug(`Content mix feedback generation unavailable: ${error.message}`);
+      if (params.reelPercent >= 70) return 'High reel dominance detected';
+      if (params.reelPercent >= 40) return 'Excellent balanced content mix';
+      return 'Increase reel content percentage';
+    }
+  }
+
+  /**
+   * Generate concise face presence feedback (4-6 words max)
+   */
+  async generateFacePresenceFeedback(params: {
+    facePercent: number;
+    rating: string;
+  }): Promise<string> {
+    if (!this.isAvailable()) {
+      if (params.facePercent >= 60) return 'Strong personal brand presence';
+      if (params.facePercent >= 30) return 'Balanced personal content style';
+      return 'Faceless content strategy detected';
+    }
+
+    try {
+      const prompt = `Generate EXACTLY 4-6 word feedback for face presence: ${params.facePercent}%, rating=${params.rating}. Be concise. Return JSON: {"feedback":"..."}`;
+
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { response_mime_type: "application/json", temperature: 0.3 }
+        });
+        return await response.response;
+      }, 'generateFacePresenceFeedback');
+
+      const parsed = JSON.parse(result.text().trim());
+      const feedback = parsed.feedback || '';
+      if (feedback.split(' ').length >= 4 && feedback.split(' ').length <= 6) return feedback;
+
+      if (params.facePercent >= 60) return 'Strong personal brand presence';
+      if (params.facePercent >= 30) return 'Balanced personal content style';
+      return 'Faceless content strategy detected';
+    } catch (error) {
+      this.logger.debug(`Face presence feedback generation unavailable: ${error.message}`);
+      if (params.facePercent >= 60) return 'Strong personal brand presence';
+      if (params.facePercent >= 30) return 'Balanced personal content style';
+      return 'Faceless content strategy detected';
+    }
+  }
+
+  /**
+   * Generate concise performance distribution feedback (4-6 words max)
+   */
+  async generatePerformanceDistributionFeedback(params: {
+    highPerformingPercent: number;
+    lowPerformingPercent: number;
+    rating: string;
+  }): Promise<string> {
+    if (!this.isAvailable()) {
+      if (params.lowPerformingPercent <= 10) return 'Excellent content consistency achieved';
+      if (params.lowPerformingPercent <= 25) return 'Good overall performance consistency';
+      if (params.lowPerformingPercent <= 40) return 'Moderate performance with fluctuations';
+      return 'High variability in performance';
+    }
+
+    try {
+      const prompt = `Generate EXACTLY 4-6 word feedback for performance: high=${params.highPerformingPercent}%, low=${params.lowPerformingPercent}%, rating=${params.rating}. Be concise. Return JSON: {"feedback":"..."}`;
+
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { response_mime_type: "application/json", temperature: 0.3 }
+        });
+        return await response.response;
+      }, 'generatePerformanceDistributionFeedback');
+
+      const parsed = JSON.parse(result.text().trim());
+      const feedback = parsed.feedback || '';
+      if (feedback.split(' ').length >= 4 && feedback.split(' ').length <= 6) return feedback;
+
+      if (params.lowPerformingPercent <= 10) return 'Excellent content consistency achieved';
+      if (params.lowPerformingPercent <= 25) return 'Good overall performance consistency';
+      if (params.lowPerformingPercent <= 40) return 'Moderate performance with fluctuations';
+      return 'High variability in performance';
+    } catch (error) {
+      this.logger.debug(`Performance distribution feedback generation unavailable: ${error.message}`);
+      if (params.lowPerformingPercent <= 10) return 'Excellent content consistency achieved';
+      if (params.lowPerformingPercent <= 25) return 'Good overall performance consistency';
+      if (params.lowPerformingPercent <= 40) return 'Moderate performance with fluctuations';
+      return 'High variability in performance';
+    }
+  }
+
+  /**
+   * Generate concise language/market alignment feedback (4-6 words max)
+   */
+  async generateLanguageAlignmentFeedback(params: {
+    targetLanguagePercent: number;
+    rating: string;
+  }): Promise<string> {
+    if (!this.isAvailable()) {
+      if (params.targetLanguagePercent >= 70) return 'Excellent market language alignment';
+      if (params.targetLanguagePercent >= 50) return 'Strong market fit detected';
+      if (params.targetLanguagePercent >= 30) return 'Moderate market alignment present';
+      return 'Limited market language fit';
+    }
+
+    try {
+      const prompt = `Generate EXACTLY 4-6 word feedback for language alignment: ${params.targetLanguagePercent}%, rating=${params.rating}. Be concise. Return JSON: {"feedback":"..."}`;
+
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { response_mime_type: "application/json", temperature: 0.3 }
+        });
+        return await response.response;
+      }, 'generateLanguageAlignmentFeedback');
+
+      const parsed = JSON.parse(result.text().trim());
+      const feedback = parsed.feedback || '';
+      if (feedback.split(' ').length >= 4 && feedback.split(' ').length <= 6) return feedback;
+
+      if (params.targetLanguagePercent >= 70) return 'Excellent market language alignment';
+      if (params.targetLanguagePercent >= 50) return 'Strong market fit detected';
+      if (params.targetLanguagePercent >= 30) return 'Moderate market alignment present';
+      return 'Limited market language fit';
+    } catch (error) {
+      this.logger.debug(`Language alignment feedback generation unavailable: ${error.message}`);
+      if (params.targetLanguagePercent >= 70) return 'Excellent market language alignment';
+      if (params.targetLanguagePercent >= 50) return 'Strong market fit detected';
+      if (params.targetLanguagePercent >= 30) return 'Moderate market alignment present';
+      return 'Limited market language fit';
+    }
+  }
+
+  /**
+   * Generate concise visual quality feedback (4-6 words max)
+   */
+  async generateVisualQualityFeedback(params: {
+    avgLighting: number;
+    avgEditing: number;
+    avgAesthetics: number;
+    rating: string;
+  }): Promise<string> {
+    if (!this.isAvailable()) {
+      const avgScore = (params.avgLighting + params.avgEditing + params.avgAesthetics) / 3;
+      if (avgScore >= 80) return 'Professional quality visual content';
+      if (avgScore >= 60) return 'Good editing and composition';
+      return 'Improve visual content quality';
+    }
+
+    try {
+      const prompt = `Generate EXACTLY 4-6 word feedback for visual quality: lighting=${params.avgLighting}, editing=${params.avgEditing}, aesthetics=${params.avgAesthetics}, rating=${params.rating}. Be concise. Return JSON: {"feedback":"..."}`;
+
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { response_mime_type: "application/json", temperature: 0.3 }
+        });
+        return await response.response;
+      }, 'generateVisualQualityFeedback');
+
+      const parsed = JSON.parse(result.text().trim());
+      const feedback = parsed.feedback || '';
+      if (feedback.split(' ').length >= 4 && feedback.split(' ').length <= 6) return feedback;
+
+      const avgScore = (params.avgLighting + params.avgEditing + params.avgAesthetics) / 3;
+      if (avgScore >= 80) return 'Professional quality visual content';
+      if (avgScore >= 60) return 'Good editing and composition';
+      return 'Improve visual content quality';
+    } catch (error) {
+      this.logger.debug(`Visual quality feedback generation unavailable: ${error.message}`);
+      const avgScore = (params.avgLighting + params.avgEditing + params.avgAesthetics) / 3;
+      if (avgScore >= 80) return 'Professional quality visual content';
+      if (avgScore >= 60) return 'Good editing and composition';
+      return 'Improve visual content quality';
+    }
+  }
+
+  /**
+   * Generate concise follower authenticity feedback (4-6 words max)
+   */
+  async generateFollowerAuthenticityFeedback(params: {
+    authenticityPercent: number;
+    change: number;
+    rating: string;
+  }): Promise<string> {
+    if (!this.isAvailable()) {
+      if (params.authenticityPercent >= 60) return 'Healthy active follower base';
+      if (params.authenticityPercent < 30) return 'Low follower authenticity detected';
+      return 'Moderate follower engagement levels';
+    }
+
+    try {
+      const prompt = `Generate EXACTLY 4-6 word feedback for follower authenticity: ${params.authenticityPercent}%, change=${params.change}%, rating=${params.rating}. Be concise. Return JSON: {"feedback":"..."}`;
+
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { response_mime_type: "application/json", temperature: 0.3 }
+        });
+        return await response.response;
+      }, 'generateFollowerAuthenticityFeedback');
+
+      const parsed = JSON.parse(result.text().trim());
+      const feedback = parsed.feedback || '';
+      if (feedback.split(' ').length >= 4 && feedback.split(' ').length <= 6) return feedback;
+
+      if (params.authenticityPercent >= 60) return 'Healthy active follower base';
+      if (params.authenticityPercent < 30) return 'Low follower authenticity detected';
+      return 'Moderate follower engagement levels';
+    } catch (error) {
+      this.logger.debug(`Follower authenticity feedback generation unavailable: ${error.message}`);
+      if (params.authenticityPercent >= 60) return 'Healthy active follower base';
+      if (params.authenticityPercent < 30) return 'Low follower authenticity detected';
+      return 'Moderate follower engagement levels';
+    }
+  }
+
+  /**
+   * Generate concise demographics stability feedback (4-6 words max)
+   */
+  async generateDemographicsStabilityFeedback(params: {
+    stabilityScore: number;
+    coreAudience: string;
+    rating: string;
+  }): Promise<string> {
+    if (!this.isAvailable()) {
+      if (params.stabilityScore >= 8) return 'Stable core audience demographics';
+      if (params.stabilityScore >= 6) return 'Moderate audience stability detected';
+      return 'Demographic shifts detected recently';
+    }
+
+    try {
+      const prompt = `Generate EXACTLY 4-6 word feedback for demographics stability: score=${params.stabilityScore}, audience=${params.coreAudience}, rating=${params.rating}. Be concise. Return JSON: {"feedback":"..."}`;
+
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { response_mime_type: "application/json", temperature: 0.3 }
+        });
+        return await response.response;
+      }, 'generateDemographicsStabilityFeedback');
+
+      const parsed = JSON.parse(result.text().trim());
+      const feedback = parsed.feedback || '';
+      if (feedback.split(' ').length >= 4 && feedback.split(' ').length <= 6) return feedback;
+
+      if (params.stabilityScore >= 8) return 'Stable core audience demographics';
+      if (params.stabilityScore >= 6) return 'Moderate audience stability detected';
+      return 'Demographic shifts detected recently';
+    } catch (error) {
+      this.logger.debug(`Demographics stability feedback generation unavailable: ${error.message}`);
+      if (params.stabilityScore >= 8) return 'Stable core audience demographics';
+      if (params.stabilityScore >= 6) return 'Moderate audience stability detected';
+      return 'Demographic shifts detected recently';
+    }
+  }
+
+  /**
+   * Generate concise geo relevance feedback (4-6 words max)
+   */
+  async generateGeoRelevanceFeedback(params: {
+    targetCountryPercent: number;
+    targetCountry: string;
+    rating: string;
+  }): Promise<string> {
+    if (!this.isAvailable()) {
+      if (params.targetCountryPercent >= 75) return 'Strong target market alignment';
+      if (params.targetCountryPercent >= 50) return 'Good geographic audience fit';
+      return 'Limited target market presence';
+    }
+
+    try {
+      const prompt = `Generate EXACTLY 4-6 word feedback for geo relevance: ${params.targetCountryPercent}% in ${params.targetCountry}, rating=${params.rating}. Be concise. Return JSON: {"feedback":"..."}`;
+
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { response_mime_type: "application/json", temperature: 0.3 }
+        });
+        return await response.response;
+      }, 'generateGeoRelevanceFeedback');
+
+      const parsed = JSON.parse(result.text().trim());
+      const feedback = parsed.feedback || '';
+      if (feedback.split(' ').length >= 4 && feedback.split(' ').length <= 6) return feedback;
+
+      if (params.targetCountryPercent >= 75) return 'Strong target market alignment';
+      if (params.targetCountryPercent >= 50) return 'Good geographic audience fit';
+      return 'Limited target market presence';
+    } catch (error) {
+      this.logger.debug(`Geo relevance feedback generation unavailable: ${error.message}`);
+      if (params.targetCountryPercent >= 75) return 'Strong target market alignment';
+      if (params.targetCountryPercent >= 50) return 'Good geographic audience fit';
+      return 'Limited target market presence';
+    }
+  }
+
+  /**
+   * Generate concise profile summary (4-6 words max)
+   */
+  async generateProfileSummary(params: {
+    totalScore: number;
+    strengths: string[];
+    weaknesses: string[];
+    grade: string;
+  }): Promise<string> {
+    if (!this.isAvailable()) {
+      if (params.strengths.length > 0) return `Strong ${params.strengths[0]} profile`;
+      if (params.weaknesses.length > 0) return `Needs work on ${params.weaknesses[0]}`;
+      return 'Balanced profile overall';
+    }
+
+    try {
+      const prompt = `Generate EXACTLY 4-6 word summary for profile: score=${params.totalScore}, grade=${params.grade}, strengths=[${params.strengths.join(',')}], weaknesses=[${params.weaknesses.join(',')}]. Be concise. Return JSON: {"summary":"..."}`;
+
+      const result = await this.executeWithFallback(async (model) => {
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { response_mime_type: "application/json", temperature: 0.3 }
+        });
+        return await response.response;
+      }, 'generateProfileSummary');
+
+      const parsed = JSON.parse(result.text().trim());
+      const summary = parsed.summary || '';
+      if (summary.split(' ').length >= 4 && summary.split(' ').length <= 6) return summary;
+
+      if (params.strengths.length > 0) return `Strong ${params.strengths[0]} profile`;
+      if (params.weaknesses.length > 0) return `Needs work on ${params.weaknesses[0]}`;
+      return 'Balanced profile overall';
+    } catch (error) {
+      this.logger.debug(`Profile summary generation unavailable: ${error.message}`);
+      if (params.strengths.length > 0) return `Strong ${params.strengths[0]} profile`;
+      if (params.weaknesses.length > 0) return `Needs work on ${params.weaknesses[0]}`;
+      return 'Balanced profile overall';
+    }
+  }
+
+  /**
    * Generate a default retention curve when AI is not available
    */
   private getDefaultRetentionCurve(retentionRate: number, _avgDuration: string): Array<{ time: string; retention: number }> {

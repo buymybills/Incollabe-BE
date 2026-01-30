@@ -182,8 +182,8 @@ export class InfluencerProfileScoringService {
     // Generate grade based on total score
     const grade = this.calculateGrade(totalScore);
 
-    // Generate AI profile summary
-    const profileSummary = this.generateProfileSummary({
+    // Generate AI profile summary (4-6 words)
+    const profileSummary = await this.generateProfileSummary({
       audienceQuality,
       contentRelevance,
       contentQuality,
@@ -311,19 +311,12 @@ export class InfluencerProfileScoringService {
       rating = 'Weak Follower Base';
     }
 
-    // Generate AI feedback
-    let feedback = '';
-    if (authenticityPercentage >= 60 && Math.abs(change) < 5) {
-      feedback = 'Your follower base shows healthy activity with no abnormal spikes.';
-    } else if (authenticityPercentage >= 60 && change > 5) {
-      feedback = 'Strong follower growth with healthy engagement patterns.';
-    } else if (authenticityPercentage < 30) {
-      feedback = 'Low active follower percentage may indicate fake followers or inactive audience.';
-    } else if (change < -5) {
-      feedback = 'Declining active follower rate - review content strategy and engagement.';
-    } else {
-      feedback = 'Stable follower base with room for improvement in engagement.';
-    }
+    // Generate AI feedback (4-6 words)
+    const aiFeedback = await this.geminiAIService.generateFollowerAuthenticityFeedback({
+      authenticityPercent: authenticityPercentage,
+      change,
+      rating,
+    });
 
     return {
       score: Number(score.toFixed(2)),
@@ -332,7 +325,7 @@ export class InfluencerProfileScoringService {
         totalFollowers,
         activeFollowers,
         rating,
-        feedback,
+        aiFeedback,
         change,
         syncDate: latestSync.syncDate,
       },
@@ -380,7 +373,7 @@ export class InfluencerProfileScoringService {
       for (const segment of latestSnapshot.audienceAgeGender) {
         const gender = segment.gender?.toLowerCase() || 'unknown';
         const ageRange = segment.ageRange || 'unknown';
-        const percentage = segment.percentage || 0;
+        const percentage = Number(segment.percentage) || 0;
 
         // Gender totals
         if (gender === 'male' || gender === 'm') {
@@ -487,6 +480,10 @@ export class InfluencerProfileScoringService {
         const previousTotal = previousSnapshot.totalFollowers || latestTotal;
         change = latestTotal - previousTotal;
       }
+    } else if (historicalSnapshots.length === 1 && latestSnapshot && latestSnapshot.audienceAgeGender && latestSnapshot.audienceAgeGender.length > 0) {
+      // Only 1 snapshot with demographics - give full score since we have valid data but can't calculate variance yet
+      score = 10;
+      varianceIndex = 0;
     }
 
     // Identify core audience (highest percentage segment)
@@ -500,13 +497,13 @@ export class InfluencerProfileScoringService {
 
       coreAudience = `${topGender} ${topSegment.ageRange}`;
 
-      if (score >= 8) {
-        coreFeedback = `Core audience (${coreAudience}) has remained stable for 90 days.`;
-      } else if (score >= 6) {
-        coreFeedback = `Core audience (${coreAudience}) shows moderate stability.`;
-      } else {
-        coreFeedback = `Significant demographic shifts detected in ${coreAudience} segment.`;
-      }
+      // Generate AI feedback (4-6 words)
+      const rating = score >= 8 ? 'Excellent' : score >= 6 ? 'Good' : 'Weak';
+      coreFeedback = await this.geminiAIService.generateDemographicsStabilityFeedback({
+        stabilityScore: score,
+        coreAudience,
+        rating,
+      });
     }
 
     return {
@@ -516,7 +513,7 @@ export class InfluencerProfileScoringService {
         genderBreakdown,
         ageBreakdown,
         coreAudience,
-        feedback: coreFeedback,
+        aiFeedback: coreFeedback,
         change,
         snapshotsAnalyzed: historicalSnapshots.length,
         varianceIndex: Number(varianceIndex.toFixed(4)),
@@ -584,17 +581,15 @@ export class InfluencerProfileScoringService {
           }))
       : [];
 
-    // Generate AI feedback based on India percentage
-    let feedback = '';
-    if (indiaPercentage >= 75) {
-      feedback = 'Audience geography strongly aligns with Indian consumer brands.';
-    } else if (indiaPercentage >= 50) {
-      feedback = 'Good Indian market presence with some international reach.';
-    } else if (indiaPercentage >= 25) {
-      feedback = 'Moderate Indian audience - consider geo-targeted content for better brand alignment.';
-    } else {
-      feedback = 'Low Indian audience percentage may limit collaboration with India-focused brands.';
-    }
+    // Generate AI feedback (4-6 words)
+    const rating = indiaPercentage >= 75 ? 'Excellent' :
+                   indiaPercentage >= 50 ? 'Good' :
+                   indiaPercentage >= 25 ? 'Fair' : 'Weak';
+    const aiFeedback = await this.geminiAIService.generateGeoRelevanceFeedback({
+      targetCountryPercent: indiaPercentage,
+      targetCountry: 'India',
+      rating,
+    });
 
     return {
       score: Number(score.toFixed(2)),
@@ -603,7 +598,7 @@ export class InfluencerProfileScoringService {
         targetAudiencePercentage: Number(indiaPercentage.toFixed(2)),
         topCountries,
         topCities,
-        feedback,
+        aiFeedback,
       },
     };
   }
@@ -1039,17 +1034,11 @@ export class InfluencerProfileScoringService {
    * AI rates content on scale of 1-10 based on trends, topics, niche relevance
    */
   private async calculatePlatformRelevance(influencer: Influencer): Promise<{ score: number; details: any }> {
-    if (!this.geminiAIService.isAvailable()) {
-      return {
-        score: 7.0, // Default good score
-        details: {
-          message: 'AI not available - using default score',
-          percentage: 70,
-          rating: 'Good',
-          description: 'Content is Well Allignes',
-        },
-      };
-    }
+    // Get cached AI analysis from snapshot (generated once per 30 days)
+    const latestSnapshot = await this.instagramProfileAnalysisModel.findOne({
+      where: { influencerId: influencer.id },
+      order: [['syncNumber', 'DESC']],
+    });
 
     try {
       const recentMedia = await this.getRecentMediaForAI(influencer.id, 20);
@@ -1057,9 +1046,27 @@ export class InfluencerProfileScoringService {
         return { score: 0, details: { message: 'No media available for analysis' } };
       }
 
-      // Use AI to analyze trend relevance
+      // Use AI to analyze trend relevance (try cache first)
       const captions = recentMedia.map(m => m.caption);
-      const trendAnalysis = await this.geminiAIService.analyzeTrendRelevance(captions);
+      let trendAnalysis;
+
+      if (latestSnapshot?.aiTrendAnalysis && latestSnapshot?.aiFeedbackGeneratedAt) {
+        trendAnalysis = latestSnapshot.aiTrendAnalysis;
+        console.log(`📦 Using cached trend analysis from ${latestSnapshot.aiFeedbackGeneratedAt}`);
+      } else if (this.geminiAIService.isAvailable()) {
+        console.log(`🤖 Generating fresh trend analysis (will be cached in next snapshot)`);
+        trendAnalysis = await this.geminiAIService.analyzeTrendRelevance(captions);
+      } else {
+        return {
+          score: 7.0,
+          details: {
+            message: 'AI not available - using default score',
+            percentage: 70,
+            rating: 'Good',
+            description: 'Content is Well Allignes',
+          },
+        };
+      }
 
       const aiScore = trendAnalysis.score || 7; // AI returns 1-10
       const percentage = (aiScore / 10) * 100; // Convert to percentage
@@ -1160,17 +1167,25 @@ export class InfluencerProfileScoringService {
     const carouselPercentage = (carouselPosts / allPosts) * 100;
 
     let score = 0;
-    let aiFeedback = '';
+    let rating = '';
     if (reelPercentage >= 90) {
       score = 2;
-      aiFeedback = 'High reel dominance detected. Consider diversifying content mix for better engagement variety.';
+      rating = 'Weak';
     } else if (reelPercentage >= 60) {
       score = 5;
-      aiFeedback = 'Excellent content mix! Strong reel presence balanced with other formats for optimal reach.';
+      rating = 'Excellent';
     } else {
       score = 3;
-      aiFeedback = 'Low reel percentage. Instagram prioritizes reels - increase video content for better reach.';
+      rating = 'Fair';
     }
+
+    // Generate AI feedback (4-6 words)
+    const aiFeedback = await this.geminiAIService.generateContentMixFeedback({
+      reelPercent: reelPercentage,
+      imagePercent: imagePercentage,
+      carouselPercent: carouselPercentage,
+      rating,
+    });
 
     // Convert to 0-10 scale
     const normalizedScore = (score / 5) * 10;
@@ -1278,15 +1293,12 @@ export class InfluencerProfileScoringService {
       if (styleCounts.aesthetic > analyzedCount * 0.3) detectedStyles.push('Aesthetic');
       if (styleCounts.storytelling > analyzedCount * 0.3) detectedStyles.push('Storytelling');
 
-      // Generate AI feedback
-      let aiFeedback = '';
-      if (facePercentage > 70) {
-        aiFeedback = 'Strong personal brand presence with high face visibility. Great for building authentic connections with audience.';
-      } else if (facePercentage > 40) {
-        aiFeedback = 'Balanced content style mixing personal and product-focused content. Good for diverse brand collaborations.';
-      } else {
-        aiFeedback = 'Faceless content strategy detected. Works well for product-focused or lifestyle brand partnerships.';
-      }
+      // Generate AI feedback (4-6 words)
+      const rating = facePercentage > 70 ? 'Excellent' : facePercentage > 40 ? 'Good' : 'Fair';
+      const aiFeedback = await this.geminiAIService.generateFacePresenceFeedback({
+        facePercent: facePercentage,
+        rating,
+      });
 
       return {
         score: Number(score.toFixed(2)),
@@ -1356,20 +1368,28 @@ export class InfluencerProfileScoringService {
     const topPostsPercentage = (topPostsCount / recentInsights.length) * 100;
 
     let rawScore = 0;
-    let aiFeedback = '';
+    let rating = '';
     if (topPostsPercentage === 0) {
       rawScore = 3;
-      aiFeedback = 'No posts exceeding average reach. Focus on content quality and posting consistency.';
+      rating = 'Weak';
     } else if (topPostsPercentage <= 30) {
       rawScore = 6;
-      aiFeedback = 'Moderate high-performing content. Analyze top posts to identify winning patterns.';
+      rating = 'Fair';
     } else if (topPostsPercentage <= 44) {
       rawScore = 8;
-      aiFeedback = 'Good content performance! Strong consistency in creating engaging posts.';
+      rating = 'Good';
     } else {
       rawScore = 10;
-      aiFeedback = 'Excellent performance! Majority of content exceeds average reach - keep up the great work!';
+      rating = 'Excellent';
     }
+
+    // Generate AI feedback (4-6 words)
+    const lowPostsPercentage = 100 - topPostsPercentage;
+    const aiFeedback = await this.geminiAIService.generatePerformanceDistributionFeedback({
+      highPerformingPercent: topPostsPercentage,
+      lowPerformingPercent: lowPostsPercentage,
+      rating,
+    });
 
     // Get top 3 posts with thumbnails
     const topPosts = topPostsInsights.slice(0, 3).map(insight => ({
@@ -1440,20 +1460,28 @@ export class InfluencerProfileScoringService {
     const worstPostsPercentage = (worstPostsCount / recentInsights.length) * 100;
 
     let rawScore = 0;
-    let aiFeedback = '';
+    let rating = '';
     if (worstPostsPercentage <= 15) {
       rawScore = 10;
-      aiFeedback = 'Excellent consistency! Very few underperforming posts. Your content strategy is highly effective.';
+      rating = 'Excellent';
     } else if (worstPostsPercentage <= 30) {
       rawScore = 8;
-      aiFeedback = 'Good performance consistency. Minor fluctuations are normal - keep optimizing your best-performing content types.';
+      rating = 'Good';
     } else if (worstPostsPercentage <= 45) {
       rawScore = 6;
-      aiFeedback = 'Moderate consistency. Review underperforming posts to identify patterns and avoid similar content.';
+      rating = 'Fair';
     } else {
       rawScore = 3;
-      aiFeedback = 'High number of underperforming posts. Analyze your top posts and replicate their successful elements.';
+      rating = 'Weak';
     }
+
+    // Generate AI feedback (4-6 words)
+    const highPostsPercentage = 100 - worstPostsPercentage;
+    const aiFeedback = await this.geminiAIService.generatePerformanceDistributionFeedback({
+      highPerformingPercent: highPostsPercentage,
+      lowPerformingPercent: worstPostsPercentage,
+      rating,
+    });
 
     // Get worst 3 posts with thumbnails
     const worstPosts = worstPostsInsights.slice(0, 3).map(insight => ({
@@ -1530,7 +1558,21 @@ export class InfluencerProfileScoringService {
       }
 
       const captions = recentMedia.map(m => m.caption);
-      const nicheResult = await this.geminiAIService.detectNiche(captions, []);
+
+      // Get cached AI analysis from snapshot (generated once per 30 days)
+      const latestSnapshot = await this.instagramProfileAnalysisModel.findOne({
+        where: { influencerId: influencer.id },
+        order: [['syncNumber', 'DESC']],
+      });
+
+      let nicheResult;
+      if (latestSnapshot?.aiNicheAnalysis && latestSnapshot?.aiFeedbackGeneratedAt) {
+        nicheResult = latestSnapshot.aiNicheAnalysis;
+        console.log(`📦 Using cached niche analysis from ${latestSnapshot.aiFeedbackGeneratedAt}`);
+      } else {
+        console.log(`🤖 Generating fresh niche analysis (will be cached in next snapshot)`);
+        nicheResult = await this.geminiAIService.detectNiche(captions, []);
+      }
 
       const topNiches = ['fashion', 'beauty', 'lifestyle', 'food', 'electronics', 'travel', 'business', 'finance', 'education', 'fitness', 'sports', 'spiritual', 'motivator'];
 
@@ -1539,20 +1581,27 @@ export class InfluencerProfileScoringService {
       const matchCount = matchedNiches.length;
 
       let rawScore = 0;
-      let aiFeedback = '';
+      let rating = '';
       if (matchCount === 0) {
         rawScore = 3;
-        aiFeedback = 'Content niche not clearly defined. Focus on specific categories for better brand targeting.';
+        rating = 'Weak';
       } else if (matchCount === 1) {
         rawScore = 6;
-        aiFeedback = 'Single niche focus identified. Good for specialized brand partnerships in this category.';
+        rating = 'Fair';
       } else if (matchCount <= 4) {
         rawScore = 8;
-        aiFeedback = 'Well-defined multi-niche presence. Excellent for diverse brand collaboration opportunities.';
+        rating = 'Good';
       } else {
         rawScore = 10;
-        aiFeedback = 'Strong presence across multiple niches. Highly versatile profile for various brand partnerships.';
+        rating = 'Excellent';
       }
+
+      // Generate AI feedback (4-6 words)
+      const aiFeedback = await this.geminiAIService.generateNicheFeedback({
+        nicheCount: matchCount,
+        topNiches: matchedNiches,
+        rating,
+      });
 
       // Calculate niche breakdown with reach and engagement data
       const nicheBreakdown: Array<{ niche: string; reach: number; engagement: number; postCount: number }> = [];
@@ -1671,7 +1720,21 @@ export class InfluencerProfileScoringService {
       }
 
       const captions = recentMedia.map(m => m.caption);
-      const hashtagAnalysis = await this.geminiAIService.analyzeHashtagEffectiveness(captions);
+
+      // Get cached AI analysis from snapshot (generated once per 30 days)
+      const latestSnapshot = await this.instagramProfileAnalysisModel.findOne({
+        where: { influencerId: influencer.id },
+        order: [['syncNumber', 'DESC']],
+      });
+
+      let hashtagAnalysis;
+      if (latestSnapshot?.aiHashtagAnalysis && latestSnapshot?.aiFeedbackGeneratedAt) {
+        hashtagAnalysis = latestSnapshot.aiHashtagAnalysis;
+        console.log(`📦 Using cached hashtag analysis from ${latestSnapshot.aiFeedbackGeneratedAt}`);
+      } else {
+        console.log(`🤖 Generating fresh hashtag analysis (will be cached in next snapshot)`);
+        hashtagAnalysis = await this.geminiAIService.analyzeHashtagEffectiveness(captions);
+      }
 
       // Extract hashtags from captions
       const hashtagRegex = /#[\w]+/g;
@@ -1724,17 +1787,11 @@ export class InfluencerProfileScoringService {
 
       const effectiveness = effectivenessMap[hashtagAnalysis.rating] || 'Moderate';
 
-      // Generate AI feedback based on rating
-      let aiFeedback = '';
-      if (hashtagAnalysis.rating === 'outperforming') {
-        aiFeedback = 'Outstanding hashtag strategy! Your tags are driving excellent discoverability and engagement.';
-      } else if (hashtagAnalysis.rating === 'effective') {
-        aiFeedback = 'Solid hashtag usage. Your tags are helping content reach the right audience effectively.';
-      } else if (hashtagAnalysis.rating === 'medium') {
-        aiFeedback = 'Moderate hashtag effectiveness. Consider using more specific, niche-relevant tags for better reach.';
-      } else {
-        aiFeedback = 'Hashtag strategy needs improvement. Research trending and niche-specific tags to boost discoverability.';
-      }
+      // Generate AI feedback (4-6 words) - use cached from hashtagAnalysis or generate new
+      const aiFeedback = hashtagAnalysis.feedback || await this.geminiAIService.generateHashtagFeedback({
+        effectiveness: hashtagAnalysis.rating,
+        rating: effectivenessMap[hashtagAnalysis.rating] || 'Moderate',
+      });
 
       return {
         score: Number(score.toFixed(2)),
@@ -1744,7 +1801,7 @@ export class InfluencerProfileScoringService {
           detectedHashtags,
           avgHashtagsUsed,
           totalUniqueHashtags: hashtagFrequency.size,
-          aiFeedback: hashtagAnalysis.feedback || aiFeedback,
+          aiFeedback,
         },
       };
     } catch (error) {
@@ -1811,7 +1868,20 @@ export class InfluencerProfileScoringService {
         };
       }
 
-      const languageResult = await this.geminiAIService.analyzeLanguage(captions);
+      // Get cached AI analysis from snapshot (generated once per 30 days)
+      const latestSnapshot = await this.instagramProfileAnalysisModel.findOne({
+        where: { influencerId: influencer.id },
+        order: [['syncNumber', 'DESC']],
+      });
+
+      let languageResult;
+      if (latestSnapshot?.aiLanguageAnalysis && latestSnapshot?.aiFeedbackGeneratedAt) {
+        languageResult = latestSnapshot.aiLanguageAnalysis;
+        console.log(`📦 Using cached language analysis from ${latestSnapshot.aiFeedbackGeneratedAt}`);
+      } else {
+        console.log(`🤖 Generating fresh language analysis (will be cached in next snapshot)`);
+        languageResult = await this.geminiAIService.analyzeLanguage(captions);
+      }
 
       // Check if language analysis returned valid data
       if (!languageResult || !languageResult.languagePercentages || typeof languageResult.languagePercentages !== 'object') {
@@ -1832,7 +1902,7 @@ export class InfluencerProfileScoringService {
 
       for (const lang of targetLanguages) {
         if (languageResult.languagePercentages[lang]) {
-          targetLanguagePercentage += languageResult.languagePercentages[lang];
+          targetLanguagePercentage += Number(languageResult.languagePercentages[lang]) || 0;
         }
       }
 
@@ -1842,22 +1912,19 @@ export class InfluencerProfileScoringService {
       const languageBreakdown = Object.entries(languageResult.languagePercentages)
         .map(([language, percentage]) => ({
           language,
-          percentage: Number(percentage.toFixed(1)),
+          percentage: Number(Number(percentage).toFixed(1)),
           isTarget: targetLanguages.includes(language),
         }))
         .sort((a, b) => b.percentage - a.percentage);
 
-      // Generate market fit feedback
-      let aiFeedback = '';
-      if (targetLanguagePercentage >= 90) {
-        aiFeedback = 'Excellent market alignment! Content is perfectly positioned for Hindi/English speaking audiences.';
-      } else if (targetLanguagePercentage >= 70) {
-        aiFeedback = 'Strong market fit with good Hindi/English content mix. Well-suited for Indian brand collaborations.';
-      } else if (targetLanguagePercentage >= 50) {
-        aiFeedback = 'Moderate market alignment. Consider increasing Hindi/English content for better brand partnership opportunities.';
-      } else {
-        aiFeedback = 'Limited market fit with target languages. Focus on Hindi/English content to attract local brand partnerships.';
-      }
+      // Generate AI feedback for market fit (4-6 words)
+      const rating = targetLanguagePercentage >= 90 ? 'Excellent' :
+                     targetLanguagePercentage >= 70 ? 'Good' :
+                     targetLanguagePercentage >= 50 ? 'Fair' : 'Weak';
+      const aiFeedback = await this.geminiAIService.generateLanguageAlignmentFeedback({
+        targetLanguagePercent: targetLanguagePercentage,
+        rating,
+      });
 
       // Add market insights
       const marketInsights: string[] = [];
@@ -1940,6 +2007,51 @@ export class InfluencerProfileScoringService {
    * AI-based production quality analysis with sub-scores
    */
   private async calculateVisualQuality(influencer: Influencer): Promise<{ score: number; details: any }> {
+    // Get cached AI analysis from snapshot (generated once per 30 days)
+    const latestSnapshot = await this.instagramProfileAnalysisModel.findOne({
+      where: { influencerId: influencer.id },
+      order: [['syncNumber', 'DESC']],
+    });
+
+    // Try to use cached AI visual analysis
+    if (latestSnapshot?.aiVisualAnalysis && latestSnapshot?.aiFeedbackGeneratedAt) {
+      const cachedData = latestSnapshot.aiVisualAnalysis;
+      console.log(`📦 Using cached visual analysis from ${latestSnapshot.aiFeedbackGeneratedAt}`);
+
+      // Extract cached scores
+      const lightingScore = cachedData.avgLighting || 75;
+      const editingScore = cachedData.avgProfessionalScore || 75;
+      const aestheticsScore = cachedData.avgAestheticsScore || 75;
+
+      // Calculate overall score on 0-10 scale
+      const score = ((lightingScore + editingScore + aestheticsScore) / 300) * 10;
+
+      // Generate AI feedback from cached data (4-6 words)
+      const avgScore = (editingScore + aestheticsScore + lightingScore) / 3;
+      const rating = avgScore >= 80 ? 'Excellent' :
+                     avgScore >= 60 ? 'Good' :
+                     avgScore >= 40 ? 'Fair' : 'Weak';
+      const aiFeedback = await this.geminiAIService.generateVisualQualityFeedback({
+        avgLighting: lightingScore,
+        avgEditing: editingScore,
+        avgAesthetics: aestheticsScore,
+        rating,
+      });
+
+      return {
+        score: Number(score.toFixed(2)),
+        details: {
+          imagesAnalyzed: cachedData.imagesAnalyzed || 0,
+          lighting: Number(lightingScore.toFixed(2)),
+          editing: Number(editingScore.toFixed(2)),
+          aesthetics: Number(aestheticsScore.toFixed(2)),
+          aiFeedback,
+          change: 0,
+        },
+      };
+    }
+
+    // Fallback: Generate fresh AI analysis if not cached
     if (!this.geminiAIService.isAvailable()) {
       return {
         score: 7.5,
@@ -1954,6 +2066,7 @@ export class InfluencerProfileScoringService {
     }
 
     try {
+      console.log(`🤖 Generating fresh visual analysis (will be cached in next snapshot)`);
       const recentMedia = await this.getRecentMediaForAI(influencer.id, 10);
       if (recentMedia.length === 0) {
         return { score: 0, details: { message: 'No media available' } };
@@ -2044,6 +2157,56 @@ export class InfluencerProfileScoringService {
    * AI rates aesthetic consistency with mood and color analysis
    */
   private async calculateColorPaletteMood(influencer: Influencer): Promise<{ score: number; details: any }> {
+    // Get cached AI analysis from snapshot (generated once per 30 days)
+    const latestSnapshot = await this.instagramProfileAnalysisModel.findOne({
+      where: { influencerId: influencer.id },
+      order: [['syncNumber', 'DESC']],
+    });
+
+    // Try to use cached AI color palette analysis
+    if (latestSnapshot?.aiColorPaletteAnalysis && latestSnapshot?.aiFeedbackGeneratedAt) {
+      const aestheticAnalysis = latestSnapshot.aiColorPaletteAnalysis;
+      console.log(`📦 Using cached color palette analysis from ${latestSnapshot.aiFeedbackGeneratedAt}`);
+
+      // AI returns 1-20, convert to 0-10
+      const rating = aestheticAnalysis.rating || 14;
+      const score = (rating / 20) * 10;
+
+      // Generate AI feedback based on mood and rating
+      const mood = aestheticAnalysis.mood || 'Neutral';
+      const consistency = aestheticAnalysis.consistency || 'medium';
+      let aiFeedback = '';
+
+      if (rating >= 18 && consistency === 'high') {
+        aiFeedback = 'Excellent color consistency creating strong brand recognition and aesthetic appeal.';
+      } else if (rating >= 15 && consistency === 'high') {
+        aiFeedback = 'Strong color palette consistency helps with brand recall.';
+      } else if (mood.toLowerCase().includes('cool') && mood.toLowerCase().includes('muted')) {
+        aiFeedback = 'Consistent cool tones help brand recall, but muted accents reduce scroll-stopping impact.';
+      } else if (mood.toLowerCase().includes('vibrant') || mood.toLowerCase().includes('warm')) {
+        aiFeedback = 'Vibrant colors create eye-catching content that stands out in feeds.';
+      } else if (rating < 10 || consistency === 'low') {
+        aiFeedback = 'Improve color palette consistency for better aesthetic appeal and brand recognition.';
+      } else {
+        aiFeedback = 'Moderate color consistency - consider developing a signature palette.';
+      }
+
+      return {
+        score: Number(score.toFixed(2)),
+        details: {
+          rating: aestheticAnalysis.rating,
+          mood: aestheticAnalysis.mood || 'Neutral',
+          dominantColors: aestheticAnalysis.dominantColors && aestheticAnalysis.dominantColors.length > 0
+            ? aestheticAnalysis.dominantColors
+            : [],
+          consistency: aestheticAnalysis.consistency || 'Medium',
+          aiFeedback,
+          change: 0,
+        },
+      };
+    }
+
+    // Fallback: Generate fresh AI analysis if not cached
     if (!this.geminiAIService.isAvailable()) {
       return {
         score: 7.0,
@@ -2058,6 +2221,7 @@ export class InfluencerProfileScoringService {
     }
 
     try {
+      console.log(`🤖 Generating fresh color palette analysis (will be cached in next snapshot)`);
       const recentMedia = await this.getRecentMediaForAI(influencer.id, 10);
       if (recentMedia.length === 0) {
         return { score: 0, details: { message: 'No media available' } };
@@ -2121,6 +2285,82 @@ export class InfluencerProfileScoringService {
    * Detailed sentiment breakdown with counts and percentages
    */
   private async calculateCaptionSentiment(influencer: Influencer): Promise<{ score: number; details: any }> {
+    // Get cached AI analysis from snapshot (generated once per 30 days)
+    const latestSnapshot = await this.instagramProfileAnalysisModel.findOne({
+      where: { influencerId: influencer.id },
+      order: [['syncNumber', 'DESC']],
+    });
+
+    // Get caption count for percentage calculations
+    const recentMedia = await this.getRecentMediaForAI(influencer.id, 20);
+    const captions = recentMedia.map(m => m.caption).filter(c => c && c.length > 0);
+
+    // Try to use cached AI sentiment analysis
+    if (latestSnapshot?.aiSentimentAnalysis && latestSnapshot?.aiFeedbackGeneratedAt) {
+      const sentimentResult = latestSnapshot.aiSentimentAnalysis;
+      console.log(`📦 Using cached sentiment analysis from ${latestSnapshot.aiFeedbackGeneratedAt}`);
+
+      const sentimentScore = sentimentResult.score || 70;
+      const aiFeedback = sentimentResult.feedback || 'Sentiment analysis complete.';
+
+      // Convert overall sentiment to distribution
+      // sentimentScore ranges from -100 to +100
+      let positivePercentage: number;
+      let negativePercentage: number;
+      let neutralPercentage: number;
+
+      if (sentimentScore >= 50) {
+        positivePercentage = 70 + (sentimentScore - 50) / 2;
+        negativePercentage = 5;
+        neutralPercentage = 100 - positivePercentage - negativePercentage;
+      } else if (sentimentScore >= 0) {
+        positivePercentage = 50 + sentimentScore / 2;
+        negativePercentage = 10 + (50 - sentimentScore) / 5;
+        neutralPercentage = 100 - positivePercentage - negativePercentage;
+      } else if (sentimentScore >= -50) {
+        positivePercentage = 30 + (sentimentScore + 50) / 2.5;
+        negativePercentage = 30 + Math.abs(sentimentScore) / 2;
+        neutralPercentage = 100 - positivePercentage - negativePercentage;
+      } else {
+        positivePercentage = 5;
+        negativePercentage = 70 + Math.abs(sentimentScore + 50) / 2;
+        neutralPercentage = 100 - positivePercentage - negativePercentage;
+      }
+
+      const captionsLength = captions.length || 20;
+      const positiveCount = Math.round((positivePercentage / 100) * captionsLength);
+      const negativeCount = Math.round((negativePercentage / 100) * captionsLength);
+      const neutralCount = captionsLength - positiveCount - negativeCount;
+
+      // Scoring based on positive percentage
+      let rawScore = 0;
+      if (positivePercentage <= 30) rawScore = 4;
+      else if (positivePercentage <= 50) rawScore = 6;
+      else if (positivePercentage <= 75) rawScore = 8;
+      else rawScore = 10;
+
+      return {
+        score: Number(rawScore.toFixed(2)),
+        details: {
+          positive: {
+            count: positiveCount,
+            percentage: Number(positivePercentage.toFixed(2)),
+          },
+          negative: {
+            count: negativeCount,
+            percentage: Number(negativePercentage.toFixed(2)),
+          },
+          neutral: {
+            count: neutralCount,
+            percentage: Number(neutralPercentage.toFixed(2)),
+          },
+          captionsAnalyzed: captionsLength,
+          aiFeedback,
+        },
+      };
+    }
+
+    // Fallback: Generate fresh AI analysis if not cached
     if (!this.geminiAIService.isAvailable()) {
       return {
         score: 8.0,
@@ -2134,12 +2374,11 @@ export class InfluencerProfileScoringService {
     }
 
     try {
-      const recentMedia = await this.getRecentMediaForAI(influencer.id, 20);
+      console.log(`🤖 Generating fresh sentiment analysis (will be cached in next snapshot)`);
       if (recentMedia.length === 0) {
         return { score: 0, details: { message: 'No media available' } };
       }
 
-      const captions = recentMedia.map(m => m.caption).filter(c => c && c.length > 0);
       if (captions.length === 0) {
         return { score: 0, details: { message: 'No captions available' } };
       }
@@ -2224,6 +2463,60 @@ export class InfluencerProfileScoringService {
    * AI rates call-to-action effectiveness with detailed metrics
    */
   private async calculateCTAUsage(influencer: Influencer): Promise<{ score: number; details: any }> {
+    // Get cached AI analysis from snapshot (generated once per 30 days)
+    const latestSnapshot = await this.instagramProfileAnalysisModel.findOne({
+      where: { influencerId: influencer.id },
+      order: [['syncNumber', 'DESC']],
+    });
+
+    // Get caption count for calculations
+    const recentMedia = await this.getRecentMediaForAI(influencer.id, 20);
+    const captions = recentMedia.map(m => m.caption).filter(c => c && c.length > 0);
+
+    // Try to use cached AI CTA analysis
+    if (latestSnapshot?.aiCtaAnalysis && latestSnapshot?.aiFeedbackGeneratedAt) {
+      const ctaAnalysis = latestSnapshot.aiCtaAnalysis;
+      console.log(`📦 Using cached CTA analysis from ${latestSnapshot.aiFeedbackGeneratedAt}`);
+
+      // Map AI rating to score
+      const scoreMap = {
+        'good': 10,
+        'medium': 7,
+        'less': 4,
+      };
+
+      const score = scoreMap[ctaAnalysis.rating] || 7;
+
+      // Calculate usage percentage
+      const ctaCount = ctaAnalysis.ctaCount || 0;
+      const captionsLength = captions.length || 20;
+      const usagePercentage = captionsLength > 0 ? (ctaCount / captionsLength) * 100 : 0;
+
+      // Common CTAs detected
+      const commonCTAs = ctaAnalysis.examples || [
+        'Save For Later',
+        'Comment Bellow',
+        'Share With your Friend',
+        'Follow For More',
+      ];
+
+      const aiFeedback = ctaAnalysis.feedback || 'Moderate CTA usage detected.';
+
+      return {
+        score: Number(score.toFixed(2)),
+        details: {
+          rating: ctaAnalysis.rating,
+          usagePercentage: Number(usagePercentage.toFixed(2)),
+          totalPosts: captionsLength,
+          ctaCount,
+          detectedCTAs: commonCTAs,
+          aiFeedback,
+          change: 0,
+        },
+      };
+    }
+
+    // Fallback: Generate fresh AI analysis if not cached
     if (!this.geminiAIService.isAvailable()) {
       return {
         score: 7.0,
@@ -2237,12 +2530,11 @@ export class InfluencerProfileScoringService {
     }
 
     try {
-      const recentMedia = await this.getRecentMediaForAI(influencer.id, 20);
+      console.log(`🤖 Generating fresh CTA analysis (will be cached in next snapshot)`);
       if (recentMedia.length === 0) {
         return { score: 0, details: { message: 'No media available' } };
       }
 
-      const captions = recentMedia.map(m => m.caption).filter(c => c && c.length > 0);
       if (captions.length === 0) {
         return { score: 0, details: { message: 'No captions available' } };
       }
@@ -2351,12 +2643,21 @@ export class InfluencerProfileScoringService {
     }
 
     if (!latestSync || !latestSync.avgEngagementRate) {
-      // Generate default retention curve even when no data
-      const defaultRetentionCurve = await this.geminiAIService.generateRetentionCurve({
-        retentionRate: 0,
-        avgDuration: '20-30 Sec',
-        engagementRate: 0,
-      });
+      // Get cached retention curve or use default
+      let defaultRetentionCurve;
+      if (latestSync?.aiRetentionCurve) {
+        defaultRetentionCurve = latestSync.aiRetentionCurve;
+        console.log(`📦 Using cached retention curve from ${latestSync.aiFeedbackGeneratedAt}`);
+      } else if (this.geminiAIService.isAvailable()) {
+        console.log(`🤖 Generating fresh retention curve (will be cached in next snapshot)`);
+        defaultRetentionCurve = await this.geminiAIService.generateRetentionCurve({
+          retentionRate: 0,
+          avgDuration: '20-30 Sec',
+          engagementRate: 0,
+        });
+      } else {
+        defaultRetentionCurve = this.getDefaultRetentionCurve();
+      }
 
       return {
         score: 0,
@@ -2489,39 +2790,37 @@ export class InfluencerProfileScoringService {
     else if (retentionRate >= 20) retentionRating = 'Fair';
     else retentionRating = 'Needs Improvement';
 
-    // Generate AI feedback based on engagement patterns
+    // Generate AI feedback (4-6 words) - with caching
     let aiFeedback = '';
-    if (engagementRate >= 5) {
-      aiFeedback = 'Outstanding engagement! Your audience is highly active and responsive to your content.';
-    } else if (engagementRate >= 3) {
-      aiFeedback = 'Your follower base shows healthy activity with no abnormal spikes.';
-    } else if (engagementRate >= 1.5) {
-      aiFeedback = 'Moderate engagement levels. Consider experimenting with content formats to boost interaction.';
+    if (latestSync?.aiEngagementFeedback && latestSync?.aiFeedbackGeneratedAt) {
+      aiFeedback = latestSync.aiEngagementFeedback;
+      console.log(`📦 Using cached engagement feedback from ${latestSync.aiFeedbackGeneratedAt}`);
     } else {
-      aiFeedback = 'Engagement needs improvement. Focus on creating more compelling CTAs and interactive content.';
+      console.log(`🤖 Generating fresh engagement feedback (will be cached in next snapshot)`);
+      aiFeedback = await this.geminiAIService.generateEngagementFeedback({
+        engagementRate,
+        reachRatio: reachToFollowerRatio,
+        retentionRate,
+        rating,
+      });
     }
 
-    // Add specific insights based on reach ratio
-    if (reachToFollowerRatio >= 2) {
-      aiFeedback += ' Excellent reach extending beyond your follower base.';
-    } else if (reachToFollowerRatio < 0.5) {
-      aiFeedback += ' Low reach-to-follower ratio suggests content may need optimization for discovery.';
+    // Get cached retention curve or generate fresh one
+    let retentionCurve;
+    if (latestSync?.aiRetentionCurve && latestSync?.aiFeedbackGeneratedAt) {
+      retentionCurve = latestSync.aiRetentionCurve;
+      console.log(`📦 Using cached retention curve from ${latestSync.aiFeedbackGeneratedAt}`);
+    } else if (this.geminiAIService.isAvailable()) {
+      console.log(`🤖 Generating fresh retention curve (will be cached in next snapshot)`);
+      retentionCurve = await this.geminiAIService.generateRetentionCurve({
+        retentionRate,
+        avgDuration: avgReelDuration,
+        engagementRate: Number(engagementRate.toFixed(2)),
+        contentQuality: latestSync.avgEngagementRate ? Math.min(100, latestSync.avgEngagementRate * 20) : undefined,
+      });
+    } else {
+      retentionCurve = this.getDefaultRetentionCurve();
     }
-
-    // Add retention insights
-    if (retentionRate >= 60) {
-      aiFeedback += ' High retention indicates compelling content that keeps viewers engaged.';
-    } else if (retentionRate < 30) {
-      aiFeedback += ' Low retention suggests viewers are leaving early - consider stronger hooks and pacing.';
-    }
-
-    // Generate AI-powered retention curve data
-    const retentionCurve = await this.geminiAIService.generateRetentionCurve({
-      retentionRate,
-      avgDuration: avgReelDuration,
-      engagementRate: Number(engagementRate.toFixed(2)),
-      contentQuality: latestSync.avgEngagementRate ? Math.min(100, latestSync.avgEngagementRate * 20) : undefined,
-    });
 
     return {
       score: Number(score.toFixed(2)),
@@ -2606,6 +2905,22 @@ export class InfluencerProfileScoringService {
   }
 
   /**
+   * Get default retention curve when AI is not available
+   * Returns a standard retention curve for visualization
+   */
+  private getDefaultRetentionCurve(): any[] {
+    return [
+      { time: 0, retention: 100 },
+      { time: 5, retention: 85 },
+      { time: 10, retention: 70 },
+      { time: 15, retention: 60 },
+      { time: 20, retention: 50 },
+      { time: 25, retention: 45 },
+      { time: 30, retention: 40 },
+    ];
+  }
+
+  /**
    * 4.2 Performance Consistency (30%)
    * Coefficient of variation in reach
    * Enhanced with rating, benchmarks, and AI feedback
@@ -2672,24 +2987,12 @@ export class InfluencerProfileScoringService {
     const trendPercentage = firstHalfAvg > 0 ?
       Number((((secondHalfAvg - firstHalfAvg) / firstHalfAvg) * 100).toFixed(1)) : 0;
 
-    // Generate AI feedback
-    let aiFeedback = '';
-    if (performancePercentage >= 70) {
-      aiFeedback = 'Your follower base shows healthy activity with no abnormal spikes.';
-    } else if (performancePercentage >= 50) {
-      aiFeedback = 'Moderate consistency. Some posts underperform - analyze top performers for insights.';
-    } else if (performancePercentage >= 30) {
-      aiFeedback = 'High variability in post performance. Review content strategy for more consistent results.';
-    } else {
-      aiFeedback = 'Inconsistent performance detected. Focus on understanding what content resonates with your audience.';
-    }
-
-    // Add trend insight
-    if (trendPercentage > 10) {
-      aiFeedback += ' Positive trend: recent posts showing improved performance.';
-    } else if (trendPercentage < -10) {
-      aiFeedback += ' Declining trend: recent posts underperforming compared to earlier ones.';
-    }
+    // Generate AI feedback (4-6 words) - no caching for performance consistency (needs real-time trend)
+    const aiFeedback = await this.geminiAIService.generatePerformanceConsistencyFeedback({
+      consistencyPercent: performancePercentage,
+      trendPercent: trendPercentage,
+      rating,
+    });
 
     return {
       score: Number(score.toFixed(2)),
@@ -2839,8 +3142,8 @@ export class InfluencerProfileScoringService {
       //   console.log(`🤖 Generated new growth feedback (not cached)`);
       // }
 
-      // Always generate fresh AI feedback for testing
-      const aiFeedback = await this.generateGrowthFeedback({
+      // Always generate fresh AI feedback (4-6 words)
+      const aiFeedback = await this.geminiAIService.generateGrowthFeedback({
         growthRate,
         currentGrowth: growth,
         avgGrowthPerDay: 0,
@@ -2909,8 +3212,8 @@ export class InfluencerProfileScoringService {
       else if (growthRate >= 0) { score = 3.33; rating = 'Weak'; }
       else { score = 0; rating = 'Declining'; }
 
-      // Generate AI feedback
-      const aiFeedback = await this.generateGrowthFeedback({
+      // Generate AI feedback (4-6 words)
+      const aiFeedback = await this.geminiAIService.generateGrowthFeedback({
         growthRate,
         currentGrowth: totalGrowth,
         avgGrowthPerDay: 0,
@@ -2991,8 +3294,8 @@ export class InfluencerProfileScoringService {
     else if (currentGrowthRate >= 0) score = 3.33;
     else score = 0;
 
-    // Generate AI feedback about growth trends
-    const aiFeedback = await this.generateGrowthFeedback({
+    // Generate AI feedback about growth trends (4-6 words)
+    const aiFeedback = await this.geminiAIService.generateGrowthFeedback({
       growthRate: currentGrowthRate,
       currentGrowth,
       avgGrowthPerDay: currentAvgPerDay,
@@ -3133,45 +3436,6 @@ export class InfluencerProfileScoringService {
     return weeklyData;
   }
 
-  /**
-   * Helper: Generate AI feedback about growth trends
-   */
-  private async generateGrowthFeedback(params: {
-    growthRate: number;
-    currentGrowth: number;
-    avgGrowthPerDay: number;
-    rating: string;
-  }): Promise<string> {
-    try {
-      const prompt = `Analyze follower growth: Rate=${params.growthRate.toFixed(1)}%, Growth=${params.currentGrowth}, AvgPerDay=${params.avgGrowthPerDay}, Rating=${params.rating}. Give 1 actionable tip (15-20 words) to improve growth. Return JSON: {"feedback": "your tip"}`;
-
-      const result = await this.geminiAIService.executeWithFallback(async (model) => {
-        const response = await model.generateContent({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: {
-            response_mime_type: "application/json",
-            temperature: 0.3,
-          }
-        });
-        return await response.response;
-      }, 'generateGrowthFeedback');
-
-      const text = result.text();
-      const parsed = JSON.parse(text);
-      return parsed.feedback || 'Continue posting consistently to maintain growth momentum.';
-    } catch (error) {
-      // Fallback feedback based on growth rate
-      if (params.growthRate > 20) {
-        return 'Excellent growth! Maintain your content quality and posting schedule.';
-      } else if (params.growthRate > 10) {
-        return 'Good progress. Try posting more consistently to accelerate growth.';
-      } else if (params.growthRate > 0) {
-        return 'Growth is slow. Focus on trending topics and engaging hooks in your content.';
-      } else {
-        return 'Follower count is stagnant. Review your content strategy and post timing.';
-      }
-    }
-  }
 
   /**
    * Helper: Find peak follower gain period with top contributing posts
@@ -3397,8 +3661,8 @@ export class InfluencerProfileScoringService {
     //   console.log(`🤖 Generated new posting feedback (not cached)`);
     // }
 
-    // Always generate fresh AI feedback for testing
-    const aiFeedback = await this.generatePostingBehaviorFeedback({
+    // Always generate fresh AI feedback (4-6 words)
+    const aiFeedback = await this.geminiAIService.generatePostingBehaviorFeedback({
       postsPerWeek,
       rating,
       postTypeBreakdown,
@@ -3555,49 +3819,6 @@ export class InfluencerProfileScoringService {
     };
   }
 
-  /**
-   * Helper: Generate AI feedback for posting behavior
-   */
-  private async generatePostingBehaviorFeedback(params: {
-    postsPerWeek: number;
-    rating: string;
-    postTypeBreakdown: any;
-  }): Promise<string> {
-    try {
-      const reelCount = params.postTypeBreakdown.reel.count;
-      const imageCount = params.postTypeBreakdown.image.count;
-      const carouselCount = params.postTypeBreakdown.carousel.count;
-
-      const prompt = `Analyze posting: ${params.postsPerWeek.toFixed(1)} posts/week, Rating=${params.rating}, Reels=${reelCount}, Images=${imageCount}, Carousels=${carouselCount}. Give 1 actionable tip (15-20 words) about content variety or posting frequency. Return JSON: {"feedback": "your tip"}`;
-
-      const result = await this.geminiAIService.executeWithFallback(async (model) => {
-        const response = await model.generateContent({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: {
-            response_mime_type: "application/json",
-            temperature: 0.3,
-          }
-        });
-        return await response.response;
-      }, 'generatePostingBehaviorFeedback');
-
-      const text = result.text();
-      const parsed = JSON.parse(text);
-      return parsed.feedback || 'Your follower base shows healthy activity with no abnormal spikes.';
-    } catch (error) {
-      // Fallback feedback
-      if (params.postsPerWeek >= 6) {
-        return 'Excellent posting frequency! Keep maintaining this consistent schedule.';
-      } else if (params.postsPerWeek >= 4) {
-        return 'Good posting frequency. Try adding more reels for better reach and engagement.';
-      } else if (params.postsPerWeek >= 2) {
-        return 'Increase posting frequency to 4-6 times per week for optimal growth.';
-      } else {
-        return 'Low posting frequency detected. Aim for at least 4-5 posts per week to boost engagement.';
-      }
-    }
-  }
-
   // ==================== CATEGORY 6: MONETISATION (10 pts) ====================
 
   async calculateMonetisation(influencer: Influencer): Promise<MonetisationScore> {
@@ -3698,10 +3919,22 @@ export class InfluencerProfileScoringService {
         captions: recentMedia.map(m => m.caption),
       };
 
-      // Ask AI to predict monetisation potential on 1-50 scale
-      const monetisationResult = await this.geminiAIService.predictMonetisationPotential(profileContext);
-      const monetisationRating = monetisationResult.rating;
-      const aiFeedback = monetisationResult.feedback;
+      // Try to use cached AI monetization analysis
+      let monetisationRating: number;
+      let aiFeedback: string;
+
+      if (latestSync?.aiMonetizationAnalysis && latestSync?.aiFeedbackGeneratedAt) {
+        const monetisationResult = latestSync.aiMonetizationAnalysis;
+        console.log(`📦 Using cached monetization analysis from ${latestSync.aiFeedbackGeneratedAt}`);
+        monetisationRating = monetisationResult.rating || 25;
+        aiFeedback = monetisationResult.feedback || 'Monetization analysis complete.';
+      } else {
+        // Generate fresh AI analysis
+        console.log(`🤖 Generating fresh monetization analysis (will be cached in next snapshot)`);
+        const monetisationResult = await this.geminiAIService.predictMonetisationPotential(profileContext);
+        monetisationRating = monetisationResult.rating;
+        aiFeedback = monetisationResult.feedback;
+      }
 
       // Convert 1-50 scale to 0-10 scale
       const score = (monetisationRating / 50) * 10;
@@ -3831,11 +4064,18 @@ export class InfluencerProfileScoringService {
         engagementRate: latestSync.avgEngagementRate ? Number(latestSync.avgEngagementRate) : 0,
       };
 
-      // Ask AI to predict payout considering 0.2-0.5 rupees per view (if available)
+      // Try to use cached AI payout prediction
       let predictedPayout = 0;
       let payoutFeedback = '';
-      if (this.geminiAIService.isAvailable()) {
+
+      if (latestSync?.aiPayoutPrediction && latestSync?.aiFeedbackGeneratedAt) {
+        const payoutResult = latestSync.aiPayoutPrediction;
+        console.log(`📦 Using cached payout prediction from ${latestSync.aiFeedbackGeneratedAt}`);
+        predictedPayout = payoutResult.payout || 0;
+        payoutFeedback = payoutResult.feedback || 'Payout prediction complete.';
+      } else if (this.geminiAIService.isAvailable()) {
         try {
+          console.log(`🤖 Generating fresh payout prediction (will be cached in next snapshot)`);
           const payoutResult = await this.geminiAIService.predictInfluencerPayout(profileData);
           predictedPayout = payoutResult.payout;
           payoutFeedback = payoutResult.feedback;
@@ -4030,10 +4270,28 @@ export class InfluencerProfileScoringService {
         };
       }
 
-      // Ask AI to analyze audience sentiment on 1-20 scale
-      const sentimentResult = await this.geminiAIService.analyzeAudienceSentiment(captions);
-      const sentimentRating = sentimentResult.rating;
-      const aiFeedback = sentimentResult.feedback;
+      // Get cached AI analysis from snapshot (generated once per 30 days)
+      const latestSnapshot = await this.instagramProfileAnalysisModel.findOne({
+        where: { influencerId: influencer.id },
+        order: [['syncNumber', 'DESC']],
+      });
+
+      // Try to use cached AI audience sentiment analysis
+      let sentimentRating: number;
+      let aiFeedback: string;
+
+      if (latestSnapshot?.aiAudienceSentiment && latestSnapshot?.aiFeedbackGeneratedAt) {
+        const sentimentResult = latestSnapshot.aiAudienceSentiment;
+        console.log(`📦 Using cached audience sentiment from ${latestSnapshot.aiFeedbackGeneratedAt}`);
+        sentimentRating = sentimentResult.rating || 12;
+        aiFeedback = sentimentResult.feedback || 'Audience sentiment analysis complete.';
+      } else {
+        // Generate fresh AI analysis
+        console.log(`🤖 Generating fresh audience sentiment (will be cached in next snapshot)`);
+        const sentimentResult = await this.geminiAIService.analyzeAudienceSentiment(captions);
+        sentimentRating = sentimentResult.rating;
+        aiFeedback = sentimentResult.feedback;
+      }
 
       // Convert 1-20 scale to 0-10 scale
       const score = (sentimentRating / 20) * 10;
@@ -4227,17 +4485,16 @@ export class InfluencerProfileScoringService {
   }
 
   /**
-   * Generate AI profile summary based on category scores
-   * Returns a concise summary like "Strong in: niche clarity, engagement. Focus on improving: growth momentum."
+   * Generate AI profile summary based on category scores (4-6 words)
    */
-  private generateProfileSummary(categories: {
+  private async generateProfileSummary(categories: {
     audienceQuality: AudienceQualityScore;
     contentRelevance: ContentRelevanceScore;
     contentQuality: ContentQualityScore;
     engagementStrength: EngagementStrengthScore;
     growthMomentum: GrowthMomentumScore;
     monetisation: MonetisationScore;
-  }): string {
+  }): Promise<string> {
     // Analyze each category and identify strengths/weaknesses
     const categoryAnalysis = [
       { name: 'niche clarity', score: categories.contentRelevance.score },
@@ -4245,27 +4502,31 @@ export class InfluencerProfileScoringService {
       { name: 'content quality', score: categories.contentQuality.score },
       { name: 'engagement', score: categories.engagementStrength.score },
       { name: 'growth momentum', score: categories.growthMomentum.score },
-      { name: 'monetisation readiness', score: categories.monetisation.score },
+      { name: 'monetisation', score: categories.monetisation.score },
     ];
+
+    // Calculate total score and grade
+    const totalScore = (
+      categories.audienceQuality.score +
+      categories.contentRelevance.score +
+      categories.contentQuality.score +
+      categories.engagementStrength.score +
+      categories.growthMomentum.score +
+      categories.monetisation.score
+    ) / 6;
+
+    const grade = this.calculateGrade(totalScore);
 
     // Find strongest (≥70) and weakest (<60) areas
     const strengths = categoryAnalysis.filter(c => c.score >= 70).map(c => c.name);
     const weaknesses = categoryAnalysis.filter(c => c.score < 60).map(c => c.name);
 
-    // Build concise feedback message
-    let summary = '';
-    if (strengths.length > 0) {
-      summary += `Strong in: ${strengths.join(', ')}. `;
-    }
-    if (weaknesses.length > 0) {
-      summary += `Focus on improving: ${weaknesses.join(', ')}.`;
-    }
-
-    // If no clear strengths/weaknesses, provide balanced summary
-    if (summary.trim() === '') {
-      summary = 'Balanced profile across all areas.';
-    }
-
-    return summary.trim();
+    // Generate AI summary (4-6 words)
+    return await this.geminiAIService.generateProfileSummary({
+      totalScore,
+      strengths,
+      weaknesses,
+      grade,
+    });
   }
 }

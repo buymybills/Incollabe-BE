@@ -113,6 +113,19 @@ export interface InstagramProfileAnalysisCreationAttributes {
   aiContentFeedback?: string;
   aiFeedbackGeneratedAt?: Date;
   aiFeedbackVersion?: number;
+  // Comprehensive AI analysis cache (generated once per snapshot)
+  aiNicheAnalysis?: any;
+  aiLanguageAnalysis?: any;
+  aiVisualAnalysis?: any;
+  aiSentimentAnalysis?: any;
+  aiHashtagAnalysis?: any;
+  aiCtaAnalysis?: any;
+  aiColorPaletteAnalysis?: any;
+  aiTrendAnalysis?: any;
+  aiRetentionCurve?: any;
+  aiMonetizationAnalysis?: any;
+  aiPayoutPrediction?: any;
+  aiAudienceSentiment?: any;
   analyzedAt?: Date;
 }
 
@@ -421,6 +434,79 @@ export class InstagramProfileAnalysis extends Model<InstagramProfileAnalysis, In
     defaultValue: 1,
   })
   declare aiFeedbackVersion: number;
+
+  // Comprehensive AI analysis cache (generated once per snapshot, reused by all scoring APIs)
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  declare aiNicheAnalysis: any;
+
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  declare aiLanguageAnalysis: any;
+
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  declare aiVisualAnalysis: any;
+
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  declare aiSentimentAnalysis: any;
+
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  declare aiHashtagAnalysis: any;
+
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  declare aiCtaAnalysis: any;
+
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  declare aiColorPaletteAnalysis: any;
+
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  declare aiTrendAnalysis: any;
+
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  declare aiRetentionCurve: any;
+
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  declare aiMonetizationAnalysis: any;
+
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  declare aiPayoutPrediction: any;
+
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  declare aiAudienceSentiment: any;
 
   @Column({
     type: DataType.DATE,
