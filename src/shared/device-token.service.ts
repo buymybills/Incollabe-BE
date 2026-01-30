@@ -236,4 +236,20 @@ export class DeviceTokenService {
       },
     });
   }
+
+  /**
+   * Get user type from userId and deviceId
+   * Returns the userType (influencer/brand) if device is found
+   */
+  async getUserTypeFromDevice(userId: number, deviceId: string): Promise<UserType | null> {
+    const device = await this.deviceTokenModel.findOne({
+      where: {
+        userId,
+        deviceId,
+      },
+      attributes: ['userType'],
+    });
+
+    return device ? device.userType : null;
+  }
 }

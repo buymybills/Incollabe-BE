@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, ApiHideProperty } from '@nestjs/swagger';
 import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CheckReviewPromptDto {
@@ -68,13 +68,17 @@ export class RecordPromptShownDto {
   @IsNumber()
   user_id: number;
 
-  @ApiProperty({
-    description: 'User type',
-    enum: ['influencer', 'brand'],
-    example: 'influencer',
-  })
+  @ApiHideProperty()
+  @IsOptional()
   @IsEnum(['influencer', 'brand'])
-  user_type: 'influencer' | 'brand';
+  user_type?: 'influencer' | 'brand';
+
+  @ApiProperty({
+    description: 'Device ID - used to automatically determine user type from device_tokens table',
+    example: 'A1B2C3D4-E5F6-7890-ABCD-EF1234567890',
+  })
+  @IsString()
+  device_id: string;
 }
 
 export class MarkAsReviewedDto {
@@ -85,13 +89,17 @@ export class MarkAsReviewedDto {
   @IsNumber()
   user_id: number;
 
-  @ApiProperty({
-    description: 'User type',
-    enum: ['influencer', 'brand'],
-    example: 'influencer',
-  })
+  @ApiHideProperty()
+  @IsOptional()
   @IsEnum(['influencer', 'brand'])
-  user_type: 'influencer' | 'brand';
+  user_type?: 'influencer' | 'brand';
+
+  @ApiProperty({
+    description: 'Device ID - used to automatically determine user type from device_tokens table',
+    example: 'A1B2C3D4-E5F6-7890-ABCD-EF1234567890',
+  })
+  @IsString()
+  device_id: string;
 }
 
 export class MarkAsReviewedResponseDto {
