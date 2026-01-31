@@ -333,6 +333,13 @@ export class ProSubscriptionService {
     // Exclude cancelled invoices that were never paid
     const allInvoices = await this.proInvoiceModel.findAll({
       where: { influencerId },
+      include: [
+        {
+          model: this.proSubscriptionModel,
+          as: 'subscription',
+          attributes: ['razorpaySubscriptionId', 'autoRenew'],
+        },
+      ],
       order: [['createdAt', 'DESC']],
     });
 
@@ -350,7 +357,7 @@ export class ProSubscriptionService {
 
     // User has Pro access if:
     // 1. Subscription is ACTIVE, OR
-    // 2. Subscription is CANCELLED but current period hasn't ended yet, OR
+    // 2. Subscription is CANCELLED but current period hasn't ended yet AND was actually paid, OR
     // 3. Subscription is PAUSED:
     //    - Before currentPeriodEnd: isPro = true (paid period, pause hasn't started)
     //    - After resumeDate: isPro = true (pause ended)
@@ -361,7 +368,8 @@ export class ProSubscriptionService {
     if (subscription.status === SubscriptionStatus.ACTIVE) {
       isPro = true;
     } else if (subscription.status === SubscriptionStatus.CANCELLED) {
-      isPro = subscription.currentPeriodEnd > now;
+      // Only give Pro access if subscription was actually paid AND current period hasn't ended
+      isPro = hadPaidInvoices && subscription.currentPeriodEnd > now;
     } else if (subscription.status === SubscriptionStatus.PAUSED) {
       // If pause period has ended, give Pro access
       if (subscription.resumeDate && subscription.resumeDate <= now) {
@@ -377,10 +385,10 @@ export class ProSubscriptionService {
       }
     }
 
-    // Don't count subscriptions in pending/failed/inactive states as having a subscription
+    // Don't count subscriptions in failed/inactive states as having a subscription
     // Also don't count cancelled subscriptions that were never paid
+    // NOTE: payment_pending subscriptions SHOULD show subscription details (so user can resume payment)
     const hasSubscription = !(
-      subscription.status === SubscriptionStatus.PAYMENT_PENDING ||
       subscription.status === SubscriptionStatus.PAYMENT_FAILED ||
       subscription.status === SubscriptionStatus.INACTIVE ||
       (subscription.status === SubscriptionStatus.CANCELLED && !hadPaidInvoices)
@@ -407,46 +415,64 @@ export class ProSubscriptionService {
       displayStatus = SubscriptionStatus.ACTIVE;
     }
 
+    // Helper function to format status (remove underscores, convert to camelCase)
+    const formatStatus = (status: string): string => {
+      return status.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    };
+
+    // Don't return subscription details if it's cancelled and never paid
+    // This prevents showing confusing subscription data for abandoned payment attempts
+    const subscriptionData = hasSubscription ? {
+      id: subscription.id,
+      status: formatStatus(displayStatus),
+      isCancelled: subscription.status === SubscriptionStatus.CANCELLED || displayStatus === SubscriptionStatus.EXPIRED,
+      isPaused: subscription.isPaused,  // True if pause is scheduled OR active
+      pausedAt: subscription.pausedAt ? toIST(subscription.pausedAt) : null,
+      pauseStartDate: subscription.pauseStartDate
+        ? toIST(subscription.pauseStartDate)
+        : (subscription.isPaused ? toIST(subscription.currentPeriodEnd) : null),  // Fallback for old data
+      pauseEndDate: subscription.resumeDate ? toIST(subscription.resumeDate) : null,
+      pauseDurationDays: subscription.pauseDurationDays,
+      startDate: toIST(subscription.startDate),
+      currentPeriodStart: toIST(subscription.currentPeriodStart),
+      currentPeriodEnd: toIST(subscription.currentPeriodEnd),
+      nextBillingDate: toIST(subscription.nextBillingDate),
+      amount: subscription.subscriptionAmount / 100, // Convert to Rs
+      autoRenew: subscription.autoRenew,
+      paymentMethod: subscription.paymentMethod,
+      // Autopay can be true if autoRenew is enabled OR razorpaySubscriptionId exists
+      isAutopay: subscription.autoRenew || !!subscription.razorpaySubscriptionId,
+      subscriptionType: (subscription.autoRenew || subscription.razorpaySubscriptionId) ? 'autopay' : 'monthly',
+    } : null;
+
     return {
       hasSubscription,
       isPro,
-      subscription: {
-        id: subscription.id,
-        status: displayStatus,
-        isCancelled: subscription.status === SubscriptionStatus.CANCELLED || displayStatus === SubscriptionStatus.EXPIRED,
-        isPaused: subscription.isPaused,  // True if pause is scheduled OR active
-        pausedAt: subscription.pausedAt ? toIST(subscription.pausedAt) : null,
-        pauseStartDate: subscription.pauseStartDate
-          ? toIST(subscription.pauseStartDate)
-          : (subscription.isPaused ? toIST(subscription.currentPeriodEnd) : null),  // Fallback for old data
-        pauseEndDate: subscription.resumeDate ? toIST(subscription.resumeDate) : null,
-        pauseDurationDays: subscription.pauseDurationDays,
-        startDate: toIST(subscription.startDate),
-        currentPeriodStart: toIST(subscription.currentPeriodStart),
-        currentPeriodEnd: toIST(subscription.currentPeriodEnd),
-        nextBillingDate: toIST(subscription.nextBillingDate),
-        amount: subscription.subscriptionAmount / 100, // Convert to Rs
-        autoRenew: subscription.autoRenew,
-        paymentMethod: subscription.paymentMethod,
-        isAutopay: subscription.autoRenew && !!subscription.razorpaySubscriptionId, // true if autopay, false if monthly
-        subscriptionType: subscription.autoRenew && subscription.razorpaySubscriptionId ? 'autopay' : 'monthly',
-      },
-      invoices: filteredInvoices.map((inv) => ({
-        id: inv.id,
-        invoiceNumber: inv.invoiceNumber,
-        amount: inv.totalAmount / 100,
-        status: inv.paymentStatus,
-        billingPeriod: {
-          start: toIST(inv.billingPeriodStart),
-          end: toIST(inv.billingPeriodEnd),
-        },
-        paidAt: toIST(inv.paidAt),
-        invoiceUrl: inv.invoiceUrl,
-        paymentMethod: inv.paymentMethod,
-        // Check if this invoice was paid via autopay (has razorpayPaymentId starting with subscription-related prefix)
-        isAutopay: inv.razorpayPaymentId ? inv.razorpayPaymentId.includes('sub_') : false,
-        paymentType: inv.razorpayPaymentId && inv.razorpayPaymentId.includes('sub_') ? 'Autopay' : 'Monthly',
-      })),
+      subscription: subscriptionData,
+      invoices: filteredInvoices.map((inv) => {
+        // For autopay detection, check the invoice's subscription (not the latest subscription)
+        // 1. Check if invoice's subscription has razorpaySubscriptionId (autopay enabled)
+        // 2. For paid invoices, can also verify via razorpayPaymentId
+        const invoiceSubscription = inv.subscription || subscription;
+        const isAutopay = invoiceSubscription?.razorpaySubscriptionId ? true :
+                          (inv.razorpayPaymentId ? inv.razorpayPaymentId.includes('sub_') : false);
+
+        return {
+          id: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          amount: inv.totalAmount / 100,
+          status: formatStatus(inv.paymentStatus),
+          billingPeriod: {
+            start: toIST(inv.billingPeriodStart),
+            end: toIST(inv.billingPeriodEnd),
+          },
+          paidAt: toIST(inv.paidAt),
+          invoiceUrl: inv.invoiceUrl,
+          paymentMethod: inv.paymentMethod,
+          isAutopay,
+          paymentType: isAutopay ? 'Autopay' : 'Monthly',
+        };
+      }),
     };
   }
 
@@ -476,12 +502,17 @@ export class ProSubscriptionService {
       };
     }
 
+    // Helper function to format status (remove underscores, convert to camelCase)
+    const formatStatus = (status: string): string => {
+      return status.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    };
+
     return {
       invoices: filteredInvoices.map((inv) => ({
         id: inv.id,
         invoiceNumber: inv.invoiceNumber,
         amount: inv.totalAmount / 100, // Convert to Rs
-        status: inv.paymentStatus,
+        status: formatStatus(inv.paymentStatus),
         billingPeriod: {
           start: toIST(inv.billingPeriodStart),
           end: toIST(inv.billingPeriodEnd),
@@ -697,6 +728,75 @@ export class ProSubscriptionService {
       success: true,
       message: 'Pending subscription cancelled successfully. You can now create a new subscription.',
       cancelledSubscriptionId: subscription.id,
+    };
+  }
+
+  /**
+   * Resume pending payment for an incomplete subscription
+   * Returns existing payment order details so user can complete payment
+   */
+  async resumePendingPayment(influencerId: number) {
+    // Find pending subscription with invoice
+    const subscription = await this.proSubscriptionModel.findOne({
+      where: {
+        influencerId,
+        status: SubscriptionStatus.PAYMENT_PENDING,
+      },
+      include: [
+        {
+          model: ProInvoice,
+          as: 'invoices',
+          where: { paymentStatus: InvoiceStatus.PENDING },
+          required: true,
+        },
+      ],
+    });
+
+    if (!subscription) {
+      throw new NotFoundException(
+        'No pending payment found. Please create a new subscription.'
+      );
+    }
+
+    const invoice = subscription.invoices[0];
+
+    // Check if Razorpay order exists
+    if (!invoice.razorpayOrderId) {
+      throw new BadRequestException(
+        'Payment order not found. Please cancel and create a new subscription.'
+      );
+    }
+
+    // Get influencer details
+    const influencer = await this.influencerModel.findByPk(influencerId);
+    if (!influencer) {
+      throw new NotFoundException('Influencer not found');
+    }
+
+    console.log(`📱 Resuming pending payment for influencer ${influencerId}, subscription ${subscription.id}`);
+
+    return {
+      subscription: {
+        id: subscription.id,
+        status: subscription.status,
+        startDate: toIST(subscription.startDate),
+        endDate: toIST(subscription.currentPeriodEnd),
+        amount: subscription.subscriptionAmount,
+        createdAt: toIST(subscription.createdAt),
+      },
+      invoice: {
+        id: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        amount: invoice.totalAmount,
+        status: invoice.paymentStatus,
+      },
+      payment: {
+        orderId: invoice.razorpayOrderId,
+        amount: invoice.totalAmount,
+        currency: 'INR',
+        keyId: process.env.RAZORPAY_KEY_ID,
+      },
+      message: 'Complete this pending payment or cancel it to create a new subscription.',
     };
   }
 
@@ -1752,22 +1852,14 @@ export class ProSubscriptionService {
       throw new BadRequestException('You already have an active autopay subscription');
     }
 
-    // Create or get the Razorpay plan
-    const planResult = await this.razorpayService.createPlan(
-      'monthly',
-      1,
-      199,
-      'INR',
-      'CollabKaroo Pro - Monthly Subscription',
-      'Pro account subscription with unlimited campaigns and features',
-      { subscriptionType: 'pro_account' },
-    );
+    // Use existing Razorpay plan from environment
+    const planId = this.configService.get<string>('RAZORPAY_PRO_PLAN_ID');
 
-    if (!planResult.success) {
-      throw new BadRequestException(`Failed to create plan: ${planResult.error}`);
+    if (!planId) {
+      throw new BadRequestException(
+        'RAZORPAY_PRO_PLAN_ID is not configured. Please run the setup endpoint to create a plan first.'
+      );
     }
-
-    const planId = planResult.planId;
 
     // Check if influencer still has active Pro access from previous subscription
     const influencerData = await this.influencerModel.findByPk(influencerId);

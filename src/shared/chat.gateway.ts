@@ -15,6 +15,7 @@ import { WsAuthGuard } from './guards/ws-auth.guard';
 import { SendMessageDto, MarkAsReadDto, TypingDto } from './dto/chat.dto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { ParticipantType } from './models/conversation.model';
 
 @WebSocketGateway({
   cors: {
@@ -438,7 +439,7 @@ export class ChatGateway
               };
 
         const otherPartyDetails = await this.chatService['getParticipantDetails'](
-          otherParticipant.type as any,
+          otherParticipant.type,
           otherParticipant.id,
         );
 
@@ -555,7 +556,7 @@ export class ChatGateway
    */
   private extractUserFromToken(
     token: string,
-  ): { userId: number; userType: 'influencer' | 'brand' } | null {
+  ): { userId: number; userType: ParticipantType } | null {
     try {
       // Remove 'Bearer ' prefix if present
       const jwtToken = token.replace(/^Bearer\s+/, '');
@@ -738,7 +739,7 @@ export class ChatGateway
   public async emitNewMessage(
     conversationId: number,
     senderId: number,
-    senderType: string,
+    senderType: ParticipantType,
     message: any,
   ) {
     try {
@@ -786,7 +787,7 @@ export class ChatGateway
   private async notifyUserDirectlyWithConversation(
     conversationId: number,
     senderUserId: number,
-    senderUserType: string,
+    senderUserType: ParticipantType,
     message: any,
   ) {
     try {
@@ -798,7 +799,7 @@ export class ChatGateway
 
       // Determine the recipient
       let recipientUserId: number;
-      let recipientUserType: string;
+      let recipientUserType: ParticipantType;
 
       if (
         conversation.participant1Type === senderUserType &&
@@ -838,19 +839,27 @@ export class ChatGateway
 
         // Get sender details for conversation update
         const senderDetails = await this.chatService['getParticipantDetails'](
-          senderUserType as any,
+          senderUserType,
           senderUserId,
+        );
+
+        // Get recipient details (currentUser for the frontend)
+        const recipientDetails = await this.chatService['getParticipantDetails'](
+          recipientUserType,
+          recipientUserId,
         );
 
         // Send conversation update (for conversations list)
         recipientSocket.emit('conversation:update', {
           id: conversationId,
+          currentUser: recipientDetails,
           lastMessage: conversation.lastMessage,
           lastMessageAt: conversation.lastMessageAt,
           lastMessageSenderType: conversation.lastMessageSenderType,
           unreadCount: recipientUnreadCount,
           otherParty: senderDetails,
           otherPartyType: senderUserType,
+          createdAt: conversation.createdAt,
           updatedAt: conversation.updatedAt,
         });
 
@@ -874,7 +883,7 @@ export class ChatGateway
   private async sendConversationUpdateToSender(
     conversationId: number,
     senderUserId: number,
-    senderUserType: string,
+    senderUserType: ParticipantType,
     senderSocket: Socket,
   ) {
     try {
@@ -886,7 +895,7 @@ export class ChatGateway
 
       // Determine the other participant (recipient)
       let recipientUserId: number;
-      let recipientUserType: string;
+      let recipientUserType: ParticipantType;
 
       if (
         conversation.participant1Type === senderUserType &&
@@ -918,19 +927,27 @@ export class ChatGateway
 
       // Get recipient details for conversation update
       const recipientDetails = await this.chatService['getParticipantDetails'](
-        recipientUserType as any,
+        recipientUserType,
         recipientUserId,
+      );
+
+      // Get sender details (currentUser for the frontend)
+      const senderDetails = await this.chatService['getParticipantDetails'](
+        senderUserType,
+        senderUserId,
       );
 
       // Send conversation update to sender
       senderSocket.emit('conversation:update', {
         id: conversationId,
+        currentUser: senderDetails,
         lastMessage: conversation.lastMessage,
         lastMessageAt: conversation.lastMessageAt,
         lastMessageSenderType: conversation.lastMessageSenderType,
         unreadCount: senderUnreadCount, // Should be 0 for sender
         otherParty: recipientDetails,
         otherPartyType: recipientUserType,
+        createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,
       });
 

@@ -8,6 +8,7 @@ import { CustomNicheService } from '../shared/services/custom-niche.service';
 import { NotificationService } from '../shared/notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
 import { AppVersionService } from '../shared/services/app-version.service';
+import { AppReviewService } from '../shared/services/app-review.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import {
   ProfileReview,
@@ -158,6 +159,12 @@ const mockAppVersionService = {
   getAllVersionConfigs: jest.fn().mockResolvedValue([]),
   updateVersionConfig: jest.fn(),
   clearCache: jest.fn(),
+};
+
+const mockAppReviewService = {
+  trackReviewPrompt: jest.fn(),
+  shouldShowReviewPrompt: jest.fn().mockResolvedValue(false),
+  markAsReviewed: jest.fn(),
 };
 
 describe('InfluencerService', () => {
@@ -326,6 +333,32 @@ describe('InfluencerService', () => {
             create: jest.fn(),
             update: jest.fn(),
           },
+        },
+        {
+          provide: 'INSTAGRAM_PROFILE_ANALYSIS_MODEL',
+          useValue: {
+            findOne: jest.fn().mockResolvedValue(null),
+            findAll: jest.fn().mockResolvedValue([]),
+            create: jest.fn(),
+            update: jest.fn(),
+          },
+        },
+        {
+          provide: 'HOME_PAGE_HISTORY_MODEL',
+          useValue: {
+            create: jest.fn().mockResolvedValue({
+              id: 1,
+              influencerId: 1,
+              actionType: 'app_open',
+              createdAt: new Date(),
+            }),
+            findAll: jest.fn().mockResolvedValue([]),
+            count: jest.fn().mockResolvedValue(0),
+          },
+        },
+        {
+          provide: AppReviewService,
+          useValue: mockAppReviewService,
         },
       ],
     }).compile();

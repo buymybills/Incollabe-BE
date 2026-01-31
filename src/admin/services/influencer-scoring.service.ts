@@ -369,6 +369,40 @@ export class InfluencerScoringService {
         this.getBatchCompletedCampaignsCounts(influencerIds),
       ]);
 
+    // Calculate search priority helper function
+    // Prioritizes matches by field (name first, then username), then by position
+    const calculateSearchPriority = (
+      name: string,
+      username: string,
+      searchTerm: string,
+    ): number => {
+      if (!searchTerm) return 0;
+
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      const lowerName = name.toLowerCase();
+      const lowerUsername = username.toLowerCase();
+
+      // Check position in name
+      const nameIndex = lowerName.indexOf(lowerSearchTerm);
+      // Check position in username
+      const usernameIndex = lowerUsername.indexOf(lowerSearchTerm);
+
+      // Priority tiers:
+      // 1000-1999: Match in name (1000 = starts with, 1001 = position 1, etc.)
+      // 2000-2999: Match in username (2000 = starts with, 2001 = position 1, etc.)
+      // 9999: No match (shouldn't happen due to filtering)
+
+      if (nameIndex >= 0) {
+        // Match found in name - highest priority tier
+        return 1000 + nameIndex;
+      } else if (usernameIndex >= 0) {
+        // Match found in username - lower priority tier
+        return 2000 + usernameIndex;
+      }
+
+      return 9999; // No match found
+    };
+
     // Map influencers and apply follower filters
     const mappedInfluencers = allInfluencers.map((inf) => {
       const influencer = inf as unknown as InfluencerWithAssociations;
@@ -392,6 +426,13 @@ export class InfluencerScoringService {
       const instagramPostCost = instagramCosts.post || 0;
       const instagramReelCost = instagramCosts.reel || 0;
 
+      // Calculate search priority
+      const searchPriority = calculateSearchPriority(
+        influencer.name || '',
+        influencer.username || '',
+        searchQuery?.trim() || '',
+      );
+
       // For non-top profiles, we don't calculate scores
       // But we still return the same structure with default/null scores
       const scoreBreakdown: InfluencerScoreBreakdown = {
@@ -405,7 +446,7 @@ export class InfluencerScoringService {
         recommendationLevel: 'not_recommended',
       };
 
-        const topInfluencer: TopInfluencerDto & { followingCount: number } = {
+        const topInfluencer: TopInfluencerDto & { followingCount: number; searchPriority: number } = {
           id: influencer.id,
           name: influencer.name,
           username: influencer.username,
@@ -428,6 +469,7 @@ export class InfluencerScoringService {
           instagramPostCost,
           instagramReelCost,
           scoreBreakdown,
+          searchPriority, // Add search priority for sorting
         };
 
       return topInfluencer;
@@ -435,29 +477,54 @@ export class InfluencerScoringService {
 
     // Filter out null values
     const validInfluencers = mappedInfluencers.filter(
-      (inf): inf is TopInfluencerDto & { followingCount: number } =>
+      (inf): inf is TopInfluencerDto & { followingCount: number; searchPriority: number } =>
         inf !== null,
     );
 
     // Apply sorting based on sortBy parameter
+    // When search query is present, prioritize by search relevance first
+    const hasSearchQuery = searchQuery && searchQuery.trim();
+
     switch (sortBy) {
       case InfluencerSortBy.POSTS:
-        validInfluencers.sort((a, b) => b.postsCount - a.postsCount);
+        validInfluencers.sort((a, b) => {
+          if (hasSearchQuery && a.searchPriority !== b.searchPriority) {
+            return a.searchPriority - b.searchPriority; // Lower priority number = higher relevance
+          }
+          return b.postsCount - a.postsCount;
+        });
         break;
       case InfluencerSortBy.FOLLOWERS:
-        validInfluencers.sort((a, b) => b.followersCount - a.followersCount);
+        validInfluencers.sort((a, b) => {
+          if (hasSearchQuery && a.searchPriority !== b.searchPriority) {
+            return a.searchPriority - b.searchPriority;
+          }
+          return b.followersCount - a.followersCount;
+        });
         break;
       case InfluencerSortBy.FOLLOWING:
-        validInfluencers.sort((a, b) => b.followingCount - a.followingCount);
+        validInfluencers.sort((a, b) => {
+          if (hasSearchQuery && a.searchPriority !== b.searchPriority) {
+            return a.searchPriority - b.searchPriority;
+          }
+          return b.followingCount - a.followingCount;
+        });
         break;
       case InfluencerSortBy.CAMPAIGNS:
-        validInfluencers.sort(
-          (a, b) => b.completedCampaigns - a.completedCampaigns,
-        );
+        validInfluencers.sort((a, b) => {
+          if (hasSearchQuery && a.searchPriority !== b.searchPriority) {
+            return a.searchPriority - b.searchPriority;
+          }
+          return b.completedCampaigns - a.completedCampaigns;
+        });
         break;
       case InfluencerSortBy.CREATED_AT:
       default:
-        // Already sorted by createdAt ASC from database query
+        // When search is active, sort by search priority first
+        if (hasSearchQuery) {
+          validInfluencers.sort((a, b) => a.searchPriority - b.searchPriority);
+        }
+        // Otherwise already sorted by createdAt ASC from database query
         break;
     }
 
@@ -465,7 +532,12 @@ export class InfluencerScoringService {
     const total = validInfluencers.length;
     const totalPages = Math.ceil(total / limit);
     const offset = (page - 1) * limit;
-    const paginatedInfluencers = validInfluencers.slice(offset, offset + limit);
+    const paginatedInfluencersWithPriority = validInfluencers.slice(offset, offset + limit);
+
+    // Remove searchPriority from response (only used internally for sorting)
+    const paginatedInfluencers = paginatedInfluencersWithPriority.map(
+      ({ searchPriority, ...influencer }) => influencer,
+    );
 
     return {
       influencers: paginatedInfluencers,

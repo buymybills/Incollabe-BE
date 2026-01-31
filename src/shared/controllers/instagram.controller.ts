@@ -1,8 +1,9 @@
-import { Post, Get, Body, Query, Param, HttpCode, HttpStatus, UseGuards, Req, BadRequestException } from '@nestjs/common';
-// import { Controller } from '@nestjs/common'; // DISABLED: Commented out with @Controller decorator
+import { Controller, Post, Get, Body, Query, Param, HttpCode, HttpStatus, UseGuards, Req, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { InstagramService } from '../services/instagram.service';
 import { InstagramSyncCronService } from '../services/instagram-sync.cron';
+//import { InstagramGrowthCronService } from '../services/instagram-growth.cron';
+import { InfluencerCredibilityScoringService } from '../services/influencer-credibility-scoring.service';
 import {
   InstagramTokenDto,
   InstagramTokenResponseDto,
@@ -14,21 +15,19 @@ import { Public } from '../../auth/decorators/public.decorator';
 import type { RequestWithUser } from '../../types/request.types';
 
 /**
- * DISABLED: Instagram functionality commented out for production
- *
- * To re-enable:
- * 1. Uncomment the @Controller decorator below
- * 2. Uncomment the controller registration in shared.module.ts
- * 3. Uncomment the cron jobs in instagram-sync.cron.ts
+ * Instagram OAuth Controller
+ * Handles Instagram authentication and token management
  */
 @ApiTags('Instagram OAuth')
-// @Controller('instagram')
+@Controller('instagram')
 @UseGuards(AuthGuard)
 @ApiBearerAuth()
 export class InstagramController {
   constructor(
     private readonly instagramService: InstagramService,
     private readonly instagramSyncCronService: InstagramSyncCronService,
+    //private readonly instagramGrowthCronService: InstagramGrowthCronService,
+    private readonly credibilityScoringService: InfluencerCredibilityScoringService,
   ) {}
 
   /**
@@ -167,77 +166,6 @@ export class InstagramController {
     };
   }
 
-  /**
-   * Connect Instagram using Facebook access token (Graph API)
-   * GET /instagram/connect-facebook
-   */
-  @Public()
-  @Get('connect-facebook')
-  @ApiOperation({
-    summary: 'Connect Instagram using Facebook token',
-    description: 'Connects Instagram Business account using Facebook access token (Graph API). Requires facebook_access_token, user_id and user_type parameters.'
-  })
-  @ApiQuery({
-    name: 'facebook_access_token',
-    required: true,
-    description: 'Facebook access token from OAuth flow'
-  })
-  @ApiQuery({
-    name: 'user_id',
-    required: true,
-    description: 'User ID (influencer or brand ID)'
-  })
-  @ApiQuery({
-    name: 'user_type',
-    required: true,
-    enum: ['influencer', 'brand'],
-    description: 'User type: influencer or brand'
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Instagram connected successfully'
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'No Facebook Pages found or Instagram not connected to page'
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'User not found'
-  })
-  async connectFacebook(
-    @Query('facebook_access_token') facebookAccessToken: string,
-    @Query('user_id') userId: string,
-    @Query('user_type') userType: string,
-  ) {
-    if (!userId || !userType || !facebookAccessToken) {
-      throw new BadRequestException('facebook_access_token, user_id and user_type are required');
-    }
-
-    if (!['influencer', 'brand'].includes(userType)) {
-      throw new BadRequestException('user_type must be either "influencer" or "brand"');
-    }
-
-    const user = await this.instagramService.connectWithFacebookToken(
-      Number(userId),
-      userType as 'influencer' | 'brand',
-      facebookAccessToken,
-    );
-
-    return {
-      message: 'Instagram account connected successfully using Facebook',
-      profile: {
-        id: user.instagramUserId,
-        username: user.instagramUsername,
-        accountType: user.instagramAccountType,
-        followersCount: user.instagramFollowersCount,
-        followsCount: user.instagramFollowsCount,
-        mediaCount: user.instagramMediaCount,
-        profilePictureUrl: user.instagramProfilePictureUrl,
-        bio: user.instagramBio,
-      },
-    };
-  }
 
   /**
    * Get stored Instagram profile for a user
@@ -734,5 +662,771 @@ export class InstagramController {
       ...result,
     };
   }
+
+  /**
+   * Bulk sync all media insights with progressive growth tracking
+   * POST /instagram/sync-all-media-insights
+   */
+  @Public()
+  @Post('sync-all-media-insights')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Bulk sync media insights with progressive growth tracking',
+    description: `Comprehensive media insights sync with intelligent snapshot management:
+
+    **How it works:**
+    1. **Checks last snapshot date** - Finds the most recent snapshot for this user
+    2. **15-day throttle** - If last snapshot was less than 15 days ago, returns error with days remaining
+    3. **Fetches media** - Gets all posts from Instagram API (up to limit)
+    4. **Stores insights** - Fetches detailed insights for each post
+    5. **Creates new snapshot** - Snapshot period depends on last sync:
+       - **First time:** Creates snapshot for last 30 days
+       - **Subsequent syncs:** Creates snapshot from (last snapshot end date + 1 day) to today
+       - Example: If last snapshot ended on Dec 31 and you sync on Jan 20 (20 days later), new snapshot will cover Jan 1 - Jan 20 (20 days)
+    6. **Compares growth** - Calculates growth metrics by comparing new snapshot with previous snapshot
+
+    **Key Features:**
+    - Progressive snapshot tracking (keeps all historical snapshots)
+    - Dynamic snapshot periods (15, 20, 30+ days based on when user syncs)
+    - Prevents sync abuse with 15-day minimum interval
+    - Complete growth comparison metrics
+
+    **Growth metrics:**
+    - Followers growth (count & percentage)
+    - Engagement rate change
+    - Average reach change
+    - Posts activity comparison
+    - Active followers percentage change`
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'User ID (influencer or brand ID)'
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    enum: ['influencer', 'brand'],
+    description: 'User type: influencer or brand'
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of posts to fetch from Instagram API (default: 50, max: 100)',
+    type: Number
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Bulk sync completed successfully with progressive growth tracking',
+    schema: {
+      examples: {
+        'Subsequent Sync (with growth)': {
+          value: {
+            success: true,
+            message: 'Successfully synced 48 posts and created snapshot #3',
+            syncedAt: '2025-02-10T10:30:00Z',
+            mediaSync: {
+              totalPosts: 50,
+              synced: 48,
+              failed: 2,
+              errors: [
+                {
+                  mediaId: '12345',
+                  error: 'Media posted before business account conversion'
+                }
+              ]
+            },
+            currentSnapshot: {
+              snapshotId: 52,
+              syncNumber: 3,
+              period: {
+                start: '2025-01-01',
+                end: '2025-02-10',
+                days: 41
+              },
+              metrics: {
+                postsAnalyzed: 25,
+                totalFollowers: 15820,
+                activeFollowers: 1740,
+                activeFollowersPercentage: 11.0,
+                avgEngagementRate: 4.12,
+                avgReach: 6200,
+                totalLikes: 12450,
+                totalComments: 628,
+                totalShares: 156,
+                totalSaves: 412
+              }
+            },
+            previousSnapshot: {
+              snapshotId: 51,
+              syncNumber: 2,
+              period: {
+                start: '2024-12-02',
+                end: '2024-12-31',
+                days: 30
+              },
+              metrics: {
+                postsAnalyzed: 18,
+                totalFollowers: 14800,
+                activeFollowers: 1480,
+                activeFollowersPercentage: 10.0,
+                avgEngagementRate: 3.45,
+                avgReach: 5200,
+                totalLikes: 8640,
+                totalComments: 432,
+                totalShares: 89,
+                totalSaves: 267
+              }
+            },
+            growth: {
+              followers: {
+                previous: 14800,
+                current: 15820,
+                change: 1020,
+                changePercentage: 6.89
+              },
+              engagement: {
+                previous: 3.45,
+                current: 4.12,
+                change: 0.67,
+                changePercentage: 19.42
+              },
+              reach: {
+                previous: 5200,
+                current: 6200,
+                change: 1000,
+                changePercentage: 19.23
+              },
+              posts: {
+                previous: 18,
+                current: 25,
+                change: 7
+              },
+              activeFollowers: {
+                previous: 10.0,
+                current: 11.0,
+                change: 1.0
+              }
+            }
+          }
+        },
+        'Initial Sync (first time)': {
+          value: {
+            success: true,
+            message: 'Initial snapshot created with 32 posts',
+            syncedAt: '2025-01-23T10:30:00Z',
+            mediaSync: {
+              totalPosts: 35,
+              synced: 32,
+              failed: 3,
+              errors: []
+            },
+            currentSnapshot: {
+              snapshotId: 1,
+              syncNumber: 1,
+              period: {
+                start: '2024-12-24',
+                end: '2025-01-23',
+                days: 30
+              },
+              metrics: {
+                postsAnalyzed: 15,
+                totalFollowers: 12500,
+                activeFollowers: 1125,
+                activeFollowersPercentage: 9.0,
+                avgEngagementRate: 2.85,
+                avgReach: 4200,
+                totalLikes: 5340,
+                totalComments: 267,
+                totalShares: 45,
+                totalSaves: 178
+              }
+            }
+          }
+        }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid parameters, no Instagram account connected, or sync throttled',
+    schema: {
+      examples: {
+        'Sync Throttled (too soon)': {
+          value: {
+            error: 'sync_throttled',
+            message: 'Instagram profile sync is limited to once every 15 days. Please wait 8 more day(s).',
+            details: {
+              lastSnapshotDate: '2025-01-10',
+              nextAllowedSyncDate: '2025-01-25',
+              daysSinceLastSnapshot: 7,
+              daysRemaining: 8
+            }
+          }
+        }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Bulk sync failed'
+  })
+  async syncAllMediaInsights(
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
+    @Query('limit') limit?: string,
+  ) {
+    if (!userId || !userType) {
+      throw new BadRequestException('user_id and user_type are required');
+    }
+
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException('user_type must be either "influencer" or "brand"');
+    }
+
+    const limitNum = limit ? parseInt(limit, 10) : 50;
+
+    // Ensure limit is within bounds
+    if (limitNum < 1 || limitNum > 100) {
+      throw new BadRequestException('limit must be between 1 and 100');
+    }
+
+    const result = await this.instagramService.syncAllMediaInsights(
+      Number(userId),
+      userType as 'influencer' | 'brand',
+      limitNum,
+    );
+
+    return result;
+  }
+
+  /**
+   * Comprehensive sync of all Instagram insights with progressive growth tracking
+   * POST /instagram/sync-all-insights
+   */
+  @Public()
+  @Post('sync-all-insights')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Comprehensive sync with progressive growth tracking (MASTER SYNC API)',
+    description: `Complete Instagram insights sync with intelligent snapshot management:
+
+    **How it works:**
+    1. **Checks last snapshot date** - Finds the most recent snapshot for this user
+    2. **15-day throttle** - If last snapshot was less than 15 days ago, returns error with days remaining
+    3. **Fetches profile** - Updates basic profile data (username, followers, account type, etc.)
+    4. **Creates new snapshot** - Snapshot period depends on last sync:
+       - **First time:** Creates snapshot for last 30 days
+       - **Subsequent syncs:** Creates snapshot from (last snapshot end date + 1 day) to today
+       - Example: If last snapshot ended on Dec 31 and you sync on Jan 20 (20 days later), new snapshot will cover Jan 1 - Jan 20 (20 days)
+    5. **Fetches demographics** - Gets audience demographics and geographic data (requires Facebook connection)
+    6. **Compares growth** - Calculates growth metrics by comparing new snapshot with previous snapshot
+
+    **Key Features:**
+    - Progressive snapshot tracking (keeps all historical snapshots)
+    - Dynamic snapshot periods (adapts to when user syncs)
+    - Prevents sync abuse with 15-day minimum interval
+    - Complete profile + demographics + growth metrics
+
+    **Growth metrics:**
+    - Followers growth (count & percentage)
+    - Engagement rate change
+    - Average reach change
+    - Posts activity comparison
+    - Active followers percentage change
+
+    **Note:** Demographics and geographic data require Instagram Business Account connected to Facebook Page.`
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'User ID (influencer or brand ID)'
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    enum: ['influencer', 'brand'],
+    description: 'User type: influencer or brand'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Comprehensive sync completed with progressive growth tracking',
+    schema: {
+      examples: {
+        'Subsequent Sync (with growth)': {
+          value: {
+            message: 'Instagram insights snapshot #3 created with growth analysis',
+            syncedAt: '2025-02-10T10:30:00Z',
+            basicProfile: {
+              status: 'success',
+              data: {
+                username: 'example_influencer',
+                followersCount: 15820,
+                followsCount: 530,
+                mediaCount: 135,
+                accountType: 'BUSINESS'
+              }
+            },
+            currentSnapshot: {
+              snapshotId: 53,
+              syncNumber: 3,
+              period: {
+                start: '2025-01-01',
+                end: '2025-02-10',
+                days: 41
+              },
+              metrics: {
+                postsAnalyzed: 22,
+                totalFollowers: 15820,
+                activeFollowers: 1740,
+                activeFollowersPercentage: 11.0,
+                avgEngagementRate: 4.12,
+                avgReach: 6200,
+                totalLikes: 11250,
+                totalComments: 564,
+                totalShares: 142,
+                totalSaves: 385
+              }
+            },
+            previousSnapshot: {
+              snapshotId: 52,
+              syncNumber: 2,
+              period: {
+                start: '2024-12-02',
+                end: '2024-12-31',
+                days: 30
+              },
+              metrics: {
+                postsAnalyzed: 15,
+                totalFollowers: 14800,
+                activeFollowers: 1480,
+                activeFollowersPercentage: 10.0,
+                avgEngagementRate: 3.45,
+                avgReach: 5200,
+                totalLikes: 6840,
+                totalComments: 342,
+                totalShares: 72,
+                totalSaves: 228
+              }
+            },
+            growth: {
+              followers: {
+                previous: 14800,
+                current: 15820,
+                change: 1020,
+                changePercentage: 6.89
+              },
+              engagement: {
+                previous: 3.45,
+                current: 4.12,
+                change: 0.67,
+                changePercentage: 19.42
+              },
+              reach: {
+                previous: 5200,
+                current: 6200,
+                change: 1000,
+                changePercentage: 19.23
+              },
+              posts: {
+                previous: 15,
+                current: 22,
+                change: 7
+              },
+              activeFollowers: {
+                previous: 10.0,
+                current: 11.0,
+                change: 1.0
+              }
+            },
+            audienceDemographics: {
+              status: 'success',
+              data: []
+            },
+            geographicData: {
+              status: 'success',
+              data: []
+            }
+          }
+        },
+        'Initial Sync (first time)': {
+          value: {
+            message: 'Initial Instagram insights snapshot created',
+            syncedAt: '2025-01-23T10:30:00Z',
+            basicProfile: {
+              status: 'success',
+              data: {
+                username: 'example_influencer',
+                followersCount: 12500,
+                followsCount: 485,
+                mediaCount: 98,
+                accountType: 'BUSINESS'
+              }
+            },
+            currentSnapshot: {
+              snapshotId: 1,
+              syncNumber: 1,
+              period: {
+                start: '2024-12-24',
+                end: '2025-01-23',
+                days: 30
+              },
+              metrics: {
+                postsAnalyzed: 12,
+                totalFollowers: 12500,
+                activeFollowers: 1125,
+                activeFollowersPercentage: 9.0,
+                avgEngagementRate: 2.85,
+                avgReach: 4200,
+                totalLikes: 4260,
+                totalComments: 213,
+                totalShares: 36,
+                totalSaves: 142
+              }
+            },
+            audienceDemographics: {
+              status: 'success',
+              data: []
+            },
+            geographicData: {
+              status: 'success',
+              data: []
+            }
+          }
+        }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'No Instagram account connected, invalid parameters, or sync throttled',
+    schema: {
+      examples: {
+        'Sync Throttled (too soon)': {
+          value: {
+            error: 'sync_throttled',
+            message: 'Instagram profile sync is limited to once every 15 days. Please wait 8 more day(s).',
+            details: {
+              lastSnapshotDate: '2025-01-15',
+              nextAllowedSyncDate: '2025-01-30',
+              daysSinceLastSnapshot: 7,
+              daysRemaining: 8
+            }
+          }
+        }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found'
+  })
+  async syncAllInsights(
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
+  ) {
+    if (!userId || !userType) {
+      throw new BadRequestException('user_id and user_type are required');
+    }
+
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException('user_type must be either "influencer" or "brand"');
+    }
+
+    const result = await this.instagramService.syncAllInsights(
+      Number(userId),
+      userType as 'influencer' | 'brand',
+    );
+
+    return result;
+  }
+
+  /**
+   * Get audience demographics
+   * GET /instagram/audience-demographics
+   *
+   * IMPORTANT: This endpoint requires Instagram Business Account connected to a Facebook Page.
+   * Without Facebook Page integration, Instagram API does not provide demographic data.
+   * Alternative: Use Gemini AI to analyze content and engagement patterns for estimated demographics.
+   */
+  @Public()
+  @Get('audience-demographics')
+  @ApiOperation({
+    summary: 'Get audience demographics (requires Facebook Page)',
+    description: 'Fetches audience demographics including age/gender, cities, and countries. NOTE: Requires Instagram Business Account connected to a Facebook Page. Without Facebook Page integration, returns empty data with error details suggesting AI-based demographic estimation as alternative.'
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'User ID (influencer or brand ID)'
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    enum: ['influencer', 'brand'],
+    description: 'User type: influencer or brand'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Demographics fetched successfully (or returns empty data with error if Facebook Page not integrated)'
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid parameters or no Instagram account connected'
+  })
+  async getAudienceDemographics(
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
+  ) {
+    if (!userId || !userType) {
+      throw new BadRequestException('user_id and user_type are required');
+    }
+
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException('user_type must be either "influencer" or "brand"');
+    }
+
+    const demographics = await this.instagramService.getAudienceDemographics(
+      Number(userId),
+      userType as 'influencer' | 'brand',
+    );
+
+    // Provide different message based on data availability
+    const message = demographics.dataAvailable
+      ? 'Audience demographics retrieved successfully'
+      : 'Demographics not available - Facebook Page integration required';
+
+    return {
+      message,
+      ...demographics,
+    };
+  }
+
+  /**
+   * Get follower count history
+   * GET /instagram/follower-history
+   */
+  @Public()
+  @Get('follower-history')
+  @ApiOperation({
+    summary: 'Get follower count history',
+    description: 'Fetches historical follower count data. Requires user_id, user_type, since and until parameters.'
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'User ID (influencer or brand ID)'
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    enum: ['influencer', 'brand'],
+    description: 'User type: influencer or brand'
+  })
+  @ApiQuery({
+    name: 'since',
+    required: true,
+    description: 'Start timestamp (Unix timestamp)',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'until',
+    required: true,
+    description: 'End timestamp (Unix timestamp)',
+    type: Number
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Follower history retrieved successfully'
+  })
+  async getFollowerHistory(
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
+    @Query('since') since: string,
+    @Query('until') until: string,
+  ) {
+    if (!userId || !userType || !since || !until) {
+      throw new BadRequestException('user_id, user_type, since and until are required');
+    }
+
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException('user_type must be either "influencer" or "brand"');
+    }
+
+    const history = await this.instagramService.getFollowerCountHistory(
+      Number(userId),
+      userType as 'influencer' | 'brand',
+      Number(since),
+      Number(until),
+    );
+
+    return {
+      message: 'Follower history retrieved successfully',
+      data: history,
+    };
+  }
+
+  /**
+   * Calculate influencer credibility score
+   * GET /instagram/calculate-credibility-score
+   */
+  @Public()
+  @Get('calculate-credibility-score')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Calculate influencer credibility score',
+    description: 'Calculates comprehensive credibility score for an influencer based on 5 key categories: Audience Quality (25pts), Content Performance (25pts), Consistency & Reliability (20pts), Content Intelligence (20pts), and Brand Safety & Trust (10pts). Requires influencer_id parameter.'
+  })
+  @ApiQuery({
+    name: 'influencer_id',
+    required: true,
+    description: 'Influencer ID',
+    type: Number
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Credibility score calculated successfully'
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid influencer ID or Instagram not connected'
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Influencer not found'
+  })
+  async calculateCredibilityScore(
+    @Query('influencer_id') influencerId: string,
+  ) {
+    if (!influencerId) {
+      throw new BadRequestException('influencer_id is required');
+    }
+
+    const score = await this.credibilityScoringService.calculateCredibilityScore(
+      Number(influencerId),
+    );
+
+    // Get aggregate analytics
+    const analytics = await this.credibilityScoringService.getAggregateAnalytics(
+      Number(influencerId),
+    );
+
+    return {
+      message: 'Credibility score calculated successfully',
+      score,
+      analytics,
+    };
+  }
+
+  /**
+   * Get online followers data
+   * GET /instagram/online-followers
+   */
+  @Public()
+  @Get('online-followers')
+  @ApiOperation({
+    summary: 'Get when followers are online',
+    description: 'Fetches data about when followers are most active online. Requires user_id and user_type parameters.'
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'User ID (influencer or brand ID)'
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    enum: ['influencer', 'brand'],
+    description: 'User type: influencer or brand'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Online followers data retrieved successfully'
+  })
+  async getOnlineFollowers(
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
+  ) {
+    if (!userId || !userType) {
+      throw new BadRequestException('user_id and user_type are required');
+    }
+
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException('user_type must be either "influencer" or "brand"');
+    }
+
+    const data = await this.instagramService.getOnlineFollowers(
+      Number(userId),
+      userType as 'influencer' | 'brand',
+    );
+
+    return {
+      message: 'Online followers data retrieved successfully',
+      data,
+    };
+  }
+
+  /**
+   * Get comprehensive analytics for influencer/brand
+   * Returns all calculated metrics needed for the UI
+   */
+  @Public()
+  @Get('analytics')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get comprehensive analytics',
+    description:
+      'Returns profile summary, engagement metrics, content mix, best/worst posts, demographics, growth trends, and active followers data',
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'ID of the influencer or brand',
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    description: 'Type of user',
+    enum: ['influencer', 'brand'],
+  })
+  async getComprehensiveAnalytics(
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
+  ) {
+    if (!userId || !userType) {
+      throw new BadRequestException('user_id and user_type are required');
+    }
+
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException(
+        'user_type must be either "influencer" or "brand"',
+      );
+    }
+
+    return await this.instagramService.getComprehensiveAnalytics(
+      Number(userId),
+      userType as 'influencer' | 'brand',
+    );
+  }
+
+  /**
+   * Manually trigger growth snapshot cron (for testing/debugging)
+   * POST /instagram/trigger-growth-snapshot
+   */
+  // @Public()
+  // @Post('trigger-growth-snapshot')
+  // @HttpCode(HttpStatus.OK)
+  // @ApiOperation({
+  //   summary: 'Manually trigger growth snapshot cron',
+  //   description: 'Triggers the daily growth snapshot cron job manually for testing/debugging purposes'
+  // })
+  // async triggerGrowthSnapshot() {
+  //   await this.instagramGrowthCronService.trackFollowerGrowthDaily();
+  //   return {
+  //     success: true,
+  //     message: 'Growth snapshot cron triggered successfully',
+  //   };
+  // }
 
 }

@@ -274,13 +274,17 @@ export class MaxxSubscriptionAdminService {
       }
     }
 
-    // Build influencer search clause
-    const influencerWhereClause: any = {};
-    if (search) {
-      influencerWhereClause[Op.or] = [
-        { name: { [Op.iLike]: `%${search}%` } },
-        { username: { [Op.iLike]: `%${search}%` } },
-      ];
+    // Date range filter for valid till date
+    if (validTillStartDate || validTillEndDate) {
+      whereClause.currentPeriodEnd = {};
+      if (validTillStartDate) {
+        whereClause.currentPeriodEnd[Op.gte] = new Date(validTillStartDate);
+      }
+      if (validTillEndDate) {
+        const endDateTime = new Date(validTillEndDate);
+        endDateTime.setHours(23, 59, 59, 999);
+        whereClause.currentPeriodEnd[Op.lte] = endDateTime;
+      }
     }
 
     // Determine sort field
@@ -292,7 +296,8 @@ export class MaxxSubscriptionAdminService {
     }
 
     // Get subscriptions with influencer details
-    const { count, rows: subscriptions } = await this.proSubscriptionModel.findAndCountAll({
+    // Note: We'll filter by search after fetching to enable priority-based sorting
+    const subscriptions = await this.proSubscriptionModel.findAll({
       where: whereClause,
       include: [
         {
@@ -311,15 +316,54 @@ export class MaxxSubscriptionAdminService {
           ],
         },
       ],
-      limit,
-      offset,
       order: orderField,
       subQuery: false,
-      distinct: true,
     });
 
-    // Build response data
-    const data: MaxxSubscriptionItemDto[] = subscriptions.map((subscription) => {
+    // Calculate search priority helper function
+    // Prioritizes matches by field (name first, then username, then city), then by position
+    const calculateSearchPriority = (
+      name: string,
+      username: string,
+      cityName: string,
+      searchTerm: string,
+    ): number => {
+      if (!searchTerm) return 0;
+
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      const lowerName = name.toLowerCase();
+      const lowerUsername = username.toLowerCase();
+      const lowerCity = cityName.toLowerCase();
+
+      const nameIndex = lowerName.indexOf(lowerSearchTerm);
+      const usernameIndex = lowerUsername.indexOf(lowerSearchTerm);
+      const cityIndex = lowerCity.indexOf(lowerSearchTerm);
+
+      // Priority tiers:
+      // 1000-1999: Match in name (1000 = starts with, 1001 = position 1, etc.)
+      // 2000-2999: Match in username (2000 = starts with, 2001 = position 1, etc.)
+      // 3000-3999: Match in city (3000 = starts with, 3001 = position 1, etc.)
+      // 9999: No match
+
+      if (nameIndex >= 0) {
+        return 1000 + nameIndex;
+      } else if (usernameIndex >= 0) {
+        return 2000 + usernameIndex;
+      } else if (cityIndex >= 0) {
+        return 3000 + cityIndex;
+      }
+
+      return 9999;
+    };
+
+    // Helper function to format status (remove underscores, convert to camelCase)
+    const formatStatus = (status: string): string => {
+      return status.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    };
+
+    // Build response data with search filtering and priority
+    const allData: (MaxxSubscriptionItemDto & { searchPriority: number })[] = subscriptions
+      .map((subscription) => {
       const influencer = subscription.influencer;
 
       // Calculate usage months
@@ -349,13 +393,24 @@ export class MaxxSubscriptionAdminService {
       // Manual subscriptions will have upiMandateStatus as null
       const paymentType = subscription.upiMandateStatus ? 'autopay' : 'monthly';
 
+      // Calculate search priority
+      const profileName = influencer?.name || 'N/A';
+      const userName = influencer?.username || 'N/A';
+      const cityName = influencer?.city?.name || 'N/A';
+      const searchPriority = calculateSearchPriority(
+        profileName,
+        userName,
+        cityName,
+        search || '',
+      );
+
       return {
         id: subscription.id,
         influencerId: subscription.influencerId,
-        profileName: influencer?.name || 'N/A',
-        username: influencer?.username || 'N/A',
-        location: influencer?.city?.name || 'N/A',
-        profileStatus,
+        profileName,
+        username: userName,
+        location: cityName,
+        profileStatus: formatStatus(profileStatus),
         usageMonths,
         paymentType,
         validTillDate: toIST(subscription.currentPeriodEnd),
@@ -363,16 +418,35 @@ export class MaxxSubscriptionAdminService {
         profileImage: influencer?.profileImage,
         isAutoRenew: subscription.autoRenew,
         razorpaySubscriptionId: subscription.razorpaySubscriptionId,
+        searchPriority,
       };
+    })
+    .filter((item) => {
+      // Filter by search if provided
+      if (!search) return true;
+      return item.searchPriority < 9999; // Only include items that matched the search
     });
+
+    // Sort by search priority when search is active
+    if (search) {
+      allData.sort((a, b) => a.searchPriority - b.searchPriority);
+    }
+
+    // Apply pagination
+    const total = allData.length;
+    const totalPages = Math.ceil(total / limit);
+    const paginatedData = allData.slice(offset, offset + limit);
+
+    // Remove searchPriority from response
+    const data = paginatedData.map(({ searchPriority, ...item }) => item);
 
     return {
       data,
       pagination: {
         page,
         limit,
-        total: count,
-        totalPages: Math.ceil(count / limit),
+        total,
+        totalPages,
       },
     };
   }
@@ -424,6 +498,11 @@ export class MaxxSubscriptionAdminService {
     const paidInvoices = subscription.invoices?.filter((inv) => inv.paymentStatus === 'paid') || [];
     const totalAmount = paidInvoices.reduce((sum, inv) => sum + (inv.totalAmount / 100), 0);
 
+    // Helper function to format status (remove underscores, convert to camelCase)
+    const formatStatus = (status: string): string => {
+      return status.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    };
+
     // Build payment history - exclude only cancelled invoices that were never paid
     const paymentHistory: PaymentHistoryItemDto[] = (subscription.invoices || [])
       .filter((invoice) => {
@@ -438,7 +517,7 @@ export class MaxxSubscriptionAdminService {
         invoiceNumber: invoice.invoiceNumber,
         amount: invoice.totalAmount / 100, // Convert from paise to Rs
         paymentDate: invoice.paidAt ? toIST(invoice.paidAt) : null,
-        paymentStatus: invoice.paymentStatus,
+        paymentStatus: formatStatus(invoice.paymentStatus),
         razorpayPaymentId: invoice.razorpayPaymentId,
       }));
 
@@ -458,7 +537,7 @@ export class MaxxSubscriptionAdminService {
         profileImage: influencer.profileImage,
         isVerified: influencer.isVerified,
       },
-      subscriptionStatus: subscription.status,
+      subscriptionStatus: formatStatus(subscription.status),
       // Check upiMandateStatus to identify autopay even if cancelled
       // Autopay subscriptions will have upiMandateStatus set (pending/authenticated/paused/cancelled)
       // Manual subscriptions will have upiMandateStatus as null

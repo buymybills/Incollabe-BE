@@ -52,6 +52,7 @@ import {
   CancelProSubscriptionDto,
 } from './dto/pro-subscription.dto';
 import { RedeemRewardsDto, RedeemRewardsResponseDto } from './dto/redeem-rewards.dto';
+import { TrackHomePageActivityDto, TrackHomePageActivityResponseDto } from './dto/track-home-page-activity.dto';
 import {
   AddUpiIdDto,
   SelectUpiIdDto,
@@ -1264,6 +1265,51 @@ export class InfluencerController {
     );
   }
 
+  @Get('pro/resume-payment')
+  @ApiOperation({
+    summary: '🔄 Resume pending payment',
+    description: 'Get details of pending payment to complete subscription. Use this when you started a subscription but didn\'t complete the payment.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Pending payment details retrieved successfully',
+    schema: {
+      example: {
+        subscription: {
+          id: 123,
+          status: 'payment_pending',
+          startDate: '2026-01-16T10:00:00.000+05:30',
+          endDate: '2026-02-15T10:00:00.000+05:30',
+          amount: 19900,
+          createdAt: '2026-01-16T09:00:00.000+05:30',
+        },
+        invoice: {
+          id: 456,
+          invoiceNumber: 'MAXXINV-202601-1',
+          amount: 19900,
+          status: 'pending',
+        },
+        payment: {
+          orderId: 'order_xyz123',
+          amount: 19900,
+          currency: 'INR',
+          keyId: 'rzp_test_xxxxx',
+        },
+        message: 'Complete this pending payment or cancel it to create a new subscription.',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'No pending payment found',
+  })
+  async resumePendingPayment(@Req() req: RequestWithUser) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can resume payments');
+    }
+    return await this.proSubscriptionService.resumePendingPayment(req.user.id);
+  }
+
   @Post('pro/invoices/:invoiceId')
   @ApiOperation({
     summary: 'Download Pro subscription invoice',
@@ -1768,5 +1814,33 @@ export class InfluencerController {
     }
     const influencerId = req.user.id;
     return await this.influencerService.selectUpiAndRedeemRewards(influencerId, upiIdRecordId);
+  }
+
+  // ==================== Home Page Activity Tracking ====================
+
+  @Post('home-page-activity')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Track influencer home page activity',
+    description: 'Records influencer activity on the home page including app opens, scrolls, and refreshes for analytics purposes',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Activity tracked successfully',
+    type: TrackHomePageActivityResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request data' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Only influencers can track activity' })
+  @ApiResponse({ status: 404, description: 'Influencer not found' })
+  async trackHomePageActivity(
+    @Req() req: RequestWithUser,
+    @Body() data: TrackHomePageActivityDto,
+  ) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can track home page activity');
+    }
+    const influencerId = req.user.id;
+    return await this.influencerService.trackHomePageActivity(influencerId, data);
   }
 }

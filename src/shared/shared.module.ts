@@ -19,9 +19,19 @@ import { ChatService } from './chat.service';
 import { ChatGateway } from './chat.gateway';
 import { SearchController } from './controllers/search.controller';
 import { ChatController } from './chat.controller';
-// import { InstagramController } from './controllers/instagram.controller'; // DISABLED: Instagram functionality commented out
-// import { InstagramService } from './services/instagram.service'; // DISABLED: Instagram functionality commented out
-// import { InstagramSyncCronService } from './services/instagram-sync.cron'; // DISABLED: Instagram functionality commented out
+import { InstagramController } from './controllers/instagram.controller';
+//import { ConfigController } from './controllers/config.controller';
+import { InstagramService } from './services/instagram.service';
+//import { InstagramSyncCronService } from './services/instagram-sync.cron';
+//import { InstagramDemographicsCronService } from './services/instagram-demographics.cron';
+//import { InstagramGrowthCronService } from './services/instagram-growth.cron';
+//import { CredibilityScoreCronService } from './services/credibility-score.cron';
+import { InfluencerCredibilityScoringService } from './services/influencer-credibility-scoring.service';
+import { InfluencerProfileScoringService } from './services/influencer-profile-scoring.service';
+import { GeminiAIService } from './services/gemini-ai.service';
+import { AppReviewController } from './controllers/app-review.controller';
+import { AppReviewService } from './services/app-review.service';
+import { InfluencerProfileScoringController } from './controllers/influencer-profile-scoring.controller';
 import { IsValidUsernameConstraint } from './validators/is-valid-username.validator';
 import { RazorpayService } from './razorpay.service';
 import { Otp } from '../auth/model/otp.model';
@@ -30,11 +40,20 @@ import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { Niche } from '../auth/model/niche.model';
 import { SupportTicket } from './models/support-ticket.model';
+//import { SupportTicketReply } from './models/support-ticket-reply.model';
 import { Conversation } from './models/conversation.model';
 import { Message } from './models/message.model';
 import { KeyBackup } from './models/key-backup.model';
 import { InstagramMedia } from './models/instagram-media.model';
 import { InstagramMediaInsight } from './models/instagram-media-insight.model';
+import { InstagramProfileGrowth } from './models/instagram-profile-growth.model';
+import { InstagramProfileAnalysis } from './models/instagram-profile-analysis.model';
+import { InstagramOnlineFollowers } from './models/instagram-online-followers.model';
+import { InfluencerCredibilityScore } from './models/influencer-credibility-score.model';
+import { AppReviewRequest } from './models/app-review-request.model';
+import { Campaign } from '../campaign/models/campaign.model';
+import { CampaignApplication } from '../campaign/models/campaign-application.model';
+import { CampaignInvitation } from '../campaign/models/campaign-invitation.model';
 import { KeyBackupService } from './services/key-backup.service';
 import { KeyBackupController } from './key-backup.controller';
 import { JwtAuthModule } from './jwt.module';
@@ -55,20 +74,26 @@ import { AppVersionService } from './services/app-version.service';
       Brand,
       Niche,
       SupportTicket,
+      //SupportTicketReply,
       Conversation,
       Message,
       KeyBackup,
       InstagramMedia,
       InstagramMediaInsight,
+      InstagramProfileGrowth,
+      InstagramProfileAnalysis,
+      InstagramOnlineFollowers,
+      InfluencerCredibilityScore,
+      AppReviewRequest,
+      Campaign,
+      CampaignApplication,
+      CampaignInvitation,
       DeviceToken,
       AppVersion,
     ]),
   ],
-  controllers: [
-    SearchController,
-    ChatController,
-    KeyBackupController,
-    // InstagramController, // DISABLED: Instagram functionality commented out for production
+  controllers: [SearchController, ChatController, KeyBackupController, InstagramController, AppReviewController, InfluencerProfileScoringController, 
+    //ConfigController
   ],
   providers: [
     SmsService,
@@ -89,8 +114,15 @@ import { AppVersionService } from './services/app-version.service';
     IsValidUsernameConstraint,
     RazorpayService,
     KeyBackupService,
-    // InstagramService, // DISABLED: Instagram functionality commented out for production
-    // InstagramSyncCronService, // DISABLED: Instagram functionality commented out for production
+    InstagramService,
+    //InstagramSyncCronService,
+    //InstagramDemographicsCronService,
+    //InstagramGrowthCronService,
+    //CredibilityScoreCronService,
+    InfluencerCredibilityScoringService,
+    InfluencerProfileScoringService,
+    GeminiAIService,
+    AppReviewService,
     DeviceTokenService,
     AppVersionService,
   ],
@@ -111,7 +143,11 @@ import { AppVersionService } from './services/app-version.service';
     ChatService,
     IsValidUsernameConstraint,
     RazorpayService,
-    // InstagramService, // DISABLED: Instagram functionality commented out for production
+    InstagramService,
+    InfluencerCredibilityScoringService,
+    InfluencerProfileScoringService,
+    GeminiAIService,
+    AppReviewService,
     DeviceTokenService,
     AppVersionService,
   ],

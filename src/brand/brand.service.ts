@@ -4,6 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
+import { Op } from 'sequelize';
 import { Brand } from './model/brand.model';
 import { BrandNiche } from './model/brand-niche.model';
 import { Niche } from '../auth/model/niche.model';
@@ -13,13 +14,14 @@ import { Region } from '../shared/models/region.model';
 import { CompanyType } from '../shared/models/company-type.model';
 import { Follow, FollowingType } from '../post/models/follow.model';
 import { Post, UserType } from '../post/models/post.model';
-import { Campaign } from '../campaign/models/campaign.model';
+import { Campaign, CampaignStatus } from '../campaign/models/campaign.model';
 import { S3Service } from '../shared/s3.service';
 import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../shared/email.service';
 import { MasterDataService } from '../shared/services/master-data.service';
 import { ProfileReviewService } from '../admin/profile-review.service';
 import { EncryptionService } from '../shared/services/encryption.service';
+import { AppReviewService } from '../shared/services/app-review.service';
 import {
   ProfileReview,
   ProfileType,
@@ -68,6 +70,7 @@ export class BrandService {
     private readonly masterDataService: MasterDataService,
     private readonly profileReviewService: ProfileReviewService,
     private readonly encryptionService: EncryptionService,
+    private readonly appReviewService: AppReviewService,
   ) {}
 
   async getBrandProfile(
@@ -132,8 +135,8 @@ export class BrandService {
       isFollowing = !!followRecord;
     }
 
-    // Calculate profile completion, platform metrics, verification status, and get campaigns
-    const [profileCompletion, platformMetrics, verificationStatus, campaigns] =
+    // Calculate profile completion, platform metrics, verification status, campaigns, and app review
+    const [profileCompletion, platformMetrics, verificationStatus, campaigns, appReviewPrompt] =
       await Promise.all([
         this.calculateProfileCompletion(brand),
         this.calculatePlatformMetrics(brandId),
@@ -144,6 +147,7 @@ export class BrandService {
           campaignLimit,
           campaignFilter,
         ),
+        this.appReviewService.shouldShowReviewPrompt(brandId, 'brand'),
       ]);
 
     // Build comprehensive response
@@ -255,6 +259,12 @@ export class BrandService {
       // Campaigns created by this brand (with pagination)
       campaigns: campaigns.campaigns,
       totalCampaigns: campaigns.total,
+
+      // App review prompt
+      appReview: {
+        shouldShow: appReviewPrompt.shouldShow,
+        campaignCount: appReviewPrompt.campaignCount,
+      },
 
       createdAt: brand.createdAt.toISOString(),
       updatedAt: brand.updatedAt.toISOString(),
@@ -977,11 +987,14 @@ export class BrandService {
           },
         }),
 
-        // Count all active campaigns (ongoing + completed, excluding closed/deleted)
+        // Count all active campaigns (ongoing + completed, excluding drafts and deleted)
         this.campaignModel.count({
           where: {
             brandId: brandId,
             isActive: true,
+            status: {
+              [Op.ne]: CampaignStatus.DRAFT,
+            },
           },
         }),
       ]);

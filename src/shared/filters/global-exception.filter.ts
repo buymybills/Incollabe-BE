@@ -66,7 +66,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     // Create error response
-    const errorResponse = {
+    let errorResponse: any = {
       statusCode: status,
       timestamp: new Date().toISOString(),
       path: request.url,
@@ -78,6 +78,18 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         }),
       requestId: request.requestId,
     };
+
+    // Preserve custom properties from HttpException response (like validationDetails)
+    if (exception instanceof HttpException) {
+      const exceptionResponse = exception.getResponse();
+      if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
+        const { message: _, statusCode: __, ...customProps } = exceptionResponse as any;
+        errorResponse = {
+          ...errorResponse,
+          ...customProps,
+        };
+      }
+    }
 
     response.status(status).json(errorResponse);
   }

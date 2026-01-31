@@ -46,6 +46,7 @@ import { PostService } from '../post/post.service';
 import { AuthService } from '../auth/auth.service';
 import { CampaignService } from '../campaign/campaign.service';
 import { S3Service } from '../shared/s3.service';
+import { AppVersionService } from '../shared/services/app-version.service';
 import { InvoiceExcelExportService } from './services/invoice-excel-export.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import type { RequestWithAdmin } from './guards/admin-auth.guard';
@@ -53,8 +54,6 @@ import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
 import { AdminRole, AdminStatus } from './models/admin.model';
 import { ProfileType } from './models/profile-review.model';
-import { Influencer } from '../auth/model/influencer.model';
-import { InjectModel } from '@nestjs/sequelize';
 
 // DTOs
 import { AdminLoginDto, AdminLoginResponseDto } from './dto/admin-login.dto';
@@ -133,6 +132,7 @@ import { SupportTicketService } from '../shared/support-ticket.service';
 import { CreateSupportTicketDto } from '../shared/dto/create-support-ticket.dto';
 import { GetSupportTicketsDto } from '../shared/dto/get-support-tickets.dto';
 import { UpdateSupportTicketDto } from '../shared/dto/update-support-ticket.dto';
+//import { CreateTicketReplyDto } from '../shared/dto/create-ticket-reply.dto';
 import {
   GetNewAccountsWithReferralDto,
   NewAccountsWithReferralResponseDto,
@@ -166,6 +166,13 @@ import {
   GetMaxSubscriptionInvoicesDto,
   MaxSubscriptionInvoicesResponseDto,
 } from './dto/max-subscription-invoice.dto';
+import {
+  CreateAppVersionDto,
+  UpdateAppVersionDto,
+  GetVersionsQueryDto,
+  AppVersionResponseDto,
+  ActivateVersionDto,
+} from './dto/app-version.dto';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -189,9 +196,8 @@ export class AdminController {
     private readonly authService: AuthService,
     private readonly campaignService: CampaignService,
     private readonly s3Service: S3Service,
+    private readonly appVersionService: AppVersionService,
     private readonly invoiceExcelExportService: InvoiceExcelExportService,
-    @InjectModel(Influencer)
-    private readonly influencerModel: typeof Influencer,
   ) {}
 
   @Post('login')
@@ -2044,9 +2050,9 @@ export class AdminController {
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Get list of influencers who have referred others',
+    summary: 'Get list of all influencers with referral codes',
     description:
-      'Get paginated list of influencers who have referral codes and have referred other users. Includes total referrals count, earnings, redeemed and pending amounts. Supports search and sorting.',
+      'Get paginated list of all influencers who have generated referral codes, regardless of whether they have referred other users. Includes total referrals count (can be 0), earnings, redeemed and pending amounts. Supports search and sorting.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -2426,26 +2432,22 @@ export class AdminController {
   }
 
   // ============================================
-  // MAX SUBSCRIPTION - BRAND
+  // MAX SUBSCRIPTION BRAND
   // ============================================
 
   @Get('max-subscription-brand/statistics')
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Get Max Campaign Brand statistics',
-    description:
-      'Get comprehensive statistics for brand Max Campaign purchases including total profiles, active/inactive campaigns, and cancelled subscriptions with month-over-month growth percentages',
+    summary: 'Get Max Subscription Brand statistics',
+    description: 'Get comprehensive statistics for Max Subscription Brand including total Maxx profiles, active/inactive profiles, and cancellations with month-over-month growth',
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Max subscription brand statistics retrieved successfully',
+    description: 'Max Subscription Brand statistics retrieved successfully',
     type: MaxSubscriptionBrandStatisticsDto,
   })
-  @ApiUnauthorizedResponse({
-    description: 'Authentication required',
-  })
-  async getMaxSubscriptionBrandStatistics() {
+  async getMaxSubscriptionBrandStatistics(): Promise<MaxSubscriptionBrandStatisticsDto> {
     return await this.maxSubscriptionBrandService.getStatistics();
   }
 
@@ -2453,19 +2455,69 @@ export class AdminController {
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Get list of Max Campaign purchases by brands',
-    description:
-      'Get paginated list of Max Campaign purchases with filters for purchase type (Invite Campaign vs Maxx Campaign), status, search, and date range. Supports sorting by date or amount.',
+    summary: 'Get Max campaign purchases',
+    description: 'Get paginated list of Max campaign purchases with filtering by purchase type, status, date range, and search',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20)',
+  })
+  @ApiQuery({
+    name: 'purchaseType',
+    required: false,
+    enum: ['all', 'invite_campaign', 'maxx_campaign'],
+    description: 'Filter by purchase type',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['all', 'active', 'inactive', 'cancelled'],
+    description: 'Filter by campaign status',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by campaign name, brand name, or username',
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    type: String,
+    description: 'Filter by start date (ISO format)',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    description: 'Filter by end date (ISO format)',
+  })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    enum: ['createdAt', 'amount'],
+    description: 'Sort by field (default: createdAt)',
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    enum: ['ASC', 'DESC'],
+    description: 'Sort order (default: DESC)',
   })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Max campaign purchases retrieved successfully',
     type: MaxPurchasesResponseDto,
   })
-  @ApiUnauthorizedResponse({
-    description: 'Authentication required',
-  })
-  async getMaxPurchases(@Query() filters: GetMaxPurchasesDto) {
+  async getMaxPurchases(@Query() filters: GetMaxPurchasesDto): Promise<MaxPurchasesResponseDto> {
     return await this.maxSubscriptionBrandService.getMaxPurchases(filters);
   }
 
@@ -2830,6 +2882,67 @@ export class AdminController {
     return await this.supportTicketService.deleteTicket(id);
   }
 
+  // @Post('support-tickets/:id/reply')
+  // @UseGuards(AdminAuthGuard)
+  // @ApiBearerAuth()
+  // @ApiOperation({
+  //   summary: 'Reply to a support ticket',
+  //   description: 'Add a reply to a support ticket (visible to ticket creator)',
+  // })
+  // @ApiParam({
+  //   name: 'id',
+  //   description: 'Support ticket ID',
+  //   type: 'number',
+  // })
+  // @ApiResponse({
+  //   status: HttpStatus.CREATED,
+  //   description: 'Reply added successfully',
+  // })
+  // @ApiNotFoundResponse({
+  //   description: 'Ticket not found',
+  // })
+  // @ApiUnauthorizedResponse({
+  //   description: 'Authentication required',
+  // })
+  // async replyToSupportTicket(
+  //   @Param('id', ParseIntPipe) id: number,
+  //   @Body() replyDto: CreateTicketReplyDto,
+  //   @Req() req: RequestWithAdmin,
+  // ) {
+  //   return await this.supportTicketService.createReply(
+  //     id,
+  //     replyDto,
+  //     req.admin.id,
+  //     'admin',
+  //   );
+  // }
+
+  // @Get('support-tickets/:id/replies')
+  // @UseGuards(AdminAuthGuard)
+  // @ApiBearerAuth()
+  // @ApiOperation({
+  //   summary: 'Get all replies for a support ticket',
+  //   description: 'Retrieve all replies for a specific support ticket',
+  // })
+  // @ApiParam({
+  //   name: 'id',
+  //   description: 'Support ticket ID',
+  //   type: 'number',
+  // })
+  // @ApiResponse({
+  //   status: HttpStatus.OK,
+  //   description: 'Replies retrieved successfully',
+  // })
+  // @ApiNotFoundResponse({
+  //   description: 'Ticket not found',
+  // })
+  // @ApiUnauthorizedResponse({
+  //   description: 'Authentication required',
+  // })
+  // async getSupportTicketReplies(@Param('id', ParseIntPipe) id: number) {
+  //   return await this.supportTicketService.getTicketReplies(id);
+  // }
+
   // Master Data Endpoints
   @Get('niches')
   @UseGuards(AdminAuthGuard)
@@ -3000,6 +3113,283 @@ export class AdminController {
     );
   }
 
+  // ============================================
+  // APP VERSION MANAGEMENT
+  // ============================================
+
+  @Get('app-versions/current')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get current live app versions',
+    description: 'Returns the current live versions for both iOS and Android platforms',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Current app versions retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        ios: {
+          type: 'object',
+          properties: {
+            version: { type: 'string', example: '5.0.0.8' },
+            liveDate: { type: 'string', format: 'date-time' },
+          },
+        },
+        android: {
+          type: 'object',
+          properties: {
+            version: { type: 'string', example: '5.0.0.8' },
+            liveDate: { type: 'string', format: 'date-time' },
+          },
+        },
+      },
+    },
+  })
+  async getCurrentVersions() {
+    return await this.appVersionService.getCurrentVersions();
+  }
+
+  @Get('app-versions')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get all app versions with metrics',
+    description: 'Returns paginated list of all app versions with system live count and penetration metrics',
+  })
+  @ApiQuery({
+    name: 'platform',
+    required: false,
+    enum: ['ios', 'android'],
+    description: 'Filter by platform',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20)',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'App versions retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        versions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              platform: { type: 'string', enum: ['ios', 'android'] },
+              version: { type: 'string', example: '5.0.0.8' },
+              versionCode: { type: 'number', example: 508 },
+              status: { type: 'string', enum: ['live', 'down'] },
+              updateType: { type: 'string', enum: ['mandatory', 'optional'] },
+              systemLive: { type: 'number', example: 10989 },
+              penetration: { type: 'number', example: 60.5 },
+              liveDate: { type: 'string', format: 'date-time' },
+              createdAt: { type: 'string', format: 'date-time' },
+              updatedAt: { type: 'string', format: 'date-time' },
+            },
+          },
+        },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        totalPages: { type: 'number' },
+      },
+    },
+  })
+  async getAllVersions(@Query() query: GetVersionsQueryDto) {
+    return await this.appVersionService.getAllVersionsWithMetrics(
+      query.platform,
+      query.page,
+      query.limit,
+    );
+  }
+
+  @Post('app-versions')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Create new app version',
+    description: 'Create a new app version for iOS or Android (created as inactive by default)',
+  })
+  @ApiBody({
+    type: CreateAppVersionDto,
+    description: 'App version details',
+  })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    description: 'App version created successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', example: 1 },
+        platform: { type: 'string', enum: ['ios', 'android'], example: 'ios' },
+        latestVersion: { type: 'string', example: '5.0.0.9' },
+        latestVersionCode: { type: 'number', example: 509 },
+        minimumVersion: { type: 'string', example: '5.0.0.9' },
+        minimumVersionCode: { type: 'number', example: 509 },
+        forceUpdate: { type: 'boolean', example: false },
+        updateMessage: { type: 'string', example: 'A new version is available.' },
+        forceUpdateMessage: { type: 'string', example: 'This version is no longer supported.' },
+        isActive: { type: 'boolean', example: false },
+        createdAt: { type: 'string', format: 'date-time' },
+        updatedAt: { type: 'string', format: 'date-time' },
+      },
+    },
+  })
+  @ApiBadRequestResponse({
+    description: 'Version already exists or invalid data',
+  })
+  async createVersion(@Body() dto: CreateAppVersionDto) {
+    return await this.appVersionService.createVersion({
+      platform: dto.platform,
+      version: dto.version,
+      versionCode: dto.versionCode,
+      isMandatory: dto.isMandatory,
+      updateMessage: dto.updateMessage,
+    });
+  }
+
+  @Post('app-versions/:id/activate')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Activate app version',
+    description: 'Make a specific app version live (deactivates other versions for the same platform)',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'Version ID',
+  })
+  @ApiBody({
+    type: ActivateVersionDto,
+    description: 'Platform to activate version for',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Version activated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', example: 1 },
+        platform: { type: 'string', enum: ['ios', 'android'], example: 'ios' },
+        latestVersion: { type: 'string', example: '5.0.0.9' },
+        latestVersionCode: { type: 'number', example: 509 },
+        minimumVersion: { type: 'string', example: '5.0.0.9' },
+        minimumVersionCode: { type: 'number', example: 509 },
+        forceUpdate: { type: 'boolean', example: false },
+        updateMessage: { type: 'string' },
+        forceUpdateMessage: { type: 'string' },
+        isActive: { type: 'boolean', example: true },
+        createdAt: { type: 'string', format: 'date-time' },
+        updatedAt: { type: 'string', format: 'date-time' },
+      },
+    },
+  })
+  @ApiNotFoundResponse({
+    description: 'Version not found',
+  })
+  @ApiBadRequestResponse({
+    description: 'Version is already active',
+  })
+  async activateVersion(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: ActivateVersionDto,
+  ) {
+    return await this.appVersionService.activateVersion(id, body.platform);
+  }
+
+  @Put('app-versions/:id')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update app version',
+    description: 'Update details of an existing app version',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'Version ID',
+  })
+  @ApiBody({
+    type: UpdateAppVersionDto,
+    description: 'Fields to update',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Version updated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', example: 1 },
+        platform: { type: 'string', enum: ['ios', 'android'], example: 'ios' },
+        latestVersion: { type: 'string', example: '5.0.0.10' },
+        latestVersionCode: { type: 'number', example: 510 },
+        minimumVersion: { type: 'string', example: '5.0.0.10' },
+        minimumVersionCode: { type: 'number', example: 510 },
+        forceUpdate: { type: 'boolean', example: true },
+        updateMessage: { type: 'string' },
+        forceUpdateMessage: { type: 'string' },
+        isActive: { type: 'boolean' },
+        createdAt: { type: 'string', format: 'date-time' },
+        updatedAt: { type: 'string', format: 'date-time' },
+      },
+    },
+  })
+  @ApiNotFoundResponse({
+    description: 'Version not found',
+  })
+  async updateVersion(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateAppVersionDto,
+  ) {
+    return await this.appVersionService.updateVersion(id, dto);
+  }
+
+  @Delete('app-versions/:id')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Delete app version',
+    description: 'Delete an inactive app version (cannot delete active versions)',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'Version ID',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Version deleted successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Version not found',
+  })
+  @ApiBadRequestResponse({
+    description: 'Cannot delete active version',
+  })
+  async deleteVersion(@Param('id', ParseIntPipe) id: number) {
+    await this.appVersionService.deleteVersion(id);
+    return { message: 'Version deleted successfully' };
+  }
+
   // ==================== Invoice Excel Export ====================
 
   @Get('invoices/export/max-influencer')
@@ -3007,7 +3397,7 @@ export class AdminController {
   @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Export Maxx Influencer invoices to Excel (GST Format)',
+    summary: 'Export MaxX Influencer invoices to Excel (GST Format)',
     description: 'Download all MaxX Pro subscription invoices in Excel format with GST details',
   })
   @ApiQuery({ name: 'startDate', required: false, type: String, description: 'Start date filter (YYYY-MM-DD)' })
@@ -3037,7 +3427,7 @@ export class AdminController {
 
     const excelBuffer = await this.invoiceExcelExportService.exportMaxInfluencerInvoices(filters);
 
-    const fileName = `Maxx_Influencer_Invoices_${new Date().toISOString().split('T')[0]}.xlsx`;
+    const fileName = `MaxX_Influencer_Invoices_${new Date().toISOString().split('T')[0]}.xlsx`;
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
@@ -3049,7 +3439,7 @@ export class AdminController {
   @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Export Maxx Campaign invoices to Excel (GST Format)',
+    summary: 'Export MaxX Campaign invoices to Excel (GST Format)',
     description: 'Download all MaxX Campaign invoices in Excel format with GST details',
   })
   @ApiQuery({ name: 'startDate', required: false, type: String, description: 'Start date filter (YYYY-MM-DD)' })
@@ -3082,7 +3472,7 @@ export class AdminController {
 
     const excelBuffer = await this.invoiceExcelExportService.exportMaxCampaignInvoices(filters);
 
-    const fileName = `Maxx_Campaign_Invoices_${new Date().toISOString().split('T')[0]}.xlsx`;
+    const fileName = `MaxX_Campaign_Invoices_${new Date().toISOString().split('T')[0]}.xlsx`;
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
@@ -3130,5 +3520,7 @@ export class AdminController {
     const fileName = `Invite_Only_Campaign_Invoices_${new Date().toISOString().split('T')[0]}.xlsx`;
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(excelBuffer);
   }
 }

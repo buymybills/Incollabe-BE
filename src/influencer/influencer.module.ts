@@ -28,7 +28,9 @@ import { SubscriptionSchedulerService } from './services/subscription-scheduler.
 import { CreditTransaction } from '../admin/models/credit-transaction.model';
 import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
 import { InfluencerUpi } from './models/influencer-upi.model';
+import { HomePageHistory } from './models/home-page-history.model';
 import { CampaignModule } from '../campaign/campaign.module';
+import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
 
 @Module({
   imports: [
@@ -47,6 +49,7 @@ import { CampaignModule } from '../campaign/campaign.module';
       Admin,
       Campaign,
       CampaignApplication,
+      CampaignInvitation,
       CustomNiche,
       ProSubscription,
       ProInvoice,
@@ -54,6 +57,8 @@ import { CampaignModule } from '../campaign/campaign.module';
       CreditTransaction,
       InfluencerReferralUsage,
       InfluencerUpi,
+      InstagramProfileAnalysis,
+      HomePageHistory,
     ]),
     SharedModule,
     CampaignModule,
@@ -127,6 +132,14 @@ import { CampaignModule } from '../campaign/campaign.module';
     {
       provide: 'PRO_SUBSCRIPTION_MODEL',
       useValue: ProSubscription,
+    },
+    {
+      provide: 'INSTAGRAM_PROFILE_ANALYSIS_MODEL',
+      useValue: InstagramProfileAnalysis,
+    },
+    {
+      provide: 'HOME_PAGE_HISTORY_MODEL',
+      useValue: HomePageHistory,
     },
   ],
   exports: [InfluencerService, InfluencerRepository, ProSubscriptionService],

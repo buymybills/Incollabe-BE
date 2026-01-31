@@ -1,9 +1,10 @@
 import { Request } from 'express';
+import { ParticipantType } from '../shared/models/conversation.model';
 
 export interface User {
   id: number;
   email: string;
-  userType: 'brand' | 'influencer';
+  userType: ParticipantType;
   profileCompleted: boolean;
 }
 

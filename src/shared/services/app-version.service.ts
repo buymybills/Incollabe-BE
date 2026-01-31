@@ -1,7 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { AppVersion, PlatformType } from '../models/app-version.model';
+import { DeviceToken } from '../models/device-token.model';
 import { isVersionLessThan } from '../utils/version-compare.util';
+import { Op } from 'sequelize';
 
 export interface AppVersionConfig {
   platform: PlatformType;
@@ -14,6 +16,24 @@ export interface AppVersionConfig {
   forceUpdateMessage: string;
 }
 
+interface AppVersionRaw {
+  id: number;
+  platform: PlatformType;
+  latestVersion: string;
+  latestVersionCode: number;
+  minimumVersion: string;
+  minimumVersionCode: number;
+  forceUpdate: boolean;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface CurrentVersionRaw {
+  latestVersion: string;
+  createdAt: Date;
+}
+
 @Injectable()
 export class AppVersionService {
   private readonly logger = new Logger(AppVersionService.name);
@@ -24,6 +44,8 @@ export class AppVersionService {
   constructor(
     @InjectModel(AppVersion)
     private readonly appVersionModel: typeof AppVersion,
+    @InjectModel(DeviceToken)
+    private readonly deviceTokenModel: typeof DeviceToken,
   ) {}
 
   /**
@@ -194,5 +216,350 @@ export class AppVersionService {
 
     this.logger.log(`Version configuration updated for platform: ${platform}`);
     return config;
+  }
+
+  // ============================================
+  // ADMIN METHODS
+  // ============================================
+
+  /**
+   * Create a new app version (Admin only)
+   */
+  async createVersion(data: {
+    platform: PlatformType;
+    version: string;
+    versionCode: number;
+    isMandatory: boolean;
+    updateMessage?: string;
+  }): Promise<AppVersion> {
+    // Check if the exact combination already exists
+    const existing = await this.appVersionModel.findOne({
+      where: {
+        platform: data.platform,
+        latestVersion: data.version,
+        latestVersionCode: data.versionCode,
+      },
+    });
+
+    if (existing) {
+      throw new BadRequestException(
+        `Version ${data.version} (code: ${data.versionCode}) already exists for ${data.platform}`,
+      );
+    }
+
+    // Create new version (inactive by default)
+    const newVersion = await this.appVersionModel.create({
+      platform: data.platform,
+      latestVersion: data.version,
+      latestVersionCode: data.versionCode,
+      minimumVersion: data.version,
+      minimumVersionCode: data.versionCode,
+      forceUpdate: data.isMandatory,
+      updateMessage: data.updateMessage || 'A new version is available. Please update to get the latest features and improvements.',
+      forceUpdateMessage: 'This version is no longer supported. Please update to continue using the app.',
+      isActive: false, // New versions are inactive by default
+    } as any);
+
+    this.logger.log(`New app version created: ${data.platform} ${data.version} (code: ${data.versionCode})`);
+    return newVersion;
+  }
+
+  /**
+   * Get all versions with metrics (Admin only)
+   */
+  async getAllVersionsWithMetrics(
+    platform?: PlatformType,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<{
+    versions: Array<{
+      id: number;
+      platform: PlatformType;
+      version: string;
+      versionCode: number;
+      status: 'live' | 'down';
+      updateType: 'mandatory' | 'optional';
+      systemLive: number;
+      penetration: number;
+      liveDate: Date;
+      createdAt: Date;
+      updatedAt: Date;
+    }>;
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
+    const where: any = {};
+    if (platform) {
+      where.platform = platform;
+    }
+
+    const { count, rows } = await this.appVersionModel.findAndCountAll({
+      where,
+      attributes: [
+        'id',
+        'platform',
+        'latestVersion',
+        'latestVersionCode',
+        'minimumVersion',
+        'minimumVersionCode',
+        'forceUpdate',
+        'isActive',
+        'createdAt',
+        'updatedAt',
+      ],
+      order: [
+        ['platform', 'ASC'],
+        ['latestVersionCode', 'DESC'],
+        ['createdAt', 'DESC'],
+      ],
+      limit,
+      offset: (page - 1) * limit,
+      raw: true,
+    });
+
+    // Calculate metrics for each version
+    const versionsWithMetrics = await Promise.all(
+      (rows as unknown as AppVersionRaw[]).map(async (version) => {
+        const metrics = await this.calculateVersionMetrics(
+          version.platform,
+          version.latestVersion,
+          version.latestVersionCode,
+        );
+
+        return {
+          id: version.id,
+          platform: version.platform,
+          version: version.latestVersion,
+          versionCode: version.latestVersionCode,
+          status: version.isActive ? ('live' as const) : ('down' as const),
+          updateType: version.forceUpdate ? ('mandatory' as const) : ('optional' as const),
+          systemLive: metrics.systemLive,
+          penetration: metrics.penetration,
+          liveDate: version.createdAt,
+          createdAt: version.createdAt,
+          updatedAt: version.updatedAt,
+        };
+      }),
+    );
+
+    return {
+      versions: versionsWithMetrics,
+      total: count,
+      page,
+      totalPages: Math.ceil(count / limit),
+    };
+  }
+
+  /**
+   * Calculate metrics for a specific version
+   */
+  private async calculateVersionMetrics(
+    platform: PlatformType,
+    version: string,
+    versionCode: number,
+  ): Promise<{ systemLive: number; penetration: number }> {
+    const platformFilter = platform === 'ios' ? 'ios' : 'android';
+
+    // Count devices on this specific version
+    // Build OR conditions, filtering out null/undefined values
+    const orConditions: Array<{ appVersion?: string; versionCode?: number }> = [];
+    if (version) {
+      orConditions.push({ appVersion: version });
+    }
+    if (versionCode) {
+      orConditions.push({ versionCode: versionCode });
+    }
+
+    // If no valid version identifiers, return 0
+    if (orConditions.length === 0) {
+      return { systemLive: 0, penetration: 0 };
+    }
+
+    const systemLive = await this.deviceTokenModel.count({
+      where: {
+        deviceOs: platformFilter,
+        [Op.or]: orConditions,
+      },
+    });
+
+    // Count total active devices for this platform (used in last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const totalDevices = await this.deviceTokenModel.count({
+      where: {
+        deviceOs: platformFilter,
+        lastUsedAt: {
+          [Op.gte]: thirtyDaysAgo,
+        },
+      },
+    });
+
+    const penetration = totalDevices > 0 ? (systemLive / totalDevices) * 100 : 0;
+
+    return {
+      systemLive,
+      penetration: Math.round(penetration * 100) / 100, // Round to 2 decimal places
+    };
+  }
+
+  /**
+   * Activate a specific version (make it live)
+   */
+  async activateVersion(versionId: number, platform: PlatformType): Promise<AppVersion> {
+    const version = await this.appVersionModel.findOne({
+      where: {
+        id: versionId,
+        platform,
+      },
+      attributes: [
+        'id',
+        'platform',
+        'latestVersion',
+        'latestVersionCode',
+        'minimumVersion',
+        'minimumVersionCode',
+        'forceUpdate',
+        'updateMessage',
+        'forceUpdateMessage',
+        'isActive',
+        'createdAt',
+        'updatedAt',
+      ],
+    });
+
+    if (!version) {
+      throw new NotFoundException(`Version with ID ${versionId} not found for platform ${platform}`);
+    }
+
+    if (version.isActive) {
+      throw new BadRequestException(`Version ${version.latestVersion || 'Unknown'} is already active`);
+    }
+
+    // Deactivate all other versions for this platform
+    await this.appVersionModel.update(
+      { isActive: false },
+      {
+        where: {
+          platform,
+          isActive: true,
+        },
+      },
+    );
+
+    // Activate this version
+    await version.update({ isActive: true });
+
+    // Clear cache
+    this.clearCache(platform);
+
+    this.logger.log(`Activated version: ${platform} ${version.latestVersion} (ID: ${versionId})`);
+    return version;
+  }
+
+  /**
+   * Update version details (Admin only)
+   */
+  async updateVersion(
+    versionId: number,
+    updates: {
+      version?: string;
+      versionCode?: number;
+      isMandatory?: boolean;
+      updateMessage?: string;
+    },
+  ): Promise<AppVersion> {
+    const version = await this.appVersionModel.findByPk(versionId);
+
+    if (!version) {
+      throw new NotFoundException(`Version with ID ${versionId} not found`);
+    }
+
+    const updateData: any = {};
+
+    if (updates.version !== undefined) {
+      updateData.latestVersion = updates.version;
+      updateData.minimumVersion = updates.version;
+    }
+
+    if (updates.versionCode !== undefined) {
+      updateData.latestVersionCode = updates.versionCode;
+      updateData.minimumVersionCode = updates.versionCode;
+    }
+
+    if (updates.isMandatory !== undefined) {
+      updateData.forceUpdate = updates.isMandatory;
+    }
+
+    if (updates.updateMessage !== undefined) {
+      updateData.updateMessage = updates.updateMessage;
+    }
+
+    await version.update(updateData);
+
+    // Clear cache if this version is active
+    if (version.isActive) {
+      this.clearCache(version.platform);
+    }
+
+    this.logger.log(`Updated version: ${version.platform} ${version.latestVersion} (ID: ${versionId})`);
+    return version;
+  }
+
+  /**
+   * Delete a version (Admin only)
+   * Only inactive versions can be deleted
+   */
+  async deleteVersion(versionId: number): Promise<void> {
+    const version = await this.appVersionModel.findByPk(versionId);
+
+    if (!version) {
+      throw new NotFoundException(`Version with ID ${versionId} not found`);
+    }
+
+    if (version.isActive) {
+      throw new BadRequestException('Cannot delete an active version. Deactivate it first.');
+    }
+
+    await version.destroy();
+
+    this.logger.log(`Deleted version: ${version.platform} ${version.latestVersion} (ID: ${versionId})`);
+  }
+
+  /**
+   * Get current live versions for both platforms
+   */
+  async getCurrentVersions(): Promise<{
+    ios: { version: string; liveDate: Date } | null;
+    android: { version: string; liveDate: Date } | null;
+  }> {
+    const [iosVersion, androidVersion] = await Promise.all([
+      this.appVersionModel.findOne({
+        where: { platform: 'ios', isActive: true },
+        attributes: ['latestVersion', 'createdAt'],
+        raw: true,
+      }),
+      this.appVersionModel.findOne({
+        where: { platform: 'android', isActive: true },
+        attributes: ['latestVersion', 'createdAt'],
+        raw: true,
+      }),
+    ]);
+
+    return {
+      ios: iosVersion
+        ? {
+            version: (iosVersion as CurrentVersionRaw).latestVersion,
+            liveDate: (iosVersion as CurrentVersionRaw).createdAt,
+          }
+        : null,
+      android: androidVersion
+        ? {
+            version: (androidVersion as CurrentVersionRaw).latestVersion,
+            liveDate: (androidVersion as CurrentVersionRaw).createdAt,
+          }
+        : null,
+    };
   }
 }

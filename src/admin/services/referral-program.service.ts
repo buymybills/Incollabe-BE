@@ -311,7 +311,7 @@ export class ReferralProgramService {
   }
 
   /**
-   * Get list of influencers who have referred others (account referrers)
+   * Get list of influencers who have referral codes (account referrers)
    */
   async getAccountReferrers(
     filters: GetAccountReferrersDto,
@@ -324,32 +324,10 @@ export class ReferralProgramService {
       sortOrder = 'DESC',
     } = filters;
 
-    // First, get all unique referral codes that have been used
-    const usedReferralCodes = await this.referralUsageModel.findAll({
-      attributes: [[fn('DISTINCT', col('referralCode')), 'referralCode']],
-      raw: true,
-    });
-
-    const usedCodes = usedReferralCodes.map((r: any) => r.referralCode).filter(Boolean);
-
-    if (usedCodes.length === 0) {
-      // No referrals yet, return empty result
-      return {
-        data: [],
-        pagination: {
-          page,
-          limit,
-          total: 0,
-          totalPages: 0,
-        },
-      };
-    }
-
-    // Build where clause for influencers whose referral codes have been used
+    // Build where clause for ALL influencers who have a referral code
     const whereClause: any = {
       referralCode: {
-        //[Op.ne]: null,
-        [Op.in]: usedCodes,
+        [Op.ne]: null,
       },
     };
 
@@ -361,7 +339,7 @@ export class ReferralProgramService {
       ];
     }
 
-    // Get ALL influencers whose referral codes have been used (no pagination yet)
+    // Get ALL influencers who have a referral code (no pagination yet)
     // We need to fetch all to properly sort by totalReferrals before paginating
     const influencers = await this.influencerModel.findAll({
       where: whereClause,
