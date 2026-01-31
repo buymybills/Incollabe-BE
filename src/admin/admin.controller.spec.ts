@@ -18,8 +18,11 @@ import { SupportTicketService } from '../shared/support-ticket.service';
 import { AuthService } from '../auth/auth.service';
 import { CampaignService } from '../campaign/campaign.service';
 import { S3Service } from '../shared/s3.service';
+import { InvoiceExcelExportService } from './services/invoice-excel-export.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
+import { getModelToken } from '@nestjs/sequelize';
+import { Influencer } from '../auth/model/influencer.model';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { CreateAdminDto } from './dto/create-admin.dto';
 import { ApproveProfileDto, RejectProfileDto } from './dto/profile-review.dto';
@@ -149,6 +152,21 @@ const mockS3Service = {
   deleteFileFromS3: jest.fn(),
 };
 
+const mockInvoiceExcelExportService = {
+  exportMaxInfluencerInvoices: jest.fn(),
+  exportMaxCampaignInvoices: jest.fn(),
+  exportInviteOnlyInvoices: jest.fn(),
+};
+
+const mockInfluencerRepository = {
+  findAll: jest.fn(),
+  findOne: jest.fn(),
+  findByPk: jest.fn(),
+  create: jest.fn(),
+  update: jest.fn(),
+  destroy: jest.fn(),
+};
+
 const mockAdminAuthGuard = {
   canActivate: jest.fn(() => true),
 };
@@ -237,6 +255,14 @@ describe('AdminController', () => {
         {
           provide: S3Service,
           useValue: mockS3Service,
+        },
+        {
+          provide: InvoiceExcelExportService,
+          useValue: mockInvoiceExcelExportService,
+        },
+        {
+          provide: getModelToken(Influencer),
+          useValue: mockInfluencerRepository,
         },
       ],
     })

@@ -17,6 +17,7 @@ import { ReferralProgramService } from './services/referral-program.service';
 import { MaxxSubscriptionAdminService } from './services/maxx-subscription-admin.service';
 import { MaxSubscriptionBrandService } from './services/max-subscription-brand.service';
 import { MaxSubscriptionInvoiceService } from './services/max-subscription-invoice.service';
+import { InvoiceExcelExportService } from './services/invoice-excel-export.service';
 
 import { Admin } from './models/admin.model';
 import { ProfileReview } from './models/profile-review.model';
@@ -106,6 +107,7 @@ import { RolesGuard } from './guards/roles.guard';
     MaxxSubscriptionAdminService,
     MaxSubscriptionBrandService,
     MaxSubscriptionInvoiceService,
+    InvoiceExcelExportService,
     AdminAuthGuard,
     RolesGuard,
   ],
