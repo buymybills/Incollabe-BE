@@ -1,9 +1,7 @@
-import { Controller, Get, Param, ParseIntPipe, UseGuards, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe, UseGuards, NotFoundException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
-import { InjectModel } from '@nestjs/sequelize';
 import { InfluencerProfileScoringService } from '../services/influencer-profile-scoring.service';
 import { AuthGuard } from '../../auth/guards/auth.guard';
-import { Influencer } from '../../auth/model/influencer.model';
 
 @ApiTags('Influencer Profile Scoring')
 @Controller('influencer/profile-score')
@@ -12,28 +10,7 @@ import { Influencer } from '../../auth/model/influencer.model';
 export class InfluencerProfileScoringController {
   constructor(
     private readonly profileScoringService: InfluencerProfileScoringService,
-    @InjectModel(Influencer)
-    private readonly influencerModel: typeof Influencer,
   ) {}
-
-  /**
-   * Helper method to check if influencer has profile scoring access
-   */
-  private async checkProfileScoringAccess(influencerId: number): Promise<void> {
-    const influencer = await this.influencerModel.findByPk(influencerId, {
-      attributes: ['id', 'hasProfileScoringAccess'],
-    });
-
-    if (!influencer) {
-      throw new NotFoundException(`Influencer with ID ${influencerId} not found`);
-    }
-
-    if (!influencer.hasProfileScoringAccess) {
-      throw new ForbiddenException(
-        'Profile scoring features are not enabled for this account. Please contact support to enable this feature.'
-      );
-    }
-  }
 
   /**
    * MASTER API: Get complete profile score with all 6 categories
@@ -82,7 +59,6 @@ export class InfluencerProfileScoringController {
     description: 'Unauthorized - Invalid or missing JWT token'
   })
   async getCompleteProfileScore(@Param('influencerId', ParseIntPipe) influencerId: number) {
-    await this.checkProfileScoringAccess(influencerId);
     return this.profileScoringService.getCompleteProfileScore(influencerId);
   }
 
@@ -120,7 +96,6 @@ export class InfluencerProfileScoringController {
     }
   })
   async getAudienceQuality(@Param('influencerId', ParseIntPipe) influencerId: number) {
-    await this.checkProfileScoringAccess(influencerId);
     const influencer = await this.profileScoringService['influencerModel'].findByPk(influencerId);
     if (!influencer) {
       throw new NotFoundException(`Influencer with ID ${influencerId} not found`);
@@ -140,7 +115,6 @@ export class InfluencerProfileScoringController {
   @ApiParam({ name: 'influencerId', type: 'number' })
   @ApiResponse({ status: 200, description: 'Content relevance score retrieved' })
   async getContentRelevance(@Param('influencerId', ParseIntPipe) influencerId: number) {
-    await this.checkProfileScoringAccess(influencerId);
     const influencer = await this.profileScoringService['influencerModel'].findByPk(influencerId);
     if (!influencer) {
       throw new NotFoundException(`Influencer with ID ${influencerId} not found`);
@@ -160,7 +134,6 @@ export class InfluencerProfileScoringController {
   @ApiParam({ name: 'influencerId', type: 'number' })
   @ApiResponse({ status: 200, description: 'Content quality score retrieved' })
   async getContentQuality(@Param('influencerId', ParseIntPipe) influencerId: number) {
-    await this.checkProfileScoringAccess(influencerId);
     const influencer = await this.profileScoringService['influencerModel'].findByPk(influencerId);
     if (!influencer) {
       throw new NotFoundException(`Influencer with ID ${influencerId} not found`);
@@ -180,7 +153,6 @@ export class InfluencerProfileScoringController {
   @ApiParam({ name: 'influencerId', type: 'number' })
   @ApiResponse({ status: 200, description: 'Engagement strength score retrieved' })
   async getEngagementStrength(@Param('influencerId', ParseIntPipe) influencerId: number) {
-    await this.checkProfileScoringAccess(influencerId);
     const influencer = await this.profileScoringService['influencerModel'].findByPk(influencerId);
     if (!influencer) {
       throw new NotFoundException(`Influencer with ID ${influencerId} not found`);
@@ -200,7 +172,6 @@ export class InfluencerProfileScoringController {
   @ApiParam({ name: 'influencerId', type: 'number' })
   @ApiResponse({ status: 200, description: 'Growth momentum score retrieved' })
   async getGrowthMomentum(@Param('influencerId', ParseIntPipe) influencerId: number) {
-    await this.checkProfileScoringAccess(influencerId);
     const influencer = await this.profileScoringService['influencerModel'].findByPk(influencerId);
     if (!influencer) {
       throw new NotFoundException(`Influencer with ID ${influencerId} not found`);
@@ -220,7 +191,6 @@ export class InfluencerProfileScoringController {
   @ApiParam({ name: 'influencerId', type: 'number' })
   @ApiResponse({ status: 200, description: 'Monetisation score retrieved' })
   async getMonetisation(@Param('influencerId', ParseIntPipe) influencerId: number) {
-    await this.checkProfileScoringAccess(influencerId);
     const influencer = await this.profileScoringService['influencerModel'].findByPk(influencerId);
     if (!influencer) {
       throw new NotFoundException(`Influencer with ID ${influencerId} not found`);

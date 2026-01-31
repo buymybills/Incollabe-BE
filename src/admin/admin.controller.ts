@@ -54,8 +54,6 @@ import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
 import { AdminRole, AdminStatus } from './models/admin.model';
 import { ProfileType } from './models/profile-review.model';
-import { Influencer } from '../auth/model/influencer.model';
-import { InjectModel } from '@nestjs/sequelize';
 
 // DTOs
 import { AdminLoginDto, AdminLoginResponseDto } from './dto/admin-login.dto';
@@ -199,8 +197,6 @@ export class AdminController {
     private readonly s3Service: S3Service,
     private readonly appVersionService: AppVersionService,
     private readonly invoiceExcelExportService: InvoiceExcelExportService,
-    @InjectModel(Influencer)
-    private readonly influencerModel: typeof Influencer,
   ) {}
 
   @Post('login')
@@ -3330,85 +3326,6 @@ export class AdminController {
   async deleteVersion(@Param('id', ParseIntPipe) id: number) {
     await this.appVersionService.deleteVersion(id);
     return { message: 'Version deleted successfully' };
-  }
-
-  // ==================== Profile Scoring Access Control ====================
-
-  @Put('influencer/:influencerId/profile-scoring-access')
-  @UseGuards(AdminAuthGuard, RolesGuard)
-  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
-  @ApiBearerAuth()
-  @ApiOperation({
-    summary: 'Toggle profile scoring access for influencer',
-    description: 'Enable or disable advanced profile scoring features for a specific influencer',
-  })
-  @ApiParam({
-    name: 'influencerId',
-    type: Number,
-    description: 'Influencer ID',
-    example: 151,
-  })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        hasAccess: {
-          type: 'boolean',
-          description: 'Enable or disable profile scoring access',
-          example: true,
-        },
-      },
-      required: ['hasAccess'],
-    },
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Profile scoring access updated successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: true },
-        message: { type: 'string', example: 'Profile scoring access enabled for influencer' },
-        data: {
-          type: 'object',
-          properties: {
-            influencerId: { type: 'number', example: 151 },
-            hasProfileScoringAccess: { type: 'boolean', example: true },
-            profileScoringEnabledAt: { type: 'string', format: 'date-time', example: '2026-01-27T10:30:00Z' },
-          },
-        },
-      },
-    },
-  })
-  @ApiNotFoundResponse({
-    description: 'Influencer not found',
-  })
-  async toggleProfileScoringAccess(
-    @Param('influencerId', ParseIntPipe) id: number,
-    @Body() body: { hasAccess: boolean },
-  ) {
-    const influencer = await this.influencerModel.findByPk(id);
-
-    if (!influencer) {
-      throw new NotFoundException(`Influencer with ID ${id} not found`);
-    }
-
-    await influencer.update({
-      hasProfileScoringAccess: body.hasAccess,
-      profileScoringEnabledAt: body.hasAccess ? new Date() : null,
-    });
-
-    return {
-      success: true,
-      message: body.hasAccess
-        ? 'Profile scoring access enabled for influencer'
-        : 'Profile scoring access disabled for influencer',
-      data: {
-        influencerId: influencer.id,
-        hasProfileScoringAccess: influencer.hasProfileScoringAccess,
-        profileScoringEnabledAt: influencer.profileScoringEnabledAt,
-      },
-    };
   }
 
   // ==================== Invoice Excel Export ====================
