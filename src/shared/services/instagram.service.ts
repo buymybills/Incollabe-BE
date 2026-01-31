@@ -177,6 +177,34 @@ export class InstagramService {
     // Step 1: Fetch user profile from Instagram
     const profile = await this.getUserProfile(accessToken);
 
+    // Step 1.5: Validate account eligibility
+    if (!profile.media_count || profile.media_count < 5) {
+      throw new BadRequestException({
+        error: 'insufficient_media_count',
+        message: 'Your account must have at least 5 posts to connect',
+        mediaCount: profile.media_count || 0,
+        requiredMediaCount: 5,
+      });
+    }
+
+    if (!profile.followers_count || profile.followers_count < 100) {
+      throw new BadRequestException({
+        error: 'insufficient_followers',
+        message: 'Your account must have at least 100 followers to connect',
+        followersCount: profile.followers_count || 0,
+        requiredFollowersCount: 100,
+      });
+    }
+
+    if (profile.account_type !== 'MEDIA_CREATOR' && profile.account_type !== 'BUSINESS') {
+      throw new BadRequestException({
+        error: 'invalid_account_type',
+        message: 'Your account must be a Creator or Business account. Please switch your account type in Instagram settings.',
+        currentAccountType: profile.account_type,
+        allowedAccountTypes: ['MEDIA_CREATOR', 'BUSINESS'],
+      });
+    }
+
     // Step 2: Check if this Instagram account is already connected to another user
     const existingInfluencer = await this.influencerModel.findOne({
       where: {
