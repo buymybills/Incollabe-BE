@@ -19,6 +19,7 @@ export interface ProfileScore {
   scoreChange: number; // Change from previous week (e.g., -3, +5)
   grade: string; // "Strong Profile", "Good Profile", "Average Profile", or "Weak Profile"
   profileSummary: string; // AI-generated summary (e.g., "Strong in: niche clarity, engagement. Focus on improving: growth momentum.")
+  facebookPageConnected: boolean; // Whether Facebook page is connected (required for demographics)
   categories: {
     audienceQuality: AudienceQualityScore;
     contentRelevance: ContentRelevanceScore;
@@ -198,6 +199,7 @@ export class InfluencerProfileScoringService {
       scoreChange,
       grade,
       profileSummary,
+      facebookPageConnected: audienceQuality.facebookPageConnected || false,
       categories: {
         audienceQuality,
         contentRelevance,

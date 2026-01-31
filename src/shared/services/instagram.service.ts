@@ -177,31 +177,36 @@ export class InstagramService {
     // Step 1: Fetch user profile from Instagram
     const profile = await this.getUserProfile(accessToken);
 
-    // Step 1.5: Validate account eligibility
-    if (!profile.media_count || profile.media_count < 5) {
-      throw new BadRequestException({
-        error: 'insufficient_media_count',
-        message: 'Your account must have at least 5 posts to connect',
-        mediaCount: profile.media_count || 0,
-        requiredMediaCount: 5,
-      });
-    }
+    // Step 1.5: Validate account eligibility - check all conditions and return detailed response
+    const mediaCountValid = profile.media_count && profile.media_count >= 5;
+    const followersValid = profile.followers_count && profile.followers_count >= 100;
+    const accountTypeValid = profile.account_type === 'MEDIA_CREATOR' || profile.account_type === 'BUSINESS';
 
-    if (!profile.followers_count || profile.followers_count < 100) {
+    // If any validation fails, throw error with all validation details
+    if (!mediaCountValid || !followersValid || !accountTypeValid) {
       throw new BadRequestException({
-        error: 'insufficient_followers',
-        message: 'Your account must have at least 100 followers to connect',
-        followersCount: profile.followers_count || 0,
-        requiredFollowersCount: 100,
-      });
-    }
-
-    if (profile.account_type !== 'MEDIA_CREATOR' && profile.account_type !== 'BUSINESS') {
-      throw new BadRequestException({
-        error: 'invalid_account_type',
-        message: 'Your account must be a Creator or Business account. Please switch your account type in Instagram settings.',
-        currentAccountType: profile.account_type,
-        allowedAccountTypes: ['MEDIA_CREATOR', 'BUSINESS'],
+        error: 'account_not_eligible',
+        message: 'Your Instagram account does not meet the requirements to connect',
+        validationDetails: {
+          mediaCount: {
+            valid: mediaCountValid,
+            current: profile.media_count || 0,
+            required: 5,
+            message: mediaCountValid ? 'Sufficient posts' : 'Your account must have at least 5 posts',
+          },
+          followers: {
+            valid: followersValid,
+            current: profile.followers_count || 0,
+            required: 100,
+            message: followersValid ? 'Sufficient followers' : 'Your account must have at least 100 followers',
+          },
+          accountType: {
+            valid: accountTypeValid,
+            current: profile.account_type || 'PERSONAL',
+            required: ['MEDIA_CREATOR', 'BUSINESS'],
+            message: accountTypeValid ? 'Valid account type' : 'Your account must be a Creator or Business account. Please switch your account type in Instagram settings.',
+          },
+        },
       });
     }
 
@@ -375,7 +380,7 @@ export class InstagramService {
       throw new BadRequestException('No Instagram account connected');
     }
 
-    // Check if last sync was less than 30 days ago (only for influencers)
+    // Check if last sync was less than 15 days ago (only for influencers)
     if (userType === 'influencer') {
       const latestAnalysis = await this.instagramProfileAnalysisModel.findOne({
         where: { influencerId: userId },
@@ -388,13 +393,13 @@ export class InstagramService {
         const diffInMs = now.getTime() - lastSync.getTime();
         const daysSinceLastSync = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
 
-        if (daysSinceLastSync < 30) {
-          const daysRemaining = 30 - daysSinceLastSync;
-          const nextSyncDate = new Date(lastSync.getTime() + (30 * 24 * 60 * 60 * 1000));
+        if (daysSinceLastSync < 15) {
+          const daysRemaining = 15 - daysSinceLastSync;
+          const nextSyncDate = new Date(lastSync.getTime() + (15 * 24 * 60 * 60 * 1000));
 
           throw new BadRequestException({
             error: 'sync_throttled',
-            message: `Instagram profile sync is limited to once every 30 days. Please wait ${daysRemaining} more day(s).`,
+            message: `Instagram profile sync is limited to once every 15 days. Please wait ${daysRemaining} more day(s).`,
             details: {
               lastSyncDate: lastSync.toISOString(),
               nextAllowedSyncDate: nextSyncDate.toISOString(),
@@ -907,22 +912,22 @@ export class InstagramService {
 
       console.log(`\n⏱️  STEP 2: Calculating snapshot date ranges...`);
       if (lastSnapshot && lastSnapshot.analysisPeriodEnd) {
-        // Check if 30 days have passed since last snapshot
+        // Check if 15 days have passed since last snapshot
         const lastSnapshotEnd = new Date(lastSnapshot.analysisPeriodEnd);
         const daysSinceLastSnapshot = Math.floor((today.getTime() - lastSnapshotEnd.getTime()) / (1000 * 60 * 60 * 24));
 
         console.log(`   📆 Days since last snapshot: ${daysSinceLastSnapshot}`);
 
-        if (daysSinceLastSnapshot < 30) {
-          const daysRemaining = 30 - daysSinceLastSnapshot;
-          const nextSyncDate = new Date(lastSnapshotEnd.getTime() + (30 * 24 * 60 * 60 * 1000));
+        if (daysSinceLastSnapshot < 15) {
+          const daysRemaining = 15 - daysSinceLastSnapshot;
+          const nextSyncDate = new Date(lastSnapshotEnd.getTime() + (15 * 24 * 60 * 60 * 1000));
 
           console.log(`   ❌ THROTTLED: Only ${daysSinceLastSnapshot} days passed, need to wait ${daysRemaining} more days`);
           console.log(`   ⏰ Next allowed sync: ${nextSyncDate.toISOString().split('T')[0]}\n`);
 
           throw new BadRequestException({
             error: 'sync_throttled',
-            message: `Instagram profile sync is limited to once every 30 days. Please wait ${daysRemaining} more day(s).`,
+            message: `Instagram profile sync is limited to once every 15 days. Please wait ${daysRemaining} more day(s).`,
             details: {
               lastSnapshotDate: lastSnapshotEnd.toISOString().split('T')[0],
               nextAllowedSyncDate: nextSyncDate.toISOString().split('T')[0],
@@ -2728,21 +2733,21 @@ export class InstagramService {
     let isInitialSnapshot = false;
 
     if (lastSnapshot && lastSnapshot.analysisPeriodEnd) {
-      // Check if 30 days have passed since last snapshot
+      // Check if 15 days have passed since last snapshot
       const lastSnapshotEnd = new Date(lastSnapshot.analysisPeriodEnd);
       const daysSinceLastSnapshot = Math.floor((today.getTime() - lastSnapshotEnd.getTime()) / (1000 * 60 * 60 * 24));
 
       // Allow sync if snapshots exist but demographics data is missing (grace period for demographics fetch)
       const hasDemographics = lastSnapshot.audienceAgeGender && lastSnapshot.audienceAgeGender.length > 0;
-      const allowDemographicsGracePeriod = !hasDemographics && daysSinceLastSnapshot < 30;
+      const allowDemographicsGracePeriod = !hasDemographics && daysSinceLastSnapshot < 15;
 
-      if (daysSinceLastSnapshot < 30 && !allowDemographicsGracePeriod) {
-        const daysRemaining = 30 - daysSinceLastSnapshot;
-        const nextSyncDate = new Date(lastSnapshotEnd.getTime() + (30 * 24 * 60 * 60 * 1000));
+      if (daysSinceLastSnapshot < 15 && !allowDemographicsGracePeriod) {
+        const daysRemaining = 15 - daysSinceLastSnapshot;
+        const nextSyncDate = new Date(lastSnapshotEnd.getTime() + (15 * 24 * 60 * 60 * 1000));
 
         throw new BadRequestException({
           error: 'sync_throttled',
-          message: `Instagram profile sync is limited to once every 30 days. Please wait ${daysRemaining} more day(s).`,
+          message: `Instagram profile sync is limited to once every 15 days. Please wait ${daysRemaining} more day(s).`,
           details: {
             lastSnapshotDate: lastSnapshotEnd.toISOString().split('T')[0],
             nextAllowedSyncDate: nextSyncDate.toISOString().split('T')[0],

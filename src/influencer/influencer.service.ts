@@ -2374,8 +2374,8 @@ export class InfluencerService {
         const diffInMs = now.getTime() - lastSync.getTime();
         daysSinceLastSync = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
 
-        // Sync needed if 30 or more days have passed
-        syncNeeded = daysSinceLastSync >= 30;
+        // Sync needed if 15 or more days have passed
+        syncNeeded = daysSinceLastSync >= 15;
       } else {
         // No sync data found - sync is needed
         syncNeeded = true;

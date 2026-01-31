@@ -672,19 +672,19 @@ export class InstagramController {
 
     **How it works:**
     1. **Checks last snapshot date** - Finds the most recent snapshot for this user
-    2. **30-day throttle** - If last snapshot was less than 30 days ago, returns error with days remaining
+    2. **15-day throttle** - If last snapshot was less than 15 days ago, returns error with days remaining
     3. **Fetches media** - Gets all posts from Instagram API (up to limit)
     4. **Stores insights** - Fetches detailed insights for each post
     5. **Creates new snapshot** - Snapshot period depends on last sync:
        - **First time:** Creates snapshot for last 30 days
        - **Subsequent syncs:** Creates snapshot from (last snapshot end date + 1 day) to today
-       - Example: If last snapshot ended on Dec 31 and you sync on Feb 10 (41 days later), new snapshot will cover Jan 1 - Feb 10 (41 days)
+       - Example: If last snapshot ended on Dec 31 and you sync on Jan 20 (20 days later), new snapshot will cover Jan 1 - Jan 20 (20 days)
     6. **Compares growth** - Calculates growth metrics by comparing new snapshot with previous snapshot
 
     **Key Features:**
     - Progressive snapshot tracking (keeps all historical snapshots)
-    - Dynamic snapshot periods (30, 40, 50+ days based on when user syncs)
-    - Prevents sync abuse with 30-day minimum interval
+    - Dynamic snapshot periods (15, 20, 30+ days based on when user syncs)
+    - Prevents sync abuse with 15-day minimum interval
     - Complete growth comparison metrics
 
     **Growth metrics:**
@@ -851,12 +851,12 @@ export class InstagramController {
         'Sync Throttled (too soon)': {
           value: {
             error: 'sync_throttled',
-            message: 'Instagram profile sync is limited to once every 30 days. Please wait 12 more day(s).',
+            message: 'Instagram profile sync is limited to once every 15 days. Please wait 8 more day(s).',
             details: {
               lastSnapshotDate: '2025-01-10',
-              nextAllowedSyncDate: '2025-02-09',
-              daysSinceLastSnapshot: 18,
-              daysRemaining: 12
+              nextAllowedSyncDate: '2025-01-25',
+              daysSinceLastSnapshot: 7,
+              daysRemaining: 8
             }
           }
         }
@@ -909,19 +909,19 @@ export class InstagramController {
 
     **How it works:**
     1. **Checks last snapshot date** - Finds the most recent snapshot for this user
-    2. **30-day throttle** - If last snapshot was less than 30 days ago, returns error with days remaining
+    2. **15-day throttle** - If last snapshot was less than 15 days ago, returns error with days remaining
     3. **Fetches profile** - Updates basic profile data (username, followers, account type, etc.)
     4. **Creates new snapshot** - Snapshot period depends on last sync:
        - **First time:** Creates snapshot for last 30 days
        - **Subsequent syncs:** Creates snapshot from (last snapshot end date + 1 day) to today
-       - Example: If last snapshot ended on Dec 31 and you sync on Feb 10 (41 days later), new snapshot will cover Jan 1 - Feb 10 (41 days)
+       - Example: If last snapshot ended on Dec 31 and you sync on Jan 20 (20 days later), new snapshot will cover Jan 1 - Jan 20 (20 days)
     5. **Fetches demographics** - Gets audience demographics and geographic data (requires Facebook connection)
     6. **Compares growth** - Calculates growth metrics by comparing new snapshot with previous snapshot
 
     **Key Features:**
     - Progressive snapshot tracking (keeps all historical snapshots)
     - Dynamic snapshot periods (adapts to when user syncs)
-    - Prevents sync abuse with 30-day minimum interval
+    - Prevents sync abuse with 15-day minimum interval
     - Complete profile + demographics + growth metrics
 
     **Growth metrics:**
@@ -1101,11 +1101,11 @@ export class InstagramController {
         'Sync Throttled (too soon)': {
           value: {
             error: 'sync_throttled',
-            message: 'Instagram profile sync is limited to once every 30 days. Please wait 8 more day(s).',
+            message: 'Instagram profile sync is limited to once every 15 days. Please wait 8 more day(s).',
             details: {
               lastSnapshotDate: '2025-01-15',
-              nextAllowedSyncDate: '2025-02-14',
-              daysSinceLastSnapshot: 22,
+              nextAllowedSyncDate: '2025-01-30',
+              daysSinceLastSnapshot: 7,
               daysRemaining: 8
             }
           }
