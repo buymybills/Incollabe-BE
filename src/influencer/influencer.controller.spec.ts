@@ -5,6 +5,7 @@ import { SupportTicketService } from '../shared/support-ticket.service';
 import { ProSubscriptionService } from './services/pro-subscription.service';
 import { CampaignService } from '../campaign/campaign.service';
 import { RazorpayService } from '../shared/razorpay.service';
+import { S3Service } from '../shared/s3.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto';
 import { WhatsappVerificationDto } from './dto/whatsapp-verification.dto';
@@ -47,6 +48,12 @@ const mockRazorpayService = {
   getPaymentDetails: jest.fn(),
 };
 
+const mockS3Service = {
+  uploadFile: jest.fn(),
+  deleteFile: jest.fn(),
+  getSignedUrl: jest.fn(),
+};
+
 const mockAuthGuard = {
   canActivate: jest.fn(() => true),
 };
@@ -87,6 +94,10 @@ describe('InfluencerController', () => {
               return null;
             }),
           },
+        },
+        {
+          provide: S3Service,
+          useValue: mockS3Service,
         },
       ],
     })
