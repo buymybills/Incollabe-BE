@@ -293,9 +293,20 @@ export class InfluencerProfileScoringService {
       limit: 5,
     });
 
-    const historicalSnapshots = snapshots.filter(
+    // Prefer snapshots with both demographics AND post analysis
+    // This avoids using demographics-only snapshots when full snapshots exist
+    const snapshotsWithDemographics = snapshots.filter(
       snapshot => snapshot.audienceAgeGender && snapshot.audienceAgeGender.length > 0
     );
+
+    const snapshotsWithPostsAndDemographics = snapshotsWithDemographics.filter(
+      snapshot => snapshot.postsAnalyzed > 0
+    );
+
+    // Use full snapshots if available, otherwise fall back to demographics-only
+    const historicalSnapshots = snapshotsWithPostsAndDemographics.length > 0
+      ? snapshotsWithPostsAndDemographics
+      : snapshotsWithDemographics;
 
     const latestSnapshot = historicalSnapshots[0];
     const totalFollowers = latestSnapshot?.totalFollowers || influencer.instagramFollowersCount || 0;
@@ -477,10 +488,26 @@ export class InfluencerProfileScoringService {
    * Target geography: India with city-level insights
    */
   private async calculateGeoRelevance(influencer: Influencer): Promise<{ score: number; details: any }> {
-    const latestSnapshot = await this.instagramProfileAnalysisModel.findOne({
+    // Fetch recent snapshots
+    const snapshots = await this.instagramProfileAnalysisModel.findAll({
       where: { influencerId: influencer.id },
       order: [['syncDate', 'DESC']],
+      limit: 5,
     });
+
+    // Prefer snapshots with both geography data AND post analysis
+    const snapshotsWithGeo = snapshots.filter(
+      s => s.audienceCountries && s.audienceCountries.length > 0
+    );
+
+    const snapshotsWithPostsAndGeo = snapshotsWithGeo.filter(
+      s => s.postsAnalyzed > 0
+    );
+
+    // Use full snapshots if available, otherwise fall back to geo-only
+    const latestSnapshot = snapshotsWithPostsAndGeo.length > 0
+      ? snapshotsWithPostsAndGeo[0]
+      : snapshotsWithGeo[0];
 
     if (!latestSnapshot || !latestSnapshot.audienceCountries || latestSnapshot.audienceCountries.length === 0) {
       return {
@@ -2584,7 +2611,12 @@ export class InfluencerProfileScoringService {
     });
 
     // Filter to only complete snapshots with engagement data
-    const validSnapshots = allSnapshots.filter(s => s.syncNumber != null && s.avgEngagementRate != null);
+    // Must have postsAnalyzed > 0 to ensure it's not a demographics-only snapshot
+    const validSnapshots = allSnapshots.filter(s =>
+      s.syncNumber != null &&
+      s.avgEngagementRate != null &&
+      s.postsAnalyzed > 0
+    );
     const latestSync = validSnapshots.length > 0 ? validSnapshots[0] : null;
 
     console.log(`📊 Engagement Overview Debug: Found ${allSnapshots.length} total snapshots, ${validSnapshots.length} valid snapshots`);
