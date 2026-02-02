@@ -171,6 +171,7 @@ export class SupportTicketService {
         description: ticket.description,
         reportType: ticket.reportType,
         status: ticket.status,
+        imageUrls: ticket.imageUrls || [],
         resolution: ticket.resolution,
         resolvedAt: ticket.resolvedAt,
         createdAt: ticket.createdAt,
