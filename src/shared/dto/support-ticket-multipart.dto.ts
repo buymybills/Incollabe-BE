@@ -5,13 +5,12 @@ import {
   IsEnum,
   IsOptional,
   IsInt,
-  IsArray,
   MaxLength,
   MinLength,
 } from 'class-validator';
 import { ReportType, UserType } from '../models/support-ticket.model';
 
-export class CreateSupportTicketDto {
+export class CreateSupportTicketMultipartDto {
   @ApiProperty({
     description: 'Subject/title of the support ticket',
     example: 'Cannot upload post image',
@@ -38,6 +37,7 @@ export class CreateSupportTicketDto {
     description: 'Type of report/issue',
     enum: ReportType,
     example: ReportType.TECHNICAL_ISSUE,
+    enumName: 'ReportType',
   })
   @IsEnum(ReportType)
   @IsNotEmpty()
@@ -47,25 +47,52 @@ export class CreateSupportTicketDto {
     description: 'Type of user being reported (if reporting another user)',
     enum: UserType,
     example: UserType.BRAND,
+    enumName: 'UserType',
   })
   @IsEnum(UserType)
   @IsOptional()
-  reportedUserType?: UserType;
+  reportedUserType?: string;
 
   @ApiPropertyOptional({
     description: 'ID of the user being reported (if reporting another user)',
-    example: 123,
+    example: '123',
   })
-  @IsInt()
   @IsOptional()
-  reportedUserId?: number;
+  reportedUserId?: string;
 
   @ApiPropertyOptional({
-    description: 'Array of image URLs for the ticket',
-    example: ['https://example.com/image1.jpg', 'https://example.com/image2.jpg'],
-    type: [String],
+    description: 'Supporting images (max 5 images, 10MB each)',
+    type: 'array',
+    items: {
+      type: 'string',
+      format: 'binary',
+    },
+    maxItems: 5,
   })
-  @IsArray()
   @IsOptional()
-  imageUrls?: string[];
+  images?: any;
+}
+
+export class CreateTicketReplyMultipartDto {
+  @ApiProperty({
+    description: 'Reply message',
+    example: 'We have received your request and will investigate this issue.',
+    minLength: 1,
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(1)
+  message: string;
+
+  @ApiPropertyOptional({
+    description: 'Supporting images (max 5 images, 10MB each)',
+    type: 'array',
+    items: {
+      type: 'string',
+      format: 'binary',
+    },
+    maxItems: 5,
+  })
+  @IsOptional()
+  images?: any;
 }

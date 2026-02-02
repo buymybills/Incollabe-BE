@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import {
@@ -10,25 +11,34 @@ import {
   UserType,
   ReportType,
 } from './models/support-ticket.model';
+import {
+  SupportTicketReply,
+  ReplyAuthorType,
+} from './models/support-ticket-reply.model';
 import { CreateSupportTicketDto } from './dto/create-support-ticket.dto';
 import { GetSupportTicketsDto } from './dto/get-support-tickets.dto';
 import { UpdateSupportTicketDto } from './dto/update-support-ticket.dto';
 import { SupportTicketCreationDto } from './dto/support-ticket-creation.dto';
+import { CreateTicketReplyDto } from './dto/create-ticket-reply.dto';
 import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { Admin } from '../admin/models/admin.model';
 import { Op, CreationAttributes } from 'sequelize';
 import { ReportedUserDto } from './types/support-ticket.types';
+import { EncryptionService } from './services/encryption.service';
 
 @Injectable()
 export class SupportTicketService {
   constructor(
     @InjectModel(SupportTicket)
     private supportTicketModel: typeof SupportTicket,
+    @InjectModel(SupportTicketReply)
+    private supportTicketReplyModel: typeof SupportTicketReply,
     @InjectModel(Influencer)
     private influencerModel: typeof Influencer,
     @InjectModel(Brand)
     private brandModel: typeof Brand,
+    private encryptionService: EncryptionService,
   ) {}
 
   /**
@@ -70,6 +80,10 @@ export class SupportTicketService {
 
     if (createDto.reportedUserId) {
       creationDto.reportedUserId = createDto.reportedUserId;
+    }
+
+    if (createDto.imageUrls && createDto.imageUrls.length > 0) {
+      creationDto.imageUrls = createDto.imageUrls;
     }
 
     const ticket = await this.supportTicketModel.create(
@@ -298,7 +312,7 @@ export class SupportTicketService {
             id: influencer.id,
             name: influencer.name,
             username: influencer.username,
-            phone: influencer.phone,
+            phone: influencer.phone ? this.encryptionService.decrypt(influencer.phone) : undefined,
             whatsappNumber: influencer.whatsappNumber,
             profileImage: influencer.profileImage,
           };
@@ -321,7 +335,7 @@ export class SupportTicketService {
             name: brand.brandName,
             username: brand.username,
             email: brand.email,
-            pocContactNumber: brand.pocContactNumber,
+            pocContactNumber: brand.pocContactNumber ? this.encryptionService.decrypt(brand.pocContactNumber) : undefined,
             profileImage: brand.profileImage,
           };
         }
@@ -430,6 +444,117 @@ export class SupportTicketService {
     };
   }
 
+  /**
+   * Create a reply to a support ticket
+   * Can be called by admin, or by the ticket creator (influencer/brand)
+   */
+  async createReply(
+    ticketId: number,
+    replyDto: CreateTicketReplyDto,
+    userId: number,
+    userType: 'admin' | 'influencer' | 'brand',
+  ) {
+    const ticket = await this.supportTicketModel.findByPk(ticketId);
+
+    if (!ticket) {
+      throw new NotFoundException('Support ticket not found');
+    }
+
+    const ticketData = ticket.get({ plain: true });
+    console.log('TICKET DATA:', JSON.stringify(ticketData, null, 2));
+
+    // Validate that non-admin users can only reply to their own tickets
+    if (userType !== 'admin') {
+      if (userType === 'influencer' && ticket.influencerId !== userId) {
+        throw new ForbiddenException(`You can only reply to your own tickets. Debug: userType=${userType}, userId=${userId}, ticket.influencerId=${ticket.influencerId}, ticket.brandId=${ticket.brandId}`);
+      }
+      if (userType === 'brand' && ticket.brandId !== userId) {
+        throw new ForbiddenException(`You can only reply to your own tickets. Debug: userType=${userType}, userId=${userId}, ticket.influencerId=${ticket.influencerId}, ticket.brandId=${ticket.brandId}`);
+      }
+    }
+
+    const replyData: any = {
+      ticketId,
+      message: replyDto.message,
+      imageUrls: replyDto.imageUrls || [],
+    };
+
+    if (userType === 'admin') {
+      replyData.authorType = ReplyAuthorType.ADMIN;
+      replyData.adminId = userId;
+    } else if (userType === 'influencer') {
+      replyData.authorType = ReplyAuthorType.INFLUENCER;
+      replyData.influencerId = userId;
+    } else {
+      replyData.authorType = ReplyAuthorType.BRAND;
+      replyData.brandId = userId;
+    }
+
+    const reply = await this.supportTicketReplyModel.create(replyData);
+
+    return {
+      message: 'Reply added successfully',
+      replyId: reply.id,
+      createdAt: reply.createdAt,
+    };
+  }
+
+  /**
+   * Get all replies for a ticket
+   * Users can only get replies for their own tickets, admins can get any
+   */
+  async getTicketReplies(
+    ticketId: number,
+    userId?: number,
+    userType?: 'admin' | 'influencer' | 'brand',
+  ) {
+    const ticket = await this.supportTicketModel.findByPk(ticketId);
+
+    if (!ticket) {
+      throw new NotFoundException('Support ticket not found');
+    }
+
+    // Validate that non-admin users can only get replies for their own tickets
+    if (userType && userType !== 'admin') {
+      if (userType === 'influencer' && ticket.influencerId !== userId) {
+        throw new ForbiddenException(
+          'You can only view replies to your own tickets',
+        );
+      }
+      if (userType === 'brand' && ticket.brandId !== userId) {
+        throw new ForbiddenException(
+          'You can only view replies to your own tickets',
+        );
+      }
+    }
+
+    const replies = await this.supportTicketReplyModel.findAll({
+      where: { ticketId },
+      include: [
+        {
+          model: Admin,
+          as: 'admin',
+          attributes: ['id', 'name', 'email'],
+        },
+        {
+          model: Influencer,
+          as: 'influencer',
+          attributes: ['id', 'name', 'username', 'profileImage'],
+        },
+        {
+          model: Brand,
+          as: 'brand',
+          attributes: ['id', 'brandName', 'username', 'profileImage'],
+        },
+      ],
+      order: [['createdAt', 'ASC']],
+    });
+
+    return {
+      replies: replies.map((reply) => this.formatReplyResponse(reply)),
+    };
+  }
+
   // Helper methods
   private async validateUser(
     userId: number,
@@ -453,7 +578,7 @@ export class SupportTicketService {
               id: ticket.influencer.id,
               name: ticket.influencer.name,
               username: ticket.influencer.username,
-              phone: ticket.influencer.phone,
+              phone: ticket.influencer.phone ? this.encryptionService.decrypt(ticket.influencer.phone) : undefined,
               whatsappNumber: ticket.influencer.whatsappNumber,
               profileImage: ticket.influencer.profileImage,
             }
@@ -465,7 +590,7 @@ export class SupportTicketService {
               name: ticket.brand.brandName,
               username: ticket.brand.username,
               email: ticket.brand.email,
-              pocContactNumber: ticket.brand.pocContactNumber,
+              pocContactNumber: ticket.brand.pocContactNumber ? this.encryptionService.decrypt(ticket.brand.pocContactNumber) : undefined,
               profileImage: ticket.brand.profileImage,
             }
           : null;
@@ -474,6 +599,7 @@ export class SupportTicketService {
       id: ticket.id,
       subject: ticket.subject,
       description: ticket.description,
+      imageUrls: ticket.imageUrls || [],
       reportType: ticket.reportType,
       status: ticket.status,
       reporter,
@@ -490,6 +616,46 @@ export class SupportTicketService {
             email: ticket.assignedAdmin.email,
           }
         : null,
+    };
+  }
+
+  private formatReplyResponse(reply: SupportTicketReply) {
+    let author: any = null;
+
+    if (reply.authorType === ReplyAuthorType.ADMIN && reply.admin) {
+      author = {
+        type: 'admin',
+        id: reply.admin.id,
+        name: reply.admin.name,
+        email: reply.admin.email,
+      };
+    } else if (
+      reply.authorType === ReplyAuthorType.INFLUENCER &&
+      reply.influencer
+    ) {
+      author = {
+        type: 'influencer',
+        id: reply.influencer.id,
+        name: reply.influencer.name,
+        username: reply.influencer.username,
+        profileImage: reply.influencer.profileImage,
+      };
+    } else if (reply.authorType === ReplyAuthorType.BRAND && reply.brand) {
+      author = {
+        type: 'brand',
+        id: reply.brand.id,
+        name: reply.brand.brandName,
+        username: reply.brand.username,
+        profileImage: reply.brand.profileImage,
+      };
+    }
+
+    return {
+      id: reply.id,
+      message: reply.message,
+      imageUrls: reply.imageUrls || [],
+      author,
+      createdAt: reply.createdAt,
     };
   }
 }

@@ -22,6 +22,7 @@ import { CampaignInvitation } from '../campaign/models/campaign-invitation.model
 import { CampaignApplication } from '../campaign/models/campaign-application.model';
 import { CustomNiche } from '../auth/model/custom-niche.model';
 import { SupportTicket } from '../shared/models/support-ticket.model';
+import { SupportTicketReply } from '../shared/models/support-ticket-reply.model';
 import { Conversation } from '../shared/models/conversation.model';
 import { Message } from '../shared/models/message.model';
 import { InfluencerReferralUsage } from 'src/auth/model/influencer-referral-usage.model';
@@ -115,6 +116,7 @@ import { InfluencerCredibilityScore } from '../shared/models/influencer-credibil
             CampaignApplication,
             CustomNiche,
             SupportTicket,
+            SupportTicketReply,
             Conversation,
             Message,
             InfluencerReferralUsage,
@@ -123,7 +125,7 @@ import { InfluencerCredibilityScore } from '../shared/models/influencer-credibil
           ],
           autoLoadModels: true,
           synchronize: false, // Disabled to prevent index conflicts with existing database
-          logging: false,
+          logging: false, // Temporarily enabled for debugging
         };
       },
     }),

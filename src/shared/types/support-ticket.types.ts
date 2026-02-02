@@ -14,14 +14,14 @@ export class ReportedInfluencerDto {
   @ApiProperty()
   username: string;
 
-  @ApiProperty()
-  phone: string;
+  @ApiProperty({ required: false })
+  phone?: string;
 
-  @ApiProperty()
-  whatsappNumber: string;
+  @ApiProperty({ required: false })
+  whatsappNumber?: string;
 
-  @ApiProperty()
-  profileImage: string;
+  @ApiProperty({ required: false })
+  profileImage?: string;
 }
 
 export class ReportedBrandDto {
@@ -37,14 +37,14 @@ export class ReportedBrandDto {
   @ApiProperty()
   username: string;
 
-  @ApiProperty()
-  email: string;
+  @ApiProperty({ required: false })
+  email?: string;
 
-  @ApiProperty()
-  pocContactNumber: string;
+  @ApiProperty({ required: false })
+  pocContactNumber?: string;
 
-  @ApiProperty()
-  profileImage: string;
+  @ApiProperty({ required: false })
+  profileImage?: string;
 }
 
 export type ReportedUserDto = ReportedInfluencerDto | ReportedBrandDto | null;

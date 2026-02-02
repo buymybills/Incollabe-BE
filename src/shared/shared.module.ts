@@ -40,6 +40,7 @@ import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { Niche } from '../auth/model/niche.model';
 import { SupportTicket } from './models/support-ticket.model';
+import { SupportTicketReply } from './models/support-ticket-reply.model';
 import { Conversation } from './models/conversation.model';
 import { Message } from './models/message.model';
 import { KeyBackup } from './models/key-backup.model';
@@ -73,6 +74,7 @@ import { AppVersionService } from './services/app-version.service';
       Brand,
       Niche,
       SupportTicket,
+      SupportTicketReply,
       Conversation,
       Message,
       KeyBackup,

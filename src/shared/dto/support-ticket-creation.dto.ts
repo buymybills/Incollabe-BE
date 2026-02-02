@@ -14,4 +14,5 @@ export class SupportTicketCreationDto {
   status: TicketStatus;
   reportedUserType?: UserType;
   reportedUserId?: number;
+  imageUrls?: string[];
 }

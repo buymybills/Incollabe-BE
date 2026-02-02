@@ -132,6 +132,7 @@ import { SupportTicketService } from '../shared/support-ticket.service';
 import { CreateSupportTicketDto } from '../shared/dto/create-support-ticket.dto';
 import { GetSupportTicketsDto } from '../shared/dto/get-support-tickets.dto';
 import { UpdateSupportTicketDto } from '../shared/dto/update-support-ticket.dto';
+import { CreateTicketReplyDto } from '../shared/dto/create-ticket-reply.dto';
 import {
   GetNewAccountsWithReferralDto,
   NewAccountsWithReferralResponseDto,
@@ -2879,6 +2880,75 @@ export class AdminController {
   })
   async deleteSupportTicket(@Param('id', ParseIntPipe) id: number) {
     return await this.supportTicketService.deleteTicket(id);
+  }
+
+  @Post('support-tickets/:id/reply')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Reply to a support ticket',
+    description: 'Add a reply to a support ticket (Admin)',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Support ticket ID',
+    type: 'number',
+  })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    description: 'Reply added successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Ticket not found',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async replyToTicket(
+    @Req() req: RequestWithAdmin,
+    @Param('id', ParseIntPipe) ticketId: number,
+    @Body() replyDto: CreateTicketReplyDto,
+  ) {
+    const adminId = req.admin.id;
+    return this.supportTicketService.createReply(
+      ticketId,
+      replyDto,
+      adminId,
+      'admin',
+    );
+  }
+
+  @Get('support-tickets/:id/replies')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get all replies for a support ticket',
+    description: 'Fetch all replies for a specific support ticket (Admin)',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Support ticket ID',
+    type: 'number',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Replies fetched successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Ticket not found',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getTicketReplies(
+    @Req() req: RequestWithAdmin,
+    @Param('id', ParseIntPipe) ticketId: number,
+  ) {
+    return this.supportTicketService.getTicketReplies(
+      ticketId,
+      req.admin.id,
+      'admin',
+    );
   }
 
   // Master Data Endpoints

@@ -44,7 +44,19 @@ import { Public } from '../auth/decorators/public.decorator';
 import type { RequestWithUser } from '../types/request.types';
 import { SupportTicketService } from '../shared/support-ticket.service';
 import { CreateSupportTicketDto } from '../shared/dto/create-support-ticket.dto';
+import { CreateTicketReplyDto } from '../shared/dto/create-ticket-reply.dto';
 import { UserType } from '../shared/models/support-ticket.model';
+import {
+  CreateSupportTicketMultipartDto,
+  CreateTicketReplyMultipartDto,
+} from '../shared/dto/support-ticket-multipart.dto';
+import {
+  CreateTicketResponseDto,
+  CreateReplyResponseDto,
+  GetTicketsResponseDto,
+  GetRepliesResponseDto,
+} from '../shared/dto/support-ticket-response.dto';
+import { S3Service } from '../shared/s3.service';
 import { ProSubscriptionService } from './services/pro-subscription.service';
 import { CampaignService } from '../campaign/campaign.service';
 import {
@@ -74,6 +86,7 @@ export class InfluencerController {
     private readonly campaignService: CampaignService,
     private readonly razorpayService: RazorpayService,
     private readonly configService: ConfigService,
+    private readonly s3Service: S3Service,
   ) {}
 
   @Get('profile')
@@ -934,33 +947,242 @@ export class InfluencerController {
 
   // Support Ticket endpoints
   @Post('support-ticket')
-  @ApiOperation({ summary: 'Create a support ticket' })
+  @UseInterceptors(
+    FileFieldsInterceptor([{ name: 'images', maxCount: 5 }], {
+      fileFilter: (req, file, callback) => {
+        const allowedMimeTypes = [
+          'image/jpeg',
+          'image/jpg',
+          'image/png',
+          'image/webp',
+        ];
+        if (!allowedMimeTypes.includes(file.mimetype)) {
+          return callback(
+            new BadRequestException('Only image files are allowed!'),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB per file
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Create a support ticket',
+    description:
+      'Create a new support ticket with optional image attachments. You can upload up to 5 images (max 10MB each). Supported formats: JPG, PNG, WEBP.',
+  })
   @ApiResponse({
     status: 201,
     description: 'Support ticket created successfully',
+    type: CreateTicketResponseDto,
   })
-  @ApiResponse({ status: 400, description: 'Invalid input' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid input or file type not allowed',
+  })
+  @ApiResponse({
+    status: 413,
+    description: 'File too large (max 10MB per file)',
+  })
   async createSupportTicket(
     @Req() req: RequestWithUser,
-    @Body() createDto: CreateSupportTicketDto,
+    @Body() createDto: CreateSupportTicketMultipartDto,
+    @UploadedFiles()
+    files?: { images?: Express.Multer.File[] },
   ) {
     const userId = req.user.id;
+
+    // Upload images to S3 if provided
+    let imageUrls: string[] = [];
+    if (files?.images && files.images.length > 0) {
+      imageUrls = await Promise.all(
+        files.images.map((file) =>
+          this.s3Service.uploadFileToS3(file, 'support-tickets', 'ticket'),
+        ),
+      );
+    }
+
+    // Create the ticket DTO
+    const ticketDto: CreateSupportTicketDto = {
+      subject: createDto.subject,
+      description: createDto.description,
+      reportType: createDto.reportType as any,
+      imageUrls,
+    };
+
+    if (createDto.reportedUserType) {
+      ticketDto.reportedUserType = createDto.reportedUserType as any;
+    }
+    if (createDto.reportedUserId) {
+      ticketDto.reportedUserId = parseInt(createDto.reportedUserId);
+    }
+
     return this.supportTicketService.createTicket(
-      createDto,
+      ticketDto,
       userId,
       UserType.INFLUENCER,
     );
   }
 
   @Get('support-tickets')
-  @ApiOperation({ summary: 'Get my support tickets' })
+  @ApiOperation({
+    summary: 'Get my support tickets',
+    description:
+      'Retrieve all support tickets created by the authenticated influencer. Includes pagination.',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20)',
+    example: 20,
+  })
   @ApiResponse({
     status: 200,
     description: 'Support tickets fetched successfully',
+    type: GetTicketsResponseDto,
   })
-  async getMySupportTickets(@Req() req: RequestWithUser) {
+  async getMySupportTickets(
+    @Req() req: RequestWithUser,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
     const userId = req.user.id;
-    return this.supportTicketService.getMyTickets(userId, UserType.INFLUENCER);
+    const parsedPage = page ? parseInt(page, 10) : 1;
+    const parsedLimit = limit ? parseInt(limit, 10) : 20;
+    return this.supportTicketService.getMyTickets(
+      userId,
+      UserType.INFLUENCER,
+      parsedPage,
+      parsedLimit,
+    );
+  }
+
+  @Post('support-tickets/:id/reply')
+  @UseInterceptors(
+    FileFieldsInterceptor([{ name: 'images', maxCount: 5 }], {
+      fileFilter: (req, file, callback) => {
+        const allowedMimeTypes = [
+          'image/jpeg',
+          'image/jpg',
+          'image/png',
+          'image/webp',
+        ];
+        if (!allowedMimeTypes.includes(file.mimetype)) {
+          return callback(
+            new BadRequestException('Only image files are allowed!'),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB per file
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Reply to a support ticket',
+    description:
+      'Add a reply to your support ticket with optional image attachments. You can upload up to 5 images (max 10MB each). Only the ticket creator can reply.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Support ticket ID',
+    type: 'number',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Reply added successfully',
+    type: CreateReplyResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Ticket not found' })
+  @ApiResponse({
+    status: 403,
+    description: 'Cannot reply to this ticket - not the ticket owner',
+  })
+  @ApiResponse({
+    status: 413,
+    description: 'File too large (max 10MB per file)',
+  })
+  async replyToTicket(
+    @Req() req: RequestWithUser,
+    @Param('id', ParseIntPipe) ticketId: number,
+    @Body() replyDto: CreateTicketReplyMultipartDto,
+    @UploadedFiles()
+    files?: { images?: Express.Multer.File[] },
+  ) {
+    const userId = req.user.id;
+
+    // Upload images to S3 if provided
+    let imageUrls: string[] = [];
+    if (files?.images && files.images.length > 0) {
+      imageUrls = await Promise.all(
+        files.images.map((file) =>
+          this.s3Service.uploadFileToS3(file, 'support-tickets', 'reply'),
+        ),
+      );
+    }
+
+    // Create the reply DTO
+    const ticketReplyDto: CreateTicketReplyDto = {
+      message: replyDto.message,
+      imageUrls,
+    };
+
+    return this.supportTicketService.createReply(
+      ticketId,
+      ticketReplyDto,
+      userId,
+      'influencer',
+    );
+  }
+
+  @Get('support-tickets/:id/replies')
+  @ApiOperation({
+    summary: 'Get all replies for a support ticket',
+    description:
+      'Retrieve all replies for a specific support ticket. Only the ticket creator can view replies.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Support ticket ID',
+    type: 'number',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Replies fetched successfully',
+    type: GetRepliesResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Ticket not found' })
+  @ApiResponse({
+    status: 403,
+    description: 'Cannot view replies for this ticket - not the ticket owner',
+  })
+  async getTicketReplies(
+    @Req() req: RequestWithUser,
+    @Param('id', ParseIntPipe) ticketId: number,
+  ) {
+    const userId = req.user.id;
+    return this.supportTicketService.getTicketReplies(
+      ticketId,
+      userId,
+      'influencer',
+    );
   }
 
   // Pro Subscription Endpoints
@@ -1818,29 +2040,29 @@ export class InfluencerController {
 
   // ==================== Home Page Activity Tracking ====================
 
-  @Post('home-page-activity')
-  @UseGuards(AuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({
-    summary: 'Track influencer home page activity',
-    description: 'Records influencer activity on the home page including app opens, scrolls, and refreshes for analytics purposes',
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'Activity tracked successfully',
-    type: TrackHomePageActivityResponseDto,
-  })
-  @ApiResponse({ status: 400, description: 'Invalid request data' })
-  @ApiResponse({ status: 401, description: 'Unauthorized - Only influencers can track activity' })
-  @ApiResponse({ status: 404, description: 'Influencer not found' })
-  async trackHomePageActivity(
-    @Req() req: RequestWithUser,
-    @Body() data: TrackHomePageActivityDto,
-  ) {
-    if (req.user.userType !== 'influencer') {
-      throw new BadRequestException('Only influencers can track home page activity');
-    }
-    const influencerId = req.user.id;
-    return await this.influencerService.trackHomePageActivity(influencerId, data);
-  }
+  // @Post('home-page-activity')
+  // @UseGuards(AuthGuard)
+  // @ApiBearerAuth()
+  // @ApiOperation({
+  //   summary: 'Track influencer home page activity',
+  //   description: 'Records influencer activity on the home page including app opens, scrolls, and refreshes for analytics purposes',
+  // })
+  // @ApiResponse({
+  //   status: 201,
+  //   description: 'Activity tracked successfully',
+  //   type: TrackHomePageActivityResponseDto,
+  // })
+  // @ApiResponse({ status: 400, description: 'Invalid request data' })
+  // @ApiResponse({ status: 401, description: 'Unauthorized - Only influencers can track activity' })
+  // @ApiResponse({ status: 404, description: 'Influencer not found' })
+  // async trackHomePageActivity(
+  //   @Req() req: RequestWithUser,
+  //   @Body() data: TrackHomePageActivityDto,
+  // ) {
+  //   if (req.user.userType !== 'influencer') {
+  //     throw new BadRequestException('Only influencers can track home page activity');
+  //   }
+  //   const influencerId = req.user.id;
+  //   return await this.influencerService.trackHomePageActivity(influencerId, data);
+  // }
 }

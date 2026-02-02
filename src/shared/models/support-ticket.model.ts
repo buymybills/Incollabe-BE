@@ -5,6 +5,7 @@ import {
   DataType,
   ForeignKey,
   BelongsTo,
+  HasMany,
 } from 'sequelize-typescript';
 import { Influencer } from '../../auth/model/influencer.model';
 import { Brand } from '../../brand/model/brand.model';
@@ -33,6 +34,7 @@ export enum ReportType {
 @Table({
   tableName: 'support_tickets',
   timestamps: true,
+  underscored: false,
 })
 export class SupportTicket extends Model<SupportTicket> {
   @Column({
@@ -47,60 +49,62 @@ export class SupportTicket extends Model<SupportTicket> {
     type: DataType.ENUM(...Object.values(UserType)),
     allowNull: false,
   })
-  userType: UserType;
+  declare userType: UserType;
 
   @ForeignKey(() => Influencer)
   @Column({
     type: DataType.INTEGER,
     allowNull: true,
+    field: 'influencerId',
   })
-  influencerId: number;
+  declare influencerId: number;
 
   @ForeignKey(() => Brand)
   @Column({
     type: DataType.INTEGER,
     allowNull: true,
+    field: 'brandId',
   })
-  brandId: number;
+  declare brandId: number;
 
   // Ticket details
   @Column({
     type: DataType.STRING(255),
     allowNull: false,
   })
-  subject: string;
+  declare subject: string;
 
   @Column({
     type: DataType.TEXT,
     allowNull: false,
   })
-  description: string;
+  declare description: string;
 
   @Column({
     type: DataType.ENUM(...Object.values(ReportType)),
     allowNull: false,
   })
-  reportType: ReportType;
+  declare reportType: ReportType;
 
   @Column({
     type: DataType.ENUM(...Object.values(TicketStatus)),
     allowNull: false,
     defaultValue: TicketStatus.UNRESOLVED,
   })
-  status: TicketStatus;
+  declare status: TicketStatus;
 
   // Reported user (if reporting another user)
   @Column({
     type: DataType.ENUM(...Object.values(UserType)),
     allowNull: true,
   })
-  reportedUserType: UserType;
+  declare reportedUserType: UserType;
 
   @Column({
     type: DataType.INTEGER,
     allowNull: true,
   })
-  reportedUserId: number;
+  declare reportedUserId: number;
 
   // Admin handling
   @ForeignKey(() => Admin)
@@ -108,33 +112,43 @@ export class SupportTicket extends Model<SupportTicket> {
     type: DataType.INTEGER,
     allowNull: true,
   })
-  assignedToAdminId: number;
+  declare assignedToAdminId: number;
 
   @Column({
     type: DataType.TEXT,
     allowNull: true,
   })
-  adminNotes: string;
+  declare adminNotes: string;
 
   @Column({
     type: DataType.TEXT,
     allowNull: true,
   })
-  resolution: string;
+  declare resolution: string;
 
   @Column({
     type: DataType.DATE,
     allowNull: true,
   })
-  resolvedAt: Date;
+  declare resolvedAt: Date;
+
+  @Column({
+    type: DataType.ARRAY(DataType.STRING),
+    allowNull: true,
+    defaultValue: [],
+  })
+  declare imageUrls: string[];
 
   // Associations
   @BelongsTo(() => Influencer)
-  influencer: Influencer;
+  declare influencer: Influencer;
 
   @BelongsTo(() => Brand)
-  brand: Brand;
+  declare brand: Brand;
 
   @BelongsTo(() => Admin)
-  assignedAdmin: Admin;
+  declare assignedAdmin: Admin;
+
+  @HasMany(() => require('./support-ticket-reply.model').SupportTicketReply)
+  declare replies: any[];
 }
