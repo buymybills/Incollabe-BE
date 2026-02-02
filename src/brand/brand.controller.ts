@@ -12,6 +12,7 @@ import {
   UploadedFiles,
   SetMetadata,
   BadRequestException,
+  UnauthorizedException,
   Query,
 } from '@nestjs/common';
 import {
@@ -36,6 +37,7 @@ import type { SignupFiles } from '../types/file-upload.types';
 import type { RequestWithUser } from '../types/request.types';
 import { SupportTicketService } from '../shared/support-ticket.service';
 import { CreateSupportTicketDto } from '../shared/dto/create-support-ticket.dto';
+import { GetMyTicketsDto } from '../shared/dto/get-my-tickets.dto';
 import { CreateTicketReplyDto } from '../shared/dto/create-ticket-reply.dto';
 import { UserType } from '../shared/models/support-ticket.model';
 import {
@@ -559,21 +561,7 @@ export class BrandController {
   @ApiOperation({
     summary: 'Get my support tickets',
     description:
-      'Retrieve all support tickets created by the authenticated brand. Includes pagination.',
-  })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: Number,
-    description: 'Page number (default: 1)',
-    example: 1,
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Items per page (default: 20)',
-    example: 20,
+      'Retrieve all support tickets created by the authenticated brand. Supports filtering by status, report type, and search query with pagination.',
   })
   @ApiResponse({
     status: 200,
@@ -582,17 +570,16 @@ export class BrandController {
   })
   async getMySupportTickets(
     @Req() req: RequestWithUser,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
+    @Query() filters: GetMyTicketsDto,
   ) {
-    const userId = req.user.id;
-    const parsedPage = page ? parseInt(page, 10) : 1;
-    const parsedLimit = limit ? parseInt(limit, 10) : 20;
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new UnauthorizedException('User not authenticated');
+    }
     return this.supportTicketService.getMyTickets(
       userId,
       UserType.BRAND,
-      parsedPage,
-      parsedLimit,
+      filters,
     );
   }
 

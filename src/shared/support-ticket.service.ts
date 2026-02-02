@@ -104,15 +104,47 @@ export class SupportTicketService {
   async getMyTickets(
     userId: number,
     userType: UserType,
-    page: number = 1,
-    limit: number = 20,
+    filters: {
+      status?: TicketStatus;
+      reportType?: ReportType;
+      searchQuery?: string;
+      page?: number;
+      limit?: number;
+    } = {},
   ) {
+    const {
+      status,
+      reportType,
+      searchQuery,
+      page = 1,
+      limit = 20,
+    } = filters;
+
     const whereClause: any = { userType };
 
+    // User-specific filter
     if (userType === UserType.INFLUENCER) {
       whereClause.influencerId = userId;
     } else {
       whereClause.brandId = userId;
+    }
+
+    // Status filter
+    if (status) {
+      whereClause.status = status;
+    }
+
+    // Report type filter
+    if (reportType) {
+      whereClause.reportType = reportType;
+    }
+
+    // Search query (subject and description)
+    if (searchQuery && searchQuery.trim()) {
+      whereClause[Op.or] = [
+        { subject: { [Op.iLike]: `%${searchQuery.trim()}%` } },
+        { description: { [Op.iLike]: `%${searchQuery.trim()}%` } },
+      ];
     }
 
     const offset = (page - 1) * limit;
