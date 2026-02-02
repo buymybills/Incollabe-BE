@@ -234,13 +234,14 @@ export class InfluencerProfileScoringService {
     // Convert to 0-100 scale for UI
     const scoreOut100 = score * 10;
 
-    // If all scores are 0 (no data available), return simplified response
+    // If all scores are 0 (no demographic data available), return simplified response
+    // Note: onlinePresence data may still be available from Instagram API
     if (scoreOut100 === 0 && followerAuthenticity.score === 0 && demographicsSnapshot.score === 0 && geoRelevance.score === 0) {
       return {
         score: 0,
         maxScore: 100,
         facebookPageConnected: false,
-        message: 'No audience data available. Please sync your Instagram account to get audience quality metrics.',
+        message: 'Basic audience data available. Connect your Instagram to a Facebook Page to unlock detailed demographics (age, gender, location) for better audience targeting.',
         onlinePresence,
       } as any;
     }
@@ -260,76 +261,23 @@ export class InfluencerProfileScoringService {
 
   /**
    * 1.1 Follower Authenticity (65%)
-   * Uses stored 30-day snapshots from credibility scoring
+   * NOTE: Instagram Graph API does NOT provide active/real followers data.
+   * Therefore, we ALWAYS assign full points (10/10) as we cannot measure authenticity.
    */
   private async calculateFollowerAuthenticity(influencer: Influencer): Promise<{ score: number; details: any }> {
-    const allSnapshots = await this.instagramProfileAnalysisModel.findAll({
-      where: { influencerId: influencer.id },
-      order: [['syncNumber', 'DESC']],
-    });
-
-    // Filter to only complete snapshots with follower data
-    const snapshots = allSnapshots.filter(s => s.syncNumber != null && s.activeFollowersPercentage != null).slice(0, 2);
-
-    if (snapshots.length === 0 || !snapshots[0].activeFollowersPercentage) {
-      return {
-        score: 0,
-        details: {
-          authenticityPercentage: 0,
-          message: 'No sync data available',
-        },
-      };
-    }
-
-    const latestSync = snapshots[0];
-    const previousSync = snapshots.length > 1 ? snapshots[1] : null;
-
-    const authenticityPercentage = Number(latestSync.activeFollowersPercentage) || 0;
-    const activeFollowers = latestSync.activeFollowers || 0;
-    const totalFollowers = latestSync.totalFollowers || 0;
-
-    // Calculate change from previous sync
-    let change = 0;
-    if (previousSync && previousSync.activeFollowersPercentage) {
-      const previousPercentage = Number(previousSync.activeFollowersPercentage) || 0;
-      change = Number((authenticityPercentage - previousPercentage).toFixed(2));
-    }
-
-    // Convert authenticity % to 0-10 scale
-    // 25%+ active = 10/10, scales down linearly
-    const score = Math.min((authenticityPercentage / 25) * 10, 10);
-
-    // Determine rating title based on percentage
-    let rating = '';
-    if (authenticityPercentage >= 70) {
-      rating = 'Excellent Follower Base';
-    } else if (authenticityPercentage >= 50) {
-      rating = 'Strong Follower Base';
-    } else if (authenticityPercentage >= 30) {
-      rating = 'Good Follower Base';
-    } else if (authenticityPercentage >= 15) {
-      rating = 'Moderate Follower Base';
-    } else {
-      rating = 'Weak Follower Base';
-    }
-
-    // Generate AI feedback (4-6 words)
-    const aiFeedback = await this.geminiAIService.generateFollowerAuthenticityFeedback({
-      authenticityPercent: authenticityPercentage,
-      change,
-      rating,
-    });
-
+    // Instagram API doesn't provide follower authenticity metrics
+    // Always return full score (10/10) - benefit of the doubt
     return {
-      score: Number(score.toFixed(2)),
+      score: 10,
       details: {
-        authenticityPercentage: Number(authenticityPercentage.toFixed(2)),
-        totalFollowers,
-        activeFollowers,
-        rating,
-        aiFeedback,
-        change,
-        syncDate: latestSync.syncDate,
+        authenticityPercentage: 100,
+        totalFollowers: influencer.instagramFollowersCount || 0,
+        activeFollowers: influencer.instagramFollowersCount || 0,
+        rating: 'Not Available',
+        aiFeedback: 'Follower authenticity data not available from Instagram API',
+        change: 0,
+        syncDate: null,
+        message: 'Instagram API does not provide follower authenticity metrics - full score assigned',
       },
     };
   }
