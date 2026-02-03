@@ -3590,7 +3590,7 @@ export class InfluencerProfileScoringService {
       },
       order: [['timestamp', 'DESC']],
       limit: 3,
-      attributes: ['id', 'mediaUrl', 'timestamp'],
+      attributes: ['id', 'mediaUrl', 'mediaType', 'timestamp'],
       include: [{
         model: this.instagramMediaInsightModel,
         as: 'insights',
@@ -3612,6 +3612,7 @@ export class InfluencerProfileScoringService {
       },
       topPosts: topPosts.map((post) => ({
         mediaUrl: post.mediaUrl,
+        mediaType: post.mediaType || 'IMAGE',
         date: new Date(post.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         views: post.insights?.[0]?.reach || 0,
         followersGained: followersPerPost,
@@ -3663,7 +3664,7 @@ export class InfluencerProfileScoringService {
       },
       order: [['timestamp', 'DESC']],
       limit: 3,
-      attributes: ['id', 'mediaUrl', 'timestamp'],
+      attributes: ['id', 'mediaUrl', 'mediaType', 'timestamp'],
       include: [{
         model: this.instagramMediaInsightModel,
         as: 'insights',
@@ -3685,6 +3686,7 @@ export class InfluencerProfileScoringService {
       },
       topPosts: topPosts.map((post) => ({
         mediaUrl: post.mediaUrl,
+        mediaType: post.mediaType || 'IMAGE',
         date: new Date(post.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         views: post.insights?.[0]?.reach || 0,
         followersGained: followersPerPost,
