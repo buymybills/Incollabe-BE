@@ -1,17 +1,27 @@
-import { Table, Column, Model, DataType, ForeignKey, BelongsTo, CreatedAt, UpdatedAt } from 'sequelize-typescript';
+import {
+  Table,
+  Column,
+  Model,
+  DataType,
+  ForeignKey,
+  BelongsTo,
+  PrimaryKey,
+  AutoIncrement,
+  CreatedAt,
+  UpdatedAt,
+} from 'sequelize-typescript';
 import { Influencer } from '../../auth/model/influencer.model';
 import { InstagramProfileAnalysis } from './instagram-profile-analysis.model';
 
 @Table({
   tableName: 'influencer_profile_scores',
   timestamps: true,
+  underscored: true,
 })
 export class InfluencerProfileScore extends Model {
-  @Column({
-    type: DataType.INTEGER,
-    primaryKey: true,
-    autoIncrement: true,
-  })
+  @PrimaryKey
+  @AutoIncrement
+  @Column(DataType.INTEGER)
   declare id: number;
 
   @ForeignKey(() => Influencer)
@@ -21,14 +31,11 @@ export class InfluencerProfileScore extends Model {
   })
   declare influencerId: number;
 
-  @BelongsTo(() => Influencer)
-  declare influencer: Influencer;
-
   @Column({
     type: DataType.STRING(255),
     allowNull: true,
   })
-  declare instagramUsername: string | null;
+  declare instagramUsername: string;
 
   // Overall Score
   @Column({
@@ -47,19 +54,19 @@ export class InfluencerProfileScore extends Model {
     type: DataType.DECIMAL(5, 2),
     allowNull: true,
   })
-  declare scoreChange: number | null;
+  declare scoreChange: number;
 
   @Column({
     type: DataType.STRING(50),
     allowNull: true,
   })
-  declare grade: string | null;
+  declare grade: string;
 
   @Column({
     type: DataType.TEXT,
     allowNull: true,
   })
-  declare profileSummary: string | null;
+  declare profileSummary: string;
 
   @Column({
     type: DataType.BOOLEAN,
@@ -72,7 +79,7 @@ export class InfluencerProfileScore extends Model {
     type: DataType.DECIMAL(5, 2),
     allowNull: true,
   })
-  declare audienceQualityScore: number | null;
+  declare audienceQualityScore: number;
 
   @Column({
     type: DataType.INTEGER,
@@ -84,20 +91,20 @@ export class InfluencerProfileScore extends Model {
     type: DataType.JSONB,
     allowNull: true,
   })
-  declare audienceQualityBreakdown: Record<string, any> | null;
+  declare audienceQualityBreakdown: object;
 
   @Column({
     type: DataType.JSONB,
     allowNull: true,
   })
-  declare audienceQualityOnlinePresence: Record<string, any> | null;
+  declare audienceQualityOnlinePresence: object;
 
   // Category 2: Content Relevance
   @Column({
     type: DataType.DECIMAL(5, 2),
     allowNull: true,
   })
-  declare contentRelevanceScore: number | null;
+  declare contentRelevanceScore: number;
 
   @Column({
     type: DataType.INTEGER,
@@ -109,14 +116,14 @@ export class InfluencerProfileScore extends Model {
     type: DataType.JSONB,
     allowNull: true,
   })
-  declare contentRelevanceDetails: Record<string, any> | null;
+  declare contentRelevanceDetails: object;
 
   // Category 3: Content Quality
   @Column({
     type: DataType.DECIMAL(5, 2),
     allowNull: true,
   })
-  declare contentQualityScore: number | null;
+  declare contentQualityScore: number;
 
   @Column({
     type: DataType.INTEGER,
@@ -128,14 +135,14 @@ export class InfluencerProfileScore extends Model {
     type: DataType.JSONB,
     allowNull: true,
   })
-  declare contentQualityDetails: Record<string, any> | null;
+  declare contentQualityDetails: object;
 
   // Category 4: Engagement Strength
   @Column({
     type: DataType.DECIMAL(5, 2),
     allowNull: true,
   })
-  declare engagementStrengthScore: number | null;
+  declare engagementStrengthScore: number;
 
   @Column({
     type: DataType.INTEGER,
@@ -147,14 +154,14 @@ export class InfluencerProfileScore extends Model {
     type: DataType.JSONB,
     allowNull: true,
   })
-  declare engagementStrengthDetails: Record<string, any> | null;
+  declare engagementStrengthDetails: object;
 
   // Category 5: Growth Momentum
   @Column({
     type: DataType.DECIMAL(5, 2),
     allowNull: true,
   })
-  declare growthMomentumScore: number | null;
+  declare growthMomentumScore: number;
 
   @Column({
     type: DataType.INTEGER,
@@ -166,14 +173,14 @@ export class InfluencerProfileScore extends Model {
     type: DataType.JSONB,
     allowNull: true,
   })
-  declare growthMomentumDetails: Record<string, any> | null;
+  declare growthMomentumDetails: object;
 
-  // Category 6: Monetisation
+  // Category 6: Monetisation Potential
   @Column({
     type: DataType.DECIMAL(5, 2),
     allowNull: true,
   })
-  declare monetisationScore: number | null;
+  declare monetisationScore: number;
 
   @Column({
     type: DataType.INTEGER,
@@ -185,7 +192,7 @@ export class InfluencerProfileScore extends Model {
     type: DataType.JSONB,
     allowNull: true,
   })
-  declare monetisationDetails: Record<string, any> | null;
+  declare monetisationDetails: object;
 
   // Metadata
   @ForeignKey(() => InstagramProfileAnalysis)
@@ -193,10 +200,7 @@ export class InfluencerProfileScore extends Model {
     type: DataType.INTEGER,
     allowNull: true,
   })
-  declare snapshotId: number | null;
-
-  @BelongsTo(() => InstagramProfileAnalysis)
-  declare snapshot: InstagramProfileAnalysis;
+  declare snapshotId: number;
 
   @Column({
     type: DataType.DATE,
@@ -214,14 +218,21 @@ export class InfluencerProfileScore extends Model {
   @CreatedAt
   @Column({
     type: DataType.DATE,
-    defaultValue: DataType.NOW,
+    field: 'created_at',
   })
   declare createdAt: Date;
 
   @UpdatedAt
   @Column({
     type: DataType.DATE,
-    defaultValue: DataType.NOW,
+    field: 'updated_at',
   })
   declare updatedAt: Date;
+
+  // Associations
+  @BelongsTo(() => Influencer)
+  declare influencer: Influencer;
+
+  @BelongsTo(() => InstagramProfileAnalysis)
+  declare snapshot: InstagramProfileAnalysis;
 }

@@ -7,6 +7,7 @@ import { InstagramMediaInsight } from '../models/instagram-media-insight.model';
 import { InstagramMedia } from '../models/instagram-media.model';
 import { InstagramProfileGrowth } from '../models/instagram-profile-growth.model';
 import { InstagramOnlineFollowers } from '../models/instagram-online-followers.model';
+import { InfluencerProfileScore } from '../models/influencer-profile-score.model';
 import { CampaignApplication } from '../../campaign/models/campaign-application.model';
 import { GeminiAIService } from './gemini-ai.service';
 import { InstagramService } from './instagram.service';
@@ -15,7 +16,7 @@ import { InstagramService } from './instagram.service';
 
 export interface ProfileScore {
   totalScore: number; // 0-100 (average of all 6 categories)
-  maxScore: 100;
+  maxScore: number;
   scoreChange: number; // Change from previous week (e.g., -3, +5)
   grade: string; // "Strong Profile", "Good Profile", "Average Profile", or "Weak Profile"
   profileSummary: string; // AI-generated summary (e.g., "Strong in: niche clarity, engagement. Focus on improving: growth momentum.")
@@ -36,7 +37,7 @@ export interface ProfileScore {
 // Category 1: Audience Quality (100 points for UI display)
 export interface AudienceQualityScore {
   score: number; // 0-100 (for UI display)
-  maxScore: 100;
+  maxScore: number;
   facebookPageConnected: boolean; // Indicates if Facebook Page is connected for demographics
   message?: string; // Optional message when no data available
   breakdown?: {
@@ -53,7 +54,7 @@ export interface AudienceQualityScore {
 // Category 2: Content Relevance (100 points for UI display)
 export interface ContentRelevanceScore {
   score: number; // 0-100 (for UI display)
-  maxScore: 100;
+  maxScore: number;
   details: {
     rating: string;
     totalPostsAnalyzed: number;
@@ -79,7 +80,7 @@ export interface ContentRelevanceScore {
 // Category 3: Content Quality (100 points for UI display)
 export interface ContentQualityScore {
   score: number; // 0-100 (for UI display)
-  maxScore: 100;
+  maxScore: number;
   breakdown: {
     visualQuality: { score: number; weight: 60; details: any };
     colorPaletteMood: { score: number; weight: 20; details: any };
@@ -92,7 +93,7 @@ export interface ContentQualityScore {
 // Category 4: Engagement Strength (100 points for UI display)
 export interface EngagementStrengthScore {
   score: number; // 0-100 (for UI display)
-  maxScore: 100;
+  maxScore: number;
   breakdown: {
     engagementOverview: { score: number; weight: 70; details: any };
     performanceConsistency: { score: number; weight: 30; details: any };
@@ -102,7 +103,7 @@ export interface EngagementStrengthScore {
 // Category 5: Growth Momentum (100 points for UI display)
 export interface GrowthMomentumScore {
   score: number; // 0-100 (for UI display)
-  maxScore: 100;
+  maxScore: number;
   breakdown: {
     growthTrend: { score: number; weight: 60; details: any };
     postingBehaviour: { score: number; weight: 40; details: any };
@@ -112,7 +113,7 @@ export interface GrowthMomentumScore {
 // Category 6: Monetisation (100 points for UI display)
 export interface MonetisationScore {
   score: number; // 0-100 (for UI display)
-  maxScore: 100;
+  maxScore: number;
   breakdown: {
     monetisationSignals: { score: number; weight: 50; details: any };
     brandTrustSignal: { score: number; weight: 30; details: any };
@@ -137,18 +138,107 @@ export class InfluencerProfileScoringService {
     private instagramOnlineFollowersModel: typeof InstagramOnlineFollowers,
     @InjectModel(CampaignApplication)
     private campaignApplicationModel: typeof CampaignApplication,
+    @InjectModel(InfluencerProfileScore)
+    private influencerProfileScoreModel: typeof InfluencerProfileScore,
     private geminiAIService: GeminiAIService,
     private instagramService: InstagramService,
   ) {}
 
   /**
-   * MASTER API: Get complete profile score with all 6 categories
+   * MASTER API: Get complete profile score with all 6 categories (WITH CACHING)
+   *
+   * Caching Strategy:
+   * - Returns cached score if valid (not expired and snapshot hasn't changed)
+   * - Recalculates only when:
+   *   1. No cache exists
+   *   2. Cache is expired (validUntil < now)
+   *   3. New Instagram snapshot added (snapshotId changed)
    */
-  async getCompleteProfileScore(influencerId: number): Promise<ProfileScore> {
+  async getCompleteProfileScore(influencerId: number, forceRecalculate = false): Promise<ProfileScore> {
     const influencer = await this.influencerModel.findByPk(influencerId);
     if (!influencer) {
       throw new NotFoundException(`Influencer with ID ${influencerId} not found`);
     }
+
+    // Get latest Instagram snapshot
+    const latestSnapshot = await this.instagramProfileAnalysisModel.findOne({
+      where: { influencerId },
+      order: [['createdAt', 'DESC']],
+    });
+
+    // Check for valid cached score
+    if (!forceRecalculate) {
+      const cachedScore = await this.influencerProfileScoreModel.findOne({
+        where: {
+          influencerId,
+          validUntil: { [Op.gt]: new Date() }, // Not expired
+        },
+        order: [['calculatedAt', 'DESC']],
+      });
+
+      // Return cached score if:
+      // 1. Cache exists and is valid
+      // 2. Snapshot ID matches (or both are null)
+      if (cachedScore) {
+        const snapshotMatches =
+          (!latestSnapshot && !cachedScore.snapshotId) ||
+          (latestSnapshot && cachedScore.snapshotId === latestSnapshot.id);
+
+        if (snapshotMatches) {
+          console.log(`✅ Returning cached profile score for influencer ${influencerId} (calculated at ${cachedScore.calculatedAt})`);
+
+          return {
+            totalScore: Number(cachedScore.totalScore),
+            maxScore: cachedScore.maxScore || 100,
+            scoreChange: Number(cachedScore.scoreChange || 0),
+            grade: cachedScore.grade || '',
+            profileSummary: cachedScore.profileSummary || '',
+            facebookPageConnected: cachedScore.facebookPageConnected || false,
+            categories: {
+              audienceQuality: {
+                score: Number(cachedScore.audienceQualityScore || 0),
+                maxScore: cachedScore.audienceQualityMaxScore || 100,
+                breakdown: cachedScore.audienceQualityBreakdown as any,
+                onlinePresence: cachedScore.audienceQualityOnlinePresence as any,
+                facebookPageConnected: cachedScore.facebookPageConnected || false,
+              },
+              contentRelevance: {
+                score: Number(cachedScore.contentRelevanceScore || 0),
+                maxScore: cachedScore.contentRelevanceMaxScore || 100,
+                ...(cachedScore.contentRelevanceDetails as any),
+              },
+              contentQuality: {
+                score: Number(cachedScore.contentQualityScore || 0),
+                maxScore: cachedScore.contentQualityMaxScore || 100,
+                ...(cachedScore.contentQualityDetails as any),
+              },
+              engagementStrength: {
+                score: Number(cachedScore.engagementStrengthScore || 0),
+                maxScore: cachedScore.engagementStrengthMaxScore || 100,
+                ...(cachedScore.engagementStrengthDetails as any),
+              },
+              growthMomentum: {
+                score: Number(cachedScore.growthMomentumScore || 0),
+                maxScore: cachedScore.growthMomentumMaxScore || 100,
+                ...(cachedScore.growthMomentumDetails as any),
+              },
+              monetisation: {
+                score: Number(cachedScore.monetisationScore || 0),
+                maxScore: cachedScore.monetisationMaxScore || 100,
+                ...(cachedScore.monetisationDetails as any),
+              },
+            },
+            calculatedAt: cachedScore.calculatedAt,
+            influencerId,
+            instagramUsername: influencer.instagramUsername || '',
+          };
+        } else {
+          console.log(`🔄 Snapshot changed for influencer ${influencerId}, recalculating score...`);
+        }
+      }
+    }
+
+    console.log(`🔄 Calculating new profile score for influencer ${influencerId}...`);
 
     // Calculate all 6 categories in parallel
     const [
@@ -193,6 +283,46 @@ export class InfluencerProfileScoringService {
       monetisation,
     });
 
+    const calculatedAt = new Date();
+    const validUntil = new Date();
+    validUntil.setDate(validUntil.getDate() + 15); // Valid for 15 days
+
+    // Save to cache
+    await this.influencerProfileScoreModel.create({
+      influencerId,
+      instagramUsername: influencer.instagramUsername || '',
+      totalScore: Number(totalScore.toFixed(2)),
+      maxScore: 100,
+      scoreChange,
+      grade,
+      profileSummary,
+      facebookPageConnected: audienceQuality.facebookPageConnected || false,
+      audienceQualityScore: audienceQuality.score,
+      audienceQualityMaxScore: audienceQuality.maxScore,
+      audienceQualityBreakdown: audienceQuality.breakdown,
+      audienceQualityOnlinePresence: audienceQuality.onlinePresence,
+      contentRelevanceScore: contentRelevance.score,
+      contentRelevanceMaxScore: contentRelevance.maxScore,
+      contentRelevanceDetails: contentRelevance as any,
+      contentQualityScore: contentQuality.score,
+      contentQualityMaxScore: contentQuality.maxScore,
+      contentQualityDetails: contentQuality as any,
+      engagementStrengthScore: engagementStrength.score,
+      engagementStrengthMaxScore: engagementStrength.maxScore,
+      engagementStrengthDetails: engagementStrength as any,
+      growthMomentumScore: growthMomentum.score,
+      growthMomentumMaxScore: growthMomentum.maxScore,
+      growthMomentumDetails: growthMomentum as any,
+      monetisationScore: monetisation.score,
+      monetisationMaxScore: monetisation.maxScore,
+      monetisationDetails: monetisation as any,
+      snapshotId: latestSnapshot?.id || null,
+      calculatedAt,
+      validUntil,
+    });
+
+    console.log(`✅ Profile score calculated and cached for influencer ${influencerId} (valid until ${validUntil})`);
+
     return {
       totalScore: Number(totalScore.toFixed(2)),
       maxScore: 100,
@@ -208,7 +338,7 @@ export class InfluencerProfileScoringService {
         growthMomentum,
         monetisation,
       },
-      calculatedAt: new Date(),
+      calculatedAt,
       influencerId,
       instagramUsername: influencer.instagramUsername || '',
     };
