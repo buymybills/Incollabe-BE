@@ -32,6 +32,8 @@ import { GeminiAIService } from './services/gemini-ai.service';
 import { AppReviewController } from './controllers/app-review.controller';
 import { AppReviewService } from './services/app-review.service';
 import { InfluencerProfileScoringController } from './controllers/influencer-profile-scoring.controller';
+import { CampusAmbassadorController } from './controllers/campus-ambassador.controller';
+import { CampusAmbassadorService } from './services/campus-ambassador.service';
 import { IsValidUsernameConstraint } from './validators/is-valid-username.validator';
 import { RazorpayService } from './razorpay.service';
 import { Otp } from '../auth/model/otp.model';
@@ -51,6 +53,7 @@ import { InstagramProfileAnalysis } from './models/instagram-profile-analysis.mo
 import { InstagramOnlineFollowers } from './models/instagram-online-followers.model';
 import { InfluencerCredibilityScore } from './models/influencer-credibility-score.model';
 import { InfluencerProfileScore } from './models/influencer-profile-score.model';
+import { CampusAmbassador } from './models/campus-ambassador.model';
 import { AppReviewRequest } from './models/app-review-request.model';
 import { Campaign } from '../campaign/models/campaign.model';
 import { CampaignApplication } from '../campaign/models/campaign-application.model';
@@ -86,6 +89,7 @@ import { AppVersionService } from './services/app-version.service';
       InstagramOnlineFollowers,
       InfluencerCredibilityScore,
       InfluencerProfileScore,
+      CampusAmbassador,
       AppReviewRequest,
       Campaign,
       CampaignApplication,
@@ -94,7 +98,16 @@ import { AppVersionService } from './services/app-version.service';
       AppVersion,
     ]),
   ],
-  controllers: [SearchController, ChatController, KeyBackupController, InstagramController, AppReviewController, InfluencerProfileScoringController, ConfigController],
+  controllers: [
+    SearchController,
+    ChatController,
+    KeyBackupController,
+    InstagramController,
+    AppReviewController,
+    InfluencerProfileScoringController,
+    CampusAmbassadorController,
+    ConfigController,
+  ],
   providers: [
     SmsService,
     S3Service,
@@ -123,6 +136,7 @@ import { AppVersionService } from './services/app-version.service';
     InfluencerProfileScoringService,
     GeminiAIService,
     AppReviewService,
+    CampusAmbassadorService,
     DeviceTokenService,
     AppVersionService,
   ],
