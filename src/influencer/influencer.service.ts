@@ -328,6 +328,9 @@ export class InfluencerService {
       // Verification status (available for both public and private)
       verificationStatus,
 
+      // Instagram connection status with sync status
+      instagram: await this.getInstagramSyncStatus(influencer),
+
       // Collaboration costs (public)
       collaborationCosts: influencer.collaborationCosts || {},
 
@@ -530,6 +533,15 @@ export class InfluencerService {
           isPhoneVerified: influencer.isPhoneVerified,
           isWhatsappVerified: influencer.isWhatsappVerified,
           isProfileCompleted: !!influencer.instagramUserId || !!influencer.instagramAccessToken, // True if Instagram is connected
+        },
+        instagram: {
+          ...baseProfile.instagram,
+          tokenExpiresAt: influencer.instagramTokenExpiresAt
+            ? influencer.instagramTokenExpiresAt.toISOString()
+            : null,
+          followersCount: influencer.instagramFollowersCount || 0,
+          followsCount: influencer.instagramFollowsCount || 0,
+          mediaCount: influencer.instagramMediaCount || 0,
         },
         proSubscription: {
           isPro,
@@ -2321,6 +2333,53 @@ export class InfluencerService {
 
       await this.customNicheModel.bulkCreate(customNicheData);
     }
+  }
+
+  /**
+   * Get Instagram connection status with sync status
+   */
+  private async getInstagramSyncStatus(influencer: Influencer) {
+    const isConnected = !!(influencer.instagramUserId && influencer.instagramAccessToken);
+
+    let syncNeeded = false;
+    let lastSyncDate: string | null = null;
+    let daysSinceLastSync: number | null = null;
+
+    if (isConnected) {
+      // Fetch the latest Instagram profile analysis
+      const latestAnalysis = await this.instagramProfileAnalysisModel.findOne({
+        where: { influencerId: influencer.id },
+        order: [['syncDate', 'DESC']],
+      });
+
+      if (latestAnalysis && latestAnalysis.syncDate) {
+        lastSyncDate = latestAnalysis.syncDate.toISOString();
+
+        // Calculate days since last sync
+        const now = new Date();
+        const lastSync = new Date(latestAnalysis.syncDate);
+        const diffInMs = now.getTime() - lastSync.getTime();
+        daysSinceLastSync = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+
+        // Sync needed if 15 or more days have passed
+        syncNeeded = daysSinceLastSync >= 15;
+      } else {
+        // No sync data found - sync is needed
+        syncNeeded = true;
+        daysSinceLastSync = null;
+      }
+    }
+
+    return {
+      isConnected,
+      username: influencer.instagramUsername || null,
+      connectedAt: influencer.instagramConnectedAt
+        ? influencer.instagramConnectedAt.toISOString()
+        : null,
+      syncNeeded,
+      lastSyncDate,
+      daysSinceLastSync,
+    };
   }
 
   private async calculatePlatformMetrics(influencerId: number) {
