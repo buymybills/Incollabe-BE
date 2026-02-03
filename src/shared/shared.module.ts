@@ -50,6 +50,7 @@ import { InstagramProfileGrowth } from './models/instagram-profile-growth.model'
 import { InstagramProfileAnalysis } from './models/instagram-profile-analysis.model';
 import { InstagramOnlineFollowers } from './models/instagram-online-followers.model';
 import { InfluencerCredibilityScore } from './models/influencer-credibility-score.model';
+import { InfluencerProfileScore } from './models/influencer-profile-score.model';
 import { AppReviewRequest } from './models/app-review-request.model';
 import { Campaign } from '../campaign/models/campaign.model';
 import { CampaignApplication } from '../campaign/models/campaign-application.model';
@@ -84,6 +85,7 @@ import { AppVersionService } from './services/app-version.service';
       InstagramProfileAnalysis,
       InstagramOnlineFollowers,
       InfluencerCredibilityScore,
+      InfluencerProfileScore,
       AppReviewRequest,
       Campaign,
       CampaignApplication,
