@@ -2346,9 +2346,10 @@ export class InfluencerService {
     let daysSinceLastSync: number | null = null;
 
     if (isConnected) {
-      // Fetch the latest Instagram profile analysis
+      // Fetch the latest Instagram profile analysis with non-null syncDate
+      // Filter out demographics-only records that don't have syncDate
       const latestAnalysis = await this.instagramProfileAnalysisModel.findOne({
-        where: { influencerId: influencer.id },
+        where: literal(`influencer_id = ${influencer.id} AND sync_date IS NOT NULL`),
         order: [['syncDate', 'DESC']],
       });
 
