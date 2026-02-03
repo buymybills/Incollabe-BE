@@ -219,6 +219,8 @@ export class MaxxSubscriptionAdminService {
       sortOrder = 'DESC',
       startDate,
       endDate,
+      validTillStartDate,
+      validTillEndDate,
     } = filters;
 
     const offset = (page - 1) * limit;
@@ -261,7 +263,7 @@ export class MaxxSubscriptionAdminService {
       }
     }
 
-    // Date range filter
+    // Date range filter for subscription creation date
     if (startDate || endDate) {
       whereClause.createdAt = {};
       if (startDate) {
@@ -293,6 +295,8 @@ export class MaxxSubscriptionAdminService {
       orderField = [['startDate', sortOrder]];
     } else if (sortBy === 'validTill') {
       orderField = [['currentPeriodEnd', sortOrder]];
+    } else if (sortBy === 'paymentType') {
+      orderField = [['autoRenew', sortOrder]];
     }
 
     // Get subscriptions with influencer details
@@ -304,14 +308,12 @@ export class MaxxSubscriptionAdminService {
           model: Influencer,
           as: 'influencer',
           attributes: ['id', 'name', 'username', 'profileImage', 'cityId'],
-          where: Object.keys(influencerWhereClause).length > 0
-            ? influencerWhereClause
-            : undefined,
-          required: Object.keys(influencerWhereClause).length > 0,
+          required: true,
           include: [
             {
               model: this.cityModel,
               attributes: ['name'],
+              required: false,
             },
           ],
         },
@@ -463,7 +465,7 @@ export class MaxxSubscriptionAdminService {
           attributes: ['id', 'name', 'username', 'profileImage', 'isVerified', 'cityId'],
           include: [
             {
-              model: this.cityModel,
+              model: City,
               attributes: ['name'],
             },
           ],

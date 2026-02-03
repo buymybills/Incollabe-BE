@@ -155,7 +155,7 @@ export class GetMaxxSubscriptionsDto {
 
   @ApiProperty({
     description: 'Sort by field',
-    enum: ['usageMonths', 'validTill', 'createdAt'],
+    enum: ['usageMonths', 'validTill', 'paymentType', 'createdAt'],
     required: false,
     example: 'usageMonths',
   })
@@ -172,7 +172,7 @@ export class GetMaxxSubscriptionsDto {
   sortOrder?: 'ASC' | 'DESC';
 
   @ApiProperty({
-    description: 'Start date for filtering (YYYY-MM-DD)',
+    description: 'Start date for filtering subscription creation date (YYYY-MM-DD)',
     required: false,
     example: '2025-06-01',
   })
@@ -181,13 +181,31 @@ export class GetMaxxSubscriptionsDto {
   startDate?: string;
 
   @ApiProperty({
-    description: 'End date for filtering (YYYY-MM-DD)',
+    description: 'End date for filtering subscription creation date (YYYY-MM-DD)',
     required: false,
     example: '2025-10-31',
   })
   @IsOptional()
   @IsDateString()
   endDate?: string;
+
+  @ApiProperty({
+    description: 'Start date for filtering by valid till date (YYYY-MM-DD)',
+    required: false,
+    example: '2025-10-01',
+  })
+  @IsOptional()
+  @IsDateString()
+  validTillStartDate?: string;
+
+  @ApiProperty({
+    description: 'End date for filtering by valid till date (YYYY-MM-DD)',
+    required: false,
+    example: '2025-12-31',
+  })
+  @IsOptional()
+  @IsDateString()
+  validTillEndDate?: string;
 }
 
 export class MaxxSubscriptionItemDto {

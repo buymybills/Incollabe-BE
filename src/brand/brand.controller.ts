@@ -12,6 +12,7 @@ import {
   UploadedFiles,
   SetMetadata,
   BadRequestException,
+  UnauthorizedException,
   Query,
 } from '@nestjs/common';
 import {
@@ -22,6 +23,7 @@ import {
   ApiConsumes,
   ApiBody,
   ApiQuery,
+  ApiParam,
 } from '@nestjs/swagger';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { BrandService } from './brand.service';
@@ -35,7 +37,20 @@ import type { SignupFiles } from '../types/file-upload.types';
 import type { RequestWithUser } from '../types/request.types';
 import { SupportTicketService } from '../shared/support-ticket.service';
 import { CreateSupportTicketDto } from '../shared/dto/create-support-ticket.dto';
+import { GetMyTicketsDto } from '../shared/dto/get-my-tickets.dto';
+import { CreateTicketReplyDto } from '../shared/dto/create-ticket-reply.dto';
 import { UserType } from '../shared/models/support-ticket.model';
+import {
+  CreateSupportTicketMultipartDto,
+  CreateTicketReplyMultipartDto,
+} from '../shared/dto/support-ticket-multipart.dto';
+import {
+  CreateTicketResponseDto,
+  CreateReplyResponseDto,
+  GetTicketsResponseDto,
+  GetRepliesResponseDto,
+} from '../shared/dto/support-ticket-response.dto';
+import { S3Service } from '../shared/s3.service';
 import { MaxCampaignPaymentService } from '../campaign/services/max-campaign-payment.service';
 import { VerifyMaxCampaignPaymentDto } from '../campaign/dto/max-campaign.dto';
 import { InviteOnlyPaymentService } from '../campaign/services/invite-only-payment.service';
@@ -51,6 +66,7 @@ export class BrandController {
     private readonly supportTicketService: SupportTicketService,
     private readonly maxCampaignPaymentService: MaxCampaignPaymentService,
     private readonly inviteOnlyPaymentService: InviteOnlyPaymentService,
+    private readonly s3Service: S3Service,
   ) {}
 
   @Get('company-types')
@@ -460,33 +476,227 @@ export class BrandController {
 
   // Support Ticket endpoints
   @Post('support-ticket')
-  @ApiOperation({ summary: 'Create a support ticket' })
+  @UseInterceptors(
+    FileFieldsInterceptor([{ name: 'images', maxCount: 5 }], {
+      fileFilter: (req, file, callback) => {
+        const allowedMimeTypes = [
+          'image/jpeg',
+          'image/jpg',
+          'image/png',
+          'image/webp',
+        ];
+        if (!allowedMimeTypes.includes(file.mimetype)) {
+          return callback(
+            new BadRequestException('Only image files are allowed!'),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB per file
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Create a support ticket',
+    description:
+      'Create a new support ticket with optional image attachments. You can upload up to 5 images (max 10MB each). Supported formats: JPG, PNG, WEBP.',
+  })
   @ApiResponse({
     status: 201,
     description: 'Support ticket created successfully',
+    type: CreateTicketResponseDto,
   })
-  @ApiResponse({ status: 400, description: 'Invalid input' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid input or file type not allowed',
+  })
+  @ApiResponse({
+    status: 413,
+    description: 'File too large (max 10MB per file)',
+  })
   async createSupportTicket(
     @Req() req: RequestWithUser,
-    @Body() createDto: CreateSupportTicketDto,
+    @Body() createDto: CreateSupportTicketMultipartDto,
+    @UploadedFiles()
+    files?: { images?: Express.Multer.File[] },
   ) {
     const userId = req.user.id;
+
+    // Upload images to S3 if provided
+    let imageUrls: string[] = [];
+    if (files?.images && files.images.length > 0) {
+      imageUrls = await Promise.all(
+        files.images.map((file) =>
+          this.s3Service.uploadFileToS3(file, 'support-tickets', 'ticket'),
+        ),
+      );
+    }
+
+    // Create the ticket DTO
+    const ticketDto: CreateSupportTicketDto = {
+      subject: createDto.subject,
+      description: createDto.description,
+      reportType: createDto.reportType as any,
+      imageUrls,
+    };
+
+    if (createDto.reportedUserType) {
+      ticketDto.reportedUserType = createDto.reportedUserType as any;
+    }
+    if (createDto.reportedUserId) {
+      ticketDto.reportedUserId = parseInt(createDto.reportedUserId);
+    }
+
     return this.supportTicketService.createTicket(
-      createDto,
+      ticketDto,
       userId,
       UserType.BRAND,
     );
   }
 
   @Get('support-tickets')
-  @ApiOperation({ summary: 'Get my support tickets' })
+  @ApiOperation({
+    summary: 'Get my support tickets',
+    description:
+      'Retrieve all support tickets created by the authenticated brand. Supports filtering by status, report type, and search query with pagination.',
+  })
   @ApiResponse({
     status: 200,
     description: 'Support tickets fetched successfully',
+    type: GetTicketsResponseDto,
   })
-  async getMySupportTickets(@Req() req: RequestWithUser) {
+  async getMySupportTickets(
+    @Req() req: RequestWithUser,
+    @Query() filters: GetMyTicketsDto,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new UnauthorizedException('User not authenticated');
+    }
+    return this.supportTicketService.getMyTickets(
+      userId,
+      UserType.BRAND,
+      filters,
+    );
+  }
+
+  @Post('support-tickets/:id/reply')
+  @UseInterceptors(
+    FileFieldsInterceptor([{ name: 'images', maxCount: 5 }], {
+      fileFilter: (req, file, callback) => {
+        const allowedMimeTypes = [
+          'image/jpeg',
+          'image/jpg',
+          'image/png',
+          'image/webp',
+        ];
+        if (!allowedMimeTypes.includes(file.mimetype)) {
+          return callback(
+            new BadRequestException('Only image files are allowed!'),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB per file
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Reply to a support ticket',
+    description:
+      'Add a reply to your support ticket with optional image attachments. You can upload up to 5 images (max 10MB each). Only the ticket creator can reply.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Support ticket ID',
+    type: 'number',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Reply added successfully',
+    type: CreateReplyResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Ticket not found' })
+  @ApiResponse({
+    status: 403,
+    description: 'Cannot reply to this ticket - not the ticket owner',
+  })
+  @ApiResponse({
+    status: 413,
+    description: 'File too large (max 10MB per file)',
+  })
+  async replyToTicket(
+    @Req() req: RequestWithUser,
+    @Param('id', ParseIntPipe) ticketId: number,
+    @Body() replyDto: CreateTicketReplyMultipartDto,
+    @UploadedFiles()
+    files?: { images?: Express.Multer.File[] },
+  ) {
     const userId = req.user.id;
-    return this.supportTicketService.getMyTickets(userId, UserType.BRAND);
+
+    // Upload images to S3 if provided
+    let imageUrls: string[] = [];
+    if (files?.images && files.images.length > 0) {
+      imageUrls = await Promise.all(
+        files.images.map((file) =>
+          this.s3Service.uploadFileToS3(file, 'support-tickets', 'reply'),
+        ),
+      );
+    }
+
+    // Create the reply DTO
+    const ticketReplyDto: CreateTicketReplyDto = {
+      message: replyDto.message,
+      imageUrls,
+    };
+
+    return this.supportTicketService.createReply(
+      ticketId,
+      ticketReplyDto,
+      userId,
+      'brand',
+    );
+  }
+
+  @Get('support-tickets/:id/replies')
+  @ApiOperation({
+    summary: 'Get all replies for a support ticket',
+    description:
+      'Retrieve all replies for a specific support ticket. Only the ticket creator can view replies.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Support ticket ID',
+    type: 'number',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Replies fetched successfully',
+    type: GetRepliesResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Ticket not found' })
+  @ApiResponse({
+    status: 403,
+    description: 'Cannot view replies for this ticket - not the ticket owner',
+  })
+  async getTicketReplies(
+    @Req() req: RequestWithUser,
+    @Param('id', ParseIntPipe) ticketId: number,
+  ) {
+    const userId = req.user.id;
+    return this.supportTicketService.getTicketReplies(
+      ticketId,
+      userId,
+      'brand',
+    );
   }
 
   // Max Campaign Payment Endpoints

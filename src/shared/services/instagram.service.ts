@@ -2353,6 +2353,27 @@ export class InstagramService {
       ? Number(((activeFollowers / totalFollowers) * 100).toFixed(2))
       : 0;
 
+    // Fetch demographics (age/gender, cities, countries)
+    let audienceAgeGender: any[] = [];
+    let audienceCities: any[] = [];
+    let audienceCountries: any[] = [];
+    try {
+      console.log(`\n📊 Fetching audience demographics...`);
+      const demographics = await this.getAudienceDemographics(userId, userType);
+
+      if (demographics && demographics.dataAvailable) {
+        audienceAgeGender = demographics.ageGender || [];
+        audienceCities = demographics.cities || [];
+        audienceCountries = demographics.countries || [];
+        console.log(`   ✅ Demographics fetched: ${audienceAgeGender.length} age/gender segments, ${audienceCities.length} cities, ${audienceCountries.length} countries`);
+      } else {
+        console.log(`   ⚠️  Demographics not available: ${demographics?.message || 'Unknown reason'}`);
+      }
+    } catch (error) {
+      console.warn(`   ⚠️  Could not fetch demographics: ${error.message}`);
+      console.warn(`   Continuing without demographics data...`);
+    }
+
     // Generate COMPREHENSIVE AI analysis for this snapshot (only runs once every 30 days)
     let aiGrowthFeedback: string | undefined;
     let aiPostingFeedback: string | undefined;
@@ -2375,7 +2396,7 @@ export class InstagramService {
     let aiAudienceSentiment: any;
 
     if (this.geminiAIService.isAvailable() && postsAnalyzed > 0) {
-      console.log(`\n🤖 Generating AI feedback for snapshot #${syncNumber}...`);
+      console.log(`\n🤖 Generating AI feedback for snapshot #${syncNumber} (PARALLEL MODE - FAST)...`);
 
       try {
         // Get captions from media insights for AI analysis
@@ -2399,7 +2420,14 @@ export class InstagramService {
           order: [['syncNumber', 'DESC']],
         });
 
-        // 1. Growth Feedback (comparing with previous snapshot)
+        // Prepare prompts
+        const daysInPeriod = Math.ceil((periodEnd.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24));
+        const postsPerWeek = (postsAnalyzed / daysInPeriod) * 7;
+
+        // Build all AI calls to run in parallel
+        const aiCalls: Promise<any>[] = [];
+
+        // 1. Growth Feedback (only if previous snapshot exists)
         if (previousSnapshot) {
           const followerGrowth = totalFollowers - (previousSnapshot.totalFollowers || 0);
           const followerGrowthPercentage = previousSnapshot.totalFollowers
@@ -2409,185 +2437,280 @@ export class InstagramService {
 
           const growthPrompt = `Follower growth: ${followerGrowth >= 0 ? '+' : ''}${followerGrowth} (${followerGrowthPercentage}%), Engagement: ${avgEngagementRate}% (${engagementChange >= 0 ? '+' : ''}${engagementChange.toFixed(2)}%), Posts: ${postsAnalyzed}. Give 4-6 words actionable growth feedback.`;
 
-          const growthResult = await this.geminiAIService.executeWithFallback(async (model) => {
-            const response = await model.generateContent({
-              contents: [{ role: 'user', parts: [{ text: growthPrompt }] }],
-              generationConfig: {
-                response_mime_type: "application/json",
-                temperature: 0.3,
-              }
-            });
-            return await response.response;
-          }, 'generateGrowthFeedback');
-
-          const parsed = JSON.parse(growthResult.text());
-          aiGrowthFeedback = parsed.feedback || parsed.message || 'Keep up consistent posting.';
-          console.log(`   ✅ Growth Feedback: ${aiGrowthFeedback}`);
+          aiCalls.push(
+            this.geminiAIService.executeWithFallback(async (model) => {
+              const response = await model.generateContent({
+                contents: [{ role: 'user', parts: [{ text: growthPrompt }] }],
+                generationConfig: { response_mime_type: "application/json", temperature: 0.3 }
+              });
+              return { type: 'growth', result: await response.response };
+            }, 'generateGrowthFeedback').catch(err => ({ type: 'growth', error: err }))
+          );
         }
 
         // 2. Posting Consistency Feedback
-        const daysInPeriod = Math.ceil((periodEnd.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24));
-        const postsPerWeek = (postsAnalyzed / daysInPeriod) * 7;
-
         const postingPrompt = `Posted ${postsAnalyzed} times in ${daysInPeriod} days (${postsPerWeek.toFixed(1)} posts/week). Give 4-6 words actionable posting feedback.`;
-
-        const postingResult = await this.geminiAIService.executeWithFallback(async (model) => {
-          const response = await model.generateContent({
-            contents: [{ role: 'user', parts: [{ text: postingPrompt }] }],
-            generationConfig: {
-              response_mime_type: "application/json",
-              temperature: 0.3,
-            }
-          });
-          return await response.response;
-        }, 'generatePostingFeedback');
-
-        const postingParsed = JSON.parse(postingResult.text());
-        aiPostingFeedback = postingParsed.feedback || postingParsed.message || 'Maintain regular posting schedule.';
-        console.log(`   ✅ Posting Feedback: ${aiPostingFeedback}`);
+        aiCalls.push(
+          this.geminiAIService.executeWithFallback(async (model) => {
+            const response = await model.generateContent({
+              contents: [{ role: 'user', parts: [{ text: postingPrompt }] }],
+              generationConfig: { response_mime_type: "application/json", temperature: 0.3 }
+            });
+            return { type: 'posting', result: await response.response };
+          }, 'generatePostingFeedback').catch(err => ({ type: 'posting', error: err }))
+        );
 
         // 3. Engagement Feedback
         const engagementPrompt = `Engagement rate: ${avgEngagementRate}%, Avg reach: ${avgReach}, Total engagement: ${totalEngagement} (likes: ${totalLikes}, comments: ${totalComments}, shares: ${totalShares}, saves: ${totalSaves}). Give 4-6 words actionable engagement feedback.`;
+        aiCalls.push(
+          this.geminiAIService.executeWithFallback(async (model) => {
+            const response = await model.generateContent({
+              contents: [{ role: 'user', parts: [{ text: engagementPrompt }] }],
+              generationConfig: { response_mime_type: "application/json", temperature: 0.3 }
+            });
+            return { type: 'engagement', result: await response.response };
+          }, 'generateEngagementFeedback').catch(err => ({ type: 'engagement', error: err }))
+        );
 
-        const engagementResult = await this.geminiAIService.executeWithFallback(async (model) => {
-          const response = await model.generateContent({
-            contents: [{ role: 'user', parts: [{ text: engagementPrompt }] }],
-            generationConfig: {
-              response_mime_type: "application/json",
-              temperature: 0.3,
-            }
-          });
-          return await response.response;
-        }, 'generateEngagementFeedback');
-
-        const engagementParsed = JSON.parse(engagementResult.text());
-        aiEngagementFeedback = engagementParsed.feedback || engagementParsed.message || 'Boost engagement with CTAs.';
-        console.log(`   ✅ Engagement Feedback: ${aiEngagementFeedback}`);
-
-        // 4. Content Quality Feedback (based on captions and sentiment)
+        // 4. Content Quality Feedback
         if (captions.length > 0) {
           const sampleCaptions = captions.slice(0, 10).join('\n---\n');
           const contentPrompt = `Sample captions:\n${sampleCaptions}\n\nAnalyze content quality. Give 4-6 words actionable content feedback.`;
+          aiCalls.push(
+            this.geminiAIService.executeWithFallback(async (model) => {
+              const response = await model.generateContent({
+                contents: [{ role: 'user', parts: [{ text: contentPrompt }] }],
+                generationConfig: { response_mime_type: "application/json", temperature: 0.3 }
+              });
+              return { type: 'content', result: await response.response };
+            }, 'generateContentFeedback').catch(err => ({ type: 'content', error: err }))
+          );
+        }
 
-          const contentResult = await this.geminiAIService.executeWithFallback(async (model) => {
-            const response = await model.generateContent({
-              contents: [{ role: 'user', parts: [{ text: contentPrompt }] }],
-              generationConfig: {
-                response_mime_type: "application/json",
-                temperature: 0.3,
-              }
-            });
-            return await response.response;
-          }, 'generateContentFeedback');
+        // Execute all basic feedback calls in parallel
+        console.log(`   ⚡ Running ${aiCalls.length} basic AI calls in parallel...`);
+        const basicResults = await Promise.all(aiCalls);
 
-          const contentParsed = JSON.parse(contentResult.text());
-          aiContentFeedback = contentParsed.feedback || contentParsed.message || 'Create more engaging captions.';
-          console.log(`   ✅ Content Feedback: ${aiContentFeedback}`);
+        // Process results
+        for (const item of basicResults) {
+          if (item.error) {
+            console.warn(`   ⚠️  ${item.type} failed: ${item.error.message}`);
+            continue;
+          }
+
+          try {
+            const parsed = JSON.parse(item.result.text());
+            const feedback = parsed.feedback || parsed.message;
+
+            switch (item.type) {
+              case 'growth':
+                aiGrowthFeedback = feedback || 'Keep up consistent posting.';
+                console.log(`   ✅ Growth Feedback: ${aiGrowthFeedback}`);
+                break;
+              case 'posting':
+                aiPostingFeedback = feedback || 'Maintain regular posting schedule.';
+                console.log(`   ✅ Posting Feedback: ${aiPostingFeedback}`);
+                break;
+              case 'engagement':
+                aiEngagementFeedback = feedback || 'Boost engagement with CTAs.';
+                console.log(`   ✅ Engagement Feedback: ${aiEngagementFeedback}`);
+                break;
+              case 'content':
+                aiContentFeedback = feedback || 'Create more engaging captions.';
+                console.log(`   ✅ Content Feedback: ${aiContentFeedback}`);
+                break;
+            }
+          } catch (parseError) {
+            console.warn(`   ⚠️  Failed to parse ${item.type} result: ${parseError.message}`);
+          }
         }
 
         // ============================================================
         // COMPREHENSIVE AI ANALYSIS (for profile scoring cache)
+        // Run ALL calls in PARALLEL for maximum speed
         // ============================================================
-        console.log(`\n   📊 Generating comprehensive AI analysis for caching...`);
+        console.log(`\n   📊 Generating comprehensive AI analysis (PARALLEL MODE - FAST)...`);
+
+        const comprehensiveAICalls: Promise<any>[] = [];
 
         // 5. Niche Detection
-        console.log(`   🔍 Analyzing niche...`);
-        aiNicheAnalysis = await this.geminiAIService.detectNiche(captions, []);
-        console.log(`   ✅ Niche: ${aiNicheAnalysis.primaryNiche} (${aiNicheAnalysis.confidence}% confidence)`);
+        comprehensiveAICalls.push(
+          this.geminiAIService.detectNiche(captions, [])
+            .then(result => ({ type: 'niche', result }))
+            .catch(err => ({ type: 'niche', error: err }))
+        );
 
         // 6. Language Analysis
-        console.log(`   🌐 Analyzing language...`);
-        aiLanguageAnalysis = await this.geminiAIService.analyzeLanguage(captions);
-        console.log(`   ✅ Language: ${aiLanguageAnalysis.primaryLanguage}`);
+        comprehensiveAICalls.push(
+          this.geminiAIService.analyzeLanguage(captions)
+            .then(result => ({ type: 'language', result }))
+            .catch(err => ({ type: 'language', error: err }))
+        );
 
-        // 7. Visual Quality Analysis (sample first 5 images)
+        // 7. Visual Quality Analysis (sample first 5 images in parallel)
         if (mediaUrls.length > 0) {
-          console.log(`   🎨 Analyzing visual quality (sampling ${Math.min(5, mediaUrls.length)} images)...`);
-          const visualResults: any[] = [];
-          for (const url of mediaUrls.slice(0, 5)) {
-            try {
-              const visual = await this.geminiAIService.analyzeVisualQuality(url);
-              visualResults.push(visual);
-              await new Promise(resolve => setTimeout(resolve, 100)); // Rate limiting
-            } catch (error) {
-              console.warn(`     ⚠️ Failed to analyze image: ${error.message}`);
-            }
-          }
-
-          if (visualResults.length > 0) {
-            aiVisualAnalysis = {
-              avgQuality: Math.round(visualResults.reduce((sum, v) => sum + v.overallQuality, 0) / visualResults.length),
-              avgProfessionalScore: Math.round(visualResults.reduce((sum, v) => sum + v.professionalScore, 0) / visualResults.length),
-              avgBrandSafetyScore: Math.round(visualResults.reduce((sum, v) => sum + v.brandSafetyScore, 0) / visualResults.length),
-              facesDetected: Math.round(visualResults.reduce((sum, v) => sum + v.faces, 0) / visualResults.length),
-            };
-            console.log(`   ✅ Visual Quality: ${aiVisualAnalysis.avgQuality}/100`);
-          }
+          const visualCalls = mediaUrls.slice(0, 5).map(url =>
+            this.geminiAIService.analyzeVisualQuality(url).catch(() => null)
+          );
+          comprehensiveAICalls.push(
+            Promise.all(visualCalls)
+              .then(visualResults => ({
+                type: 'visual',
+                result: visualResults.filter(v => v !== null)
+              }))
+              .catch(err => ({ type: 'visual', error: err }))
+          );
         }
 
         // 8. Sentiment Analysis
-        console.log(`   😊 Analyzing sentiment...`);
-        aiSentimentAnalysis = await this.geminiAIService.analyzeSentiment(captions);
-        console.log(`   ✅ Sentiment: ${aiSentimentAnalysis.score}/100`);
+        comprehensiveAICalls.push(
+          this.geminiAIService.analyzeSentiment(captions)
+            .then(result => ({ type: 'sentiment', result }))
+            .catch(err => ({ type: 'sentiment', error: err }))
+        );
 
         // 9. Hashtag Effectiveness
-        console.log(`   #️⃣ Analyzing hashtags...`);
-        aiHashtagAnalysis = await this.geminiAIService.analyzeHashtagEffectiveness(captions);
-        console.log(`   ✅ Hashtags: ${aiHashtagAnalysis.rating}`);
+        comprehensiveAICalls.push(
+          this.geminiAIService.analyzeHashtagEffectiveness(captions)
+            .then(result => ({ type: 'hashtag', result }))
+            .catch(err => ({ type: 'hashtag', error: err }))
+        );
 
         // 10. CTA Usage
-        console.log(`   📢 Analyzing CTAs...`);
-        aiCtaAnalysis = await this.geminiAIService.analyzeCTAUsage(captions);
-        console.log(`   ✅ CTA Usage: ${aiCtaAnalysis.rating}`);
+        comprehensiveAICalls.push(
+          this.geminiAIService.analyzeCTAUsage(captions)
+            .then(result => ({ type: 'cta', result }))
+            .catch(err => ({ type: 'cta', error: err }))
+        );
 
-        // 11. Color Palette/Mood (sample first 5 images)
+        // 11. Color Palette/Mood
         if (mediaUrls.length > 0) {
-          console.log(`   🎨 Analyzing color palette...`);
-          aiColorPaletteAnalysis = await this.geminiAIService.analyzeColorPaletteMood(mediaUrls.slice(0, 5));
-          console.log(`   ✅ Color Palette: ${aiColorPaletteAnalysis.rating}/20`);
+          comprehensiveAICalls.push(
+            this.geminiAIService.analyzeColorPaletteMood(mediaUrls.slice(0, 5))
+              .then(result => ({ type: 'colorPalette', result }))
+              .catch(err => ({ type: 'colorPalette', error: err }))
+          );
         }
 
         // 12. Trend Relevance
-        console.log(`   📈 Analyzing trend relevance...`);
-        aiTrendAnalysis = await this.geminiAIService.analyzeTrendRelevance(captions);
-        console.log(`   ✅ Trend Relevance: ${aiTrendAnalysis.score}/10`);
+        comprehensiveAICalls.push(
+          this.geminiAIService.analyzeTrendRelevance(captions)
+            .then(result => ({ type: 'trend', result }))
+            .catch(err => ({ type: 'trend', error: err }))
+        );
 
-        // 13. Retention Curve (for reels/videos)
-        console.log(`   📊 Generating retention curve...`);
-        aiRetentionCurve = await this.geminiAIService.generateRetentionCurve({
-          retentionRate: 70,
-          avgDuration: "30 Sec",
-          engagementRate: avgEngagementRate,
-          contentQuality: aiVisualAnalysis?.avgQuality || 75,
-        });
-        console.log(`   ✅ Retention curve generated`);
+        // 13. Monetization Prediction
+        comprehensiveAICalls.push(
+          this.geminiAIService.predictMonetisationPotential({
+            followerCount: totalFollowers,
+            engagementRate: avgEngagementRate,
+            accountType: user.instagramAccountType || 'PERSONAL',
+            captions: captions.slice(0, 8),
+          })
+            .then(result => ({ type: 'monetization', result }))
+            .catch(err => ({ type: 'monetization', error: err }))
+        );
 
-        // 14. Monetization Prediction
-        console.log(`   💰 Predicting monetization...`);
-        aiMonetizationAnalysis = await this.geminiAIService.predictMonetisationPotential({
-          followerCount: totalFollowers,
-          engagementRate: avgEngagementRate,
-          accountType: user.instagramAccountType || 'PERSONAL',
-          captions: captions.slice(0, 8),
-        });
-        console.log(`   ✅ Monetization: ${aiMonetizationAnalysis.rating}/50`);
+        // 14. Payout Prediction
+        comprehensiveAICalls.push(
+          this.geminiAIService.predictInfluencerPayout({
+            activeFollowers,
+            avgViews: avgReach,
+            engagementRate: avgEngagementRate,
+          })
+            .then(result => ({ type: 'payout', result }))
+            .catch(err => ({ type: 'payout', error: err }))
+        );
 
-        // 15. Payout Prediction
-        console.log(`   💵 Predicting payout...`);
-        aiPayoutPrediction = await this.geminiAIService.predictInfluencerPayout({
-          activeFollowers,
-          avgViews: avgReach,
-          engagementRate: avgEngagementRate,
-        });
-        console.log(`   ✅ Predicted Payout: ₹${aiPayoutPrediction.payout}`);
+        // 15. Audience Sentiment
+        comprehensiveAICalls.push(
+          this.geminiAIService.analyzeAudienceSentiment(captions)
+            .then(result => ({ type: 'audienceSentiment', result }))
+            .catch(err => ({ type: 'audienceSentiment', error: err }))
+        );
 
-        // 16. Audience Sentiment
-        console.log(`   👥 Analyzing audience sentiment...`);
-        aiAudienceSentiment = await this.geminiAIService.analyzeAudienceSentiment(captions);
-        console.log(`   ✅ Audience Sentiment: ${aiAudienceSentiment.rating}/20`);
+        // Execute ALL comprehensive analysis in parallel
+        console.log(`   ⚡ Running ${comprehensiveAICalls.length} comprehensive AI calls in parallel...`);
+        const comprehensiveResults = await Promise.all(comprehensiveAICalls);
+
+        // Process results
+        for (const item of comprehensiveResults) {
+          if (item.error) {
+            console.warn(`   ⚠️  ${item.type} analysis failed: ${item.error.message}`);
+            continue;
+          }
+
+          switch (item.type) {
+            case 'niche':
+              aiNicheAnalysis = item.result;
+              console.log(`   ✅ Niche: ${aiNicheAnalysis.primaryNiche} (${aiNicheAnalysis.confidence}% confidence)`);
+              break;
+            case 'language':
+              aiLanguageAnalysis = item.result;
+              console.log(`   ✅ Language: ${aiLanguageAnalysis.primaryLanguage}`);
+              break;
+            case 'visual':
+              if (item.result.length > 0) {
+                aiVisualAnalysis = {
+                  avgQuality: Math.round(item.result.reduce((sum: number, v: any) => sum + v.overallQuality, 0) / item.result.length),
+                  avgProfessionalScore: Math.round(item.result.reduce((sum: number, v: any) => sum + v.professionalScore, 0) / item.result.length),
+                  avgBrandSafetyScore: Math.round(item.result.reduce((sum: number, v: any) => sum + v.brandSafetyScore, 0) / item.result.length),
+                  facesDetected: Math.round(item.result.reduce((sum: number, v: any) => sum + v.faces, 0) / item.result.length),
+                };
+                console.log(`   ✅ Visual Quality: ${aiVisualAnalysis.avgQuality}/100`);
+              }
+              break;
+            case 'sentiment':
+              aiSentimentAnalysis = item.result;
+              console.log(`   ✅ Sentiment: ${aiSentimentAnalysis.score}/100`);
+              break;
+            case 'hashtag':
+              aiHashtagAnalysis = item.result;
+              console.log(`   ✅ Hashtags: ${aiHashtagAnalysis.rating}`);
+              break;
+            case 'cta':
+              aiCtaAnalysis = item.result;
+              console.log(`   ✅ CTA Usage: ${aiCtaAnalysis.rating}`);
+              break;
+            case 'colorPalette':
+              aiColorPaletteAnalysis = item.result;
+              console.log(`   ✅ Color Palette: ${aiColorPaletteAnalysis.rating}/20`);
+              break;
+            case 'trend':
+              aiTrendAnalysis = item.result;
+              console.log(`   ✅ Trend Relevance: ${aiTrendAnalysis.score}/10`);
+              break;
+            case 'monetization':
+              aiMonetizationAnalysis = item.result;
+              console.log(`   ✅ Monetization: ${aiMonetizationAnalysis.rating}/50`);
+              break;
+            case 'payout':
+              aiPayoutPrediction = item.result;
+              console.log(`   ✅ Predicted Payout: ₹${aiPayoutPrediction.payout}`);
+              break;
+            case 'audienceSentiment':
+              aiAudienceSentiment = item.result;
+              console.log(`   ✅ Audience Sentiment: ${aiAudienceSentiment.rating}/20`);
+              break;
+          }
+        }
+
+        // Generate retention curve (depends on visual analysis, so do it after)
+        try {
+          aiRetentionCurve = await this.geminiAIService.generateRetentionCurve({
+            retentionRate: 70,
+            avgDuration: "30 Sec",
+            engagementRate: avgEngagementRate,
+            contentQuality: aiVisualAnalysis?.avgQuality || 75,
+          });
+          console.log(`   ✅ Retention curve generated`);
+        } catch (error) {
+          console.warn(`   ⚠️  Retention curve generation failed: ${error.message}`);
+        }
 
         aiFeedbackGeneratedAt = new Date();
-        console.log(`\n   🎯 COMPREHENSIVE AI analysis completed! (16 analyses generated)\n`);
+        const totalAICalls = basicResults.length + comprehensiveResults.length + 1; // +1 for retention curve
+        console.log(`\n   🎯 COMPREHENSIVE AI analysis completed! (${totalAICalls} analyses generated in PARALLEL)\n`);
 
       } catch (error) {
         console.warn(`   ⚠️  AI feedback generation failed: ${error.message}`);
@@ -2597,7 +2720,7 @@ export class InstagramService {
       console.log(`   ℹ️  AI not available or no posts to analyze - skipping AI feedback generation\n`);
     }
 
-    // Store snapshot with AI feedback
+    // Store snapshot with AI feedback AND demographics
     const snapshot = await this.instagramProfileAnalysisModel.create({
       influencerId: userType === 'influencer' ? userId : undefined,
       brandId: userType === 'brand' ? userId : undefined,
@@ -2618,6 +2741,10 @@ export class InstagramService {
       totalComments,
       totalShares,
       totalSaves,
+      // Demographics (age/gender, cities, countries)
+      audienceAgeGender,
+      audienceCities,
+      audienceCountries,
       // AI Feedback (generated once per snapshot, reused by profile scoring)
       aiGrowthFeedback,
       aiPostingFeedback,
@@ -2655,6 +2782,12 @@ export class InstagramService {
     console.log(`   - Total Comments: ${totalComments}`);
     console.log(`   - Total Shares: ${totalShares}`);
     console.log(`   - Total Saves: ${totalSaves}`);
+    if (audienceAgeGender.length > 0 || audienceCities.length > 0 || audienceCountries.length > 0) {
+      console.log(`📊 Demographics Stored:`);
+      if (audienceAgeGender.length > 0) console.log(`   - Age/Gender Segments: ${audienceAgeGender.length}`);
+      if (audienceCities.length > 0) console.log(`   - Cities: ${audienceCities.length}`);
+      if (audienceCountries.length > 0) console.log(`   - Countries: ${audienceCountries.length}`);
+    }
     if (aiGrowthFeedback || aiPostingFeedback || aiEngagementFeedback || aiContentFeedback) {
       console.log(`🤖 AI Feedback & Analysis Stored:`);
       if (aiGrowthFeedback) console.log(`   - Growth: ${aiGrowthFeedback}`);

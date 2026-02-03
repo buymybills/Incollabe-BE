@@ -444,32 +444,50 @@ export class InviteOnlyPaymentService {
 
   /**
    * Generate unique invoice number for Invite-Only Campaign
-   * Format: MAXXINV-YYYYMM-SEQ
-   * Example: MAXXINV-202601-1 (1st invoice in Jan 2026)
+   * Format: MAXXINV-IVTCMGN-YYYYMM-SEQ
+   * Example: MAXXINV-IVTCMGN-202602-15 (15th invoice in Feb 2026)
    */
   private async generateInvoiceNumber(): Promise<string> {
     const year = new Date().getFullYear();
     const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    const prefix = `MAXXINV-${year}${month}-`;
+    const newPrefix = `MAXXINV-IVTCMGN-${year}${month}-`;
+    const oldPrefix = `MAXXINV-${year}${month}-`; // Legacy format for continuity
 
-    // Get the latest invoice number for this month
-    const latestInvoice = await this.inviteOnlyInvoiceModel.findOne({
+    // Check BOTH new and old formats to ensure sequence continuity
+    const latestNewInvoice = await this.inviteOnlyInvoiceModel.findOne({
       where: {
         invoiceNumber: {
-          [Op.like]: `${prefix}%`,
+          [Op.like]: `${newPrefix}%`,
+        },
+      },
+      order: [['createdAt', 'DESC']],
+    });
+
+    const latestOldInvoice = await this.inviteOnlyInvoiceModel.findOne({
+      where: {
+        invoiceNumber: {
+          [Op.like]: `${oldPrefix}%`,
         },
       },
       order: [['createdAt', 'DESC']],
     });
 
     let nextNumber = 1;
-    if (latestInvoice) {
-      // Extract the sequence number (e.g., "MAXXINV-202601-1" -> 1)
-      const parts = latestInvoice.invoiceNumber.split('-');
-      const lastNumber = parseInt(parts[2], 10);
-      nextNumber = lastNumber + 1;
+
+    // Extract sequence from new format (MAXXINV-IVTCMGN-202602-15)
+    if (latestNewInvoice) {
+      const parts = latestNewInvoice.invoiceNumber.split('-');
+      const lastNumber = parseInt(parts[3], 10);
+      nextNumber = Math.max(nextNumber, lastNumber + 1);
     }
 
-    return `${prefix}${nextNumber}`;
+    // Extract sequence from old format (MAXXINV-202602-14) to ensure continuity
+    if (latestOldInvoice) {
+      const parts = latestOldInvoice.invoiceNumber.split('-');
+      const lastNumber = parseInt(parts[2], 10);
+      nextNumber = Math.max(nextNumber, lastNumber + 1);
+    }
+
+    return `${newPrefix}${nextNumber}`;
   }
 }

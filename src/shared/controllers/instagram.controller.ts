@@ -1,7 +1,7 @@
 import { Controller, Post, Get, Body, Query, Param, HttpCode, HttpStatus, UseGuards, Req, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { InstagramService } from '../services/instagram.service';
-import { InstagramSyncCronService } from '../services/instagram-sync.cron';
+//import { InstagramSyncCronService } from '../services/instagram-sync.cron';
 //import { InstagramGrowthCronService } from '../services/instagram-growth.cron';
 import { InfluencerCredibilityScoringService } from '../services/influencer-credibility-scoring.service';
 import {
@@ -25,7 +25,7 @@ import type { RequestWithUser } from '../../types/request.types';
 export class InstagramController {
   constructor(
     private readonly instagramService: InstagramService,
-    private readonly instagramSyncCronService: InstagramSyncCronService,
+    //private readonly instagramSyncCronService: InstagramSyncCronService,
     //private readonly instagramGrowthCronService: InstagramGrowthCronService,
     private readonly credibilityScoringService: InfluencerCredibilityScoringService,
   ) {}
@@ -395,27 +395,27 @@ export class InstagramController {
     };
   }
 
-  /**
-   * Manually trigger Instagram profile sync (for testing)
-   * POST /instagram/test-sync
-   */
-  @Public()
-  @Post('test-sync')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Manually trigger Instagram profile sync',
-    description: 'Triggers the cron job to sync all Instagram profiles immediately. This is for testing purposes.'
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Sync triggered successfully'
-  })
-  async testSync() {
-    await this.instagramSyncCronService.manualSync();
-    return {
-      message: 'Instagram sync triggered successfully. Check server logs for details.',
-    };
-  }
+  // /**
+  //  * Manually trigger Instagram profile sync (for testing)
+  //  * POST /instagram/test-sync
+  //  */
+  // @Public()
+  // @Post('test-sync')
+  // @HttpCode(HttpStatus.OK)
+  // @ApiOperation({
+  //   summary: 'Manually trigger Instagram profile sync',
+  //   description: 'Triggers the cron job to sync all Instagram profiles immediately. This is for testing purposes.'
+  // })
+  // @ApiResponse({
+  //   status: 200,
+  //   description: 'Sync triggered successfully'
+  // })
+  // async testSync() {
+  //   await this.instagramSyncCronService.manualSync();
+  //   return {
+  //     message: 'Instagram sync triggered successfully. Check server logs for details.',
+  //   };
+  // }
 
   /**
    * Get Instagram media/posts for a user
