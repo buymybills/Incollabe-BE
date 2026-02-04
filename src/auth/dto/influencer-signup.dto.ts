@@ -23,13 +23,24 @@ import { IsValidUsername } from '../../shared/validators/is-valid-username.valid
 
 export class InfluencerSignupDto {
   @ApiProperty({
-    description: 'Referral code of the influencer who referred you (optional). Enter the 8-character code you received.',
+    description: 'Referral or campus ambassador code (optional). Accepts either:\n- Campus Ambassador Code: CA-XXXX format (e.g., CA-0001)\n- Influencer Referral Code: 8-character alphanumeric (e.g., ABC12XYZ)',
     required: false,
-    example: 'ABC12XYZ',
+    examples: {
+      campusAmbassador: {
+        value: 'CA-0001',
+        summary: 'Campus Ambassador Code'
+      },
+      influencerReferral: {
+        value: 'ABC12XYZ',
+        summary: 'Influencer Referral Code'
+      }
+    }
   })
   @IsOptional()
   @IsString()
-  @Length(8, 8, { message: 'Referral code must be exactly 8 characters' })
+  @Matches(/^(?:CA-\d{4}|[A-Z0-9]{8})$/, {
+    message: 'Code must be either a campus ambassador code (CA-XXXX) or an 8-character influencer referral code'
+  })
   referralCode?: string;
 
   @ApiProperty({

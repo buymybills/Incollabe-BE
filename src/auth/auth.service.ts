@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { WhatsAppService } from '../shared/whatsapp.service';
 import { DeviceTokenService } from '../shared/device-token.service';
+import { CampusAmbassadorService } from '../shared/services/campus-ambassador.service';
 import { UserType } from '../shared/models/device-token.model';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -97,6 +98,7 @@ export class AuthService {
     private readonly influencerReferralUsageModel: typeof InfluencerReferralUsage,
     private readonly whatsappService: WhatsAppService,
     private readonly deviceTokenService: DeviceTokenService,
+    private readonly campusAmbassadorService: CampusAmbassadorService,
   ) {}
 
   // Redis key helpers
@@ -138,6 +140,27 @@ export class AuthService {
 
   private phoneVerificationKey(verificationId: string): string {
     return `phone_verification:${verificationId}`;
+  }
+
+  private detectCodeType(code: string): {
+    type: 'campus_ambassador' | 'influencer_referral' | 'invalid';
+    normalizedCode: string;
+  } {
+    if (!code) return { type: 'invalid', normalizedCode: '' };
+
+    const trimmedCode = code.trim();
+
+    // Campus ambassador: CA-XXXX
+    if (/^CA-\d{4}$/i.test(trimmedCode)) {
+      return { type: 'campus_ambassador', normalizedCode: trimmedCode.toUpperCase() };
+    }
+
+    // Influencer referral: 8 alphanumeric
+    if (/^[A-Z0-9]{8}$/i.test(trimmedCode)) {
+      return { type: 'influencer_referral', normalizedCode: trimmedCode.toUpperCase() };
+    }
+
+    return { type: 'invalid', normalizedCode: trimmedCode };
   }
 
   async getVerifiedPhoneNumber(
@@ -530,24 +553,44 @@ export class AuthService {
       throw new BadRequestException('Phone number already registered');
     }
 
-    // Referral code logic
-    // Note: Referral code should be validated using /validate-referral-code endpoint before signup
-    // This is a basic check to ensure the referrer exists
+    // Auto-detect code type and route to appropriate handler
     let referrerInfluencerId: number | undefined;
+    let campusAmbassadorId: string | undefined;
+
     if (referralCode) {
-      console.log(`🔍 Processing referral code during signup: ${referralCode}`);
-      const referrer = await this.influencerModel.findOne({
-        where: { referralCode },
-        attributes: ['id', 'name'],
-      });
-      if (!referrer) {
-        console.log(`❌ Invalid referral code: ${referralCode} - No influencer found`);
-        throw new BadRequestException('Invalid referral code. Please validate the code before signup.');
+      const { type, normalizedCode } = this.detectCodeType(referralCode);
+
+      if (type === 'invalid') {
+        throw new BadRequestException(
+          'Invalid code format. Must be either a campus ambassador code (CA-XXXX) or an 8-character referral code.'
+        );
       }
-      console.log(`✅ Referral code accepted: ${referralCode} - Referrer ID: ${referrer.id}, Name: ${referrer.name}`);
-      referrerInfluencerId = referrer.id;
-    } else {
-      console.log(`ℹ️ No referral code provided during signup`);
+
+      if (type === 'campus_ambassador') {
+        // Validate campus ambassador code
+        const ambassador = await this.campusAmbassadorService.getAmbassadorById(normalizedCode);
+        if (!ambassador) {
+          throw new BadRequestException('Invalid campus ambassador code.');
+        }
+
+        campusAmbassadorId = normalizedCode;
+
+        // Immediately increment totalReferrals (attempted signup)
+        await this.campusAmbassadorService.incrementReferrals(normalizedCode);
+
+      } else if (type === 'influencer_referral') {
+        // Existing influencer referral validation
+        const referrer = await this.influencerModel.findOne({
+          where: { referralCode: normalizedCode },
+          attributes: ['id', 'name'],
+        });
+
+        if (!referrer) {
+          throw new BadRequestException('Invalid referral code. Please validate the code before signup.');
+        }
+
+        referrerInfluencerId = referrer.id;
+      }
     }
 
     // Upload profile image to S3 if provided
@@ -597,6 +640,7 @@ export class AuthService {
           profileImage: profileImageUrl,
           isPhoneVerified: true,
           referralCode: newInfluencerReferralCode, // New influencer gets their own code
+          campusAmbassadorId: campusAmbassadorId || null, // Store campus ambassador ID if referred by one
         },
         { transaction },
       );
@@ -626,9 +670,10 @@ export class AuthService {
         });
       }
 
-      // Log referral usage if referralCode is present
-      // Note: Credits will be awarded only when the referred influencer is verified by admin
+      // Log referral usage or campus ambassador tracking
       if (referrerInfluencerId) {
+        // Existing influencer referral logic (unchanged)
+        // Note: Credits will be awarded only when the referred influencer is verified by admin
         await this.influencerReferralUsageModel.create(
           {
             influencerId: referrerInfluencerId,
@@ -639,15 +684,24 @@ export class AuthService {
           { transaction },
         );
         console.log(
-          `✅ Referral code used during signup:`,
-          JSON.stringify({
+          `✅ Referral code used:`,
+          {
             referralCode,
             referrerInfluencerId,
             newInfluencerId: createdInfluencer.id,
-            newInfluencerUsername: createdInfluencer.username,
-            newInfluencerName: createdInfluencer.name,
-            timestamp: new Date().toISOString(),
-          }),
+          },
+        );
+
+      } else if (campusAmbassadorId) {
+        // Campus ambassador tracking - NO credit records
+        // Increment successfulSignups only
+        await this.campusAmbassadorService.incrementSuccessfulSignups(campusAmbassadorId);
+        console.log(
+          `✅ Campus ambassador code used:`,
+          {
+            campusAmbassadorId,
+            newInfluencerId: createdInfluencer.id,
+          },
         );
       }
 
@@ -2512,5 +2566,29 @@ export class AuthService {
         nextResetDate: nextResetDate.toISOString(),
       },
     };
+  }
+
+  async validateCampusAmbassadorCode(ambassadorId: string) {
+    try {
+      const ambassador = await this.campusAmbassadorService.getAmbassadorById(ambassadorId);
+
+      if (!ambassador) {
+        return { valid: false, message: 'Invalid campus ambassador code' };
+      }
+
+      return {
+        valid: true,
+        message: 'Campus ambassador code is valid',
+        details: {
+          ambassadorName: ambassador.name,
+          collegeName: ambassador.collegeName,
+          totalReferrals: ambassador.totalReferrals,
+          successfulSignups: ambassador.successfulSignups,
+          verifiedSignups: ambassador.verifiedSignups,
+        },
+      };
+    } catch (error) {
+      return { valid: false, message: 'Invalid campus ambassador code' };
+    }
   }
 }

@@ -17,6 +17,7 @@ import { InstagramMediaInsight } from '../models/instagram-media-insight.model';
 import { InstagramProfileAnalysis } from '../models/instagram-profile-analysis.model';
 import { InstagramProfileGrowth } from '../models/instagram-profile-growth.model';
 import { GeminiAIService } from './gemini-ai.service';
+import { CampusAmbassadorService } from './campus-ambassador.service';
 
 export type UserType = 'influencer' | 'brand';
 
@@ -40,6 +41,7 @@ export class InstagramService {
     @InjectModel(InstagramProfileGrowth)
     private instagramProfileGrowthModel: typeof InstagramProfileGrowth,
     private geminiAIService: GeminiAIService,
+    private campusAmbassadorService: CampusAmbassadorService,
   ) {
     const clientId = this.configService.get<string>('INSTAGRAM_APP_ID');
     const clientSecret = this.configService.get<string>('INSTAGRAM_APP_SECRET');
@@ -248,34 +250,79 @@ export class InstagramService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 59);
 
-    // Step 4: Save to database
-    const updateData = {
-      instagramAccessToken: accessToken,
-      instagramUserId: profile.id,
-      instagramUsername: profile.username,
-      instagramAccountType: profile.account_type || undefined,
-      instagramFollowersCount: profile.followers_count || undefined,
-      instagramFollowsCount: profile.follows_count || undefined,
-      instagramMediaCount: profile.media_count || undefined,
-      instagramProfilePictureUrl: profile.profile_picture_url || undefined,
-      instagramBio: profile.biography || undefined,
-      instagramTokenExpiresAt: expiresAt,
-      instagramConnectedAt: new Date(),
-      isVerified: true,
-    };
-
     if (userType === 'influencer') {
       const influencer = await this.influencerModel.findByPk(userId);
       if (!influencer) {
         throw new NotFoundException(`Influencer with ID ${userId} not found`);
       }
+
+      // Step 4: Save to database
+      const updateData: any = {
+        instagramAccessToken: accessToken,
+        instagramUserId: profile.id,
+        instagramUsername: profile.username,
+        instagramAccountType: profile.account_type || undefined,
+        instagramFollowersCount: profile.followers_count || undefined,
+        instagramFollowsCount: profile.follows_count || undefined,
+        instagramMediaCount: profile.media_count || undefined,
+        instagramProfilePictureUrl: profile.profile_picture_url || undefined,
+        instagramBio: profile.biography || undefined,
+        instagramTokenExpiresAt: expiresAt,
+        instagramConnectedAt: new Date(),
+        isVerified: true, // Automatically verify Instagram-connected influencers
+      };
+
       await influencer.update(updateData);
+
+      // Track campus ambassador verified signup
+      // Wrap in try-catch to prevent Instagram connection failure if tracking fails
+      try {
+        if (influencer.campusAmbassadorId) {
+          await this.campusAmbassadorService.incrementVerifiedSignups(influencer.campusAmbassadorId);
+          console.log(
+            `✅ CAMPUS AMBASSADOR VERIFIED SIGNUP TRACKED (Instagram Connect) ✅`,
+          );
+          console.log(
+            `├─ Campus Ambassador ID: ${influencer.campusAmbassadorId}`,
+          );
+          console.log(
+            `├─ Verified Influencer ID: ${influencer.id} (${influencer.name})`,
+          );
+          console.log(
+            `└─ Timestamp: ${new Date().toISOString()}`,
+          );
+        }
+      } catch (error) {
+        console.error(
+          'Failed to track campus ambassador verified signup for influencer:',
+          influencer.id,
+          error,
+        );
+        // Don't throw - allow Instagram connection to succeed even if tracking fails
+      }
+
       return influencer.reload();
     } else {
       const brand = await this.brandModel.findByPk(userId);
       if (!brand) {
         throw new NotFoundException(`Brand with ID ${userId} not found`);
       }
+
+      // Step 4: Save to database
+      const updateData: any = {
+        instagramAccessToken: accessToken,
+        instagramUserId: profile.id,
+        instagramUsername: profile.username,
+        instagramAccountType: profile.account_type || undefined,
+        instagramFollowersCount: profile.followers_count || undefined,
+        instagramFollowsCount: profile.follows_count || undefined,
+        instagramMediaCount: profile.media_count || undefined,
+        instagramProfilePictureUrl: profile.profile_picture_url || undefined,
+        instagramBio: profile.biography || undefined,
+        instagramTokenExpiresAt: expiresAt,
+        instagramConnectedAt: new Date(),
+      };
+
       await brand.update(updateData);
       return brand.reload();
     }
