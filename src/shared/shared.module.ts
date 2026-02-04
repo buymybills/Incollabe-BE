@@ -162,6 +162,7 @@ import { AppVersionService } from './services/app-version.service';
     InfluencerProfileScoringService,
     GeminiAIService,
     AppReviewService,
+    CampusAmbassadorService,
     DeviceTokenService,
     AppVersionService,
   ],

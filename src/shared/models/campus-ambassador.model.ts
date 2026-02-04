@@ -19,6 +19,7 @@ export interface CampusAmbassadorCreationAttributes {
   collegeState: string;
   totalReferrals?: number;
   successfulSignups?: number;
+  verifiedSignups?: number;
 }
 
 @Table({
@@ -91,6 +92,13 @@ export class CampusAmbassador extends Model<
     defaultValue: 0,
   })
   declare successfulSignups: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    defaultValue: 0,
+    comment: 'Number of referred influencers that got verified by admin',
+  })
+  declare verifiedSignups: number;
 
   @CreatedAt
   @Column({

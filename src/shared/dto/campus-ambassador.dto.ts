@@ -83,11 +83,14 @@ export class CampusAmbassadorResponseDto {
   @ApiProperty({ example: 'Delhi' })
   collegeState: string;
 
-  @ApiProperty({ example: 0 })
+  @ApiProperty({ example: 0, description: 'Total signup attempts using this campus ambassador code' })
   totalReferrals: number;
 
-  @ApiProperty({ example: 0 })
+  @ApiProperty({ example: 0, description: 'Successfully created accounts using this campus ambassador code' })
   successfulSignups: number;
+
+  @ApiProperty({ example: 0, description: 'Number of referred influencers that got verified by admin' })
+  verifiedSignups: number;
 
   @ApiProperty({ example: '2026-02-03T12:00:00.000Z' })
   createdAt: Date;

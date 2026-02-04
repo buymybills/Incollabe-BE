@@ -57,6 +57,7 @@ export class CampusAmbassadorController {
         collegeState: ambassador.collegeState,
         totalReferrals: ambassador.totalReferrals,
         successfulSignups: ambassador.successfulSignups,
+        verifiedSignups: ambassador.verifiedSignups,
         createdAt: ambassador.createdAt,
       },
     };

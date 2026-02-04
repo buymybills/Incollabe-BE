@@ -65,6 +65,7 @@ export class CampusAmbassadorService {
       collegeState: dto.collegeState,
       totalReferrals: 0,
       successfulSignups: 0,
+      verifiedSignups: 0,
     });
 
     return ambassador;
@@ -127,6 +128,14 @@ export class CampusAmbassadorService {
   async incrementSuccessfulSignups(ambassadorId: string): Promise<void> {
     const ambassador = await this.getAmbassadorById(ambassadorId);
     await ambassador.increment('successfulSignups', { by: 1 });
+  }
+
+  /**
+   * Update verified signup metrics
+   */
+  async incrementVerifiedSignups(ambassadorId: string): Promise<void> {
+    const ambassador = await this.getAmbassadorById(ambassadorId);
+    await ambassador.increment('verifiedSignups', { by: 1 });
   }
 
   /**

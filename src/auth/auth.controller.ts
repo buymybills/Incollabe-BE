@@ -1139,9 +1139,9 @@ export class AuthController {
   @Post('validate-referral-code')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Validate referral code',
+    summary: 'Validate referral or campus ambassador code',
     description:
-      'Check if a referral code is valid and within monthly usage limit (max 20 per month). This endpoint can be called before signup to validate the referral code.',
+      'Auto-detects and validates either campus ambassador code (CA-XXXX format) or influencer referral code (8-character alphanumeric). This endpoint can be called before signup to validate the code.',
   })
   @ApiBody({
     schema: {
@@ -1149,10 +1149,8 @@ export class AuthController {
       properties: {
         referralCode: {
           type: 'string',
-          description: 'Referral code to validate (8-character alphanumeric code)',
-          example: 'ABC12XYZ',
-          minLength: 8,
-          maxLength: 8,
+          description: 'Campus ambassador code (CA-XXXX) or influencer referral code (8 characters)',
+          examples: ['CA-0001', 'ABC12XYZ'],
         },
       },
       required: ['referralCode'],
@@ -1160,13 +1158,14 @@ export class AuthController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Referral code validation result',
+    description: 'Code validation result',
     schema: {
       oneOf: [
         {
           type: 'object',
           properties: {
             valid: { type: 'boolean', example: true },
+            codeType: { type: 'string', example: 'influencer_referral' },
             message: { type: 'string', example: 'Referral code is valid' },
             details: {
               type: 'object',
@@ -1182,10 +1181,27 @@ export class AuthController {
         {
           type: 'object',
           properties: {
+            valid: { type: 'boolean', example: true },
+            codeType: { type: 'string', example: 'campus_ambassador' },
+            message: { type: 'string', example: 'Campus ambassador code is valid' },
+            details: {
+              type: 'object',
+              properties: {
+                ambassadorId: { type: 'string', example: 'CA-0001' },
+                name: { type: 'string', example: 'John Doe' },
+                collegeName: { type: 'string', example: 'MIT' },
+              },
+            },
+          },
+        },
+        {
+          type: 'object',
+          properties: {
             valid: { type: 'boolean', example: false },
+            codeType: { type: 'string', example: 'invalid' },
             message: {
               type: 'string',
-              example: 'Invalid referral code',
+              example: 'Invalid code format',
             },
           },
         },
@@ -1194,15 +1210,34 @@ export class AuthController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Invalid referral code format',
+    description: 'Code is required',
   })
   async validateReferralCode(@Body() body: { referralCode: string }) {
     const { referralCode } = body;
 
-    if (!referralCode || referralCode.length !== 8) {
-      throw new BadRequestException('Referral code must be exactly 8 characters');
+    if (!referralCode?.trim()) {
+      throw new BadRequestException('Referral code is required');
     }
 
-    return this.authService.validateReferralCode(referralCode.toUpperCase());
+    const trimmedCode = referralCode.trim();
+
+    // Check if it's a campus ambassador code (CA-XXXX format)
+    if (/^CA-\d{4}$/i.test(trimmedCode)) {
+      const result = await this.authService.validateCampusAmbassadorCode(trimmedCode.toUpperCase());
+      return { ...result, codeType: 'campus_ambassador' };
+    }
+    // Check if it's an influencer referral code (8-character alphanumeric)
+    else if (/^[A-Z0-9]{8}$/i.test(trimmedCode)) {
+      const result = await this.authService.validateReferralCode(trimmedCode.toUpperCase());
+      return { ...result, codeType: 'influencer_referral' };
+    }
+    // Invalid format
+    else {
+      return {
+        valid: false,
+        codeType: 'invalid',
+        message: 'Invalid code format. Use either CA-XXXX for campus ambassador or 8-character code for influencer referral',
+      };
+    }
   }
 }

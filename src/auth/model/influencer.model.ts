@@ -54,6 +54,14 @@ export class Influencer extends Model {
   declare referralCode: string;
 
   @AllowNull(true)
+  @Column({
+    type: DataType.STRING(50),
+    field: 'campus_ambassador_id',
+    comment: 'Campus ambassador code (CA-XXXX) if influencer was referred by a campus ambassador'
+  })
+  declare campusAmbassadorId: string;
+
+  @AllowNull(true)
   @Column({ type: DataType.INTEGER, defaultValue: 0, field: 'referral_invite_click_count' })
   declare referralInviteClickCount: number;
   @PrimaryKey
