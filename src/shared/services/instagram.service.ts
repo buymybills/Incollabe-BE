@@ -261,6 +261,7 @@ export class InstagramService {
       instagramBio: profile.biography || undefined,
       instagramTokenExpiresAt: expiresAt,
       instagramConnectedAt: new Date(),
+      isVerified: true,
     };
 
     if (userType === 'influencer') {
