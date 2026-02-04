@@ -215,6 +215,10 @@ export class SupportTicketService {
       whereClause[Op.or] = [
         { subject: { [Op.iLike]: `%${searchQuery.trim()}%` } },
         { description: { [Op.iLike]: `%${searchQuery.trim()}%` } },
+        { '$influencer.name$': { [Op.iLike]: `%${searchQuery.trim()}%` } },
+        { '$influencer.username$': { [Op.iLike]: `%${searchQuery.trim()}%` } },
+        { '$brand.brandName$': { [Op.iLike]: `%${searchQuery.trim()}%` } },
+        { '$brand.username$': { [Op.iLike]: `%${searchQuery.trim()}%` } },
       ];
     }
 
@@ -259,6 +263,8 @@ export class SupportTicketService {
         ],
         limit,
         offset,
+        subQuery: false, // Required for searching in included models
+        distinct: true, // Ensure accurate count with joins
       });
 
     return {
