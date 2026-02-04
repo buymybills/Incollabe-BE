@@ -34,6 +34,7 @@ import { Gender } from './types/gender.enum';
 import { InfluencerReferralUsage } from './model/influencer-referral-usage.model';
 import { WhatsAppService } from '../shared/whatsapp.service';
 import { DeviceTokenService } from '../shared/device-token.service';
+import { CampusAmbassadorService } from '../shared/services/campus-ambassador.service';
 
 // Mock bcrypt at module level
 jest.mock('bcrypt', () => ({
@@ -147,6 +148,18 @@ const mockDeviceTokenService = {
   getUserDeviceCount: jest.fn().mockResolvedValue(0),
 };
 
+const mockCampusAmbassadorService = {
+  getAmbassadorById: jest.fn(),
+  incrementReferrals: jest.fn(),
+  incrementSuccessfulSignups: jest.fn(),
+  incrementVerifiedSignups: jest.fn(),
+  registerAmbassador: jest.fn(),
+  getAllAmbassadors: jest.fn(),
+  getAmbassadorByEmail: jest.fn(),
+  searchByCollege: jest.fn(),
+  deleteAmbassador: jest.fn(),
+};
+
 describe('AuthService', () => {
   let service: AuthService;
   let influencerModel: any;
@@ -248,6 +261,10 @@ describe('AuthService', () => {
         {
           provide: EncryptionService,
           useValue: mockEncryptionService,
+        },
+        {
+          provide: CampusAmbassadorService,
+          useValue: mockCampusAmbassadorService,
         },
       ],
     }).compile();
