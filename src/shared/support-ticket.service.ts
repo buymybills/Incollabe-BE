@@ -201,6 +201,8 @@ export class SupportTicketService {
       reportType,
       userType,
       searchQuery,
+      profileName,
+      username,
       page = 1,
       limit = 20,
     } = filters;
@@ -220,6 +222,28 @@ export class SupportTicketService {
         { '$brand.brandName$': { [Op.iLike]: `%${searchQuery.trim()}%` } },
         { '$brand.username$': { [Op.iLike]: `%${searchQuery.trim()}%` } },
       ];
+    }
+
+    // Filter by profile name (reporter's name)
+    if (profileName && profileName.trim()) {
+      if (!whereClause[Op.and]) whereClause[Op.and] = [];
+      whereClause[Op.and].push({
+        [Op.or]: [
+          { '$influencer.name$': { [Op.iLike]: `%${profileName.trim()}%` } },
+          { '$brand.brandName$': { [Op.iLike]: `%${profileName.trim()}%` } },
+        ],
+      });
+    }
+
+    // Filter by username (reporter's username)
+    if (username && username.trim()) {
+      if (!whereClause[Op.and]) whereClause[Op.and] = [];
+      whereClause[Op.and].push({
+        [Op.or]: [
+          { '$influencer.username$': { [Op.iLike]: `%${username.trim()}%` } },
+          { '$brand.username$': { [Op.iLike]: `%${username.trim()}%` } },
+        ],
+      });
     }
 
     const offset = (page - 1) * limit;
