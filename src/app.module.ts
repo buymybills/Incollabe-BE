@@ -1,5 +1,7 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { BullModule } from '@nestjs/bull';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DatabaseModule } from './database/postgres.db';
@@ -18,6 +20,17 @@ import { LoggingMiddleware } from './shared/middleware/logging.middleware';
 @Module({
   imports: [
     ScheduleModule.forRoot(), // Enable cron jobs
+    ConfigModule.forRoot({ isGlobal: true }),
+    // Configure Bull with Redis
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        redis: {
+          host: configService.get('REDIS_HOST') || 'localhost',
+          port: Number(configService.get('REDIS_PORT')) || 6379,
+        },
+      }),
+    }),
     DatabaseModule,
     RedisModule,
     SharedModule,
@@ -28,7 +41,7 @@ import { LoggingMiddleware } from './shared/middleware/logging.middleware';
     InfluencerModule,
     AdminModule,
     PostModule,
-    CampaignModule, 
+    CampaignModule,
   ],
   controllers: [AppController],
   providers: [AppService],

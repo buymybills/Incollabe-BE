@@ -1,5 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
+import { BullModule } from '@nestjs/bull';
 
 import { AdminController } from './admin.controller';
 import { PushNotificationController } from './push-notification.controller';
@@ -18,6 +19,7 @@ import { MaxxSubscriptionAdminService } from './services/maxx-subscription-admin
 import { MaxSubscriptionBrandService } from './services/max-subscription-brand.service';
 import { MaxSubscriptionInvoiceService } from './services/max-subscription-invoice.service';
 import { InvoiceExcelExportService } from './services/invoice-excel-export.service';
+import { NotificationQueueModule } from './queues/notification.queue.module';
 
 import { Admin } from './models/admin.model';
 import { ProfileReview } from './models/profile-review.model';
@@ -85,6 +87,7 @@ import { RolesGuard } from './guards/roles.guard';
       InviteOnlyCampaignInvoice,
     ]),
     SharedModule,
+    NotificationQueueModule,
     forwardRef(() => BrandModule),
     forwardRef(() => InfluencerModule),
     PostModule,

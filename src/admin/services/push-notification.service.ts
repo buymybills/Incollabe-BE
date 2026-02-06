@@ -5,6 +5,8 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
+import { InjectQueue } from '@nestjs/bull';
+import type { Queue } from 'bull';
 import { Op } from 'sequelize';
 import {
   PushNotification,
@@ -32,6 +34,7 @@ import {
   // BulkNotificationResponseDto,
   // BulkNotificationRecipient,
 } from '../dto/push-notification.dto';
+import { SendNotificationJobData } from '../queues/notification.queue.processor';
 // import * as XLSX from 'xlsx';
 
 @Injectable()
@@ -52,6 +55,8 @@ export class PushNotificationService {
     private readonly notificationService: NotificationService,
     private readonly deviceTokenService: DeviceTokenService,
     private readonly auditLogService: AuditLogService,
+    @InjectQueue('notifications')
+    private readonly notificationQueue: Queue<SendNotificationJobData>,
   ) {}
 
   async createNotification(
@@ -319,7 +324,7 @@ export class PushNotificationService {
 
   async sendNotification(
     notificationId: number,
-  ): Promise<{ message: string; notification: NotificationResponseDto }> {
+  ): Promise<{ message: string; notification: NotificationResponseDto; jobId?: string }> {
     const notification =
       await this.pushNotificationModel.findByPk(notificationId);
 
@@ -345,80 +350,43 @@ export class PushNotificationService {
       );
     }
 
-    // Update notification status to sending
+    // Update notification status to sending (processing in background)
     await notification.update({
       status: NotificationStatus.SENT,
       sentAt: new Date(),
       totalRecipients: recipients.length,
     });
 
-    // Send notifications to all recipients (across all their devices)
-    let successCount = 0;
-    let failureCount = 0;
-    let totalDevicesSent = 0;
-
-    for (const recipient of recipients) {
-      try {
-        // Map recipient userType to DeviceUserType
-        const userType = recipient.userType === 'influencer'
-          ? DeviceUserType.INFLUENCER
-          : DeviceUserType.BRAND;
-
-        // Get all device tokens for this user
-        const deviceTokens = await this.deviceTokenService.getAllUserTokens(
-          recipient.id,
-          userType,
-        );
-
-        if (deviceTokens.length > 0) {
-          console.log(`📱 Sending to ${deviceTokens.length} device(s) for ${userType} ${recipient.id}`);
-
-          // Send to all devices for this user
-          await this.notificationService.sendCustomNotification(
-            deviceTokens, // Send to all devices
-            notification.title,
-            notification.body,
-            {
-              ...(notification.metadata || {}),
-              ...(notification.customData || {}),
-            },
-            {
-              imageUrl: notification.imageUrl || undefined,
-              actionUrl: notification.actionUrl || undefined,
-              androidChannelId: notification.androidChannelId || undefined,
-              sound: notification.sound || undefined,
-              priority: notification.priority || undefined,
-              expirationHours: notification.expirationHours || undefined,
-              badge: notification.badge || undefined,
-              threadId: notification.threadId || undefined,
-              interruptionLevel: notification.interruptionLevel || undefined,
-            },
-          );
-
-          successCount++;
-          totalDevicesSent += deviceTokens.length;
-        } else {
-          console.warn(`⚠️  No device tokens found for ${userType} ${recipient.id}`);
-          failureCount++;
-        }
-      } catch (error) {
-        console.error(`❌ Failed to send notification to user ${recipient.id}:`, error);
-        failureCount++;
-      }
-    }
-
-    console.log(`✅ Notification sent to ${successCount} users across ${totalDevicesSent} devices`);
-    console.log(`❌ Failed to send to ${failureCount} users`);
-
-    // Update notification with results
-    await notification.update({
-      successCount,
-      failureCount,
-      status:
-        failureCount === recipients.length
-          ? NotificationStatus.FAILED
-          : NotificationStatus.SENT,
+    // Queue the notification job for background processing
+    const job = await this.notificationQueue.add('send-bulk-notification', {
+      notificationId: notification.id,
+      recipients,
+      notificationPayload: {
+        title: notification.title,
+        body: notification.body,
+        imageUrl: notification.imageUrl || undefined,
+        actionUrl: notification.actionUrl || undefined,
+        androidChannelId: notification.androidChannelId || undefined,
+        sound: notification.sound || undefined,
+        priority: notification.priority || undefined,
+        expirationHours: notification.expirationHours || undefined,
+        badge: notification.badge || undefined,
+        threadId: notification.threadId || undefined,
+        interruptionLevel: (notification.interruptionLevel as 'active' | 'passive' | 'timeSensitive' | 'critical' | undefined) || undefined,
+        metadata: notification.metadata || {},
+        customData: notification.customData || {},
+      },
+    }, {
+      attempts: 3, // Retry up to 3 times on failure
+      backoff: {
+        type: 'exponential',
+        delay: 2000, // Start with 2 seconds delay
+      },
+      removeOnComplete: false, // Keep completed jobs for monitoring
+      removeOnFail: false, // Keep failed jobs for debugging
     });
+
+    console.log(`📬 Notification job queued with ID: ${job.id} for ${recipients.length} recipients`);
 
     const updatedNotification = await this.pushNotificationModel.findByPk(
       notificationId,
@@ -435,13 +403,14 @@ export class PushNotificationService {
 
     if (!updatedNotification) {
       throw new NotFoundException(
-        'Failed to retrieve notification after sending',
+        'Failed to retrieve notification after queuing',
       );
     }
 
     return {
-      message: `Notification sent successfully to ${successCount} out of ${recipients.length} recipients`,
+      message: `Notification queued successfully for ${recipients.length} recipients. Processing in background.`,
       notification: this.formatNotificationResponse(updatedNotification),
+      jobId: job.id.toString(),
     };
   }
 
