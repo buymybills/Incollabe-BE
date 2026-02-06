@@ -55,6 +55,8 @@ import { InfluencerCredibilityScore } from './models/influencer-credibility-scor
 import { InfluencerProfileScore } from './models/influencer-profile-score.model';
 import { CampusAmbassador } from './models/campus-ambassador.model';
 import { AppReviewRequest } from './models/app-review-request.model';
+import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
+import { CreditTransaction } from '../admin/models/credit-transaction.model';
 import { Campaign } from '../campaign/models/campaign.model';
 import { CampaignApplication } from '../campaign/models/campaign-application.model';
 import { CampaignInvitation } from '../campaign/models/campaign-invitation.model';
@@ -91,6 +93,8 @@ import { AppVersionService } from './services/app-version.service';
       InfluencerProfileScore,
       CampusAmbassador,
       AppReviewRequest,
+      InfluencerReferralUsage,
+      CreditTransaction,
       Campaign,
       CampaignApplication,
       CampaignInvitation,
