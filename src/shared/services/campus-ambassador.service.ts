@@ -39,6 +39,9 @@ export class CampusAmbassadorService {
    * Register a new campus ambassador
    */
   async registerAmbassador(dto: RegisterCampusAmbassadorDto): Promise<CampusAmbassador> {
+    // Add +91 prefix to phone number (user provides 10 digits, we store with +91)
+    const phoneNumberWithPrefix = `+91${dto.phoneNumber}`;
+
     // Check if email already exists
     const existingEmail = await this.campusAmbassadorModel.findOne({
       where: { email: dto.email },
@@ -48,27 +51,53 @@ export class CampusAmbassadorService {
       throw new ConflictException('This email is already registered as a campus ambassador');
     }
 
+    // Check if phone number already exists
+    const existingPhone = await this.campusAmbassadorModel.findOne({
+      where: { phoneNumber: phoneNumberWithPrefix },
+    });
+
+    if (existingPhone) {
+      throw new ConflictException('This phone number is already registered as a campus ambassador');
+    }
+
     // Generate unique ambassador ID
     const ambassadorId = await this.generateAmbassadorId();
 
-    // Add +91 prefix to phone number (user provides 10 digits, we store with +91)
-    const phoneNumberWithPrefix = `+91${dto.phoneNumber}`;
+    try {
+      // Create new campus ambassador
+      const ambassador = await this.campusAmbassadorModel.create({
+        ambassadorId,
+        name: dto.name,
+        phoneNumber: phoneNumberWithPrefix,
+        email: dto.email,
+        collegeName: dto.collegeName,
+        collegeCity: dto.collegeCity,
+        collegeState: dto.collegeState,
+        totalReferrals: 0,
+        successfulSignups: 0,
+        verifiedSignups: 0,
+      });
 
-    // Create new campus ambassador
-    const ambassador = await this.campusAmbassadorModel.create({
-      ambassadorId,
-      name: dto.name,
-      phoneNumber: phoneNumberWithPrefix,
-      email: dto.email,
-      collegeName: dto.collegeName,
-      collegeCity: dto.collegeCity,
-      collegeState: dto.collegeState,
-      totalReferrals: 0,
-      successfulSignups: 0,
-      verifiedSignups: 0,
-    });
+      return ambassador;
+    } catch (error) {
+      // Handle unique constraint violations from database
+      if (error.name === 'SequelizeUniqueConstraintError') {
+        const field = error.errors?.[0]?.path || 'field';
 
-    return ambassador;
+        if (field.includes('email')) {
+          throw new ConflictException('This email is already registered as a campus ambassador');
+        } else if (field.includes('phone')) {
+          throw new ConflictException('This phone number is already registered as a campus ambassador');
+        } else if (field.includes('ambassador_id')) {
+          throw new ConflictException('Ambassador ID conflict. Please try again.');
+        }
+
+        throw new ConflictException('This information is already registered');
+      }
+
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   /**
