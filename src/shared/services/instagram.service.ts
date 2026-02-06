@@ -18,6 +18,8 @@ import { InstagramProfileAnalysis } from '../models/instagram-profile-analysis.m
 import { InstagramProfileGrowth } from '../models/instagram-profile-growth.model';
 import { GeminiAIService } from './gemini-ai.service';
 import { CampusAmbassadorService } from './campus-ambassador.service';
+import { InfluencerReferralUsage } from '../../auth/model/influencer-referral-usage.model';
+import { CreditTransaction, CreditTransactionType, PaymentStatus } from '../../admin/models/credit-transaction.model';
 
 export type UserType = 'influencer' | 'brand';
 
@@ -40,6 +42,10 @@ export class InstagramService {
     private instagramProfileAnalysisModel: typeof InstagramProfileAnalysis,
     @InjectModel(InstagramProfileGrowth)
     private instagramProfileGrowthModel: typeof InstagramProfileGrowth,
+    @InjectModel(InfluencerReferralUsage)
+    private influencerReferralUsageModel: typeof InfluencerReferralUsage,
+    @InjectModel(CreditTransaction)
+    private creditTransactionModel: typeof CreditTransaction,
     private geminiAIService: GeminiAIService,
     private campusAmbassadorService: CampusAmbassadorService,
   ) {
@@ -299,6 +305,79 @@ export class InstagramService {
           error,
         );
         // Don't throw - allow Instagram connection to succeed even if tracking fails
+      }
+
+      // Award referral credit if this influencer was referred by someone
+      // Wrap in try-catch to prevent Instagram connection failure if referral fails
+      try {
+        const referralUsage = await this.influencerReferralUsageModel.findOne({
+          where: {
+            referredUserId: influencer.id,
+            creditAwarded: false,
+          },
+        });
+
+        if (referralUsage) {
+          // Update the referral usage record
+          await referralUsage.update({
+            creditAwarded: true,
+            creditAwardedAt: new Date(),
+          });
+
+          // Get the referrer influencer
+          const referrer = await this.influencerModel.findByPk(
+            referralUsage.influencerId,
+          );
+
+          if (referrer) {
+            // Update referrer's credits (₹25 per referral)
+            const currentCredits = referrer.referralCredits || 0;
+            const creditAmount = 25;
+            const newCredits = currentCredits + creditAmount;
+
+            await this.influencerModel.update(
+              { referralCredits: newCredits },
+              { where: { id: referrer.id } },
+            );
+
+            // Log credit transaction for admin records
+            await this.creditTransactionModel.create({
+              influencerId: referrer.id,
+              transactionType: CreditTransactionType.REFERRAL_BONUS,
+              amount: creditAmount,
+              paymentStatus: PaymentStatus.PENDING,
+              description: `Referral bonus for referring ${influencer.name} (ID ${influencer.id})`,
+              referredUserId: influencer.id,
+              upiId: referrer.upiId || null,
+            });
+
+            console.log(
+              `✅ REFERRAL CREDIT AWARDED (Instagram Connect) ✅`,
+            );
+            console.log(
+              `├─ Referrer ID: ${referrer.id} (${referrer.name})`,
+            );
+            console.log(
+              `├─ Referee ID: ${influencer.id} (${influencer.name})`,
+            );
+            console.log(
+              `├─ Amount Earned: Rs ${creditAmount}`,
+            );
+            console.log(
+              `├─ Total Credits Now: Rs ${newCredits}`,
+            );
+            console.log(
+              `└─ Timestamp: ${new Date().toISOString()}`,
+            );
+          }
+        }
+      } catch (error) {
+        console.error(
+          'Failed to award referral credit for influencer:',
+          influencer.id,
+          error,
+        );
+        // Don't throw - allow Instagram connection to succeed even if referral credit fails
       }
 
       return influencer.reload();
