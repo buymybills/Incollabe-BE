@@ -17,6 +17,7 @@ import { SearchService } from './services/search.service';
 import { SupportTicketService } from './support-ticket.service';
 import { ChatService } from './chat.service';
 import { ChatGateway } from './chat.gateway';
+import { InstagramSyncGateway } from './instagram-sync.gateway';
 import { SearchController } from './controllers/search.controller';
 import { ChatController } from './chat.controller';
 import { InstagramController } from './controllers/instagram.controller';
@@ -128,6 +129,7 @@ import { AppVersionService } from './services/app-version.service';
     SupportTicketService,
     ChatService,
     ChatGateway,
+    InstagramSyncGateway,
     IsValidUsernameConstraint,
     RazorpayService,
     KeyBackupService,
@@ -159,6 +161,7 @@ import { AppVersionService } from './services/app-version.service';
     EncryptionService,
     SupportTicketService,
     ChatService,
+    InstagramSyncGateway,
     IsValidUsernameConstraint,
     RazorpayService,
     InstagramService,

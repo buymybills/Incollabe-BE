@@ -4,6 +4,7 @@ import { InstagramService } from '../services/instagram.service';
 import { InstagramSyncCronService } from '../services/instagram-sync.cron';
 //import { InstagramGrowthCronService } from '../services/instagram-growth.cron';
 import { InfluencerCredibilityScoringService } from '../services/influencer-credibility-scoring.service';
+import { InstagramSyncGateway } from '../instagram-sync.gateway';
 import {
   InstagramTokenDto,
   InstagramTokenResponseDto,
@@ -24,6 +25,7 @@ export class InstagramController {
     private readonly instagramSyncCronService: InstagramSyncCronService,
     //private readonly instagramGrowthCronService: InstagramGrowthCronService,
     private readonly credibilityScoringService: InfluencerCredibilityScoringService,
+    private readonly instagramSyncGateway: InstagramSyncGateway,
   ) {}
 
   /**
@@ -1135,6 +1137,237 @@ export class InstagramController {
     );
 
     return result;
+  }
+
+  /**
+   * Async version: Bulk sync all media insights with WebSocket progress
+   * POST /instagram/sync-all-media-insights-async
+   */
+  @Public()
+  @Post('sync-all-media-insights-async')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Bulk sync media insights with real-time WebSocket progress (Async)',
+    description: `Starts Instagram media sync in the background and returns a jobId immediately.
+
+    **How it works:**
+    1. **Returns immediately** - API responds in < 1 second with a jobId
+    2. **Connect to WebSocket** - Use the jobId to listen for real-time progress updates
+    3. **Receive progress** - Get updates at 0%, 10%, 20%, ..., 100%
+    4. **Get completion data** - Final event contains sync summary
+
+    **WebSocket Integration:**
+    - Namespace: \`/instagram-sync\`
+    - Auth: Include JWT in connection: \`{ auth: { token: "Bearer <jwt>" } }\`
+    - Events:
+      - \`sync:<jobId>:progress\` - Progress updates (0-100%)
+      - \`sync:<jobId>:complete\` - Sync completed successfully
+      - \`sync:<jobId>:error\` - Sync failed
+
+    **Benefits:**
+    - No timeout issues (API returns immediately)
+    - Real-time feedback (user sees progress bar)
+    - Better UX (no silent waiting)
+
+    **Example Response:**
+    \`\`\`json
+    {
+      "success": true,
+      "jobId": "media-sync-123-1234567890",
+      "message": "Sync started. Connect to WebSocket for progress updates.",
+      "socketNamespace": "/instagram-sync",
+      "events": {
+        "progress": "sync:media-sync-123-1234567890:progress",
+        "complete": "sync:media-sync-123-1234567890:complete",
+        "error": "sync:media-sync-123-1234567890:error"
+      }
+    }
+    \`\`\``
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'User ID (influencer or brand ID)'
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    enum: ['influencer', 'brand'],
+    description: 'User type: influencer or brand'
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of posts to fetch from Instagram API (default: 50, max: 100)',
+    type: Number
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Sync job started successfully. Use jobId with WebSocket to track progress.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid parameters'
+  })
+  async syncAllMediaInsightsAsync(
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
+    @Query('limit') limit?: string,
+  ) {
+    if (!userId || !userType) {
+      throw new BadRequestException('user_id and user_type are required');
+    }
+
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException('user_type must be either "influencer" or "brand"');
+    }
+
+    const limitNum = limit ? parseInt(limit, 10) : 50;
+
+    // Ensure limit is within bounds
+    if (limitNum < 1 || limitNum > 100) {
+      throw new BadRequestException('limit must be between 1 and 100');
+    }
+
+    // Generate unique job ID
+    const jobId = `media-sync-${userId}-${Date.now()}`;
+
+    // Start sync in background (don't await)
+    this.instagramService
+      .syncAllMediaInsights(
+        Number(userId),
+        userType as 'influencer' | 'brand',
+        limitNum,
+        jobId, // Pass jobId to enable WebSocket emissions
+      )
+      .catch((error) => {
+        console.error(`Background media sync failed for job ${jobId}:`, error);
+        // Error will be emitted via WebSocket by the service
+      });
+
+    // Return immediately with job info
+    return {
+      success: true,
+      jobId,
+      message: 'Media sync started. Connect to WebSocket for progress updates.',
+      socketNamespace: '/instagram-sync',
+      events: {
+        progress: `sync:${jobId}:progress`,
+        complete: `sync:${jobId}:complete`,
+        error: `sync:${jobId}:error`,
+      },
+    };
+  }
+
+  /**
+   * Async version: Comprehensive sync with WebSocket progress
+   * POST /instagram/sync-all-insights-async
+   */
+  @Public()
+  @Post('sync-all-insights-async')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Comprehensive Instagram sync with real-time WebSocket progress (Async)',
+    description: `Starts comprehensive Instagram profile sync in the background and returns a jobId immediately.
+
+    **How it works:**
+    1. **Returns immediately** - API responds in < 1 second with a jobId
+    2. **Connect to WebSocket** - Use the jobId to listen for real-time progress updates
+    3. **Receive progress** - Get updates at 0%, 25%, 50%, 75%, 100%
+    4. **Get completion data** - Final event contains sync summary
+
+    **What this syncs:**
+    - Basic profile data (username, followers, account type)
+    - Profile snapshots with growth tracking
+    - Audience demographics (age, gender)
+    - Geographic data (countries, cities)
+
+    **WebSocket Integration:**
+    - Namespace: \`/instagram-sync\`
+    - Auth: Include JWT in connection: \`{ auth: { token: "Bearer <jwt>" } }\`
+    - Events:
+      - \`sync:<jobId>:progress\` - Progress updates (0%, 25%, 50%, 75%, 100%)
+      - \`sync:<jobId>:complete\` - Sync completed successfully
+      - \`sync:<jobId>:error\` - Sync failed
+
+    **Benefits:**
+    - No timeout issues (API returns immediately)
+    - Real-time feedback during sync
+    - Better UX for long-running operations
+
+    **Example Response:**
+    \`\`\`json
+    {
+      "success": true,
+      "jobId": "profile-sync-123-1234567890",
+      "message": "Profile sync started. Connect to WebSocket for progress updates.",
+      "socketNamespace": "/instagram-sync",
+      "events": {
+        "progress": "sync:profile-sync-123-1234567890:progress",
+        "complete": "sync:profile-sync-123-1234567890:complete",
+        "error": "sync:profile-sync-123-1234567890:error"
+      }
+    }
+    \`\`\``
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'User ID (influencer or brand ID)'
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    enum: ['influencer', 'brand'],
+    description: 'User type: influencer or brand'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Sync job started successfully. Use jobId with WebSocket to track progress.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid parameters'
+  })
+  async syncAllInsightsAsync(
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
+  ) {
+    if (!userId || !userType) {
+      throw new BadRequestException('user_id and user_type are required');
+    }
+
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException('user_type must be either "influencer" or "brand"');
+    }
+
+    // Generate unique job ID
+    const jobId = `profile-sync-${userId}-${Date.now()}`;
+
+    // Start sync in background (don't await)
+    this.instagramService
+      .syncAllInsights(
+        Number(userId),
+        userType as 'influencer' | 'brand',
+        jobId, // Pass jobId to enable WebSocket emissions
+      )
+      .catch((error) => {
+        console.error(`Background profile sync failed for job ${jobId}:`, error);
+        // Error will be emitted via WebSocket by the service
+      });
+
+    // Return immediately with job info
+    return {
+      success: true,
+      jobId,
+      message: 'Profile sync started. Connect to WebSocket for progress updates.',
+      socketNamespace: '/instagram-sync',
+      events: {
+        progress: `sync:${jobId}:progress`,
+        complete: `sync:${jobId}:complete`,
+        error: `sync:${jobId}:error`,
+      },
+    };
   }
 
   /**
