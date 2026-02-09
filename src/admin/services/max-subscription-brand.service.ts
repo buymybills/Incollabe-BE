@@ -300,18 +300,7 @@ export class MaxSubscriptionBrandService {
 
     // Payment method filter
     if (paymentMethod && paymentMethod !== 'all') {
-      if (paymentMethod === 'upi') {
-        invoiceWhereClause.paymentMethod = { [Op.iLike]: '%upi%' };
-      } else if (paymentMethod === 'credit_card') {
-        invoiceWhereClause.paymentMethod = {
-          [Op.or]: [
-            { [Op.iLike]: '%card%' },
-            { [Op.iLike]: '%credit%' },
-          ],
-        };
-      } else if (paymentMethod === 'razorpay') {
-        invoiceWhereClause.paymentMethod = { [Op.iLike]: '%razorpay%' };
-      }
+      invoiceWhereClause.paymentMethod = paymentMethod;
     }
 
     // Build where clause for campaigns
@@ -483,18 +472,7 @@ export class MaxSubscriptionBrandService {
 
     // Payment method filter
     if (paymentMethod && paymentMethod !== 'all') {
-      if (paymentMethod === 'upi') {
-        invoiceWhereClause.paymentMethod = { [Op.iLike]: '%upi%' };
-      } else if (paymentMethod === 'credit_card') {
-        invoiceWhereClause.paymentMethod = {
-          [Op.or]: [
-            { [Op.iLike]: '%card%' },
-            { [Op.iLike]: '%credit%' },
-          ],
-        };
-      } else if (paymentMethod === 'razorpay') {
-        invoiceWhereClause.paymentMethod = { [Op.iLike]: '%razorpay%' };
-      }
+      invoiceWhereClause.paymentMethod = paymentMethod;
     }
 
     // Build where clause for campaigns

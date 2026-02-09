@@ -1361,7 +1361,7 @@ export class CampaignService {
   async getCampaignApplications(
     campaignId: number,
     getApplicationsDto: GetCampaignApplicationsDto,
-    brandId: number,
+    brandId?: number,
   ): Promise<{
     applications: CampaignApplication[];
     total: number;
@@ -1369,14 +1369,23 @@ export class CampaignService {
     limit: number;
     totalPages: number;
   }> {
-    // Verify campaign exists and belongs to the brand
+    // Verify campaign exists and belongs to the brand (if brandId provided)
     // Note: We allow viewing applications even for inactive/completed campaigns
+    const campaignWhere: any = { id: campaignId };
+    if (brandId !== undefined) {
+      campaignWhere.brandId = brandId;
+    }
+
     const campaign = await this.campaignModel.findOne({
-      where: { id: campaignId, brandId },
+      where: campaignWhere,
     });
 
     if (!campaign) {
-      throw new NotFoundException('Campaign not found or access denied');
+      throw new NotFoundException(
+        brandId !== undefined
+          ? 'Campaign not found or access denied'
+          : 'Campaign not found',
+      );
     }
 
     const {
