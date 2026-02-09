@@ -577,7 +577,11 @@ export class MaxSubscriptionInvoiceService {
     if (startDate || endDate) {
       whereClause.paidAt = {};
       if (startDate) whereClause.paidAt[Op.gte] = new Date(startDate);
-      if (endDate) whereClause.paidAt[Op.lte] = new Date(endDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        whereClause.paidAt[Op.lte] = end;
+      }
     }
 
     if (paymentMethod && paymentMethod !== 'all') {
@@ -666,7 +670,11 @@ export class MaxSubscriptionInvoiceService {
     if (startDate || endDate) {
       whereClause.paidAt = {};
       if (startDate) whereClause.paidAt[Op.gte] = new Date(startDate);
-      if (endDate) whereClause.paidAt[Op.lte] = new Date(endDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        whereClause.paidAt[Op.lte] = end;
+      }
     }
 
     if (paymentMethod && paymentMethod !== 'all') {
@@ -727,7 +735,11 @@ export class MaxSubscriptionInvoiceService {
     if (startDate || endDate) {
       whereClause.paidAt = {};
       if (startDate) whereClause.paidAt[Op.gte] = new Date(startDate);
-      if (endDate) whereClause.paidAt[Op.lte] = new Date(endDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        whereClause.paidAt[Op.lte] = end;
+      }
     }
 
     if (paymentMethod && paymentMethod !== 'all') {
