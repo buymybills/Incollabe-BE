@@ -25,6 +25,7 @@ import { GetCampaignsDto } from './dto/get-campaigns.dto';
 import { SearchInfluencersDto } from './dto/search-influencers.dto';
 import { InviteInfluencersDto } from './dto/invite-influencers.dto';
 import { Follow } from '../post/models/follow.model';
+import { Post } from '../post/models/post.model';
 import { CampaignQueryService } from './services/campaign-query.service';
 import { NotificationService } from '../shared/notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
@@ -32,6 +33,8 @@ import { Experience } from '../influencer/models/experience.model';
 import { CreditTransaction } from '../admin/models/credit-transaction.model';
 import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
 import { MaxCampaignInvoice } from './models/max-campaign-invoice.model';
+import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
+import { AIScoringService } from '../admin/services/ai-scoring.service';
 
 const mockModel = () => ({
   findOne: jest.fn(),
@@ -69,6 +72,11 @@ const mockDeviceTokenService = {
   addOrUpdateDeviceToken: jest.fn(),
   removeDeviceToken: jest.fn(),
   getUserDevices: jest.fn(),
+};
+
+const mockAIScoringService = {
+  scoreInfluencer: jest.fn(),
+  getInfluencerScore: jest.fn(),
 };
 
 describe('CampaignService', () => {
@@ -134,6 +142,14 @@ describe('CampaignService', () => {
           useValue: mockModel(),
         },
         {
+          provide: getModelToken(Post),
+          useValue: mockModel(),
+        },
+        {
+          provide: getModelToken(InstagramProfileAnalysis),
+          useValue: mockModel(),
+        },
+        {
           provide: WhatsAppService,
           useValue: mockWhatsAppService,
         },
@@ -148,6 +164,10 @@ describe('CampaignService', () => {
         {
           provide: DeviceTokenService,
           useValue: mockDeviceTokenService,
+        },
+        {
+          provide: AIScoringService,
+          useValue: mockAIScoringService,
         },
         {
           provide: getModelToken(CreditTransaction),
