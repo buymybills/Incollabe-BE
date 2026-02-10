@@ -128,13 +128,15 @@ export class InstagramSyncGateway
           userType: decoded.type || decoded.userType,
         });
 
-        console.log(`✅ Client ${client.id} authenticated as ${decoded.type} ${decoded.sub}`);
+        console.log(`✅ Client ${client.id} authenticated as ${decoded.type || decoded.userType} ${decoded.sub || decoded.id}`);
+        console.log(`   Total connected clients: ${this.authenticatedSockets.size}`);
         this.logger.log(`Client ${client.id} connected and authenticated`);
 
         // Send connection success event
         client.emit('connected', {
           message: 'Connected to Instagram sync updates',
           socketId: client.id,
+          timestamp: new Date().toISOString(),
         });
       } catch (error) {
         console.error(`❌ Token verification failed for ${client.id}:`, error.message);
@@ -179,6 +181,8 @@ export class InstagramSyncGateway
     const eventName = `sync:${jobId}:progress`;
 
     console.log(`📡 Emitting progress for job ${jobId}: ${progress}% - ${message}`);
+    console.log(`   Connected clients: ${this.authenticatedSockets.size}`);
+    console.log(`   Event name: ${eventName}`);
 
     // Emit to all authenticated sockets for this user
     this.server.emit(eventName, {
@@ -187,6 +191,8 @@ export class InstagramSyncGateway
       message,
       timestamp: new Date().toISOString(),
     });
+
+    console.log(`   ✅ Event emitted to ${this.authenticatedSockets.size} clients`);
   }
 
   /**
