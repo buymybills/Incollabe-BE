@@ -155,7 +155,7 @@ export class InstagramService {
    */
   async getUserProfile(
     accessToken: string,
-    fields: string = 'id,username,account_type,followers_count,follows_count,media_count,profile_picture_url,biography,website,name,is_verified'
+    fields: string = 'id,username,account_type,followers_count,follows_count,media_count,profile_picture_url,biography,website,name'
   ): Promise<InstagramUserProfileDto> {
     try {
       const response = await axios.get('https://graph.instagram.com/me', {
