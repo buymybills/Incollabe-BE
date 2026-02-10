@@ -25,6 +25,7 @@ import { GetCampaignsDto } from './dto/get-campaigns.dto';
 import { SearchInfluencersDto } from './dto/search-influencers.dto';
 import { InviteInfluencersDto } from './dto/invite-influencers.dto';
 import { Follow } from '../post/models/follow.model';
+import { Post } from '../post/models/post.model';
 import { CampaignQueryService } from './services/campaign-query.service';
 import { NotificationService } from '../shared/notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
@@ -131,6 +132,10 @@ describe('CampaignService', () => {
         },
         {
           provide: getModelToken(MaxCampaignInvoice),
+          useValue: mockModel(),
+        },
+        {
+          provide: getModelToken(Post),
           useValue: mockModel(),
         },
         {
