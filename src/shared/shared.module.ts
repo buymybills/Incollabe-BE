@@ -17,15 +17,17 @@ import { SearchService } from './services/search.service';
 import { SupportTicketService } from './support-ticket.service';
 import { ChatService } from './chat.service';
 import { ChatGateway } from './chat.gateway';
+import { InstagramSyncGateway } from './instagram-sync.gateway';
 import { SearchController } from './controllers/search.controller';
 import { ChatController } from './chat.controller';
 import { InstagramController } from './controllers/instagram.controller';
 import { ConfigController } from './controllers/config.controller';
 import { InstagramService } from './services/instagram.service';
-//import { InstagramSyncCronService } from './services/instagram-sync.cron';
-//import { InstagramDemographicsCronService } from './services/instagram-demographics.cron';
-//import { InstagramGrowthCronService } from './services/instagram-growth.cron';
-//import { CredibilityScoreCronService } from './services/credibility-score.cron';
+// import { InstagramSyncCronService } from './services/instagram-sync.cron';
+// import { InstagramDemographicsCronService } from './services/instagram-demographics.cron';
+// import { InstagramGrowthCronService } from './services/instagram-growth.cron';
+import { InstagramTokenRefreshCronService } from './services/instagram-token-refresh.cron';
+import { CredibilityScoreCronService } from './services/credibility-score.cron';
 import { InfluencerCredibilityScoringService } from './services/influencer-credibility-scoring.service';
 import { InfluencerProfileScoringService } from './services/influencer-profile-scoring.service';
 import { GeminiAIService } from './services/gemini-ai.service';
@@ -128,14 +130,16 @@ import { AppVersionService } from './services/app-version.service';
     SupportTicketService,
     ChatService,
     ChatGateway,
+    InstagramSyncGateway,
     IsValidUsernameConstraint,
     RazorpayService,
     KeyBackupService,
     InstagramService,
-    //InstagramSyncCronService,
-    //InstagramDemographicsCronService,
-    //InstagramGrowthCronService,
-    //CredibilityScoreCronService,
+    // InstagramSyncCronService,
+    // InstagramDemographicsCronService,
+    // InstagramGrowthCronService,
+    InstagramTokenRefreshCronService,
+    CredibilityScoreCronService,
     InfluencerCredibilityScoringService,
     InfluencerProfileScoringService,
     GeminiAIService,
@@ -159,6 +163,7 @@ import { AppVersionService } from './services/app-version.service';
     EncryptionService,
     SupportTicketService,
     ChatService,
+    InstagramSyncGateway,
     IsValidUsernameConstraint,
     RazorpayService,
     InstagramService,

@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsOptional, IsEnum, IsNumber, IsString, Min } from 'class-validator';
+import { IsOptional, IsEnum, IsNumber, IsString, Min, IsDateString } from 'class-validator';
 import { Type } from 'class-transformer';
 import {
   CampaignStatus,
@@ -109,4 +109,22 @@ export class GetCampaignsDto {
   @IsNumber()
   @Min(1)
   limit?: number = 20;
+
+  @ApiProperty({
+    description: 'Start date for filtering campaigns (YYYY-MM-DD). If not provided, no date filtering is applied.',
+    required: false,
+    example: '2026-01-01',
+  })
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @ApiProperty({
+    description: 'End date for filtering campaigns (YYYY-MM-DD). If not provided, no date filtering is applied.',
+    required: false,
+    example: '2026-02-07',
+  })
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
 }

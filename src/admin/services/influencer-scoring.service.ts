@@ -193,6 +193,8 @@ export class InfluencerScoringService {
           city: influencer.city?.name || '',
           country: influencer.country?.name || '',
           isVerified: influencer.isVerified || false,
+          verifiedAt: influencer.verifiedAt || null,
+          instagramIsVerified: influencer.instagramIsVerified || false,
           isTopInfluencer: influencer.isTopInfluencer || false,
           followersCount,
           engagementRate: scoreBreakdown.engagementRateScore / 10, // Convert back to percentage
@@ -456,6 +458,8 @@ export class InfluencerScoringService {
           city: influencer.city?.name || '',
           country: influencer.country?.name || '',
           isVerified: influencer.isVerified || false,
+          verifiedAt: influencer.verifiedAt || null,
+          instagramIsVerified: influencer.instagramIsVerified || false,
           isTopInfluencer: influencer.isTopInfluencer || false,
           displayOrder: influencer.isTopInfluencer
             ? influencer.displayOrder

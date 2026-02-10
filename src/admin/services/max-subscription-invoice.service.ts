@@ -183,16 +183,7 @@ export class MaxSubscriptionInvoiceService {
 
     // Payment method filter
     if (paymentMethod && paymentMethod !== 'all') {
-      if (paymentMethod === 'upi') {
-        whereClause.paymentMethod = { [Op.iLike]: '%upi%' };
-      } else if (paymentMethod === 'credit_card') {
-        whereClause.paymentMethod = { [Op.or]: [
-          { [Op.iLike]: '%card%' },
-          { [Op.iLike]: '%credit%' },
-        ]};
-      } else if (paymentMethod === 'razorpay') {
-        whereClause.paymentMethod = { [Op.iLike]: '%razorpay%' };
-      }
+      whereClause.paymentMethod = paymentMethod;
     }
 
     // Date filtering
@@ -332,18 +323,7 @@ export class MaxSubscriptionInvoiceService {
 
     // Payment method filter
     if (paymentMethod && paymentMethod !== 'all') {
-      if (paymentMethod === 'upi') {
-        whereClause.paymentMethod = { [Op.iLike]: '%upi%' };
-      } else if (paymentMethod === 'credit_card') {
-        whereClause.paymentMethod = {
-          [Op.or]: [
-            { [Op.iLike]: '%card%' },
-            { [Op.iLike]: '%credit%' },
-          ],
-        };
-      } else if (paymentMethod === 'razorpay') {
-        whereClause.paymentMethod = { [Op.iLike]: '%razorpay%' };
-      }
+      whereClause.paymentMethod = paymentMethod;
     }
 
     // Date filtering
@@ -597,10 +577,14 @@ export class MaxSubscriptionInvoiceService {
     if (startDate || endDate) {
       whereClause.paidAt = {};
       if (startDate) whereClause.paidAt[Op.gte] = new Date(startDate);
-      if (endDate) whereClause.paidAt[Op.lte] = new Date(endDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        whereClause.paidAt[Op.lte] = end;
+      }
     }
 
-    if (paymentMethod) {
+    if (paymentMethod && paymentMethod !== 'all') {
       whereClause.paymentMethod = paymentMethod;
     }
 
@@ -686,10 +670,14 @@ export class MaxSubscriptionInvoiceService {
     if (startDate || endDate) {
       whereClause.paidAt = {};
       if (startDate) whereClause.paidAt[Op.gte] = new Date(startDate);
-      if (endDate) whereClause.paidAt[Op.lte] = new Date(endDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        whereClause.paidAt[Op.lte] = end;
+      }
     }
 
-    if (paymentMethod) {
+    if (paymentMethod && paymentMethod !== 'all') {
       whereClause.paymentMethod = paymentMethod;
     }
 
@@ -747,10 +735,14 @@ export class MaxSubscriptionInvoiceService {
     if (startDate || endDate) {
       whereClause.paidAt = {};
       if (startDate) whereClause.paidAt[Op.gte] = new Date(startDate);
-      if (endDate) whereClause.paidAt[Op.lte] = new Date(endDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        whereClause.paidAt[Op.lte] = end;
+      }
     }
 
-    if (paymentMethod) {
+    if (paymentMethod && paymentMethod !== 'all') {
       whereClause.paymentMethod = paymentMethod;
     }
 

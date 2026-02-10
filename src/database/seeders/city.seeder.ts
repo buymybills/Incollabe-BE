@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { City } from '../../shared/models/city.model';
 import { Country } from '../../shared/models/country.model';
-import indianCitiesData from '../data/indian-cities.json';
+import indianCitiesData from '../data/indian-cities-geonames.json';
 
 @Injectable()
 export class CitySeeder {
@@ -26,23 +26,26 @@ export class CitySeeder {
       throw new Error('Countries must be seeded before cities');
     }
 
-    // Load Indian cities from JSON file (1221 cities)
+    // Load Indian cities from GeoNames JSON file (4911 cities)
     const indianCitiesArray = Array.isArray(indianCitiesData)
       ? indianCitiesData
       : (indianCitiesData as any).default || [];
 
-    const indianCities = indianCitiesArray.map((city: any) => ({
-      name: city.name,
-      state: city.state,
-      countryId: countryMap.get('IN'),
-      tier: city.tier,
-    }));
+    const indianCities = indianCitiesArray
+      .filter((city: any) => city.state !== 'Unknown') // Filter out cities with unknown state
+      .map((city: any) => ({
+        name: city.name,
+        state: city.state,
+        countryId: countryMap.get('IN'),
+        tier: city.tier,
+      }));
 
-    console.log(`📍 Loaded ${indianCities.length} Indian cities from database`);
+    console.log(`📍 Loaded ${indianCities.length} Indian cities from GeoNames database`);
 
     const cities = [
-      // India (IN) - All 1221 cities loaded from JSON file
+      // India (IN) - 4,200+ cities loaded from GeoNames database
       // This includes all Indian states and union territories with proper tier classification
+      // Source: GeoNames (population >= 10,000 OR capital cities)
       ...indianCities,
 
       // United States (US)

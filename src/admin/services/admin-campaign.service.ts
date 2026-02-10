@@ -376,6 +376,8 @@ export class AdminCampaignService {
       sortBy = 'createdAt',
       page = 1,
       limit = 20,
+      startDate,
+      endDate,
     } = filters;
 
     // Build base where conditions
@@ -398,6 +400,20 @@ export class AdminCampaignService {
     // Apply status filter (active, draft, completed, paused, cancelled)
     if (statusFilter) {
       whereConditions.status = statusFilter;
+    }
+
+    // Apply date range filter
+    if (startDate || endDate) {
+      whereConditions.createdAt = {};
+      if (startDate) {
+        whereConditions.createdAt[Op.gte] = new Date(startDate);
+      }
+      if (endDate) {
+        // Set end date to end of day (23:59:59)
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(23, 59, 59, 999);
+        whereConditions.createdAt[Op.lte] = endDateTime;
+      }
     }
 
     // Apply campaign name search

@@ -21,7 +21,7 @@ export class UpdateSupportTicketDto {
   adminNotes?: string;
 
   @ApiPropertyOptional({
-    description: 'Resolution message (sent to user)',
+    description: 'Resolution message (sent to user) - Optional',
     example: 'We have fixed the upload issue. Please try again.',
     minLength: 10,
   })

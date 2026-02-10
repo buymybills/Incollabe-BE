@@ -86,6 +86,7 @@ import { GetBrandsDto } from './dto/get-brands.dto';
 import { GetCampaignsDto } from './dto/get-campaigns.dto';
 import { GetPostsDto } from './dto/get-posts.dto';
 import { TopInfluencersResponseDto } from './dto/top-influencer-response.dto';
+import { GetCampaignApplicationsDto } from '../campaign/dto/get-campaign-applications.dto';
 import {
   DashboardRequestDto,
   CampaignDashboardRequestDto,
@@ -1694,9 +1695,9 @@ export class AdminController {
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Get campaign applications with AI scoring',
+    summary: 'Get campaign applications',
     description:
-      'Get all applications for a campaign with AI-powered relevance scoring, strengths/concerns analysis, and smart sorting',
+      'Get all applications for a campaign with comprehensive filtering and sorting options. Supports filters by status, gender, niches, cities, age range, platforms, and experience level.',
   })
   @ApiParam({
     name: 'id',
@@ -1705,87 +1706,84 @@ export class AdminController {
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Campaign applications retrieved successfully with AI scores',
+    description: 'Campaign applications retrieved successfully',
     schema: {
       type: 'object',
       properties: {
-        campaignId: { type: 'number', example: 123 },
-        totalApplications: { type: 'number', example: 50 },
-        topMatches: {
+        applications: {
           type: 'array',
-          description: 'Top 10 highly recommended influencers',
           items: {
             type: 'object',
             properties: {
-              applicationId: { type: 'number', example: 1 },
+              id: { type: 'number', example: 1 },
+              status: {
+                type: 'string',
+                enum: ['pending', 'selected', 'rejected'],
+                example: 'pending',
+              },
+              coverLetter: { type: 'string', example: 'I would love to...' },
+              proposalMessage: { type: 'string', example: 'My proposal is...' },
+              createdAt: {
+                type: 'string',
+                example: '2024-01-15T10:30:00Z',
+              },
+              updatedAt: {
+                type: 'string',
+                example: '2024-01-15T10:30:00Z',
+              },
+              reviewedAt: {
+                type: 'string',
+                example: '2024-01-16T14:20:00Z',
+                nullable: true,
+              },
+              reviewNotes: {
+                type: 'string',
+                example: 'Great profile',
+                nullable: true,
+              },
               influencer: {
                 type: 'object',
                 properties: {
                   id: { type: 'number', example: 123 },
                   name: { type: 'string', example: 'Jane Doe' },
                   username: { type: 'string', example: '@janedoe' },
-                  followers: { type: 'number', example: 50000 },
-                  engagementRate: { type: 'number', example: 5.2 },
+                  profileImage: {
+                    type: 'string',
+                    example: 'https://example.com/image.jpg',
+                  },
+                  collaborationCosts: { type: 'number', example: 5000 },
+                  totalFollowers: { type: 'number', example: 50000 },
+                  completedCampaigns: { type: 'number', example: 10 },
+                  city: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'number', example: 1 },
+                      name: { type: 'string', example: 'Mumbai' },
+                      state: { type: 'string', example: 'Maharashtra' },
+                      tier: { type: 'string', example: 'Tier 1' },
+                    },
+                  },
                   niches: {
                     type: 'array',
-                    items: { type: 'string' },
-                    example: ['Fashion', 'Lifestyle'],
+                    items: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'number', example: 1 },
+                        name: { type: 'string', example: 'Fashion' },
+                        logoNormal: { type: 'string', example: 'logo.png' },
+                        logoDark: { type: 'string', example: 'logo-dark.png' },
+                      },
+                    },
                   },
-                  location: { type: 'string', example: 'Mumbai' },
-                },
-              },
-              aiScore: { type: 'number', example: 85 },
-              recommendation: {
-                type: 'string',
-                enum: ['Highly Recommended', 'Recommended', 'Consider'],
-                example: 'Highly Recommended',
-              },
-              strengths: {
-                type: 'array',
-                items: { type: 'string' },
-                example: [
-                  'Perfect niche alignment',
-                  'High engagement rate (5.2%)',
-                ],
-              },
-              concerns: {
-                type: 'array',
-                items: { type: 'string' },
-                example: [],
-              },
-              appliedAt: {
-                type: 'string',
-                example: '2024-01-15T10:30:00Z',
-              },
-              status: { type: 'string', example: 'pending' },
-              scoreBreakdown: {
-                type: 'object',
-                properties: {
-                  overall: { type: 'number', example: 85 },
-                  nicheMatch: { type: 'number', example: 90 },
-                  audienceRelevance: { type: 'number', example: 80 },
-                  engagementRate: { type: 'number', example: 85 },
-                  locationMatch: { type: 'number', example: 100 },
-                  pastPerformance: { type: 'number', example: 70 },
-                  contentQuality: { type: 'number', example: 75 },
                 },
               },
             },
           },
         },
-        otherApplications: {
-          type: 'array',
-          description: 'Other applications (paginated)',
-        },
-        pagination: {
-          type: 'object',
-          properties: {
-            page: { type: 'number', example: 1 },
-            limit: { type: 'number', example: 50 },
-            total: { type: 'number', example: 40 },
-            totalPages: { type: 'number', example: 1 },
-          },
-        },
+        total: { type: 'number', example: 100 },
+        page: { type: 'number', example: 1 },
+        limit: { type: 'number', example: 10 },
+        totalPages: { type: 'number', example: 10 },
       },
     },
   })
@@ -1794,21 +1792,12 @@ export class AdminController {
   })
   async getCampaignApplications(
     @Param('id', ParseIntPipe) campaignId: number,
-    @Query('sortBy')
-    sortBy?: 'relevance' | 'date' | 'engagement' | 'followers' | null,
-    @Query('filter')
-    filter?: 'all' | 'highly_recommended' | 'recommended' | 'consider' | null,
-    @Query('page', new ParseIntPipe({ optional: true })) page: number = 1,
-    @Query('limit', new ParseIntPipe({ optional: true })) limit: number = 10,
+    @Query() getApplicationsDto: GetCampaignApplicationsDto,
   ) {
-    return await this.adminCampaignService.getCampaignApplicationsWithAI(
+    // brandId is optional - admin can view any campaign
+    return await this.campaignService.getCampaignApplications(
       campaignId,
-      {
-        sortBy: sortBy || undefined,
-        filter: filter || undefined,
-        page,
-        limit,
-      },
+      getApplicationsDto,
     );
   }
 
@@ -2664,21 +2653,41 @@ export class AdminController {
     summary: 'Download all invoices as ZIP',
     description: 'Download all filtered invoices as a ZIP file containing all PDFs',
   })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        search: { type: 'string', description: 'Search by name, username, or campaign name' },
-        startDate: { type: 'string', format: 'date', description: 'Filter by start date' },
-        endDate: { type: 'string', format: 'date', description: 'Filter by end date' },
-        invoiceType: {
-          type: 'string',
-          enum: ['all', 'maxx_subscription', 'invite_campaign', 'maxx_campaign'],
-          description: 'Filter by invoice type',
-        },
-        paymentMethod: { type: 'string', description: 'Filter by payment method' },
-      },
-    },
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by name, username, or campaign name',
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    type: String,
+    description: 'Filter by start date (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    description: 'Filter by end date (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'invoiceType',
+    required: false,
+    enum: ['all', 'maxx_subscription', 'invite_campaign', 'maxx_campaign'],
+    description: 'Filter by invoice type',
+  })
+  @ApiQuery({
+    name: 'paymentMethod',
+    required: false,
+    enum: ['all', 'razorpay', 'upi', 'card', 'netbanking', 'manual', 'free_trial', 'admin_granted'],
+    description: 'Filter by payment method',
+  })
+  @ApiQuery({
+    name: 'profileType',
+    required: false,
+    enum: ['all', 'influencer', 'brand'],
+    description: 'Filter by profile type',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -2693,7 +2702,7 @@ export class AdminController {
     },
   })
   async downloadAllInvoices(
-    @Body() filters: GetMaxSubscriptionInvoicesDto,
+    @Query() filters: GetMaxSubscriptionInvoicesDto,
     @Res() res: any,
   ) {
     const axios = await import('axios');

@@ -20,9 +20,13 @@ export enum ProfileTypeFilter {
 // Payment Method Filter
 export enum PaymentMethodFilter {
   ALL = 'all',
-  UPI = 'upi',
-  CREDIT_CARD = 'credit_card',
   RAZORPAY = 'razorpay',
+  UPI = 'upi',
+  CARD = 'card',
+  NET_BANKING = 'netbanking',
+  MANUAL = 'manual',
+  FREE_TRIAL = 'free_trial',
+  ADMIN_GRANTED = 'admin_granted',
 }
 
 // Unified Statistics Response DTO
