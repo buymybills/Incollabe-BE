@@ -44,6 +44,9 @@ import {
   CampaignsByCategoryResponse,
   CampaignCategoryType,
 } from './interfaces/campaign-with-stats.interface';
+import { AIScoringService } from '../admin/services/ai-scoring.service';
+import { Post } from '../post/models/post.model';
+import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
 
 @Injectable()
 export class CampaignService {
@@ -70,6 +73,10 @@ export class CampaignService {
     private readonly experienceModel: typeof Experience,
     @InjectModel(MaxCampaignInvoice)
     private readonly maxCampaignInvoiceModel: typeof MaxCampaignInvoice,
+    @InjectModel(Post)
+    private readonly postModel: typeof Post,
+    @InjectModel(InstagramProfileAnalysis)
+    private readonly instagramProfileAnalysisModel: typeof InstagramProfileAnalysis,
     // REMOVED: Models only needed for early selection bonus feature (now disabled)
     // @InjectModel(CreditTransaction)
     // private readonly creditTransactionModel: typeof CreditTransaction,
@@ -79,6 +86,7 @@ export class CampaignService {
     private readonly notificationService: NotificationService,
     private readonly deviceTokenService: DeviceTokenService,
     private readonly campaignQueryService: CampaignQueryService,
+    private readonly aiScoringService: AIScoringService,
   ) {}
 
   /**
@@ -1397,6 +1405,7 @@ export class CampaignService {
       maxAge,
       platforms,
       experience,
+      scoreWithAI = false,
       sortBy = 'application_new_old',
       page = 1,
       limit = 10,
@@ -1596,6 +1605,11 @@ export class CampaignService {
       case 'campaign_charges_lowest':
         order = [[Influencer, 'collaborationCosts', 'ASC']];
         break;
+      case 'ai_score':
+        sortInMemory = true;
+        sortDirection = 'desc';
+        order = [['createdAt', 'DESC']]; // Default order for fetching
+        break;
       default:
         order = [['createdAt', 'DESC']];
     }
@@ -1678,6 +1692,11 @@ export class CampaignService {
           appJson.influencer.totalFollowers = totalFollowers;
         }
 
+        // Calculate AI matchability score if requested
+        if (scoreWithAI && appJson.influencer) {
+          appJson.aiMatchability = await this.calculateAIScore(app, campaign);
+        }
+
         return appJson;
       }),
     );
@@ -1710,10 +1729,16 @@ export class CampaignService {
       }
     }
 
-    // Sort in-memory if needed (for follower-based sorting)
+    // Sort in-memory if needed (for follower-based sorting or AI scoring)
     let finalApplications = filteredApplications;
     if (sortInMemory) {
       finalApplications = filteredApplications.sort((a, b) => {
+        if (sortBy === 'ai_score') {
+          const aScore = a.aiMatchability?.overallScore || 0;
+          const bScore = b.aiMatchability?.overallScore || 0;
+          return bScore - aScore; // Descending order (highest score first)
+        }
+        // Follower-based sorting
         const aFollowers = a.influencer?.totalFollowers || 0;
         const bFollowers = b.influencer?.totalFollowers || 0;
         return sortDirection === 'desc'
@@ -1744,6 +1769,619 @@ export class CampaignService {
     };
   }
 
+  /**
+   * Calculate AI matchability score for an application
+   */
+  private async calculateAIScore(
+    application: any,
+    campaign: Campaign,
+  ): Promise<any> {
+    const influencer = application.influencer;
+
+    // Get follower count for this influencer
+    const followerCount = await this.getFollowerCount(influencer.id);
+
+    // Get post performance data
+    const postPerformance = await this.getPostPerformance(influencer.id);
+
+    // Get past campaign performance
+    const pastCampaigns = await this.getPastCampaignStats(influencer.id);
+
+    // Get campaign niches
+    const campaignNiches = await this.getCampaignNiches(campaign.nicheIds);
+
+    // Get campaign cities
+    const campaignCities = campaign.isPanIndia ? ['All India'] : await this.getCampaignCities(campaign.id);
+
+    // Prepare data for AI scoring
+    const influencerData = {
+      id: influencer.id,
+      name: influencer.name,
+      username: influencer.username,
+      followers: followerCount,
+      niches: (influencer.niches || []).map((n: any) => n.name),
+      location: influencer.city?.name || 'N/A',
+      isVerified: influencer.isVerified || false,
+      bio: influencer.bio || '',
+      pastCampaigns,
+      postPerformance: postPerformance || undefined,
+    };
+
+    const campaignData = {
+      id: campaign.id,
+      name: campaign.name,
+      description: campaign.description,
+      niches: campaignNiches,
+      targetCities: campaignCities,
+      isPanIndia: campaign.isPanIndia,
+      campaignType: campaign.type,
+    };
+
+    // Use AI to score the match
+    const aiResult = await this.aiScoringService.scoreInfluencerForCampaign(
+      influencerData,
+      campaignData,
+    );
+
+    return {
+      overallScore: aiResult.overall,
+      matchPercentage: `${aiResult.overall}%`,
+      recommendation: aiResult.recommendation,
+      scoreBreakdown: {
+        nicheMatch: aiResult.nicheMatch,
+        audienceRelevance: aiResult.audienceRelevance,
+        engagementRate: aiResult.engagementRate,
+        locationMatch: aiResult.locationMatch,
+        pastPerformance: aiResult.pastPerformance,
+        contentQuality: aiResult.contentQuality,
+      },
+      strengths: aiResult.strengths,
+      concerns: aiResult.concerns,
+    };
+  }
+
+  /**
+   * Get follower count for an influencer
+   */
+  private async getFollowerCount(influencerId: number): Promise<number> {
+    return await this.followModel.count({
+      where: {
+        followingType: 'influencer',
+        followingInfluencerId: influencerId,
+      },
+    });
+  }
+
+  /**
+   * Get post performance statistics
+   */
+  private async getPostPerformance(influencerId: number): Promise<any> {
+    const posts = await this.postModel.findAll({
+      where: { influencerId: influencerId, userType: 'influencer' },
+      limit: 10,
+      order: [['createdAt', 'DESC']],
+    });
+
+    if (posts.length === 0) return null;
+
+    const totalLikes = posts.reduce((sum, post) => sum + (post.likesCount || 0), 0);
+    const avgEngagement = totalLikes / posts.length;
+
+    return {
+      avgLikes: totalLikes / posts.length,
+      engagementRate: avgEngagement,
+      totalPosts: posts.length,
+    };
+  }
+
+  /**
+   * Get past campaign statistics
+   */
+  private async getPastCampaignStats(influencerId: number): Promise<any> {
+    const completedCampaigns = await this.experienceModel.count({
+      where: {
+        influencerId,
+        successfullyCompleted: true,
+      },
+    });
+
+    return {
+      total: completedCampaigns,
+      successful: completedCampaigns,
+    };
+  }
+
+  /**
+   * Get campaign niches
+   */
+  private async getCampaignNiches(nicheIds: number[]): Promise<string[]> {
+    if (!nicheIds || nicheIds.length === 0) return [];
+
+    const niches = await Niche.findAll({
+      where: { id: { [Op.in]: nicheIds } },
+      attributes: ['name'],
+    });
+
+    return niches.map((n) => n.name);
+  }
+
+  /**
+   * Get campaign cities
+   */
+  private async getCampaignCities(campaignId: number): Promise<string[]> {
+    const campaignCities = await this.campaignCityModel.findAll({
+      where: { campaignId },
+      include: [
+        {
+          model: City,
+          attributes: ['name'],
+        },
+      ],
+    });
+
+    return campaignCities.map((cc) => cc.city?.name || '');
+  }
+
+  /**
+   * Calculate Expected ROI
+   */
+  private calculateExpectedROI(followerCount: number, postPerformance: any): number {
+    if (!postPerformance) return 1.0;
+
+    const engagementRate = postPerformance.engagementRate || 0;
+    const baseROI = 1.0;
+
+    // Higher engagement rate = higher ROI
+    if (engagementRate > 1000) return 2.5;
+    if (engagementRate > 500) return 2.0;
+    if (engagementRate > 200) return 1.5;
+    if (engagementRate > 100) return 1.4;
+
+    return baseROI;
+  }
+
+  /**
+   * Calculate Estimated Engagement
+   */
+  private calculateEstimatedEngagement(followerCount: number, postPerformance: any): number {
+    if (!postPerformance) {
+      // Estimate 5% engagement rate if no post data
+      return Math.round(followerCount * 0.05);
+    }
+
+    return Math.round(postPerformance.engagementRate || followerCount * 0.05);
+  }
+
+  /**
+   * Calculate Estimated Reach
+   */
+  private calculateEstimatedReach(followerCount: number): number {
+    // Reach is typically 30-60% of followers for organic posts
+    return Math.round(followerCount * 0.5);
+  }
+
+  /**
+   * Get metric tier label based on value
+   */
+  private getMetricTier(value: number, metricType: 'roi' | 'engagement' | 'reach'): string {
+    switch (metricType) {
+      case 'roi':
+        if (value >= 2.0) return 'Elite';
+        if (value >= 1.5) return 'Great';
+        if (value >= 1.2) return 'Good';
+        return 'Average';
+
+      case 'engagement':
+        if (value >= 10000) return 'Elite';
+        if (value >= 5000) return 'Great';
+        if (value >= 1000) return 'Good';
+        return 'Average';
+
+      case 'reach':
+        if (value >= 100000) return 'Elite';
+        if (value >= 50000) return 'Great';
+        if (value >= 10000) return 'Good';
+        return 'Average';
+
+      default:
+        return 'Average';
+    }
+  }
+
+  /**
+   * Get campaign experience details with full information
+   */
+  private async getCampaignExperienceDetails(influencerId: number): Promise<any[]> {
+    const experiences = await this.experienceModel.findAll({
+      where: { influencerId },
+      order: [['createdAt', 'DESC']],
+      limit: 10,
+    });
+
+    // For each experience, try to get campaign details if campaignId exists
+    const experienceDetails = await Promise.all(
+      experiences.map(async (exp) => {
+        const expJson = exp.toJSON();
+        let campaignData: any = null;
+        let brandData: any = null;
+
+        // If experience is linked to a campaign, fetch campaign and brand details
+        if (expJson.campaignId) {
+          const campaign = await this.campaignModel.findOne({
+            where: { id: expJson.campaignId },
+            include: [
+              {
+                model: Brand,
+                attributes: ['id', 'brandName'],
+              },
+              {
+                model: CampaignDeliverable,
+                attributes: ['platform', 'deliverableType', 'quantity'],
+              },
+            ],
+          });
+
+          if (campaign) {
+            const campaignJson: any = campaign.toJSON();
+            campaignData = {
+              id: campaignJson.id,
+              name: campaignJson.name,
+              description: campaignJson.description,
+              type: campaignJson.type,
+            };
+
+            brandData = {
+              id: campaignJson.brand?.id,
+              name: campaignJson.brand?.brandName,
+              logo: null, // Brand model doesn't have logo field
+            };
+
+            // Format deliverables from campaign
+            const deliverables = campaignJson.deliverables || [];
+            expJson.deliverableFormat = deliverables
+              .map((d: any) => `${d.platform} ${d.deliverableType}`)
+              .join(' + ') || expJson.deliverableFormat;
+          }
+        }
+
+        // If no campaign found, use stored brand name
+        if (!brandData) {
+          brandData = {
+            id: null,
+            name: expJson.brandName,
+            logo: null,
+          };
+        }
+
+        // Determine status
+        let status = 'Ongoing';
+        if (expJson.successfullyCompleted) {
+          status = 'Completed';
+        } else if (expJson.completionDate && new Date(expJson.completionDate) < new Date()) {
+          status = 'Completed';
+        }
+
+        // Payment type - default to "Paid" (can be enhanced based on campaign type if available)
+        let paymentType = 'Paid';
+        if (campaignData?.type === 'barter') {
+          paymentType = 'Barter';
+        }
+
+        return {
+          id: expJson.id,
+          brand: brandData,
+          campaign: campaignData || {
+            id: null,
+            name: expJson.campaignName,
+            description: expJson.roleDescription,
+            type: null,
+          },
+          deliverableFormat: expJson.deliverableFormat,
+          paymentType,
+          status,
+          completionDate: expJson.completionDate,
+          createdAt: expJson.createdAt,
+        };
+      }),
+    );
+
+    return experienceDetails;
+  }
+
+  /**
+   * Get detailed AI matchability insights for influencer application
+   */
+  async getInfluencerAIDetails(
+    campaignId: number,
+    influencerId: number,
+    brandId: number | null,
+  ) {
+    // Build where condition for campaign based on user type
+    const campaignWhere: any = { id: campaignId };
+
+    // If brandId is provided (brand is viewing), verify campaign belongs to them
+    if (brandId !== null) {
+      campaignWhere.brandId = brandId;
+    }
+
+    // Verify campaign exists (and belongs to brand if applicable)
+    const campaign = await this.campaignModel.findOne({
+      where: campaignWhere,
+      include: [
+        {
+          model: Niche,
+          attributes: ['id', 'name'],
+          through: { attributes: [] },
+        },
+        {
+          model: CampaignCity,
+          include: [
+            {
+              model: City,
+              attributes: ['name'],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!campaign) {
+      throw new NotFoundException(
+        brandId !== null
+          ? 'Campaign not found or access denied'
+          : 'Campaign not found',
+      );
+    }
+
+    // Find the application
+    const application = await this.campaignApplicationModel.findOne({
+      where: { campaignId, influencerId },
+      include: [
+        {
+          model: Influencer,
+          attributes: [
+            'id',
+            'name',
+            'username',
+            'profileImage',
+            'isVerified',
+            'instagramFollowersCount',
+          ],
+        },
+      ],
+    });
+
+    if (!application) {
+      throw new NotFoundException(
+        'No application found for this influencer on this campaign',
+      );
+    }
+
+    // Get AI matchability score
+    const aiMatchability = await this.calculateAIScore(application, campaign);
+
+    // Get Instagram profile analysis data
+    const instagramAnalysis = await this.instagramProfileAnalysisModel.findOne({
+      where: { influencerId },
+      order: [['syncNumber', 'DESC']],
+      attributes: [
+        'audienceAgeGender',
+        'avgEngagementRate',
+        'avgReach',
+        'activeFollowersPercentage',
+        'totalFollowers',
+      ],
+    });
+
+    // Calculate Audience Quality Score
+    const audienceQuality = this.calculateAudienceQuality(instagramAnalysis);
+
+    // Calculate Average Reaction metrics
+    const avgReaction = this.calculateAverageReaction(instagramAnalysis);
+
+    // Get performance metrics
+    const followerCount = await this.getFollowerCount(influencerId);
+    const postPerformance = await this.getPostPerformance(influencerId);
+
+    const expectedROI = this.calculateExpectedROI(followerCount, postPerformance);
+    const estimatedEngagement = this.calculateEstimatedEngagement(followerCount, postPerformance);
+    const estimatedReach = this.calculateEstimatedReach(followerCount);
+
+    // Get trust signals
+    const trustSignals = await this.getTrustSignals(influencerId, application.influencer);
+
+    return {
+      matchabilityScore: aiMatchability.overallScore,
+      matchPercentage: aiMatchability.matchPercentage,
+      whyThisCreator: {
+        audienceQuality: {
+          score: audienceQuality.score,
+          maxScore: 100,
+          description: audienceQuality.description,
+          tier: audienceQuality.tier,
+        },
+        avgReaction: {
+          value: avgReaction.value,
+          description: avgReaction.description,
+          tier: avgReaction.tier,
+        },
+      },
+      predictedPerformance: {
+        expectedROI: {
+          value: expectedROI,
+          tier: this.getMetricTier(expectedROI, 'roi'),
+        },
+        estimatedEngagement: {
+          value: estimatedEngagement,
+          tier: this.getMetricTier(estimatedEngagement, 'engagement'),
+        },
+        estimatedReach: {
+          value: estimatedReach,
+          tier: this.getMetricTier(estimatedReach, 'reach'),
+        },
+      },
+      trustSignals,
+    };
+  }
+
+  /**
+   * Calculate audience quality score based on demographics
+   */
+  private calculateAudienceQuality(instagramAnalysis: any): any {
+    if (!instagramAnalysis || !instagramAnalysis.audienceAgeGender) {
+      return {
+        score: 50,
+        description: 'No audience data available',
+        tier: 'Average',
+      };
+    }
+
+    const audienceData = instagramAnalysis.audienceAgeGender;
+
+    // Find dominant demographic
+    let dominantDemo: any = null;
+    let maxPercentage = 0;
+
+    for (const demo of audienceData) {
+      if (demo.percentage > maxPercentage) {
+        maxPercentage = demo.percentage;
+        dominantDemo = demo;
+      }
+    }
+
+    // Calculate score based on concentration
+    let score = 50; // Base score
+
+    // Higher concentration = higher quality
+    if (maxPercentage >= 50) {
+      score = 90;
+    } else if (maxPercentage >= 40) {
+      score = 80;
+    } else if (maxPercentage >= 30) {
+      score = 70;
+    } else if (maxPercentage >= 20) {
+      score = 60;
+    }
+
+    // Build description
+    const ageRange = dominantDemo?.ageRange || 'N/A';
+    const gender = dominantDemo?.gender || 'followers';
+    const description = `${Math.round(maxPercentage)}% of followers are ${gender.toLowerCase()} (${ageRange})`;
+
+    // Determine tier
+    let tier = 'Average';
+    if (score >= 85) tier = 'Strong';
+    else if (score >= 70) tier = 'Good';
+
+    return { score, description, tier };
+  }
+
+  /**
+   * Calculate average reaction metrics
+   */
+  private calculateAverageReaction(instagramAnalysis: any): any {
+    if (!instagramAnalysis) {
+      return {
+        value: 0,
+        description: 'No engagement data available',
+        tier: 'Average',
+      };
+    }
+
+    const avgReach = instagramAnalysis.avgReach || 0;
+    const engagementRate = instagramAnalysis.avgEngagementRate || 0;
+    const activeFollowersPercentage = instagramAnalysis.activeFollowersPercentage || 0;
+
+    // Format large numbers (e.g., 210K)
+    const formattedReach = this.formatLargeNumber(avgReach);
+
+    // Build description
+    const description = `Reels average ${formattedReach} with a ${engagementRate.toFixed(1)}% engagement rate with active followers`;
+
+    // Determine tier based on engagement rate
+    let tier = 'Average';
+    if (engagementRate >= 6.0 && activeFollowersPercentage >= 70) {
+      tier = 'Strong';
+    } else if (engagementRate >= 4.0 && activeFollowersPercentage >= 50) {
+      tier = 'Good';
+    }
+
+    return {
+      value: avgReach,
+      description,
+      tier,
+    };
+  }
+
+  /**
+   * Format large numbers (e.g., 210000 -> "210K")
+   */
+  private formatLargeNumber(num: number): string {
+    if (num >= 1000000) {
+      return `${(num / 1000000).toFixed(1)}M`;
+    } else if (num >= 1000) {
+      return `${(num / 1000).toFixed(1)}K`;
+    }
+    return num.toString();
+  }
+
+  /**
+   * Get trust signals for influencer
+   */
+  private async getTrustSignals(influencerId: number, influencer: any): Promise<any> {
+    // Get past campaign ratings
+    const completedExperiences = await this.experienceModel.count({
+      where: {
+        influencerId,
+        successfullyCompleted: true,
+      },
+    });
+
+    // Calculate fraud probability (simplified - can be enhanced)
+    // Lower fraud probability for verified accounts and those with completed campaigns
+    let fraudProbability = 0.5; // Base 50%
+
+    if (influencer?.isVerified) {
+      fraudProbability -= 0.3; // -30% if verified
+    }
+
+    if (completedExperiences >= 5) {
+      fraudProbability -= 0.3; // -30% if 5+ completed campaigns
+    } else if (completedExperiences >= 2) {
+      fraudProbability -= 0.15; // -15% if 2+ completed campaigns
+    }
+
+    fraudProbability = Math.max(0, Math.min(1, fraudProbability)); // Clamp between 0 and 1
+
+    // Calculate past sponsor rating (simplified - based on completion rate)
+    // TODO: Implement actual brand ratings when that feature is available
+    const totalExperiences = await this.experienceModel.count({
+      where: { influencerId },
+    });
+
+    let pastSponsorRating = 3.5; // Default rating
+    if (totalExperiences > 0) {
+      const completionRate = completedExperiences / totalExperiences;
+      pastSponsorRating = 3.0 + (completionRate * 2.0); // Scale from 3.0 to 5.0
+    }
+
+    return {
+      verifiedBadge: influencer?.isVerified || false,
+      fraudCheck: {
+        status: fraudProbability < 0.1 ? 'Passed' : fraudProbability < 0.3 ? 'Low Risk' : 'Medium Risk',
+        probability: fraudProbability,
+        formattedProbability: `${(fraudProbability * 100).toFixed(2)}% fraud probability`,
+      },
+      pastSponsorRating: {
+        rating: Math.round(pastSponsorRating * 10) / 10,
+        maxRating: 5,
+        formattedRating: `${pastSponsorRating.toFixed(1)}/5`,
+        source: 'avg from platform',
+        basedOn: completedExperiences,
+      },
+    };
+  }
+
   async getInfluencerApplicationForCampaign(
     campaignId: number,
     influencerId: number,
@@ -1760,6 +2398,22 @@ export class CampaignService {
     // Verify campaign exists (and belongs to brand if applicable)
     const campaign = await this.campaignModel.findOne({
       where: campaignWhere,
+      include: [
+        {
+          model: Niche,
+          attributes: ['id', 'name'],
+          through: { attributes: [] },
+        },
+        {
+          model: CampaignCity,
+          include: [
+            {
+              model: City,
+              attributes: ['name'],
+            },
+          ],
+        },
+      ],
     });
 
     if (!campaign) {
@@ -1798,6 +2452,8 @@ export class CampaignService {
             'dateOfBirth',
             'whatsappNumber',
             'collaborationCosts',
+            'instagramFollowersCount',
+            'youtubeFollowersCount',
           ],
           include: [
             {
@@ -1820,7 +2476,48 @@ export class CampaignService {
       );
     }
 
-    return application;
+    // Calculate AI matchability score
+    const aiMatchability = await this.calculateAIScore(application, campaign);
+
+    // Calculate performance metrics
+    const followerCount = await this.getFollowerCount(influencerId);
+    const postPerformance = await this.getPostPerformance(influencerId);
+
+    // Calculate Expected ROI (based on engagement rate and follower count)
+    const expectedROI = this.calculateExpectedROI(followerCount, postPerformance);
+
+    // Calculate Estimated Engagement
+    const estimatedEngagement = this.calculateEstimatedEngagement(followerCount, postPerformance);
+
+    // Calculate Estimated Reach
+    const estimatedReach = this.calculateEstimatedReach(followerCount);
+
+    // Get campaign experience with full details
+    const campaignExperience = await this.getCampaignExperienceDetails(influencerId);
+
+    // Build enhanced response
+    const appJson = application.toJSON();
+
+    return {
+      ...appJson,
+      aiMatchability,
+      metrics: {
+        expectedROI: {
+          value: expectedROI,
+          tier: this.getMetricTier(expectedROI, 'roi'),
+        },
+        estimatedEngagement: {
+          value: estimatedEngagement,
+          tier: this.getMetricTier(estimatedEngagement, 'engagement'),
+        },
+        estimatedReach: {
+          value: estimatedReach,
+          tier: this.getMetricTier(estimatedReach, 'reach'),
+        },
+      },
+      campaignExperience,
+      totalFollowers: followerCount,
+    };
   }
 
   async updateApplicationStatus(

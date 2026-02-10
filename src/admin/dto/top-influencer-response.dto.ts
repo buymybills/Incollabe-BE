@@ -92,10 +92,30 @@ export class TopInfluencerDto {
   country: string;
 
   @ApiProperty({
-    description: 'Verification status',
+    description: 'Verification status (true if admin verified OR Instagram connected)',
     example: true,
   })
   isVerified: boolean;
+
+  @ApiProperty({
+    description: 'Admin verification timestamp (null if auto-verified via Instagram)',
+    example: '2024-01-15T10:30:00Z',
+    required: false,
+    nullable: true,
+  })
+  verifiedAt?: Date | null;
+
+  @ApiProperty({
+    description: 'Instagram blue checkmark verification status',
+    example: false,
+  })
+  instagramIsVerified: boolean;
+
+  @ApiProperty({
+    description: 'Whether Instagram account is connected',
+    example: true,
+  })
+  isInstagramConnected: boolean;
 
   @ApiProperty({
     description: 'Top influencer status',

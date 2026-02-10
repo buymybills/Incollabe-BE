@@ -1264,6 +1264,13 @@ export class CampaignController {
     example: '3',
   })
   @ApiQuery({
+    name: 'scoreWithAI',
+    required: false,
+    type: Boolean,
+    description: 'Enable AI-based matchability scoring (calculates match percentage based on niche, location, audience, and past performance)',
+    example: false,
+  })
+  @ApiQuery({
     name: 'sortBy',
     required: false,
     enum: [
@@ -1272,8 +1279,9 @@ export class CampaignController {
       'followers_high_low',
       'followers_low_high',
       'campaign_charges_lowest',
+      'ai_score',
     ],
-    description: 'Sort applications by',
+    description: 'Sort applications by (ai_score requires scoreWithAI=true)',
     example: 'application_new_old',
   })
   @ApiQuery({
@@ -1451,6 +1459,51 @@ export class CampaignController {
     }
 
     return this.campaignService.getInfluencerApplicationForCampaign(
+      campaignId,
+      influencerId,
+      req.user.userType === 'brand' ? req.user.id : null,
+    );
+  }
+
+  @Get(':campaignId/applications/influencer/:influencerId/ai-details')
+  @ApiOperation({
+    summary: 'Get detailed AI matchability insights for influencer application',
+    description:
+      'Get detailed AI-powered insights including audience quality, engagement metrics, and trust signals for a specific influencer application.',
+  })
+  @ApiParam({
+    name: 'campaignId',
+    type: Number,
+    description: 'Campaign ID',
+    example: 36,
+  })
+  @ApiParam({
+    name: 'influencerId',
+    type: Number,
+    description: 'Influencer ID',
+    example: 132,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Detailed AI insights retrieved successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Campaign or Application not found',
+  })
+  async getInfluencerAIDetails(
+    @Param('campaignId', ParseIntPipe) campaignId: number,
+    @Param('influencerId', ParseIntPipe) influencerId: number,
+    @Req() req: RequestWithUser,
+  ) {
+    // If influencer, they can only view their own details
+    if (req.user.userType === 'influencer' && req.user.id !== influencerId) {
+      throw new ForbiddenException(
+        'You can only view your own AI details',
+      );
+    }
+
+    return this.campaignService.getInfluencerAIDetails(
       campaignId,
       influencerId,
       req.user.userType === 'brand' ? req.user.id : null,

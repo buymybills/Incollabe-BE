@@ -275,9 +275,11 @@ export class InstagramService {
         instagramMediaCount: profile.media_count || undefined,
         instagramProfilePictureUrl: profile.profile_picture_url || undefined,
         instagramBio: profile.biography || undefined,
+        instagramIsVerified: true, // Set to true when Instagram is connected
         instagramTokenExpiresAt: expiresAt,
         instagramConnectedAt: new Date(),
         isVerified: true, // Automatically verify Instagram-connected influencers
+        verifiedAt: new Date(), // Set verification timestamp when Instagram is connected
       };
 
       await influencer.update(updateData);
@@ -543,7 +545,7 @@ export class InstagramService {
     const profile = await this.getUserProfile(user.instagramAccessToken);
 
     // Update database with fresh data
-    await user.update({
+    const updateData: any = {
       instagramUsername: profile.username,
       instagramAccountType: profile.account_type || undefined,
       instagramFollowersCount: profile.followers_count || undefined,
@@ -551,7 +553,12 @@ export class InstagramService {
       instagramMediaCount: profile.media_count || undefined,
       instagramProfilePictureUrl: profile.profile_picture_url || undefined,
       instagramBio: profile.biography || undefined,
-    });
+    };
+
+    // Don't update instagramIsVerified during sync - it was set during initial connection
+    // instagramIsVerified means "verified via Instagram connection on our platform"
+
+    await user.update(updateData);
 
     return user.reload();
   }

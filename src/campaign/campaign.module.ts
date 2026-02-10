@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { CampaignController } from './campaign.controller';
 import { CampaignService } from './campaign.service';
@@ -23,6 +23,9 @@ import { MaxCampaignInvoice } from './models/max-campaign-invoice.model';
 import { InviteOnlyPaymentService } from './services/invite-only-payment.service';
 import { InviteOnlyCampaignInvoice } from './models/invite-only-campaign-invoice.model';
 import { PaymentStatusCheckerService } from './services/payment-status-checker.service';
+import { Post } from '../post/models/post.model';
+import { AdminModule } from '../admin/admin.module';
+import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
 
 @Module({
   imports: [
@@ -43,8 +46,11 @@ import { PaymentStatusCheckerService } from './services/payment-status-checker.s
       Experience,
       MaxCampaignInvoice,
       InviteOnlyCampaignInvoice,
+      Post,
+      InstagramProfileAnalysis,
     ]),
     SharedModule,
+    forwardRef(() => AdminModule),
   ],
   controllers: [CampaignController],
   providers: [
