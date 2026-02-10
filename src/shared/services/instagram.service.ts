@@ -155,7 +155,7 @@ export class InstagramService {
    */
   async getUserProfile(
     accessToken: string,
-    fields: string = 'id,username,account_type,followers_count,follows_count,media_count,profile_picture_url,biography,website,name'
+    fields: string = 'id,username,account_type,followers_count,follows_count,media_count,profile_picture_url,biography,website,name,is_verified'
   ): Promise<InstagramUserProfileDto> {
     try {
       const response = await axios.get('https://graph.instagram.com/me', {
@@ -235,23 +235,23 @@ export class InstagramService {
       },
     });
 
-    // if (existingInfluencer) {
-    //   throw new BadRequestException({
-    //     error: 'instagram_account_already_connected',
-    //     message: `@${profile.username} is already connected to another account`,
-    //     instagramUsername: profile.username,
-    //     connectedTo: 'influencer',
-    //   });
-    // }
+    if (existingInfluencer) {
+      throw new BadRequestException({
+        error: 'instagram_account_already_connected',
+        message: `@${profile.username} is already connected to another account`,
+        instagramUsername: profile.username,
+        connectedTo: 'influencer',
+      });
+    }
 
-    // if (existingBrand) {
-    //   throw new BadRequestException({
-    //     error: 'instagram_account_already_connected',
-    //     message: `@${profile.username} is already connected to another account`,
-    //     instagramUsername: profile.username,
-    //     connectedTo: 'brand',
-    //   });
-    // }
+    if (existingBrand) {
+      throw new BadRequestException({
+        error: 'instagram_account_already_connected',
+        message: `@${profile.username} is already connected to another account`,
+        instagramUsername: profile.username,
+        connectedTo: 'brand',
+      });
+    }
 
     // Step 3: Long-lived tokens typically expire in 60 days
     // We'll set a conservative expiry of 59 days from now
@@ -275,9 +275,11 @@ export class InstagramService {
         instagramMediaCount: profile.media_count || undefined,
         instagramProfilePictureUrl: profile.profile_picture_url || undefined,
         instagramBio: profile.biography || undefined,
+        instagramIsVerified: true, // Set to true when Instagram is connected
         instagramTokenExpiresAt: expiresAt,
         instagramConnectedAt: new Date(),
         isVerified: true, // Automatically verify Instagram-connected influencers
+        verifiedAt: new Date(), // Set verification timestamp when Instagram is connected
       };
 
       await influencer.update(updateData);
@@ -543,7 +545,7 @@ export class InstagramService {
     const profile = await this.getUserProfile(user.instagramAccessToken);
 
     // Update database with fresh data
-    await user.update({
+    const updateData: any = {
       instagramUsername: profile.username,
       instagramAccountType: profile.account_type || undefined,
       instagramFollowersCount: profile.followers_count || undefined,
@@ -551,7 +553,12 @@ export class InstagramService {
       instagramMediaCount: profile.media_count || undefined,
       instagramProfilePictureUrl: profile.profile_picture_url || undefined,
       instagramBio: profile.biography || undefined,
-    });
+    };
+
+    // Don't update instagramIsVerified during sync - it was set during initial connection
+    // instagramIsVerified means "verified via Instagram connection on our platform"
+
+    await user.update(updateData);
 
     return user.reload();
   }

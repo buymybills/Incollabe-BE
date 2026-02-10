@@ -85,6 +85,10 @@ export class InstagramUserProfileDto {
   @ApiProperty({ description: 'Full name', required: false })
   @IsOptional()
   name?: string;
+
+  @ApiProperty({ description: 'Whether the account is verified by Instagram (blue checkmark)', required: false })
+  @IsOptional()
+  is_verified?: boolean;
 }
 
 export class InstagramMediaDto {

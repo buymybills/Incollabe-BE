@@ -138,14 +138,11 @@ export class ProSubscriptionService {
       totalTax = igst;
     }
 
-    // Generate invoice number
-    const invoiceNumber = await this.generateInvoiceNumber(influencerId);
-
-    // Create invoice with tax breakdown
+    // Create invoice with tax breakdown (invoice number will be generated after payment)
     let invoice;
     try {
       invoice = await this.proInvoiceModel.create({
-        invoiceNumber,
+        invoiceNumber: null, // Will be generated after successful payment
         subscriptionId: subscription.id,
         influencerId,
         amount: baseAmount,
@@ -254,8 +251,12 @@ export class ProSubscriptionService {
 
     const now = createDatabaseDate();
 
+    // Generate invoice number now that payment is successful
+    const invoiceNumber = await this.generateInvoiceNumber(invoice.influencerId);
+
     // Update invoice
     await invoice.update({
+      invoiceNumber,
       paymentStatus: InvoiceStatus.PAID,
       razorpayPaymentId: paymentId,
       paidAt: now,
@@ -1579,6 +1580,12 @@ export class ProSubscriptionService {
    * Handle payment-specific webhooks
    */
   private async handlePaymentWebhook(event: string, payload: any) {
+    // Skip events that don't have actual payment data (like payment.downtime.*)
+    if (!payload.payment?.entity?.id && !payload.payment?.entity?.order_id) {
+      console.log(`⏭️ Skipping ${event} - not a payment transaction event`);
+      return { success: true, message: 'Event type not applicable to invoices' };
+    }
+
     // Find the invoice by razorpayPaymentId or razorpayOrderId
     const invoice = await this.proInvoiceModel.findOne({
       where: {

@@ -29,7 +29,7 @@ export class ProInvoice extends Model {
 
   @Column({
     type: DataType.STRING(50),
-    allowNull: false,
+    allowNull: true,
     unique: true,
   })
   declare invoiceNumber: string;

@@ -26,6 +26,7 @@ import { UserType as DeviceUserType } from '../shared/models/device-token.model'
 import { AuditLogService } from './services/audit-log.service';
 import { AuditActionType } from './models/audit-log.model';
 import { ProfileReviewDto } from './dto/profile-review.dto';
+import { CampusAmbassadorService } from '../shared/services/campus-ambassador.service';
 import { Op } from 'sequelize';
 
 interface CampaignCountResult {
@@ -63,6 +64,7 @@ export class ProfileReviewService {
     private readonly notificationService: NotificationService,
     private readonly deviceTokenService: DeviceTokenService,
     private readonly auditLogService: AuditLogService,
+    private readonly campusAmbassadorService: CampusAmbassadorService,
   ) { }
 
   async createProfileReview(createData: any) {
@@ -459,6 +461,33 @@ export class ProfileReviewService {
             error,
           );
           // Don't throw - allow profile approval to continue even if referral fails
+        }
+
+        // Track campus ambassador verified signup
+        // Wrap in try-catch to prevent profile approval failure if tracking fails
+        try {
+          if (influencer.campusAmbassadorId) {
+            await this.campusAmbassadorService.incrementVerifiedSignups(influencer.campusAmbassadorId);
+            console.log(
+              `✅ CAMPUS AMBASSADOR VERIFIED SIGNUP TRACKED ✅`,
+            );
+            console.log(
+              `├─ Campus Ambassador ID: ${influencer.campusAmbassadorId}`,
+            );
+            console.log(
+              `├─ Verified Influencer ID: ${influencer.id} (${influencer.name})`,
+            );
+            console.log(
+              `└─ Timestamp: ${new Date().toISOString()}`,
+            );
+          }
+        } catch (error) {
+          console.error(
+            'Failed to track campus ambassador verified signup for influencer:',
+            influencer.id,
+            error,
+          );
+          // Don't throw - allow profile approval to continue even if tracking fails
         }
       }
     }

@@ -6,12 +6,13 @@ import {
   Max,
   IsString,
   IsIn,
+  IsBoolean,
   ValidationArguments,
   registerDecorator,
   ValidationOptions,
 } from 'class-validator';
-import { Type } from 'class-transformer';
-import { ApiProperty } from '@nestjs/swagger';
+import { Type, Transform } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ApplicationStatus } from '../models/campaign-application.model';
 import { Gender } from '../../auth/types/gender.enum';
 
@@ -129,6 +130,16 @@ export class GetCampaignApplicationsDto {
   @IsString()
   experience?: string;
 
+  @ApiPropertyOptional({
+    description: 'Enable AI-based matchability scoring',
+    example: false,
+    type: Boolean,
+  })
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  scoreWithAI?: boolean = false;
+
   @IsOptional()
   @IsString()
   @IsIn([
@@ -137,6 +148,7 @@ export class GetCampaignApplicationsDto {
     'followers_high_low',
     'followers_low_high',
     'campaign_charges_lowest',
+    'ai_score',
   ])
   sortBy?: string = 'application_new_old';
 

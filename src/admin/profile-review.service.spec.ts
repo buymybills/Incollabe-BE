@@ -22,6 +22,7 @@ import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { ProfileReviewDto } from './dto/profile-review.dto';
 import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
 import { CreditTransaction } from './models/credit-transaction.model';
+import { CampusAmbassadorService } from '../shared/services/campus-ambassador.service';
 
 const mockProfileReviewModel = {
   findOne: jest.fn(),
@@ -98,6 +99,18 @@ const mockCreditTransactionModel = {
   findAndCountAll: jest.fn(),
   findByPk: jest.fn(),
   update: jest.fn(),
+};
+
+const mockCampusAmbassadorService = {
+  getAmbassadorById: jest.fn(),
+  incrementReferrals: jest.fn(),
+  incrementSuccessfulSignups: jest.fn(),
+  incrementVerifiedSignups: jest.fn(),
+  registerAmbassador: jest.fn(),
+  getAllAmbassadors: jest.fn(),
+  getAmbassadorByEmail: jest.fn(),
+  searchByCollege: jest.fn(),
+  deleteAmbassador: jest.fn(),
 };
 
 describe('ProfileReviewService', () => {
@@ -178,6 +191,10 @@ describe('ProfileReviewService', () => {
             addOrUpdateDeviceToken: jest.fn(),
             removeDeviceToken: jest.fn(),
           },
+        },
+        {
+          provide: CampusAmbassadorService,
+          useValue: mockCampusAmbassadorService,
         },
       ],
     }).compile();

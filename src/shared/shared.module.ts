@@ -26,6 +26,7 @@ import { InstagramService } from './services/instagram.service';
 import { InstagramSyncCronService } from './services/instagram-sync.cron';
 import { InstagramDemographicsCronService } from './services/instagram-demographics.cron';
 import { InstagramGrowthCronService } from './services/instagram-growth.cron';
+import { InstagramTokenRefreshCronService } from './services/instagram-token-refresh.cron';
 import { CredibilityScoreCronService } from './services/credibility-score.cron';
 import { InfluencerCredibilityScoringService } from './services/influencer-credibility-scoring.service';
 import { InfluencerProfileScoringService } from './services/influencer-profile-scoring.service';
@@ -137,6 +138,7 @@ import { AppVersionService } from './services/app-version.service';
     InstagramSyncCronService,
     InstagramDemographicsCronService,
     InstagramGrowthCronService,
+    InstagramTokenRefreshCronService,
     CredibilityScoreCronService,
     InfluencerCredibilityScoringService,
     InfluencerProfileScoringService,

@@ -114,6 +114,6 @@ import { RolesGuard } from './guards/roles.guard';
     AdminAuthGuard,
     RolesGuard,
   ],
-  exports: [AdminAuthService, ProfileReviewService, AuditLogService],
+  exports: [AdminAuthService, ProfileReviewService, AuditLogService, AIScoringService],
 })
 export class AdminModule {}

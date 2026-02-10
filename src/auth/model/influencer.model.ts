@@ -207,6 +207,10 @@ export class Influencer extends Model {
   @Column({ type: DataType.TEXT, field: 'instagram_bio' })
   declare instagramBio: string;
 
+  @AllowNull(false)
+  @Column({ type: DataType.BOOLEAN, field: 'instagram_is_verified', defaultValue: false })
+  declare instagramIsVerified: boolean;
+
   @AllowNull(true)
   @Column({ type: DataType.DATE, field: 'instagram_token_expires_at' })
   declare instagramTokenExpiresAt: Date;
