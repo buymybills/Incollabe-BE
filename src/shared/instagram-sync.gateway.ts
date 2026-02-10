@@ -102,15 +102,20 @@ export class InstagramSyncGateway
       console.log(`\n🔌 New sync gateway connection: ${client.id}`);
 
       // Extract and verify JWT token
-      const token =
+      let token =
         client.handshake.auth.token ||
-        client.handshake.headers.authorization?.replace('Bearer ', '');
+        client.handshake.headers.authorization;
 
       if (!token) {
         this.logger.warn(`Client ${client.id} rejected: No token provided`);
         client.emit('error', { message: 'Authentication required' });
         client.disconnect();
         return;
+      }
+
+      // Strip "Bearer " prefix if present
+      if (token.startsWith('Bearer ')) {
+        token = token.replace('Bearer ', '');
       }
 
       // Verify JWT token
@@ -158,15 +163,15 @@ export class InstagramSyncGateway
    * Emit sync progress update to specific user
    * Called by background job workers during sync
    *
-   * @param userId - Influencer or brand ID
-   * @param userType - 'influencer' or 'brand'
+   * @param _userId - Influencer or brand ID (reserved for future targeted emissions)
+   * @param _userType - 'influencer' or 'brand' (reserved for future targeted emissions)
    * @param jobId - Unique job identifier
    * @param progress - Progress percentage (0-100)
    * @param message - Human-readable progress message
    */
   emitSyncProgress(
-    userId: number,
-    userType: string,
+    _userId: number,
+    _userType: string,
     jobId: string,
     progress: number,
     message: string,
@@ -189,8 +194,8 @@ export class InstagramSyncGateway
    * Called when background sync finishes successfully
    */
   emitSyncComplete(
-    userId: number,
-    userType: string,
+    _userId: number,
+    _userType: string,
     jobId: string,
     summary: any,
   ) {
@@ -212,8 +217,8 @@ export class InstagramSyncGateway
    * Called when background sync fails
    */
   emitSyncError(
-    userId: number,
-    userType: string,
+    _userId: number,
+    _userType: string,
     jobId: string,
     error: { message: string; code?: string },
   ) {
