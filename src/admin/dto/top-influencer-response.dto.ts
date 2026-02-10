@@ -112,6 +112,12 @@ export class TopInfluencerDto {
   instagramIsVerified: boolean;
 
   @ApiProperty({
+    description: 'Whether Instagram account is connected',
+    example: true,
+  })
+  isInstagramConnected: boolean;
+
+  @ApiProperty({
     description: 'Top influencer status',
     example: false,
   })
