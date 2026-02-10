@@ -44,6 +44,8 @@ import {
   CampaignsByCategoryResponse,
   CampaignCategoryType,
 } from './interfaces/campaign-with-stats.interface';
+//import { AIScoringService } from '../admin/services/ai-scoring.service';
+import { Post } from '../post/models/post.model';
 
 @Injectable()
 export class CampaignService {
@@ -70,6 +72,8 @@ export class CampaignService {
     private readonly experienceModel: typeof Experience,
     @InjectModel(MaxCampaignInvoice)
     private readonly maxCampaignInvoiceModel: typeof MaxCampaignInvoice,
+    @InjectModel(Post)
+    private readonly postModel: typeof Post,
     // REMOVED: Models only needed for early selection bonus feature (now disabled)
     // @InjectModel(CreditTransaction)
     // private readonly creditTransactionModel: typeof CreditTransaction,
@@ -79,6 +83,7 @@ export class CampaignService {
     private readonly notificationService: NotificationService,
     private readonly deviceTokenService: DeviceTokenService,
     private readonly campaignQueryService: CampaignQueryService,
+    //private readonly aiScoringService: AIScoringService,
   ) {}
 
   /**
@@ -1361,7 +1366,7 @@ export class CampaignService {
   async getCampaignApplications(
     campaignId: number,
     getApplicationsDto: GetCampaignApplicationsDto,
-    brandId: number,
+    brandId?: number,
   ): Promise<{
     applications: CampaignApplication[];
     total: number;
@@ -1369,14 +1374,23 @@ export class CampaignService {
     limit: number;
     totalPages: number;
   }> {
-    // Verify campaign exists and belongs to the brand
+    // Verify campaign exists and belongs to the brand (if brandId provided)
     // Note: We allow viewing applications even for inactive/completed campaigns
+    const campaignWhere: any = { id: campaignId };
+    if (brandId !== undefined) {
+      campaignWhere.brandId = brandId;
+    }
+
     const campaign = await this.campaignModel.findOne({
-      where: { id: campaignId, brandId },
+      where: campaignWhere,
     });
 
     if (!campaign) {
-      throw new NotFoundException('Campaign not found or access denied');
+      throw new NotFoundException(
+        brandId !== undefined
+          ? 'Campaign not found or access denied'
+          : 'Campaign not found',
+      );
     }
 
     const {
@@ -1388,6 +1402,7 @@ export class CampaignService {
       maxAge,
       platforms,
       experience,
+      //scoreWithAI = false,
       sortBy = 'application_new_old',
       page = 1,
       limit = 10,
@@ -1587,6 +1602,11 @@ export class CampaignService {
       case 'campaign_charges_lowest':
         order = [[Influencer, 'collaborationCosts', 'ASC']];
         break;
+      // case 'ai_score':
+      //   sortInMemory = true;
+      //   sortDirection = 'desc';
+      //   order = [['createdAt', 'DESC']]; // Default order for fetching
+      //   break;
       default:
         order = [['createdAt', 'DESC']];
     }
@@ -1669,6 +1689,11 @@ export class CampaignService {
           appJson.influencer.totalFollowers = totalFollowers;
         }
 
+        // Calculate AI matchability score if requested
+        // if (scoreWithAI && appJson.influencer) {
+        //   appJson.aiMatchability = await this.calculateAIScore(app, campaign);
+        // }
+
         return appJson;
       }),
     );
@@ -1701,10 +1726,16 @@ export class CampaignService {
       }
     }
 
-    // Sort in-memory if needed (for follower-based sorting)
+    // Sort in-memory if needed (for follower-based sorting or AI scoring)
     let finalApplications = filteredApplications;
     if (sortInMemory) {
       finalApplications = filteredApplications.sort((a, b) => {
+        if (sortBy === 'ai_score') {
+          const aScore = a.aiMatchability?.overallScore || 0;
+          const bScore = b.aiMatchability?.overallScore || 0;
+          return bScore - aScore; // Descending order (highest score first)
+        }
+        // Follower-based sorting
         const aFollowers = a.influencer?.totalFollowers || 0;
         const bFollowers = b.influencer?.totalFollowers || 0;
         return sortDirection === 'desc'
@@ -1734,6 +1765,159 @@ export class CampaignService {
       totalPages,
     };
   }
+
+  /**
+   * Calculate AI matchability score for an application
+   */
+  // private async calculateAIScore(
+  //   application: any,
+  //   campaign: Campaign,
+  // ): Promise<any> {
+  //   const influencer = application.influencer;
+
+  //   // Get follower count for this influencer
+  //   const followerCount = await this.getFollowerCount(influencer.id);
+
+  //   // Get post performance data
+  //   const postPerformance = await this.getPostPerformance(influencer.id);
+
+  //   // Get past campaign performance
+  //   const pastCampaigns = await this.getPastCampaignStats(influencer.id);
+
+  //   // Get campaign niches
+  //   const campaignNiches = await this.getCampaignNiches(campaign.nicheIds);
+
+  //   // Get campaign cities
+  //   const campaignCities = campaign.isPanIndia ? ['All India'] : await this.getCampaignCities(campaign.id);
+
+  //   // Prepare data for AI scoring
+  //   const influencerData = {
+  //     id: influencer.id,
+  //     name: influencer.name,
+  //     username: influencer.username,
+  //     followers: followerCount,
+  //     niches: (influencer.niches || []).map((n: any) => n.name),
+  //     location: influencer.city?.name || 'N/A',
+  //     isVerified: influencer.isVerified || false,
+  //     bio: influencer.bio || '',
+  //     pastCampaigns,
+  //     postPerformance: postPerformance || undefined,
+  //   };
+
+  //   const campaignData = {
+  //     id: campaign.id,
+  //     name: campaign.name,
+  //     description: campaign.description,
+  //     niches: campaignNiches,
+  //     targetCities: campaignCities,
+  //     isPanIndia: campaign.isPanIndia,
+  //     campaignType: campaign.type,
+  //   };
+
+  //   // Use AI to score the match
+  //   const aiResult = await this.aiScoringService.scoreInfluencerForCampaign(
+  //     influencerData,
+  //     campaignData,
+  //   );
+
+  //   return {
+  //     overallScore: aiResult.overall,
+  //     matchPercentage: `${aiResult.overall}%`,
+  //     recommendation: aiResult.recommendation,
+  //     scoreBreakdown: {
+  //       nicheMatch: aiResult.nicheMatch,
+  //       audienceRelevance: aiResult.audienceRelevance,
+  //       engagementRate: aiResult.engagementRate,
+  //       locationMatch: aiResult.locationMatch,
+  //       pastPerformance: aiResult.pastPerformance,
+  //       contentQuality: aiResult.contentQuality,
+  //     },
+  //     strengths: aiResult.strengths,
+  //     concerns: aiResult.concerns,
+  //   };
+  // }
+
+  // /**
+  //  * Get follower count for an influencer
+  //  */
+  // private async getFollowerCount(influencerId: number): Promise<number> {
+  //   return await this.followModel.count({
+  //     where: {
+  //       followingType: 'influencer',
+  //       followingInfluencerId: influencerId,
+  //     },
+  //   });
+  // }
+
+  // /**
+  //  * Get post performance statistics
+  //  */
+  // private async getPostPerformance(influencerId: number): Promise<any> {
+  //   const posts = await this.postModel.findAll({
+  //     where: { userId: influencerId, userType: 'influencer' },
+  //     limit: 10,
+  //     order: [['createdAt', 'DESC']],
+  //   });
+
+  //   if (posts.length === 0) return null;
+
+  //   const totalLikes = posts.reduce((sum, post) => sum + (post.likesCount || 0), 0);
+  //   const avgEngagement = totalLikes / posts.length;
+
+  //   return {
+  //     avgLikes: totalLikes / posts.length,
+  //     engagementRate: avgEngagement,
+  //     totalPosts: posts.length,
+  //   };
+  // }
+
+  // /**
+  //  * Get past campaign statistics
+  //  */
+  // private async getPastCampaignStats(influencerId: number): Promise<any> {
+  //   const completedCampaigns = await this.experienceModel.count({
+  //     where: {
+  //       influencerId,
+  //       successfullyCompleted: true,
+  //     },
+  //   });
+
+  //   return {
+  //     total: completedCampaigns,
+  //     successful: completedCampaigns,
+  //   };
+  // }
+
+  // /**
+  //  * Get campaign niches
+  //  */
+  // private async getCampaignNiches(nicheIds: number[]): Promise<string[]> {
+  //   if (!nicheIds || nicheIds.length === 0) return [];
+
+  //   const niches = await Niche.findAll({
+  //     where: { id: { [Op.in]: nicheIds } },
+  //     attributes: ['name'],
+  //   });
+
+  //   return niches.map((n) => n.name);
+  // }
+
+  // /**
+  //  * Get campaign cities
+  //  */
+  // private async getCampaignCities(campaignId: number): Promise<string[]> {
+  //   const campaignCities = await this.campaignCityModel.findAll({
+  //     where: { campaignId },
+  //     include: [
+  //       {
+  //         model: City,
+  //         attributes: ['name'],
+  //       },
+  //     ],
+  //   });
+
+  //   return campaignCities.map((cc) => cc.city?.name || '');
+  // }
 
   async getInfluencerApplicationForCampaign(
     campaignId: number,

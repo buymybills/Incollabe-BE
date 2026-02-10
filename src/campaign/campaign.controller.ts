@@ -1263,6 +1263,13 @@ export class CampaignController {
       'Filter by campaign experience (0, 1, 2, 3, 4, 5 for 0, 1+, 2+, 3+, 4+, 5+ campaigns)',
     example: '3',
   })
+  // @ApiQuery({
+  //   name: 'scoreWithAI',
+  //   required: false,
+  //   type: Boolean,
+  //   description: 'Enable AI-based matchability scoring (calculates match percentage based on niche, location, audience, and past performance)',
+  //   example: false,
+  // })
   @ApiQuery({
     name: 'sortBy',
     required: false,
@@ -1272,8 +1279,9 @@ export class CampaignController {
       'followers_high_low',
       'followers_low_high',
       'campaign_charges_lowest',
+      //'ai_score',
     ],
-    description: 'Sort applications by',
+    description: 'Sort applications by (ai_score requires scoreWithAI=true)',
     example: 'application_new_old',
   })
   @ApiQuery({
