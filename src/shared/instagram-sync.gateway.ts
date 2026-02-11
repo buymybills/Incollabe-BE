@@ -104,7 +104,10 @@ export class InstagramSyncGateway
     this.redisPubClient = new Redis({ host: redisHost, port: redisPort });
     this.redisSubClient = this.redisPubClient.duplicate();
 
-    server.adapter(createAdapter(this.redisPubClient, this.redisSubClient));
+    // afterInit receives the Namespace (not root Server) in a namespaced gateway.
+    // adapter() must be called on the root Server, accessible via namespace.server.
+    const rootServer = (server as any).server ?? server;
+    rootServer.adapter(createAdapter(this.redisPubClient, this.redisSubClient));
 
     console.log('\n🚀 ===== INSTAGRAM SYNC WEBSOCKET GATEWAY INITIALIZED =====');
     console.log('Namespace: /instagram-sync');
