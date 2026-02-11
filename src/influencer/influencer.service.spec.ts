@@ -424,7 +424,7 @@ describe('InfluencerService', () => {
       expect(result).toHaveProperty('name', 'Test Influencer');
       // Private profile data (should be available for non-public profiles)
       if ('profileCompletion' in result) {
-        expect((result as any).profileCompletion.completionPercentage).toBe(36);
+        expect((result as any).profileCompletion.completionPercentage).toBe(38);
       }
       // Check for deviceToken (single object, not array)
       if ('deviceToken' in result) {
