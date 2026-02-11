@@ -6,9 +6,10 @@ import {
   OnGatewayInit,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger } from '@nestjs/common';
+import { Logger, OnModuleDestroy } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { createAdapter } from '@socket.io/redis-adapter';
+import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
 /**
@@ -68,8 +69,7 @@ import Redis from 'ioredis';
  */
 @WebSocketGateway({
   cors: {
-    origin: '*', // Configure based on your frontend URL in production
-    credentials: true,
+    origin: '*',
   },
   namespace: '/instagram-sync',
   pingTimeout: 60000,
@@ -77,86 +77,41 @@ import Redis from 'ioredis';
   transports: ['websocket', 'polling'],
 })
 export class InstagramSyncGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy
 {
   @WebSocketServer()
   server: Server;
 
   private logger: Logger = new Logger('InstagramSyncGateway');
   private authenticatedSockets: Map<string, { userId: number; userType: string }> = new Map();
+  private redisPubClient: Redis | null = null;
+  private redisSubClient: Redis | null = null;
 
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  onModuleDestroy() {
+    this.redisPubClient?.disconnect();
+    this.redisSubClient?.disconnect();
+  }
 
   afterInit(server: Server) {
+    const redisHost = this.configService.get<string>('REDIS_HOST') || 'localhost';
+    const redisPort = Number(this.configService.get<string>('REDIS_PORT')) || 6379;
+
+    this.redisPubClient = new Redis({ host: redisHost, port: redisPort });
+    this.redisSubClient = this.redisPubClient.duplicate();
+
+    server.adapter(createAdapter(this.redisPubClient, this.redisSubClient));
+
     console.log('\n🚀 ===== INSTAGRAM SYNC WEBSOCKET GATEWAY INITIALIZED =====');
     console.log('Namespace: /instagram-sync');
     console.log('Purpose: Real-time sync progress updates');
+    console.log(`Redis adapter attached (${redisHost}:${redisPort})`);
     console.log('==========================================================\n');
-
-    // Configure Redis adapter for cross-process WebSocket communication (OPTIONAL)
-    const redisHost = process.env.REDIS_HOST || 'localhost';
-    const redisPort = parseInt(process.env.REDIS_PORT || '6379', 10);
-
-    // Only enable Redis adapter if explicitly configured
-    const enableRedisAdapter = process.env.ENABLE_REDIS_ADAPTER === 'true';
-
-    if (enableRedisAdapter) {
-      try {
-        console.log(`⚙️  Attempting to configure Redis adapter at ${redisHost}:${redisPort}...`);
-
-        // Create Redis pub/sub clients for Socket.IO adapter
-        const pubClient = new Redis({
-          host: redisHost,
-          port: redisPort,
-          retryStrategy: (times) => {
-            if (times > 3) {
-              console.error('❌ Redis connection failed after 3 retries. Disabling Redis adapter.');
-              return null; // Stop retrying
-            }
-            const delay = Math.min(times * 50, 2000);
-            return delay;
-          },
-          lazyConnect: true, // Don't connect immediately
-        });
-
-        const subClient = pubClient.duplicate({ lazyConnect: true });
-
-        // Handle Redis connection errors
-        pubClient.on('error', (error) => {
-          console.error('❌ Redis pubClient error:', error.message);
-          this.logger.error('Redis pubClient error', error);
-        });
-
-        subClient.on('error', (error) => {
-          console.error('❌ Redis subClient error:', error.message);
-          this.logger.error('Redis subClient error', error);
-        });
-
-        // Connect Redis clients
-        Promise.all([pubClient.connect(), subClient.connect()])
-          .then(() => {
-            // Attach Redis adapter to Socket.IO server AFTER successful connection
-            server.adapter(createAdapter(pubClient, subClient));
-            console.log('✅ Redis adapter configured for multi-process WebSocket support');
-            console.log(`   Redis: ${redisHost}:${redisPort}`);
-            this.logger.log(`Redis adapter enabled for cross-process communication`);
-          })
-          .catch((error) => {
-            console.error('❌ Failed to connect to Redis:', error.message);
-            console.warn('⚠️  WebSocket will work in single-process mode only');
-            this.logger.warn('Redis connection failed - using in-memory adapter');
-          });
-      } catch (error) {
-        console.error('❌ Failed to configure Redis adapter:', error);
-        console.warn('⚠️  WebSocket will work in single-process mode only');
-        this.logger.error('Redis adapter configuration failed', error);
-      }
-    } else {
-      console.log('ℹ️  Redis adapter disabled (set ENABLE_REDIS_ADAPTER=true to enable)');
-      console.warn('⚠️  WebSocket will work in single-process mode only');
-    }
-
-    this.logger.log('Instagram Sync WebSocket Gateway initialized');
+    this.logger.log('Instagram Sync WebSocket Gateway initialized with Redis adapter');
   }
 
   /**
@@ -223,10 +178,10 @@ export class InstagramSyncGateway
    * Handle client disconnections
    */
   handleDisconnect(client: Socket) {
-    console.log(`🔌 Client disconnected: ${client.id}`);
-    console.log(`   Remaining clients: ${this.authenticatedSockets.size - 1}`);
-    this.logger.log(`Client disconnected: ${client.id}`);
     this.authenticatedSockets.delete(client.id);
+    console.log(`🔌 Client disconnected: ${client.id}`);
+    console.log(`   Remaining clients: ${this.authenticatedSockets.size}`);
+    this.logger.log(`Client disconnected: ${client.id}`);
   }
 
   /**
