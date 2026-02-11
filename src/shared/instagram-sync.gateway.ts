@@ -130,6 +130,7 @@ export class InstagramSyncGateway
 
         console.log(`✅ Client ${client.id} authenticated as ${decoded.type || decoded.userType} ${decoded.sub || decoded.id}`);
         console.log(`   Total connected clients: ${this.authenticatedSockets.size}`);
+        console.log(`   Client IDs in map: [${Array.from(this.authenticatedSockets.keys()).join(', ')}]`);
         this.logger.log(`Client ${client.id} connected and authenticated`);
 
         // Send connection success event
@@ -157,6 +158,7 @@ export class InstagramSyncGateway
    */
   handleDisconnect(client: Socket) {
     console.log(`🔌 Client disconnected: ${client.id}`);
+    console.log(`   Remaining clients: ${this.authenticatedSockets.size - 1}`);
     this.logger.log(`Client disconnected: ${client.id}`);
     this.authenticatedSockets.delete(client.id);
   }
@@ -180,19 +182,22 @@ export class InstagramSyncGateway
   ) {
     const eventName = `sync:${jobId}:progress`;
 
+    const socketIOSize = (this.server as any).sockets?.size || 0;
     console.log(`📡 Emitting progress for job ${jobId}: ${progress}% - ${message}`);
-    console.log(`   Connected clients: ${this.authenticatedSockets.size}`);
+    console.log(`   Authenticated clients (our map): ${this.authenticatedSockets.size}`);
+    console.log(`   Client IDs in our map: [${Array.from(this.authenticatedSockets.keys()).join(', ')}]`);
+    console.log(`   Socket.IO namespace clients: ${socketIOSize}`);
     console.log(`   Event name: ${eventName}`);
 
     // Emit to all authenticated sockets for this user
-    this.server.emit(eventName, {
+    const emitResult = this.server.emit(eventName, {
       jobId,
       progress: Math.min(100, Math.max(0, progress)), // Clamp between 0-100
       message,
       timestamp: new Date().toISOString(),
     });
 
-    console.log(`   ✅ Event emitted to ${this.authenticatedSockets.size} clients`);
+    console.log(`   ✅ Event emitted to ${this.authenticatedSockets.size} clients (broadcast result: ${emitResult})`);
   }
 
   /**

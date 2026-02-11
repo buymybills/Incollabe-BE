@@ -1232,18 +1232,21 @@ export class InstagramController {
     // Generate unique job ID
     const jobId = `media-sync-${userId}-${Date.now()}`;
 
-    // Start sync in background (don't await)
-    this.instagramService
-      .syncAllMediaInsights(
-        Number(userId),
-        userType as 'influencer' | 'brand',
-        limitNum,
-        jobId, // Pass jobId to enable WebSocket emissions
-      )
-      .catch((error) => {
-        console.error(`Background media sync failed for job ${jobId}:`, error);
-        // Error will be emitted via WebSocket by the service
-      });
+    // Start sync in background with a small delay to allow WebSocket connection
+    // This prevents race condition where events are emitted before client connects
+    setTimeout(() => {
+      this.instagramService
+        .syncAllMediaInsights(
+          Number(userId),
+          userType as 'influencer' | 'brand',
+          limitNum,
+          jobId, // Pass jobId to enable WebSocket emissions
+        )
+        .catch((error) => {
+          console.error(`Background media sync failed for job ${jobId}:`, error);
+          // Error will be emitted via WebSocket by the service
+        });
+    }, 1000); // Wait 1 second for WebSocket to connect
 
     // Return immediately with job info
     return {
@@ -1344,17 +1347,20 @@ export class InstagramController {
     // Generate unique job ID
     const jobId = `profile-sync-${userId}-${Date.now()}`;
 
-    // Start sync in background (don't await)
-    this.instagramService
-      .syncAllInsights(
-        Number(userId),
-        userType as 'influencer' | 'brand',
-        jobId, // Pass jobId to enable WebSocket emissions
-      )
-      .catch((error) => {
-        console.error(`Background profile sync failed for job ${jobId}:`, error);
-        // Error will be emitted via WebSocket by the service
-      });
+    // Start sync in background with a small delay to allow WebSocket connection
+    // This prevents race condition where events are emitted before client connects
+    setTimeout(() => {
+      this.instagramService
+        .syncAllInsights(
+          Number(userId),
+          userType as 'influencer' | 'brand',
+          jobId, // Pass jobId to enable WebSocket emissions
+        )
+        .catch((error) => {
+          console.error(`Background profile sync failed for job ${jobId}:`, error);
+          // Error will be emitted via WebSocket by the service
+        });
+    }, 1000); // Wait 1 second for WebSocket to connect
 
     // Return immediately with job info
     return {
