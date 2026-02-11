@@ -93,32 +93,67 @@ export class InstagramSyncGateway
     console.log('Purpose: Real-time sync progress updates');
     console.log('==========================================================\n');
 
-    // Configure Redis adapter for cross-process WebSocket communication
+    // Configure Redis adapter for cross-process WebSocket communication (OPTIONAL)
     const redisHost = process.env.REDIS_HOST || 'localhost';
     const redisPort = parseInt(process.env.REDIS_PORT || '6379', 10);
 
-    try {
-      // Create Redis pub/sub clients for Socket.IO adapter
-      const pubClient = new Redis({
-        host: redisHost,
-        port: redisPort,
-        retryStrategy: (times) => {
-          const delay = Math.min(times * 50, 2000);
-          return delay;
-        },
-      });
+    // Only enable Redis adapter if explicitly configured
+    const enableRedisAdapter = process.env.ENABLE_REDIS_ADAPTER === 'true';
 
-      const subClient = pubClient.duplicate();
+    if (enableRedisAdapter) {
+      try {
+        console.log(`⚙️  Attempting to configure Redis adapter at ${redisHost}:${redisPort}...`);
 
-      // Attach Redis adapter to Socket.IO server
-      server.adapter(createAdapter(pubClient, subClient));
+        // Create Redis pub/sub clients for Socket.IO adapter
+        const pubClient = new Redis({
+          host: redisHost,
+          port: redisPort,
+          retryStrategy: (times) => {
+            if (times > 3) {
+              console.error('❌ Redis connection failed after 3 retries. Disabling Redis adapter.');
+              return null; // Stop retrying
+            }
+            const delay = Math.min(times * 50, 2000);
+            return delay;
+          },
+          lazyConnect: true, // Don't connect immediately
+        });
 
-      console.log('✅ Redis adapter configured for multi-process WebSocket support');
-      console.log(`   Redis: ${redisHost}:${redisPort}`);
-      this.logger.log(`Redis adapter enabled for cross-process communication`);
-    } catch (error) {
-      console.error('❌ Failed to configure Redis adapter:', error);
-      this.logger.error('Redis adapter configuration failed', error);
+        const subClient = pubClient.duplicate({ lazyConnect: true });
+
+        // Handle Redis connection errors
+        pubClient.on('error', (error) => {
+          console.error('❌ Redis pubClient error:', error.message);
+          this.logger.error('Redis pubClient error', error);
+        });
+
+        subClient.on('error', (error) => {
+          console.error('❌ Redis subClient error:', error.message);
+          this.logger.error('Redis subClient error', error);
+        });
+
+        // Connect Redis clients
+        Promise.all([pubClient.connect(), subClient.connect()])
+          .then(() => {
+            // Attach Redis adapter to Socket.IO server AFTER successful connection
+            server.adapter(createAdapter(pubClient, subClient));
+            console.log('✅ Redis adapter configured for multi-process WebSocket support');
+            console.log(`   Redis: ${redisHost}:${redisPort}`);
+            this.logger.log(`Redis adapter enabled for cross-process communication`);
+          })
+          .catch((error) => {
+            console.error('❌ Failed to connect to Redis:', error.message);
+            console.warn('⚠️  WebSocket will work in single-process mode only');
+            this.logger.warn('Redis connection failed - using in-memory adapter');
+          });
+      } catch (error) {
+        console.error('❌ Failed to configure Redis adapter:', error);
+        console.warn('⚠️  WebSocket will work in single-process mode only');
+        this.logger.error('Redis adapter configuration failed', error);
+      }
+    } else {
+      console.log('ℹ️  Redis adapter disabled (set ENABLE_REDIS_ADAPTER=true to enable)');
+      console.warn('⚠️  WebSocket will work in single-process mode only');
     }
 
     this.logger.log('Instagram Sync WebSocket Gateway initialized');
