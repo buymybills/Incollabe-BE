@@ -857,7 +857,6 @@ export class InfluencerService {
       'profileHeadline',
       'countryId',
       'cityId',
-      'whatsappNumber',
       // At least one social media link
       'instagramUrl', // OR youtubeUrl, etc.
     ];
@@ -938,7 +937,6 @@ export class InfluencerService {
       'profileHeadline',
       'countryId',
       'cityId',
-      'whatsappNumber',
     ];
 
     const allFieldsFilled = requiredFields.every((field) => {
