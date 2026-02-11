@@ -771,7 +771,6 @@ describe('CampaignService', () => {
       expect(influencerModel.findAndCountAll).toHaveBeenCalledWith({
         where: {
           isProfileCompleted: true,
-          isWhatsappVerified: true,
         },
         include: expect.any(Array),
         attributes: expect.any(Array),
