@@ -1047,7 +1047,6 @@ export class CampaignService {
 
     const whereCondition: any = {
       isProfileCompleted: true,
-      isWhatsappVerified: true,
     };
 
     // Search by name or username
@@ -1259,7 +1258,6 @@ export class CampaignService {
       where: {
         id: { [Op.in]: influencerIds },
         isProfileCompleted: true,
-        isWhatsappVerified: true,
       },
       attributes: ['id', 'name', 'whatsappNumber'],
     });

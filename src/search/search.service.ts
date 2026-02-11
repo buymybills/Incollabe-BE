@@ -40,7 +40,6 @@ export class SearchService {
         where: {
           ...searchCondition,
           isProfileCompleted: true,
-          isWhatsappVerified: true,
         },
         attributes: [
           'id',

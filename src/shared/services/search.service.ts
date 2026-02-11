@@ -81,7 +81,6 @@ export class SearchService {
         where: {
           ...influencerSearchCondition,
           isProfileCompleted: true,
-          isWhatsappVerified: true,
         },
         attributes: [
           'id',

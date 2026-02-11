@@ -2395,7 +2395,6 @@ export class AuthService {
         where: {
           ...influencerSearchCondition,
           isProfileCompleted: true,
-          isWhatsappVerified: true,
         },
         attributes: [
           'id',
