@@ -182,22 +182,19 @@ export class InstagramSyncGateway
   ) {
     const eventName = `sync:${jobId}:progress`;
 
-    const socketIOSize = (this.server as any).sockets?.size || 0;
     console.log(`📡 Emitting progress for job ${jobId}: ${progress}% - ${message}`);
-    console.log(`   Authenticated clients (our map): ${this.authenticatedSockets.size}`);
-    console.log(`   Client IDs in our map: [${Array.from(this.authenticatedSockets.keys()).join(', ')}]`);
-    console.log(`   Socket.IO namespace clients: ${socketIOSize}`);
     console.log(`   Event name: ${eventName}`);
 
-    // Emit to all authenticated sockets for this user
-    const emitResult = this.server.emit(eventName, {
+    // Broadcast to ALL clients in the namespace
+    // Socket.IO handles cross-process communication via adapter
+    this.server.emit(eventName, {
       jobId,
       progress: Math.min(100, Math.max(0, progress)), // Clamp between 0-100
       message,
       timestamp: new Date().toISOString(),
     });
 
-    console.log(`   ✅ Event emitted to ${this.authenticatedSockets.size} clients (broadcast result: ${emitResult})`);
+    console.log(`   ✅ Event broadcast to namespace`);
   }
 
   /**
@@ -214,6 +211,7 @@ export class InstagramSyncGateway
 
     console.log(`✅ Emitting completion for job ${jobId}`);
 
+    // Broadcast to ALL clients in the namespace
     this.server.emit(eventName, {
       jobId,
       success: true,
@@ -221,6 +219,8 @@ export class InstagramSyncGateway
       message: 'Instagram sync completed successfully',
       timestamp: new Date().toISOString(),
     });
+
+    console.log(`   ✅ Completion event broadcast to namespace`);
   }
 
   /**
@@ -237,6 +237,7 @@ export class InstagramSyncGateway
 
     console.log(`❌ Emitting error for job ${jobId}: ${error.message}`);
 
+    // Broadcast to ALL clients in the namespace
     this.server.emit(eventName, {
       jobId,
       success: false,
@@ -246,5 +247,7 @@ export class InstagramSyncGateway
       },
       timestamp: new Date().toISOString(),
     });
+
+    console.log(`   ✅ Error event broadcast to namespace`);
   }
 }
