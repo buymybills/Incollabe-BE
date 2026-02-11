@@ -173,7 +173,7 @@ export class InstagramSyncGateway
    * @param progress - Progress percentage (0-100)
    * @param message - Human-readable progress message
    */
-  emitSyncProgress(
+  async emitSyncProgress(
     _userId: number,
     _userType: string,
     jobId: string,
@@ -185,23 +185,37 @@ export class InstagramSyncGateway
     console.log(`📡 Emitting progress for job ${jobId}: ${progress}% - ${message}`);
     console.log(`   Event name: ${eventName}`);
 
-    // Broadcast to ALL clients in the namespace
-    // Socket.IO handles cross-process communication via adapter
-    this.server.emit(eventName, {
+    const payload = {
       jobId,
       progress: Math.min(100, Math.max(0, progress)), // Clamp between 0-100
       message,
       timestamp: new Date().toISOString(),
-    });
+    };
 
-    console.log(`   ✅ Event broadcast to namespace`);
+    try {
+      // Fetch all connected sockets in this namespace
+      const sockets = await this.server.fetchSockets();
+      console.log(`   Connected sockets: ${sockets.length}`);
+
+      // Emit to each connected socket individually to guarantee delivery
+      let emittedCount = 0;
+      for (const socket of sockets) {
+        socket.emit(eventName, payload);
+        emittedCount++;
+        console.log(`     ↳ Emitted to socket ${socket.id}`);
+      }
+
+      console.log(`   ✅ Event sent to ${emittedCount} connected clients`);
+    } catch (error) {
+      console.error(`   ❌ Failed to emit progress:`, error);
+    }
   }
 
   /**
    * Emit sync completion notification
    * Called when background sync finishes successfully
    */
-  emitSyncComplete(
+  async emitSyncComplete(
     _userId: number,
     _userType: string,
     jobId: string,
@@ -211,23 +225,38 @@ export class InstagramSyncGateway
 
     console.log(`✅ Emitting completion for job ${jobId}`);
 
-    // Broadcast to ALL clients in the namespace
-    this.server.emit(eventName, {
+    const payload = {
       jobId,
       success: true,
       summary,
       message: 'Instagram sync completed successfully',
       timestamp: new Date().toISOString(),
-    });
+    };
 
-    console.log(`   ✅ Completion event broadcast to namespace`);
+    try {
+      // Fetch all connected sockets in this namespace
+      const sockets = await this.server.fetchSockets();
+      console.log(`   Connected sockets: ${sockets.length}`);
+
+      // Emit to each connected socket individually to guarantee delivery
+      let emittedCount = 0;
+      for (const socket of sockets) {
+        socket.emit(eventName, payload);
+        emittedCount++;
+        console.log(`     ↳ Emitted to socket ${socket.id}`);
+      }
+
+      console.log(`   ✅ Completion event sent to ${emittedCount} connected clients`);
+    } catch (error) {
+      console.error(`   ❌ Failed to emit completion:`, error);
+    }
   }
 
   /**
    * Emit sync error notification
    * Called when background sync fails
    */
-  emitSyncError(
+  async emitSyncError(
     _userId: number,
     _userType: string,
     jobId: string,
@@ -237,8 +266,7 @@ export class InstagramSyncGateway
 
     console.log(`❌ Emitting error for job ${jobId}: ${error.message}`);
 
-    // Broadcast to ALL clients in the namespace
-    this.server.emit(eventName, {
+    const payload = {
       jobId,
       success: false,
       error: {
@@ -246,8 +274,24 @@ export class InstagramSyncGateway
         code: error.code || 'SYNC_ERROR',
       },
       timestamp: new Date().toISOString(),
-    });
+    };
 
-    console.log(`   ✅ Error event broadcast to namespace`);
+    try {
+      // Fetch all connected sockets in this namespace
+      const sockets = await this.server.fetchSockets();
+      console.log(`   Connected sockets: ${sockets.length}`);
+
+      // Emit to each connected socket individually to guarantee delivery
+      let emittedCount = 0;
+      for (const socket of sockets) {
+        socket.emit(eventName, payload);
+        emittedCount++;
+        console.log(`     ↳ Emitted to socket ${socket.id}`);
+      }
+
+      console.log(`   ✅ Error event sent to ${emittedCount} connected clients`);
+    } catch (error) {
+      console.error(`   ❌ Failed to emit error:`, error);
+    }
   }
 }
