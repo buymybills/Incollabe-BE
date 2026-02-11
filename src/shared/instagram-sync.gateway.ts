@@ -8,6 +8,8 @@ import {
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { createAdapter } from '@socket.io/redis-adapter';
+import Redis from 'ioredis';
 
 /**
  * WebSocket Gateway for Instagram Sync Progress Updates
@@ -90,6 +92,35 @@ export class InstagramSyncGateway
     console.log('Namespace: /instagram-sync');
     console.log('Purpose: Real-time sync progress updates');
     console.log('==========================================================\n');
+
+    // Configure Redis adapter for cross-process WebSocket communication
+    const redisHost = process.env.REDIS_HOST || 'localhost';
+    const redisPort = parseInt(process.env.REDIS_PORT || '6379', 10);
+
+    try {
+      // Create Redis pub/sub clients for Socket.IO adapter
+      const pubClient = new Redis({
+        host: redisHost,
+        port: redisPort,
+        retryStrategy: (times) => {
+          const delay = Math.min(times * 50, 2000);
+          return delay;
+        },
+      });
+
+      const subClient = pubClient.duplicate();
+
+      // Attach Redis adapter to Socket.IO server
+      server.adapter(createAdapter(pubClient, subClient));
+
+      console.log('✅ Redis adapter configured for multi-process WebSocket support');
+      console.log(`   Redis: ${redisHost}:${redisPort}`);
+      this.logger.log(`Redis adapter enabled for cross-process communication`);
+    } catch (error) {
+      console.error('❌ Failed to configure Redis adapter:', error);
+      this.logger.error('Redis adapter configuration failed', error);
+    }
+
     this.logger.log('Instagram Sync WebSocket Gateway initialized');
   }
 
@@ -173,7 +204,7 @@ export class InstagramSyncGateway
    * @param progress - Progress percentage (0-100)
    * @param message - Human-readable progress message
    */
-  async emitSyncProgress(
+  emitSyncProgress(
     _userId: number,
     _userType: string,
     jobId: string,
@@ -192,30 +223,18 @@ export class InstagramSyncGateway
       timestamp: new Date().toISOString(),
     };
 
-    try {
-      // Fetch all connected sockets in this namespace
-      const sockets = await this.server.fetchSockets();
-      console.log(`   Connected sockets: ${sockets.length}`);
+    // Broadcast to ALL clients in the namespace
+    // This works across processes if Redis adapter is configured
+    this.server.emit(eventName, payload);
 
-      // Emit to each connected socket individually to guarantee delivery
-      let emittedCount = 0;
-      for (const socket of sockets) {
-        socket.emit(eventName, payload);
-        emittedCount++;
-        console.log(`     ↳ Emitted to socket ${socket.id}`);
-      }
-
-      console.log(`   ✅ Event sent to ${emittedCount} connected clients`);
-    } catch (error) {
-      console.error(`   ❌ Failed to emit progress:`, error);
-    }
+    console.log(`   ✅ Event broadcast to namespace (will reach all connected clients across all processes)`);
   }
 
   /**
    * Emit sync completion notification
    * Called when background sync finishes successfully
    */
-  async emitSyncComplete(
+  emitSyncComplete(
     _userId: number,
     _userType: string,
     jobId: string,
@@ -233,30 +252,17 @@ export class InstagramSyncGateway
       timestamp: new Date().toISOString(),
     };
 
-    try {
-      // Fetch all connected sockets in this namespace
-      const sockets = await this.server.fetchSockets();
-      console.log(`   Connected sockets: ${sockets.length}`);
+    // Broadcast to ALL clients in the namespace
+    this.server.emit(eventName, payload);
 
-      // Emit to each connected socket individually to guarantee delivery
-      let emittedCount = 0;
-      for (const socket of sockets) {
-        socket.emit(eventName, payload);
-        emittedCount++;
-        console.log(`     ↳ Emitted to socket ${socket.id}`);
-      }
-
-      console.log(`   ✅ Completion event sent to ${emittedCount} connected clients`);
-    } catch (error) {
-      console.error(`   ❌ Failed to emit completion:`, error);
-    }
+    console.log(`   ✅ Completion event broadcast to namespace`);
   }
 
   /**
    * Emit sync error notification
    * Called when background sync fails
    */
-  async emitSyncError(
+  emitSyncError(
     _userId: number,
     _userType: string,
     jobId: string,
@@ -276,22 +282,9 @@ export class InstagramSyncGateway
       timestamp: new Date().toISOString(),
     };
 
-    try {
-      // Fetch all connected sockets in this namespace
-      const sockets = await this.server.fetchSockets();
-      console.log(`   Connected sockets: ${sockets.length}`);
+    // Broadcast to ALL clients in the namespace
+    this.server.emit(eventName, payload);
 
-      // Emit to each connected socket individually to guarantee delivery
-      let emittedCount = 0;
-      for (const socket of sockets) {
-        socket.emit(eventName, payload);
-        emittedCount++;
-        console.log(`     ↳ Emitted to socket ${socket.id}`);
-      }
-
-      console.log(`   ✅ Error event sent to ${emittedCount} connected clients`);
-    } catch (error) {
-      console.error(`   ❌ Failed to emit error:`, error);
-    }
+    console.log(`   ✅ Error event broadcast to namespace`);
   }
 }
