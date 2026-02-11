@@ -93,7 +93,6 @@ describe('SearchService', () => {
         expect.objectContaining({
           where: expect.objectContaining({
             isProfileCompleted: true,
-            isWhatsappVerified: true,
           }),
           limit: 20,
           offset: 0,
@@ -335,7 +334,6 @@ describe('SearchService', () => {
         expect.objectContaining({
           where: expect.objectContaining({
             isProfileCompleted: true,
-            isWhatsappVerified: true,
           }),
         }),
       );

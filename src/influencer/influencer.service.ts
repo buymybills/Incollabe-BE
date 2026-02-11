@@ -955,9 +955,6 @@ export class InfluencerService {
         influencer.twitterUrl,
     );
 
-    // WhatsApp verification required
-    const isWhatsappVerified = Boolean(influencer.isWhatsappVerified);
-
     // Basic collaboration costs should be set
     const hasCollaborationCosts = Boolean(
       influencer.collaborationCosts &&
@@ -967,7 +964,6 @@ export class InfluencerService {
     return (
       allFieldsFilled &&
       hasSocialMediaLink &&
-      isWhatsappVerified &&
       hasCollaborationCosts
     );
   }
@@ -1715,8 +1711,7 @@ export class InfluencerService {
     const influencer = await this.influencerRepository.findById(influencerId);
     if (
       !influencer ||
-      !influencer.isProfileCompleted ||
-      !influencer.isWhatsappVerified
+      !influencer.isProfileCompleted
     ) {
       throw new BadRequestException(
         'Your profile must be completed and verified to apply for campaigns',
