@@ -953,7 +953,6 @@ export class InfluencerService {
       'profileHeadline',
       'countryId',
       'cityId',
-      'whatsappNumber',
     ];
 
     const allFieldsFilled = requiredFields.every((field) => {
