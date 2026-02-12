@@ -2422,15 +2422,35 @@ export class CampaignService {
       ],
     });
 
+    // Get performance metrics
+    let followerCount = await this.getFollowerCount(influencerId);
+
+    // Fallback: Use Instagram followers count if no platform followers found
+    if (followerCount === 0 && application.influencer.instagramFollowersCount) {
+      followerCount = application.influencer.instagramFollowersCount;
+      console.log(`[AI Score] Using Instagram followers count ${followerCount} for influencer ${influencerId}`);
+    }
+
+    const postPerformance = await this.getPostPerformance(influencerId);
+
+    // Log data availability for debugging
+    console.log(`[AI Score] Data availability for influencer ${influencerId}:`, {
+      hasInstagramAnalysis: !!instagramAnalysis,
+      hasPostPerformance: !!postPerformance,
+      followerCount,
+      avgReach: instagramAnalysis?.avgReach || postPerformance?.avgReach || 0,
+      engagementRate: instagramAnalysis?.avgEngagementRate || postPerformance?.engagementRate || 0,
+    });
+
     // Calculate Audience Quality Score
     const audienceQuality = this.calculateAudienceQuality(instagramAnalysis);
 
-    // Calculate Average Reaction metrics
-    const avgReaction = this.calculateAverageReaction(instagramAnalysis);
-
-    // Get performance metrics
-    const followerCount = await this.getFollowerCount(influencerId);
-    const postPerformance = await this.getPostPerformance(influencerId);
+    // Calculate Average Reaction metrics (with fallback to postPerformance)
+    const avgReaction = this.calculateAverageReaction(
+      instagramAnalysis,
+      postPerformance,
+      followerCount,
+    );
 
     const expectedROI = this.calculateExpectedROI(followerCount, postPerformance);
     const estimatedEngagement = this.calculateEstimatedEngagement(followerCount, postPerformance);
@@ -2531,10 +2551,10 @@ export class CampaignService {
    * Calculate audience quality score based on demographics
    */
   private calculateAudienceQuality(instagramAnalysis: any): any {
-    if (!instagramAnalysis || !instagramAnalysis.audienceAgeGender) {
+    if (!instagramAnalysis || !instagramAnalysis.audienceAgeGender || instagramAnalysis.audienceAgeGender.length === 0) {
       return {
         score: 50,
-        description: 'No audience data available',
+        description: 'Audience demographic data not yet analyzed',
         tier: 'Average',
       };
     }
@@ -2553,6 +2573,15 @@ export class CampaignService {
       }
     }
 
+    // If no valid data found
+    if (maxPercentage === 0 || !dominantDemo) {
+      return {
+        score: 50,
+        description: 'Audience demographic data not yet analyzed',
+        tier: 'Average',
+      };
+    }
+
     // Calculate score based on concentration
     let score = 50; // Base score
 
@@ -2568,8 +2597,8 @@ export class CampaignService {
     }
 
     // Build description
-    const ageRange = dominantDemo?.ageRange || 'N/A';
-    const gender = dominantDemo?.gender || 'followers';
+    const ageRange = dominantDemo.ageRange || 'various ages';
+    const gender = dominantDemo.gender || 'followers';
     const description = `${Math.round(maxPercentage)}% of followers are ${gender.toLowerCase()} (${ageRange})`;
 
     // Determine tier
@@ -2583,8 +2612,31 @@ export class CampaignService {
   /**
    * Calculate average reaction metrics
    */
-  private calculateAverageReaction(instagramAnalysis: any): any {
-    if (!instagramAnalysis) {
+  private calculateAverageReaction(
+    instagramAnalysis: any,
+    postPerformance: any,
+    followerCount: number,
+  ): any {
+    let avgReach = Number(instagramAnalysis?.avgReach) || 0;
+    let engagementRate = Number(instagramAnalysis?.avgEngagementRate) || 0;
+    let activeFollowersPercentage = Number(instagramAnalysis?.activeFollowersPercentage) || 0;
+
+    // Fallback: If no Instagram analysis, use postPerformance data
+    if (!instagramAnalysis && postPerformance) {
+      avgReach = Number(postPerformance.avgReach) || 0;
+      engagementRate = Number(postPerformance.engagementRate) || 0;
+      // Estimate active followers at 60% if no data
+      activeFollowersPercentage = 60;
+    }
+
+    // Further fallback: If still no data, estimate from follower count
+    if (avgReach === 0 && followerCount > 0) {
+      // Estimate reach as 30-50% of followers for organic posts
+      avgReach = Math.round(followerCount * 0.4);
+    }
+
+    // If still no engagement rate, provide a default message
+    if (engagementRate === 0 && avgReach === 0) {
       return {
         value: 0,
         description: 'No engagement data available',
@@ -2592,15 +2644,11 @@ export class CampaignService {
       };
     }
 
-    const avgReach = Number(instagramAnalysis.avgReach) || 0;
-    const engagementRate = Number(instagramAnalysis.avgEngagementRate) || 0;
-    const activeFollowersPercentage = Number(instagramAnalysis.activeFollowersPercentage) || 0;
-
     // Format large numbers (e.g., 210K)
     const formattedReach = this.formatLargeNumber(avgReach);
 
     // Build description
-    const description = `Reels average ${formattedReach} with a ${engagementRate.toFixed(1)}% engagement rate with active followers`;
+    const description = `Reels average ${formattedReach} views with a ${engagementRate.toFixed(1)}% engagement rate${activeFollowersPercentage > 0 ? ' with active followers' : ''}`;
 
     // Determine tier based on engagement rate
     let tier = 'Average';
@@ -3608,11 +3656,21 @@ export class CampaignService {
           attributes: ['audienceAgeGender', 'avgEngagementRate', 'avgReach', 'activeFollowersPercentage', 'totalFollowers'],
         });
 
-        const audienceQuality = this.calculateAudienceQuality(instagramAnalysis);
-        const avgReaction = this.calculateAverageReaction(instagramAnalysis);
+        let followerCount = await this.getFollowerCount(influencerId);
 
-        const followerCount = await this.getFollowerCount(influencerId);
+        // Fallback: Use Instagram followers count if no platform followers found
+        if (followerCount === 0 && application.influencer.instagramFollowersCount) {
+          followerCount = application.influencer.instagramFollowersCount;
+        }
+
         const postPerformance = await this.getPostPerformance(influencerId);
+
+        const audienceQuality = this.calculateAudienceQuality(instagramAnalysis);
+        const avgReaction = this.calculateAverageReaction(
+          instagramAnalysis,
+          postPerformance,
+          followerCount,
+        );
 
         const expectedROI = this.calculateExpectedROI(followerCount, postPerformance);
         const estimatedEngagement = this.calculateEstimatedEngagement(followerCount, postPerformance);
