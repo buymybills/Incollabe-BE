@@ -130,16 +130,6 @@ export class GetCampaignApplicationsDto {
   @IsString()
   experience?: string;
 
-  @ApiPropertyOptional({
-    description: 'Enable AI-based matchability scoring',
-    example: false,
-    type: Boolean,
-  })
-  @IsOptional()
-  @Transform(({ value }) => value === 'true' || value === true)
-  @IsBoolean()
-  scoreWithAI?: boolean = false;
-
   @IsOptional()
   @IsString()
   @IsIn([
