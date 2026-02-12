@@ -1264,13 +1264,6 @@ export class CampaignController {
     example: '3',
   })
   @ApiQuery({
-    name: 'scoreWithAI',
-    required: false,
-    type: Boolean,
-    description: 'Enable AI-based matchability scoring (calculates match percentage based on niche, location, audience, and past performance)',
-    example: false,
-  })
-  @ApiQuery({
     name: 'sortBy',
     required: false,
     enum: [
@@ -1281,7 +1274,7 @@ export class CampaignController {
       'campaign_charges_lowest',
       'ai_score',
     ],
-    description: 'Sort applications by (ai_score requires scoreWithAI=true)',
+    description: 'Sort applications by (ai_score only works when aiScoreEnabled is true for the campaign)',
     example: 'application_new_old',
   })
   @ApiQuery({
