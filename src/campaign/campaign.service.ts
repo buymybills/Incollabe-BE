@@ -2126,11 +2126,12 @@ export class CampaignService {
     const engagementRate = Number(postPerformance.engagementRate) || 0;
     const baseROI = 1.0;
 
+    // Engagement rate is a percentage (e.g., 6.96%)
     // Higher engagement rate = higher ROI
-    if (engagementRate > 1000) return 2.5;
-    if (engagementRate > 500) return 2.0;
-    if (engagementRate > 200) return 1.5;
-    if (engagementRate > 100) return 1.4;
+    if (engagementRate >= 8.0) return 2.5; // 8%+ is exceptional
+    if (engagementRate >= 6.0) return 2.0; // 6%+ is excellent
+    if (engagementRate >= 4.0) return 1.5; // 4%+ is very good
+    if (engagementRate >= 2.0) return 1.4; // 2%+ is good
 
     return baseROI;
   }
@@ -2144,15 +2145,27 @@ export class CampaignService {
       return Math.round(followerCount * 0.05);
     }
 
-    const engagementRate = Number(postPerformance.engagementRate);
-    return Math.round(engagementRate || followerCount * 0.05);
+    // engagementRate is a percentage (e.g., 6.96)
+    // Calculate total estimated engagement: followers * (rate / 100)
+    const engagementRate = Number(postPerformance.engagementRate) || 0;
+    if (engagementRate > 0) {
+      return Math.round(followerCount * (engagementRate / 100));
+    }
+
+    // Fallback: 5% engagement rate
+    return Math.round(followerCount * 0.05);
   }
 
   /**
    * Calculate Estimated Reach
    */
-  private calculateEstimatedReach(followerCount: number): number {
-    // Reach is typically 30-60% of followers for organic posts
+  private calculateEstimatedReach(followerCount: number, postPerformance?: any): number {
+    // If we have avgReach from post performance, use it
+    if (postPerformance?.avgReach) {
+      return Number(postPerformance.avgReach);
+    }
+
+    // Otherwise estimate reach as 30-60% of followers for organic posts
     return Math.round(followerCount * 0.5);
   }
 
@@ -2422,16 +2435,40 @@ export class CampaignService {
       ],
     });
 
-    // Get performance metrics
-    let followerCount = await this.getFollowerCount(influencerId);
+    // Get performance metrics - prioritize Instagram profile analysis data
+    let followerCount = 0;
+    let postPerformance: any = null;
 
-    // Fallback: Use Instagram followers count if no platform followers found
-    if (followerCount === 0 && application.influencer.instagramFollowersCount) {
-      followerCount = application.influencer.instagramFollowersCount;
-      console.log(`[AI Score] Using Instagram followers count ${followerCount} for influencer ${influencerId}`);
+    // First priority: Use Instagram profile analysis data if available
+    if (instagramAnalysis && instagramAnalysis.totalFollowers) {
+      followerCount = Number(instagramAnalysis.totalFollowers) || 0;
+      console.log(`[AI Score] Using totalFollowers from Instagram analysis: ${followerCount}`);
+
+      // Create postPerformance object from Instagram analysis
+      if (instagramAnalysis.avgReach && instagramAnalysis.avgEngagementRate) {
+        postPerformance = {
+          avgReach: Number(instagramAnalysis.avgReach) || 0,
+          engagementRate: Number(instagramAnalysis.avgEngagementRate) || 0,
+          totalPosts: 10, // Estimated
+        };
+      }
     }
 
-    const postPerformance = await this.getPostPerformance(influencerId);
+    // Fallback: Check platform followers
+    if (followerCount === 0) {
+      followerCount = await this.getFollowerCount(influencerId);
+    }
+
+    // Fallback: Use Instagram followers from influencer profile
+    if (followerCount === 0 && application.influencer.instagramFollowersCount) {
+      followerCount = application.influencer.instagramFollowersCount;
+      console.log(`[AI Score] Using Instagram followers count from profile: ${followerCount}`);
+    }
+
+    // Fallback: Get post performance from media insights if not available from analysis
+    if (!postPerformance) {
+      postPerformance = await this.getPostPerformance(influencerId);
+    }
 
     // Log data availability for debugging
     console.log(`[AI Score] Data availability for influencer ${influencerId}:`, {
@@ -2454,7 +2491,7 @@ export class CampaignService {
 
     const expectedROI = this.calculateExpectedROI(followerCount, postPerformance);
     const estimatedEngagement = this.calculateEstimatedEngagement(followerCount, postPerformance);
-    const estimatedReach = this.calculateEstimatedReach(followerCount);
+    const estimatedReach = this.calculateEstimatedReach(followerCount, postPerformance);
 
     // Calculate tone matching with campaign
     const toneMatching = this.calculateToneMatching(aiMatchability, estimatedEngagement);
@@ -2911,7 +2948,7 @@ export class CampaignService {
     const estimatedEngagement = this.calculateEstimatedEngagement(followerCount, postPerformance);
 
     // Calculate Estimated Reach
-    const estimatedReach = this.calculateEstimatedReach(followerCount);
+    const estimatedReach = this.calculateEstimatedReach(followerCount, postPerformance);
 
     // Get campaign experience with full details
     const campaignExperience = await this.getCampaignExperienceDetails(influencerId);
@@ -3656,14 +3693,38 @@ export class CampaignService {
           attributes: ['audienceAgeGender', 'avgEngagementRate', 'avgReach', 'activeFollowersPercentage', 'totalFollowers'],
         });
 
-        let followerCount = await this.getFollowerCount(influencerId);
+        // Get performance metrics - prioritize Instagram profile analysis data
+        let followerCount = 0;
+        let postPerformance: any = null;
 
-        // Fallback: Use Instagram followers count if no platform followers found
+        // First priority: Use Instagram profile analysis data if available
+        if (instagramAnalysis && instagramAnalysis.totalFollowers) {
+          followerCount = Number(instagramAnalysis.totalFollowers) || 0;
+
+          // Create postPerformance object from Instagram analysis
+          if (instagramAnalysis.avgReach && instagramAnalysis.avgEngagementRate) {
+            postPerformance = {
+              avgReach: Number(instagramAnalysis.avgReach) || 0,
+              engagementRate: Number(instagramAnalysis.avgEngagementRate) || 0,
+              totalPosts: 10, // Estimated
+            };
+          }
+        }
+
+        // Fallback: Check platform followers
+        if (followerCount === 0) {
+          followerCount = await this.getFollowerCount(influencerId);
+        }
+
+        // Fallback: Use Instagram followers from influencer profile
         if (followerCount === 0 && application.influencer.instagramFollowersCount) {
           followerCount = application.influencer.instagramFollowersCount;
         }
 
-        const postPerformance = await this.getPostPerformance(influencerId);
+        // Fallback: Get post performance from media insights if not available from analysis
+        if (!postPerformance) {
+          postPerformance = await this.getPostPerformance(influencerId);
+        }
 
         const audienceQuality = this.calculateAudienceQuality(instagramAnalysis);
         const avgReaction = this.calculateAverageReaction(
@@ -3674,7 +3735,7 @@ export class CampaignService {
 
         const expectedROI = this.calculateExpectedROI(followerCount, postPerformance);
         const estimatedEngagement = this.calculateEstimatedEngagement(followerCount, postPerformance);
-        const estimatedReach = this.calculateEstimatedReach(followerCount);
+        const estimatedReach = this.calculateEstimatedReach(followerCount, postPerformance);
         const toneMatching = this.calculateToneMatching(aiMatchability, estimatedEngagement);
         const trustSignals = await this.getTrustSignals(influencerId, application.influencer);
 
