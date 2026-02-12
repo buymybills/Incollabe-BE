@@ -118,12 +118,9 @@ export class InviteOnlyPaymentService {
       taxAmount = igst;
     }
 
-    // Generate invoice number
-    const invoiceNumber = await this.generateInvoiceNumber();
-
-    // Create invoice with tax breakdown
+    // Create invoice with tax breakdown (invoice number generated after payment)
     const invoice = await this.inviteOnlyInvoiceModel.create({
-      invoiceNumber,
+      invoiceNumber: null,
       campaignId,
       brandId,
       amount: baseAmount,
@@ -242,8 +239,12 @@ export class InviteOnlyPaymentService {
 
     const now = createDatabaseDate();
 
+    // Generate invoice number now that payment is confirmed
+    const invoiceNumber = await this.generateInvoiceNumber();
+
     // Update invoice
     await invoice.update({
+      invoiceNumber,
       paymentStatus: InvoiceStatus.PAID,
       razorpayPaymentId: paymentId,
       paidAt: now,
