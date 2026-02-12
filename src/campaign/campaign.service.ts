@@ -2039,15 +2039,19 @@ export class CampaignService {
     let totalReach = 0;
 
     const totalEngagement = recentInsights.reduce((sum, insight) => {
-      totalLikes += insight.likes || 0;
-      totalComments += insight.comments || 0;
-      totalShares += insight.shares || 0;
-      totalSaves += insight.saved || 0;
-      totalReach += insight.reach || 0;
-      return sum + (insight.likes || 0)
-                 + (insight.comments || 0)
-                 + (insight.shares || 0)
-                 + (insight.saved || 0);
+      const likes = Number(insight.likes) || 0;
+      const comments = Number(insight.comments) || 0;
+      const shares = Number(insight.shares) || 0;
+      const saved = Number(insight.saved) || 0;
+      const reach = Number(insight.reach) || 0;
+
+      totalLikes += likes;
+      totalComments += comments;
+      totalShares += shares;
+      totalSaves += saved;
+      totalReach += reach;
+
+      return sum + likes + comments + shares + saved;
     }, 0);
 
     const avgEngagement = totalEngagement / recentInsights.length;
@@ -2119,7 +2123,7 @@ export class CampaignService {
   private calculateExpectedROI(followerCount: number, postPerformance: any): number {
     if (!postPerformance) return 1.0;
 
-    const engagementRate = postPerformance.engagementRate || 0;
+    const engagementRate = Number(postPerformance.engagementRate) || 0;
     const baseROI = 1.0;
 
     // Higher engagement rate = higher ROI
@@ -2140,7 +2144,8 @@ export class CampaignService {
       return Math.round(followerCount * 0.05);
     }
 
-    return Math.round(postPerformance.engagementRate || followerCount * 0.05);
+    const engagementRate = Number(postPerformance.engagementRate);
+    return Math.round(engagementRate || followerCount * 0.05);
   }
 
   /**
@@ -2459,8 +2464,9 @@ export class CampaignService {
     let maxPercentage = 0;
 
     for (const demo of audienceData) {
-      if (demo.percentage > maxPercentage) {
-        maxPercentage = demo.percentage;
+      const percentage = Number(demo.percentage) || 0;
+      if (percentage > maxPercentage) {
+        maxPercentage = percentage;
         dominantDemo = demo;
       }
     }
@@ -2504,9 +2510,9 @@ export class CampaignService {
       };
     }
 
-    const avgReach = instagramAnalysis.avgReach || 0;
-    const engagementRate = instagramAnalysis.avgEngagementRate || 0;
-    const activeFollowersPercentage = instagramAnalysis.activeFollowersPercentage || 0;
+    const avgReach = Number(instagramAnalysis.avgReach) || 0;
+    const engagementRate = Number(instagramAnalysis.avgEngagementRate) || 0;
+    const activeFollowersPercentage = Number(instagramAnalysis.activeFollowersPercentage) || 0;
 
     // Format large numbers (e.g., 210K)
     const formattedReach = this.formatLargeNumber(avgReach);
@@ -2546,8 +2552,8 @@ export class CampaignService {
    */
   private calculateToneMatching(aiMatchability: any, engagement: number): any {
     // Use AI niche match and content quality scores to determine tone matching
-    const nicheMatch = aiMatchability.scoreBreakdown?.nicheMatch || 0;
-    const contentQuality = aiMatchability.scoreBreakdown?.contentQuality || 0;
+    const nicheMatch = Number(aiMatchability.scoreBreakdown?.nicheMatch) || 0;
+    const contentQuality = Number(aiMatchability.scoreBreakdown?.contentQuality) || 0;
 
     // Calculate tone matching percentage (weighted average)
     const toneMatchPercentage = Math.round((nicheMatch * 0.6) + (contentQuality * 0.4));
