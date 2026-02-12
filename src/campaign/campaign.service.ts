@@ -2260,24 +2260,9 @@ export class CampaignService {
     }
 
     // Verify campaign exists (and belongs to brand if applicable)
+    // Note: niches are stored as nicheIds JSON array on campaign, not via association
     const campaign = await this.campaignModel.findOne({
       where: campaignWhere,
-      include: [
-        {
-          model: Niche,
-          attributes: ['id', 'name'],
-          through: { attributes: [] },
-        },
-        {
-          model: CampaignCity,
-          include: [
-            {
-              model: City,
-              attributes: ['name'],
-            },
-          ],
-        },
-      ],
     });
 
     if (!campaign) {
@@ -2301,6 +2286,18 @@ export class CampaignService {
             'profileImage',
             'isVerified',
             'instagramFollowersCount',
+            'bio',
+          ],
+          include: [
+            {
+              model: Niche,
+              attributes: ['id', 'name'],
+              through: { attributes: [] },
+            },
+            {
+              model: City,
+              attributes: ['id', 'name'],
+            },
           ],
         },
       ],
@@ -2593,24 +2590,9 @@ export class CampaignService {
     }
 
     // Verify campaign exists (and belongs to brand if applicable)
+    // Note: niches are stored as nicheIds JSON array on campaign, not via association
     const campaign = await this.campaignModel.findOne({
       where: campaignWhere,
-      include: [
-        {
-          model: Niche,
-          attributes: ['id', 'name'],
-          through: { attributes: [] },
-        },
-        {
-          model: CampaignCity,
-          include: [
-            {
-              model: City,
-              attributes: ['name'],
-            },
-          ],
-        },
-      ],
     });
 
     if (!campaign) {
@@ -3350,7 +3332,11 @@ export class CampaignService {
     }
 
     if (campaign.aiScoreEnabled) {
-      return { alreadyEnabled: true, message: 'AI scoring already enabled for this campaign' };
+      // Retry scoring for any applicants still missing a score (idempotent)
+      this.bulkCalculateAndStoreScores(campaignId).catch((err) => {
+        console.error(`[AI Score] Bulk retry scoring failed for campaign ${campaignId}:`, err);
+      });
+      return { alreadyEnabled: true, message: 'AI scoring already enabled. Rescoring any unscored applicants.' };
     }
 
     const brand = await this.brandModel.findByPk(brandId);
@@ -3375,30 +3361,32 @@ export class CampaignService {
   }
 
   private async bulkCalculateAndStoreScores(campaignId: number): Promise<void> {
-    // Fetch campaign with niches + cities (required for calculateAIScore)
+    // Fetch campaign only — niches are fetched via getCampaignNiches(campaign.nicheIds)
+    // and cities via getCampaignCities(campaign.id) inside calculateAIScore
     const campaign = await this.campaignModel.findOne({
       where: { id: campaignId },
-      include: [
-        {
-          model: Niche,
-          attributes: ['id', 'name'],
-          through: { attributes: [] },
-        },
-        {
-          model: CampaignCity,
-          include: [{ model: City, attributes: ['name'] }],
-        },
-      ],
     });
 
     if (!campaign) return;
 
+    // Only score applicants that haven't been scored yet (idempotent retry)
     const applications = await this.campaignApplicationModel.findAll({
-      where: { campaignId },
+      where: { campaignId, aiScore: null },
       include: [
         {
           model: Influencer,
-          attributes: ['id', 'name', 'username', 'profileImage', 'isVerified', 'instagramFollowersCount'],
+          attributes: ['id', 'name', 'username', 'profileImage', 'isVerified', 'instagramFollowersCount', 'bio'],
+          include: [
+            {
+              model: Niche,
+              attributes: ['id', 'name'],
+              through: { attributes: [] },
+            },
+            {
+              model: City,
+              attributes: ['id', 'name'],
+            },
+          ],
         },
       ],
     });
