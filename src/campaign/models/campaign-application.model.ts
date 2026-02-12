@@ -76,6 +76,20 @@ export class CampaignApplication extends Model<CampaignApplication> {
   })
   reviewNotes: string;
 
+  @Column({
+    type: DataType.FLOAT,
+    allowNull: true,
+    field: 'ai_score',
+  })
+  declare aiScore: number | null;
+
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+    field: 'ai_score_data',
+  })
+  declare aiScoreData: Record<string, any> | null;
+
   @CreatedAt
   declare createdAt: Date;
 

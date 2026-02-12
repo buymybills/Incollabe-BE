@@ -1510,6 +1510,35 @@ export class CampaignController {
     );
   }
 
+  @Post(':campaignId/enable-ai-score')
+  @ApiOperation({
+    summary: 'Enable AI matchability scoring for a campaign',
+    description:
+      'Costs 1 AI credit. Sets aiScoreEnabled=true on the campaign and bulk-calculates matchability scores for all current applicants. Each brand has 2 lifetime free credits.',
+  })
+  @ApiParam({
+    name: 'campaignId',
+    type: Number,
+    description: 'Campaign ID',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'AI scoring enabled successfully',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No AI score credits remaining',
+  })
+  async enableAIScore(
+    @Param('campaignId', ParseIntPipe) campaignId: number,
+    @Req() req: RequestWithUser,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new ForbiddenException('Only brands can enable AI scoring');
+    }
+    return this.campaignService.enableAIScoreForCampaign(campaignId, req.user.id);
+  }
+
   @Put(':campaignId/applications/:applicationId/status')
   @ApiOperation({
     summary: 'Update application status',

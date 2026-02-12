@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Op, literal } from 'sequelize';
@@ -1377,6 +1378,8 @@ export class CampaignService {
     page: number;
     limit: number;
     totalPages: number;
+    aiScoreEnabled: boolean;
+    aiCreditsRemaining: number | null;
   }> {
     // Verify campaign exists and belongs to the brand (if brandId provided)
     // Note: We allow viewing applications even for inactive/completed campaigns
@@ -1406,7 +1409,6 @@ export class CampaignService {
       maxAge,
       platforms,
       experience,
-      scoreWithAI = false,
       sortBy = 'application_new_old',
       page = 1,
       limit = 10,
@@ -1652,6 +1654,7 @@ export class CampaignService {
           'updatedAt',
           'reviewedAt',
           'reviewNotes',
+          'aiScore',
         ],
         include: includeOptions,
         order,
@@ -1693,10 +1696,9 @@ export class CampaignService {
           appJson.influencer.totalFollowers = totalFollowers;
         }
 
-        // Calculate AI matchability score if requested
-        if (scoreWithAI && appJson.influencer) {
-          appJson.aiMatchability = await this.calculateAIScore(app, campaign);
-        }
+        // AI score is only available after brand activates it via enable-ai-score endpoint
+        // The stored aiScore field is already included in the attributes query above
+        // On-the-fly scoring is intentionally disabled to enforce the credit system
 
         return appJson;
       }),
@@ -1735,8 +1737,8 @@ export class CampaignService {
     if (sortInMemory) {
       finalApplications = filteredApplications.sort((a, b) => {
         if (sortBy === 'ai_score') {
-          const aScore = a.aiMatchability?.overallScore || 0;
-          const bScore = b.aiMatchability?.overallScore || 0;
+          const aScore = (a as any).aiScore || a.aiMatchability?.overallScore || 0;
+          const bScore = (b as any).aiScore || b.aiMatchability?.overallScore || 0;
           return bScore - aScore; // Descending order (highest score first)
         }
         // Follower-based sorting
@@ -1761,12 +1763,25 @@ export class CampaignService {
 
     const totalPages = Math.ceil(totalCount / limit);
 
+    // Fetch brand's remaining AI credits when a brand is viewing
+    let aiCreditsRemaining: number | null = null;
+    if (brandId !== undefined) {
+      const brand = await this.brandModel.findByPk(brandId, {
+        attributes: ['aiCreditsRemaining'],
+      });
+      if (brand) {
+        aiCreditsRemaining = brand.aiCreditsRemaining;
+      }
+    }
+
     return {
       applications: paginatedApplications,
       total: totalCount,
       page,
       limit,
       totalPages,
+      aiScoreEnabled: campaign.aiScoreEnabled,
+      aiCreditsRemaining,
     };
   }
 
@@ -2295,6 +2310,11 @@ export class CampaignService {
       throw new NotFoundException(
         'No application found for this influencer on this campaign',
       );
+    }
+
+    // Return cached score if AI scoring has been enabled for this campaign
+    if (campaign.aiScoreEnabled && application.aiScoreData) {
+      return application.aiScoreData;
     }
 
     // Get AI matchability score
@@ -3314,5 +3334,147 @@ export class CampaignService {
       campaignType: type,
       deliverableFormats,
     };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // AI Score Credits
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  async enableAIScoreForCampaign(campaignId: number, brandId: number) {
+    const campaign = await this.campaignModel.findOne({
+      where: { id: campaignId, brandId },
+    });
+
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found or access denied');
+    }
+
+    if (campaign.aiScoreEnabled) {
+      return { alreadyEnabled: true, message: 'AI scoring already enabled for this campaign' };
+    }
+
+    const brand = await this.brandModel.findByPk(brandId);
+    if (!brand || brand.aiCreditsRemaining <= 0) {
+      throw new ForbiddenException('No AI score credits remaining');
+    }
+
+    await this.campaignModel.sequelize!.transaction(async (t) => {
+      await brand.update(
+        { aiCreditsRemaining: brand.aiCreditsRemaining - 1 },
+        { transaction: t },
+      );
+      await campaign.update({ aiScoreEnabled: true }, { transaction: t });
+    });
+
+    // Fire-and-forget: calculate and store scores for all applicants
+    this.bulkCalculateAndStoreScores(campaignId).catch((err) => {
+      console.error(`[AI Score] Bulk scoring failed for campaign ${campaignId}:`, err);
+    });
+
+    return { success: true, creditsRemaining: brand.aiCreditsRemaining - 1 };
+  }
+
+  private async bulkCalculateAndStoreScores(campaignId: number): Promise<void> {
+    // Fetch campaign with niches + cities (required for calculateAIScore)
+    const campaign = await this.campaignModel.findOne({
+      where: { id: campaignId },
+      include: [
+        {
+          model: Niche,
+          attributes: ['id', 'name'],
+          through: { attributes: [] },
+        },
+        {
+          model: CampaignCity,
+          include: [{ model: City, attributes: ['name'] }],
+        },
+      ],
+    });
+
+    if (!campaign) return;
+
+    const applications = await this.campaignApplicationModel.findAll({
+      where: { campaignId },
+      include: [
+        {
+          model: Influencer,
+          attributes: ['id', 'name', 'username', 'profileImage', 'isVerified', 'instagramFollowersCount'],
+        },
+      ],
+    });
+
+    for (const application of applications) {
+      try {
+        const influencerId = application.influencerId;
+
+        const aiMatchability = await this.calculateAIScore(application, campaign);
+
+        const instagramAnalysis = await this.instagramProfileAnalysisModel.findOne({
+          where: { influencerId },
+          order: [['syncNumber', 'DESC']],
+          attributes: ['audienceAgeGender', 'avgEngagementRate', 'avgReach', 'activeFollowersPercentage', 'totalFollowers'],
+        });
+
+        const audienceQuality = this.calculateAudienceQuality(instagramAnalysis);
+        const avgReaction = this.calculateAverageReaction(instagramAnalysis);
+
+        const followerCount = await this.getFollowerCount(influencerId);
+        const postPerformance = await this.getPostPerformance(influencerId);
+
+        const expectedROI = this.calculateExpectedROI(followerCount, postPerformance);
+        const estimatedEngagement = this.calculateEstimatedEngagement(followerCount, postPerformance);
+        const estimatedReach = this.calculateEstimatedReach(followerCount);
+        const toneMatching = this.calculateToneMatching(aiMatchability, estimatedEngagement);
+        const trustSignals = await this.getTrustSignals(influencerId, application.influencer);
+
+        const scoreData = {
+          matchabilityScore: aiMatchability.overallScore,
+          matchPercentage: aiMatchability.matchPercentage,
+          whyThisCreator: {
+            audienceQuality: {
+              score: audienceQuality.score,
+              maxScore: 100,
+              description: audienceQuality.description,
+              tier: audienceQuality.tier,
+            },
+            avgReach: {
+              value: avgReaction.value,
+              description: avgReaction.description,
+              tier: avgReaction.tier,
+            },
+            avgEngagement: {
+              value: estimatedEngagement,
+              description: toneMatching.description,
+              tier: toneMatching.tier,
+            },
+          },
+          predictedPerformance: {
+            expectedROI: {
+              value: expectedROI,
+              tier: this.getMetricTier(expectedROI, 'roi'),
+            },
+            estimatedEngagement: {
+              value: estimatedEngagement,
+              tier: this.getMetricTier(estimatedEngagement, 'engagement'),
+            },
+            estimatedReach: {
+              value: estimatedReach,
+              tier: this.getMetricTier(estimatedReach, 'reach'),
+            },
+          },
+          trustSignals,
+        };
+
+        await application.update({
+          aiScore: aiMatchability.overallScore,
+          aiScoreData: scoreData,
+        });
+      } catch (err) {
+        console.error(
+          `[AI Score] Failed to score application ${application.id} (influencer ${application.influencerId}):`,
+          err,
+        );
+      }
+    }
   }
 }
