@@ -2632,7 +2632,6 @@ export class CampaignService {
             'whatsappNumber',
             'collaborationCosts',
             'instagramFollowersCount',
-            'youtubeFollowersCount',
           ],
           include: [
             {
