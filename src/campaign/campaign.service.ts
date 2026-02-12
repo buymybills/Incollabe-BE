@@ -2303,20 +2303,12 @@ export class CampaignService {
         });
     }
 
-    // Push notifications for UNDER_REVIEW and REJECTED statuses
+    // Push notification for UNDER_REVIEW status
     if (
       influencer &&
       influencer.id &&
-      (updateStatusDto.status === ApplicationStatus.UNDER_REVIEW ||
-        updateStatusDto.status === ApplicationStatus.REJECTED)
+      updateStatusDto.status === ApplicationStatus.UNDER_REVIEW
     ) {
-      let pushStatus: string;
-      if (updateStatusDto.status === ApplicationStatus.UNDER_REVIEW) {
-        pushStatus = 'pending';
-      } else {
-        pushStatus = 'rejected';
-      }
-
       // Get all device tokens and send to all devices
       this.deviceTokenService
         .getAllUserTokens(influencer.id, UserType.INFLUENCER)
@@ -2325,7 +2317,7 @@ export class CampaignService {
             return this.notificationService.sendCampaignStatusUpdate(
               deviceTokens,
               campaign.name,
-              pushStatus,
+              'pending',
               brandName,
             );
           }
@@ -2334,6 +2326,29 @@ export class CampaignService {
           console.error('Failed to send push notification to influencer:', error);
         });
     }
+
+    // Push notification for REJECTED status - commented out
+    // if (
+    //   influencer &&
+    //   influencer.id &&
+    //   updateStatusDto.status === ApplicationStatus.REJECTED
+    // ) {
+    //   this.deviceTokenService
+    //     .getAllUserTokens(influencer.id, UserType.INFLUENCER)
+    //     .then((deviceTokens: string[]) => {
+    //       if (deviceTokens.length > 0) {
+    //         return this.notificationService.sendCampaignStatusUpdate(
+    //           deviceTokens,
+    //           campaign.name,
+    //           'rejected',
+    //           brandName,
+    //         );
+    //       }
+    //     })
+    //     .catch((error: any) => {
+    //       console.error('Failed to send push notification to influencer:', error);
+    //     });
+    // }
 
     // Return updated application with influencer details
     const updatedApplication = await this.campaignApplicationModel.findOne({
