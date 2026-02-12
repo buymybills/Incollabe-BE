@@ -1797,6 +1797,19 @@ export class CampaignService {
       }
     }
 
+    // If AI scoring is enabled but some applicants still have no score,
+    // kick off background scoring without blocking the response
+    if (campaign.aiScoreEnabled) {
+      const hasUnscored = applicationsWithStats.some(
+        (app) => app.aiScore === null || app.aiScore === undefined,
+      );
+      if (hasUnscored) {
+        this.bulkCalculateAndStoreScores(campaignId).catch((err) => {
+          console.error(`[AI Score] Auto-trigger bulk scoring failed for campaign ${campaignId}:`, err);
+        });
+      }
+    }
+
     return {
       applications: paginatedApplications,
       total: totalCount,
