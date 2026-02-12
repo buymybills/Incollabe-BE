@@ -47,6 +47,7 @@ import {
 import { AIScoringService } from '../admin/services/ai-scoring.service';
 import { Post } from '../post/models/post.model';
 import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
+import { InstagramMediaInsight } from '../shared/models/instagram-media-insight.model';
 
 @Injectable()
 export class CampaignService {
@@ -77,6 +78,8 @@ export class CampaignService {
     private readonly postModel: typeof Post,
     @InjectModel(InstagramProfileAnalysis)
     private readonly instagramProfileAnalysisModel: typeof InstagramProfileAnalysis,
+    @InjectModel(InstagramMediaInsight)
+    private readonly instagramMediaInsightModel: typeof InstagramMediaInsight,
     // REMOVED: Models only needed for early selection bonus feature (now disabled)
     // @InjectModel(CreditTransaction)
     // private readonly creditTransactionModel: typeof CreditTransaction,
@@ -1785,6 +1788,31 @@ export class CampaignService {
     // Get past campaign performance
     const pastCampaigns = await this.getPastCampaignStats(influencer.id);
 
+    // Get multiple Instagram profile analyses for robust niche calculation
+    // Each snapshot covers 15 days (or 30 days for initial 2 snapshots)
+    // We need multiple snapshots to get enough data
+    const instagramAnalyses = await this.instagramProfileAnalysisModel.findAll({
+      where: { influencerId: influencer.id },
+      order: [['syncNumber', 'DESC']],
+      limit: 5, // Get last 5 snapshots (~60-75 days of data)
+      attributes: ['topNiches', 'nichePerformance', 'postsAnalyzed', 'syncNumber', 'syncDate'],
+    });
+
+    // Aggregate niches across multiple snapshots for accurate analysis
+    let influencerNiches: string[] = [];
+    let totalPostsAnalyzed = 0;
+
+    if (instagramAnalyses && instagramAnalyses.length > 0) {
+      const nicheAggregation = this.aggregateNichesFromSnapshots(instagramAnalyses);
+      influencerNiches = nicheAggregation.niches;
+      totalPostsAnalyzed = nicheAggregation.totalPosts;
+    }
+
+    // Fallback to profile niches if no Instagram analysis
+    if (influencerNiches.length === 0 && influencer.niches) {
+      influencerNiches = (influencer.niches || []).map((n: any) => n.name);
+    }
+
     // Get campaign niches
     const campaignNiches = await this.getCampaignNiches(campaign.nicheIds);
 
@@ -1797,12 +1825,14 @@ export class CampaignService {
       name: influencer.name,
       username: influencer.username,
       followers: followerCount,
-      niches: (influencer.niches || []).map((n: any) => n.name),
+      niches: influencerNiches, // Use data-driven niches aggregated from multiple snapshots
       location: influencer.city?.name || 'N/A',
       isVerified: influencer.isVerified || false,
       bio: influencer.bio || '',
       pastCampaigns,
       postPerformance: postPerformance || undefined,
+      postsAnalyzed: totalPostsAnalyzed, // Total posts across all analyzed snapshots
+      snapshotsAnalyzed: instagramAnalyses?.length || 0,
     };
 
     const campaignData = {
@@ -1839,6 +1869,88 @@ export class CampaignService {
   }
 
   /**
+   * Aggregate niches from multiple Instagram profile snapshots
+   * Each snapshot covers 15 days (or 30 days for initial 2 snapshots)
+   * This gives us a comprehensive view of influencer's content over time
+   */
+  private aggregateNichesFromSnapshots(snapshots: any[]): {
+    niches: string[];
+    totalPosts: number;
+  } {
+    if (!snapshots || snapshots.length === 0) {
+      return { niches: [], totalPosts: 0 };
+    }
+
+    // Map to track niche data: niche -> { count, weightedScore, appearances }
+    const nicheMap = new Map<
+      string,
+      { totalCount: number; weightedScore: number; appearances: number }
+    >();
+
+    let totalPostsAnalyzed = 0;
+
+    // Process each snapshot with decreasing weight (recent = more important)
+    snapshots.forEach((snapshot, index) => {
+      // Weight: 1.0 for most recent, 0.8 for next, 0.6, 0.4, 0.2
+      const weight = 1.0 - index * 0.2;
+
+      if (snapshot.topNiches && Array.isArray(snapshot.topNiches)) {
+        snapshot.topNiches.forEach((nicheData: any) => {
+          const niche = nicheData.niche;
+          const count = nicheData.count || 0;
+
+          if (!niche || niche.trim().length === 0) return;
+
+          const existing = nicheMap.get(niche) || {
+            totalCount: 0,
+            weightedScore: 0,
+            appearances: 0,
+          };
+
+          nicheMap.set(niche, {
+            totalCount: existing.totalCount + count,
+            weightedScore: existing.weightedScore + count * weight,
+            appearances: existing.appearances + 1,
+          });
+        });
+      }
+
+      // Sum up posts analyzed across snapshots
+      totalPostsAnalyzed += snapshot.postsAnalyzed || 0;
+    });
+
+    // Sort niches by weighted score (higher = more consistent and recent)
+    const sortedNiches = Array.from(nicheMap.entries())
+      .map(([niche, data]) => ({
+        niche,
+        totalCount: data.totalCount,
+        weightedScore: data.weightedScore,
+        appearances: data.appearances,
+        // Calculate consistency: niches appearing in more snapshots rank higher
+        consistency: data.appearances / snapshots.length,
+      }))
+      .sort((a, b) => {
+        // Primary sort: weighted score (recent + frequency)
+        // Secondary sort: consistency (appears in multiple snapshots)
+        const scoreDiff = b.weightedScore - a.weightedScore;
+        if (Math.abs(scoreDiff) > 5) return scoreDiff;
+        return b.consistency - a.consistency;
+      })
+      .filter((item) => {
+        // Filter out niches with very low presence
+        // Must have at least 5% of total posts OR appear in multiple snapshots
+        const percentage = (item.totalCount / totalPostsAnalyzed) * 100;
+        return percentage >= 5 || item.appearances >= 2;
+      })
+      .map((item) => item.niche);
+
+    return {
+      niches: sortedNiches,
+      totalPosts: totalPostsAnalyzed,
+    };
+  }
+
+  /**
    * Get follower count for an influencer
    */
   private async getFollowerCount(influencerId: number): Promise<number> {
@@ -1851,24 +1963,54 @@ export class CampaignService {
   }
 
   /**
-   * Get post performance statistics
+   * Get post performance statistics from Instagram insights
+   * Uses same formula as Instagram service: (likes + comments + shares + saves) / posts / followers * 100
    */
   private async getPostPerformance(influencerId: number): Promise<any> {
-    const posts = await this.postModel.findAll({
-      where: { influencerId: influencerId, userType: 'influencer' },
+    // Get recent Instagram media insights (last 10 posts)
+    const recentInsights = await this.instagramMediaInsightModel.findAll({
+      where: { influencerId },
       limit: 10,
-      order: [['createdAt', 'DESC']],
+      order: [['fetchedAt', 'DESC']],
     });
 
-    if (posts.length === 0) return null;
+    if (recentInsights.length === 0) return null;
 
-    const totalLikes = posts.reduce((sum, post) => sum + (post.likesCount || 0), 0);
-    const avgEngagement = totalLikes / posts.length;
+    // Get follower count for engagement rate calculation
+    const followerCount = await this.getFollowerCount(influencerId);
+    if (followerCount === 0) return null;
+
+    // Calculate totals
+    let totalLikes = 0;
+    let totalComments = 0;
+    let totalShares = 0;
+    let totalSaves = 0;
+    let totalReach = 0;
+
+    const totalEngagement = recentInsights.reduce((sum, insight) => {
+      totalLikes += insight.likes || 0;
+      totalComments += insight.comments || 0;
+      totalShares += insight.shares || 0;
+      totalSaves += insight.saved || 0;
+      totalReach += insight.reach || 0;
+      return sum + (insight.likes || 0)
+                 + (insight.comments || 0)
+                 + (insight.shares || 0)
+                 + (insight.saved || 0);
+    }, 0);
+
+    const avgEngagement = totalEngagement / recentInsights.length;
+    const avgEngagementRate = Number(((avgEngagement / followerCount) * 100).toFixed(2));
+    const avgReach = Math.round(totalReach / recentInsights.length);
 
     return {
-      avgLikes: totalLikes / posts.length,
-      engagementRate: avgEngagement,
-      totalPosts: posts.length,
+      avgLikes: totalLikes / recentInsights.length,
+      avgComments: totalComments / recentInsights.length,
+      avgShares: totalShares / recentInsights.length,
+      avgSaves: totalSaves / recentInsights.length,
+      avgReach,
+      engagementRate: avgEngagementRate,
+      totalPosts: recentInsights.length,
     };
   }
 
@@ -2185,6 +2327,9 @@ export class CampaignService {
     const estimatedEngagement = this.calculateEstimatedEngagement(followerCount, postPerformance);
     const estimatedReach = this.calculateEstimatedReach(followerCount);
 
+    // Calculate tone matching with campaign
+    const toneMatching = this.calculateToneMatching(aiMatchability, estimatedEngagement);
+
     // Get trust signals
     const trustSignals = await this.getTrustSignals(influencerId, application.influencer);
 
@@ -2198,10 +2343,15 @@ export class CampaignService {
           description: audienceQuality.description,
           tier: audienceQuality.tier,
         },
-        avgReaction: {
+        avgReach: {
           value: avgReaction.value,
           description: avgReaction.description,
           tier: avgReaction.tier,
+        },
+        avgEngagement: {
+          value: estimatedEngagement,
+          description: toneMatching.description,
+          tier: toneMatching.tier,
         },
       },
       predictedPerformance: {
@@ -2321,6 +2471,35 @@ export class CampaignService {
       return `${(num / 1000).toFixed(1)}K`;
     }
     return num.toString();
+  }
+
+  /**
+   * Calculate tone matching percentage with campaign
+   */
+  private calculateToneMatching(aiMatchability: any, engagement: number): any {
+    // Use AI niche match and content quality scores to determine tone matching
+    const nicheMatch = aiMatchability.scoreBreakdown?.nicheMatch || 0;
+    const contentQuality = aiMatchability.scoreBreakdown?.contentQuality || 0;
+
+    // Calculate tone matching percentage (weighted average)
+    const toneMatchPercentage = Math.round((nicheMatch * 0.6) + (contentQuality * 0.4));
+
+    // Build description
+    const description = `Content style and captions show ${toneMatchPercentage}% Tone matches with campaign needs`;
+
+    // Determine tier
+    let tier = 'Average';
+    if (toneMatchPercentage >= 80) {
+      tier = 'Strong';
+    } else if (toneMatchPercentage >= 65) {
+      tier = 'Good';
+    }
+
+    return {
+      toneMatchPercentage,
+      description,
+      tier,
+    };
   }
 
   /**

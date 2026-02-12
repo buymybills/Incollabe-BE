@@ -26,6 +26,7 @@ import { PaymentStatusCheckerService } from './services/payment-status-checker.s
 import { Post } from '../post/models/post.model';
 import { AdminModule } from '../admin/admin.module';
 import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
+import { InstagramMediaInsight } from '../shared/models/instagram-media-insight.model';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-ana
       InviteOnlyCampaignInvoice,
       Post,
       InstagramProfileAnalysis,
+      InstagramMediaInsight,
     ]),
     SharedModule,
     forwardRef(() => AdminModule),

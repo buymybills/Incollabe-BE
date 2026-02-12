@@ -34,6 +34,7 @@ import { CreditTransaction } from '../admin/models/credit-transaction.model';
 import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
 import { MaxCampaignInvoice } from './models/max-campaign-invoice.model';
 import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
+import { InstagramMediaInsight } from '../shared/models/instagram-media-insight.model';
 import { AIScoringService } from '../admin/services/ai-scoring.service';
 
 const mockModel = () => ({
@@ -147,6 +148,10 @@ describe('CampaignService', () => {
         },
         {
           provide: getModelToken(InstagramProfileAnalysis),
+          useValue: mockModel(),
+        },
+        {
+          provide: getModelToken(InstagramMediaInsight),
           useValue: mockModel(),
         },
         {
