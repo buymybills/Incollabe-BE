@@ -1622,6 +1622,29 @@ export class CampaignService {
         model: Influencer,
         // Note: influencerFilter AND niche already applied via filteredInfluencerIds above
         // No need to apply where clause again here
+        attributes: [
+          'id',
+          'name',
+          'username',
+          'profileImage',
+          'profileBanner',
+          'profileHeadline',
+          'bio',
+          'gender',
+          'dateOfBirth',
+          'isVerified',
+          'isProfileCompleted',
+          'isPro',
+          'instagramFollowersCount',
+          'instagramUsername',
+          'instagramUrl',
+          'instagramAccountType',
+          'youtubeUrl',
+          'facebookUrl',
+          'collaborationCosts',
+          'createdAt',
+          'updatedAt',
+        ],
         include: [
           {
             model: City,
@@ -2309,12 +2332,12 @@ export class CampaignService {
       );
     }
 
-    // Return cached score if AI scoring has been enabled for this campaign
-    if (campaign.aiScoreEnabled && application.aiScoreData) {
+    // Return cached score if already calculated
+    if (application.aiScoreData) {
       return application.aiScoreData;
     }
 
-    // Get AI matchability score
+    // Not cached — calculate now
     const aiMatchability = await this.calculateAIScore(application, campaign);
 
     // Get Instagram profile analysis data
@@ -2350,7 +2373,7 @@ export class CampaignService {
     // Get trust signals
     const trustSignals = await this.getTrustSignals(influencerId, application.influencer);
 
-    return {
+    const scoreData = {
       matchabilityScore: aiMatchability.overallScore,
       matchPercentage: aiMatchability.matchPercentage,
       whyThisCreator: {
@@ -2387,6 +2410,14 @@ export class CampaignService {
       },
       trustSignals,
     };
+
+    // Persist the score so subsequent calls use the cache
+    await application.update({
+      aiScore: aiMatchability.overallScore,
+      aiScoreData: scoreData,
+    });
+
+    return scoreData;
   }
 
   /**
