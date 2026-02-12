@@ -2357,9 +2357,53 @@ export class CampaignService {
       );
     }
 
-    // Return cached score if already calculated
+    // Get campaign experience count
+    const campaignExperienceCount = await this.experienceModel.count({
+      where: { influencerId },
+    });
+
+    // If cached data exists, return it with influencer info
     if (application.aiScoreData) {
-      return application.aiScoreData;
+      // Get Instagram analysis for profile strength even with cached data
+      const instagramAnalysis = await this.instagramProfileAnalysisModel.findOne({
+        where: { influencerId },
+        order: [['syncNumber', 'DESC']],
+        attributes: ['activeFollowersPercentage'],
+      });
+
+      // Calculate profile strength using cached data
+      const nicheMatchScore = application.aiScoreData.scoreBreakdown?.nicheMatch || null;
+      const profileStrength = this.calculateProfileStrength(
+        application.aiScore || 0,
+        nicheMatchScore,
+        instagramAnalysis,
+      );
+
+      return {
+        influencer: {
+          id: application.influencer.id,
+          name: application.influencer.name,
+          username: application.influencer.username,
+          profileImage: application.influencer.profileImage,
+          isVerified: application.influencer.isVerified,
+          bio: application.influencer.bio,
+          location: application.influencer.city
+            ? {
+                city: application.influencer.city.name,
+                state: application.influencer.city.state,
+                country: 'India',
+              }
+            : null,
+          niches: application.influencer.niches?.map((niche: any) => ({
+            id: niche.id,
+            name: niche.name,
+          })) || [],
+          followersCount: application.influencer.instagramFollowersCount,
+        },
+        profileStrength,
+        campaignExperienceCount,
+        ...application.aiScoreData,
+      };
     }
 
     // Not cached — calculate now
@@ -2398,9 +2442,22 @@ export class CampaignService {
     // Get trust signals
     const trustSignals = await this.getTrustSignals(influencerId, application.influencer);
 
+    // Calculate profile strength
+    const profileStrength = this.calculateProfileStrength(
+      aiMatchability.overallScore,
+      aiMatchability.scoreBreakdown?.nicheMatch || null,
+      instagramAnalysis,
+    );
+
     const scoreData = {
       matchabilityScore: aiMatchability.overallScore,
       matchPercentage: aiMatchability.matchPercentage,
+      // AI Feedback
+      recommendation: aiMatchability.recommendation,
+      strengths: aiMatchability.strengths,
+      concerns: aiMatchability.concerns,
+      scoreBreakdown: aiMatchability.scoreBreakdown,
+      // Why This Creator
       whyThisCreator: {
         audienceQuality: {
           score: audienceQuality.score,
@@ -2442,7 +2499,32 @@ export class CampaignService {
       aiScoreData: scoreData,
     });
 
-    return scoreData;
+    // Return comprehensive response with influencer info
+    return {
+      influencer: {
+        id: application.influencer.id,
+        name: application.influencer.name,
+        username: application.influencer.username,
+        profileImage: application.influencer.profileImage,
+        isVerified: application.influencer.isVerified,
+        bio: application.influencer.bio,
+        location: application.influencer.city
+          ? {
+              city: application.influencer.city.name,
+              state: application.influencer.city.state,
+              country: 'India',
+            }
+          : null,
+        niches: application.influencer.niches?.map((niche: any) => ({
+          id: niche.id,
+          name: niche.name,
+        })) || [],
+        followersCount: application.influencer.instagramFollowersCount,
+      },
+      profileStrength,
+      campaignExperienceCount,
+      ...scoreData,
+    };
   }
 
   /**
@@ -2573,6 +2655,55 @@ export class CampaignService {
       toneMatchPercentage,
       description,
       tier,
+    };
+  }
+
+  /**
+   * Calculate profile strength based on various factors
+   */
+  private calculateProfileStrength(
+    aiMatchabilityScore: number,
+    nicheMatchScore: number | null,
+    instagramAnalysis: any,
+  ): any {
+    const factors: Array<{ factor: string; strength: string }> = [];
+    let overallStrength = 'Average';
+
+    // Check niche clarity (based on AI niche match score if available, otherwise estimate from overall score)
+    const nicheMatch = nicheMatchScore !== null ? nicheMatchScore : aiMatchabilityScore;
+    if (nicheMatch >= 80) {
+      factors.push({ factor: 'Strong niche clarity', strength: 'Strong' });
+    } else if (nicheMatch >= 60) {
+      factors.push({ factor: 'Good niche clarity', strength: 'Good' });
+    } else {
+      factors.push({ factor: 'Weak niche clarity', strength: 'Weak' });
+    }
+
+    // Check growth momentum (based on follower count trends)
+    // Simplified: check if they have high active followers percentage
+    const activeFollowersPercentage = Number(instagramAnalysis?.activeFollowersPercentage) || 0;
+    if (activeFollowersPercentage >= 70) {
+      factors.push({ factor: 'Strong growth momentum', strength: 'Strong' });
+    } else if (activeFollowersPercentage >= 50) {
+      factors.push({ factor: 'Steady growth momentum', strength: 'Good' });
+    } else {
+      factors.push({ factor: 'Weak growth momentum', strength: 'Weak' });
+    }
+
+    // Determine overall strength based on AI match score
+    if (aiMatchabilityScore >= 80) {
+      overallStrength = 'Strong';
+    } else if (aiMatchabilityScore >= 65) {
+      overallStrength = 'Good';
+    }
+
+    // Build description string
+    const description = factors.map((f) => f.factor).join(' • ');
+
+    return {
+      strength: overallStrength,
+      description: `${overallStrength} Profile - ${description}`,
+      factors,
     };
   }
 
@@ -3492,6 +3623,12 @@ export class CampaignService {
         const scoreData = {
           matchabilityScore: aiMatchability.overallScore,
           matchPercentage: aiMatchability.matchPercentage,
+          // AI Feedback
+          recommendation: aiMatchability.recommendation,
+          strengths: aiMatchability.strengths,
+          concerns: aiMatchability.concerns,
+          scoreBreakdown: aiMatchability.scoreBreakdown,
+          // Why This Creator
           whyThisCreator: {
             audienceQuality: {
               score: audienceQuality.score,

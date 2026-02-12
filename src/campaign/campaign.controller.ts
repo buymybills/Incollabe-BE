@@ -1460,9 +1460,9 @@ export class CampaignController {
 
   @Get(':campaignId/applications/influencer/:influencerId/ai-details')
   @ApiOperation({
-    summary: 'Get detailed AI matchability insights for influencer application',
+    summary: 'Get comprehensive AI matchability insights for influencer application',
     description:
-      'Get detailed AI-powered insights including audience quality, engagement metrics, and trust signals for a specific influencer application.',
+      'Get comprehensive AI-powered insights including influencer profile, matchability score, audience quality, engagement metrics, trust signals, profile strength, and campaign experience for a specific influencer application. This endpoint returns all data needed for the AI score detail view.',
   })
   @ApiParam({
     name: 'campaignId',
