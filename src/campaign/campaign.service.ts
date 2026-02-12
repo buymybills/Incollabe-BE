@@ -2345,6 +2345,13 @@ export class CampaignService {
       );
     }
 
+    // Check if influencer data is available
+    if (!application.influencer) {
+      throw new NotFoundException(
+        `Influencer ${influencerId} not found or deleted`,
+      );
+    }
+
     // Return cached score if already calculated
     if (application.aiScoreData) {
       return application.aiScoreData;
@@ -2695,6 +2702,13 @@ export class CampaignService {
     if (!application) {
       throw new NotFoundException(
         'No application found for this influencer on this campaign',
+      );
+    }
+
+    // Check if influencer data is available
+    if (!application.influencer) {
+      throw new NotFoundException(
+        `Influencer ${influencerId} not found or deleted`,
       );
     }
 
@@ -3414,7 +3428,7 @@ export class CampaignService {
 
     // Only score applicants that haven't been scored yet (idempotent retry)
     const applications = await this.campaignApplicationModel.findAll({
-      where: { campaignId, aiScore: null },
+      where: { campaignId, aiScore: { [Op.is]: null } },
       include: [
         {
           model: Influencer,
@@ -3434,9 +3448,20 @@ export class CampaignService {
       ],
     });
 
+    console.log(`[AI Score] Starting bulk scoring for campaign ${campaignId}: ${applications.length} unscored applicants`);
+
     for (const application of applications) {
       try {
         const influencerId = application.influencerId;
+        console.log(`[AI Score] Scoring application ${application.id} (influencer ${influencerId})`);
+
+        // Skip if influencer data is not available
+        if (!application.influencer) {
+          console.warn(
+            `[AI Score] Skipping application ${application.id}: influencer ${influencerId} not found or deleted`,
+          );
+          continue;
+        }
 
         const aiMatchability = await this.calculateAIScore(application, campaign);
 
@@ -3500,12 +3525,17 @@ export class CampaignService {
           aiScore: aiMatchability.overallScore,
           aiScoreData: scoreData,
         });
+        console.log(`[AI Score] Saved score ${aiMatchability.overallScore} for application ${application.id}`);
       } catch (err) {
         console.error(
           `[AI Score] Failed to score application ${application.id} (influencer ${application.influencerId}):`,
-          err,
+          err instanceof Error ? err.message : err,
         );
+        if (err instanceof Error) {
+          console.error(`[AI Score] Stack:`, err.stack);
+        }
       }
     }
+    console.log(`[AI Score] Bulk scoring complete for campaign ${campaignId}`);
   }
 }
