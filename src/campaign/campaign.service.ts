@@ -1830,11 +1830,14 @@ export class CampaignService {
   ): Promise<any> {
     const influencer = application.influencer;
 
-    // Get follower count for this influencer
-    const followerCount = await this.getFollowerCount(influencer.id);
+    // Get follower count - prioritize Instagram followers from profile
+    let followerCount = influencer.instagramFollowersCount || 0;
+    if (followerCount === 0) {
+      followerCount = await this.getFollowerCount(influencer.id);
+    }
 
-    // Get post performance data
-    const postPerformance = await this.getPostPerformance(influencer.id);
+    // Get post performance data - pass followerCount to avoid duplicate lookups
+    const postPerformance = await this.getPostPerformance(influencer.id, followerCount);
 
     // Get past campaign performance
     const pastCampaigns = await this.getPastCampaignStats(influencer.id);
@@ -2017,7 +2020,7 @@ export class CampaignService {
    * Get post performance statistics from Instagram insights
    * Uses same formula as Instagram service: (likes + comments + shares + saves) / posts / followers * 100
    */
-  private async getPostPerformance(influencerId: number): Promise<any> {
+  private async getPostPerformance(influencerId: number, followerCountOverride?: number): Promise<any> {
     // Get recent Instagram media insights (last 10 posts)
     const recentInsights = await this.instagramMediaInsightModel.findAll({
       where: { influencerId },
@@ -2028,7 +2031,18 @@ export class CampaignService {
     if (recentInsights.length === 0) return null;
 
     // Get follower count for engagement rate calculation
-    const followerCount = await this.getFollowerCount(influencerId);
+    // Prefer passed-in follower count (from Instagram profile) over Follow table
+    let followerCount = followerCountOverride || 0;
+    if (followerCount === 0) {
+      followerCount = await this.getFollowerCount(influencerId);
+    }
+    // If still no followers, try getting from influencer profile
+    if (followerCount === 0) {
+      const influencer = await this.influencerModel.findByPk(influencerId, {
+        attributes: ['instagramFollowersCount'],
+      });
+      followerCount = influencer?.instagramFollowersCount || 0;
+    }
     if (followerCount === 0) return null;
 
     // Calculate totals
@@ -2120,7 +2134,7 @@ export class CampaignService {
   /**
    * Calculate Expected ROI
    */
-  private calculateExpectedROI(followerCount: number, postPerformance: any): number {
+  private calculateExpectedROI(_followerCount: number, postPerformance: any): number {
     if (!postPerformance) return 1.0;
 
     const engagementRate = Number(postPerformance.engagementRate) || 0;
@@ -2439,7 +2453,7 @@ export class CampaignService {
     let followerCount = 0;
     let postPerformance: any = null;
 
-    // First priority: Use Instagram profile analysis data if available
+    // Priority 1: Use Instagram profile analysis data if available
     if (instagramAnalysis && instagramAnalysis.totalFollowers) {
       followerCount = Number(instagramAnalysis.totalFollowers) || 0;
       console.log(`[AI Score] Using totalFollowers from Instagram analysis: ${followerCount}`);
@@ -2454,20 +2468,21 @@ export class CampaignService {
       }
     }
 
-    // Fallback: Check platform followers
-    if (followerCount === 0) {
-      followerCount = await this.getFollowerCount(influencerId);
-    }
-
-    // Fallback: Use Instagram followers from influencer profile
+    // Priority 2: Use Instagram followers from influencer profile
     if (followerCount === 0 && application.influencer.instagramFollowersCount) {
       followerCount = application.influencer.instagramFollowersCount;
       console.log(`[AI Score] Using Instagram followers count from profile: ${followerCount}`);
     }
 
-    // Fallback: Get post performance from media insights if not available from analysis
+    // Priority 3: Check platform followers (Follow table)
+    if (followerCount === 0) {
+      followerCount = await this.getFollowerCount(influencerId);
+    }
+
+    // Get post performance from media insights if not available from Instagram analysis
+    // Pass followerCount so it doesn't need to look it up again
     if (!postPerformance) {
-      postPerformance = await this.getPostPerformance(influencerId);
+      postPerformance = await this.getPostPerformance(influencerId, followerCount);
     }
 
     // Log data availability for debugging
@@ -2717,7 +2732,7 @@ export class CampaignService {
   /**
    * Calculate tone matching percentage with campaign
    */
-  private calculateToneMatching(aiMatchability: any, engagement: number): any {
+  private calculateToneMatching(aiMatchability: any, _engagement: number): any {
     // Use AI niche match and content quality scores to determine tone matching
     const nicheMatch = Number(aiMatchability.scoreBreakdown?.nicheMatch) || 0;
     const contentQuality = Number(aiMatchability.scoreBreakdown?.contentQuality) || 0;
@@ -2937,9 +2952,12 @@ export class CampaignService {
     // Calculate AI matchability score
     const aiMatchability = await this.calculateAIScore(application, campaign);
 
-    // Calculate performance metrics
-    const followerCount = await this.getFollowerCount(influencerId);
-    const postPerformance = await this.getPostPerformance(influencerId);
+    // Calculate performance metrics - prioritize Instagram followers from profile
+    let followerCount = application.influencer.instagramFollowersCount || 0;
+    if (followerCount === 0) {
+      followerCount = await this.getFollowerCount(influencerId);
+    }
+    const postPerformance = await this.getPostPerformance(influencerId, followerCount);
 
     // Calculate Expected ROI (based on engagement rate and follower count)
     const expectedROI = this.calculateExpectedROI(followerCount, postPerformance);
@@ -3723,7 +3741,7 @@ export class CampaignService {
 
         // Fallback: Get post performance from media insights if not available from analysis
         if (!postPerformance) {
-          postPerformance = await this.getPostPerformance(influencerId);
+          postPerformance = await this.getPostPerformance(influencerId, followerCount);
         }
 
         const audienceQuality = this.calculateAudienceQuality(instagramAnalysis);

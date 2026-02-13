@@ -186,6 +186,67 @@ Return ONLY valid JSON in this exact format:
     else if (overall >= 60) recommendation = 'Recommended';
     else recommendation = 'Consider';
 
+    // Generate meaningful strengths and concerns based on scores
+    const strengths: string[] = [];
+    const concerns: string[] = [];
+
+    // Niche Match analysis
+    if (nicheMatch >= 80) {
+      strengths.push('Excellent niche alignment with campaign requirements');
+    } else if (nicheMatch >= 60) {
+      strengths.push('Good niche match for campaign');
+    } else if (nicheMatch < 50) {
+      concerns.push('Limited niche alignment with campaign focus areas');
+    }
+
+    // Audience Relevance analysis
+    if (audienceRelevance >= 80) {
+      strengths.push(`Strong audience size of ${influencer.followers.toLocaleString()} followers`);
+    } else if (audienceRelevance >= 60) {
+      strengths.push(`Good audience reach with ${influencer.followers.toLocaleString()} followers`);
+    } else if (audienceRelevance < 60) {
+      concerns.push('Smaller audience size may limit campaign reach');
+    }
+
+    // Engagement Rate analysis
+    if (engagementRate >= 80) {
+      strengths.push('Exceptional engagement rate with audience');
+    } else if (engagementRate >= 60) {
+      strengths.push('Solid engagement with followers');
+    } else if (engagementRate < 50) {
+      concerns.push('Engagement rate could be improved');
+    }
+
+    // Location Match analysis
+    if (locationMatch >= 90) {
+      strengths.push('Perfect location match for campaign targeting');
+    } else if (locationMatch < 70) {
+      concerns.push('Location may not align with primary campaign targets');
+    }
+
+    // Past Performance analysis
+    if (influencer.pastCampaigns.total > 0) {
+      if (pastPerformance >= 70) {
+        strengths.push(`Proven track record with ${influencer.pastCampaigns.total} past campaigns`);
+      } else if (pastPerformance < 50) {
+        concerns.push('Past campaign performance shows room for improvement');
+      }
+    } else {
+      concerns.push('No past campaign history to evaluate');
+    }
+
+    // Content Quality analysis
+    if (influencer.isVerified) {
+      strengths.push('Verified account adds credibility');
+    }
+
+    // Ensure at least one strength
+    if (strengths.length === 0) {
+      strengths.push('Profile meets basic campaign requirements');
+    }
+
+    const reasoning = `Match score of ${overall}% based on niche alignment (${nicheMatch}%), audience relevance (${audienceRelevance}%), engagement (${engagementRate}%), location fit (${locationMatch}%), and past performance (${pastPerformance}%).`;
+
     return {
       overall,
       nicheMatch,
@@ -195,9 +256,9 @@ Return ONLY valid JSON in this exact format:
       pastPerformance,
       contentQuality,
       recommendation,
-      strengths: ['Fallback scoring - AI not configured'],
-      concerns: [],
-      reasoning: 'Using basic algorithmic scoring as AI is not configured.',
+      strengths,
+      concerns,
+      reasoning,
     };
   }
 
