@@ -252,18 +252,29 @@ export class ChatService {
     const userParticipantType = userType as ParticipantType;
 
     // Find all conversations where user is participant1 or participant2
+    // IMPORTANT: Only show conversations that have at least one message
+    // This prevents showing empty conversations created during search/browsing
     const whereClause: any = {
-      [Op.or]: [
+      [Op.and]: [
         {
-          participant1Type: userParticipantType,
-          participant1Id: userId,
+          [Op.or]: [
+            {
+              participant1Type: userParticipantType,
+              participant1Id: userId,
+            },
+            {
+              participant2Type: userParticipantType,
+              participant2Id: userId,
+            },
+          ],
         },
         {
-          participant2Type: userParticipantType,
-          participant2Id: userId,
+          isActive: true,
+        },
+        {
+          lastMessageAt: { [Op.ne]: null as any }, // Only include conversations with at least one message
         },
       ],
-      isActive: true,
     };
 
     const { rows: conversations, count: total } =
@@ -686,19 +697,29 @@ export class ChatService {
   async getUnreadCount(userId: number, userType: 'influencer' | 'brand') {
     const userParticipantType = userType as ParticipantType;
 
+    // Only count conversations that have at least one message
     const conversations = await this.conversationModel.findAll({
       where: {
-        [Op.or]: [
+        [Op.and]: [
           {
-            participant1Type: userParticipantType,
-            participant1Id: userId,
+            [Op.or]: [
+              {
+                participant1Type: userParticipantType,
+                participant1Id: userId,
+              },
+              {
+                participant2Type: userParticipantType,
+                participant2Id: userId,
+              },
+            ],
           },
           {
-            participant2Type: userParticipantType,
-            participant2Id: userId,
+            isActive: true,
+          },
+          {
+            lastMessageAt: { [Op.ne]: null as any }, // Only include conversations with at least one message
           },
         ],
-        isActive: true,
       },
     });
 

@@ -1232,6 +1232,13 @@ export class InstagramController {
     // Generate unique job ID
     const jobId = `media-sync-${userId}-${Date.now()}`;
 
+    // Create placeholder sync record IMMEDIATELY to prevent syncNeeded=true
+    // This ensures the influencer profile API shows syncNeeded=false while sync is running
+    await this.instagramService.createPlaceholderSyncRecord(
+      Number(userId),
+      userType as 'influencer' | 'brand',
+    );
+
     // Start sync in background with a small delay to allow WebSocket connection
     // This prevents race condition where events are emitted before client connects
     setTimeout(() => {
@@ -1346,6 +1353,13 @@ export class InstagramController {
 
     // Generate unique job ID
     const jobId = `profile-sync-${userId}-${Date.now()}`;
+
+    // Create placeholder sync record IMMEDIATELY to prevent syncNeeded=true
+    // This ensures the influencer profile API shows syncNeeded=false while sync is running
+    await this.instagramService.createPlaceholderSyncRecord(
+      Number(userId),
+      userType as 'influencer' | 'brand',
+    );
 
     // Start sync in background with a small delay to allow WebSocket connection
     // This prevents race condition where events are emitted before client connects

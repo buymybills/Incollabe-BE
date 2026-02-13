@@ -258,6 +258,17 @@ export class MaxCampaignScoringProcessor {
 
     // --- Sync required: either initial snapshots are missing or data is stale ---
 
+    // Create placeholder sync record IMMEDIATELY before starting background sync
+    // This prevents syncNeeded from being true while the sync is running in the background
+    try {
+      await this.instagramService.createPlaceholderSyncRecord(influencerId, 'influencer');
+    } catch (placeholderError) {
+      // If placeholder creation fails (e.g., duplicate), log but continue with sync
+      this.logger.warn(
+        `Failed to create placeholder sync record for influencer ${influencerId}: ${placeholderError.message}`,
+      );
+    }
+
     try {
       // Step 1: Fetch recent media posts and their individual insights
       await this.instagramService.syncAllMediaInsights(influencerId, 'influencer', 50);

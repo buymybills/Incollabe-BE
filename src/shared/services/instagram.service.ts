@@ -2166,6 +2166,32 @@ export class InstagramService {
   }
 
   /**
+   * Create a placeholder sync record to indicate sync is in progress
+   * This prevents syncNeeded from being true while async sync is running
+   * @param userId - The user's ID (brand or influencer)
+   * @param userType - Type of user ('brand' or 'influencer')
+   */
+  async createPlaceholderSyncRecord(userId: number, userType: UserType): Promise<void> {
+    const user = await this.getUser(userId, userType);
+
+    if (!user.instagramAccessToken || !user.instagramUserId) {
+      throw new BadRequestException('No Instagram account connected');
+    }
+
+    // Create a minimal placeholder record with just syncDate to indicate sync started
+    // This will make getInstagramSyncStatus return syncNeeded = false
+    await this.instagramProfileAnalysisModel.create({
+      influencerId: userType === 'influencer' ? userId : undefined,
+      brandId: userType === 'brand' ? userId : undefined,
+      instagramUserId: user.instagramUserId,
+      instagramUsername: user.instagramUsername,
+      syncDate: new Date(), // This is the key field that getInstagramSyncStatus checks
+      postsAnalyzed: 0,
+      syncNumber: 0, // Placeholder sync number, will be replaced by actual sync
+    });
+  }
+
+  /**
    * Get comprehensive analytics for influencer/brand
    * Includes all calculated metrics for the UI
    */
