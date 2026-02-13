@@ -75,14 +75,16 @@ export class InstagramService {
 
     try {
       // Debug logging
-      console.log('Instagram OAuth Exchange:', {
+      console.log('Instagram OAuth Exchange - Starting:', {
         client_id: this.clientId,
         has_client_secret: !!this.clientSecret,
         redirect_uri,
         code_length: code?.length,
+        code_preview: code?.substring(0, 20) + '...',
       });
 
       // Step 1: Exchange code for short-lived token
+      console.log('Step 1: Exchanging authorization code for short-lived token...');
       const params = new URLSearchParams({
         client_id: this.clientId,
         client_secret: this.clientSecret,
@@ -101,8 +103,10 @@ export class InstagramService {
 
       const shortToken = shortTokenResponse.data.access_token;
       const userId = shortTokenResponse.data.user_id;
+      console.log('Step 1: Success - Received short-lived token for user:', userId);
 
       // Step 2: Exchange short-lived token for long-lived token
+      console.log('Step 2: Exchanging short-lived token for long-lived token...');
       const longTokenResponse = await axios.get('https://graph.instagram.com/access_token', {
         params: {
           grant_type: 'ig_exchange_token',
@@ -113,6 +117,7 @@ export class InstagramService {
 
       const longToken = longTokenResponse.data.access_token;
       const expiresIn = longTokenResponse.data.expires_in;
+      console.log('Step 2: Success - Received long-lived token, expires in:', expiresIn, 'seconds');
 
       return {
         access_token: longToken,
@@ -120,6 +125,7 @@ export class InstagramService {
         expires_in: expiresIn,
       };
     } catch (error) {
+      console.error('Token exchange failed at some step - see detailed error below');
       this.handleInstagramError(error, 'Failed to exchange code for token');
     }
   }
@@ -640,6 +646,15 @@ export class InstagramService {
       const axiosError = error as AxiosError;
       const errorData = axiosError.response?.data as any;
 
+      // Enhanced logging for debugging
+      console.error('Instagram API Error:', {
+        status: axiosError.response?.status,
+        statusText: axiosError.response?.statusText,
+        errorData,
+        url: axiosError.config?.url,
+        method: axiosError.config?.method,
+      });
+
       const errorMessage = errorData?.error?.message ||
                           errorData?.error_message ||
                           errorData?.message ||
@@ -655,6 +670,13 @@ export class InstagramService {
         details: errorData,
       });
     }
+
+    // Log non-Axios errors
+    console.error('Non-Axios Error in Instagram Service:', {
+      message: error?.message,
+      stack: error?.stack,
+      defaultMessage,
+    });
 
     throw new InternalServerErrorException({
       error: 'internal_server_error',
