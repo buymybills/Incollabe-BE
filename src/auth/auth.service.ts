@@ -32,6 +32,7 @@ import { SignupFiles } from '../types/file-upload.types';
 import { BrandInitialSignupDto } from './dto/brand-initial-signup.dto';
 import { BrandLoginDto } from './dto/brand-login.dto';
 import { BrandProfileCompletionDto } from './dto/brand-profile-completion.dto';
+import { BrandResendOtpDto } from './dto/brand-resend-otp.dto';
 import { BrandSignupDto } from './dto/brand-signup.dto';
 import { BrandVerifyOtpDto } from './dto/brand-verify-otp.dto';
 import { CheckUsernameDto } from './dto/check-username.dto';
@@ -1510,6 +1511,39 @@ export class AuthService {
         isActive: brand.isActive,
         niches: brand.niches || [],
       },
+    };
+  }
+
+  async resendBrandOtp(email: string) {
+    // Normalize email to lowercase for case-insensitive comparison
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Check if there's an active temp session for this email
+    const tempSessionKey = `temp:brand:${normalizedEmail}`;
+    const tempSessionData = await this.redisService.getClient().get(tempSessionKey);
+
+    if (!tempSessionData) {
+      throw new BadRequestException(
+        'No active OTP session found. Please login again to request a new OTP.',
+      );
+    }
+
+    // Parse the session data to get brandId and device info
+    const sessionData = JSON.parse(tempSessionData);
+
+    // Generate and store a new OTP
+    const otp = await this.generateAndStoreOtp(normalizedEmail, {
+      brandId: sessionData.brandId,
+      deviceId: sessionData.deviceId,
+      userAgent: sessionData.userAgent,
+    });
+
+    // Send the OTP via email
+    await this.emailService.sendBrandOtp(normalizedEmail, otp);
+
+    return {
+      message: 'OTP resent successfully to your email address.',
+      email: normalizedEmail,
     };
   }
 

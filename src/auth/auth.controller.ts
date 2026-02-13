@@ -41,6 +41,7 @@ import {
 } from '@nestjs/platform-express';
 import { ApiFileFields } from './decorators/api-file.decorator';
 import { BrandLoginDto } from './dto/brand-login.dto';
+import { BrandResendOtpDto } from './dto/brand-resend-otp.dto';
 import { BrandVerifyOtpDto } from './dto/brand-verify-otp.dto';
 import { CheckUsernameDto } from './dto/check-username.dto';
 import { LogoutDto } from './dto/logout.dto';
@@ -761,6 +762,46 @@ export class AuthController {
       deviceId,
       userAgent as string,
     );
+  }
+
+  @Post('brand/resend-otp')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Resend OTP to brand email',
+    description:
+      'Resend a new OTP to the brand email address. This can be used if the previous OTP expired or was not received.',
+  })
+  @ApiBody({ type: BrandResendOtpDto })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP resent successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example: 'OTP resent successfully to your email address.',
+        },
+        email: { type: 'string', example: 'brand@example.com' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'No active OTP session found',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 400 },
+        message: {
+          type: 'string',
+          example: 'No active OTP session found. Please login again to request a new OTP.',
+        },
+      },
+    },
+  })
+  async resendBrandOtp(@Body() resendOtpDto: BrandResendOtpDto) {
+    return this.authService.resendBrandOtp(resendOtpDto.email);
   }
 
   @Post('logout')
