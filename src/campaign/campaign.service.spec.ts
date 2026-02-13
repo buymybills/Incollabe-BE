@@ -36,6 +36,7 @@ import { MaxCampaignInvoice } from './models/max-campaign-invoice.model';
 import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
 import { InstagramMediaInsight } from '../shared/models/instagram-media-insight.model';
 import { AIScoringService } from '../admin/services/ai-scoring.service';
+import { MaxCampaignScoringQueueService } from './services/max-campaign-scoring-queue.service';
 
 const mockModel = () => ({
   findOne: jest.fn(),
@@ -78,6 +79,11 @@ const mockDeviceTokenService = {
 const mockAIScoringService = {
   scoreInfluencer: jest.fn(),
   getInfluencerScore: jest.fn(),
+};
+
+const mockMaxCampaignScoringQueueService = {
+  queueCampaignScoring: jest.fn(),
+  queueInfluencerScoring: jest.fn(),
 };
 
 describe('CampaignService', () => {
@@ -173,6 +179,10 @@ describe('CampaignService', () => {
         {
           provide: AIScoringService,
           useValue: mockAIScoringService,
+        },
+        {
+          provide: MaxCampaignScoringQueueService,
+          useValue: mockMaxCampaignScoringQueueService,
         },
         {
           provide: getModelToken(CreditTransaction),

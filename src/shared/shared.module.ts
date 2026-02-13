@@ -59,6 +59,7 @@ import { CampusAmbassador } from './models/campus-ambassador.model';
 import { AppReviewRequest } from './models/app-review-request.model';
 import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
 import { CreditTransaction } from '../admin/models/credit-transaction.model';
+import { ProfileReview } from '../admin/models/profile-review.model';
 import { Campaign } from '../campaign/models/campaign.model';
 import { CampaignApplication } from '../campaign/models/campaign-application.model';
 import { CampaignInvitation } from '../campaign/models/campaign-invitation.model';
@@ -97,6 +98,7 @@ import { AppVersionService } from './services/app-version.service';
       AppReviewRequest,
       InfluencerReferralUsage,
       CreditTransaction,
+      ProfileReview,
       Campaign,
       CampaignApplication,
       CampaignInvitation,

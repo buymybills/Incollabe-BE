@@ -49,6 +49,7 @@ import { AIScoringService } from '../admin/services/ai-scoring.service';
 import { Post } from '../post/models/post.model';
 import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
 import { InstagramMediaInsight } from '../shared/models/instagram-media-insight.model';
+import { MaxCampaignScoringQueueService } from './services/max-campaign-scoring-queue.service';
 
 @Injectable()
 export class CampaignService {
@@ -91,6 +92,7 @@ export class CampaignService {
     private readonly deviceTokenService: DeviceTokenService,
     private readonly campaignQueryService: CampaignQueryService,
     private readonly aiScoringService: AIScoringService,
+    private readonly maxCampaignScoringQueueService: MaxCampaignScoringQueueService,
   ) {}
 
   /**
@@ -3836,5 +3838,62 @@ export class CampaignService {
       }
     }
     console.log(`[AI Score] Bulk scoring complete for campaign ${campaignId}`);
+  }
+
+  /**
+   * Queue MAX campaign scoring job in background
+   * This runs Instagram data fetch + profile scoring + AI matchability scoring
+   * for all applicants in a MAX campaign
+   */
+  async queueMaxCampaignScoring(campaignId: number): Promise<void> {
+    console.log(`[MAX Campaign Scoring] Queueing background job for campaign ${campaignId}`);
+
+    // Verify campaign exists and is a MAX campaign
+    const campaign = await this.campaignModel.findByPk(campaignId);
+    if (!campaign) {
+      throw new NotFoundException(`Campaign ${campaignId} not found`);
+    }
+
+    if (!campaign.isMaxCampaign) {
+      console.log(`[MAX Campaign Scoring] Campaign ${campaignId} is not a MAX campaign, skipping`);
+      return;
+    }
+
+    // Queue the background job
+    await this.maxCampaignScoringQueueService.queueCampaignScoring(campaignId);
+    console.log(`[MAX Campaign Scoring] Successfully queued job for campaign ${campaignId}`);
+  }
+
+  /**
+   * Queue scoring for specific influencers in a MAX campaign
+   * Useful when new applications come in
+   */
+  async queueMaxCampaignScoringForInfluencers(
+    campaignId: number,
+    influencerIds: number[],
+  ): Promise<void> {
+    console.log(
+      `[MAX Campaign Scoring] Queueing background job for ${influencerIds.length} influencers in campaign ${campaignId}`,
+    );
+
+    // Verify campaign exists and is a MAX campaign
+    const campaign = await this.campaignModel.findByPk(campaignId);
+    if (!campaign) {
+      throw new NotFoundException(`Campaign ${campaignId} not found`);
+    }
+
+    if (!campaign.isMaxCampaign) {
+      console.log(`[MAX Campaign Scoring] Campaign ${campaignId} is not a MAX campaign, skipping`);
+      return;
+    }
+
+    // Queue the background job for specific influencers
+    await this.maxCampaignScoringQueueService.queueInfluencerScoring(
+      campaignId,
+      influencerIds,
+    );
+    console.log(
+      `[MAX Campaign Scoring] Successfully queued job for ${influencerIds.length} influencers`,
+    );
   }
 }

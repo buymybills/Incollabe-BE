@@ -21,6 +21,7 @@ import { CampusAmbassadorService } from './campus-ambassador.service';
 import { InstagramSyncGateway } from '../instagram-sync.gateway';
 import { InfluencerReferralUsage } from '../../auth/model/influencer-referral-usage.model';
 import { CreditTransaction, CreditTransactionType, PaymentStatus } from '../../admin/models/credit-transaction.model';
+import { ProfileReview, ReviewStatus, ProfileType } from '../../admin/models/profile-review.model';
 
 export type UserType = 'influencer' | 'brand';
 
@@ -47,6 +48,8 @@ export class InstagramService {
     private influencerReferralUsageModel: typeof InfluencerReferralUsage,
     @InjectModel(CreditTransaction)
     private creditTransactionModel: typeof CreditTransaction,
+    @InjectModel(ProfileReview)
+    private profileReviewModel: typeof ProfileReview,
     private geminiAIService: GeminiAIService,
     private campusAmbassadorService: CampusAmbassadorService,
     private instagramSyncGateway: InstagramSyncGateway,
@@ -283,6 +286,27 @@ export class InstagramService {
       };
 
       await influencer.update(updateData);
+
+      // Auto-approve any pending profile review since Instagram connection verifies the influencer
+      try {
+        const pendingReview = await this.profileReviewModel.findOne({
+          where: {
+            profileId: influencer.id,
+            profileType: ProfileType.INFLUENCER,
+            status: ReviewStatus.PENDING,
+          },
+        });
+        if (pendingReview) {
+          await pendingReview.update({
+            status: ReviewStatus.APPROVED,
+            reviewedAt: new Date(),
+            adminComments: 'Auto-approved via Instagram connection',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to auto-approve profile review on Instagram connect:', error);
+        // Don't throw - allow Instagram connection to succeed
+      }
 
       // Track campus ambassador verified signup
       // Wrap in try-catch to prevent Instagram connection failure if tracking fails

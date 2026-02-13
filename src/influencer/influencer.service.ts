@@ -51,6 +51,7 @@ import { City } from '../shared/models/city.model';
 import { Brand } from '../brand/model/brand.model';
 import { GetOpenCampaignsDto } from '../campaign/dto/get-open-campaigns.dto';
 import { MyApplicationResponseDto } from '../campaign/dto/my-application-response.dto';
+import { MaxCampaignScoringQueueService } from '../campaign/services/max-campaign-scoring-queue.service';
 import { CreateExperienceDto } from './dto/create-experience.dto';
 import { UpdateExperienceDto } from './dto/update-experience.dto';
 import { Op, literal } from 'sequelize';
@@ -140,6 +141,7 @@ export class InfluencerService {
     private readonly instagramProfileAnalysisModel: typeof InstagramProfileAnalysis,
     // @Inject('HOME_PAGE_HISTORY_MODEL')
     // private readonly homePageHistoryModel: typeof HomePageHistory,
+    private readonly maxCampaignScoringQueueService: MaxCampaignScoringQueueService,
   ) {}
 
   /**
@@ -204,16 +206,18 @@ export class InfluencerService {
         const hasBeenSubmitted = await this.hasProfileReview(influencerId);
         // If profile just became complete and hasn't been submitted, create review
         if (!hasBeenSubmitted) {
-          await this.createProfileReview(influencerId);
-          // Send verification pending push notification asynchronously (fire-and-forget)
-          const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencerId, DeviceUserType.INFLUENCER);
-          if (fcmTokens && fcmTokens.length > 0) {
-            this.notificationService.sendCustomNotification(
-              fcmTokens,
-              'Profile Under Review',
-              `Hi ${influencer.name}, your profile has been submitted for verification. You will be notified once the review is complete within 48 hours.`,
-              { type: 'profile_verification_pending' },
-            ).catch(err => console.error('Failed to send profile verification pending notification:', err));
+          const reviewCreated = await this.createProfileReview(influencerId);
+          // Send verification pending push notification only if review was actually created
+          if (reviewCreated) {
+            const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencerId, DeviceUserType.INFLUENCER);
+            if (fcmTokens && fcmTokens.length > 0) {
+              this.notificationService.sendCustomNotification(
+                fcmTokens,
+                'Profile Under Review',
+                `Hi ${influencer.name}, your profile has been submitted for verification. You will be notified once the review is complete within 48 hours.`,
+                { type: 'profile_verification_pending' },
+              ).catch(err => console.error('Failed to send profile verification pending notification:', err));
+            }
           }
         }
         // Refetch influencer to get updated state from database
@@ -772,34 +776,38 @@ export class InfluencerService {
     // If profile just became complete and hasn't been submitted, create review
     if (!wasComplete && isComplete && !hasBeenSubmitted) {
       // Create profile review for admin verification
-      await this.createProfileReview(influencerId);
+      const reviewCreated = await this.createProfileReview(influencerId);
 
-      // Send verification pending push notification
-      const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencerId, DeviceUserType.INFLUENCER);
-      if (fcmTokens && fcmTokens.length > 0) {
-        this.notificationService.sendCustomNotification(
-          fcmTokens,
-          'Profile Under Review',
-          `Hi ${updatedInfluencer.name}, your profile has been submitted for verification. You will be notified once the review is complete within 48 hours.`,
-          { type: 'profile_verification_pending' },
-        ).catch(err => console.error('Failed to send profile verification pending notification:', err));
+      // Send verification pending push notification only if review was actually created
+      if (reviewCreated) {
+        const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencerId, DeviceUserType.INFLUENCER);
+        if (fcmTokens && fcmTokens.length > 0) {
+          this.notificationService.sendCustomNotification(
+            fcmTokens,
+            'Profile Under Review',
+            `Hi ${updatedInfluencer.name}, your profile has been submitted for verification. You will be notified once the review is complete within 48 hours.`,
+            { type: 'profile_verification_pending' },
+          ).catch(err => console.error('Failed to send profile verification pending notification:', err));
+        }
       }
     }
 
     // If profile is already complete but has no review record, create one
     // This handles cases where profile was already marked complete but hasn't been submitted yet
     if (isComplete && !hasBeenSubmitted && wasComplete) {
-      await this.createProfileReview(influencerId);
+      const reviewCreated = await this.createProfileReview(influencerId);
 
-      // Send verification pending push notification
-      const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencerId, DeviceUserType.INFLUENCER);
-      if (fcmTokens && fcmTokens.length > 0) {
-        this.notificationService.sendCustomNotification(
-          fcmTokens,
-          'Profile Under Review',
-          `Hi ${updatedInfluencer.name}, your profile has been submitted for verification. You will be notified once the review is complete within 48 hours.`,
-          { type: 'profile_verification_pending' },
-        ).catch(err => console.error('Failed to send profile verification pending notification:', err));
+      // Send verification pending push notification only if review was actually created
+      if (reviewCreated) {
+        const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencerId, DeviceUserType.INFLUENCER);
+        if (fcmTokens && fcmTokens.length > 0) {
+          this.notificationService.sendCustomNotification(
+            fcmTokens,
+            'Profile Under Review',
+            `Hi ${updatedInfluencer.name}, your profile has been submitted for verification. You will be notified once the review is complete within 48 hours.`,
+            { type: 'profile_verification_pending' },
+          ).catch(err => console.error('Failed to send profile verification pending notification:', err));
+        }
       }
     }
 
@@ -1200,23 +1208,36 @@ export class InfluencerService {
     return !!review;
   }
 
-  private async createProfileReview(influencerId: number) {
+  private async createProfileReview(influencerId: number): Promise<boolean> {
+    // Skip if already verified via Instagram - no admin review needed
+    const influencer = await this.influencerRepository.findById(influencerId);
+    if (influencer?.instagramUserId && influencer?.instagramAccessToken) {
+      return false;
+    }
+
     // Check if review already exists
     const existingReview = await this.profileReviewModel.findOne({
       where: { profileId: influencerId, profileType: ProfileType.INFLUENCER },
     });
 
     if (existingReview) {
-      // Update existing review to pending status and clear previous review data
-      await existingReview.update({
-        status: 'pending',
-        submittedAt: new Date(),
-        // Clear previous review data for fresh review
-        reviewedBy: null,
-        reviewedAt: null,
-        rejectionReason: null,
-        adminComments: null,
-      });
+      // If review is already approved or pending, don't create/update
+      if (existingReview.status === 'approved' || existingReview.status === 'pending') {
+        return false;
+      }
+
+      // Only update if rejected - allow resubmission
+      if (existingReview.status === 'rejected') {
+        await existingReview.update({
+          status: 'pending',
+          submittedAt: new Date(),
+          // Clear previous review data for fresh review
+          reviewedBy: null,
+          reviewedAt: null,
+          rejectionReason: null,
+          adminComments: null,
+        });
+      }
     } else {
       // Create new review
       await this.profileReviewModel.create({
@@ -1229,6 +1250,7 @@ export class InfluencerService {
 
     // Send notification to admins
     await this.notifyAdminsOfPendingProfile(influencerId);
+    return true;
   }
 
   private async notifyAdminsOfPendingProfile(influencerId: number) {
@@ -1302,8 +1324,6 @@ export class InfluencerService {
       search,
       cityIds,
       nicheIds,
-      minBudget,
-      maxBudget,
       campaignType,
       page = 1,
       limit = 10,
@@ -1740,6 +1760,50 @@ export class InfluencerService {
       influencerId,
       status: ApplicationStatus.APPLIED,
     } as any);
+
+    // For MAX campaigns: queue background scoring only when Instagram data needs to be fetched.
+    // AI score depends on instagram_profile_analysis data created by syncAllMediaInsights +
+    // syncAllInsights. We skip queuing if:
+    //   - syncNumber 1 & 2 already exist (initial sync was done), AND
+    //   - the most recent snapshot is less than 15 days old (data is still fresh)
+    // Otherwise we queue so the background job fetches/refreshes the data first.
+    if (campaign.isMaxCampaign) {
+      const allSnapshots = await this.instagramProfileAnalysisModel.findAll({
+        where: { influencerId },
+        order: [['id', 'DESC']],
+        attributes: ['syncNumber', 'analysisPeriodEnd', 'createdAt'],
+      });
+
+      const validSnapshots = allSnapshots.filter((s) => s.syncNumber != null);
+      const initialSnapshots = validSnapshots.filter(
+        (s) => s.syncNumber === 1 || s.syncNumber === 2,
+      );
+      // syncNumber 1 & 2 are created once during the first-ever Instagram sync.
+      const hasInitialSnapshots = initialSnapshots.length >= 2;
+
+      // Even if initial snapshots exist, check if the latest snapshot is stale (> 15 days).
+      // Stale data means AI score would be calculated on outdated metrics — re-sync needed.
+      let isStale = false;
+      if (hasInitialSnapshots && validSnapshots[0]) {
+        const snapshotDate =
+          validSnapshots[0].analysisPeriodEnd || validSnapshots[0].createdAt;
+        const daysSince =
+          (Date.now() - new Date(snapshotDate).getTime()) / (1000 * 60 * 60 * 24);
+        isStale = daysSince >= 15;
+      }
+
+      // Queue if: initial sync never done OR latest data is stale
+      if (!hasInitialSnapshots || isStale) {
+        this.maxCampaignScoringQueueService
+          .queueInfluencerScoring(campaignId, [influencerId])
+          .catch((err) =>
+            console.error(
+              `Failed to queue MAX campaign scoring for influencer ${influencerId} on campaign ${campaignId}:`,
+              err,
+            ),
+          );
+      }
+    }
 
     // Send push notification to influencer about application confirmation asynchronously (fire-and-forget)
     const influencerFcmTokens = await this.deviceTokenService.getAllUserTokens(influencer.id, DeviceUserType.INFLUENCER);
