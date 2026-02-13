@@ -1845,12 +1845,14 @@ export class CampaignService {
     // Get multiple Instagram profile analyses for robust niche calculation
     // Each snapshot covers 15 days (or 30 days for initial 2 snapshots)
     // We need multiple snapshots to get enough data
-    const instagramAnalyses = await this.instagramProfileAnalysisModel.findAll({
+    // Fetch and filter following profile-score API pattern
+    const allAnalyses = await this.instagramProfileAnalysisModel.findAll({
       where: { influencerId: influencer.id },
       order: [['syncNumber', 'DESC']],
-      limit: 5, // Get last 5 snapshots (~60-75 days of data)
       attributes: ['topNiches', 'nichePerformance', 'postsAnalyzed', 'syncNumber', 'syncDate'],
     });
+    // Filter out incomplete snapshots and take last 5
+    const instagramAnalyses = allAnalyses.filter(s => s.syncNumber != null).slice(0, 5);
 
     // Aggregate niches across multiple snapshots for accurate analysis
     let influencerNiches: string[] = [];
@@ -2392,11 +2394,14 @@ export class CampaignService {
     // If cached data exists, return it with influencer info
     if (application.aiScoreData) {
       // Get Instagram analysis for profile strength even with cached data
-      const instagramAnalysis = await this.instagramProfileAnalysisModel.findOne({
+      // Fetch and filter following profile-score API pattern
+      const allSnapshots = await this.instagramProfileAnalysisModel.findAll({
         where: { influencerId },
         order: [['syncNumber', 'DESC']],
-        attributes: ['activeFollowersPercentage'],
+        attributes: ['activeFollowersPercentage', 'syncNumber'],
       });
+      const validSnapshots = allSnapshots.filter(s => s.syncNumber != null);
+      const instagramAnalysis = validSnapshots.length > 0 ? validSnapshots[0] : null;
 
       // Calculate profile strength using cached data
       const nicheMatchScore = application.aiScoreData.scoreBreakdown?.nicheMatch || null;
@@ -2436,8 +2441,9 @@ export class CampaignService {
     // Not cached — calculate now
     const aiMatchability = await this.calculateAIScore(application, campaign);
 
-    // Get Instagram profile analysis data
-    const instagramAnalysis = await this.instagramProfileAnalysisModel.findOne({
+    // Get Instagram profile analysis data - use latest snapshot
+    // Fetch and filter following profile-score API pattern
+    const allSnapshots = await this.instagramProfileAnalysisModel.findAll({
       where: { influencerId },
       order: [['syncNumber', 'DESC']],
       attributes: [
@@ -2446,8 +2452,11 @@ export class CampaignService {
         'avgReach',
         'activeFollowersPercentage',
         'totalFollowers',
+        'syncNumber',
       ],
     });
+    const validSnapshots = allSnapshots.filter(s => s.syncNumber != null);
+    const instagramAnalysis = validSnapshots.length > 0 ? validSnapshots[0] : null;
 
     // Get performance metrics - prioritize Instagram profile analysis data
     let followerCount = 0;
@@ -2673,12 +2682,18 @@ export class CampaignService {
     let engagementRate = Number(instagramAnalysis?.avgEngagementRate) || 0;
     let activeFollowersPercentage = Number(instagramAnalysis?.activeFollowersPercentage) || 0;
 
-    // Fallback: If no Instagram analysis, use postPerformance data
-    if (!instagramAnalysis && postPerformance) {
-      avgReach = Number(postPerformance.avgReach) || 0;
-      engagementRate = Number(postPerformance.engagementRate) || 0;
+    // Fallback: If Instagram analysis data is missing or has null values, use postPerformance data
+    if ((avgReach === 0 || engagementRate === 0) && postPerformance) {
+      if (avgReach === 0) {
+        avgReach = Number(postPerformance.avgReach) || 0;
+      }
+      if (engagementRate === 0) {
+        engagementRate = Number(postPerformance.engagementRate) || 0;
+      }
       // Estimate active followers at 60% if no data
-      activeFollowersPercentage = 60;
+      if (activeFollowersPercentage === 0) {
+        activeFollowersPercentage = 60;
+      }
     }
 
     // Further fallback: If still no data, estimate from follower count
@@ -3705,11 +3720,15 @@ export class CampaignService {
 
         const aiMatchability = await this.calculateAIScore(application, campaign);
 
-        const instagramAnalysis = await this.instagramProfileAnalysisModel.findOne({
+        // Get Instagram profile analysis data - use latest snapshot
+        // Fetch and filter following profile-score API pattern
+        const allSnapshots = await this.instagramProfileAnalysisModel.findAll({
           where: { influencerId },
           order: [['syncNumber', 'DESC']],
-          attributes: ['audienceAgeGender', 'avgEngagementRate', 'avgReach', 'activeFollowersPercentage', 'totalFollowers'],
+          attributes: ['audienceAgeGender', 'avgEngagementRate', 'avgReach', 'activeFollowersPercentage', 'totalFollowers', 'syncNumber'],
         });
+        const validSnapshots = allSnapshots.filter(s => s.syncNumber != null);
+        const instagramAnalysis = validSnapshots.length > 0 ? validSnapshots[0] : null;
 
         // Get performance metrics - prioritize Instagram profile analysis data
         let followerCount = 0;
