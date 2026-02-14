@@ -1382,6 +1382,7 @@ export class CampaignService {
     totalPages: number;
     aiScoreEnabled: boolean;
     aiCreditsRemaining: number | null;
+    isMaxCampaign: boolean;
   }> {
     // Verify campaign exists and belongs to the brand (if brandId provided)
     // Note: We allow viewing applications even for inactive/completed campaigns
@@ -1821,6 +1822,7 @@ export class CampaignService {
       totalPages,
       aiScoreEnabled: campaign.aiScoreEnabled,
       aiCreditsRemaining,
+      isMaxCampaign: campaign.isMaxCampaign,
     };
   }
 
