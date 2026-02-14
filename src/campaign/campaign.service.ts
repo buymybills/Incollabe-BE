@@ -3656,24 +3656,40 @@ export class CampaignService {
     }
 
     const brand = await this.brandModel.findByPk(brandId);
-    if (!brand || brand.aiCreditsRemaining <= 0) {
+    if (!brand) {
+      throw new NotFoundException('Brand not found');
+    }
+
+    if (brand.aiCreditsRemaining <= 0) {
       throw new ForbiddenException('No AI score credits remaining');
     }
 
-    await this.campaignModel.sequelize!.transaction(async (t) => {
-      await brand.update(
-        { aiCreditsRemaining: brand.aiCreditsRemaining - 1 },
-        { transaction: t },
-      );
-      await campaign.update({ aiScoreEnabled: true }, { transaction: t });
-    });
+    try {
+      await this.campaignModel.sequelize!.transaction(async (t) => {
+        // Atomic decrement - database-level CHECK constraint prevents going below 0
+        await brand.decrement('aiCreditsRemaining', {
+          by: 1,
+          transaction: t,
+        });
+        await campaign.update({ aiScoreEnabled: true }, { transaction: t });
+      });
+    } catch (error) {
+      // If decrement fails (e.g., CHECK constraint violation), throw proper error
+      if (error.message?.includes('check_ai_credits_non_negative')) {
+        throw new ForbiddenException('No AI score credits remaining');
+      }
+      throw error;
+    }
 
     // Fire-and-forget: calculate and store scores for all applicants
     this.bulkCalculateAndStoreScores(campaignId).catch((err) => {
       console.error(`[AI Score] Bulk scoring failed for campaign ${campaignId}:`, err);
     });
 
-    return { success: true, creditsRemaining: brand.aiCreditsRemaining - 1 };
+    // Reload to get updated credit count
+    await brand.reload();
+
+    return { success: true, creditsRemaining: brand.aiCreditsRemaining };
   }
 
   private async bulkCalculateAndStoreScores(campaignId: number): Promise<void> {

@@ -5,6 +5,7 @@ import { BrandService } from './brand.service';
 import { BrandController } from './brand.controller';
 import { Brand } from './model/brand.model';
 import { BrandNiche } from './model/brand-niche.model';
+import { AiCreditInvoice } from './model/ai-credit-invoice.model';
 import { Niche } from '../auth/model/niche.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Country } from '../shared/models/country.model';
@@ -19,6 +20,7 @@ import { ProfileReview } from '../admin/models/profile-review.model';
 import { Admin } from '../admin/models/admin.model';
 import { RedisService } from '../redis/redis.service';
 import { MasterDataService } from '../shared/services/master-data.service';
+import { AiCreditPaymentService } from './ai-credit-payment.service';
 import { AdminModule } from '../admin/admin.module';
 import { SharedModule } from '../shared/shared.module';
 import { CampaignModule } from '../campaign/campaign.module';
@@ -40,6 +42,7 @@ import { CampaignModule } from '../campaign/campaign.module';
       CustomNiche,
       ProfileReview,
       Admin,
+      AiCreditInvoice,
     ]),
     ConfigModule,
     forwardRef(() => AdminModule),
@@ -47,7 +50,7 @@ import { CampaignModule } from '../campaign/campaign.module';
     forwardRef(() => CampaignModule),
   ],
   controllers: [BrandController],
-  providers: [BrandService, RedisService, MasterDataService],
-  exports: [BrandService],
+  providers: [BrandService, RedisService, MasterDataService, AiCreditPaymentService],
+  exports: [BrandService, AiCreditPaymentService],
 })
 export class BrandModule {}
