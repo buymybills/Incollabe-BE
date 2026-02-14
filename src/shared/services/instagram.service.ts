@@ -2172,23 +2172,32 @@ export class InstagramService {
    * @param userType - Type of user ('brand' or 'influencer')
    */
   async createPlaceholderSyncRecord(userId: number, userType: UserType): Promise<void> {
-    const user = await this.getUser(userId, userType);
+    try {
+      const user = await this.getUser(userId, userType);
 
-    if (!user.instagramAccessToken || !user.instagramUserId) {
-      throw new BadRequestException('No Instagram account connected');
+      if (!user.instagramAccessToken || !user.instagramUserId) {
+        throw new BadRequestException('No Instagram account connected');
+      }
+
+      console.log(`📝 Creating placeholder sync record for ${userType} ${userId}...`);
+
+      // Create a minimal placeholder record with just syncDate to indicate sync started
+      // This will make getInstagramSyncStatus return syncNeeded = false
+      const placeholder = await this.instagramProfileAnalysisModel.create({
+        influencerId: userType === 'influencer' ? userId : undefined,
+        brandId: userType === 'brand' ? userId : undefined,
+        instagramUserId: user.instagramUserId,
+        instagramUsername: user.instagramUsername,
+        syncDate: new Date(), // This is the key field that getInstagramSyncStatus checks
+        postsAnalyzed: 0,
+        syncNumber: 0, // Placeholder sync number, will be replaced by actual sync
+      });
+
+      console.log(`✅ Placeholder record created successfully with ID: ${placeholder.id}`);
+    } catch (error) {
+      console.error(`❌ Failed to create placeholder sync record:`, error);
+      // Don't throw - let the sync continue even if placeholder fails
     }
-
-    // Create a minimal placeholder record with just syncDate to indicate sync started
-    // This will make getInstagramSyncStatus return syncNeeded = false
-    await this.instagramProfileAnalysisModel.create({
-      influencerId: userType === 'influencer' ? userId : undefined,
-      brandId: userType === 'brand' ? userId : undefined,
-      instagramUserId: user.instagramUserId,
-      instagramUsername: user.instagramUsername,
-      syncDate: new Date(), // This is the key field that getInstagramSyncStatus checks
-      postsAnalyzed: 0,
-      syncNumber: 0, // Placeholder sync number, will be replaced by actual sync
-    });
   }
 
   /**
