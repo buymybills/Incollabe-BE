@@ -75,14 +75,16 @@ export class InstagramService {
 
     try {
       // Debug logging
-      console.log('Instagram OAuth Exchange:', {
+      console.log('Instagram OAuth Exchange - Starting:', {
         client_id: this.clientId,
         has_client_secret: !!this.clientSecret,
         redirect_uri,
         code_length: code?.length,
+        code_preview: code?.substring(0, 20) + '...',
       });
 
       // Step 1: Exchange code for short-lived token
+      console.log('Step 1: Exchanging authorization code for short-lived token...');
       const params = new URLSearchParams({
         client_id: this.clientId,
         client_secret: this.clientSecret,
@@ -101,8 +103,10 @@ export class InstagramService {
 
       const shortToken = shortTokenResponse.data.access_token;
       const userId = shortTokenResponse.data.user_id;
+      console.log('Step 1: Success - Received short-lived token for user:', userId);
 
       // Step 2: Exchange short-lived token for long-lived token
+      console.log('Step 2: Exchanging short-lived token for long-lived token...');
       const longTokenResponse = await axios.get('https://graph.instagram.com/access_token', {
         params: {
           grant_type: 'ig_exchange_token',
@@ -113,6 +117,7 @@ export class InstagramService {
 
       const longToken = longTokenResponse.data.access_token;
       const expiresIn = longTokenResponse.data.expires_in;
+      console.log('Step 2: Success - Received long-lived token, expires in:', expiresIn, 'seconds');
 
       return {
         access_token: longToken,
@@ -120,6 +125,7 @@ export class InstagramService {
         expires_in: expiresIn,
       };
     } catch (error) {
+      console.error('Token exchange failed at some step - see detailed error below');
       this.handleInstagramError(error, 'Failed to exchange code for token');
     }
   }
@@ -640,6 +646,15 @@ export class InstagramService {
       const axiosError = error as AxiosError;
       const errorData = axiosError.response?.data as any;
 
+      // Enhanced logging for debugging
+      console.error('Instagram API Error:', {
+        status: axiosError.response?.status,
+        statusText: axiosError.response?.statusText,
+        errorData,
+        url: axiosError.config?.url,
+        method: axiosError.config?.method,
+      });
+
       const errorMessage = errorData?.error?.message ||
                           errorData?.error_message ||
                           errorData?.message ||
@@ -655,6 +670,13 @@ export class InstagramService {
         details: errorData,
       });
     }
+
+    // Log non-Axios errors
+    console.error('Non-Axios Error in Instagram Service:', {
+      message: error?.message,
+      stack: error?.stack,
+      defaultMessage,
+    });
 
     throw new InternalServerErrorException({
       error: 'internal_server_error',
@@ -1028,25 +1050,25 @@ export class InstagramService {
     userId: number,
     userType: UserType,
     limit: number = 50,
-    //jobId?: string,
+    jobId?: string,
   ): Promise<any> {
     console.log(`🔄 Starting bulk media insights sync with progressive growth tracking for ${userType} ${userId}...`);
 
     // Generate jobId if not provided (for backward compatibility)
-    //const actualJobId = jobId || `sync-${userId}-${Date.now()}`;
+    const actualJobId = jobId || `sync-${userId}-${Date.now()}`;
 
     const syncedAt = new Date();
 
     // Emit 0% - Starting sync
-    // if (jobId) {
-    //   this.instagramSyncGateway.emitSyncProgress(
-    //     userId,
-    //     userType,
-    //     actualJobId,
-    //     0,
-    //     'Starting Instagram media sync...'
-    //   );
-    // }
+    if (jobId) {
+      this.instagramSyncGateway.emitSyncProgress(
+        userId,
+        userType,
+        actualJobId,
+        0,
+        'Starting Instagram media sync...'
+      );
+    }
 
     console.log(`\n${'#'.repeat(100)}`);
     console.log(`${'#'.repeat(100)}`);
@@ -1063,15 +1085,15 @@ export class InstagramService {
       console.log(`📂 STEP 1: Checking for existing snapshots...`);
 
       // Emit 5% - Checking throttle
-      // if (jobId) {
-      //   this.instagramSyncGateway.emitSyncProgress(
-      //     userId,
-      //     userType,
-      //     actualJobId,
-      //     5,
-      //     'Checking last sync date...'
-      //   );
-      // }
+      if (jobId) {
+        this.instagramSyncGateway.emitSyncProgress(
+          userId,
+          userType,
+          actualJobId,
+          5,
+          'Checking last sync date...'
+        );
+      }
       const lastSnapshot = await this.instagramProfileAnalysisModel.findOne({
         where: userType === 'influencer'
           ? { influencerId: userId }
@@ -1148,15 +1170,15 @@ export class InstagramService {
       console.log(`📥 STEP 3: Fetching media posts from Instagram API (limit: ${limit})...`);
 
       // Emit 10% - Fetching media
-      // if (jobId) {
-      //   this.instagramSyncGateway.emitSyncProgress(
-      //     userId,
-      //     userType,
-      //     actualJobId,
-      //     10,
-      //     `Fetching your posts (limit: ${limit})...`
-      //   );
-      // }
+      if (jobId) {
+        this.instagramSyncGateway.emitSyncProgress(
+          userId,
+          userType,
+          actualJobId,
+          10,
+          `Fetching your posts (limit: ${limit})...`
+        );
+      }
 
       const mediaResponse = await this.getInstagramMedia(userId, userType, limit);
       const mediaPosts = mediaResponse.data || [];
@@ -1195,16 +1217,16 @@ export class InstagramService {
           console.log(`✅ Synced insights for media ${mediaId}`);
 
           // Emit progress every 5 posts or on the last post (15% to 85% range)
-          // if (jobId && (i % 5 === 0 || i === mediaPosts.length - 1)) {
-          //   const progress = 15 + ((i + 1) / mediaPosts.length) * 70;
-          //   this.instagramSyncGateway.emitSyncProgress(
-          //     userId,
-          //     userType,
-          //     actualJobId,
-          //     Math.floor(progress),
-          //     `Processing post ${i + 1} of ${mediaPosts.length}...`
-          //   );
-          // }
+          if (jobId && (i % 5 === 0 || i === mediaPosts.length - 1)) {
+            const progress = 15 + ((i + 1) / mediaPosts.length) * 70;
+            this.instagramSyncGateway.emitSyncProgress(
+              userId,
+              userType,
+              actualJobId,
+              Math.floor(progress),
+              `Processing post ${i + 1} of ${mediaPosts.length}...`
+            );
+          }
 
           // Rate limiting: wait 100ms between requests to avoid API throttling
           await new Promise(resolve => setTimeout(resolve, 100));
@@ -1231,15 +1253,15 @@ export class InstagramService {
       console.log(`   ✅ Insights sync completed: ${results.synced} synced, ${results.failed} failed\n`);
 
       // Emit 90% - Creating snapshot
-      // if (jobId) {
-      //   this.instagramSyncGateway.emitSyncProgress(
-      //     userId,
-      //     userType,
-      //     actualJobId,
-      //     90,
-      //     'Creating performance snapshot...'
-      //   );
-      // }
+      if (jobId) {
+        this.instagramSyncGateway.emitSyncProgress(
+          userId,
+          userType,
+          actualJobId,
+          90,
+          'Creating performance snapshot...'
+        );
+      }
 
       // STEP 5: Create snapshot(s) from stored data
       console.log(`📊 STEP 5: Creating snapshot(s) from stored media insights...`);
@@ -1307,15 +1329,15 @@ export class InstagramService {
       }
 
       // Emit 95% - Calculating growth
-      // if (jobId) {
-      //   this.instagramSyncGateway.emitSyncProgress(
-      //     userId,
-      //     userType,
-      //     actualJobId,
-      //     95,
-      //     'Analyzing growth metrics...'
-      //   );
-      // }
+      if (jobId) {
+        this.instagramSyncGateway.emitSyncProgress(
+          userId,
+          userType,
+          actualJobId,
+          95,
+          'Analyzing growth metrics...'
+        );
+      }
 
       // STEP 6: Calculate growth metrics
       console.log(`\n📈 STEP 6: Calculating growth metrics...`);
@@ -1465,36 +1487,36 @@ export class InstagramService {
       }
 
       // Emit 100% - Complete
-      // if (jobId) {
-      //   this.instagramSyncGateway.emitSyncComplete(
-      //     userId,
-      //     userType,
-      //     actualJobId,
-      //     {
-      //       totalPosts: results.totalPosts,
-      //       synced: results.synced,
-      //       failed: results.failed,
-      //       snapshotId: snapshot2Data?.snapshotId || null,
-      //       syncNumber: isInitialSnapshot ? 2 : syncNumber,
-      //     }
-      //   );
-      // }
+      if (jobId) {
+        this.instagramSyncGateway.emitSyncComplete(
+          userId,
+          userType,
+          actualJobId,
+          {
+            totalPosts: results.totalPosts,
+            synced: results.synced,
+            failed: results.failed,
+            snapshotId: snapshot2Data?.snapshotId || null,
+            syncNumber: isInitialSnapshot ? 2 : syncNumber,
+          }
+        );
+      }
 
       return response;
 
     } catch (error) {
       // Emit error event
-      // if (jobId) {
-      //   this.instagramSyncGateway.emitSyncError(
-      //     userId,
-      //     userType,
-      //     actualJobId,
-      //     {
-      //       message: error instanceof Error ? error.message : 'Unknown error',
-      //       code: error instanceof BadRequestException ? (error.getResponse() as any)?.error || 'SYNC_ERROR' : 'SYNC_ERROR',
-      //     }
-      //   );
-      // }
+      if (jobId) {
+        this.instagramSyncGateway.emitSyncError(
+          userId,
+          userType,
+          actualJobId,
+          {
+            message: error instanceof Error ? error.message : 'Unknown error',
+            code: error instanceof BadRequestException ? (error.getResponse() as any)?.error || 'SYNC_ERROR' : 'SYNC_ERROR',
+          }
+        );
+      }
 
       // Re-throw BadRequestException (like throttle errors)
       if (error instanceof BadRequestException) {
@@ -2140,6 +2162,41 @@ export class InstagramService {
         throw new NotFoundException(`Brand with ID ${userId} not found`);
       }
       return user;
+    }
+  }
+
+  /**
+   * Create a placeholder sync record to indicate sync is in progress
+   * This prevents syncNeeded from being true while async sync is running
+   * @param userId - The user's ID (brand or influencer)
+   * @param userType - Type of user ('brand' or 'influencer')
+   */
+  async createPlaceholderSyncRecord(userId: number, userType: UserType): Promise<void> {
+    try {
+      const user = await this.getUser(userId, userType);
+
+      if (!user.instagramAccessToken || !user.instagramUserId) {
+        throw new BadRequestException('No Instagram account connected');
+      }
+
+      console.log(`📝 Creating placeholder sync record for ${userType} ${userId}...`);
+
+      // Create a minimal placeholder record with just syncDate to indicate sync started
+      // This will make getInstagramSyncStatus return syncNeeded = false
+      const placeholder = await this.instagramProfileAnalysisModel.create({
+        influencerId: userType === 'influencer' ? userId : undefined,
+        brandId: userType === 'brand' ? userId : undefined,
+        instagramUserId: user.instagramUserId,
+        instagramUsername: user.instagramUsername,
+        syncDate: new Date(), // This is the key field that getInstagramSyncStatus checks
+        postsAnalyzed: 0,
+        syncNumber: 0, // Placeholder sync number, will be replaced by actual sync
+      });
+
+      console.log(`✅ Placeholder record created successfully with ID: ${placeholder.id}`);
+    } catch (error) {
+      console.error(`❌ Failed to create placeholder sync record:`, error);
+      // Don't throw - let the sync continue even if placeholder fails
     }
   }
 
@@ -3099,22 +3156,22 @@ export class InstagramService {
   async syncAllInsights(
     userId: number,
     userType: UserType,
-    //jobId?: string,
+    jobId?: string,
   ): Promise<any> {
     // Generate jobId if not provided (for backward compatibility)
-    // const actualJobId = jobId || `sync-${userId}-${Date.now()}`;
+    const actualJobId = jobId || `sync-${userId}-${Date.now()}`;
 
-    // try {
-    //   // Emit: Starting sync (0%)
-    //   if (jobId) {
-    //     this.instagramSyncGateway.emitSyncProgress(
-    //       userId,
-    //       userType,
-    //       actualJobId,
-    //       0,
-    //       'Starting Instagram profile sync...',
-    //     );
-    //   }
+    try {
+      // Emit: Starting sync (0%)
+      if (jobId) {
+        this.instagramSyncGateway.emitSyncProgress(
+          userId,
+          userType,
+          actualJobId,
+          0,
+          'Starting Instagram profile sync...',
+        );
+      }
 
       const user = await this.getUser(userId, userType);
 
@@ -3218,15 +3275,15 @@ export class InstagramService {
     }
 
     // Emit: Profile fetched (25%)
-    // if (jobId) {
-    //   this.instagramSyncGateway.emitSyncProgress(
-    //     userId,
-    //     userType,
-    //     actualJobId,
-    //     25,
-    //     'Profile data fetched. Creating snapshots...',
-    //   );
-    // }
+    if (jobId) {
+      this.instagramSyncGateway.emitSyncProgress(
+        userId,
+        userType,
+        actualJobId,
+        25,
+        'Profile data fetched. Creating snapshots...',
+      );
+    }
 
     // STEP 3: Create snapshot(s)
     let snapshot1Data: any = null;
@@ -3359,15 +3416,15 @@ export class InstagramService {
     }
 
     // Emit: Snapshots created (50%)
-    // if (jobId) {
-    //   this.instagramSyncGateway.emitSyncProgress(
-    //     userId,
-    //     userType,
-    //     actualJobId,
-    //     50,
-    //     'Fetching audience demographics...',
-    //   );
-    // }
+    if (jobId) {
+      this.instagramSyncGateway.emitSyncProgress(
+        userId,
+        userType,
+        actualJobId,
+        50,
+        'Fetching audience demographics...',
+      );
+    }
 
     // STEP 5: Fetch additional insights (demographics, geographic data, etc.)
     let demographicsData: any = null;
@@ -3439,15 +3496,15 @@ export class InstagramService {
     }
 
     // Emit: Demographics and geographic data fetched (75%)
-    // if (jobId) {
-    //   this.instagramSyncGateway.emitSyncProgress(
-    //     userId,
-    //     userType,
-    //     actualJobId,
-    //     75,
-    //     'Updating snapshots with audience insights...',
-    //   );
-    // }
+    if (jobId) {
+      this.instagramSyncGateway.emitSyncProgress(
+        userId,
+        userType,
+        actualJobId,
+        75,
+        'Updating snapshots with audience insights...',
+      );
+    }
 
     // STEP 5: Update snapshots with demographics and geographic data
     if (demographicsData?.status === 'success' && demographicsData.data) {
@@ -3588,39 +3645,39 @@ export class InstagramService {
     }
 
     // Emit: Complete (100%)
-    // if (jobId) {
-    //   this.instagramSyncGateway.emitSyncComplete(
-    //     userId,
-    //     userType,
-    //     actualJobId,
-    //     {
-    //       snapshotsCreated: isInitialSnapshot ? 2 : 1,
-    //       syncNumber: isInitialSnapshot ? 2 : syncNumber,
-    //       hasDemographics: demographicsData?.status === 'success',
-    //       hasGeographicData: geographicData?.status === 'success',
-    //       hasGrowthComparison: growthComparison !== null,
-    //     },
-    //   );
-    // }
+    if (jobId) {
+      this.instagramSyncGateway.emitSyncComplete(
+        userId,
+        userType,
+        actualJobId,
+        {
+          snapshotsCreated: isInitialSnapshot ? 2 : 1,
+          syncNumber: isInitialSnapshot ? 2 : syncNumber,
+          hasDemographics: demographicsData?.status === 'success',
+          hasGeographicData: geographicData?.status === 'success',
+          hasGrowthComparison: growthComparison !== null,
+        },
+      );
+    }
 
     return response;
-    // } catch (error) {
-    //   // Emit error
-    //   if (jobId) {
-    //     this.instagramSyncGateway.emitSyncError(
-    //       userId,
-    //       userType,
-    //       actualJobId,
-    //       {
-    //         message: error instanceof Error ? error.message : 'Unknown error',
-    //         code: error instanceof BadRequestException ?
-    //           (error.getResponse() as any)?.error || 'SYNC_ERROR' : 'SYNC_ERROR',
-    //       },
-    //     );
-    //   }
+    } catch (error) {
+      // Emit error
+      if (jobId) {
+        this.instagramSyncGateway.emitSyncError(
+          userId,
+          userType,
+          actualJobId,
+          {
+            message: error instanceof Error ? error.message : 'Unknown error',
+            code: error instanceof BadRequestException ?
+              (error.getResponse() as any)?.error || 'SYNC_ERROR' : 'SYNC_ERROR',
+          },
+        );
+      }
 
-    //   throw error;
-    // }
+      throw error;
+    }
   }
 
 }

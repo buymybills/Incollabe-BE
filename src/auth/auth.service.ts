@@ -27,11 +27,11 @@ import { EmailService } from '../shared/email.service';
 import { S3Service } from '../shared/s3.service';
 import { LoggerService } from '../shared/services/logger.service';
 import { EncryptionService } from '../shared/services/encryption.service';
-import { SmsService } from '../shared/sms.service';
 import { SignupFiles } from '../types/file-upload.types';
 import { BrandInitialSignupDto } from './dto/brand-initial-signup.dto';
 import { BrandLoginDto } from './dto/brand-login.dto';
 import { BrandProfileCompletionDto } from './dto/brand-profile-completion.dto';
+import { BrandResendOtpDto } from './dto/brand-resend-otp.dto';
 import { BrandSignupDto } from './dto/brand-signup.dto';
 import { BrandVerifyOtpDto } from './dto/brand-verify-otp.dto';
 import { CheckUsernameDto } from './dto/check-username.dto';
@@ -85,7 +85,6 @@ export class AuthService {
     @InjectModel(CompanyType)
     private readonly companyTypeModel: typeof CompanyType,
     private readonly configService: ConfigService,
-    private readonly smsService: SmsService,
     private readonly emailService: EmailService,
     private readonly s3Service: S3Service,
     private readonly loggerService: LoggerService,
@@ -252,10 +251,10 @@ export class AuthService {
       expiresAt: expiresAt.toISOString(),
     });
 
-    // Send OTP via SMS only in production environment
+    // Send OTP via WhatsApp only in production environment
     if (!isStaging) {
-      await this.smsService.sendOtp(formattedPhone, code);
-      this.loggerService.info(`📱 OTP sent via SMS to ${formattedPhone}`);
+      await this.whatsappService.sendOTP(formattedPhone, code);
+      this.loggerService.info(`📱 OTP sent via WhatsApp to ${formattedPhone}`);
     } else {
       this.loggerService.info(`🧪 Staging OTP for ${formattedPhone}: ${code}`);
     }
@@ -1509,6 +1508,39 @@ export class AuthService {
         isActive: brand.isActive,
         niches: brand.niches || [],
       },
+    };
+  }
+
+  async resendBrandOtp(email: string) {
+    // Normalize email to lowercase for case-insensitive comparison
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Check if there's an active temp session for this email
+    const tempSessionKey = `temp:brand:${normalizedEmail}`;
+    const tempSessionData = await this.redisService.getClient().get(tempSessionKey);
+
+    if (!tempSessionData) {
+      throw new BadRequestException(
+        'No active OTP session found. Please login again to request a new OTP.',
+      );
+    }
+
+    // Parse the session data to get brandId and device info
+    const sessionData = JSON.parse(tempSessionData);
+
+    // Generate and store a new OTP
+    const otp = await this.generateAndStoreOtp(normalizedEmail, {
+      brandId: sessionData.brandId,
+      deviceId: sessionData.deviceId,
+      userAgent: sessionData.userAgent,
+    });
+
+    // Send the OTP via email
+    await this.emailService.sendBrandOtp(normalizedEmail, otp);
+
+    return {
+      message: 'OTP resent successfully to your email address.',
+      email: normalizedEmail,
     };
   }
 

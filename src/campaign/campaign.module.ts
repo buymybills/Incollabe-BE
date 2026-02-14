@@ -1,5 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
+import { BullModule } from '@nestjs/bull';
 import { CampaignController } from './campaign.controller';
 import { CampaignService } from './campaign.service';
 import { CampaignQueryService } from './services/campaign-query.service';
@@ -25,6 +26,10 @@ import { InviteOnlyCampaignInvoice } from './models/invite-only-campaign-invoice
 import { PaymentStatusCheckerService } from './services/payment-status-checker.service';
 import { Post } from '../post/models/post.model';
 import { AdminModule } from '../admin/admin.module';
+import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
+import { InstagramMediaInsight } from '../shared/models/instagram-media-insight.model';
+import { MaxCampaignScoringProcessor } from './queues/max-campaign-scoring.processor';
+import { MaxCampaignScoringQueueService } from './services/max-campaign-scoring-queue.service';
 
 @Module({
   imports: [
@@ -46,7 +51,12 @@ import { AdminModule } from '../admin/admin.module';
       MaxCampaignInvoice,
       InviteOnlyCampaignInvoice,
       Post,
+      InstagramProfileAnalysis,
+      InstagramMediaInsight,
     ]),
+    BullModule.registerQueue({
+      name: 'max-campaign-scoring',
+    }),
     SharedModule,
     forwardRef(() => AdminModule),
   ],
@@ -57,7 +67,14 @@ import { AdminModule } from '../admin/admin.module';
     MaxCampaignPaymentService,
     InviteOnlyPaymentService,
     PaymentStatusCheckerService,
+    MaxCampaignScoringQueueService,
+    MaxCampaignScoringProcessor,
   ],
-  exports: [CampaignService, MaxCampaignPaymentService, InviteOnlyPaymentService],
+  exports: [
+    CampaignService,
+    MaxCampaignPaymentService,
+    InviteOnlyPaymentService,
+    MaxCampaignScoringQueueService,
+  ],
 })
 export class CampaignModule {}

@@ -38,7 +38,7 @@ export class InviteOnlyCampaignInvoice extends Model {
   @Column({
     type: DataType.STRING,
     unique: true,
-    allowNull: false,
+    allowNull: true,
     field: 'invoice_number', // Maps to existing snake_case DB column
   })
   declare invoiceNumber: string;

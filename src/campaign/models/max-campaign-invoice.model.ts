@@ -37,7 +37,7 @@ export class MaxCampaignInvoice extends Model {
   @Column({
     type: DataType.STRING,
     unique: true,
-    allowNull: false,
+    allowNull: true,
   })
   declare invoiceNumber: string;
 

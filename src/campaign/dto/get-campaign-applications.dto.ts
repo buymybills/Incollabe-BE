@@ -148,7 +148,7 @@ export class GetCampaignApplicationsDto {
     'followers_high_low',
     'followers_low_high',
     'campaign_charges_lowest',
-    //'ai_score',
+    'ai_score',
   ])
   sortBy?: string = 'application_new_old';
 

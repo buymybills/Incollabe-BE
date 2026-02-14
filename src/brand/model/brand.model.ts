@@ -58,6 +58,7 @@ export interface BrandCreationAttributes {
   isActive?: boolean;
   isVerified?: boolean;
   isTopBrand?: boolean;
+  aiCreditsRemaining?: number;
 }
 
 @Table({ tableName: 'brands', timestamps: true, paranoid: true })
@@ -389,6 +390,14 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
     defaultValue: false,
   })
   declare isTopBrand: boolean;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 2,
+    field: 'ai_credits_remaining',
+  })
+  declare aiCreditsRemaining: number;
 
   @BelongsToMany(() => Niche, () => BrandNiche)
   declare niches: Niche[];

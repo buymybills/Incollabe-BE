@@ -50,6 +50,7 @@ import { City } from '../shared/models/city.model';
 import { Brand } from '../brand/model/brand.model';
 import { GetOpenCampaignsDto } from '../campaign/dto/get-open-campaigns.dto';
 import { MyApplicationResponseDto } from '../campaign/dto/my-application-response.dto';
+import { MaxCampaignScoringQueueService } from '../campaign/services/max-campaign-scoring-queue.service';
 import { CreateExperienceDto } from './dto/create-experience.dto';
 import { UpdateExperienceDto } from './dto/update-experience.dto';
 import { Op, literal } from 'sequelize';
@@ -138,6 +139,7 @@ export class InfluencerService {
     private readonly instagramProfileAnalysisModel: typeof InstagramProfileAnalysis,
     // @Inject('HOME_PAGE_HISTORY_MODEL')
     // private readonly homePageHistoryModel: typeof HomePageHistory,
+    private readonly maxCampaignScoringQueueService: MaxCampaignScoringQueueService,
   ) {}
 
   /**
@@ -1744,6 +1746,50 @@ export class InfluencerService {
       status: ApplicationStatus.APPLIED,
     } as any);
 
+    // For MAX campaigns: queue background scoring only when Instagram data needs to be fetched.
+    // AI score depends on instagram_profile_analysis data created by syncAllMediaInsights +
+    // syncAllInsights. We skip queuing if:
+    //   - syncNumber 1 & 2 already exist (initial sync was done), AND
+    //   - the most recent snapshot is less than 15 days old (data is still fresh)
+    // Otherwise we queue so the background job fetches/refreshes the data first.
+    if (campaign.isMaxCampaign) {
+      const allSnapshots = await this.instagramProfileAnalysisModel.findAll({
+        where: { influencerId },
+        order: [['id', 'DESC']],
+        attributes: ['syncNumber', 'analysisPeriodEnd', 'createdAt'],
+      });
+
+      const validSnapshots = allSnapshots.filter((s) => s.syncNumber != null);
+      const initialSnapshots = validSnapshots.filter(
+        (s) => s.syncNumber === 1 || s.syncNumber === 2,
+      );
+      // syncNumber 1 & 2 are created once during the first-ever Instagram sync.
+      const hasInitialSnapshots = initialSnapshots.length >= 2;
+
+      // Even if initial snapshots exist, check if the latest snapshot is stale (> 15 days).
+      // Stale data means AI score would be calculated on outdated metrics — re-sync needed.
+      let isStale = false;
+      if (hasInitialSnapshots && validSnapshots[0]) {
+        const snapshotDate =
+          validSnapshots[0].analysisPeriodEnd || validSnapshots[0].createdAt;
+        const daysSince =
+          (Date.now() - new Date(snapshotDate).getTime()) / (1000 * 60 * 60 * 24);
+        isStale = daysSince >= 15;
+      }
+
+      // Queue if: initial sync never done OR latest data is stale
+      if (!hasInitialSnapshots || isStale) {
+        this.maxCampaignScoringQueueService
+          .queueInfluencerScoring(campaignId, [influencerId])
+          .catch((err) =>
+            console.error(
+              `Failed to queue MAX campaign scoring for influencer ${influencerId} on campaign ${campaignId}:`,
+              err,
+            ),
+          );
+      }
+    }
+
     // Send push notification to influencer about application confirmation asynchronously (fire-and-forget)
     const influencerFcmTokens = await this.deviceTokenService.getAllUserTokens(influencer.id, DeviceUserType.INFLUENCER);
     if (influencerFcmTokens && influencerFcmTokens.length > 0) {
@@ -1838,6 +1884,7 @@ export class InfluencerService {
               'numberOfInfluencers',
               'isActive',
               'isMaxCampaign',
+              // 'isInviteOnly',
               'createdAt',
               'updatedAt',
             ],
@@ -1867,6 +1914,14 @@ export class InfluencerService {
         deliverableFormat = appData.campaign.deliverables.map((d: any) => this.getDeliverableLabel(d.type));
       }
 
+      // Calculate promotionType based on campaign flags
+      // let promotionType: 'organic' | 'max' | 'invite_only' = 'organic';
+      // if (appData.campaign.isMaxCampaign) {
+      //   promotionType = 'max';
+      // } else if (appData.campaign.isInviteOnly) {
+      //   promotionType = 'invite_only';
+      // }
+
       // Destructure to exclude deliverables from campaign response
       const { deliverables, ...campaignWithoutDeliverables } = appData.campaign;
 
@@ -1881,6 +1936,7 @@ export class InfluencerService {
         campaign: {
           ...campaignWithoutDeliverables,
           deliverableFormat,
+          // promotionType,
         },
       };
     });
@@ -2357,10 +2413,9 @@ export class InfluencerService {
     let daysSinceLastSync: number | null = null;
 
     if (isConnected) {
-      // Fetch the latest Instagram profile analysis with non-null syncDate
-      // Filter out demographics-only records that don't have syncDate
+      // Fetch the latest Instagram profile analysis (exclude demographic-only records with no syncDate)
       const latestAnalysis = await this.instagramProfileAnalysisModel.findOne({
-        where: literal(`influencer_id = ${influencer.id} AND sync_date IS NOT NULL`),
+        where: { influencerId: influencer.id, syncDate: { [Op.not]: null as any } },
         order: [['syncDate', 'DESC']],
       });
 

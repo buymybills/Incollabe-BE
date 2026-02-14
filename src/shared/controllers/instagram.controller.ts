@@ -1147,12 +1147,12 @@ export class InstagramController {
    * Async version: Bulk sync all media insights with WebSocket progress
    * POST /instagram/sync-all-media-insights-async
    */
-  // @Public()
-  // @Post('sync-all-media-insights-async')
-  // @HttpCode(HttpStatus.OK)
-  // @ApiOperation({
-  //   summary: 'Bulk sync media insights with real-time WebSocket progress (Async)',
-  //   description: `Starts Instagram media sync in the background and returns a jobId immediately.
+  @Public()
+  @Post('sync-all-media-insights-async')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Bulk sync media insights with real-time WebSocket progress (Async)',
+    description: `Starts Instagram media sync in the background and returns a jobId immediately.
 
   //   **How it works:**
   //   1. **Returns immediately** - API responds in < 1 second with a jobId
@@ -1187,92 +1187,102 @@ export class InstagramController {
   //     }
   //   }
   //   \`\`\``
-  // })
-  // @ApiQuery({
-  //   name: 'user_id',
-  //   required: true,
-  //   description: 'User ID (influencer or brand ID)'
-  // })
-  // @ApiQuery({
-  //   name: 'user_type',
-  //   required: true,
-  //   enum: ['influencer', 'brand'],
-  //   description: 'User type: influencer or brand'
-  // })
-  // @ApiQuery({
-  //   name: 'limit',
-  //   required: false,
-  //   description: 'Number of posts to fetch from Instagram API (default: 50, max: 100)',
-  //   type: Number
-  // })
-  // @ApiResponse({
-  //   status: 200,
-  //   description: 'Sync job started successfully. Use jobId with WebSocket to track progress.',
-  // })
-  // @ApiResponse({
-  //   status: 400,
-  //   description: 'Invalid parameters'
-  // })
-  // async syncAllMediaInsightsAsync(
-  //   @Query('user_id') userId: string,
-  //   @Query('user_type') userType: string,
-  //   @Query('limit') limit?: string,
-  // ) {
-  //   if (!userId || !userType) {
-  //     throw new BadRequestException('user_id and user_type are required');
-  //   }
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'User ID (influencer or brand ID)'
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    enum: ['influencer', 'brand'],
+    description: 'User type: influencer or brand'
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of posts to fetch from Instagram API (default: 50, max: 100)',
+    type: Number
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Sync job started successfully. Use jobId with WebSocket to track progress.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid parameters'
+  })
+  async syncAllMediaInsightsAsync(
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
+    @Query('limit') limit?: string,
+  ) {
+    if (!userId || !userType) {
+      throw new BadRequestException('user_id and user_type are required');
+    }
 
-  //   if (!['influencer', 'brand'].includes(userType)) {
-  //     throw new BadRequestException('user_type must be either "influencer" or "brand"');
-  //   }
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException('user_type must be either "influencer" or "brand"');
+    }
 
-  //   const limitNum = limit ? parseInt(limit, 10) : 50;
+    const limitNum = limit ? parseInt(limit, 10) : 50;
 
-  //   // Ensure limit is within bounds
-  //   if (limitNum < 1 || limitNum > 100) {
-  //     throw new BadRequestException('limit must be between 1 and 100');
-  //   }
+    // Ensure limit is within bounds
+    if (limitNum < 1 || limitNum > 100) {
+      throw new BadRequestException('limit must be between 1 and 100');
+    }
 
-  //   // Generate unique job ID
-  //   const jobId = `media-sync-${userId}-${Date.now()}`;
+    // Generate unique job ID
+    const jobId = `media-sync-${userId}-${Date.now()}`;
 
-  //   // Start sync in background (don't await)
-  //   this.instagramService
-  //     .syncAllMediaInsights(
-  //       Number(userId),
-  //       userType as 'influencer' | 'brand',
-  //       limitNum,
-  //       jobId, // Pass jobId to enable WebSocket emissions
-  //     )
-  //     .catch((error) => {
-  //       console.error(`Background media sync failed for job ${jobId}:`, error);
-  //       // Error will be emitted via WebSocket by the service
-  //     });
+    // Create placeholder sync record IMMEDIATELY to prevent syncNeeded=true
+    // This ensures the influencer profile API shows syncNeeded=false while sync is running
+    await this.instagramService.createPlaceholderSyncRecord(
+      Number(userId),
+      userType as 'influencer' | 'brand',
+    );
 
-  //   // Return immediately with job info
-  //   return {
-  //     success: true,
-  //     jobId,
-  //     message: 'Media sync started. Connect to WebSocket for progress updates.',
-  //     socketNamespace: '/instagram-sync',
-  //     events: {
-  //       progress: `sync:${jobId}:progress`,
-  //       complete: `sync:${jobId}:complete`,
-  //       error: `sync:${jobId}:error`,
-  //     },
-  //   };
-  // }
+    // Start sync in background with a small delay to allow WebSocket connection
+    // This prevents race condition where events are emitted before client connects
+    setTimeout(() => {
+      this.instagramService
+        .syncAllMediaInsights(
+          Number(userId),
+          userType as 'influencer' | 'brand',
+          limitNum,
+          jobId, // Pass jobId to enable WebSocket emissions
+        )
+        .catch((error) => {
+          console.error(`Background media sync failed for job ${jobId}:`, error);
+          // Error will be emitted via WebSocket by the service
+        });
+    }, 1000); // Wait 1 second for WebSocket to connect
+
+    // Return immediately with job info
+    return {
+      success: true,
+      jobId,
+      message: 'Media sync started. Connect to WebSocket for progress updates.',
+      socketNamespace: '/instagram-sync',
+      events: {
+        progress: `sync:${jobId}:progress`,
+        complete: `sync:${jobId}:complete`,
+        error: `sync:${jobId}:error`,
+      },
+    };
+  }
 
   // /**
   //  * Async version: Comprehensive sync with WebSocket progress
   //  * POST /instagram/sync-all-insights-async
   //  */
-  // @Public()
-  // @Post('sync-all-insights-async')
-  // @HttpCode(HttpStatus.OK)
-  // @ApiOperation({
-  //   summary: 'Comprehensive Instagram sync with real-time WebSocket progress (Async)',
-  //   description: `Starts comprehensive Instagram profile sync in the background and returns a jobId immediately.
+  @Public()
+  @Post('sync-all-insights-async')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Comprehensive Instagram sync with real-time WebSocket progress (Async)',
+    description: `Starts comprehensive Instagram profile sync in the background and returns a jobId immediately.
 
   //   **How it works:**
   //   1. **Returns immediately** - API responds in < 1 second with a jobId
@@ -1313,66 +1323,76 @@ export class InstagramController {
   //     }
   //   }
   //   \`\`\``
-  // })
-  // @ApiQuery({
-  //   name: 'user_id',
-  //   required: true,
-  //   description: 'User ID (influencer or brand ID)'
-  // })
-  // @ApiQuery({
-  //   name: 'user_type',
-  //   required: true,
-  //   enum: ['influencer', 'brand'],
-  //   description: 'User type: influencer or brand'
-  // })
-  // @ApiResponse({
-  //   status: 200,
-  //   description: 'Sync job started successfully. Use jobId with WebSocket to track progress.',
-  // })
-  // @ApiResponse({
-  //   status: 400,
-  //   description: 'Invalid parameters'
-  // })
-  // async syncAllInsightsAsync(
-  //   @Query('user_id') userId: string,
-  //   @Query('user_type') userType: string,
-  // ) {
-  //   if (!userId || !userType) {
-  //     throw new BadRequestException('user_id and user_type are required');
-  //   }
+  })
+  @ApiQuery({
+    name: 'user_id',
+    required: true,
+    description: 'User ID (influencer or brand ID)'
+  })
+  @ApiQuery({
+    name: 'user_type',
+    required: true,
+    enum: ['influencer', 'brand'],
+    description: 'User type: influencer or brand'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Sync job started successfully. Use jobId with WebSocket to track progress.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid parameters'
+  })
+  async syncAllInsightsAsync(
+    @Query('user_id') userId: string,
+    @Query('user_type') userType: string,
+  ) {
+    if (!userId || !userType) {
+      throw new BadRequestException('user_id and user_type are required');
+    }
 
-  //   if (!['influencer', 'brand'].includes(userType)) {
-  //     throw new BadRequestException('user_type must be either "influencer" or "brand"');
-  //   }
+    if (!['influencer', 'brand'].includes(userType)) {
+      throw new BadRequestException('user_type must be either "influencer" or "brand"');
+    }
 
-  //   // Generate unique job ID
-  //   const jobId = `profile-sync-${userId}-${Date.now()}`;
+    // Generate unique job ID
+    const jobId = `profile-sync-${userId}-${Date.now()}`;
 
-  //   // Start sync in background (don't await)
-  //   this.instagramService
-  //     .syncAllInsights(
-  //       Number(userId),
-  //       userType as 'influencer' | 'brand',
-  //       jobId, // Pass jobId to enable WebSocket emissions
-  //     )
-  //     .catch((error) => {
-  //       console.error(`Background profile sync failed for job ${jobId}:`, error);
-  //       // Error will be emitted via WebSocket by the service
-  //     });
+    // Create placeholder sync record IMMEDIATELY to prevent syncNeeded=true
+    // This ensures the influencer profile API shows syncNeeded=false while sync is running
+    await this.instagramService.createPlaceholderSyncRecord(
+      Number(userId),
+      userType as 'influencer' | 'brand',
+    );
 
-  //   // Return immediately with job info
-  //   return {
-  //     success: true,
-  //     jobId,
-  //     message: 'Profile sync started. Connect to WebSocket for progress updates.',
-  //     socketNamespace: '/instagram-sync',
-  //     events: {
-  //       progress: `sync:${jobId}:progress`,
-  //       complete: `sync:${jobId}:complete`,
-  //       error: `sync:${jobId}:error`,
-  //     },
-  //   };
-  // }
+    // Start sync in background with a small delay to allow WebSocket connection
+    // This prevents race condition where events are emitted before client connects
+    setTimeout(() => {
+      this.instagramService
+        .syncAllInsights(
+          Number(userId),
+          userType as 'influencer' | 'brand',
+          jobId, // Pass jobId to enable WebSocket emissions
+        )
+        .catch((error) => {
+          console.error(`Background profile sync failed for job ${jobId}:`, error);
+          // Error will be emitted via WebSocket by the service
+        });
+    }, 1000); // Wait 1 second for WebSocket to connect
+
+    // Return immediately with job info
+    return {
+      success: true,
+      jobId,
+      message: 'Profile sync started. Connect to WebSocket for progress updates.',
+      socketNamespace: '/instagram-sync',
+      events: {
+        progress: `sync:${jobId}:progress`,
+        complete: `sync:${jobId}:complete`,
+        error: `sync:${jobId}:error`,
+      },
+    };
+  }
 
   /**
    * Get audience demographics

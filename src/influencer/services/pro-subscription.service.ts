@@ -138,14 +138,11 @@ export class ProSubscriptionService {
       totalTax = igst;
     }
 
-    // Generate invoice number
-    const invoiceNumber = await this.generateInvoiceNumber(influencerId);
-
-    // Create invoice with tax breakdown
+    // Create invoice with tax breakdown (invoice number will be generated after payment)
     let invoice;
     try {
       invoice = await this.proInvoiceModel.create({
-        invoiceNumber,
+        invoiceNumber: null, // Will be generated after successful payment
         subscriptionId: subscription.id,
         influencerId,
         amount: baseAmount,
@@ -254,8 +251,12 @@ export class ProSubscriptionService {
 
     const now = createDatabaseDate();
 
+    // Generate invoice number now that payment is successful
+    const invoiceNumber = await this.generateInvoiceNumber(invoice.influencerId);
+
     // Update invoice
     await invoice.update({
+      invoiceNumber,
       paymentStatus: InvoiceStatus.PAID,
       razorpayPaymentId: paymentId,
       paidAt: now,
@@ -805,30 +806,57 @@ export class ProSubscriptionService {
    * Format: MAXXINV-YYYYMM-SEQ
    * Example: MAXXINV-202601-1 (1st invoice in Jan 2026)
    */
+  /**
+   * Generate unique invoice number for Pro Subscription
+   * Format: INV-UYYMM-SEQ
+   * Example: INV-U2602-1 (1st invoice in Feb 2026)
+   */
   private async generateInvoiceNumber(influencerId: number): Promise<string> {
-    const year = new Date().getFullYear();
+    const year = String(new Date().getFullYear()).slice(-2); // Get last 2 digits of year
     const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    const prefix = `MAXXINV-${year}${month}-`;
+    const yearMonth = `${year}${month}`;
+    const currentPrefix = `INV-U${yearMonth}-`;
 
-    // Get the latest invoice number for this month (across all users)
-    const latestInvoice = await this.proInvoiceModel.findOne({
+    // Legacy format for continuity
+    const legacyPrefix = `MAXXINV-20${yearMonth}-`; // MAXXINV-202602-
+
+    // Check current format (INV-U2602-1)
+    const latestCurrentInvoice = await this.proInvoiceModel.findOne({
       where: {
         invoiceNumber: {
-          [Op.like]: `${prefix}%`,
+          [Op.like]: `${currentPrefix}%`,
+        },
+      },
+      order: [['createdAt', 'DESC']],
+    });
+
+    // Check legacy format (MAXXINV-202602-1)
+    const latestLegacyInvoice = await this.proInvoiceModel.findOne({
+      where: {
+        invoiceNumber: {
+          [Op.like]: `${legacyPrefix}%`,
         },
       },
       order: [['createdAt', 'DESC']],
     });
 
     let nextNumber = 1;
-    if (latestInvoice) {
-      // Extract the sequence number (e.g., "MAXXINV-202601-1" -> 1)
-      const parts = latestInvoice.invoiceNumber.split('-');
+
+    // Extract sequence from current format (INV-U2602-15)
+    if (latestCurrentInvoice) {
+      const parts = latestCurrentInvoice.invoiceNumber.split('-');
       const lastNumber = parseInt(parts[2], 10);
-      nextNumber = lastNumber + 1;
+      nextNumber = Math.max(nextNumber, lastNumber + 1);
     }
 
-    return `${prefix}${nextNumber}`;
+    // Extract sequence from legacy format (MAXXINV-202602-14)
+    if (latestLegacyInvoice) {
+      const parts = latestLegacyInvoice.invoiceNumber.split('-');
+      const lastNumber = parseInt(parts[2], 10);
+      nextNumber = Math.max(nextNumber, lastNumber + 1);
+    }
+
+    return `${currentPrefix}${nextNumber}`;
   }
 
   /**
@@ -1579,6 +1607,12 @@ export class ProSubscriptionService {
    * Handle payment-specific webhooks
    */
   private async handlePaymentWebhook(event: string, payload: any) {
+    // Skip events that don't have actual payment data (like payment.downtime.*)
+    if (!payload.payment?.entity?.id && !payload.payment?.entity?.order_id) {
+      console.log(`⏭️ Skipping ${event} - not a payment transaction event`);
+      return { success: true, message: 'Event type not applicable to invoices' };
+    }
+
     // Find the invoice by razorpayPaymentId or razorpayOrderId
     const invoice = await this.proInvoiceModel.findOne({
       where: {

@@ -12,7 +12,6 @@ import { BrandNiche } from '../brand/model/brand-niche.model';
 import { CustomNiche } from './model/custom-niche.model';
 import { CompanyType } from '../shared/models/company-type.model';
 import { RedisService } from '../redis/redis.service';
-import { SmsService } from '../shared/sms.service';
 import { EmailService } from '../shared/email.service';
 import { S3Service } from '../shared/s3.service';
 import { LoggerService } from '../shared/services/logger.service';
@@ -75,10 +74,6 @@ const mockRedisService = {
     exists: jest.fn().mockResolvedValue(0),
     ttl: jest.fn().mockResolvedValue(3600),
   })),
-};
-
-const mockSmsService = {
-  sendOtp: jest.fn(),
 };
 
 const mockEmailService = {
@@ -169,7 +164,7 @@ describe('AuthService', () => {
   let influencerNicheModel: any;
   let brandNicheModel: any;
   let redisService: any;
-  let smsService: any;
+  let whatsappService: any;
   let emailService: any;
   let s3Service: any;
   let jwtService: any;
@@ -231,10 +226,6 @@ describe('AuthService', () => {
           useValue: mockRedisService,
         },
         {
-          provide: SmsService,
-          useValue: mockSmsService,
-        },
-        {
           provide: EmailService,
           useValue: mockEmailService,
         },
@@ -277,7 +268,7 @@ describe('AuthService', () => {
     influencerNicheModel = module.get(getModelToken(InfluencerNiche));
     brandNicheModel = module.get(getModelToken(BrandNiche));
     redisService = module.get(RedisService);
-    smsService = module.get(SmsService);
+    whatsappService = module.get(WhatsAppService);
     emailService = module.get(EmailService);
     s3Service = module.get(S3Service);
     jwtService = module.get(JwtService);
@@ -365,13 +356,13 @@ describe('AuthService', () => {
       redisService.get.mockResolvedValue(null); // No cooldown
       otpModel.destroy.mockResolvedValue(1);
       otpModel.create.mockResolvedValue({ otp: '123456' });
-      smsService.sendOtp.mockResolvedValue(true);
+      whatsappService.sendOTP.mockResolvedValue(true);
 
       const result = await service.requestOtp(requestOtpDto);
 
       expect(result).toBe('OTP sent to +919876543210');
       expect(otpModel.create).toHaveBeenCalled();
-      expect(smsService.sendOtp).toHaveBeenCalled();
+      expect(whatsappService.sendOTP).toHaveBeenCalled();
     });
 
     it('should throw ForbiddenException if cooldown is active', async () => {
@@ -857,7 +848,7 @@ describe('AuthService', () => {
       expect(service['nicheModel']).toBeDefined();
       expect(service['otpModel']).toBeDefined();
       expect(service['redisService']).toBeDefined();
-      expect(service['smsService']).toBeDefined();
+      expect(service['whatsappService']).toBeDefined();
       expect(service['emailService']).toBeDefined();
       expect(service['s3Service']).toBeDefined();
       expect(service['jwtService']).toBeDefined();

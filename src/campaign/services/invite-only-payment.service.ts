@@ -118,12 +118,9 @@ export class InviteOnlyPaymentService {
       taxAmount = igst;
     }
 
-    // Generate invoice number
-    const invoiceNumber = await this.generateInvoiceNumber();
-
-    // Create invoice with tax breakdown
+    // Create invoice with tax breakdown (invoice number generated after payment)
     const invoice = await this.inviteOnlyInvoiceModel.create({
-      invoiceNumber,
+      invoiceNumber: null,
       campaignId,
       brandId,
       amount: baseAmount,
@@ -242,8 +239,12 @@ export class InviteOnlyPaymentService {
 
     const now = createDatabaseDate();
 
+    // Generate invoice number now that payment is confirmed
+    const invoiceNumber = await this.generateInvoiceNumber();
+
     // Update invoice
     await invoice.update({
+      invoiceNumber,
       paymentStatus: InvoiceStatus.PAID,
       razorpayPaymentId: paymentId,
       paidAt: now,
@@ -444,29 +445,44 @@ export class InviteOnlyPaymentService {
 
   /**
    * Generate unique invoice number for Invite-Only Campaign
-   * Format: MAXXINV-IVTCMGN-YYYYMM-SEQ
-   * Example: MAXXINV-IVTCMGN-202602-15 (15th invoice in Feb 2026)
+   * Format: INV-IYYMM-SEQ
+   * Example: INV-I2602-1 (1st invoice in Feb 2026)
    */
   private async generateInvoiceNumber(): Promise<string> {
-    const year = new Date().getFullYear();
+    const year = String(new Date().getFullYear()).slice(-2); // Get last 2 digits of year
     const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    const newPrefix = `MAXXINV-IVTCMGN-${year}${month}-`;
-    const oldPrefix = `MAXXINV-${year}${month}-`; // Legacy format for continuity
+    const yearMonth = `${year}${month}`;
+    const currentPrefix = `INV-I${yearMonth}-`;
 
-    // Check BOTH new and old formats to ensure sequence continuity
-    const latestNewInvoice = await this.inviteOnlyInvoiceModel.findOne({
+    // Legacy formats for continuity
+    const legacyPrefix1 = `MAXXINV-IVTCMGN-20${yearMonth}-`; // MAXXINV-IVTCMGN-202602-
+    const legacyPrefix2 = `MAXXINV-20${yearMonth}-`; // MAXXINV-202602-
+
+    // Check current format
+    const latestCurrentInvoice = await this.inviteOnlyInvoiceModel.findOne({
       where: {
         invoiceNumber: {
-          [Op.like]: `${newPrefix}%`,
+          [Op.like]: `${currentPrefix}%`,
         },
       },
       order: [['createdAt', 'DESC']],
     });
 
-    const latestOldInvoice = await this.inviteOnlyInvoiceModel.findOne({
+    // Check legacy format 1 (MAXXINV-IVTCMGN-202602-15)
+    const latestLegacy1Invoice = await this.inviteOnlyInvoiceModel.findOne({
       where: {
         invoiceNumber: {
-          [Op.like]: `${oldPrefix}%`,
+          [Op.like]: `${legacyPrefix1}%`,
+        },
+      },
+      order: [['createdAt', 'DESC']],
+    });
+
+    // Check legacy format 2 (MAXXINV-202602-14)
+    const latestLegacy2Invoice = await this.inviteOnlyInvoiceModel.findOne({
+      where: {
+        invoiceNumber: {
+          [Op.like]: `${legacyPrefix2}%`,
         },
       },
       order: [['createdAt', 'DESC']],
@@ -474,20 +490,27 @@ export class InviteOnlyPaymentService {
 
     let nextNumber = 1;
 
-    // Extract sequence from new format (MAXXINV-IVTCMGN-202602-15)
-    if (latestNewInvoice) {
-      const parts = latestNewInvoice.invoiceNumber.split('-');
-      const lastNumber = parseInt(parts[3], 10);
-      nextNumber = Math.max(nextNumber, lastNumber + 1);
-    }
-
-    // Extract sequence from old format (MAXXINV-202602-14) to ensure continuity
-    if (latestOldInvoice) {
-      const parts = latestOldInvoice.invoiceNumber.split('-');
+    // Extract sequence from current format (INV-I2602-15)
+    if (latestCurrentInvoice) {
+      const parts = latestCurrentInvoice.invoiceNumber.split('-');
       const lastNumber = parseInt(parts[2], 10);
       nextNumber = Math.max(nextNumber, lastNumber + 1);
     }
 
-    return `${newPrefix}${nextNumber}`;
+    // Extract sequence from legacy format 1 (MAXXINV-IVTCMGN-202602-15)
+    if (latestLegacy1Invoice) {
+      const parts = latestLegacy1Invoice.invoiceNumber.split('-');
+      const lastNumber = parseInt(parts[3], 10);
+      nextNumber = Math.max(nextNumber, lastNumber + 1);
+    }
+
+    // Extract sequence from legacy format 2 (MAXXINV-202602-14)
+    if (latestLegacy2Invoice) {
+      const parts = latestLegacy2Invoice.invoiceNumber.split('-');
+      const lastNumber = parseInt(parts[2], 10);
+      nextNumber = Math.max(nextNumber, lastNumber + 1);
+    }
+
+    return `${currentPrefix}${nextNumber}`;
   }
 }

@@ -36,45 +36,59 @@ export class CampaignApplication extends Model<CampaignApplication> {
     type: DataType.INTEGER,
     allowNull: false,
   })
-  campaignId: number;
+  declare campaignId: number;
 
   @ForeignKey(() => Influencer)
   @Column({
     type: DataType.INTEGER,
     allowNull: false,
   })
-  influencerId: number;
+  declare influencerId: number;
 
   @Column({
     type: DataType.ENUM(...Object.values(ApplicationStatus)),
     allowNull: false,
     defaultValue: ApplicationStatus.APPLIED,
   })
-  status: ApplicationStatus;
+  declare status: ApplicationStatus;
 
   @Column({
     type: DataType.TEXT,
     allowNull: true,
   })
-  coverLetter: string;
+  declare coverLetter: string;
 
   @Column({
     type: DataType.TEXT,
     allowNull: true,
   })
-  proposalMessage: string;
+  declare proposalMessage: string;
 
   @Column({
     type: DataType.DATE,
     allowNull: true,
   })
-  reviewedAt: Date;
+  declare reviewedAt: Date;
 
   @Column({
     type: DataType.TEXT,
     allowNull: true,
   })
-  reviewNotes: string;
+  declare reviewNotes: string;
+
+  @Column({
+    type: DataType.FLOAT,
+    allowNull: true,
+    field: 'ai_score',
+  })
+  declare aiScore: number | null;
+
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+    field: 'ai_score_data',
+  })
+  declare aiScoreData: Record<string, any> | null;
 
   @CreatedAt
   declare createdAt: Date;
