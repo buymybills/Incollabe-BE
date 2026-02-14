@@ -16,6 +16,15 @@ export interface InfluencerData {
     averageLikes: number;
     engagementRate: number;
   };
+  // For audience quality scoring
+  instagramFollowsCount?: number;
+  instagramMediaCount?: number;
+  // For growth & consistency scoring (sorted ASC by syncNumber)
+  profileSnapshots?: Array<{
+    syncNumber: number;
+    totalFollowers: number;
+    avgEngagementRate: number;
+  }>;
 }
 
 export interface CampaignData {
@@ -32,7 +41,9 @@ export interface AIScoreResult {
   overall: number;
   nicheMatch: number;
   audienceRelevance: number;
+  audienceQuality: number;
   engagementRate: number;
+  growthConsistency: number;
   locationMatch: number;
   pastPerformance: number;
   contentQuality: number;

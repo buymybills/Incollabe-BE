@@ -1853,7 +1853,7 @@ export class CampaignService {
     const allAnalyses = await this.instagramProfileAnalysisModel.findAll({
       where: { influencerId: influencer.id },
       order: [['syncNumber', 'DESC']],
-      attributes: ['topNiches', 'nichePerformance', 'postsAnalyzed', 'syncNumber', 'syncDate'],
+      attributes: ['aiNicheAnalysis', 'postsAnalyzed', 'syncNumber', 'syncDate', 'totalFollowers', 'avgEngagementRate'],
     });
     // Filter out incomplete snapshots and take last 5
     const instagramAnalyses = allAnalyses.filter(s => s.syncNumber != null).slice(0, 5);
@@ -1863,7 +1863,7 @@ export class CampaignService {
     let totalPostsAnalyzed = 0;
 
     if (instagramAnalyses && instagramAnalyses.length > 0) {
-      const nicheAggregation = this.aggregateNichesFromSnapshots(instagramAnalyses);
+      const nicheAggregation = this.aggregateNichesFromAI(instagramAnalyses);
       influencerNiches = nicheAggregation.niches;
       totalPostsAnalyzed = nicheAggregation.totalPosts;
     }
@@ -1879,6 +1879,15 @@ export class CampaignService {
     // Get campaign cities
     const campaignCities = campaign.isPanIndia ? ['All India'] : await this.getCampaignCities(campaign.id);
 
+    // Build profile snapshots for growth & consistency scoring
+    const profileSnapshots = instagramAnalyses
+      .filter(s => s.syncNumber != null)
+      .map(s => ({
+        syncNumber: s.syncNumber,
+        totalFollowers: s.totalFollowers || 0,
+        avgEngagementRate: Number(s.avgEngagementRate) || 0,
+      }));
+
     // Prepare data for AI scoring
     const influencerData = {
       id: influencer.id,
@@ -1893,6 +1902,10 @@ export class CampaignService {
       postPerformance: postPerformance || undefined,
       postsAnalyzed: totalPostsAnalyzed, // Total posts across all analyzed snapshots
       snapshotsAnalyzed: instagramAnalyses?.length || 0,
+      // New fields for audience quality & growth scoring
+      instagramFollowsCount: influencer.instagramFollowsCount || 0,
+      instagramMediaCount: influencer.instagramMediaCount || 0,
+      profileSnapshots,
     };
 
     const campaignData = {
@@ -1918,7 +1931,9 @@ export class CampaignService {
       scoreBreakdown: {
         nicheMatch: aiResult.nicheMatch,
         audienceRelevance: aiResult.audienceRelevance,
+        audienceQuality: aiResult.audienceQuality,
         engagementRate: aiResult.engagementRate,
+        growthConsistency: aiResult.growthConsistency,
         locationMatch: aiResult.locationMatch,
         pastPerformance: aiResult.pastPerformance,
         contentQuality: aiResult.contentQuality,
@@ -1933,7 +1948,11 @@ export class CampaignService {
    * Each snapshot covers 15 days (or 30 days for initial 2 snapshots)
    * This gives us a comprehensive view of influencer's content over time
    */
-  private aggregateNichesFromSnapshots(snapshots: any[]): {
+  /**
+   * Aggregate niches from AI analysis (aiNicheAnalysis JSON column)
+   * Extracts primaryNiche and secondaryNiches from each snapshot
+   */
+  private aggregateNichesFromAI(snapshots: any[]): {
     niches: string[];
     totalPosts: number;
   } {
@@ -1941,68 +1960,39 @@ export class CampaignService {
       return { niches: [], totalPosts: 0 };
     }
 
-    // Map to track niche data: niche -> { count, weightedScore, appearances }
-    const nicheMap = new Map<
-      string,
-      { totalCount: number; weightedScore: number; appearances: number }
-    >();
-
+    // Map to track niche frequency across snapshots
+    const nicheMap = new Map<string, number>();
     let totalPostsAnalyzed = 0;
 
-    // Process each snapshot with decreasing weight (recent = more important)
     snapshots.forEach((snapshot, index) => {
-      // Weight: 1.0 for most recent, 0.8 for next, 0.6, 0.4, 0.2
+      // Weight: recent snapshots are more important (1.0, 0.8, 0.6, 0.4, 0.2)
       const weight = 1.0 - index * 0.2;
 
-      if (snapshot.topNiches && Array.isArray(snapshot.topNiches)) {
-        snapshot.topNiches.forEach((nicheData: any) => {
-          const niche = nicheData.niche;
-          const count = nicheData.count || 0;
+      if (snapshot.aiNicheAnalysis) {
+        const analysis = snapshot.aiNicheAnalysis;
 
-          if (!niche || niche.trim().length === 0) return;
+        // Add primary niche with higher weight (×2)
+        if (analysis.primaryNiche) {
+          const niche = analysis.primaryNiche.toLowerCase();
+          nicheMap.set(niche, (nicheMap.get(niche) || 0) + (2 * weight));
+        }
 
-          const existing = nicheMap.get(niche) || {
-            totalCount: 0,
-            weightedScore: 0,
-            appearances: 0,
-          };
-
-          nicheMap.set(niche, {
-            totalCount: existing.totalCount + count,
-            weightedScore: existing.weightedScore + count * weight,
-            appearances: existing.appearances + 1,
+        // Add secondary niches with normal weight
+        if (analysis.secondaryNiches && Array.isArray(analysis.secondaryNiches)) {
+          analysis.secondaryNiches.forEach((niche: string) => {
+            const nicheLower = niche.toLowerCase();
+            nicheMap.set(nicheLower, (nicheMap.get(nicheLower) || 0) + weight);
           });
-        });
+        }
       }
 
-      // Sum up posts analyzed across snapshots
       totalPostsAnalyzed += snapshot.postsAnalyzed || 0;
     });
 
-    // Sort niches by weighted score (higher = more consistent and recent)
+    // Sort by weighted frequency (higher = more common and recent)
     const sortedNiches = Array.from(nicheMap.entries())
-      .map(([niche, data]) => ({
-        niche,
-        totalCount: data.totalCount,
-        weightedScore: data.weightedScore,
-        appearances: data.appearances,
-        // Calculate consistency: niches appearing in more snapshots rank higher
-        consistency: data.appearances / snapshots.length,
-      }))
-      .sort((a, b) => {
-        // Primary sort: weighted score (recent + frequency)
-        // Secondary sort: consistency (appears in multiple snapshots)
-        const scoreDiff = b.weightedScore - a.weightedScore;
-        if (Math.abs(scoreDiff) > 5) return scoreDiff;
-        return b.consistency - a.consistency;
-      })
-      .filter((item) => {
-        // Filter out niches with very low presence
-        // Must have at least 5% of total posts OR appear in multiple snapshots
-        const percentage = (item.totalCount / totalPostsAnalyzed) * 100;
-        return percentage >= 5 || item.appearances >= 2;
-      })
-      .map((item) => item.niche);
+      .sort((a, b) => b[1] - a[1])
+      .map(([niche]) => niche);
 
     return {
       niches: sortedNiches,
