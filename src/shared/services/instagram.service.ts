@@ -202,32 +202,32 @@ export class InstagramService {
     const accountTypeValid = profile.account_type === 'MEDIA_CREATOR' || profile.account_type === 'BUSINESS';
 
     // If any validation fails, throw error with all validation details
-    if (!mediaCountValid || !followersValid || !accountTypeValid) {
-      throw new BadRequestException({
-        error: 'account_not_eligible',
-        message: 'Your Instagram account does not meet the requirements to connect',
-        validationDetails: {
-          mediaCount: {
-            valid: mediaCountValid,
-            current: profile.media_count || 0,
-            required: 5,
-            message: mediaCountValid ? 'Sufficient posts' : 'Your account must have at least 5 posts',
-          },
-          followers: {
-            valid: followersValid,
-            current: profile.followers_count || 0,
-            required: 100,
-            message: followersValid ? 'Sufficient followers' : 'Your account must have at least 100 followers',
-          },
-          accountType: {
-            valid: accountTypeValid,
-            current: profile.account_type || 'PERSONAL',
-            required: ['MEDIA_CREATOR', 'BUSINESS'],
-            message: accountTypeValid ? 'Valid account type' : 'Your account must be a Creator or Business account. Please switch your account type in Instagram settings.',
-          },
-        },
-      });
-    }
+    // if (!mediaCountValid || !followersValid || !accountTypeValid) {
+    //   throw new BadRequestException({
+    //     error: 'account_not_eligible',
+    //     message: 'Your Instagram account does not meet the requirements to connect',
+    //     validationDetails: {
+    //       mediaCount: {
+    //         valid: mediaCountValid,
+    //         current: profile.media_count || 0,
+    //         required: 5,
+    //         message: mediaCountValid ? 'Sufficient posts' : 'Your account must have at least 5 posts',
+    //       },
+    //       followers: {
+    //         valid: followersValid,
+    //         current: profile.followers_count || 0,
+    //         required: 100,
+    //         message: followersValid ? 'Sufficient followers' : 'Your account must have at least 100 followers',
+    //       },
+    //       accountType: {
+    //         valid: accountTypeValid,
+    //         current: profile.account_type || 'PERSONAL',
+    //         required: ['MEDIA_CREATOR', 'BUSINESS'],
+    //         message: accountTypeValid ? 'Valid account type' : 'Your account must be a Creator or Business account. Please switch your account type in Instagram settings.',
+    //       },
+    //     },
+    //   });
+    // }
 
     // Step 2: Check if this Instagram account is already connected to another user
     const existingInfluencer = await this.influencerModel.findOne({
