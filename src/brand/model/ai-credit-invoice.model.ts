@@ -24,6 +24,7 @@ export enum AiCreditPaymentMethod {
 @Table({
   tableName: 'ai_credit_invoices',
   timestamps: true,
+  underscored: true,
 })
 export class AiCreditInvoice extends Model {
   @Column({
@@ -37,6 +38,7 @@ export class AiCreditInvoice extends Model {
     type: DataType.STRING,
     unique: true,
     allowNull: true,
+    field: 'invoice_number',
   })
   declare invoiceNumber: string;
 
@@ -44,6 +46,7 @@ export class AiCreditInvoice extends Model {
   @Column({
     type: DataType.INTEGER,
     allowNull: false,
+    field: 'brand_id',
   })
   declare brandId: number;
 
@@ -51,6 +54,7 @@ export class AiCreditInvoice extends Model {
     type: DataType.INTEGER,
     allowNull: false,
     defaultValue: 1,
+    field: 'credits_purchased',
   })
   declare creditsPurchased: number;
 
@@ -87,48 +91,56 @@ export class AiCreditInvoice extends Model {
   @Column({
     type: DataType.INTEGER,
     allowNull: false,
+    field: 'total_amount',
   })
   declare totalAmount: number;
 
   @Column({
     type: DataType.ENUM(...Object.values(AiCreditInvoiceStatus)),
     defaultValue: AiCreditInvoiceStatus.PENDING,
+    field: 'payment_status',
   })
   declare paymentStatus: AiCreditInvoiceStatus;
 
   @Column({
     type: DataType.ENUM(...Object.values(AiCreditPaymentMethod)),
     allowNull: true,
+    field: 'payment_method',
   })
   declare paymentMethod: AiCreditPaymentMethod;
 
   @Column({
     type: DataType.STRING,
     allowNull: true,
+    field: 'razorpay_order_id',
   })
   declare razorpayOrderId: string;
 
   @Column({
     type: DataType.STRING,
     allowNull: true,
+    field: 'razorpay_payment_id',
   })
   declare razorpayPaymentId: string;
 
   @Column({
     type: DataType.DATE,
     allowNull: true,
+    field: 'paid_at',
   })
   declare paidAt: Date;
 
   @Column({
     type: DataType.STRING,
     allowNull: true,
+    field: 'invoice_url',
   })
   declare invoiceUrl: string;
 
   @Column({
     type: DataType.JSONB,
     allowNull: true,
+    field: 'invoice_data',
   })
   declare invoiceData: any;
 
