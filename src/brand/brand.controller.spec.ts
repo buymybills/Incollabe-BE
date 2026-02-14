@@ -5,6 +5,7 @@ import { SupportTicketService } from '../shared/support-ticket.service';
 import { MaxCampaignPaymentService } from '../campaign/services/max-campaign-payment.service';
 import { InviteOnlyPaymentService } from '../campaign/services/invite-only-payment.service';
 import { S3Service } from '../shared/s3.service';
+import { AiCreditPaymentService } from './ai-credit-payment.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { UpdateBrandProfileDto } from './dto/update-brand-profile.dto';
 import { UpdateBrandNichesDto } from './dto/update-brand-niches.dto';
@@ -51,6 +52,12 @@ const mockS3Service = {
   getSignedUrl: jest.fn(),
 };
 
+const mockAiCreditPaymentService = {
+  createPayment: jest.fn(),
+  verifyPayment: jest.fn(),
+  getPaymentStatus: jest.fn(),
+};
+
 const mockAuthGuard = {
   canActivate: jest.fn(() => true),
 };
@@ -82,6 +89,10 @@ describe('BrandController', () => {
         {
           provide: S3Service,
           useValue: mockS3Service,
+        },
+        {
+          provide: AiCreditPaymentService,
+          useValue: mockAiCreditPaymentService,
         },
       ],
     })
