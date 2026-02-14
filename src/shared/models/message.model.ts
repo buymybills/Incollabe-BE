@@ -17,6 +17,7 @@ export enum MessageType {
   VIDEO = 'video',
   AUDIO = 'audio',
   FILE = 'file',
+  MEDIA = 'media', // For mixed/multiple media attachments
 }
 
 export enum SenderType {
@@ -90,6 +91,12 @@ export class Message extends Model<Message> {
     allowNull: true,
   })
   declare attachmentName: string;
+
+  @Column({
+    type: DataType.STRING(100),
+    allowNull: true,
+  })
+  declare mediaType: string; // MIME type e.g. image/jpeg, video/mp4
 
   @Column({
     type: DataType.BOOLEAN,

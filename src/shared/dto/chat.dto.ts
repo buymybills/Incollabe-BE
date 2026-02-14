@@ -81,6 +81,11 @@ export class SendMessageDto {
   @IsString()
   @IsOptional()
   attachmentName?: string;
+
+  @ApiProperty({ description: 'MIME type of the media attachment e.g. image/jpeg, video/mp4', required: false })
+  @IsString()
+  @IsOptional()
+  mediaType?: string;
 }
 
 export class GetConversationsDto {
