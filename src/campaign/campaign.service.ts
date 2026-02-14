@@ -2245,7 +2245,7 @@ export class CampaignService {
               },
               {
                 model: CampaignDeliverable,
-                attributes: ['platform', 'deliverableType', 'quantity'],
+                attributes: ['platform', 'type', 'quantity'],
               },
             ],
           });
@@ -2268,7 +2268,7 @@ export class CampaignService {
             // Format deliverables from campaign
             const deliverables = campaignJson.deliverables || [];
             expJson.deliverableFormat = deliverables
-              .map((d: any) => `${d.platform} ${d.deliverableType}`)
+              .map((d: any) => `${d.platform} ${d.type}`)
               .join(' + ') || expJson.deliverableFormat;
           }
         }
