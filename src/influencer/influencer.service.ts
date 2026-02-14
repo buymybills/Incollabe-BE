@@ -1899,6 +1899,7 @@ export class InfluencerService {
               'numberOfInfluencers',
               'isActive',
               'isMaxCampaign',
+              // 'isInviteOnly',
               'createdAt',
               'updatedAt',
             ],
@@ -1928,6 +1929,14 @@ export class InfluencerService {
         deliverableFormat = appData.campaign.deliverables.map((d: any) => this.getDeliverableLabel(d.type));
       }
 
+      // Calculate promotionType based on campaign flags
+      // let promotionType: 'organic' | 'max' | 'invite_only' = 'organic';
+      // if (appData.campaign.isMaxCampaign) {
+      //   promotionType = 'max';
+      // } else if (appData.campaign.isInviteOnly) {
+      //   promotionType = 'invite_only';
+      // }
+
       // Destructure to exclude deliverables from campaign response
       const { deliverables, ...campaignWithoutDeliverables } = appData.campaign;
 
@@ -1942,6 +1951,7 @@ export class InfluencerService {
         campaign: {
           ...campaignWithoutDeliverables,
           deliverableFormat,
+          // promotionType,
         },
       };
     });
@@ -2418,9 +2428,9 @@ export class InfluencerService {
     let daysSinceLastSync: number | null = null;
 
     if (isConnected) {
-      // Fetch the latest Instagram profile analysis
+      // Fetch the latest Instagram profile analysis (exclude demographic-only records with no syncDate)
       const latestAnalysis = await this.instagramProfileAnalysisModel.findOne({
-        where: { influencerId: influencer.id },
+        where: { influencerId: influencer.id, syncDate: { [Op.not]: null as any } },
         order: [['syncDate', 'DESC']],
       });
 
