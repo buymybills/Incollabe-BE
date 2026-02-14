@@ -64,13 +64,23 @@ export class AuthController {
   @Post('influencer/request-otp')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Request OTP for influencer',
-    description: 'Send OTP to influencer phone number for verification',
+    summary: 'Request WhatsApp OTP for influencer (Login/Signup Step 1)',
+    description:
+      'Send WhatsApp OTP to influencer phone number. This is the FIRST STEP for both login and signup.\n\n' +
+      '**Flow:**\n' +
+      '1. Call this endpoint with phone number\n' +
+      '2. User receives 6-digit OTP via WhatsApp\n' +
+      '3. User enters OTP in app\n' +
+      '4. Call POST /auth/influencer/verify-otp to complete login/signup\n\n' +
+      '**Rate Limiting:**\n' +
+      '- 60-second cooldown between OTP requests\n' +
+      '- Maximum 5 requests per 15-minute window\n' +
+      '- OTP expires after 5 minutes',
   })
   @ApiBody({ type: RequestOtpDto })
   @ApiResponse({
     status: 200,
-    description: 'OTP sent successfully',
+    description: 'OTP sent successfully via WhatsApp',
     schema: {
       example: {
         message: 'OTP sent successfully',
@@ -80,8 +90,8 @@ export class AuthController {
     },
   })
   @ApiResponse({
-    status: 409,
-    description: 'User already exists with this phone number',
+    status: 403,
+    description: 'Rate limit exceeded - too many OTP requests',
   })
   @ApiResponse({
     status: 500,
@@ -94,24 +104,67 @@ export class AuthController {
   @Post('influencer/verify-otp')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Verify OTP for influencer',
-    description: 'Verify the OTP sent to influencer phone number',
+    summary: 'Verify OTP for influencer (Login & Signup)',
+    description:
+      'Verify the WhatsApp OTP sent to influencer phone number. This endpoint handles both LOGIN and SIGNUP:\n\n' +
+      '**For Existing Users (Login):**\n' +
+      '- If profile is complete: Returns access & refresh tokens → user is logged in ✅\n' +
+      '- If profile is incomplete: Returns requiresProfileCompletion=true → redirect to profile completion\n\n' +
+      '**For New Users (Signup):**\n' +
+      '- Returns requiresSignup=true with verificationKey\n' +
+      '- Use verificationKey to call POST /auth/influencer/signup to complete registration\n\n' +
+      '**Note:** Influencers do NOT have a separate login endpoint. This OTP verification IS the login method.',
   })
   @ApiBody({ type: VerifyOtpDto })
   @ApiResponse({
     status: 200,
-    description: 'OTP verified successfully',
+    description: 'OTP verified successfully - response varies based on user status',
     schema: {
-      example: {
-        message: 'OTP verified successfully',
-        phone: '+919467289789',
-        verified: true,
-      },
+      oneOf: [
+        {
+          title: 'Existing User - Login Successful',
+          type: 'object',
+          properties: {
+            message: { type: 'string', example: 'OTP verified successfully' },
+            id: { type: 'number', example: 123 },
+            accessToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+            refreshToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+            phone: { type: 'string', example: '+919467289789' },
+            profileCompleted: { type: 'boolean', example: true },
+            requiresProfileCompletion: { type: 'boolean', example: false },
+          },
+        },
+        {
+          title: 'Existing User - Profile Incomplete',
+          type: 'object',
+          properties: {
+            message: { type: 'string', example: 'OTP verified successfully' },
+            id: { type: 'number', example: 123 },
+            phone: { type: 'string', example: '+919467289789' },
+            verified: { type: 'boolean', example: true },
+            requiresProfileCompletion: { type: 'boolean', example: true },
+          },
+        },
+        {
+          title: 'New User - Signup Required',
+          type: 'object',
+          properties: {
+            message: { type: 'string', example: 'OTP verified successfully' },
+            verificationKey: { type: 'string', example: 'verify_1234567890_abc123def' },
+            verified: { type: 'boolean', example: true },
+            requiresSignup: { type: 'boolean', example: true },
+          },
+        },
+      ],
     },
   })
   @ApiResponse({
     status: 401,
     description: 'Invalid or expired OTP',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Too many failed attempts. Try again later.',
   })
   @ApiResponse({
     status: 500,
