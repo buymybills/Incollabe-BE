@@ -209,8 +209,8 @@ export class ChatController {
         },
         messageType: {
           type: 'string',
-          enum: ['text', 'image', 'video', 'audio', 'file'],
-          description: 'Type of message being sent',
+          enum: ['text', 'image', 'video', 'audio', 'file', 'media'],
+          description: 'Type of message being sent. Use "media" for mixed/multiple media attachments.',
           default: 'text',
           example: 'text',
         },
@@ -225,6 +225,12 @@ export class ChatController {
           type: 'string',
           description: '(Optional) Original filename of attachment',
           example: 'vacation-photo.jpg',
+        },
+        mediaType: {
+          type: 'string',
+          description:
+            '(Optional) MIME type of the media attachment. Use the `fileType` value returned by POST /api/chat/upload',
+          example: 'image/jpeg',
         },
       },
       oneOf: [
@@ -265,6 +271,7 @@ export class ChatController {
           attachmentUrl:
             'https://incollabstaging.s3.ap-south-1.amazonaws.com/chat/images/photo-12345.jpg',
           attachmentName: 'vacation-photo.jpg',
+          mediaType: 'image/jpeg',
         },
       },
       encryptedWithConversationId: {
@@ -299,6 +306,9 @@ export class ChatController {
               description: 'E2EE encrypted message stored as JSON string',
             },
             messageType: { type: 'string', example: 'text' },
+            attachmentUrl: { type: 'string', example: 'https://incollabstaging.s3.ap-south-1.amazonaws.com/chat/images/photo-12345.jpg', nullable: true },
+            attachmentName: { type: 'string', example: 'vacation-photo.jpg', nullable: true },
+            mediaType: { type: 'string', example: 'image/jpeg', nullable: true, description: 'MIME type of the media attachment' },
             isEncrypted: {
               type: 'boolean',
               example: true,
@@ -402,7 +412,7 @@ export class ChatController {
   @ApiOperation({
     summary: 'Upload file for chat (image, video, audio, or document)',
     description:
-      'Upload a file to share in chat. Supports images (JPEG, PNG, GIF, WebP), videos (MP4, MOV, AVI, WebM, MKV), audio (MP3, WAV, WebM, OGG, AAC, M4A), and documents (PDF, DOC, DOCX, XLS, XLSX, TXT, CSV). Max size: 50MB',
+      'Upload a file to share in chat. Supports images (JPEG, PNG, GIF, WebP), videos (MP4, MOV, AVI, WebM, MKV), audio (MP3, WAV, WebM, OGG, AAC, M4A), and documents (PDF, DOC, DOCX, XLS, XLSX, TXT, CSV). Max size: 50MB. For multiple files, upload each separately and use messageType "media" when sending.',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({

@@ -368,6 +368,7 @@ export class ChatService {
       messageType = MessageType.TEXT,
       attachmentUrl,
       attachmentName,
+      mediaType,
     } = dto;
 
     const userParticipantType = userType as ParticipantType;
@@ -452,6 +453,7 @@ export class ChatService {
       content: content || null,
       attachmentUrl: isEncrypted ? null : attachmentUrl || null,
       attachmentName: isEncrypted ? null : attachmentName || null,
+      mediaType: isEncrypted ? null : mediaType || null,
       isRead: false,
       isEncrypted,
       encryptionVersion,
@@ -518,6 +520,7 @@ export class ChatService {
       content: message.content,
       attachmentUrl: message.attachmentUrl,
       attachmentName: message.attachmentName,
+      mediaType: message.mediaType,
       isRead: message.isRead,
       readAt: message.readAt,
       createdAt: message.createdAt,
@@ -587,6 +590,7 @@ export class ChatService {
       content: msg.content,
       attachmentUrl: msg.attachmentUrl,
       attachmentName: msg.attachmentName,
+      mediaType: msg.mediaType,
       isRead: msg.isRead,
       readAt: msg.readAt,
       createdAt: msg.createdAt,
