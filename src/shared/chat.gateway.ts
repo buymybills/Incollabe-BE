@@ -1088,11 +1088,11 @@ export class ChatGateway
 
       console.log('💬 Notification Body:', notificationBody);
 
-      // Build deep link URL using sender's influencer ID
+      // Build deep link URL using sender's ID and type
       const deepLinkUrl =
         recipientUserType === ParticipantType.INFLUENCER
-          ? `app://influencers/chat/${senderUserId}`
-          : `app://brands/chat/${senderUserId}`;
+          ? `app://influencers/chat/${senderUserId}?type=${senderUserType}`
+          : `app://brands/chat/${senderUserId}?type=${senderUserType}`;
 
       console.log('🔗 Deep Link URL:', deepLinkUrl);
 
