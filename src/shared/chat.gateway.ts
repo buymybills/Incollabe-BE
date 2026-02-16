@@ -1088,6 +1088,14 @@ export class ChatGateway
 
       console.log('💬 Notification Body:', notificationBody);
 
+      // Build deep link URL based on recipient type
+      const deepLinkUrl =
+        recipientUserType === ParticipantType.INFLUENCER
+          ? `app://influencers/chat/${conversationId}`
+          : `app://brands/chat/${conversationId}`;
+
+      console.log('🔗 Deep Link URL:', deepLinkUrl);
+
       // Send push notification
       await this.notificationService.sendCustomNotification(
         fcmTokens,
@@ -1107,6 +1115,7 @@ export class ChatGateway
           priority: 'high',
           androidChannelId: 'chat_messages',
           sound: 'default',
+          actionUrl: deepLinkUrl,
         },
       );
 
