@@ -1088,11 +1088,11 @@ export class ChatGateway
 
       console.log('💬 Notification Body:', notificationBody);
 
-      // Build deep link URL based on recipient type
+      // Build deep link URL using sender's influencer ID
       const deepLinkUrl =
         recipientUserType === ParticipantType.INFLUENCER
-          ? `app://influencers/chat/${conversationId}`
-          : `app://brands/chat/${conversationId}`;
+          ? `app://influencers/chat/${senderUserId}`
+          : `app://brands/chat/${senderUserId}`;
 
       console.log('🔗 Deep Link URL:', deepLinkUrl);
 
@@ -1103,7 +1103,7 @@ export class ChatGateway
         notificationBody,
         {
           type: 'chat_message',
-          action: 'view_chat', // Action for mobile app to handle navigation
+          action: 'view_chat',
           conversationId: conversationId.toString(),
           messageId: message.id.toString(),
           senderId: senderUserId.toString(),
