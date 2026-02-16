@@ -497,19 +497,15 @@ export class AiCreditPaymentService {
     const yearMonth = `${year}${month}`;
     const currentPrefix = `INV-M${yearMonth}-`;
 
-    const latestInvoice = await this.aiCreditInvoiceModel.findOne({
-      where: {
-        invoiceNumber: {
-          [Op.like]: `${currentPrefix}%`,
-        },
-      },
-      order: [['createdAt', 'DESC']],
+    const allInvoices = await this.aiCreditInvoiceModel.findAll({
+      where: { invoiceNumber: { [Op.like]: `${currentPrefix}%` } },
+      attributes: ['invoiceNumber'],
     });
 
     let nextNumber = 1;
-    if (latestInvoice) {
-      const parts = latestInvoice.invoiceNumber.split('-');
-      nextNumber = parseInt(parts[2], 10) + 1;
+    for (const inv of allInvoices) {
+      const n = parseInt(inv.invoiceNumber.split('-')[2], 10);
+      if (!isNaN(n)) nextNumber = Math.max(nextNumber, n + 1);
     }
 
     return `${currentPrefix}${nextNumber}`;
