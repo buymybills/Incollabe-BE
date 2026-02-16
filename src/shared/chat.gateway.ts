@@ -1103,6 +1103,7 @@ export class ChatGateway
         notificationBody,
         {
           type: 'chat_message',
+          action: 'view_chat', // Action for mobile app to handle navigation
           conversationId: conversationId.toString(),
           messageId: message.id.toString(),
           senderId: senderUserId.toString(),
