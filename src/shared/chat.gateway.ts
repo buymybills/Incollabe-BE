@@ -1104,6 +1104,10 @@ export class ChatGateway
         {
           type: 'chat_message',
           action: 'view_chat',
+          // Clear fields for navigation - who to chat with
+          otherPartyId: senderUserId.toString(), // ID of the person who sent the message
+          otherPartyType: senderUserType, // Type of the sender (influencer/brand)
+          // Additional context
           conversationId: conversationId.toString(),
           messageId: message.id.toString(),
           senderId: senderUserId.toString(),
