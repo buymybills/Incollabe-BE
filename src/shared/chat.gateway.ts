@@ -16,6 +16,9 @@ import { SendMessageDto, MarkAsReadDto, TypingDto } from './dto/chat.dto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { ParticipantType } from './models/conversation.model';
+import { NotificationService } from './notification.service';
+import { DeviceTokenService } from './device-token.service';
+import { UserType as DeviceUserType } from './models/device-token.model';
 
 @WebSocketGateway({
   cors: {
@@ -44,6 +47,8 @@ export class ChatGateway
   constructor(
     private readonly chatService: ChatService,
     private readonly jwtService: JwtService,
+    private readonly notificationService: NotificationService,
+    private readonly deviceTokenService: DeviceTokenService,
   ) { }
 
   afterInit(server: Server) {
@@ -339,6 +344,14 @@ export class ChatGateway
       // Get the actual conversationId from the message (in case it was auto-created)
       const conversationId = message.conversationId;
       console.log('Conversation ID:', conversationId);
+
+      // 🔔 Send push notification to the recipient
+      await this.sendPushNotificationToRecipient(
+        conversationId,
+        userId,
+        userType,
+        message,
+      );
 
       // Emit to conversation room (both sender and receiver)
       const roomName = `conversation_${conversationId}`;
@@ -762,6 +775,14 @@ export class ChatGateway
         message,
       );
 
+      // 🔔 Send push notification to the recipient
+      await this.sendPushNotificationToRecipient(
+        conversationId,
+        senderId,
+        senderType,
+        message,
+      );
+
       console.log('✅ WebSocket events emitted successfully');
       console.log('===================================\n');
 
@@ -771,7 +792,7 @@ export class ChatGateway
     } catch (error) {
       console.error('❌ ERROR EMITTING WEBSOCKET EVENTS:', error.message);
       console.error('Stack:', error.stack);
-      console.log('===================================\n'); 
+      console.log('===================================\n');
 
       this.logger.error(
         `Failed to emit WebSocket events: ${error.message}`,
@@ -956,6 +977,144 @@ export class ChatGateway
       );
     } catch (error) {
       this.logger.error(`Sender conversation update error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Helper: Send push notification to the recipient of a message
+   * Notifies users who are offline or not connected via WebSocket
+   */
+  private async sendPushNotificationToRecipient(
+    conversationId: number,
+    senderUserId: number,
+    senderUserType: ParticipantType,
+    message: any,
+  ) {
+    try {
+      console.log('\n🔔 === SENDING PUSH NOTIFICATION ===');
+
+      // Get conversation to find the recipient
+      const conversation =
+        await this.chatService['conversationModel'].findByPk(conversationId);
+
+      if (!conversation) {
+        console.log('⚠️  Conversation not found');
+        return;
+      }
+
+      // Determine the recipient
+      let recipientUserId: number;
+      let recipientUserType: ParticipantType;
+
+      if (
+        conversation.participant1Type === senderUserType &&
+        conversation.participant1Id === senderUserId
+      ) {
+        recipientUserId = conversation.participant2Id;
+        recipientUserType = conversation.participant2Type;
+      } else if (
+        conversation.participant2Type === senderUserType &&
+        conversation.participant2Id === senderUserId
+      ) {
+        recipientUserId = conversation.participant1Id;
+        recipientUserType = conversation.participant1Type;
+      } else {
+        console.log('⚠️  Sender not in conversation');
+        return;
+      }
+
+      console.log('📬 Recipient:', recipientUserId, '(' + recipientUserType + ')');
+
+      // Get sender details
+      const senderDetails = await this.chatService['getParticipantDetails'](
+        senderUserType,
+        senderUserId,
+      );
+
+      if (!senderDetails) {
+        console.log('⚠️  Sender details not found');
+        return;
+      }
+
+      // Get sender name for notification
+      const senderName =
+        senderUserType === ParticipantType.INFLUENCER
+          ? senderDetails.name
+          : senderDetails.brandName;
+
+      console.log('👤 Sender Name:', senderName);
+
+      // Get recipient's FCM tokens
+      const deviceUserType =
+        recipientUserType === ParticipantType.INFLUENCER
+          ? DeviceUserType.INFLUENCER
+          : DeviceUserType.BRAND;
+
+      const fcmTokens = await this.deviceTokenService.getAllUserTokens(
+        recipientUserId,
+        deviceUserType,
+      );
+
+      if (!fcmTokens || fcmTokens.length === 0) {
+        console.log('⚠️  No FCM tokens found for recipient');
+        return;
+      }
+
+      console.log('📱 Found', fcmTokens.length, 'FCM token(s) for recipient');
+
+      // Prepare notification content
+      let notificationBody: string;
+      if (message.isEncrypted) {
+        notificationBody = '🔒 Sent an encrypted message';
+      } else if (message.attachmentUrl && !message.content) {
+        notificationBody = `Sent a ${message.messageType}`;
+      } else {
+        // Truncate long messages
+        const maxLength = 100;
+        const content = message.content || '';
+        notificationBody =
+          content.length > maxLength
+            ? content.substring(0, maxLength) + '...'
+            : content;
+      }
+
+      console.log('💬 Notification Body:', notificationBody);
+
+      // Send push notification
+      await this.notificationService.sendCustomNotification(
+        fcmTokens,
+        senderName,
+        notificationBody,
+        {
+          type: 'chat_message',
+          conversationId: conversationId.toString(),
+          messageId: message.id.toString(),
+          senderId: senderUserId.toString(),
+          senderType: senderUserType,
+          senderName: senderName,
+          messageType: message.messageType,
+          isEncrypted: message.isEncrypted ? 'true' : 'false',
+        },
+        {
+          priority: 'high',
+          androidChannelId: 'chat_messages',
+          sound: 'default',
+        },
+      );
+
+      console.log('✅ Push notification sent successfully');
+      console.log('===================================\n');
+
+      this.logger.log(
+        `Push notification sent to ${recipientUserId}:${recipientUserType} for message ${message.id}`,
+      );
+    } catch (error) {
+      console.error('❌ PUSH NOTIFICATION ERROR:', error.message);
+      console.error('Stack:', error.stack);
+      console.log('===================================\n');
+
+      this.logger.error(`Push notification error: ${error.message}`, error.stack);
+      // Don't throw - notification failure shouldn't break message sending
     }
   }
 }
