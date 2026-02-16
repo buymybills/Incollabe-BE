@@ -880,11 +880,10 @@ export class InfluencerService {
       'profileHeadline',
       'countryId',
       'cityId',
-      // At least one social media link
-      'instagramUrl', // OR youtubeUrl, etc.
     ];
 
     const optionalButRecommended = [
+      'instagramUrl',
       'youtubeUrl',
       'facebookUrl',
       'linkedinUrl',
@@ -894,16 +893,6 @@ export class InfluencerService {
     const allFields = [...requiredFields, ...optionalButRecommended];
 
     const filledRequiredFields = requiredFields.filter((field) => {
-      if (field === 'instagramUrl') {
-        // Check if at least one social media link exists
-        return (
-          influencer.instagramUrl ||
-          influencer.youtubeUrl ||
-          influencer.facebookUrl ||
-          influencer.linkedinUrl ||
-          influencer.twitterUrl
-        );
-      }
       const value = influencer[field as keyof Influencer];
       return value && value.toString().trim().length > 0;
     });
@@ -921,15 +910,6 @@ export class InfluencerService {
 
     const missingFields = requiredFields
       .filter((field) => {
-        if (field === 'instagramUrl') {
-          return !(
-            influencer.instagramUrl ||
-            influencer.youtubeUrl ||
-            influencer.facebookUrl ||
-            influencer.linkedinUrl ||
-            influencer.twitterUrl
-          );
-        }
         const value = influencer[field as keyof Influencer];
         return !value || value.toString().trim().length === 0;
       })
@@ -967,15 +947,6 @@ export class InfluencerService {
       return value && value.toString().trim().length > 0;
     });
 
-    // At least one social media link required
-    const hasSocialMediaLink = Boolean(
-      influencer.instagramUrl ||
-        influencer.youtubeUrl ||
-        influencer.facebookUrl ||
-        influencer.linkedinUrl ||
-        influencer.twitterUrl,
-    );
-
     // Basic collaboration costs should be set
     const hasCollaborationCosts = Boolean(
       influencer.collaborationCosts &&
@@ -984,7 +955,6 @@ export class InfluencerService {
 
     return (
       allFieldsFilled &&
-      hasSocialMediaLink &&
       hasCollaborationCosts
     );
   }
