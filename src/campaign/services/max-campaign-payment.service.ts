@@ -596,66 +596,55 @@ export class MaxCampaignPaymentService {
    * Example: INV-C2602-1 (1st invoice in Feb 2026)
    */
   private async generateInvoiceNumber(): Promise<string> {
-    const year = String(new Date().getFullYear()).slice(-2); // Get last 2 digits of year
+    const year = String(new Date().getFullYear()).slice(-2);
     const month = String(new Date().getMonth() + 1).padStart(2, '0');
     const yearMonth = `${year}${month}`;
     const currentPrefix = `INV-C${yearMonth}-`;
 
     // Legacy formats for continuity
-    const legacyPrefix1 = `MAXXINV-CMGN-20${yearMonth}-`; // MAXXINV-CMGN-202602-
-    const legacyPrefix2 = `MAXXINV-20${yearMonth}-`; // MAXXINV-202602-
+    const legacyPrefix1 = `MAXXINV-CMGN-20${yearMonth}-`;
+    const legacyPrefix2 = `MAXXINV-20${yearMonth}-`;
 
-    // Check current format
-    const latestCurrentInvoice = await this.maxCampaignInvoiceModel.findOne({
-      where: {
-        invoiceNumber: {
-          [Op.like]: `${currentPrefix}%`,
-        },
-      },
-      order: [['createdAt', 'DESC']],
-    });
-
-    // Check legacy format 1 (MAXXINV-CMGN-202602-15)
-    const latestLegacy1Invoice = await this.maxCampaignInvoiceModel.findOne({
-      where: {
-        invoiceNumber: {
-          [Op.like]: `${legacyPrefix1}%`,
-        },
-      },
-      order: [['createdAt', 'DESC']],
-    });
-
-    // Check legacy format 2 (MAXXINV-202602-14)
-    const latestLegacy2Invoice = await this.maxCampaignInvoiceModel.findOne({
-      where: {
-        invoiceNumber: {
-          [Op.like]: `${legacyPrefix2}%`,
-        },
-      },
-      order: [['createdAt', 'DESC']],
-    });
+    // Fetch ALL invoices for each prefix and find the actual numeric max.
+    // Using createdAt DESC was wrong — a retry or re-verification could create
+    // a lower-sequence invoice after a higher one, causing a duplicate on the
+    // next assignment.
+    const [currentInvoices, legacy1Invoices, legacy2Invoices] = await Promise.all([
+      this.maxCampaignInvoiceModel.findAll({
+        where: { invoiceNumber: { [Op.like]: `${currentPrefix}%` } },
+        attributes: ['invoiceNumber'],
+      }),
+      this.maxCampaignInvoiceModel.findAll({
+        where: { invoiceNumber: { [Op.like]: `${legacyPrefix1}%` } },
+        attributes: ['invoiceNumber'],
+      }),
+      this.maxCampaignInvoiceModel.findAll({
+        where: { invoiceNumber: { [Op.like]: `${legacyPrefix2}%` } },
+        attributes: ['invoiceNumber'],
+      }),
+    ]);
 
     let nextNumber = 1;
 
-    // Extract sequence from current format (INV-C2602-15)
-    if (latestCurrentInvoice) {
-      const parts = latestCurrentInvoice.invoiceNumber.split('-');
-      const lastNumber = parseInt(parts[2], 10);
-      nextNumber = Math.max(nextNumber, lastNumber + 1);
+    // Current format: INV-C2602-<seq>  → parts[2]
+    for (const inv of currentInvoices) {
+      const parts = inv.invoiceNumber.split('-');
+      const n = parseInt(parts[2], 10);
+      if (!isNaN(n)) nextNumber = Math.max(nextNumber, n + 1);
     }
 
-    // Extract sequence from legacy format 1 (MAXXINV-CMGN-202602-15)
-    if (latestLegacy1Invoice) {
-      const parts = latestLegacy1Invoice.invoiceNumber.split('-');
-      const lastNumber = parseInt(parts[3], 10);
-      nextNumber = Math.max(nextNumber, lastNumber + 1);
+    // Legacy format 1: MAXXINV-CMGN-202602-<seq>  → parts[3]
+    for (const inv of legacy1Invoices) {
+      const parts = inv.invoiceNumber.split('-');
+      const n = parseInt(parts[3], 10);
+      if (!isNaN(n)) nextNumber = Math.max(nextNumber, n + 1);
     }
 
-    // Extract sequence from legacy format 2 (MAXXINV-202602-14)
-    if (latestLegacy2Invoice) {
-      const parts = latestLegacy2Invoice.invoiceNumber.split('-');
-      const lastNumber = parseInt(parts[2], 10);
-      nextNumber = Math.max(nextNumber, lastNumber + 1);
+    // Legacy format 2: MAXXINV-202602-<seq>  → parts[2]
+    for (const inv of legacy2Invoices) {
+      const parts = inv.invoiceNumber.split('-');
+      const n = parseInt(parts[2], 10);
+      if (!isNaN(n)) nextNumber = Math.max(nextNumber, n + 1);
     }
 
     return `${currentPrefix}${nextNumber}`;
