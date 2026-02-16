@@ -992,6 +992,8 @@ export class ChatGateway
   ) {
     try {
       console.log('\n🔔 === SENDING PUSH NOTIFICATION ===');
+      console.log('📨 Message ID:', message.id);
+      console.log('📤 Sender:', senderUserId, '(' + senderUserType + ')');
 
       // Get conversation to find the recipient
       const conversation =
@@ -1002,6 +1004,10 @@ export class ChatGateway
         return;
       }
 
+      console.log('💬 Conversation Details:');
+      console.log('   - participant1:', conversation.participant1Id, '(' + conversation.participant1Type + ')');
+      console.log('   - participant2:', conversation.participant2Id, '(' + conversation.participant2Type + ')');
+
       // Determine the recipient
       let recipientUserId: number;
       let recipientUserType: ParticipantType;
@@ -1010,20 +1016,25 @@ export class ChatGateway
         conversation.participant1Type === senderUserType &&
         conversation.participant1Id === senderUserId
       ) {
+        console.log('✅ Sender is participant1, so recipient is participant2');
         recipientUserId = conversation.participant2Id;
         recipientUserType = conversation.participant2Type;
       } else if (
         conversation.participant2Type === senderUserType &&
         conversation.participant2Id === senderUserId
       ) {
+        console.log('✅ Sender is participant2, so recipient is participant1');
         recipientUserId = conversation.participant1Id;
         recipientUserType = conversation.participant1Type;
       } else {
         console.log('⚠️  Sender not in conversation');
+        console.log('   - Expected sender:', senderUserId, '(' + senderUserType + ')');
+        console.log('   - participant1:', conversation.participant1Id, '(' + conversation.participant1Type + ')');
+        console.log('   - participant2:', conversation.participant2Id, '(' + conversation.participant2Type + ')');
         return;
       }
 
-      console.log('📬 Recipient:', recipientUserId, '(' + recipientUserType + ')');
+      console.log('📬 RECIPIENT IDENTIFIED:', recipientUserId, '(' + recipientUserType + ')');
 
       // Get sender details
       const senderDetails = await this.chatService['getParticipantDetails'](
@@ -1062,21 +1073,18 @@ export class ChatGateway
 
       console.log('📱 Found', fcmTokens.length, 'FCM token(s) for recipient');
 
-      // Prepare notification content
-      let notificationBody: string;
-      if (message.isEncrypted) {
-        notificationBody = '🔒 Sent an encrypted message';
-      } else if (message.attachmentUrl && !message.content) {
-        notificationBody = `Sent a ${message.messageType}`;
-      } else {
-        // Truncate long messages
-        const maxLength = 100;
-        const content = message.content || '';
-        notificationBody =
-          content.length > maxLength
-            ? content.substring(0, maxLength) + '...'
-            : content;
-      }
+      // Get recipient's unread count for this conversation
+      const recipientUnreadCount =
+        recipientUserType === conversation.participant1Type &&
+        recipientUserId === conversation.participant1Id
+          ? conversation.unreadCountParticipant1
+          : conversation.unreadCountParticipant2;
+
+      console.log('💬 Recipient Unread Count:', recipientUnreadCount);
+
+      // Prepare notification content - show unread count instead of message
+      const messageWord = recipientUnreadCount === 1 ? 'message' : 'messages';
+      const notificationBody = `You have ${recipientUnreadCount} unread ${messageWord}`;
 
       console.log('💬 Notification Body:', notificationBody);
 
