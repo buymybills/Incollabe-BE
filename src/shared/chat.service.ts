@@ -423,15 +423,25 @@ export class ChatService {
     if (content) {
       try {
         const parsed = JSON.parse(content);
-        // Check if it has E2EE structure
-        if (
+        // Check for new dual-key format: { encryptedKeyForRecipient, encryptedKeyForSender, iv, ciphertext }
+        const isDualKey =
+          parsed.encryptedKeyForRecipient &&
+          parsed.encryptedKeyForSender &&
+          parsed.iv &&
+          parsed.ciphertext &&
+          typeof parsed.encryptedKeyForRecipient === 'string' &&
+          typeof parsed.encryptedKeyForSender === 'string' &&
+          typeof parsed.iv === 'string' &&
+          typeof parsed.ciphertext === 'string';
+        // Check for legacy format: { encryptedKey, iv, ciphertext }
+        const isLegacy =
           parsed.encryptedKey &&
           parsed.iv &&
           parsed.ciphertext &&
           typeof parsed.encryptedKey === 'string' &&
           typeof parsed.iv === 'string' &&
-          typeof parsed.ciphertext === 'string'
-        ) {
+          typeof parsed.ciphertext === 'string';
+        if (isDualKey || isLegacy) {
           isEncrypted = true;
           encryptionVersion = parsed.version || 'v1';
         }

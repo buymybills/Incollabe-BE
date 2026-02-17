@@ -19,6 +19,7 @@ import { ParticipantType } from './models/conversation.model';
 import { NotificationService } from './notification.service';
 import { DeviceTokenService } from './device-token.service';
 import { UserType as DeviceUserType } from './models/device-token.model';
+import { ChatDecryptionService } from './services/chat-decryption.service';
 
 @WebSocketGateway({
   cors: {
@@ -49,6 +50,7 @@ export class ChatGateway
     private readonly jwtService: JwtService,
     private readonly notificationService: NotificationService,
     private readonly deviceTokenService: DeviceTokenService,
+    private readonly chatDecryptionService: ChatDecryptionService,
   ) { }
 
   afterInit(server: Server) {
@@ -1082,9 +1084,16 @@ export class ChatGateway
 
       console.log('💬 Recipient Unread Count:', recipientUnreadCount);
 
-      // Prepare notification content - show unread count instead of message
-      const messageWord = recipientUnreadCount === 1 ? 'message' : 'messages';
-      const notificationBody = `You have ${recipientUnreadCount} unread ${messageWord}`;
+      // Build notification body: show actual message content (decrypting if needed)
+      const notificationBody = await this.chatDecryptionService.buildNotificationBody(
+        {
+          content: message.content,
+          messageType: message.messageType,
+          isEncrypted: message.isEncrypted,
+        },
+        recipientUserId,
+        recipientUserType,
+      );
 
       console.log('💬 Notification Body:', notificationBody);
 
