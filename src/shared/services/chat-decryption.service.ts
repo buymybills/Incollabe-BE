@@ -40,7 +40,7 @@ export class ChatDecryptionService {
     let d = Buffer.alloc(0);
     let prev = Buffer.alloc(0);
     while (d.length < 48) { // 32 bytes key + 16 bytes IV
-      prev = crypto.createHash('md5').update(Buffer.concat([prev, passBuffer, salt])).digest();
+      prev = Buffer.from(crypto.createHash('md5').update(Buffer.concat([prev, passBuffer, salt])).digest());
       d = Buffer.concat([d, prev]);
     }
 

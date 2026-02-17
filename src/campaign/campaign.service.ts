@@ -514,11 +514,13 @@ export class CampaignService {
     brandId: number,
     type?: string,
     campaignType?: string,
+    campaignMode?: string,
   ): Promise<CampaignsByCategoryResponse> {
     const campaigns = await this.campaignQueryService.getCampaignsByCategory(
       brandId,
       type,
       campaignType,
+      campaignMode,
     );
 
     // Transform field names and cities for all campaigns
