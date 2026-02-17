@@ -606,31 +606,21 @@ describe('CampaignService', () => {
       });
     });
 
-    it('should return only Indian tier 1 and tier 2 cities for Indian brands', async () => {
+    it('should return only Indian tier 1 cities for brands', async () => {
       const userId = 1;
       const userType = 'brand';
-      const mockBrand = { headquarterCountryId: 1 }; // India
       const mockCities = [
         { id: 1, name: 'Mumbai', countryId: 1, tier: 1 },
         { id: 2, name: 'Delhi', countryId: 1, tier: 1 },
       ];
 
-      brandModel.findByPk.mockResolvedValue(mockBrand);
       cityModel.findAll.mockResolvedValue(mockCities);
 
       const result = await service.getPopularCities(userId, userType);
 
       expect(result).toEqual(mockCities);
-      expect(brandModel.findByPk).toHaveBeenCalledWith(userId, {
-        attributes: ['headquarterCountryId'],
-      });
       expect(cityModel.findAll).toHaveBeenCalledWith({
-        where: {
-          countryId: 1,
-          tier: {
-            [Op.in]: [1, 2],
-          },
-        },
+        where: { countryId: 1, tier: 1 },
         order: [
           ['tier', 'ASC'],
           ['name', 'ASC'],
@@ -639,31 +629,21 @@ describe('CampaignService', () => {
       });
     });
 
-    it('should return only Indian tier 1 and tier 2 cities for Indian influencers', async () => {
+    it('should return only Indian tier 1 cities for influencers', async () => {
       const userId = 1;
       const userType = 'influencer';
-      const mockInfluencer = { countryId: 1 }; // India
       const mockCities = [
         { id: 1, name: 'Mumbai', countryId: 1, tier: 1 },
         { id: 2, name: 'Delhi', countryId: 1, tier: 1 },
       ];
 
-      influencerModel.findByPk.mockResolvedValue(mockInfluencer);
       cityModel.findAll.mockResolvedValue(mockCities);
 
       const result = await service.getPopularCities(userId, userType);
 
       expect(result).toEqual(mockCities);
-      expect(influencerModel.findByPk).toHaveBeenCalledWith(userId, {
-        attributes: ['countryId'],
-      });
       expect(cityModel.findAll).toHaveBeenCalledWith({
-        where: {
-          countryId: 1,
-          tier: {
-            [Op.in]: [1, 2],
-          },
-        },
+        where: { countryId: 1, tier: 1 },
         order: [
           ['tier', 'ASC'],
           ['name', 'ASC'],
@@ -672,24 +652,19 @@ describe('CampaignService', () => {
       });
     });
 
-    it('should return Indian tier 1 cities for non-Indian users', async () => {
+    it('should return Indian tier 1 cities for all users regardless of country', async () => {
       const userId = 1;
       const userType = 'brand';
-      const mockBrand = { headquarterCountryId: 2 }; // Not India
       const mockCities = [
         { id: 1, name: 'Mumbai', countryId: 1, tier: 1 },
         { id: 2, name: 'Delhi', countryId: 1, tier: 1 },
       ];
 
-      brandModel.findByPk.mockResolvedValue(mockBrand);
       cityModel.findAll.mockResolvedValue(mockCities);
 
       const result = await service.getPopularCities(userId, userType);
 
       expect(result).toEqual(mockCities);
-      expect(brandModel.findByPk).toHaveBeenCalledWith(userId, {
-        attributes: ['headquarterCountryId'],
-      });
       expect(cityModel.findAll).toHaveBeenCalledWith({
         where: { countryId: 1, tier: 1 },
         order: [

@@ -896,15 +896,15 @@ export class CampaignService {
   }
 
   async getPopularCities(
-    userId?: number,
-    userType?: 'brand' | 'influencer',
+    _userId?: number,
+    _userType?: 'brand' | 'influencer',
   ): Promise<City[]> {
     return this.cityModel.findAll({
-      where: {
-        countryId: 1,
-        tier: 1,
-      },
-      order: [['name', 'ASC']],
+      where: { countryId: 1, tier: 1 },
+      order: [
+        ['tier', 'ASC'],
+        ['name', 'ASC'],
+      ],
       limit: 20,
     });
   }
