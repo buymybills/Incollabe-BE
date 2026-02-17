@@ -81,6 +81,8 @@ export class InfluencerScoringService {
       locationMatchWeight = 15,
       pastPerformanceWeight = 10,
       collaborationChargesWeight = 5,
+      startDate,
+      endDate,
     } = filters;
 
     const weights: ScoringWeights = {
@@ -110,6 +112,19 @@ export class InfluencerScoringService {
     // Apply city filter if provided and not Pan India
     if (cityIds && cityIds.length > 0 && !isPanIndia) {
       whereConditions.cityId = { [Op.in]: cityIds };
+    }
+
+    // Apply date range filter on createdAt
+    if (startDate || endDate) {
+      whereConditions.createdAt = {};
+      if (startDate) {
+        whereConditions.createdAt[Op.gte] = new Date(startDate);
+      }
+      if (endDate) {
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(23, 59, 59, 999);
+        whereConditions.createdAt[Op.lte] = endDateTime;
+      }
     }
 
     // Build include conditions for City and Niche with search
@@ -282,6 +297,8 @@ export class InfluencerScoringService {
       locationSearch,
       nicheSearch,
       sortBy = InfluencerSortBy.CREATED_AT,
+      startDate,
+      endDate,
     } = filters;
 
     // For topProfile, use the existing scoring logic
@@ -315,6 +332,19 @@ export class InfluencerScoringService {
       default:
         // For ALL_PROFILE, only filter by isActive (shows all active influencers regardless of profile completion)
         break;
+    }
+
+    // Apply date range filter on createdAt
+    if (startDate || endDate) {
+      whereConditions.createdAt = {};
+      if (startDate) {
+        whereConditions.createdAt[Op.gte] = new Date(startDate);
+      }
+      if (endDate) {
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(23, 59, 59, 999);
+        whereConditions.createdAt[Op.lte] = endDateTime;
+      }
     }
 
     // Apply follower count filters if provided
