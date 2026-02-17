@@ -110,7 +110,7 @@ export class Campaign extends Model<Campaign, CampaignCreationAttributes> {
     allowNull: false,
     defaultValue: CampaignType.PAID,
   })
-  type: CampaignType;
+  declare type: CampaignType;
 
   @Column({
     type: DataType.BOOLEAN,
