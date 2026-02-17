@@ -199,6 +199,12 @@ export class CampaignController {
       'Filter by campaign mode. openForAll: non-invite-only standard campaigns, maxCampaign: boosted MAX campaigns, inviteOnly: invite-only campaigns.',
     example: 'openForAll',
   })
+  @ApiQuery({
+    name: 'searchQuery',
+    required: false,
+    description: 'Search campaigns by name',
+    example: 'Summer Fashion',
+  })
   @ApiResponse({
     status: 200,
     description: 'Campaigns retrieved successfully by category',
@@ -281,6 +287,7 @@ export class CampaignController {
     @Query('type') type?: string,
     @Query('campaignType') campaignType?: string,
     @Query('campaignMode') campaignMode?: string,
+    @Query('searchQuery') searchQuery?: string,
   ) {
     if (req.user.userType !== 'brand') {
       throw new ForbiddenException(
@@ -288,7 +295,7 @@ export class CampaignController {
       );
     }
 
-    return this.campaignService.getCampaignsByCategory(req.user.id, type, campaignType, campaignMode);
+    return this.campaignService.getCampaignsByCategory(req.user.id, type, campaignType, campaignMode, searchQuery);
   }
 
   @Get()
