@@ -229,6 +229,13 @@ export class Campaign extends Model<Campaign, CampaignCreationAttributes> {
   })
   declare aiScoreEnabled: boolean;
 
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+    field: 'ai_score_credit_purchased',
+  })
+  declare aiScoreCreditPurchased: boolean;
+
   // Max Campaign Payment Fields
   @Column({
     type: DataType.BOOLEAN,

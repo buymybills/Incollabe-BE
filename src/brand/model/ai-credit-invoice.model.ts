@@ -52,6 +52,13 @@ export class AiCreditInvoice extends Model {
 
   @Column({
     type: DataType.INTEGER,
+    allowNull: true,
+    field: 'campaign_id',
+  })
+  declare campaignId: number;
+
+  @Column({
+    type: DataType.INTEGER,
     allowNull: false,
     defaultValue: 1,
     field: 'credits_purchased',

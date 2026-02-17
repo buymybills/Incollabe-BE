@@ -3621,25 +3621,30 @@ export class CampaignService {
       throw new NotFoundException('Brand not found');
     }
 
-    if (brand.aiCreditsRemaining <= 0) {
-      throw new ForbiddenException('No AI score credits remaining');
-    }
-
-    try {
-      await this.campaignModel.sequelize!.transaction(async (t) => {
-        // Atomic decrement - database-level CHECK constraint prevents going below 0
-        await brand.decrement('aiCreditsRemaining', {
-          by: 1,
-          transaction: t,
+    // Campaign-specific paid credit takes priority over free brand credits
+    if (campaign.aiScoreCreditPurchased) {
+      // Credit was purchased specifically for this campaign – enable without consuming brand balance
+      await campaign.update({ aiScoreEnabled: true });
+    } else if (brand.aiCreditsRemaining > 0) {
+      // Use a free brand-level credit (deducted atomically)
+      try {
+        await this.campaignModel.sequelize!.transaction(async (t) => {
+          await brand.decrement('aiCreditsRemaining', {
+            by: 1,
+            transaction: t,
+          });
+          await campaign.update({ aiScoreEnabled: true }, { transaction: t });
         });
-        await campaign.update({ aiScoreEnabled: true }, { transaction: t });
-      });
-    } catch (error) {
-      // If decrement fails (e.g., CHECK constraint violation), throw proper error
-      if (error.message?.includes('check_ai_credits_non_negative')) {
-        throw new ForbiddenException('No AI score credits remaining');
+      } catch (error) {
+        if (error.message?.includes('check_ai_credits_non_negative')) {
+          throw new ForbiddenException('No AI score credits remaining');
+        }
+        throw error;
       }
-      throw error;
+    } else {
+      throw new ForbiddenException(
+        'No AI score credits remaining. Please purchase a credit for this campaign.',
+      );
     }
 
     // Fire-and-forget: calculate and store scores for all applicants

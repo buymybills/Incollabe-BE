@@ -43,7 +43,8 @@ export class AiCreditPaymentService {
   ) {}
 
   /**
-   * Create payment order to purchase 1 AI credit (only allowed when credits = 0)
+   * Create payment order to purchase 1 AI credit for a specific campaign.
+   * The purchased credit can only be used to enable AI scoring for this campaign.
    */
   async createAiCreditOrder(campaignId: number, brandId: number) {
     // Verify campaign exists and belongs to the brand
@@ -55,6 +56,20 @@ export class AiCreditPaymentService {
     if (campaign.brandId !== brandId) {
       throw new ForbiddenException(
         'You can only purchase credits for your own campaigns',
+      );
+    }
+
+    // Prevent duplicate purchase: credit already paid for this campaign
+    if (campaign.aiScoreCreditPurchased) {
+      throw new BadRequestException(
+        'AI credit has already been purchased for this campaign.',
+      );
+    }
+
+    // Prevent purchase if AI scoring is already enabled (free credit was used)
+    if (campaign.aiScoreEnabled) {
+      throw new BadRequestException(
+        'AI scoring is already enabled for this campaign.',
       );
     }
 
@@ -72,17 +87,11 @@ export class AiCreditPaymentService {
       throw new NotFoundException('Brand not found');
     }
 
-    // VALIDATION: Only allow purchase when aiCreditsRemaining === 0
-    if (brand.aiCreditsRemaining > 0) {
-      throw new BadRequestException(
-        `You still have ${brand.aiCreditsRemaining} AI credit(s) remaining. Purchase is only allowed when your balance is 0.`,
-      );
-    }
-
-    // Auto-delete stale pending invoices (mirrors MaxCampaignPaymentService pattern)
+    // Auto-delete stale pending invoices for this campaign
     await this.aiCreditInvoiceModel.destroy({
       where: {
         brandId,
+        campaignId,
         paymentStatus: AiCreditInvoiceStatus.PENDING,
       },
     });
@@ -113,10 +122,11 @@ export class AiCreditPaymentService {
       taxAmount = igst;
     }
 
-    // Create invoice (invoice number assigned after payment confirmation)
+    // Create invoice tied to this specific campaign (invoice number assigned after payment)
     const invoice = await this.aiCreditInvoiceModel.create({
       invoiceNumber: null,
       brandId,
+      campaignId,
       creditsPurchased: this.CREDITS_PER_PURCHASE,
       amount: baseAmount,
       tax: taxAmount,
@@ -132,9 +142,10 @@ export class AiCreditPaymentService {
     const razorpayOrder = await this.razorpayService.createOrder(
       invoice.totalAmount / 100, // Amount in Rs
       'INR',
-      `AI_CREDIT_BRAND_${brandId}_INV_${invoice.id}`,
+      `AI_CREDIT_BRAND_${brandId}_CAMP_${campaignId}_INV_${invoice.id}`,
       {
         brandId,
+        campaignId,
         invoiceId: invoice.id,
         brandName: brand.brandName,
         purchaseType: 'ai_credit',
@@ -156,6 +167,10 @@ export class AiCreditPaymentService {
         brandName: brand.brandName,
         aiCreditsRemaining: brand.aiCreditsRemaining,
       },
+      campaign: {
+        id: campaign.id,
+        aiScoreCreditPurchased: campaign.aiScoreCreditPurchased,
+      },
       invoice: {
         id: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
@@ -171,7 +186,8 @@ export class AiCreditPaymentService {
   }
 
   /**
-   * Verify payment and activate AI credit on the brand's balance
+   * Verify payment and mark the campaign's AI credit as purchased.
+   * The credit is campaign-specific and enables AI scoring only for this campaign.
    */
   async verifyAndActivateAiCredit(
     campaignId: number,
@@ -203,20 +219,20 @@ export class AiCreditPaymentService {
       throw new BadRequestException('Invalid payment signature');
     }
 
-    // Get invoice by brand + razorpay order ID
+    // Get invoice by brand + campaign + razorpay order ID
     const invoice = await this.aiCreditInvoiceModel.findOne({
-      where: { brandId, razorpayOrderId: orderId },
+      where: { brandId, campaignId, razorpayOrderId: orderId },
     });
 
     if (!invoice) {
       throw new NotFoundException('Invoice not found');
     }
 
-    // Idempotency: if already paid, return success without double-incrementing
+    // Idempotency: if already paid, return success without double-activating
     if (invoice.paymentStatus === AiCreditInvoiceStatus.PAID) {
       return {
         success: true,
-        message: 'AI credit already activated',
+        message: 'AI credit already activated for this campaign',
         alreadyProcessed: true,
       };
     }
@@ -232,32 +248,24 @@ export class AiCreditPaymentService {
       paidAt: now,
     });
 
-    // Atomically increment brand's AI credit balance (prevents race conditions)
-    const brand = await this.brandModel.findByPk(brandId);
-    if (!brand) {
-      throw new NotFoundException('Brand not found');
-    }
+    // Mark the campaign as having a purchased AI credit (campaign-specific)
+    await campaign.update({ aiScoreCreditPurchased: true });
 
-    await brand.increment('aiCreditsRemaining', {
-      by: invoice.creditsPurchased,
-    });
-
-    // Generate PDF invoice and send email (fire-and-forget, mirrors existing pattern)
+    // Generate PDF invoice and send email (fire-and-forget)
     this.generateInvoiceData(invoice.id).catch((err) =>
       console.error('Failed to generate AI credit invoice:', err),
     );
 
-    // Reload brand to get updated credit count
-    await brand.reload();
+    // Reload campaign to get updated state
+    await campaign.reload();
 
     return {
       success: true,
       message:
-        'AI credit purchased successfully! Your AI credit balance has been updated.',
-      brand: {
-        id: brand.id,
-        brandName: brand.brandName,
-        aiCreditsRemaining: brand.aiCreditsRemaining,
+        'AI credit purchased successfully! You can now enable AI scoring for this campaign.',
+      campaign: {
+        id: campaign.id,
+        aiScoreCreditPurchased: campaign.aiScoreCreditPurchased,
       },
       invoice: {
         id: invoice.id,
@@ -269,7 +277,7 @@ export class AiCreditPaymentService {
   }
 
   /**
-   * Get current AI credit status and purchase eligibility for a brand
+   * Get current AI credit status for a specific campaign
    */
   async getAiCreditStatus(campaignId: number, brandId: number) {
     // Verify campaign exists and belongs to the brand
@@ -290,7 +298,7 @@ export class AiCreditPaymentService {
     }
 
     const latestInvoice = await this.aiCreditInvoiceModel.findOne({
-      where: { brandId },
+      where: { brandId, campaignId },
       order: [['createdAt', 'DESC']],
     });
 
@@ -299,7 +307,13 @@ export class AiCreditPaymentService {
         id: brand.id,
         brandName: brand.brandName,
         aiCreditsRemaining: brand.aiCreditsRemaining,
-        canPurchase: brand.aiCreditsRemaining === 0,
+      },
+      campaign: {
+        id: campaign.id,
+        aiScoreCreditPurchased: campaign.aiScoreCreditPurchased,
+        aiScoreEnabled: campaign.aiScoreEnabled,
+        // Can purchase if: no credit purchased for this campaign AND AI scoring not yet enabled
+        canPurchase: !campaign.aiScoreCreditPurchased && !campaign.aiScoreEnabled,
       },
       pricePerCredit: this.AI_CREDIT_AMOUNT / 100, // Rs 299
       latestInvoice: latestInvoice
@@ -337,6 +351,7 @@ export class AiCreditPaymentService {
       invoices: invoices.map((inv) => ({
         id: inv.id,
         invoiceNumber: inv.invoiceNumber,
+        campaignId: inv.campaignId,
         creditsPurchased: inv.creditsPurchased,
         amount: inv.totalAmount / 100,
         status: inv.paymentStatus,
@@ -366,6 +381,7 @@ export class AiCreditPaymentService {
     return {
       id: invoice.id,
       invoiceNumber: invoice.invoiceNumber,
+      campaignId: invoice.campaignId,
       creditsPurchased: invoice.creditsPurchased,
       amount: invoice.amount / 100,
       tax: invoice.tax / 100,
