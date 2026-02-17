@@ -4,6 +4,7 @@ import {
   IsEnum,
   IsNumber,
   IsString,
+  IsDateString,
   Min,
   Max,
 } from 'class-validator';
@@ -105,6 +106,24 @@ export class GetBrandsDto {
   @Min(0)
   @Max(100)
   minCompositeScore?: number;
+
+  @ApiProperty({
+    description: 'Start date for filtering brands by registration date (YYYY-MM-DD)',
+    required: false,
+    example: '2026-01-01',
+  })
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @ApiProperty({
+    description: 'End date for filtering brands by registration date (YYYY-MM-DD)',
+    required: false,
+    example: '2026-02-17',
+  })
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
 
   @ApiProperty({
     description: 'Page number for pagination',

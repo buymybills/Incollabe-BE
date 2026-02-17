@@ -1609,6 +1609,8 @@ export class AdminAuthService {
       minCompositeScore,
       page = 1,
       limit = 20,
+      startDate,
+      endDate,
     } = filters;
 
     // For topProfile, use the existing scoring logic
@@ -1696,6 +1698,19 @@ export class AdminAuthService {
         );
       }
 
+      // Apply date range filter on createdAt
+      if (startDate || endDate) {
+        const start = startDate ? new Date(startDate) : null;
+        const end = endDate ? new Date(endDate) : null;
+        if (end) end.setHours(23, 59, 59, 999);
+        filteredBrands = filteredBrands.filter((b) => {
+          const created = new Date(b.createdAt);
+          if (start && created < start) return false;
+          if (end && created > end) return false;
+          return true;
+        });
+      }
+
       // Apply pagination
       const total = filteredBrands.length;
       const totalPages = Math.ceil(total / (limit ?? 20));
@@ -1730,6 +1745,19 @@ export class AdminAuthService {
         { brandName: { [Op.iLike]: `%${searchQuery.trim()}%` } },
         { username: { [Op.iLike]: `%${searchQuery.trim()}%` } },
       ];
+    }
+
+    // Apply date range filter on createdAt
+    if (startDate || endDate) {
+      whereConditions.createdAt = {};
+      if (startDate) {
+        whereConditions.createdAt[Op.gte] = new Date(startDate);
+      }
+      if (endDate) {
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(23, 59, 59, 999);
+        whereConditions.createdAt[Op.lte] = endDateTime;
+      }
     }
 
     // Apply profile filter
