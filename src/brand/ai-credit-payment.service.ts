@@ -3,6 +3,8 @@ import {
   BadRequestException,
   NotFoundException,
   ForbiddenException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Brand } from './model/brand.model';
@@ -20,6 +22,7 @@ import { EncryptionService } from '../shared/services/encryption.service';
 import { createDatabaseDate, toIST } from '../shared/utils/date.utils';
 import { Op } from 'sequelize';
 import { generateBrandInvoicePDF } from '../shared/utils/brand-invoice-pdf.util';
+import { CampaignService } from '../campaign/campaign.service';
 
 @Injectable()
 export class AiCreditPaymentService {
@@ -40,6 +43,8 @@ export class AiCreditPaymentService {
     private s3Service: S3Service,
     private emailService: EmailService,
     private encryptionService: EncryptionService,
+    @Inject(forwardRef(() => CampaignService))
+    private campaignService: CampaignService,
   ) {}
 
   /**
@@ -250,6 +255,11 @@ export class AiCreditPaymentService {
 
     // Mark the campaign as having a purchased AI credit (campaign-specific)
     await campaign.update({ aiScoreCreditPurchased: true });
+
+    // Automatically enable AI scoring for this campaign (fire-and-forget)
+    this.campaignService.enableAIScoreForCampaign(campaignId, brandId).catch((err) =>
+      console.error(`[AI Credit] Failed to auto-enable AI scoring for campaign ${campaignId}:`, err),
+    );
 
     // Generate PDF invoice and send email (fire-and-forget)
     this.generateInvoiceData(invoice.id).catch((err) =>
