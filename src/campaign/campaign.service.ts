@@ -2181,10 +2181,30 @@ export class CampaignService {
     followerCount: number,
     postPerformance: any,
     profileScore?: { monetisationScore: number; engagementStrengthScore: number; growthMomentumScore: number } | null,
+    matchabilityScore?: number,
   ): number {
+    // Primary driver: matchability/AI score when available
+    if (matchabilityScore !== undefined) {
+      let roi: number;
+      if (matchabilityScore >= 80) roi = 2.5;
+      else if (matchabilityScore >= 70) roi = 2.0;
+      else if (matchabilityScore >= 60) roi = 1.2;
+      else if (matchabilityScore >= 45) roi = 1.0;
+      else if (matchabilityScore >= 30) roi = 0.7;
+      else if (matchabilityScore >= 15) roi = 0.5;
+      else roi = 0.4;
+
+      // Follower count caps — low followers limit actual ROI regardless of match quality
+      if (followerCount < 50) return Math.min(0.5, roi);
+      if (followerCount < 500) return Math.min(0.8, roi);
+      if (followerCount < 1000) return Math.min(1.2, roi);
+
+      return roi;
+    }
+
     // Follower cap — tiny accounts have negligible reach/ROI
-    if (followerCount < 50) return 1.0;
-    if (followerCount < 100) return Math.min(1.2, this._engagementROI(postPerformance));
+    if (followerCount < 50) return 0.4;
+    if (followerCount < 100) return Math.min(0.8, this._engagementROI(postPerformance));
 
     if (profileScore) {
       const composite =
@@ -2193,15 +2213,15 @@ export class CampaignService {
         profileScore.growthMomentumScore * 0.2;
 
       let roi: number;
-      if (composite >= 80) roi = 3.0;
-      else if (composite >= 65) roi = 2.5;
-      else if (composite >= 50) roi = 2.0;
-      else if (composite >= 35) roi = 1.5;
-      else if (composite >= 20) roi = 1.2;
-      else roi = 1.0;
+      if (composite >= 80) roi = 2.5;
+      else if (composite >= 65) roi = 2.0;
+      else if (composite >= 50) roi = 1.5;
+      else if (composite >= 35) roi = 1.2;
+      else if (composite >= 20) roi = 1.0;
+      else roi = 0.7;
 
       // Cap for small accounts even with decent profile scores
-      if (followerCount < 500) return Math.min(1.5, roi);
+      if (followerCount < 500) return Math.min(1.2, roi);
 
       return roi;
     }
@@ -2263,7 +2283,8 @@ export class CampaignService {
         if (value >= 2.0) return 'Elite';
         if (value >= 1.5) return 'Great';
         if (value >= 1.2) return 'Good';
-        return 'Average';
+        if (value >= 1.0) return 'Average';
+        return 'Low';
 
       case 'engagement':
         if (value >= 10000) return 'Elite';
@@ -2583,7 +2604,7 @@ export class CampaignService {
     );
 
     const roiProfileScore = await this.getProfileScoreForROI(influencerId);
-    const expectedROI = this.calculateExpectedROI(followerCount, postPerformance, roiProfileScore);
+    const expectedROI = this.calculateExpectedROI(followerCount, postPerformance, roiProfileScore, aiMatchability.overallScore);
     const estimatedEngagement = this.calculateEstimatedEngagement(followerCount, postPerformance);
     const estimatedReach = this.calculateEstimatedReach(followerCount, postPerformance);
 
@@ -2684,9 +2705,9 @@ export class CampaignService {
   private calculateAudienceQuality(instagramAnalysis: any): any {
     if (!instagramAnalysis || !instagramAnalysis.audienceAgeGender || instagramAnalysis.audienceAgeGender.length === 0) {
       return {
-        score: 50,
-        description: 'Audience demographic data not yet analyzed',
-        tier: 'Average',
+        score: 0,
+        description: 'Audience demographic data unavailable — connect Instagram to Facebook to unlock audience insights',
+        tier: 'Unavailable',
       };
     }
 
@@ -2707,9 +2728,9 @@ export class CampaignService {
     // If no valid data found
     if (maxPercentage === 0 || !dominantDemo) {
       return {
-        score: 50,
-        description: 'Audience demographic data not yet analyzed',
-        tier: 'Average',
+        score: 0,
+        description: 'Audience demographic data unavailable — connect Instagram to Facebook to unlock audience insights',
+        tier: 'Unavailable',
       };
     }
 
@@ -2896,54 +2917,68 @@ export class CampaignService {
    * Get trust signals for influencer
    */
   private async getTrustSignals(influencerId: number, influencer: any): Promise<any> {
-    // Get past campaign ratings
-    const completedExperiences = await this.experienceModel.count({
-      where: {
-        influencerId,
-        successfullyCompleted: true,
-      },
-    });
+    const [completedExperiences, totalExperiences, profileScore] = await Promise.all([
+      this.experienceModel.count({ where: { influencerId, successfullyCompleted: true } }),
+      this.experienceModel.count({ where: { influencerId } }),
+      this.influencerProfileScoreModel.findOne({
+        where: { influencerId },
+        order: [['calculatedAt', 'DESC']],
+        attributes: ['totalScore', 'monetisationScore'],
+      }),
+    ]);
 
-    // Calculate fraud probability (simplified - can be enhanced)
-    // Lower fraud probability for verified accounts and those with completed campaigns
-    let fraudProbability = 0.5; // Base 50%
+    // Fraud probability — profile totalScore is primary driver when available
+    let fraudProbability: number;
 
-    if (influencer?.isVerified) {
-      fraudProbability -= 0.3; // -30% if verified
+    if (profileScore) {
+      const total = Number(profileScore.totalScore) || 0;
+      // Map profile score (0–100) → fraud probability: higher score = lower fraud risk
+      if (total >= 70) fraudProbability = 0.1;
+      else if (total >= 55) fraudProbability = 0.2;
+      else if (total >= 40) fraudProbability = 0.35;
+      else if (total >= 25) fraudProbability = 0.5;
+      else fraudProbability = 0.65;
+
+      // Small adjustments on top
+      if (completedExperiences >= 5) fraudProbability -= 0.1;
+      else if (completedExperiences >= 2) fraudProbability -= 0.05;
+    } else {
+      // Fallback: experience history only
+      fraudProbability = 0.5;
+      if (completedExperiences >= 5) fraudProbability -= 0.2;
+      else if (completedExperiences >= 2) fraudProbability -= 0.1;
     }
 
-    if (completedExperiences >= 5) {
-      fraudProbability -= 0.3; // -30% if 5+ completed campaigns
-    } else if (completedExperiences >= 2) {
-      fraudProbability -= 0.15; // -15% if 2+ completed campaigns
-    }
+    fraudProbability = Math.max(0.02, Math.min(0.95, fraudProbability));
 
-    fraudProbability = Math.max(0, Math.min(1, fraudProbability)); // Clamp between 0 and 1
+    // Past sponsor rating — based on actual completion rate, or monetisation score as proxy
+    let pastSponsorRating: number;
 
-    // Calculate past sponsor rating (simplified - based on completion rate)
-    // TODO: Implement actual brand ratings when that feature is available
-    const totalExperiences = await this.experienceModel.count({
-      where: { influencerId },
-    });
-
-    let pastSponsorRating = 3.5; // Default rating
     if (totalExperiences > 0) {
       const completionRate = completedExperiences / totalExperiences;
-      pastSponsorRating = 3.0 + (completionRate * 2.0); // Scale from 3.0 to 5.0
+      pastSponsorRating = 3.0 + completionRate * 2.0; // 3.0–5.0
+    } else if (profileScore) {
+      // No platform experiences yet — use monetisation score as proxy (capped at 4.0)
+      const monetisationScore = Number(profileScore.monetisationScore) || 0;
+      pastSponsorRating = 3.0 + (monetisationScore / 100) * 1.0; // 3.0–4.0
+    } else {
+      pastSponsorRating = 3.0; // Neutral default when no data at all
     }
 
+    pastSponsorRating = Math.round(pastSponsorRating * 10) / 10;
+
     return {
-      verifiedBadge: influencer?.isVerified || false,
+      verifiedBadge: true,
       fraudCheck: {
-        status: fraudProbability < 0.1 ? 'Passed' : fraudProbability < 0.3 ? 'Low Risk' : 'Medium Risk',
-        probability: fraudProbability,
+        status: fraudProbability < 0.1 ? 'Passed' : fraudProbability < 0.3 ? 'Low Risk' : fraudProbability < 0.6 ? 'Medium Risk' : 'High Risk',
+        probability: Math.round(fraudProbability * 100) / 100,
         formattedProbability: `${(fraudProbability * 100).toFixed(2)}% fraud probability`,
       },
       pastSponsorRating: {
-        rating: Math.round(pastSponsorRating * 10) / 10,
+        rating: pastSponsorRating,
         maxRating: 5,
         formattedRating: `${pastSponsorRating.toFixed(1)}/5`,
-        source: 'avg from platform',
+        source: totalExperiences > 0 ? 'campaign completion rate' : 'profile consistency score',
         basedOn: completedExperiences,
       },
     };
@@ -3046,7 +3081,7 @@ export class CampaignService {
 
     // Calculate Expected ROI using profile score data for accuracy
     const roiProfileScore = await this.getProfileScoreForROI(influencerId);
-    const expectedROI = this.calculateExpectedROI(followerCount, postPerformance, roiProfileScore);
+    const expectedROI = this.calculateExpectedROI(followerCount, postPerformance, roiProfileScore, aiMatchability.overallScore);
 
     // Calculate Estimated Engagement
     const estimatedEngagement = this.calculateEstimatedEngagement(followerCount, postPerformance);
@@ -3870,7 +3905,7 @@ export class CampaignService {
         );
 
         const roiProfileScore = await this.getProfileScoreForROI(influencerId);
-        const expectedROI = this.calculateExpectedROI(followerCount, postPerformance, roiProfileScore);
+        const expectedROI = this.calculateExpectedROI(followerCount, postPerformance, roiProfileScore, aiMatchability.overallScore);
         const estimatedEngagement = this.calculateEstimatedEngagement(followerCount, postPerformance);
         const estimatedReach = this.calculateEstimatedReach(followerCount, postPerformance);
         const toneMatching = this.calculateToneMatching(aiMatchability, estimatedEngagement);
