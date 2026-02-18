@@ -13,6 +13,7 @@ import {
 } from 'sequelize-typescript';
 import { Influencer } from '../../auth/model/influencer.model';
 import { ExperienceSocialLink } from './experience-social-link.model';
+import { CampaignType } from '../../campaign/models/campaign.model';
 
 @Table({
   tableName: 'experiences',
@@ -51,16 +52,16 @@ export class Experience extends Model {
   declare brandName: string;
 
   @Column({
-    type: DataType.STRING,
+    type: DataType.ENUM(...Object.values(CampaignType)),
     allowNull: false,
   })
-  declare campaignCategory: string;
+  declare campaignCategory: CampaignType;
 
   @Column({
-    type: DataType.STRING,
+    type: DataType.JSON,
     allowNull: false,
   })
-  declare deliverableFormat: string;
+  declare deliverableFormat: string[];
 
   @Column({
     type: DataType.BOOLEAN,

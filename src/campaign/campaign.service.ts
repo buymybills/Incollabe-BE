@@ -2330,11 +2330,11 @@ export class CampaignService {
               logo: null, // Brand model doesn't have logo field
             };
 
-            // Format deliverables from campaign
+            // Derive deliverableFormat array from linked campaign's deliverables
             const deliverables = campaignJson.deliverables || [];
-            expJson.deliverableFormat = deliverables
-              .map((d: any) => `${d.platform} ${d.type}`)
-              .join(' + ') || expJson.deliverableFormat;
+            if (deliverables.length > 0) {
+              expJson.deliverableFormat = deliverables.map((d: any) => d.type);
+            }
           }
         }
 

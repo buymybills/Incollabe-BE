@@ -105,11 +105,11 @@ class ExperienceDto {
   @ApiProperty()
   brandName: string;
 
-  @ApiProperty()
+  @ApiProperty({ enum: ['ugc', 'paid', 'barter', 'engagement'] })
   campaignCategory: string;
 
-  @ApiProperty()
-  deliverableFormat: string;
+  @ApiProperty({ type: [String] })
+  deliverableFormat: string[];
 
   @ApiProperty()
   successfullyCompleted: boolean;

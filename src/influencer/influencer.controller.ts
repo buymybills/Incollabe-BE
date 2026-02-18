@@ -749,12 +749,19 @@ export class InfluencerController {
         campaignName: 'Festive Glam Essentials',
         brandName: 'Nykaa',
         campaignCategory: 'Skincare + Makeup',
-        deliverableFormat: '2 Instagram reels, 3 story posts',
+        deliverableFormat: ['instagram_reel', 'instagram_story'],
         successfullyCompleted: true,
         roleDescription: 'Content creator for skincare products',
         keyResultAchieved:
           'Reach: 150K, Engagement Rate: 6.1%, Conversions (Dr.Vaid Mkt): 150+ clicks',
-        socialLinks: ['https://instagram.com/p/xyz'],
+        socialLinks: [
+          {
+            id: 1,
+            platform: 'instagram',
+            contentType: 'reel',
+            url: 'https://instagram.com/p/xyz',
+          },
+        ],
         completedDate: '2024-12-01',
         createdAt: '2024-01-01T00:00:00Z',
         updatedAt: '2024-01-01T00:00:00Z',
@@ -790,7 +797,7 @@ export class InfluencerController {
             campaignName: 'Festive Glam Essentials',
             brandName: 'Nykaa',
             campaignCategory: 'Skincare + Makeup',
-            deliverableFormat: '2 Instagram reels, 3 story posts',
+            deliverableFormat: ['instagram_reel', 'instagram_story'],
             successfullyCompleted: true,
             roleDescription: 'Content creator for skincare products',
             keyResultAchieved:
@@ -817,7 +824,7 @@ export class InfluencerController {
                 campaignName: 'Festive Glam Essentials',
                 brandName: 'Nykaa',
                 campaignCategory: 'Skincare + Makeup',
-                deliverableFormat: '2 Instagram reels, 3 story posts',
+                deliverableFormat: ['instagram_reel', 'instagram_story'],
                 successfullyCompleted: true,
                 roleDescription: 'Content creator for skincare products',
                 keyResultAchieved:
@@ -869,6 +876,30 @@ export class InfluencerController {
   @ApiResponse({
     status: 200,
     description: 'Experience updated successfully',
+    schema: {
+      example: {
+        id: 1,
+        campaignName: 'Festive Glam Essentials',
+        brandName: 'Nykaa',
+        campaignCategory: 'Skincare + Makeup',
+        deliverableFormat: ['instagram_reel', 'instagram_story'],
+        successfullyCompleted: true,
+        roleDescription: 'Content creator for skincare products',
+        keyResultAchieved:
+          'Reach: 150K, Engagement Rate: 6.1%, Conversions (Dr.Vaid Mkt): 150+ clicks',
+        socialLinks: [
+          {
+            id: 1,
+            platform: 'instagram',
+            contentType: 'reel',
+            url: 'https://instagram.com/p/xyz',
+          },
+        ],
+        completedDate: '2024-12-01',
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      },
+    },
   })
   @ApiResponse({
     status: 404,
