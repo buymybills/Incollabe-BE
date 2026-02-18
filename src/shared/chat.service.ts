@@ -475,11 +475,13 @@ export class ChatService {
       conversation.participant1Id === userId;
 
     // Set last message preview
+    // Attachment type is checked first – media messages should show "📷 Image" etc.
+    // even when the text content is encrypted.
     let lastMessagePreview: string;
-    if (isEncrypted) {
-      lastMessagePreview = '🔒 Encrypted message';
-    } else if (attachmentUrl && !content) {
+    if (attachmentUrl) {
       lastMessagePreview = `Sent a ${messageType}`;
+    } else if (isEncrypted) {
+      lastMessagePreview = '🔒 Encrypted message';
     } else {
       lastMessagePreview = content || `Sent a ${messageType}`;
     }
