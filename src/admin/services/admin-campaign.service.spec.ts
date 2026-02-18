@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AdminCampaignService } from './admin-campaign.service';
-import { AIScoringService } from './ai-scoring.service';
+import { AIScoringService } from '../../shared/services/ai-scoring.service';
 import { getModelToken } from '@nestjs/sequelize';
 import {
   Campaign,
@@ -19,6 +19,9 @@ import { Brand } from '../../brand/model/brand.model';
 import { Experience } from '../../influencer/models/experience.model';
 import { Follow } from '../../post/models/follow.model';
 import { Post } from '../../post/models/post.model';
+import { InstagramMediaInsight } from '../../shared/models/instagram-media-insight.model';
+import { InfluencerProfileScore } from '../../shared/models/influencer-profile-score.model';
+import { InstagramProfileAnalysis } from '../../shared/models/instagram-profile-analysis.model';
 import { Op } from 'sequelize';
 
 describe('AdminCampaignService', () => {
@@ -103,6 +106,18 @@ describe('AdminCampaignService', () => {
         {
           provide: getModelToken(Post),
           useValue: mockPostModel,
+        },
+        {
+          provide: getModelToken(InstagramMediaInsight),
+          useValue: { findAll: jest.fn(), findOne: jest.fn() },
+        },
+        {
+          provide: getModelToken(InfluencerProfileScore),
+          useValue: { findOne: jest.fn(), findAll: jest.fn() },
+        },
+        {
+          provide: getModelToken(InstagramProfileAnalysis),
+          useValue: { findOne: jest.fn(), findAll: jest.fn() },
         },
         {
           provide: AIScoringService,

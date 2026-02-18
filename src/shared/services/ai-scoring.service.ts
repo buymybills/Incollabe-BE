@@ -5,7 +5,7 @@ import {
   InfluencerData,
   CampaignData,
   AIScoreResult,
-} from '../interfaces/ai-scoring.interface';
+} from './ai-scoring.interface';
 import { GeminiAIService } from '../../shared/services/gemini-ai.service';
 
 @Injectable()
@@ -31,17 +31,19 @@ export class AIScoringService {
     influencer: InfluencerData,
     campaign: CampaignData,
   ): Promise<AIScoreResult> {
+    let result: AIScoreResult | null = null;
+
     // Gemini is the primary AI scorer
     if (this.geminiAIService.isAvailable()) {
       try {
-        return await this.geminiScoring(influencer, campaign);
+        result = await this.geminiScoring(influencer, campaign);
       } catch (error) {
         console.error('Gemini scoring error, falling back to OpenAI:', error);
       }
     }
 
     // OpenAI as secondary
-    if (this.openai) {
+    if (!result && this.openai) {
       try {
         const prompt = this.buildScoringPrompt(influencer, campaign);
         const completion = await this.openai.chat.completions.create({
@@ -62,15 +64,46 @@ export class AIScoringService {
 
         const content = completion.choices[0].message.content;
         if (!content) throw new Error('OpenAI returned empty response');
-        const result = JSON.parse(content);
-        return this.normalizeAIResponse(result, influencer, campaign);
+        const parsed = JSON.parse(content);
+        result = this.normalizeAIResponse(parsed, influencer, campaign);
       } catch (error) {
         console.error('OpenAI scoring error, falling back to deterministic:', error);
       }
     }
 
     // Deterministic fallback
-    return this.fallbackScoring(influencer, campaign);
+    if (!result) {
+      result = this.fallbackScoring(influencer, campaign);
+    }
+
+    return this.applyScoringCaps(result, influencer);
+  }
+
+  /**
+   * Apply hard caps on the overall score:
+   * 1. Follower cap — tiny accounts cannot score high regardless of other signals
+   * 2. Location cap — a hard city mismatch (locationMatch === 0) caps overall at 50
+   */
+  private applyScoringCaps(result: AIScoreResult, influencer: InfluencerData): AIScoreResult {
+    let maxScore = 100;
+
+    // Location cap (city-targeted campaign, influencer not in target city)
+    if (result.locationMatch === 0) maxScore = Math.min(maxScore, 50);
+
+    // Follower cap
+    if (influencer.followers < 50)       maxScore = Math.min(maxScore, 15);
+    else if (influencer.followers < 100)  maxScore = Math.min(maxScore, 25);
+    else if (influencer.followers < 500)  maxScore = Math.min(maxScore, 40);
+
+    if (result.overall <= maxScore) return result;
+
+    const cappedOverall = maxScore;
+    let recommendation: 'Highly Recommended' | 'Recommended' | 'Consider';
+    if (cappedOverall >= 80) recommendation = 'Highly Recommended';
+    else if (cappedOverall >= 60) recommendation = 'Recommended';
+    else recommendation = 'Consider';
+
+    return { ...result, overall: cappedOverall, recommendation };
   }
 
   /**
@@ -86,7 +119,8 @@ export class AIScoringService {
     campaign: CampaignData,
   ): Promise<AIScoreResult> {
     // ── Deterministic component scores ──────────────────────────────────────
-    const audienceRelevance = this.calculateAudienceRelevance(influencer.followers);
+    const demographicScore  = this.calculateDemographicMatch(influencer.audienceAgeGender, campaign);
+    const audienceRelevance = this.calculateAudienceRelevance(influencer.followers, demographicScore);
     const audienceQuality   = this.calculateAudienceQualityScore(influencer);
     const engagementRate    = this.calculateEngagementScore(
       influencer.postPerformance?.engagementRate ?? 0,
@@ -98,10 +132,12 @@ export class AIScoringService {
       campaign.targetCities,
       campaign.isPanIndia,
     );
-    const pastPerformance   = influencer.pastCampaigns.successRate || 50;
-    const contentQuality    = influencer.isVerified ? 80 : 60;
+    const contentQuality    = influencer.contentQualityScore;
 
     // ── Build compact Gemini prompt ─────────────────────────────────────────
+    const audienceDemoSummary = influencer.audienceAgeGender && influencer.audienceAgeGender.length > 0
+      ? influencer.audienceAgeGender.slice(0, 5).map(d => `${d.ageRange}${d.gender ? '/' + d.gender : ''}: ${d.percentage}%`).join(', ')
+      : 'N/A';
     const prompt = `You are an influencer-campaign match analyst. Given the data below, return ONLY valid JSON.
 
 Influencer: ${influencer.name} (@${influencer.username})
@@ -111,11 +147,14 @@ Influencer: ${influencer.name} (@${influencer.username})
   Bio: ${influencer.bio || 'N/A'}
   Engagement rate: ${influencer.postPerformance?.engagementRate?.toFixed(2) ?? 'N/A'}%
   Past campaigns: ${influencer.pastCampaigns.total} (success rate ${influencer.pastCampaigns.successRate}%)
+  Audience demographics: ${audienceDemoSummary}
 
 Campaign: "${campaign.name}"
   Description: ${campaign.description || 'N/A'}
   Required niches: ${campaign.niches.join(', ') || 'Any'}
   Targeting: ${campaign.isPanIndia ? 'Pan India' : campaign.targetCities.join(', ')}
+  Target gender: ${campaign.isOpenToAllGenders ? 'All' : (campaign.genderPreferences?.join(', ') || 'Not specified')}
+  Target age: ${campaign.isOpenToAllAges ? 'All ages' : `${campaign.minAge ?? 'any'}–${campaign.maxAge ?? 'any'}`}
   Type: ${campaign.campaignType}
 
 Pre-calculated component scores (0-100):
@@ -124,15 +163,14 @@ Pre-calculated component scores (0-100):
   engagementRate: ${engagementRate}
   growthConsistency: ${growthConsistency}
   locationMatch: ${locationMatch}
-  pastPerformance: ${pastPerformance}
   contentQuality: ${contentQuality}
 
 Your task:
 1. Evaluate nicheMatch (0-100) — how well do the influencer's niches align with the campaign's required niches?
    Be precise: exact match = 80-100, related = 40-70, unrelated = 0-30.
 2. Calculate overall as the weighted average:
-   nicheMatch×0.25 + audienceRelevance×0.10 + audienceQuality×0.10 + engagementRate×0.25
-   + growthConsistency×0.10 + locationMatch×0.10 + pastPerformance×0.05 + contentQuality×0.05
+   nicheMatch×0.25 + audienceRelevance×0.10 + audienceQuality×0.10 + engagementRate×0.30
+   + growthConsistency×0.10 + locationMatch×0.10 + contentQuality×0.05
    Round to nearest integer.
 3. recommendation: "Highly Recommended" if overall≥80, "Recommended" if 60-79, else "Consider".
 4. 2-4 strengths (specific positives).
@@ -164,16 +202,24 @@ Return JSON:
     const nicheMatch = Math.min(100, Math.max(0, Math.round(parsed.nicheMatch ?? 0)));
 
     // Recalculate overall from components so it is always consistent
-    const rawOverall = Math.round(
-      nicheMatch       * 0.25 +
+    const weightedScore = Math.round(
+      nicheMatch        * 0.25 +
       audienceRelevance * 0.10 +
       audienceQuality   * 0.10 +
-      engagementRate    * 0.25 +
+      engagementRate    * 0.30 +
       growthConsistency * 0.10 +
       locationMatch     * 0.10 +
-      pastPerformance   * 0.05 +
       contentQuality    * 0.05,
     );
+
+    // Apply same niche penalty as fallback — poor niche match must hurt overall
+    // even when engagement/other signals are strong
+    let nicheMultiplier = 1.0;
+    if (nicheMatch < 80) nicheMultiplier = 0.9;
+    if (nicheMatch < 60) nicheMultiplier = 0.7;
+    if (nicheMatch < 40) nicheMultiplier = 0.5;
+    if (nicheMatch < 20) nicheMultiplier = 0.3;
+    const rawOverall = Math.round(weightedScore * nicheMultiplier);
 
     let recommendation: 'Highly Recommended' | 'Recommended' | 'Consider';
     if (rawOverall >= 80) recommendation = 'Highly Recommended';
@@ -188,7 +234,6 @@ Return JSON:
       engagementRate,
       growthConsistency,
       locationMatch,
-      pastPerformance,
       contentQuality,
       recommendation,
       strengths: parsed.strengths || [],
@@ -232,17 +277,15 @@ ${
 4. **engagementRate** (0-100): How good is the influencer's engagement relative to their follower tier?
 5. **growthConsistency** (0-100): Is the influencer's growth healthy and consistent over time?
 6. **locationMatch** (0-100): Does the influencer's location match campaign targeting?
-7. **pastPerformance** (0-100): How reliable is the influencer based on past campaigns?
-8. **contentQuality** (0-100): How good is the influencer's profile and content quality?
+7. **contentQuality** (0-100): How good is the influencer's profile and content quality?
 
 **Calculate overall score** as weighted average:
 - nicheMatch × 25%
 - audienceRelevance × 10%
 - audienceQuality × 10%
-- engagementRate × 25%
+- engagementRate × 30%
 - growthConsistency × 10%
 - locationMatch × 10%
-- pastPerformance × 5%
 - contentQuality × 5%
 
 **Provide:**
@@ -261,7 +304,6 @@ Return ONLY valid JSON in this exact format:
   "engagementRate": <number>,
   "growthConsistency": <number>,
   "locationMatch": <number>,
-  "pastPerformance": <number>,
   "contentQuality": <number>,
   "overall": <number>,
   "recommendation": "<string>",
@@ -284,7 +326,6 @@ Return ONLY valid JSON in this exact format:
       engagementRate: Math.round(response.engagementRate || 0),
       growthConsistency,
       locationMatch: Math.round(response.locationMatch || 0),
-      pastPerformance: Math.round(response.pastPerformance || 0),
       contentQuality: Math.round(response.contentQuality || 0),
       recommendation: response.recommendation || 'Consider',
       strengths: response.strengths || [],
@@ -301,7 +342,8 @@ Return ONLY valid JSON in this exact format:
       influencer.niches,
       campaign.niches,
     );
-    const audienceRelevance = this.calculateAudienceRelevance(influencer.followers);
+    const demographicScore = this.calculateDemographicMatch(influencer.audienceAgeGender, campaign);
+    const audienceRelevance = this.calculateAudienceRelevance(influencer.followers, demographicScore);
     const audienceQuality = this.calculateAudienceQualityScore(influencer);
     const engagementRate = this.calculateEngagementScore(
       influencer.postPerformance?.engagementRate ?? 0,
@@ -313,21 +355,18 @@ Return ONLY valid JSON in this exact format:
       campaign.targetCities,
       campaign.isPanIndia,
     );
-    const pastPerformance = influencer.pastCampaigns.successRate || 50;
-    const contentQuality = influencer.isVerified ? 80 : 60;
+    const contentQuality = influencer.contentQualityScore;
 
-    // Proposed weights:
-    // nicheMatch × 0.25, audienceRelevance × 0.10, audienceQuality × 0.10,
-    // engagementRate × 0.25, growthConsistency × 0.10,
-    // locationMatch × 0.10, pastPerformance × 0.05, contentQuality × 0.05
+    // Weights: nicheMatch × 0.25, audienceRelevance × 0.10, audienceQuality × 0.10,
+    // engagementRate × 0.30, growthConsistency × 0.10,
+    // locationMatch × 0.10, contentQuality × 0.05
     const rawScore = Math.round(
       nicheMatch * 0.25 +
         audienceRelevance * 0.10 +
         audienceQuality * 0.10 +
-        engagementRate * 0.25 +
+        engagementRate * 0.30 +
         growthConsistency * 0.10 +
         locationMatch * 0.10 +
-        pastPerformance * 0.05 +
         contentQuality * 0.05,
     );
 
@@ -398,19 +437,19 @@ Return ONLY valid JSON in this exact format:
     // Location Match analysis
     if (locationMatch >= 90) {
       strengths.push('Perfect location match for campaign targeting');
+    } else if (locationMatch === 0) {
+      concerns.push('Influencer location does not match any campaign target cities');
     } else if (locationMatch < 70) {
       concerns.push('Location may not align with primary campaign targets');
     }
 
-    // Past Performance analysis
-    if (influencer.pastCampaigns.total > 0) {
-      if (pastPerformance >= 70) {
-        strengths.push(`Proven track record with ${influencer.pastCampaigns.total} past campaigns`);
-      } else if (pastPerformance < 50) {
-        concerns.push('Past campaign performance shows room for improvement');
+    // Demographic match analysis
+    if (!campaign.isOpenToAllGenders || !campaign.isOpenToAllAges) {
+      if (demographicScore >= 75) {
+        strengths.push('Audience demographics closely match campaign targeting');
+      } else if (demographicScore < 40) {
+        concerns.push('Audience demographics do not align well with campaign gender/age targets');
       }
-    } else {
-      concerns.push('No past campaign history to evaluate');
     }
 
     // Content Quality analysis
@@ -433,7 +472,6 @@ Return ONLY valid JSON in this exact format:
       engagementRate,
       growthConsistency,
       locationMatch,
-      pastPerformance,
       contentQuality,
       recommendation,
       strengths,
@@ -537,7 +575,7 @@ Return ONLY valid JSON in this exact format:
   private calculateGrowthConsistencyScore(
     snapshots?: Array<{ syncNumber: number; totalFollowers: number; avgEngagementRate: number }>,
   ): number {
-    if (!snapshots || snapshots.length < 2) return 50; // Not enough data
+    if (!snapshots || snapshots.length < 2) return 30; // Insufficient data — slightly below neutral
 
     // Sort ascending by syncNumber to calculate growth over time
     const sorted = [...snapshots].sort((a, b) => a.syncNumber - b.syncNumber);
@@ -555,8 +593,9 @@ Return ONLY valid JSON in this exact format:
     if (followerGrowth >= 5 && followerGrowth <= 50) score = 90;       // Healthy growth
     else if (followerGrowth >= 2 && followerGrowth <= 100) score = 80; // Good growth
     else if (followerGrowth >= 0 && followerGrowth <= 200) score = 70; // Positive
-    else if (followerGrowth > 200) score = 40;                          // Suspicious spike
-    else if (followerGrowth < -5) score = 30;                           // Losing followers
+    else if (followerGrowth > 200) score = 75;                          // Viral / rapid growth — rewarded, not penalised
+    else if (followerGrowth >= -5) score = 40;                          // Slight drop (−5% to 0%) — mildly concerning
+    else score = 30;                                                     // > −5% loss — losing followers
 
     // Check engagement consistency across snapshots
     const engagementRates = sorted
@@ -650,16 +689,80 @@ Return ONLY valid JSON in this exact format:
     return 10;  // NO MATCH = Very Poor
   }
 
-  private calculateAudienceRelevance(followers: number): number {
-    if (followers >= 100000) return 90;
-    if (followers >= 50000) return 80;
-    if (followers >= 10000) return 70;
-    if (followers >= 5000) return 60;
-    if (followers >= 1000) return 50;  // Micro-influencer
-    if (followers >= 500) return 40;
-    if (followers >= 100) return 30;
-    if (followers >= 10) return 20;
-    return 10; // < 10 followers — not a real influencer
+  /**
+   * Audience Relevance = reach score (40%) + demographic match (60%).
+   * Falls back to reach-only when no demographic data is available.
+   */
+  private calculateAudienceRelevance(followers: number, demographicScore?: number): number {
+    let reachScore: number;
+    if (followers >= 100000) reachScore = 90;
+    else if (followers >= 50000) reachScore = 80;
+    else if (followers >= 10000) reachScore = 70;
+    else if (followers >= 5000) reachScore = 60;
+    else if (followers >= 1000) reachScore = 50;
+    else if (followers >= 500) reachScore = 40;
+    else if (followers >= 100) reachScore = 30;
+    else if (followers >= 10) reachScore = 20;
+    else reachScore = 10;
+
+    if (demographicScore === undefined) return reachScore;
+
+    // Combine: reach 40% + demographic relevance 60%
+    return Math.round(reachScore * 0.4 + demographicScore * 0.6);
+  }
+
+  /**
+   * Demographic match score (0-100) based on:
+   * - Gender split of influencer's audience vs campaign's gender targeting (50%)
+   * - Age distribution of influencer's audience vs campaign's age targeting (50%)
+   * Returns 50 (neutral) when no demographic data is available.
+   */
+  private calculateDemographicMatch(
+    audienceAgeGender: Array<{ ageRange: string; gender?: string; percentage: number }> | undefined,
+    campaign: CampaignData,
+  ): number {
+    if (!audienceAgeGender || audienceAgeGender.length === 0) return 0; // No data — cannot verify demographic match
+
+    // ── Gender match ─────────────────────────────────────────────────────────
+    let genderScore = 100;
+    if (!campaign.isOpenToAllGenders && campaign.genderPreferences && campaign.genderPreferences.length > 0) {
+      const preferred = campaign.genderPreferences.map(g => g.toLowerCase());
+      const matchingPct = audienceAgeGender
+        .filter(d => {
+          if (!d.gender) return false;
+          const g = d.gender.toLowerCase();
+          // Accept 'male'/'m', 'female'/'f' normalisation
+          return preferred.some(p => g === p || g[0] === p[0]);
+        })
+        .reduce((sum, d) => sum + (d.percentage || 0), 0);
+      genderScore = Math.min(100, Math.round(matchingPct));
+    }
+
+    // ── Age match ────────────────────────────────────────────────────────────
+    // Aggregate by ageRange first to avoid double-counting when entries are
+    // age+gender combined (e.g. 18-24/M: 20% + 18-24/F: 18% → 18-24: 38%)
+    let ageScore = 100;
+    if (!campaign.isOpenToAllAges && (campaign.minAge || campaign.maxAge)) {
+      const minAge = campaign.minAge || 0;
+      const maxAge = campaign.maxAge || 100;
+
+      // Collapse all gender variants into a single percentage per age range
+      const ageRangeTotals = new Map<string, number>();
+      for (const d of audienceAgeGender) {
+        ageRangeTotals.set(d.ageRange, (ageRangeTotals.get(d.ageRange) || 0) + (d.percentage || 0));
+      }
+
+      let matchingPct = 0;
+      for (const [ageRange, pct] of ageRangeTotals) {
+        const parts = ageRange.replace('+', '-100').split('-');
+        const rangeMin = parseInt(parts[0]) || 0;
+        const rangeMax = parseInt(parts[1]) || 100;
+        if (rangeMin <= maxAge && rangeMax >= minAge) matchingPct += pct;
+      }
+      ageScore = Math.min(100, Math.round(matchingPct));
+    }
+
+    return Math.round(genderScore * 0.5 + ageScore * 0.5);
   }
 
   private calculateLocationMatch(
@@ -667,13 +770,13 @@ Return ONLY valid JSON in this exact format:
     targetCities: string[],
     isPanIndia: boolean,
   ): number {
-    if (isPanIndia) return 100;
-    if (!targetCities || targetCities.length === 0) return 100;
+    if (isPanIndia) return 70; // Neutral — reaches all India but not specifically targeted
+    if (!targetCities || targetCities.length === 0) return 70;
 
     const matches = targetCities.some((city) =>
       influencerLocation.toLowerCase().includes(city.toLowerCase()),
     );
 
-    return matches ? 100 : 50;
+    return matches ? 100 : 0; // Hard mismatch when city doesn't match
   }
 }

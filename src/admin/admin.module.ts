@@ -8,7 +8,6 @@ import { AdminAuthService } from './admin-auth.service';
 import { ProfileReviewService } from './profile-review.service';
 import { AdminCampaignService } from './services/admin-campaign.service';
 import { AdminPostService } from './services/admin-post.service';
-import { AIScoringService } from './services/ai-scoring.service';
 import { InfluencerScoringService } from './services/influencer-scoring.service';
 import { DashboardStatsService } from './services/dashboard-stats.service';
 import { PushNotificationService } from './services/push-notification.service';
@@ -42,6 +41,9 @@ import { CampaignDeliverable } from '../campaign/models/campaign-deliverable.mod
 import { Experience } from '../influencer/models/experience.model';
 import { Follow } from '../post/models/follow.model';
 import { Post } from '../post/models/post.model';
+import { InstagramMediaInsight } from '../shared/models/instagram-media-insight.model';
+import { InfluencerProfileScore } from '../shared/models/influencer-profile-score.model';
+import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
 import { ProSubscription } from '../influencer/models/pro-subscription.model';
 import { ProInvoice } from '../influencer/models/pro-invoice.model';
 import { MaxCampaignInvoice } from '../campaign/models/max-campaign-invoice.model';
@@ -81,6 +83,9 @@ import { RolesGuard } from './guards/roles.guard';
       Experience,
       Follow,
       Post,
+      InstagramMediaInsight,
+      InfluencerProfileScore,
+      InstagramProfileAnalysis,
       ProSubscription,
       ProInvoice,
       MaxCampaignInvoice,
@@ -100,7 +105,6 @@ import { RolesGuard } from './guards/roles.guard';
     ProfileReviewService,
     AdminCampaignService,
     AdminPostService,
-    AIScoringService,
     InfluencerScoringService,
     DashboardStatsService,
     PushNotificationService,
@@ -114,6 +118,6 @@ import { RolesGuard } from './guards/roles.guard';
     AdminAuthGuard,
     RolesGuard,
   ],
-  exports: [AdminAuthService, ProfileReviewService, AuditLogService, AIScoringService],
+  exports: [AdminAuthService, ProfileReviewService, AuditLogService],
 })
 export class AdminModule {}

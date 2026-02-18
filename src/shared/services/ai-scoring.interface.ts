@@ -25,6 +25,10 @@ export interface InfluencerData {
     totalFollowers: number;
     avgEngagementRate: number;
   }>;
+  // Pre-calculated content quality score from influencer_profile_scores
+  contentQualityScore: number;
+  // Audience demographics from latest Instagram profile analysis
+  audienceAgeGender?: Array<{ ageRange: string; gender?: string; percentage: number }>;
 }
 
 export interface CampaignData {
@@ -35,6 +39,12 @@ export interface CampaignData {
   targetCities: string[];
   isPanIndia: boolean;
   campaignType: string;
+  // Demographic targeting
+  genderPreferences?: string[];
+  isOpenToAllGenders?: boolean;
+  minAge?: number;
+  maxAge?: number;
+  isOpenToAllAges?: boolean;
 }
 
 export interface AIScoreResult {
@@ -45,7 +55,6 @@ export interface AIScoreResult {
   engagementRate: number;
   growthConsistency: number;
   locationMatch: number;
-  pastPerformance: number;
   contentQuality: number;
   recommendation: 'Highly Recommended' | 'Recommended' | 'Consider';
   strengths: string[];

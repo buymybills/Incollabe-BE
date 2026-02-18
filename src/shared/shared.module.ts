@@ -71,6 +71,7 @@ import { DeviceToken } from './models/device-token.model';
 import { DeviceTokenService } from './device-token.service';
 import { AppVersion } from './models/app-version.model';
 import { AppVersionService } from './services/app-version.service';
+import { AIScoringService } from './services/ai-scoring.service';
 
 @Module({
   imports: [
@@ -151,6 +152,7 @@ import { AppVersionService } from './services/app-version.service';
     CampusAmbassadorService,
     DeviceTokenService,
     AppVersionService,
+    AIScoringService,
   ],
   exports: [
     SmsService,
@@ -178,6 +180,7 @@ import { AppVersionService } from './services/app-version.service';
     CampusAmbassadorService,
     DeviceTokenService,
     AppVersionService,
+    AIScoringService,
   ],
 })
 export class SharedModule { }

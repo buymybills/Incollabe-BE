@@ -35,7 +35,8 @@ import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage
 import { MaxCampaignInvoice } from './models/max-campaign-invoice.model';
 import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
 import { InstagramMediaInsight } from '../shared/models/instagram-media-insight.model';
-import { AIScoringService } from '../admin/services/ai-scoring.service';
+import { InfluencerProfileScore } from '../shared/models/influencer-profile-score.model';
+import { AIScoringService } from '../shared/services/ai-scoring.service';
 import { MaxCampaignScoringQueueService } from './services/max-campaign-scoring-queue.service';
 
 const mockModel = () => ({
@@ -158,6 +159,10 @@ describe('CampaignService', () => {
         },
         {
           provide: getModelToken(InstagramMediaInsight),
+          useValue: mockModel(),
+        },
+        {
+          provide: getModelToken(InfluencerProfileScore),
           useValue: mockModel(),
         },
         {

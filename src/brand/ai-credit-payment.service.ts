@@ -272,7 +272,7 @@ export class AiCreditPaymentService {
     return {
       success: true,
       message:
-        'AI credit purchased successfully! You can now enable AI scoring for this campaign.',
+        'AI credit purchased successfully! AI scoring has been enabled for this campaign.',
       campaign: {
         id: campaign.id,
         aiScoreCreditPurchased: campaign.aiScoreCreditPurchased,
