@@ -6,7 +6,9 @@ import {
   IsArray,
   IsDateString,
   IsNumber,
+  IsEnum,
 } from 'class-validator';
+import { CampaignType } from '../../campaign/models/campaign.model';
 
 export class UpdateExperienceDto {
   @ApiProperty({
@@ -37,22 +39,29 @@ export class UpdateExperienceDto {
   brandName?: string;
 
   @ApiProperty({
-    description: 'Campaign category',
-    example: 'Skincare + Makeup',
+    description: 'Campaign category (type)',
+    enum: CampaignType,
+    example: CampaignType.PAID,
     required: false,
   })
   @IsOptional()
-  @IsString()
-  campaignCategory?: string;
+  @IsEnum(CampaignType)
+  campaignCategory?: CampaignType;
 
   @ApiProperty({
-    description: 'Deliverable format',
-    example: '2 Instagram reels, 3 story posts',
+    description:
+      'Array of deliverable format types. Use values from GET /campaign/deliverable-formats endpoint. ' +
+      'For UGC/PAID/BARTER: social media formats (instagram_reel, youtube_short, etc.). ' +
+      'For ENGAGEMENT: engagement formats (like_comment, playstore_review, etc.)',
+    example: ['instagram_reel', 'instagram_story'],
+    type: [String],
+    isArray: true,
     required: false,
   })
   @IsOptional()
-  @IsString()
-  deliverableFormat?: string;
+  @IsArray()
+  @IsString({ each: true })
+  deliverableFormat?: string[];
 
   @ApiProperty({
     description: 'Whether the campaign was successfully completed',

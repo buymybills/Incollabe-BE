@@ -5,6 +5,7 @@ import {
   IsArray,
   IsBoolean,
   IsString,
+  IsDateString,
   Min,
   Max,
 } from 'class-validator';
@@ -150,6 +151,24 @@ export class GetTopInfluencersDto {
   @Min(0)
   @Max(100)
   minScore?: number;
+
+  @ApiProperty({
+    description: 'Start date for filtering influencers by registration date (YYYY-MM-DD)',
+    required: false,
+    example: '2026-01-01',
+  })
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @ApiProperty({
+    description: 'End date for filtering influencers by registration date (YYYY-MM-DD)',
+    required: false,
+    example: '2026-02-17',
+  })
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
 
   @ApiProperty({
     description: 'Page number for pagination',

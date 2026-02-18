@@ -6,7 +6,6 @@ export interface AIScore {
   audienceRelevance: number;
   engagementRate: number;
   locationMatch: number;
-  pastPerformance: number;
   contentQuality: number;
 }
 

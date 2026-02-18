@@ -110,7 +110,7 @@ export class Campaign extends Model<Campaign, CampaignCreationAttributes> {
     allowNull: false,
     defaultValue: CampaignType.PAID,
   })
-  type: CampaignType;
+  declare type: CampaignType;
 
   @Column({
     type: DataType.BOOLEAN,
@@ -228,6 +228,13 @@ export class Campaign extends Model<Campaign, CampaignCreationAttributes> {
     field: 'ai_score_enabled',
   })
   declare aiScoreEnabled: boolean;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+    field: 'ai_score_credit_purchased',
+  })
+  declare aiScoreCreditPurchased: boolean;
 
   // Max Campaign Payment Fields
   @Column({

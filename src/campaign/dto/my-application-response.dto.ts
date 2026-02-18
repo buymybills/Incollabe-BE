@@ -36,6 +36,13 @@ export class MyApplicationResponseDto {
       description: { type: 'string', example: 'Campaign description' },
       status: { type: 'string', example: 'active' },
       type: { type: 'string', example: 'paid' },
+      isMaxCampaign: { type: 'boolean', example: false },
+      isInviteOnly: { type: 'boolean', example: false },
+      promotionType: {
+        type: 'string',
+        enum: ['organic', 'max', 'invite_only'],
+        example: 'organic',
+      },
       brand: {
         type: 'object',
         properties: {
@@ -68,6 +75,9 @@ export class MyApplicationResponseDto {
     description?: string;
     status: string;
     type: string;
+    isMaxCampaign?: boolean;
+    isInviteOnly?: boolean;
+    promotionType?: 'organic' | 'max' | 'invite_only';
     brand?: {
       id: number;
       brandName: string;

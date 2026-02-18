@@ -64,12 +64,14 @@ import { Campaign } from '../campaign/models/campaign.model';
 import { CampaignApplication } from '../campaign/models/campaign-application.model';
 import { CampaignInvitation } from '../campaign/models/campaign-invitation.model';
 import { KeyBackupService } from './services/key-backup.service';
+import { ChatDecryptionService } from './services/chat-decryption.service';
 import { KeyBackupController } from './key-backup.controller';
 import { JwtAuthModule } from './jwt.module';
 import { DeviceToken } from './models/device-token.model';
 import { DeviceTokenService } from './device-token.service';
 import { AppVersion } from './models/app-version.model';
 import { AppVersionService } from './services/app-version.service';
+import { AIScoringService } from './services/ai-scoring.service';
 
 @Module({
   imports: [
@@ -136,6 +138,7 @@ import { AppVersionService } from './services/app-version.service';
     IsValidUsernameConstraint,
     RazorpayService,
     KeyBackupService,
+    ChatDecryptionService,
     InstagramService,
     // InstagramSyncCronService,
     // InstagramDemographicsCronService,
@@ -149,6 +152,7 @@ import { AppVersionService } from './services/app-version.service';
     CampusAmbassadorService,
     DeviceTokenService,
     AppVersionService,
+    AIScoringService,
   ],
   exports: [
     SmsService,
@@ -176,6 +180,7 @@ import { AppVersionService } from './services/app-version.service';
     CampusAmbassadorService,
     DeviceTokenService,
     AppVersionService,
+    AIScoringService,
   ],
 })
 export class SharedModule { }

@@ -228,6 +228,7 @@ export class ChatService {
       otherParty,
       otherPartyType,
       lastMessage: conversation.lastMessage,
+      lastMessageType: conversation.lastMessageType ?? 'text',
       lastMessageAt: conversation.lastMessageAt,
       unreadCount: this.getUserUnreadCountForConversation(
         conversation,
@@ -321,6 +322,7 @@ export class ChatService {
           otherParty: otherPartyDetails,
           otherPartyType: otherParticipant.type,
           lastMessage: conv.lastMessage,
+          lastMessageType: conv.lastMessageType ?? 'text',
           lastMessageAt: conv.lastMessageAt,
           lastMessageSenderType: conv.lastMessageSenderType,
           unreadCount: this.getUserUnreadCountForConversation(
@@ -423,15 +425,25 @@ export class ChatService {
     if (content) {
       try {
         const parsed = JSON.parse(content);
-        // Check if it has E2EE structure
-        if (
+        // Check for new dual-key format: { encryptedKeyForRecipient, encryptedKeyForSender, iv, ciphertext }
+        const isDualKey =
+          parsed.encryptedKeyForRecipient &&
+          parsed.encryptedKeyForSender &&
+          parsed.iv &&
+          parsed.ciphertext &&
+          typeof parsed.encryptedKeyForRecipient === 'string' &&
+          typeof parsed.encryptedKeyForSender === 'string' &&
+          typeof parsed.iv === 'string' &&
+          typeof parsed.ciphertext === 'string';
+        // Check for legacy format: { encryptedKey, iv, ciphertext }
+        const isLegacy =
           parsed.encryptedKey &&
           parsed.iv &&
           parsed.ciphertext &&
           typeof parsed.encryptedKey === 'string' &&
           typeof parsed.iv === 'string' &&
-          typeof parsed.ciphertext === 'string'
-        ) {
+          typeof parsed.ciphertext === 'string';
+        if (isDualKey || isLegacy) {
           isEncrypted = true;
           encryptionVersion = parsed.version || 'v1';
         }
@@ -465,19 +477,16 @@ export class ChatService {
       conversation.participant1Id === userId;
 
     // Set last message preview
-    let lastMessagePreview: string;
-    if (isEncrypted) {
-      lastMessagePreview = '🔒 Encrypted message';
-    } else if (attachmentUrl && !content) {
-      lastMessagePreview = `Sent a ${messageType}`;
-    } else {
-      lastMessagePreview = content || `Sent a ${messageType}`;
-    }
+    // Media messages → null; text (plain or encrypted) → store content as-is.
+    const lastMessagePreview: string | null = attachmentUrl
+      ? null
+      : content || null;
 
     const updateData: any = {
       lastMessage: lastMessagePreview,
       lastMessageAt: new Date(),
       lastMessageSenderType: userType,
+      lastMessageType: messageType,
     };
 
     // Increment unread count for the OTHER participant

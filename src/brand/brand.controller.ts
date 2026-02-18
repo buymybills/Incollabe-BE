@@ -55,6 +55,8 @@ import { MaxCampaignPaymentService } from '../campaign/services/max-campaign-pay
 import { VerifyMaxCampaignPaymentDto } from '../campaign/dto/max-campaign.dto';
 import { InviteOnlyPaymentService } from '../campaign/services/invite-only-payment.service';
 import { VerifyInviteOnlyPaymentDto } from '../campaign/dto/invite-only-payment.dto';
+import { AiCreditPaymentService } from './ai-credit-payment.service';
+import { VerifyAiCreditPaymentDto } from './dto/ai-credit-payment.dto';
 
 @ApiTags('Brand Profile')
 @Controller('brand')
@@ -67,6 +69,7 @@ export class BrandController {
     private readonly maxCampaignPaymentService: MaxCampaignPaymentService,
     private readonly inviteOnlyPaymentService: InviteOnlyPaymentService,
     private readonly s3Service: S3Service,
+    private readonly aiCreditPaymentService: AiCreditPaymentService,
   ) {}
 
   @Get('company-types')
@@ -961,6 +964,139 @@ export class BrandController {
       throw new BadRequestException('Only brands can regenerate invoices');
     }
     return await this.maxCampaignPaymentService.regenerateInvoicePDF(
+      invoiceId,
+      req.user.id,
+    );
+  }
+
+  // AI Credit Purchase Endpoints
+
+  @Post('campaigns/:campaignId/purchase-ai-credit')
+  @ApiOperation({
+    summary: 'Purchase 1 AI credit',
+    description:
+      'Create a Razorpay payment order to purchase 1 AI credit for Rs 299. Credit is added to brand general balance. Only allowed when aiCreditsRemaining = 0.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Payment order created successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'AI credits still remaining – purchase not allowed',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Campaign not found',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'You can only purchase credits for your own campaigns',
+  })
+  async purchaseAiCredit(
+    @Req() req: RequestWithUser,
+    @Param('campaignId', ParseIntPipe) campaignId: number,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new BadRequestException('Only brands can purchase AI credits');
+    }
+    return await this.aiCreditPaymentService.createAiCreditOrder(
+      campaignId,
+      req.user.id,
+    );
+  }
+
+  @Post('campaigns/:campaignId/verify-ai-credit-payment')
+  @ApiOperation({
+    summary: 'Verify AI credit payment',
+    description:
+      'Verify Razorpay payment signature and add 1 AI credit to brand balance.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment verified and AI credit added successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid payment signature' })
+  @ApiResponse({ status: 404, description: 'Campaign not found' })
+  async verifyAiCreditPayment(
+    @Req() req: RequestWithUser,
+    @Param('campaignId', ParseIntPipe) campaignId: number,
+    @Body() verifyDto: VerifyAiCreditPaymentDto,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new BadRequestException(
+        'Only brands can verify AI credit payments',
+      );
+    }
+    return await this.aiCreditPaymentService.verifyAndActivateAiCredit(
+      campaignId,
+      req.user.id,
+      verifyDto.paymentId,
+      verifyDto.orderId,
+      verifyDto.signature,
+    );
+  }
+
+  @Get('campaigns/:campaignId/ai-credit-status')
+  @ApiOperation({
+    summary: 'Get AI credit status',
+    description:
+      'Get current AI credit balance, purchase eligibility, and latest invoice for the brand.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'AI credit status retrieved successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Campaign not found' })
+  async getAiCreditStatus(
+    @Req() req: RequestWithUser,
+    @Param('campaignId', ParseIntPipe) campaignId: number,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new BadRequestException('Only brands can view AI credit status');
+    }
+    return await this.aiCreditPaymentService.getAiCreditStatus(
+      campaignId,
+      req.user.id,
+    );
+  }
+
+  @Get('billing/ai-credit-history')
+  @ApiOperation({
+    summary: 'Get AI credit billing history',
+    description: 'Get all AI credit purchase invoices for the brand.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'AI credit billing history retrieved successfully',
+  })
+  async getAiCreditBillingHistory(@Req() req: RequestWithUser) {
+    if (req.user.userType !== 'brand') {
+      throw new BadRequestException('Only brands can view billing history');
+    }
+    return await this.aiCreditPaymentService.getAiCreditBillingHistory(
+      req.user.id,
+    );
+  }
+
+  @Get('ai-credit/invoices/:invoiceId')
+  @ApiOperation({
+    summary: 'Get AI credit invoice details',
+    description: 'Get details for a specific AI credit invoice.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Invoice details retrieved successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Invoice not found' })
+  async getAiCreditInvoice(
+    @Req() req: RequestWithUser,
+    @Param('invoiceId', ParseIntPipe) invoiceId: number,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new BadRequestException('Only brands can view invoices');
+    }
+    return await this.aiCreditPaymentService.getAiCreditInvoiceDetails(
       invoiceId,
       req.user.id,
     );

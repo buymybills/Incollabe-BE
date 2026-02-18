@@ -1498,6 +1498,7 @@ export class DashboardStatsService {
     endDate: Date,
   ): Promise<number> {
     // Get unique cities with campaigns created in date range
+    // isPanIndia campaigns have no campaign_cities entries, so we exclude them
     const uniqueCities = await this.campaignCityModel.findAll({
       attributes: ['cityId'],
       include: [
@@ -1506,12 +1507,14 @@ export class DashboardStatsService {
           as: 'campaign',
           where: {
             isActive: true,
+            isPanIndia: false,
             createdAt: { [Op.between]: [startDate, endDate] },
           },
           attributes: [],
+          required: true,
         },
       ],
-      group: ['cityId'],
+      group: ['CampaignCity.cityId'],
       raw: true,
     });
 
@@ -1523,6 +1526,7 @@ export class DashboardStatsService {
     endDate: Date,
   ) {
     // Get city counts from campaigns created in date range
+    // isPanIndia campaigns have no campaign_cities entries, so we exclude them
     const cityCounts = await this.campaignCityModel.findAll({
       attributes: [
         'cityId',
@@ -1540,9 +1544,11 @@ export class DashboardStatsService {
           as: 'campaign',
           where: {
             isActive: true,
+            isPanIndia: false,
             createdAt: { [Op.between]: [startDate, endDate] },
           },
           attributes: [],
+          required: true,
         },
         {
           model: City,

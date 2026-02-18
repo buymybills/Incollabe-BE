@@ -104,6 +104,13 @@ export class Conversation extends Model<Conversation> {
   declare lastMessageSenderType: string; // 'influencer' or 'brand'
 
   @Column({
+    type: DataType.STRING(20),
+    allowNull: true,
+    defaultValue: 'text',
+  })
+  declare lastMessageType: string; // 'text' | 'image' | 'video' | 'audio' | 'file' | 'media'
+
+  @Column({
     type: DataType.INTEGER,
     defaultValue: 0,
   })

@@ -367,7 +367,8 @@ export class ProSubscriptionService {
     let isPro = false;
 
     if (subscription.status === SubscriptionStatus.ACTIVE) {
-      isPro = true;
+      // Guard against cron not running: if the period has ended, treat as expired
+      isPro = subscription.currentPeriodEnd > now;
     } else if (subscription.status === SubscriptionStatus.CANCELLED) {
       // Only give Pro access if subscription was actually paid AND current period hasn't ended
       isPro = hadPaidInvoices && subscription.currentPeriodEnd > now;
@@ -398,9 +399,13 @@ export class ProSubscriptionService {
     // Calculate display status dynamically based on current time
     let displayStatus = subscription.status;
 
+    // If active but period has ended (cron hasn't run yet), show as expired
+    if (subscription.status === SubscriptionStatus.ACTIVE && subscription.currentPeriodEnd <= now) {
+      displayStatus = SubscriptionStatus.EXPIRED;
+    }
     // If cancelled and current period has ended, show as expired ONLY if it was paid at some point
     // If never paid, keep status as cancelled
-    if (subscription.status === SubscriptionStatus.CANCELLED && subscription.currentPeriodEnd <= now && hadPaidInvoices) {
+    else if (subscription.status === SubscriptionStatus.CANCELLED && subscription.currentPeriodEnd <= now && hadPaidInvoices) {
       displayStatus = SubscriptionStatus.EXPIRED;
     }
     // If pause is scheduled but hasn't started yet (before currentPeriodEnd), show as active
@@ -812,48 +817,37 @@ export class ProSubscriptionService {
    * Example: INV-U2602-1 (1st invoice in Feb 2026)
    */
   private async generateInvoiceNumber(influencerId: number): Promise<string> {
-    const year = String(new Date().getFullYear()).slice(-2); // Get last 2 digits of year
+    const year = String(new Date().getFullYear()).slice(-2);
     const month = String(new Date().getMonth() + 1).padStart(2, '0');
     const yearMonth = `${year}${month}`;
     const currentPrefix = `INV-U${yearMonth}-`;
 
     // Legacy format for continuity
-    const legacyPrefix = `MAXXINV-20${yearMonth}-`; // MAXXINV-202602-
+    const legacyPrefix = `MAXXINV-20${yearMonth}-`;
 
-    // Check current format (INV-U2602-1)
-    const latestCurrentInvoice = await this.proInvoiceModel.findOne({
-      where: {
-        invoiceNumber: {
-          [Op.like]: `${currentPrefix}%`,
-        },
-      },
-      order: [['createdAt', 'DESC']],
-    });
-
-    // Check legacy format (MAXXINV-202602-1)
-    const latestLegacyInvoice = await this.proInvoiceModel.findOne({
-      where: {
-        invoiceNumber: {
-          [Op.like]: `${legacyPrefix}%`,
-        },
-      },
-      order: [['createdAt', 'DESC']],
-    });
+    const [currentInvoices, legacyInvoices] = await Promise.all([
+      this.proInvoiceModel.findAll({
+        where: { invoiceNumber: { [Op.like]: `${currentPrefix}%` } },
+        attributes: ['invoiceNumber'],
+      }),
+      this.proInvoiceModel.findAll({
+        where: { invoiceNumber: { [Op.like]: `${legacyPrefix}%` } },
+        attributes: ['invoiceNumber'],
+      }),
+    ]);
 
     let nextNumber = 1;
 
-    // Extract sequence from current format (INV-U2602-15)
-    if (latestCurrentInvoice) {
-      const parts = latestCurrentInvoice.invoiceNumber.split('-');
-      const lastNumber = parseInt(parts[2], 10);
-      nextNumber = Math.max(nextNumber, lastNumber + 1);
+    // Current format: INV-U2602-<seq>  → parts[2]
+    for (const inv of currentInvoices) {
+      const n = parseInt(inv.invoiceNumber.split('-')[2], 10);
+      if (!isNaN(n)) nextNumber = Math.max(nextNumber, n + 1);
     }
 
-    // Extract sequence from legacy format (MAXXINV-202602-14)
-    if (latestLegacyInvoice) {
-      const parts = latestLegacyInvoice.invoiceNumber.split('-');
-      const lastNumber = parseInt(parts[2], 10);
-      nextNumber = Math.max(nextNumber, lastNumber + 1);
+    // Legacy format: MAXXINV-202602-<seq>  → parts[2]
+    for (const inv of legacyInvoices) {
+      const n = parseInt(inv.invoiceNumber.split('-')[2], 10);
+      if (!isNaN(n)) nextNumber = Math.max(nextNumber, n + 1);
     }
 
     return `${currentPrefix}${nextNumber}`;
@@ -2164,6 +2158,38 @@ export class ProSubscriptionService {
 
     if (!subscription) {
       throw new NotFoundException('No paused subscription found');
+    }
+
+    // Guard: if the influencer already has a different active subscription (e.g.
+    // they bought a new plan while this one was paused), cancel the stale paused
+    // subscription instead of resuming it. Without this check the cron would
+    // violate the unique_active_subscription_per_influencer constraint every run.
+    const existingActive = await this.proSubscriptionModel.findOne({
+      where: {
+        influencerId,
+        status: SubscriptionStatus.ACTIVE,
+        id: { [Op.ne]: subscription.id },
+      },
+    });
+
+    if (existingActive) {
+      await subscription.update({
+        status: SubscriptionStatus.CANCELLED,
+        cancelledAt: createDatabaseDate(),
+        cancelReason: 'Superseded by a newer active subscription',
+        isPaused: false,
+        pausedAt: null,
+        resumeDate: null,
+      });
+      console.log(
+        `Subscription ${subscription.id} (influencer ${influencerId}) cancelled — ` +
+        `influencer already has active subscription ${existingActive.id}.`,
+      );
+      return {
+        success: true,
+        message: 'Previous paused subscription cancelled — influencer already has an active subscription.',
+        subscription: { id: existingActive.id, status: existingActive.status },
+      };
     }
 
     // If manual resume, allow anytime

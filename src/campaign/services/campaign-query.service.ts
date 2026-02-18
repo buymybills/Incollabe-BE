@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
+import { Op } from 'sequelize';
 import { Campaign, CampaignStatus } from '../models/campaign.model';
 import { CampaignApplication } from '../models/campaign-application.model';
 import { CampaignInvitation } from '../models/campaign-invitation.model';
@@ -58,17 +59,19 @@ export class CampaignQueryService {
    * @param brandId - Brand ID
    * @param campaignType - Optional filter by campaign type (paid, barter, ugc, engagement)
    */
-  async fetchOpenCampaigns(brandId: number, campaignType?: string): Promise<Campaign[]> {
+  async fetchOpenCampaigns(brandId: number, campaignType?: string, campaignMode?: string, searchQuery?: string): Promise<Campaign[]> {
     const whereCondition: any = {
       brandId,
       status: CampaignStatus.ACTIVE,
       isInviteOnly: false,
     };
 
-    // Add campaign type filter if specified
     if (campaignType) {
       whereCondition.type = campaignType;
     }
+
+    this.applyCampaignModeFilter(whereCondition, campaignMode);
+    this.applySearchFilter(whereCondition, searchQuery);
 
     return this.campaignModel.findAll({
       where: whereCondition,
@@ -81,12 +84,17 @@ export class CampaignQueryService {
    * Fetch draft campaigns for a brand
    * Only returns campaigns with DRAFT status
    */
-  async fetchDraftCampaigns(brandId: number): Promise<Campaign[]> {
+  async fetchDraftCampaigns(brandId: number, campaignMode?: string, searchQuery?: string): Promise<Campaign[]> {
+    const whereCondition: any = {
+      brandId,
+      status: CampaignStatus.DRAFT,
+    };
+
+    this.applyCampaignModeFilter(whereCondition, campaignMode);
+    this.applySearchFilter(whereCondition, searchQuery);
+
     return this.campaignModel.findAll({
-      where: {
-        brandId,
-        status: CampaignStatus.DRAFT,
-      },
+      where: whereCondition,
       include: this.getBaseIncludeOptions(),
       order: [['createdAt', 'DESC']],
     });
@@ -96,13 +104,18 @@ export class CampaignQueryService {
    * Fetch invite-only campaigns for a brand
    * Only returns active invite campaigns (status: ACTIVE, invite-only, not finished/cancelled)
    */
-  async fetchInviteCampaigns(brandId: number): Promise<Campaign[]> {
+  async fetchInviteCampaigns(brandId: number, campaignMode?: string, searchQuery?: string): Promise<Campaign[]> {
+    const whereCondition: any = {
+      brandId,
+      status: CampaignStatus.ACTIVE,
+      isInviteOnly: true,
+    };
+
+    this.applyCampaignModeFilter(whereCondition, campaignMode);
+    this.applySearchFilter(whereCondition, searchQuery);
+
     return this.campaignModel.findAll({
-      where: {
-        brandId,
-        status: CampaignStatus.ACTIVE,
-        isInviteOnly: true,
-      },
+      where: whereCondition,
       include: [
         ...this.getBaseIncludeOptions(),
         {
@@ -119,15 +132,19 @@ export class CampaignQueryService {
    * Fetch finished campaigns for a brand
    * A campaign is finished when status is COMPLETED or CANCELLED
    */
-  async fetchFinishedCampaigns(brandId: number): Promise<Campaign[]> {
-    const { Op } = require('sequelize');
-    return this.campaignModel.findAll({
-      where: {
-        brandId,
-        status: {
-          [Op.in]: [CampaignStatus.COMPLETED, CampaignStatus.CANCELLED],
-        },
+  async fetchFinishedCampaigns(brandId: number, campaignMode?: string, searchQuery?: string): Promise<Campaign[]> {
+    const whereCondition: any = {
+      brandId,
+      status: {
+        [Op.in]: [CampaignStatus.COMPLETED, CampaignStatus.CANCELLED],
       },
+    };
+
+    this.applyCampaignModeFilter(whereCondition, campaignMode);
+    this.applySearchFilter(whereCondition, searchQuery);
+
+    return this.campaignModel.findAll({
+      where: whereCondition,
       include: this.getBaseIncludeOptions(),
       order: [['createdAt', 'DESC']],
     });
@@ -136,15 +153,19 @@ export class CampaignQueryService {
   /**
    * Fetch all campaigns for a brand (excludes drafts)
    */
-  async fetchAllCampaigns(brandId: number): Promise<Campaign[]> {
-    const { Op } = require('sequelize');
-    return this.campaignModel.findAll({
-      where: {
-        brandId,
-        status: {
-          [Op.ne]: CampaignStatus.DRAFT, // Exclude draft campaigns
-        },
+  async fetchAllCampaigns(brandId: number, campaignMode?: string, searchQuery?: string): Promise<Campaign[]> {
+    const whereCondition: any = {
+      brandId,
+      status: {
+        [Op.ne]: CampaignStatus.DRAFT, // Exclude draft campaigns
       },
+    };
+
+    this.applyCampaignModeFilter(whereCondition, campaignMode);
+    this.applySearchFilter(whereCondition, searchQuery);
+
+    return this.campaignModel.findAll({
+      where: whereCondition,
       include: [
         ...this.getBaseIncludeOptions(),
         {
@@ -158,43 +179,78 @@ export class CampaignQueryService {
   }
 
   /**
+   * Apply searchQuery filter on campaign name to a where condition object.
+   */
+  private applySearchFilter(whereCondition: any, searchQuery?: string): void {
+    if (searchQuery && searchQuery.trim()) {
+      whereCondition.name = { [Op.iLike]: `%${searchQuery.trim()}%` };
+    }
+  }
+
+  /**
+   * Apply campaignMode filter to a where condition object.
+   * - openForAll: non-invite-only, non-MAX campaigns
+   * - maxCampaign: boosted MAX campaigns (isMaxCampaign: true)
+   * - inviteOnly: invite-only campaigns (isInviteOnly: true)
+   */
+  private applyCampaignModeFilter(whereCondition: any, campaignMode?: string): void {
+    if (!campaignMode) return;
+
+    switch (campaignMode) {
+      case 'openForAll':
+        whereCondition.isInviteOnly = false;
+        whereCondition.isMaxCampaign = false;
+        break;
+      case 'maxCampaign':
+        whereCondition.isMaxCampaign = true;
+        break;
+      case 'inviteOnly':
+        whereCondition.isInviteOnly = true;
+        break;
+    }
+  }
+
+  /**
    * Get campaigns by category with stats
    * @param brandId - Brand ID
    * @param type - Category type (open, invite, finished, all)
-   * @param campaignType - Optional filter by campaign type (paid, barter, ugc, engagement) - only applies to 'open' category
+   * @param campaignType - Optional filter by campaign type (paid, barter, ugc, engagement)
+   * @param campaignMode - Optional filter by mode (openForAll, maxCampaign, inviteOnly)
    */
   async getCampaignsByCategory(
     brandId: number,
     type?: string,
     campaignType?: string,
+    campaignMode?: string,
+    searchQuery?: string,
   ): Promise<CampaignWithStats[]> {
     let campaigns: Campaign[];
     let statsProcessor: (campaign: Campaign) => CampaignWithStats;
 
     switch (type) {
       case 'open':
-        campaigns = await this.fetchOpenCampaigns(brandId, campaignType);
+        campaigns = await this.fetchOpenCampaigns(brandId, campaignType, campaignMode, searchQuery);
         statsProcessor = (c) => CampaignStatsHelper.addApplicationCount(c);
         break;
 
       case 'invite':
-        campaigns = await this.fetchInviteCampaigns(brandId);
+        campaigns = await this.fetchInviteCampaigns(brandId, campaignMode, searchQuery);
         statsProcessor = (c) => CampaignStatsHelper.addInviteCount(c);
         break;
 
       case 'draft':
-        campaigns = await this.fetchDraftCampaigns(brandId);
+        campaigns = await this.fetchDraftCampaigns(brandId, campaignMode, searchQuery);
         statsProcessor = (c) => c.toJSON();
         break;
 
       case 'finished':
-        campaigns = await this.fetchFinishedCampaigns(brandId);
+        campaigns = await this.fetchFinishedCampaigns(brandId, campaignMode, searchQuery);
         statsProcessor = (c) => c.toJSON();
         break;
 
       default:
         // No type specified - return all campaigns
-        campaigns = await this.fetchAllCampaigns(brandId);
+        campaigns = await this.fetchAllCampaigns(brandId, campaignMode, searchQuery);
         statsProcessor = (c) => CampaignStatsHelper.addStatsBasedOnType(c);
         break;
     }

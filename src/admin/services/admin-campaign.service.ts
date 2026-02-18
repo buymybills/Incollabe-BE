@@ -18,7 +18,10 @@ import { CampaignCity } from '../../campaign/models/campaign-city.model';
 import { Experience } from '../../influencer/models/experience.model';
 import { Follow, FollowingType } from '../../post/models/follow.model';
 import { Post, UserType } from '../../post/models/post.model';
-import { AIScoringService } from './ai-scoring.service';
+import { InstagramMediaInsight } from '../../shared/models/instagram-media-insight.model';
+import { InfluencerProfileScore } from '../../shared/models/influencer-profile-score.model';
+import { InstagramProfileAnalysis } from '../../shared/models/instagram-profile-analysis.model';
+import { AIScoringService } from '../../shared/services/ai-scoring.service';
 import {
   AIScore,
   ScoredApplication,
@@ -43,6 +46,12 @@ export class AdminCampaignService {
     private readonly followModel: typeof Follow,
     @InjectModel(Post)
     private readonly postModel: typeof Post,
+    @InjectModel(InstagramMediaInsight)
+    private readonly instagramMediaInsightModel: typeof InstagramMediaInsight,
+    @InjectModel(InfluencerProfileScore)
+    private readonly influencerProfileScoreModel: typeof InfluencerProfileScore,
+    @InjectModel(InstagramProfileAnalysis)
+    private readonly instagramProfileAnalysisModel: typeof InstagramProfileAnalysis,
     private readonly aiScoringService: AIScoringService,
   ) {}
 
@@ -177,6 +186,24 @@ export class AdminCampaignService {
     // Get past campaign performance
     const pastCampaigns = await this.getPastCampaignStats(influencer.id);
 
+    // Get content quality score from latest Instagram profile score
+    const profileScore = await this.influencerProfileScoreModel.findOne({
+      where: { influencerId: influencer.id },
+      attributes: ['contentQualityScore'],
+      order: [['calculatedAt', 'DESC']],
+    });
+    const contentQualityScore = profileScore?.contentQualityScore
+      ? Number(profileScore.contentQualityScore)
+      : 0;
+
+    // Get audience demographics from latest Instagram profile analysis
+    const latestAnalysis = await this.instagramProfileAnalysisModel.findOne({
+      where: { influencerId: influencer.id },
+      attributes: ['audienceAgeGender'],
+      order: [['syncNumber', 'DESC']],
+    });
+    const audienceAgeGender = latestAnalysis?.audienceAgeGender ?? undefined;
+
     // Get campaign cities
     const campaignCities = await this.getCampaignCities(campaign.id);
 
@@ -195,6 +222,8 @@ export class AdminCampaignService {
       bio: influencer.bio || '',
       pastCampaigns,
       postPerformance: postPerformance || undefined,
+      contentQualityScore,
+      audienceAgeGender,
     };
 
     const campaignData = {
@@ -205,6 +234,12 @@ export class AdminCampaignService {
       targetCities: campaignCities,
       isPanIndia: campaign.isPanIndia,
       campaignType: campaign.type,
+      // Demographic targeting
+      genderPreferences: campaign.genderPreferences ?? [],
+      isOpenToAllGenders: campaign.isOpenToAllGenders ?? true,
+      minAge: campaign.minAge ?? undefined,
+      maxAge: campaign.maxAge ?? undefined,
+      isOpenToAllAges: campaign.isOpenToAllAges ?? true,
     };
 
     // Use AI to score the match
@@ -237,7 +272,6 @@ export class AdminCampaignService {
         audienceRelevance: aiResult.audienceRelevance,
         engagementRate: aiResult.engagementRate,
         locationMatch: aiResult.locationMatch,
-        pastPerformance: aiResult.pastPerformance,
         contentQuality: aiResult.contentQuality,
       },
     };
@@ -257,28 +291,46 @@ export class AdminCampaignService {
     averageLikes: number;
     engagementRate: number;
   } | null> {
+    const followerCount = await this.getFollowerCount(influencerId);
+
+    // Primary: use Instagram media insights (likes + comments + shares + saves)
+    // matching the same formula used in instagram.service.ts
+    const insights = await this.instagramMediaInsightModel.findAll({
+      where: { influencerId },
+      attributes: ['likes', 'comments', 'shares', 'saved'],
+      raw: true,
+    });
+
+    if (insights.length > 0) {
+      let totalLikes = 0;
+      let totalEngagement = 0;
+      for (const insight of insights as any[]) {
+        const likes    = insight.likes    || 0;
+        const comments = insight.comments || 0;
+        const shares   = insight.shares   || 0;
+        const saved    = insight.saved    || 0;
+        totalLikes      += likes;
+        totalEngagement += likes + comments + shares + saved;
+      }
+      const averageLikes   = Math.round(totalLikes / insights.length);
+      const engagementRate = followerCount > 0
+        ? Math.round((totalEngagement / insights.length / followerCount) * 1000000) / 100
+        : 0;
+      return { totalPosts: insights.length, averageLikes, engagementRate };
+    }
+
+    // Fallback: likes-only from internal posts table
     const posts = await this.postModel.findAll({
-      where: {
-        userType: UserType.INFLUENCER,
-        influencerId,
-        isActive: true,
-      },
+      where: { userType: UserType.INFLUENCER, influencerId, isActive: true },
       attributes: ['likesCount'],
       raw: true,
     });
 
     if (posts.length === 0) return null;
 
-    const totalLikes = posts.reduce(
-      (sum, post: any) => sum + (post.likesCount || 0),
-      0,
-    );
+    const totalLikes   = posts.reduce((sum, post: any) => sum + (post.likesCount || 0), 0);
     const averageLikes = Math.round(totalLikes / posts.length);
-
-    // Get follower count for engagement rate calculation
-    const followerCount = await this.getFollowerCount(influencerId);
-    const engagementRate =
-      followerCount > 0 ? (averageLikes / followerCount) * 100 : 0;
+    const engagementRate = followerCount > 0 ? (averageLikes / followerCount) * 100 : 0;
 
     return {
       totalPosts: posts.length,
