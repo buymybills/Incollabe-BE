@@ -228,6 +228,7 @@ export class ChatService {
       otherParty,
       otherPartyType,
       lastMessage: conversation.lastMessage,
+      lastMessageType: conversation.lastMessageType ?? 'text',
       lastMessageAt: conversation.lastMessageAt,
       unreadCount: this.getUserUnreadCountForConversation(
         conversation,
@@ -321,6 +322,7 @@ export class ChatService {
           otherParty: otherPartyDetails,
           otherPartyType: otherParticipant.type,
           lastMessage: conv.lastMessage,
+          lastMessageType: conv.lastMessageType ?? 'text',
           lastMessageAt: conv.lastMessageAt,
           lastMessageSenderType: conv.lastMessageSenderType,
           unreadCount: this.getUserUnreadCountForConversation(
@@ -484,6 +486,7 @@ export class ChatService {
       lastMessage: lastMessagePreview,
       lastMessageAt: new Date(),
       lastMessageSenderType: userType,
+      lastMessageType: messageType,
     };
 
     // Increment unread count for the OTHER participant

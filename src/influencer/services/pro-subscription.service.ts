@@ -367,7 +367,8 @@ export class ProSubscriptionService {
     let isPro = false;
 
     if (subscription.status === SubscriptionStatus.ACTIVE) {
-      isPro = true;
+      // Guard against cron not running: if the period has ended, treat as expired
+      isPro = subscription.currentPeriodEnd > now;
     } else if (subscription.status === SubscriptionStatus.CANCELLED) {
       // Only give Pro access if subscription was actually paid AND current period hasn't ended
       isPro = hadPaidInvoices && subscription.currentPeriodEnd > now;
@@ -398,9 +399,13 @@ export class ProSubscriptionService {
     // Calculate display status dynamically based on current time
     let displayStatus = subscription.status;
 
+    // If active but period has ended (cron hasn't run yet), show as expired
+    if (subscription.status === SubscriptionStatus.ACTIVE && subscription.currentPeriodEnd <= now) {
+      displayStatus = SubscriptionStatus.EXPIRED;
+    }
     // If cancelled and current period has ended, show as expired ONLY if it was paid at some point
     // If never paid, keep status as cancelled
-    if (subscription.status === SubscriptionStatus.CANCELLED && subscription.currentPeriodEnd <= now && hadPaidInvoices) {
+    else if (subscription.status === SubscriptionStatus.CANCELLED && subscription.currentPeriodEnd <= now && hadPaidInvoices) {
       displayStatus = SubscriptionStatus.EXPIRED;
     }
     // If pause is scheduled but hasn't started yet (before currentPeriodEnd), show as active
