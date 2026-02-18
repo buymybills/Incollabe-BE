@@ -1731,48 +1731,21 @@ export class InfluencerService {
       status: ApplicationStatus.APPLIED,
     } as any);
 
-    // For MAX campaigns: queue background scoring only when Instagram data needs to be fetched.
-    // AI score depends on instagram_profile_analysis data created by syncAllMediaInsights +
-    // syncAllInsights. We skip queuing if:
-    //   - syncNumber 1 & 2 already exist (initial sync was done), AND
-    //   - the most recent snapshot is less than 15 days old (data is still fresh)
-    // Otherwise we queue so the background job fetches/refreshes the data first.
+    // For MAX campaigns: always queue background scoring for every new application.
+    // The processor (MaxCampaignScoringProcessor) already decides internally whether
+    // to re-sync Instagram data (stale/missing) or skip the sync (fresh data).
+    // Queueing unconditionally ensures aiScore is calculated even when Instagram data
+    // is already fresh — the old conditional was causing aiScore to stay null permanently
+    // for influencers whose data was up-to-date.
     if (campaign.isMaxCampaign) {
-      const allSnapshots = await this.instagramProfileAnalysisModel.findAll({
-        where: { influencerId },
-        order: [['id', 'DESC']],
-        attributes: ['syncNumber', 'analysisPeriodEnd', 'createdAt'],
-      });
-
-      const validSnapshots = allSnapshots.filter((s) => s.syncNumber != null);
-      const initialSnapshots = validSnapshots.filter(
-        (s) => s.syncNumber === 1 || s.syncNumber === 2,
-      );
-      // syncNumber 1 & 2 are created once during the first-ever Instagram sync.
-      const hasInitialSnapshots = initialSnapshots.length >= 2;
-
-      // Even if initial snapshots exist, check if the latest snapshot is stale (> 15 days).
-      // Stale data means AI score would be calculated on outdated metrics — re-sync needed.
-      let isStale = false;
-      if (hasInitialSnapshots && validSnapshots[0]) {
-        const snapshotDate =
-          validSnapshots[0].analysisPeriodEnd || validSnapshots[0].createdAt;
-        const daysSince =
-          (Date.now() - new Date(snapshotDate).getTime()) / (1000 * 60 * 60 * 24);
-        isStale = daysSince >= 15;
-      }
-
-      // Queue if: initial sync never done OR latest data is stale
-      if (!hasInitialSnapshots || isStale) {
-        this.maxCampaignScoringQueueService
-          .queueInfluencerScoring(campaignId, [influencerId])
-          .catch((err) =>
-            console.error(
-              `Failed to queue MAX campaign scoring for influencer ${influencerId} on campaign ${campaignId}:`,
-              err,
-            ),
-          );
-      }
+      this.maxCampaignScoringQueueService
+        .queueInfluencerScoring(campaignId, [influencerId])
+        .catch((err) =>
+          console.error(
+            `Failed to queue MAX campaign scoring for influencer ${influencerId} on campaign ${campaignId}:`,
+            err,
+          ),
+        );
     }
 
     // Send push notification to influencer about application confirmation asynchronously (fire-and-forget)

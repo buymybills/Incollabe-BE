@@ -1774,15 +1774,43 @@ export class CampaignService {
       }
     }
 
-    // If AI scoring is enabled but some applicants still have no score,
-    // kick off background scoring without blocking the response
+    // If AI scoring is enabled, ensure all visible applications have a score.
     if (campaign.aiScoreEnabled) {
-      const hasUnscored = applicationsWithStats.some(
-        (app) => app.aiScore === null || app.aiScore === undefined,
+      const unscoredInPage = paginatedApplications.filter(
+        (app: any) => app.aiScore === null || app.aiScore === undefined,
       );
-      if (hasUnscored) {
+      const unscoredInPageIds = new Set(unscoredInPage.map((a: any) => a.id));
+
+      if (unscoredInPage.length > 0) {
+        // Calculate and save scores synchronously for the current page only.
+        // This ensures the first fetch always returns a populated aiScore instead
+        // of null — the caller does not need to refresh to see the score.
+        await this.bulkCalculateAndStoreScores(campaignId, [...unscoredInPageIds]);
+
+        // Re-read the saved scores from DB and patch them into paginatedApplications
+        // (the array entries are plain JSON objects so we mutate them directly).
+        const freshScores = await this.campaignApplicationModel.findAll({
+          where: { id: [...unscoredInPageIds] },
+          attributes: ['id', 'aiScore'],
+        });
+        const scoreMap = new Map(freshScores.map((a) => [a.id, a.aiScore]));
+        for (const app of paginatedApplications as any[]) {
+          if (scoreMap.has(app.id)) {
+            app.aiScore = scoreMap.get(app.id);
+          }
+        }
+      }
+
+      // Fire-and-forget for any unscored applications outside the current page
+      // so they are ready by the time the user navigates to the next page.
+      const hasUnscoredOutsidePage = (applicationsWithStats as any[]).some(
+        (app) =>
+          !unscoredInPageIds.has(app.id) &&
+          (app.aiScore === null || app.aiScore === undefined),
+      );
+      if (hasUnscoredOutsidePage) {
         this.bulkCalculateAndStoreScores(campaignId).catch((err) => {
-          console.error(`[AI Score] Auto-trigger bulk scoring failed for campaign ${campaignId}:`, err);
+          console.error(`[AI Score] Background scoring failed for campaign ${campaignId}:`, err);
         });
       }
     }
@@ -3736,7 +3764,7 @@ export class CampaignService {
     return { success: true, creditsRemaining: brand.aiCreditsRemaining };
   }
 
-  private async bulkCalculateAndStoreScores(campaignId: number): Promise<void> {
+  private async bulkCalculateAndStoreScores(campaignId: number, applicationIds?: number[]): Promise<void> {
     // Fetch campaign only — niches are fetched via getCampaignNiches(campaign.nicheIds)
     // and cities via getCampaignCities(campaign.id) inside calculateAIScore
     const campaign = await this.campaignModel.findOne({
@@ -3745,9 +3773,16 @@ export class CampaignService {
 
     if (!campaign) return;
 
-    // Only score applicants that haven't been scored yet (idempotent retry)
+    // Only score applicants that haven't been scored yet (idempotent retry).
+    // When applicationIds is provided, restrict to those specific applications
+    // (used for current-page synchronous scoring).
+    const whereClause: any = { campaignId, aiScore: { [Op.is]: null } };
+    if (applicationIds && applicationIds.length > 0) {
+      whereClause.id = applicationIds;
+    }
+
     const applications = await this.campaignApplicationModel.findAll({
-      where: { campaignId, aiScore: { [Op.is]: null } },
+      where: whereClause,
       include: [
         {
           model: Influencer,
