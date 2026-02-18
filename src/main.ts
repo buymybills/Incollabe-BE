@@ -43,10 +43,12 @@ async function bootstrap() {
 
   console.log('Allowed CORS origins:', allowedOrigins);
 
+  const isDev = configService.get('NODE_ENV') !== 'production';
+
   app.enableCors({
-    origin: allowedOrigins,
+    origin: isDev ? '*' : allowedOrigins,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    credentials: true,
+    credentials: isDev ? false : true,
   });
 
   // Create full Swagger document
