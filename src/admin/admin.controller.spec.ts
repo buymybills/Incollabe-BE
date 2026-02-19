@@ -20,6 +20,7 @@ import { CampaignService } from '../campaign/campaign.service';
 import { S3Service } from '../shared/s3.service';
 import { AppVersionService } from '../shared/services/app-version.service';
 import { InvoiceExcelExportService } from './services/invoice-excel-export.service';
+import { AdminCreatorScoreService } from './services/admin-creator-score.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { getModelToken } from '@nestjs/sequelize';
@@ -165,6 +166,12 @@ const mockInvoiceExcelExportService = {
   exportInviteOnlyInvoices: jest.fn(),
 };
 
+const mockAdminCreatorScoreService = {
+  getCreatorScores: jest.fn(),
+  getCreatorScore: jest.fn(),
+  getDashboardStats: jest.fn(),
+};
+
 const mockInfluencerRepository = {
   findAll: jest.fn(),
   findOne: jest.fn(),
@@ -270,6 +277,10 @@ describe('AdminController', () => {
         {
           provide: InvoiceExcelExportService,
           useValue: mockInvoiceExcelExportService,
+        },
+        {
+          provide: AdminCreatorScoreService,
+          useValue: mockAdminCreatorScoreService,
         },
         {
           provide: getModelToken(Influencer),

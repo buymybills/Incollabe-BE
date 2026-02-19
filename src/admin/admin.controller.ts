@@ -48,6 +48,8 @@ import { CampaignService } from '../campaign/campaign.service';
 import { S3Service } from '../shared/s3.service';
 import { AppVersionService } from '../shared/services/app-version.service';
 import { InvoiceExcelExportService } from './services/invoice-excel-export.service';
+import { AdminCreatorScoreService } from './services/admin-creator-score.service';
+import { GetCreatorScoresDto, GetCreatorScoresDashboardDto } from './dto/get-creator-scores.dto';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import type { RequestWithAdmin } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
@@ -199,6 +201,7 @@ export class AdminController {
     private readonly s3Service: S3Service,
     private readonly appVersionService: AppVersionService,
     private readonly invoiceExcelExportService: InvoiceExcelExportService,
+    private readonly adminCreatorScoreService: AdminCreatorScoreService,
   ) {}
 
   @Post('login')
@@ -3539,5 +3542,52 @@ export class AdminController {
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.send(excelBuffer);
+  }
+
+  // ==================== Creator Score Endpoints ====================
+
+  @Get('creator-scores/dashboard')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Creator scores dashboard stats',
+    description: 'Aggregate stats (total active creators, highest/lowest/avg scores, category averages) with % change vs previous period.',
+  })
+  @ApiQuery({ name: 'startDate', required: false, type: String, example: '2025-09-01' })
+  @ApiQuery({ name: 'endDate', required: false, type: String, example: '2025-10-31' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Dashboard stats returned successfully' })
+  async getCreatorScoresDashboard(@Query() dto: GetCreatorScoresDashboardDto) {
+    return this.adminCreatorScoreService.getDashboardStats(dto);
+  }
+
+  @Get('creator-scores')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'List creator scores',
+    description: 'Get all influencers with connected Instagram along with their latest profile score summary.',
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'search', required: false, type: String, description: 'Search by name, username or Instagram username' })
+  @ApiQuery({ name: 'startDate', required: false, type: String, example: '2025-09-01' })
+  @ApiQuery({ name: 'endDate', required: false, type: String, example: '2025-10-31' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Creator scores list returned successfully' })
+  async getCreatorScores(@Query() dto: GetCreatorScoresDto) {
+    return this.adminCreatorScoreService.getCreatorScores(dto);
+  }
+
+  @Get('creator-scores/:influencerId')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get single creator score',
+    description: 'Get the full profile score detail + all Instagram info for a specific influencer.',
+  })
+  @ApiParam({ name: 'influencerId', type: Number })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Creator score detail returned successfully' })
+  @ApiNotFoundResponse({ description: 'Influencer not found' })
+  async getCreatorScore(@Param('influencerId', ParseIntPipe) influencerId: number) {
+    return this.adminCreatorScoreService.getCreatorScore(influencerId);
   }
 }
