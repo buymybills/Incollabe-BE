@@ -117,11 +117,8 @@ export class ChatController {
       req.user.userType,
       dto,
     );
-    // Return flattened structure - interceptor will wrap it
-    return {
-      conversations: result.conversations,
-      pagination: result.pagination,
-    };
+    // Return the result as-is - service handles different structures for personal vs campaign
+    return result;
   }
 
   @Get('chat/conversations/:id/messages')

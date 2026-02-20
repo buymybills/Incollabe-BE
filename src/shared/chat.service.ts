@@ -367,24 +367,60 @@ export class ChatService {
         ),
       ];
 
+      // Fetch campaigns with brand info
       const campaigns = await this.campaignModel.findAll({
         where: { id: { [Op.in]: campaignIds.length ? campaignIds : [0] } },
-        attributes: ['id', 'name'],
+        attributes: ['id', 'name', 'brandId'],
+        include: [
+          {
+            model: this.brandModel,
+            attributes: ['id', 'brandName', 'profileImage'],
+          },
+        ],
       });
-      const campaignMap = new Map(campaigns.map((c) => [c.id, c.name]));
+
+      // Fetch selected influencer counts for each campaign
+      const selectedCounts = await this.campaignApplicationModel.findAll({
+        where: {
+          campaignId: { [Op.in]: campaignIds.length ? campaignIds : [0] },
+          status: ApplicationStatus.SELECTED,
+        },
+        attributes: [
+          'campaignId',
+          [
+            this.campaignApplicationModel.sequelize!.fn(
+              'COUNT',
+              this.campaignApplicationModel.sequelize!.col('id'),
+            ),
+            'count',
+          ],
+        ],
+        group: ['campaignId'],
+        raw: true,
+      });
+
+      const countMap = new Map(
+        selectedCounts.map((item: any) => [item.campaignId, parseInt(item.count, 10)]),
+      );
 
       const grouped: Record<number, any> = {};
       for (const conv of campaignConversations) {
         if (!conv) continue;
         const cId = conv.campaignId ?? 0;
         if (!grouped[cId]) {
+          const campaign = campaigns.find((c) => c.id === cId);
           grouped[cId] = {
             campaignId: cId,
-            campaignName: campaignMap.get(cId) ?? null,
+            campaignName: campaign?.name ?? null,
+            brandImage: (campaign as any)?.Brand?.profileImage ?? null,
+            totalSelectedInfluencers: countMap.get(cId) ?? 0,
+            totalUnreadMessages: 0,
             conversations: [],
           };
         }
         grouped[cId].conversations.push(conv);
+        // Accumulate unread count
+        grouped[cId].totalUnreadMessages += conv.unreadCount ?? 0;
       }
 
       return {
