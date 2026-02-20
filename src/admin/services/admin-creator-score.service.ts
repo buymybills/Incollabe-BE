@@ -217,25 +217,82 @@ export class AdminCreatorScoreService {
   }
 
   private async aggregateStats(from: Date, to: Date) {
-    const result = (await this.influencerProfileScoreModel.findOne({
-      attributes: [
-        [fn('COUNT', fn('DISTINCT', col('influencer_id'))), 'totalActive'],
-        [fn('MAX', col('total_score')), 'highest'],
-        [fn('MIN', col('total_score')), 'lowest'],
-        [fn('AVG', col('total_score')), 'avgTotal'],
-        [fn('AVG', col('engagement_strength_score')), 'avgEngagement'],
-        [fn('AVG', col('monetisation_score')), 'avgMonetisation'],
-        [fn('AVG', col('content_relevance_score')), 'avgContentRelevance'],
-        [fn('AVG', col('audience_quality_score')), 'avgAudienceQuality'],
-        [fn('AVG', col('content_quality_score')), 'avgContentQuality'],
-        [fn('AVG', col('growth_momentum_score')), 'avgGrowthMomentum'],
-      ],
+    // First, get all influencers who have at least one score in the period
+    const influencersInPeriod = await this.influencerProfileScoreModel.findAll({
+      attributes: [[fn('DISTINCT', col('influencer_id')), 'influencerId']],
       where: {
         calculatedAt: { [Op.between]: [from, to] },
       },
       raw: true,
-    })) as any;
+    });
 
-    return result ?? {};
+    if (!influencersInPeriod || influencersInPeriod.length === 0) {
+      return {
+        totalActive: 0,
+        highest: null,
+        lowest: null,
+        avgTotal: null,
+        avgEngagement: null,
+        avgMonetisation: null,
+        avgContentRelevance: null,
+        avgAudienceQuality: null,
+        avgContentQuality: null,
+        avgGrowthMomentum: null,
+      };
+    }
+
+    const influencerIds = influencersInPeriod.map((row: any) => row.influencerId);
+
+    // Get the latest score per influencer (using DISTINCT ON)
+    const latestScores = await this.influencerProfileScoreModel.findAll({
+      attributes: [
+        'influencerId',
+        'totalScore',
+        'engagementStrengthScore',
+        'monetisationScore',
+        'contentRelevanceScore',
+        'audienceQualityScore',
+        'contentQualityScore',
+        'growthMomentumScore',
+        'calculatedAt',
+      ],
+      where: {
+        influencerId: { [Op.in]: influencerIds },
+        id: {
+          [Op.in]: literal(`(
+            SELECT DISTINCT ON (influencer_id) id
+            FROM influencer_profile_scores
+            WHERE influencer_id IN (${influencerIds.join(',')})
+            ORDER BY influencer_id, calculated_at DESC
+          )`),
+        },
+      },
+      raw: true,
+    });
+
+    // Manually calculate aggregates from the latest scores
+    // Note: raw: true returns DB column names (snake_case due to underscored: true)
+    const totalActive = latestScores.length;
+    const scores = latestScores.map((s: any) => Number(s.total_score));
+    const highest = scores.length > 0 ? Math.max(...scores) : null;
+    const lowest = scores.length > 0 ? Math.min(...scores) : null;
+
+    const avg = (field: string) => {
+      const values = latestScores.map((s: any) => Number(s[field]) || 0);
+      return values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : null;
+    };
+
+    return {
+      totalActive,
+      highest,
+      lowest,
+      avgTotal: avg('total_score'),
+      avgEngagement: avg('engagement_strength_score'),
+      avgMonetisation: avg('monetisation_score'),
+      avgContentRelevance: avg('content_relevance_score'),
+      avgAudienceQuality: avg('audience_quality_score'),
+      avgContentQuality: avg('content_quality_score'),
+      avgGrowthMomentum: avg('growth_momentum_score'),
+    };
   }
 }
