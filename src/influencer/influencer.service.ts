@@ -1419,7 +1419,7 @@ export class InfluencerService {
               // Campaign has no influencer type restrictions (null or empty array)
               { influencerTypes: null },
               literal(
-                `("Campaign"."influencerTypes" IS NULL OR "Campaign"."influencerTypes"::jsonb = '[]'::jsonb OR "Campaign"."influencerTypes"::jsonb @> '["${influencerType}"]'::jsonb)`,
+                `("Campaign"."influencer_types" IS NULL OR "Campaign"."influencer_types"::jsonb = '[]'::jsonb OR "Campaign"."influencer_types"::jsonb @> '["${influencerType}"]'::jsonb)`,
               ),
             ],
           },
