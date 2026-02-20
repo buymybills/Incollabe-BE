@@ -412,7 +412,7 @@ export class ChatService {
           grouped[cId] = {
             campaignId: cId,
             campaignName: campaign?.name ?? null,
-            brandImage: (campaign as any)?.Brand?.profileImage ?? null,
+            brandImage: (campaign as any)?.brand?.profileImage ?? null,
             totalSelectedInfluencers: countMap.get(cId) ?? 0,
             totalUnreadMessages: 0,
             conversations: [],
