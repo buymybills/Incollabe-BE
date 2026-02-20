@@ -19,6 +19,7 @@ import { Platform, DeliverableType } from './models/campaign-deliverable.model';
 import { City } from '../shared/models/city.model';
 import { Brand } from '../brand/model/brand.model';
 import { Influencer } from '../auth/model/influencer.model';
+import { Niche } from '../auth/model/niche.model';
 import { WhatsAppService } from '../shared/whatsapp.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { GetCampaignsDto } from './dto/get-campaigns.dto';
@@ -38,6 +39,8 @@ import { InstagramMediaInsight } from '../shared/models/instagram-media-insight.
 import { InfluencerProfileScore } from '../shared/models/influencer-profile-score.model';
 import { AIScoringService } from '../shared/services/ai-scoring.service';
 import { MaxCampaignScoringQueueService } from './services/max-campaign-scoring-queue.service';
+import { ChatService } from '../shared/chat.service';
+import { ChatGateway } from '../shared/chat.gateway';
 
 const mockModel = () => ({
   findOne: jest.fn(),
@@ -166,6 +169,10 @@ describe('CampaignService', () => {
           useValue: mockModel(),
         },
         {
+          provide: getModelToken(Niche),
+          useValue: mockModel(),
+        },
+        {
           provide: WhatsAppService,
           useValue: mockWhatsAppService,
         },
@@ -196,6 +203,14 @@ describe('CampaignService', () => {
         {
           provide: getModelToken(InfluencerReferralUsage),
           useValue: mockModel(),
+        },
+        {
+          provide: ChatService,
+          useValue: { createConversation: jest.fn(), sendMessage: jest.fn() },
+        },
+        {
+          provide: ChatGateway,
+          useValue: { notifyNewMessage: jest.fn() },
         },
       ],
     }).compile();

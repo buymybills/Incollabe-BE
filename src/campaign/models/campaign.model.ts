@@ -45,6 +45,7 @@ export interface CampaignCreationAttributes {
   genderPreferences?: string[];
   isOpenToAllGenders?: boolean;
   nicheIds?: number[];
+  influencerTypes?: string[];
   customInfluencerRequirements?: string;
   performanceExpectations?: string;
   brandSupport?: string;
@@ -170,6 +171,12 @@ export class Campaign extends Model<Campaign, CampaignCreationAttributes> {
     allowNull: true,
   })
   declare nicheIds: number[];
+
+  @Column({
+    type: DataType.JSON,
+    allowNull: true,
+  })
+  declare influencerTypes: string[];
 
   @Column({
     type: DataType.TEXT,

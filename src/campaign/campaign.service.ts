@@ -51,6 +51,8 @@ import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-ana
 import { InstagramMediaInsight } from '../shared/models/instagram-media-insight.model';
 import { InfluencerProfileScore } from '../shared/models/influencer-profile-score.model';
 import { MaxCampaignScoringQueueService } from './services/max-campaign-scoring-queue.service';
+import { ChatService } from '../shared/chat.service';
+import { ChatGateway } from '../shared/chat.gateway';
 
 @Injectable()
 export class CampaignService {
@@ -85,6 +87,8 @@ export class CampaignService {
     private readonly instagramMediaInsightModel: typeof InstagramMediaInsight,
     @InjectModel(InfluencerProfileScore)
     private readonly influencerProfileScoreModel: typeof InfluencerProfileScore,
+    @InjectModel(Niche)
+    private readonly nicheModel: typeof Niche,
     // REMOVED: Models only needed for early selection bonus feature (now disabled)
     // @InjectModel(CreditTransaction)
     // private readonly creditTransactionModel: typeof CreditTransaction,
@@ -96,6 +100,8 @@ export class CampaignService {
     private readonly campaignQueryService: CampaignQueryService,
     private readonly aiScoringService: AIScoringService,
     private readonly maxCampaignScoringQueueService: MaxCampaignScoringQueueService,
+    private readonly chatService: ChatService,
+    private readonly chatGateway: ChatGateway,
   ) {}
 
   /**
@@ -160,7 +166,17 @@ export class CampaignService {
     createCampaignDto: CreateCampaignDto,
     brandId: number,
   ): Promise<CampaignResponseDto> {
-    const { deliverableFormat, cityIds, ...campaignData } = createCampaignDto;
+    const { deliverableFormat, cityIds, selectAllNiches, ...campaignData } = createCampaignDto;
+
+    // Handle selectAllNiches flag: if true, fetch all niche IDs
+    let finalNicheIds = createCampaignDto.nicheIds;
+    if (selectAllNiches) {
+      const allNiches = await this.nicheModel.findAll({
+        attributes: ['id'],
+        raw: true,
+      });
+      finalNicheIds = allNiches.map((niche: any) => niche.id);
+    }
 
     // Validate budget fields based on campaign type
     const campaignType = createCampaignDto.type || CampaignType.PAID;
@@ -202,6 +218,7 @@ export class CampaignService {
     const campaign = await this.campaignModel.create({
       ...campaignData,
       brandId,
+      nicheIds: finalNicheIds,
     } as any);
 
     // Add cities if specified
@@ -3422,6 +3439,29 @@ export class CampaignService {
         .catch((error: any) => {
           console.error('Failed to send persistent push notification to influencer:', error);
         });
+
+      // Auto-create campaign chat conversation and notify via WebSocket
+      this.chatService
+        .createCampaignConversation(
+          campaignId,
+          applicationId,
+          influencer.id,
+          campaign.brandId,
+        )
+        .then((conversation) => {
+          this.chatGateway.emitCampaignConversationCreated(
+            conversation.id,
+            influencer.id,
+            campaign.brandId,
+            campaignId,
+          );
+        })
+        .catch((err) =>
+          console.error(
+            `[CampaignChat] Failed to create conversation for application ${applicationId}:`,
+            err,
+          ),
+        );
     }
 
     // Push notifications for UNDER_REVIEW and REJECTED statuses
@@ -3734,6 +3774,63 @@ export class CampaignService {
       campaignType: type,
       deliverableFormats,
     };
+  }
+
+  async getInfluencerTypes(): Promise<{
+    influencerTypes: Array<{
+      value: string;
+      label: string;
+      followerRange: string;
+      minFollowers: number;
+      maxFollowers: number | null;
+    }>;
+  }> {
+    const influencerTypes = [
+      {
+        value: 'below_1k',
+        label: 'Below 1k',
+        followerRange: '< 1,000',
+        minFollowers: 0,
+        maxFollowers: 999,
+      },
+      {
+        value: 'nano_1k_10k',
+        label: 'Nano (1k - 10k)',
+        followerRange: '1,000 - 10,000',
+        minFollowers: 1000,
+        maxFollowers: 10000,
+      },
+      {
+        value: 'micro_10k_100k',
+        label: 'Micro (10k - 100k)',
+        followerRange: '10,000 - 100,000',
+        minFollowers: 10000,
+        maxFollowers: 100000,
+      },
+      {
+        value: 'mid_tier_100k_500k',
+        label: 'Mid-Tier (100k - 500k)',
+        followerRange: '100,000 - 500,000',
+        minFollowers: 100000,
+        maxFollowers: 500000,
+      },
+      {
+        value: 'macro_500k_1m',
+        label: 'Macro (500k - 1M)',
+        followerRange: '500,000 - 1,000,000',
+        minFollowers: 500000,
+        maxFollowers: 1000000,
+      },
+      {
+        value: 'mega_celebrity_1m_plus',
+        label: 'Mega/Celebrity (1M+)',
+        followerRange: '1,000,000+',
+        minFollowers: 1000000,
+        maxFollowers: null,
+      },
+    ];
+
+    return { influencerTypes };
   }
 
   // ─────────────────────────────────────────────────────────────────────────────

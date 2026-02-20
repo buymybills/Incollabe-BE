@@ -1148,4 +1148,55 @@ export class ChatGateway
       // Don't throw - notification failure shouldn't break message sending
     }
   }
+
+  // ============================================================
+  // Campaign Chat WebSocket Events
+  // ============================================================
+
+  /**
+   * Emit campaign:conversation:created to both participants.
+   * Called by ChatService after creating a campaign conversation.
+   */
+  public emitCampaignConversationCreated(
+    conversationId: number,
+    influencerId: number,
+    brandId: number,
+    campaignId: number,
+  ) {
+    const payload = { conversationId, campaignId };
+
+    const influencerKey = `influencer_${influencerId}`;
+    const brandKey = `brand_${brandId}`;
+
+    const influencerSocket = this.userSockets.get(influencerKey);
+    const brandSocket = this.userSockets.get(brandKey);
+
+    if (influencerSocket) {
+      influencerSocket.emit('campaign:conversation:created', payload);
+    }
+    if (brandSocket) {
+      brandSocket.emit('campaign:conversation:created', payload);
+    }
+  }
+
+  /**
+   * Emit campaign:conversation:closed to both participants.
+   * Called by the HTTP close endpoint.
+   */
+  public emitCampaignConversationClosed(
+    conversationId: number,
+    brandId: number,
+  ) {
+    const roomName = `conversation_${conversationId}`;
+    this.server.to(roomName).emit('campaign:conversation:closed', {
+      conversationId,
+      closedBy: 'brand',
+      closedById: brandId,
+    });
+
+    // Also emit campaign:review:requested to prompt rating screens
+    this.server.to(roomName).emit('campaign:review:requested', {
+      conversationId,
+    });
+  }
 }

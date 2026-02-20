@@ -7,8 +7,11 @@ import {
 import { InjectModel } from '@nestjs/sequelize';
 import { Conversation, ParticipantType } from './models/conversation.model';
 import { Message, MessageType, SenderType } from './models/message.model';
+import { CampaignReview, ReviewerType } from './models/campaign-review.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
+import { Campaign } from '../campaign/models/campaign.model';
+import { CampaignApplication, ApplicationStatus } from '../campaign/models/campaign-application.model';
 import { Op } from 'sequelize';
 import {
   CreateConversationDto,
@@ -16,6 +19,7 @@ import {
   GetConversationsDto,
   GetMessagesDto,
   MarkAsReadDto,
+  SubmitReviewDto,
 } from './dto/chat.dto';
 
 @Injectable()
@@ -29,6 +33,12 @@ export class ChatService {
     private influencerModel: typeof Influencer,
     @InjectModel(Brand)
     private brandModel: typeof Brand,
+    @InjectModel(Campaign)
+    private campaignModel: typeof Campaign,
+    @InjectModel(CampaignApplication)
+    private campaignApplicationModel: typeof CampaignApplication,
+    @InjectModel(CampaignReview)
+    private campaignReviewModel: typeof CampaignReview,
   ) {}
 
   /**
@@ -242,39 +252,34 @@ export class ChatService {
 
   /**
    * Get all conversations for a user
+   * Supports type='personal' | 'campaign' filter
    */
   async getConversations(
     userId: number,
     userType: 'influencer' | 'brand',
     dto: GetConversationsDto,
   ) {
-    const { page = 1, limit = 20, search } = dto;
+    const { page = 1, limit = 20, search, type } = dto;
     const offset = (page - 1) * limit;
     const userParticipantType = userType as ParticipantType;
 
-    // Find all conversations where user is participant1 or participant2
-    // IMPORTANT: Only show conversations that have at least one message
-    // This prevents showing empty conversations created during search/browsing
+    // Campaign conversations: show immediately, no lastMessageAt requirement
+    // Personal conversations: only show after first message
+    const isCampaignQuery = type === 'campaign';
+
     const whereClause: any = {
       [Op.and]: [
         {
           [Op.or]: [
-            {
-              participant1Type: userParticipantType,
-              participant1Id: userId,
-            },
-            {
-              participant2Type: userParticipantType,
-              participant2Id: userId,
-            },
+            { participant1Type: userParticipantType, participant1Id: userId },
+            { participant2Type: userParticipantType, participant2Id: userId },
           ],
         },
-        {
-          isActive: true,
-        },
-        {
-          lastMessageAt: { [Op.ne]: null as any }, // Only include conversations with at least one message
-        },
+        { isActive: true },
+        // Filter by conversation type
+        ...(type ? [{ conversationType: type }] : [{ conversationType: 'personal' }]),
+        // Personal chats require at least one message; campaign chats appear immediately
+        ...(!isCampaignQuery ? [{ lastMessageAt: { [Op.ne]: null as any } }] : []),
       ],
     };
 
@@ -313,11 +318,11 @@ export class ChatService {
           const username = otherPartyDetails.username?.toLowerCase() || '';
 
           if (!name.includes(searchLower) && !username.includes(searchLower)) {
-            return null; // Skip this conversation
+            return null;
           }
         }
 
-        return {
+        const base = {
           id: conv.id,
           otherParty: otherPartyDetails,
           otherPartyType: otherParticipant.type,
@@ -333,13 +338,68 @@ export class ChatService {
           createdAt: conv.createdAt,
           updatedAt: conv.updatedAt,
         };
+
+        if (isCampaignQuery) {
+          return {
+            ...base,
+            campaignId: conv.campaignId,
+            campaignApplicationId: conv.campaignApplicationId,
+            isCampaignClosed: conv.isCampaignClosed,
+            campaignClosedAt: conv.campaignClosedAt,
+          };
+        }
+        return base;
       }),
     );
 
-    // Filter out null results from search
     const filteredConversations = formattedConversations.filter(
       (conv) => conv !== null,
     );
+
+    // For campaign type, group by campaignId with campaign name lookup
+    if (isCampaignQuery) {
+      const campaignConversations = filteredConversations as any[];
+      const campaignIds = [
+        ...new Set(
+          campaignConversations
+            .map((c) => c?.campaignId)
+            .filter((id) => id != null),
+        ),
+      ];
+
+      const campaigns = await this.campaignModel.findAll({
+        where: { id: { [Op.in]: campaignIds.length ? campaignIds : [0] } },
+        attributes: ['id', 'name'],
+      });
+      const campaignMap = new Map(campaigns.map((c) => [c.id, c.name]));
+
+      const grouped: Record<number, any> = {};
+      for (const conv of campaignConversations) {
+        if (!conv) continue;
+        const cId = conv.campaignId ?? 0;
+        if (!grouped[cId]) {
+          grouped[cId] = {
+            campaignId: cId,
+            campaignName: campaignMap.get(cId) ?? null,
+            conversations: [],
+          };
+        }
+        grouped[cId].conversations.push(conv);
+      }
+
+      return {
+        type: 'campaign',
+        campaigns: Object.values(grouped),
+        pagination: {
+          page,
+          limit,
+          total: search ? filteredConversations.length : total,
+          totalPages: Math.ceil(
+            (search ? filteredConversations.length : total) / limit,
+          ),
+        },
+      };
+    }
 
     return {
       conversations: filteredConversations,
@@ -411,6 +471,11 @@ export class ChatService {
       throw new BadRequestException(
         'Either conversationId OR (otherPartyId and otherPartyType) must be provided',
       );
+    }
+
+    // Block messaging in closed campaign chats
+    if (conversation.isCampaignClosed) {
+      throw new ForbiddenException('This campaign chat has been closed');
     }
 
     // Validate message has content
@@ -785,6 +850,246 @@ export class ChatService {
 
     return {
       message: 'Conversation deleted successfully',
+    };
+  }
+
+  // ============================================================
+  // Campaign Chat Methods
+  // ============================================================
+
+  /**
+   * Auto-create a campaign conversation when an influencer is selected.
+   * Idempotent — will not create a duplicate if one already exists for this application.
+   */
+  async createCampaignConversation(
+    campaignId: number,
+    applicationId: number,
+    influencerId: number,
+    brandId: number,
+  ): Promise<Conversation> {
+    // Check idempotency — one conversation per application
+    const existing = await this.conversationModel.findOne({
+      where: { campaignApplicationId: applicationId },
+    });
+    if (existing) {
+      return existing;
+    }
+
+    // Normalize: influencer = participant1, brand = participant2
+    const conversation = await this.conversationModel.create({
+      conversationType: 'campaign',
+      campaignId,
+      campaignApplicationId: applicationId,
+      participant1Type: ParticipantType.INFLUENCER,
+      participant1Id: influencerId,
+      participant2Type: ParticipantType.BRAND,
+      participant2Id: brandId,
+      isActive: true,
+      isCampaignClosed: false,
+      unreadCountParticipant1: 0,
+      unreadCountParticipant2: 0,
+      influencerId,
+      brandId,
+      unreadCountInfluencer: 0,
+      unreadCountBrand: 0,
+    } as any);
+
+    return conversation;
+  }
+
+  /**
+   * Brand closes the campaign chat with a specific influencer.
+   * Marks conversation as closed and updates the application status to COMPLETED.
+   */
+  async closeCampaignConversation(
+    conversationId: number,
+    brandId: number,
+  ): Promise<void> {
+    const conversation = await this.conversationModel.findByPk(conversationId);
+    if (!conversation) {
+      throw new NotFoundException('Conversation not found');
+    }
+
+    if (conversation.conversationType !== 'campaign') {
+      throw new BadRequestException('This is not a campaign conversation');
+    }
+
+    // Validate requester is the brand participant
+    const isBrandParticipant =
+      (conversation.participant1Type === ParticipantType.BRAND && conversation.participant1Id === brandId) ||
+      (conversation.participant2Type === ParticipantType.BRAND && conversation.participant2Id === brandId);
+
+    if (!isBrandParticipant) {
+      throw new ForbiddenException('Only the brand can close a campaign chat');
+    }
+
+    if (conversation.isCampaignClosed) {
+      throw new BadRequestException('This campaign chat is already closed');
+    }
+
+    await conversation.update({
+      isCampaignClosed: true,
+      campaignClosedAt: new Date(),
+    });
+
+    // Mark linked application as COMPLETED
+    if (conversation.campaignApplicationId) {
+      await this.campaignApplicationModel.update(
+        { status: ApplicationStatus.COMPLETED },
+        { where: { id: conversation.campaignApplicationId } },
+      );
+    }
+  }
+
+  /**
+   * Brand bulk-closes all open campaign conversations for a campaign ("Finish Campaign").
+   */
+  async finishCampaign(
+    campaignId: number,
+    brandId: number,
+  ): Promise<{ closedCount: number }> {
+    // Verify brand owns the campaign
+    const campaign = await this.campaignModel.findOne({
+      where: { id: campaignId, brandId },
+    });
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found or access denied');
+    }
+
+    // Find all open campaign conversations for this campaignId
+    const openConversations = await this.conversationModel.findAll({
+      where: {
+        campaignId,
+        isCampaignClosed: false,
+        conversationType: 'campaign',
+      },
+    });
+
+    if (openConversations.length === 0) {
+      return { closedCount: 0 };
+    }
+
+    const conversationIds = openConversations.map((c) => c.id);
+    const applicationIds = openConversations
+      .map((c) => c.campaignApplicationId)
+      .filter((id): id is number => id != null);
+
+    // Bulk close conversations
+    await this.conversationModel.update(
+      { isCampaignClosed: true, campaignClosedAt: new Date() },
+      { where: { id: { [Op.in]: conversationIds } } },
+    );
+
+    // Bulk update linked applications to COMPLETED
+    if (applicationIds.length > 0) {
+      await this.campaignApplicationModel.update(
+        { status: ApplicationStatus.COMPLETED },
+        { where: { id: { [Op.in]: applicationIds } } },
+      );
+    }
+
+    return { closedCount: openConversations.length };
+  }
+
+  /**
+   * Submit a review after a campaign conversation has been closed.
+   * Both brand and influencer can submit one review each.
+   */
+  async submitCampaignReview(
+    conversationId: number,
+    reviewerType: 'brand' | 'influencer',
+    reviewerId: number,
+    dto: SubmitReviewDto,
+  ): Promise<CampaignReview> {
+    const conversation = await this.conversationModel.findByPk(conversationId);
+    if (!conversation) {
+      throw new NotFoundException('Conversation not found');
+    }
+
+    if (conversation.conversationType !== 'campaign') {
+      throw new BadRequestException('Reviews are only available for campaign conversations');
+    }
+
+    if (!conversation.isCampaignClosed) {
+      throw new BadRequestException('Reviews can only be submitted after the campaign chat is closed');
+    }
+
+    // Validate reviewer is a participant
+    const userType = reviewerType as ParticipantType;
+    if (!this.isParticipant(conversation, reviewerId, userType)) {
+      throw new ForbiddenException('You are not a participant in this conversation');
+    }
+
+    if (!conversation.campaignApplicationId) {
+      throw new BadRequestException('No campaign application linked to this conversation');
+    }
+
+    // Determine reviewee
+    const other = this.getOtherParticipant(conversation, reviewerId, userType);
+
+    // Upsert: one review per side per application
+    const [review] = await this.campaignReviewModel.findOrCreate({
+      where: {
+        campaignApplicationId: conversation.campaignApplicationId,
+        reviewerType: reviewerType as ReviewerType,
+        reviewerId,
+      },
+      defaults: {
+        campaignId: conversation.campaignId!,
+        campaignApplicationId: conversation.campaignApplicationId,
+        reviewerType: reviewerType as ReviewerType,
+        reviewerId,
+        revieweeType: other.type as unknown as ReviewerType,
+        revieweeId: other.id,
+        rating: dto.rating,
+        reviewText: dto.reviewText ?? null,
+      },
+    });
+
+    // If already existed, update it
+    await review.update({
+      rating: dto.rating,
+      reviewText: dto.reviewText ?? null,
+    });
+
+    return review;
+  }
+
+  /**
+   * Get review status for a campaign conversation (who has reviewed, who hasn't).
+   */
+  async getCampaignReviewStatus(
+    conversationId: number,
+    userId: number,
+    userType: 'brand' | 'influencer',
+  ) {
+    const conversation = await this.conversationModel.findByPk(conversationId);
+    if (!conversation) {
+      throw new NotFoundException('Conversation not found');
+    }
+
+    const participantType = userType as ParticipantType;
+    if (!this.isParticipant(conversation, userId, participantType)) {
+      throw new ForbiddenException('You are not a participant in this conversation');
+    }
+
+    if (!conversation.campaignApplicationId) {
+      return { brandReviewed: false, influencerReviewed: false, myReview: null };
+    }
+
+    const reviews = await this.campaignReviewModel.findAll({
+      where: { campaignApplicationId: conversation.campaignApplicationId },
+    });
+
+    const brandReview = reviews.find((r) => r.reviewerType === ReviewerType.BRAND) ?? null;
+    const influencerReview = reviews.find((r) => r.reviewerType === ReviewerType.INFLUENCER) ?? null;
+    const myReview = reviews.find((r) => r.reviewerType === (userType as ReviewerType) && r.reviewerId === userId) ?? null;
+
+    return {
+      isCampaignClosed: conversation.isCampaignClosed,
+      brandReviewed: !!brandReview,
+      influencerReviewed: !!influencerReview,
+      myReview: myReview ? { rating: myReview.rating, reviewText: myReview.reviewText, createdAt: myReview.createdAt } : null,
     };
   }
 

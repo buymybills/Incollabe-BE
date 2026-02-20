@@ -632,6 +632,61 @@ export class CampaignController {
     return this.campaignService.getDeliverableFormats(campaignType);
   }
 
+  @Get('influencer-types')
+  @Public()
+  @ApiOperation({
+    summary: 'Get available influencer types',
+    description:
+      'Returns a list of available influencer type options by follower count ranges. ' +
+      'These types can be used when creating campaigns to target specific influencer tiers.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Influencer types retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        influencerTypes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              value: {
+                type: 'string',
+                example: 'micro_10k_100k',
+                description: 'The unique identifier for this influencer type',
+              },
+              label: {
+                type: 'string',
+                example: 'Micro (10k - 100k)',
+                description: 'Human-readable label for this influencer type',
+              },
+              followerRange: {
+                type: 'string',
+                example: '10,000 - 100,000',
+                description: 'Formatted follower range for display',
+              },
+              minFollowers: {
+                type: 'number',
+                example: 10000,
+                description: 'Minimum follower count for this tier',
+              },
+              maxFollowers: {
+                type: 'number',
+                example: 100000,
+                nullable: true,
+                description: 'Maximum follower count for this tier (null for mega/celebrity tier)',
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  async getInfluencerTypes() {
+    return this.campaignService.getInfluencerTypes();
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get campaign by ID',

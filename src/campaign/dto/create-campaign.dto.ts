@@ -90,10 +90,35 @@ export class CreateCampaignDto {
   @IsBoolean()
   isOpenToAllGenders: boolean;
 
+  @ApiProperty({
+    description:
+      'If true, campaign will be visible to influencers of all niches (ignores nicheIds). If false, only specified nicheIds will be used.',
+    example: false,
+    default: false,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  selectAllNiches?: boolean;
+
   @IsOptional()
   @IsArray()
   @IsNumber({}, { each: true })
   nicheIds?: number[];
+
+  @ApiProperty({
+    description:
+      'Influencer types by follower count ranges. Available options: ' +
+      'below_1k, nano_1k_10k, micro_10k_100k, mid_tier_100k_500k, macro_500k_1m, mega_celebrity_1m_plus',
+    example: ['micro_10k_100k', 'mid_tier_100k_500k'],
+    type: [String],
+    isArray: true,
+    required: false,
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  influencerTypes?: string[];
 
   @IsOptional()
   @IsString()
