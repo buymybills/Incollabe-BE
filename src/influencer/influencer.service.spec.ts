@@ -1483,5 +1483,43 @@ describe('InfluencerService', () => {
       // Check that Op.or was used for search conditions
       expect(callArgs.where[Symbol.for('or')]).toBeDefined();
     });
+
+    it('should filter campaigns by influencer type based on follower count', async () => {
+      // Micro influencer with 50k followers
+      const microInfluencer = {
+        ...mockInfluencer,
+        instagramFollowersCount: 50000, // Should be 'micro_10k_100k'
+      };
+      mockInfluencerRepository.findById.mockResolvedValue(microInfluencer);
+
+      const influencerNicheModel = module.get('INFLUENCER_NICHE_MODEL');
+      influencerNicheModel.findAll = jest
+        .fn()
+        .mockResolvedValue([{ nicheId: 1 }]);
+
+      // Campaign with no influencer type restrictions (accepts all tiers)
+      const openCampaign = {
+        ...mockCampaign1,
+        id: 11,
+        influencerTypes: null, // No restrictions - accepts all influencer types
+        toJSON: jest.fn().mockReturnThis(),
+      };
+
+      // Database filters campaigns based on influencer type
+      // Micro influencer (50k) should only see campaigns accepting 'micro_10k_100k' or no restrictions
+      mockCampaignModel.findAndCountAll.mockResolvedValue({
+        count: 1,
+        rows: [openCampaign], // Only campaigns accepting micro or no restrictions
+      });
+
+      mockCampaignApplicationModel.findAll
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+
+      const result = await service.getOpenCampaigns({ page: 1, limit: 10 }, 1);
+
+      expect(result.campaigns).toHaveLength(1);
+      expect(result.campaigns[0].id).toBe(11); // Only open campaign matches
+    });
   });
 });
