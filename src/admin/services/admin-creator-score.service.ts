@@ -243,32 +243,29 @@ export class AdminCreatorScoreService {
 
     const influencerIds = influencersInPeriod.map((row: any) => row.influencerId);
 
-    // Get the latest score per influencer (using DISTINCT ON)
-    const latestScores = await this.influencerProfileScoreModel.findAll({
-      attributes: [
-        'influencerId',
-        'totalScore',
-        'engagementStrengthScore',
-        'monetisationScore',
-        'contentRelevanceScore',
-        'audienceQualityScore',
-        'contentQualityScore',
-        'growthMomentumScore',
-        'calculatedAt',
-      ],
-      where: {
-        influencerId: { [Op.in]: influencerIds },
-        id: {
-          [Op.in]: literal(`(
-            SELECT DISTINCT ON (influencer_id) id
-            FROM influencer_profile_scores
-            WHERE influencer_id IN (${influencerIds.join(',')})
-            ORDER BY influencer_id, calculated_at DESC
-          )`),
-        },
+    // Get the latest score per influencer (using DISTINCT ON with raw query)
+    const latestScores: any[] = await this.influencerProfileScoreModel.sequelize!.query(
+      `
+      SELECT DISTINCT ON (influencer_id)
+        influencer_id,
+        total_score,
+        engagement_strength_score,
+        monetisation_score,
+        content_relevance_score,
+        audience_quality_score,
+        content_quality_score,
+        growth_momentum_score,
+        calculated_at
+      FROM influencer_profile_scores
+      WHERE influencer_id IN (:influencerIds)
+      ORDER BY influencer_id, calculated_at DESC
+      `,
+      {
+        replacements: { influencerIds },
+        type: require('sequelize').QueryTypes.SELECT,
+        raw: true,
       },
-      raw: true,
-    });
+    );
 
     // Manually calculate aggregates from the latest scores
     // Note: raw: true returns DB column names (snake_case due to underscored: true)
