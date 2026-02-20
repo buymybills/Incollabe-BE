@@ -659,6 +659,9 @@ describe('InfluencerService', () => {
         isWhatsappVerified: true,
         collaborationCosts: { instagram: { post: 1000 } },
         isProfileCompleted: false,
+        // No Instagram connection (no instagramUserId or instagramAccessToken)
+        instagramUserId: null,
+        instagramAccessToken: null,
         update: jest.fn().mockResolvedValue(true),
       };
       const mockUpdatedProfile = {
@@ -671,29 +674,19 @@ describe('InfluencerService', () => {
       mockInfluencerRepository.updateInfluencer.mockResolvedValue(
         mockUpdatedProfile,
       );
-      mockProfileReview.create.mockResolvedValue({});
-      mockWhatsAppService.sendProfileVerificationPending.mockResolvedValue(true);
-
-      // Mock admin data for notification
-      mockAdminModel.findAll.mockResolvedValue([
-        { id: 1, email: 'admin@test.com', name: 'Test Admin' },
-      ]);
 
       const result = await service.updateInfluencerProfile(
         1,
         updateDto,
         undefined,
-      );
+      ) as any;
 
       expect(result.message).toBe(
-        'Profile submitted for verification. You will receive a notification once verification is complete within 48 hours.',
+        'Profile completed successfully. Connect your Instagram account to get verified and apply for campaigns.',
       );
-      expect(mockProfileReview.create).toHaveBeenCalledWith({
-        profileId: 1,
-        profileType: ProfileType.INFLUENCER,
-        status: 'pending',
-        submittedAt: expect.any(Date),
-      });
+      expect(result.status).toBe('completed_unverified');
+      // Profile review should NOT be created when Instagram is not connected
+      expect(mockProfileReview.create).not.toHaveBeenCalled();
     });
 
     it('should clear social links when explicitly provided as empty strings', async () => {
