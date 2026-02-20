@@ -3062,6 +3062,7 @@ export class InfluencerService {
   /**
    * Deduct one weekly credit from the influencer
    * Throws error if no credits available
+   * Pro users have unlimited credits and bypass this check
    */
   private async deductWeeklyCredit(influencerId: number): Promise<void> {
     let influencer = await this.influencerRepository.findById(influencerId);
@@ -3070,7 +3071,16 @@ export class InfluencerService {
       throw new NotFoundException('Influencer not found');
     }
 
-    // Check and reset credits if needed
+    // Pro users have unlimited applications - skip credit check
+    if (influencer.isPro) {
+      console.log('✅ Pro user - unlimited applications:', {
+        influencerId,
+        isPro: true,
+      });
+      return; // No credit deduction for Pro users
+    }
+
+    // Check and reset credits if needed (for non-Pro users)
     influencer = await this.checkAndResetWeeklyCredits(influencer);
 
     // Check if credits are available
