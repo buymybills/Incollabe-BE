@@ -175,6 +175,7 @@ export class Campaign extends Model<Campaign, CampaignCreationAttributes> {
   @Column({
     type: DataType.JSON,
     allowNull: true,
+    field: 'influencer_types', // Map to snake_case database column
   })
   declare influencerTypes: string[];
 
