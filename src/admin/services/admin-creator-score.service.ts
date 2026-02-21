@@ -17,7 +17,7 @@ export class AdminCreatorScoreService {
   ) {}
 
   async getCreatorScores(dto: GetCreatorScoresDto) {
-    const { page = 1, limit = 20, search, startDate, endDate } = dto;
+    const { page = 1, limit = 20, searchQuery, startDate, endDate } = dto;
     const offset = (page - 1) * limit;
 
     const whereClause: any = {
@@ -35,11 +35,11 @@ export class AdminCreatorScoreService {
       };
     }
 
-    if (search) {
+    if (searchQuery && searchQuery.trim()) {
       whereClause[Op.or] = [
-        { name: { [Op.iLike]: `%${search}%` } },
-        { username: { [Op.iLike]: `%${search}%` } },
-        { instagramUsername: { [Op.iLike]: `%${search}%` } },
+        { name: { [Op.iLike]: `%${searchQuery.trim()}%` } },
+        { username: { [Op.iLike]: `%${searchQuery.trim()}%` } },
+        { instagramUsername: { [Op.iLike]: `%${searchQuery.trim()}%` } },
       ];
     }
 

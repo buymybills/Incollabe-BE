@@ -16,7 +16,7 @@ export class GetCreatorScoresDto {
   @ApiPropertyOptional({ description: 'Search by name, username or Instagram username' })
   @IsOptional()
   @IsString()
-  search?: string;
+  searchQuery?: string;
 
   @ApiPropertyOptional({ description: 'Filter by Instagram connected date (start)', example: '2025-09-01' })
   @IsOptional()
