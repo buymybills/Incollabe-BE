@@ -114,8 +114,8 @@ export class InfluencerScoringService {
       whereConditions.cityId = { [Op.in]: cityIds };
     }
 
-    // Apply date range filter on createdAt
-    if (startDate || endDate) {
+    // Apply date range filter on createdAt (skip when searching)
+    if ((startDate || endDate) && !searchQuery?.trim()) {
       whereConditions.createdAt = {};
       if (startDate) {
         whereConditions.createdAt[Op.gte] = new Date(startDate);
@@ -334,8 +334,8 @@ export class InfluencerScoringService {
         break;
     }
 
-    // Apply date range filter on createdAt
-    if (startDate || endDate) {
+    // Apply date range filter on createdAt (skip when searching)
+    if ((startDate || endDate) && !searchQuery?.trim()) {
       whereConditions.createdAt = {};
       if (startDate) {
         whereConditions.createdAt[Op.gte] = new Date(startDate);
