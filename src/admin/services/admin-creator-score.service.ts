@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
-import { Op, literal, fn, col } from 'sequelize';
+import { Op } from 'sequelize';
 import { Influencer } from '../../auth/model/influencer.model';
 import { InfluencerProfileScore } from '../../shared/models/influencer-profile-score.model';
 import { InfluencerProfileScoringService } from '../../shared/services/influencer-profile-scoring.service';
@@ -240,11 +240,14 @@ export class AdminCreatorScoreService {
   }
 
   private async aggregateStats(from: Date, to: Date) {
-    // First, get all influencers who have at least one score in the period
-    const influencersInPeriod = await this.influencerProfileScoreModel.findAll({
-      attributes: [[fn('DISTINCT', col('influencer_id')), 'influencerId']],
+    // Get all influencers who connected Instagram on or before the period end
+    const influencersInPeriod = await this.influencerModel.findAll({
+      attributes: ['id'],
       where: {
-        calculatedAt: { [Op.between]: [from, to] },
+        instagramConnectedAt: {
+          [Op.ne]: null,
+          [Op.lte]: to, // Connected on or before period end
+        },
       },
       raw: true,
     });
@@ -264,9 +267,9 @@ export class AdminCreatorScoreService {
       };
     }
 
-    const influencerIds = influencersInPeriod.map((row: any) => row.influencerId);
+    const influencerIds = influencersInPeriod.map((row: any) => row.id);
 
-    // Get the latest score per influencer (using DISTINCT ON with raw query)
+    // Get the latest score per influencer calculated on or before the period end
     const latestScores: any[] = await this.influencerProfileScoreModel.sequelize!.query(
       `
       SELECT DISTINCT ON (influencer_id)
@@ -281,10 +284,11 @@ export class AdminCreatorScoreService {
         calculated_at
       FROM influencer_profile_scores
       WHERE influencer_id IN (:influencerIds)
+        AND calculated_at <= :periodEnd
       ORDER BY influencer_id, calculated_at DESC
       `,
       {
-        replacements: { influencerIds },
+        replacements: { influencerIds, periodEnd: to },
         type: require('sequelize').QueryTypes.SELECT,
         raw: true,
       },
