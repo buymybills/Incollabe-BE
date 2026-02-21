@@ -183,6 +183,13 @@ export class AdminCreatorScoreService {
       this.aggregateStats(prevPeriodStart, prevPeriodEnd),
     ]);
 
+    console.log('📊 Dashboard Stats Debug:', {
+      currentPeriod: { start: periodStart, end: periodEnd },
+      previousPeriod: { start: prevPeriodStart, end: prevPeriodEnd },
+      current,
+      previous,
+    });
+
     const pctChange = (curr: number | null, prev: number | null): number | null => {
       if (prev === null || prev === 0) return null;
       if (curr === null) return null;
@@ -192,54 +199,63 @@ export class AdminCreatorScoreService {
     const round = (v: string | number | null) =>
       v !== null && v !== undefined ? parseFloat(Number(v).toFixed(2)) : null;
 
+    // Helper to build stat object with change only when available
+    const buildStat = (value: number | null, change: number | null) => {
+      const stat: any = { value };
+      if (change !== null) {
+        stat.change = change;
+      }
+      return stat;
+    };
+
     return {
       period: { startDate: periodStart, endDate: periodEnd },
       stats: {
-        totalActiveCreators: {
-          value: Number(current.totalActive),
-          change: pctChange(Number(current.totalActive), Number(previous.totalActive)),
-        },
-        highestCreatorScore: {
-          value: round(current.highest),
-          change: pctChange(round(current.highest), round(previous.highest)),
-        },
-        lowestCreatorScore: {
-          value: round(current.lowest),
-          change: pctChange(round(current.lowest), round(previous.lowest)),
-        },
-        avgCreatorScore: {
-          value: round(current.avgTotal),
-          change: pctChange(round(current.avgTotal), round(previous.avgTotal)),
-        },
-        avgEngagementScore: {
-          value: round(current.avgEngagement),
-          change: pctChange(round(current.avgEngagement), round(previous.avgEngagement)),
-        },
-        avgMonetisationScore: {
-          value: round(current.avgMonetisation),
-          change: pctChange(round(current.avgMonetisation), round(previous.avgMonetisation)),
-        },
-        avgContentRelevanceScore: {
-          value: round(current.avgContentRelevance),
-          change: pctChange(round(current.avgContentRelevance), round(previous.avgContentRelevance)),
-        },
-        avgAudienceQualityScore: {
-          value: round(current.avgAudienceQuality),
-          change: pctChange(round(current.avgAudienceQuality), round(previous.avgAudienceQuality)),
-        },
-        avgContentQualityScore: {
-          value: round(current.avgContentQuality),
-          change: pctChange(round(current.avgContentQuality), round(previous.avgContentQuality)),
-        },
-        avgGrowthMomentumScore: {
-          value: round(current.avgGrowthMomentum),
-          change: pctChange(round(current.avgGrowthMomentum), round(previous.avgGrowthMomentum)),
-        },
+        totalActiveCreators: buildStat(
+          Number(current.totalActive),
+          pctChange(Number(current.totalActive), Number(previous.totalActive)),
+        ),
+        highestCreatorScore: buildStat(
+          round(current.highest),
+          pctChange(round(current.highest), round(previous.highest)),
+        ),
+        lowestCreatorScore: buildStat(
+          round(current.lowest),
+          pctChange(round(current.lowest), round(previous.lowest)),
+        ),
+        avgCreatorScore: buildStat(
+          round(current.avgTotal),
+          pctChange(round(current.avgTotal), round(previous.avgTotal)),
+        ),
+        avgEngagementScore: buildStat(
+          round(current.avgEngagement),
+          pctChange(round(current.avgEngagement), round(previous.avgEngagement)),
+        ),
+        avgMonetisationScore: buildStat(
+          round(current.avgMonetisation),
+          pctChange(round(current.avgMonetisation), round(previous.avgMonetisation)),
+        ),
+        avgContentRelevanceScore: buildStat(
+          round(current.avgContentRelevance),
+          pctChange(round(current.avgContentRelevance), round(previous.avgContentRelevance)),
+        ),
+        avgAudienceQualityScore: buildStat(
+          round(current.avgAudienceQuality),
+          pctChange(round(current.avgAudienceQuality), round(previous.avgAudienceQuality)),
+        ),
+        avgContentQualityScore: buildStat(
+          round(current.avgContentQuality),
+          pctChange(round(current.avgContentQuality), round(previous.avgContentQuality)),
+        ),
+        avgGrowthMomentumScore: buildStat(
+          round(current.avgGrowthMomentum),
+          pctChange(round(current.avgGrowthMomentum), round(previous.avgGrowthMomentum)),
+        ),
       },
     };
   }
 
-  private async aggregateStats(from: Date, to: Date) {
+  private async aggregateStats(_from: Date, to: Date) {
     // Get all influencers who connected Instagram on or before the period end
     const influencersInPeriod = await this.influencerModel.findAll({
       attributes: ['id'],
