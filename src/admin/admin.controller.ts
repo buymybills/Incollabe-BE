@@ -3555,7 +3555,65 @@ export class AdminController {
   })
   @ApiQuery({ name: 'startDate', required: false, type: String, example: '2025-09-01' })
   @ApiQuery({ name: 'endDate', required: false, type: String, example: '2025-10-31' })
-  @ApiResponse({ status: HttpStatus.OK, description: 'Dashboard stats returned successfully' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Dashboard stats returned successfully',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          period: {
+            startDate: '2026-01-01T00:00:00.000Z',
+            endDate: '2026-02-20T11:32:45.186Z',
+          },
+          stats: {
+            totalActiveCreators: {
+              value: 12,
+              change: null,
+            },
+            highestCreatorScore: {
+              value: 78.14,
+              change: null,
+            },
+            lowestCreatorScore: {
+              value: 28.57,
+              change: null,
+            },
+            avgCreatorScore: {
+              value: 61.14,
+              change: null,
+            },
+            avgEngagementScore: {
+              value: 56.36,
+              change: null,
+            },
+            avgMonetisationScore: {
+              value: 61.18,
+              change: null,
+            },
+            avgContentRelevanceScore: {
+              value: 57.04,
+              change: null,
+            },
+            avgAudienceQualityScore: {
+              value: 77.7,
+              change: null,
+            },
+            avgContentQualityScore: {
+              value: 68.04,
+              change: null,
+            },
+            avgGrowthMomentumScore: {
+              value: 46.54,
+              change: null,
+            },
+          },
+        },
+        message: 'Success',
+        timestamp: '2026-02-20T17:02:45.213+05:30',
+      },
+    },
+  })
   async getCreatorScoresDashboard(@Query() dto: GetCreatorScoresDashboardDto) {
     return this.adminCreatorScoreService.getDashboardStats(dto);
   }
@@ -3569,10 +3627,83 @@ export class AdminController {
   })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
-  @ApiQuery({ name: 'search', required: false, type: String, description: 'Search by name, username or Instagram username' })
+  @ApiQuery({ name: 'searchQuery', required: false, type: String, description: 'Search by name, username or Instagram username' })
   @ApiQuery({ name: 'startDate', required: false, type: String, example: '2025-09-01' })
   @ApiQuery({ name: 'endDate', required: false, type: String, example: '2025-10-31' })
-  @ApiResponse({ status: HttpStatus.OK, description: 'Creator scores list returned successfully' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Creator scores list returned successfully',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          data: [
+            {
+              id: 212,
+              name: 'Testing account',
+              username: 'testing6635',
+              instagramUsername: 'divyamehta512',
+              instagramConnectedAt: '2026-02-11T10:32:30.245Z',
+              profileImage:
+                'https://incollabstaging.s3.ap-south-1.amazonaws.com/profiles/influencers/influencer-1767774399632-572433674.blob',
+              profileScore: {
+                totalScore: '74.10',
+                grade: 'Good Profile',
+                profileSummary: 'Good profile, strong content and audience.',
+                calculatedAt: '2026-02-12T11:46:59.225Z',
+              },
+            },
+            {
+              id: 136,
+              name: 'shfjhjfhsjfh',
+              username: 'sjfbsjbfjsdbfj',
+              instagramUsername: 'divyamehta512',
+              instagramConnectedAt: '2026-02-10T12:15:35.723Z',
+              profileImage:
+                'https://incollabstaging.s3.ap-south-1.amazonaws.com/profiles/influencers/profile-1764346943545-537654341.jpg',
+              profileScore: {
+                totalScore: '78.14',
+                grade: 'Strong Profile',
+                profileSummary: 'Strong profile, clear niche, high engagement.',
+                calculatedAt: '2026-02-11T12:59:15.838Z',
+              },
+            },
+            {
+              id: 18,
+              name: 'Dhruv Bhatia',
+              username: 'db_092621',
+              instagramUsername: 'collabkaroo',
+              instagramConnectedAt: '2026-02-14T09:08:28.420Z',
+              profileImage:
+                'https://incollabstaging.s3.ap-south-1.amazonaws.com/profiles/influencers/influencer-1760415652823-627731379.blob',
+              profileScore: {
+                totalScore: '28.57',
+                grade: 'Average Profile',
+                profileSummary: 'Average profile, strong monetization, weak growth.',
+                calculatedAt: '2026-02-14T09:23:48.098Z',
+              },
+            },
+            {
+              id: 283,
+              name: 'Testing AUtomated Verific',
+              username: 'automated_verification',
+              instagramUsername: 'rishab_100_',
+              instagramConnectedAt: '2026-02-20T06:27:06.828Z',
+              profileImage:
+                'https://incollabstaging.s3.ap-south-1.amazonaws.com/profiles/influencers/influencer-1771568030222-189021097.blob',
+              profileScore: null,
+            },
+          ],
+          total: 50,
+          page: 1,
+          limit: 20,
+          totalPages: 3,
+        },
+        message: 'Success',
+        timestamp: '2026-02-21T08:30:42.784+05:30',
+      },
+    },
+  })
   async getCreatorScores(@Query() dto: GetCreatorScoresDto) {
     return this.adminCreatorScoreService.getCreatorScores(dto);
   }
@@ -3585,7 +3716,109 @@ export class AdminController {
     description: 'Get the full profile score detail + all Instagram info for a specific influencer.',
   })
   @ApiParam({ name: 'influencerId', type: Number })
-  @ApiResponse({ status: HttpStatus.OK, description: 'Creator score detail returned successfully' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Creator score detail returned successfully',
+    schema: {
+      example: {
+        influencer: {
+          id: 280,
+          name: 'Sample Creator',
+          username: 'samplecreator',
+          profileImage: 'https://example.com/profile.jpg',
+          instagramUserId: '1234567890',
+          instagramUsername: 'samplecreator',
+          instagramAccountType: 'BUSINESS',
+          instagramFollowersCount: 15000,
+          instagramFollowsCount: 500,
+          instagramMediaCount: 250,
+          instagramProfilePictureUrl: 'https://example.com/instagram.jpg',
+          instagramBio: 'Creator | Influencer | Content',
+          instagramIsVerified: false,
+          instagramConnectedAt: '2025-01-15T10:30:00.000Z',
+          instagramTokenExpiresAt: '2025-04-15T10:30:00.000Z',
+          instagramUrl: 'https://www.instagram.com/samplecreator',
+        },
+        profileScore: {
+          totalScore: 63,
+          grade: 'Good Profile',
+          profileSummary: 'Overall solid creator profile with good engagement and growing audience.',
+          audienceQuality: {
+            breakdown: {
+              verifiedFollowers: 45,
+              businessFollowers: 30,
+              activeFollowers: 85,
+              genderDistribution: 60,
+              ageDistribution: 70,
+              locationRelevance: 75,
+            },
+            score: 65,
+            weight: 20,
+            feedback: 'Good audience quality with strong active follower base and relevant demographics.',
+          },
+          contentRelevance: {
+            breakdown: {
+              nicheConsistency: 80,
+              brandAlignment: 70,
+              topicRelevance: 75,
+              hashtagQuality: 65,
+            },
+            score: 72,
+            weight: 15,
+            feedback: 'Strong niche consistency and topic relevance.',
+          },
+          contentQuality: {
+            breakdown: {
+              visualQuality: 75,
+              captionQuality: 70,
+              storytelling: 65,
+              creativity: 68,
+              professionalProduction: 72,
+            },
+            score: 70,
+            weight: 20,
+            feedback: 'High-quality content with professional production and good storytelling.',
+          },
+          engagementStrength: {
+            breakdown: {
+              likeRate: 5.2,
+              commentRate: 0.8,
+              shareRate: 0.3,
+              saveRate: 1.2,
+              engagementGrowth: 15,
+              audienceResponseRate: 45,
+            },
+            score: 68,
+            weight: 25,
+            feedback: 'Strong engagement metrics with healthy growth trajectory.',
+          },
+          growthMomentum: {
+            breakdown: {
+              followerGrowthRate: 12,
+              engagementTrend: 10,
+              contentFrequency: 8,
+              viralityScore: 30,
+            },
+            score: 55,
+            weight: 10,
+            feedback: 'Steady growth with room for improvement in virality.',
+          },
+          monetisation: {
+            breakdown: {
+              sponsoredPostRatio: 15,
+              averagePostValue: 500,
+              brandCollaborations: 8,
+              campaignCompletionRate: 90,
+            },
+            score: 60,
+            weight: 10,
+            feedback: 'Moderate monetization activity with high completion rate.',
+          },
+          calculatedAt: '2025-02-20T14:30:00.000Z',
+        },
+      },
+    },
+  })
   @ApiNotFoundResponse({ description: 'Influencer not found' })
   async getCreatorScore(@Param('influencerId', ParseIntPipe) influencerId: number) {
     return this.adminCreatorScoreService.getCreatorScore(influencerId);
