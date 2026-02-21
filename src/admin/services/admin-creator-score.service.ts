@@ -64,25 +64,29 @@ export class AdminCreatorScoreService {
 
     const influencerIds = rows.map((i) => i.id);
 
-    // Get the latest score per influencer
-    const latestScores = await this.influencerProfileScoreModel.findAll({
-      where: {
-        influencerId: { [Op.in]: influencerIds },
-        id: {
-          [Op.in]: literal(`(
-            SELECT DISTINCT ON (influencer_id) id
-            FROM influencer_profile_scores
-            WHERE influencer_id IN (${influencerIds.join(',')})
-            ORDER BY influencer_id, calculated_at DESC
-          )`),
-        },
+    // Get the latest score per influencer (using raw query for DISTINCT ON)
+    const latestScores: any[] = await this.influencerProfileScoreModel.sequelize!.query(
+      `
+      SELECT DISTINCT ON (influencer_id)
+        influencer_id,
+        total_score,
+        grade,
+        profile_summary,
+        calculated_at
+      FROM influencer_profile_scores
+      WHERE influencer_id IN (:influencerIds)
+      ORDER BY influencer_id, calculated_at DESC
+      `,
+      {
+        replacements: { influencerIds },
+        type: require('sequelize').QueryTypes.SELECT,
+        raw: true,
       },
-      attributes: ['influencerId', 'totalScore', 'grade', 'profileSummary', 'calculatedAt'],
-    });
+    );
 
-    const scoreMap = new Map<number, InfluencerProfileScore>();
+    const scoreMap = new Map<number, any>();
     for (const score of latestScores) {
-      scoreMap.set(score.influencerId, score);
+      scoreMap.set(score.influencer_id, score);
     }
 
     return {
@@ -97,10 +101,10 @@ export class AdminCreatorScoreService {
           profileImage: influencer.profileImage,
           profileScore: latestScore
             ? {
-                totalScore: latestScore.totalScore,
+                totalScore: latestScore.total_score,
                 grade: latestScore.grade,
-                profileSummary: latestScore.profileSummary,
-                calculatedAt: latestScore.calculatedAt,
+                profileSummary: latestScore.profile_summary,
+                calculatedAt: latestScore.calculated_at,
               }
             : null,
         };
