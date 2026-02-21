@@ -151,8 +151,27 @@ export class AdminCreatorScoreService {
     const { startDate, endDate } = dto;
 
     const now = new Date();
-    const periodEnd = endDate ? new Date(endDate + 'T23:59:59.999Z') : now;
-    const periodStart = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+    // Default to last 30 days if no dates provided
+    let periodEnd: Date;
+    let periodStart: Date;
+
+    if (endDate) {
+      periodEnd = new Date(endDate + 'T23:59:59.999Z');
+    } else {
+      // End of today
+      periodEnd = new Date(now);
+      periodEnd.setHours(23, 59, 59, 999);
+    }
+
+    if (startDate) {
+      periodStart = new Date(startDate);
+    } else {
+      // 30 days ago from period end
+      periodStart = new Date(periodEnd);
+      periodStart.setDate(periodStart.getDate() - 30);
+      periodStart.setHours(0, 0, 0, 0);
+    }
 
     // Previous period: same length shifted back
     const periodLengthMs = periodEnd.getTime() - periodStart.getTime();

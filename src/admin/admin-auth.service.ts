@@ -1698,8 +1698,8 @@ export class AdminAuthService {
         );
       }
 
-      // Apply date range filter on createdAt
-      if (startDate || endDate) {
+      // Apply date range filter on createdAt (skip when searching)
+      if ((startDate || endDate) && !searchQuery?.trim()) {
         const start = startDate ? new Date(startDate) : null;
         const end = endDate ? new Date(endDate) : null;
         if (end) end.setHours(23, 59, 59, 999);
@@ -1747,8 +1747,8 @@ export class AdminAuthService {
       ];
     }
 
-    // Apply date range filter on createdAt
-    if (startDate || endDate) {
+    // Apply date range filter on createdAt (skip when searching)
+    if ((startDate || endDate) && !searchQuery?.trim()) {
       whereConditions.createdAt = {};
       if (startDate) {
         whereConditions.createdAt[Op.gte] = new Date(startDate);
