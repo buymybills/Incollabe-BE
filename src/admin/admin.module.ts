@@ -18,6 +18,7 @@ import { MaxxSubscriptionAdminService } from './services/maxx-subscription-admin
 import { MaxSubscriptionBrandService } from './services/max-subscription-brand.service';
 import { MaxSubscriptionInvoiceService } from './services/max-subscription-invoice.service';
 import { InvoiceExcelExportService } from './services/invoice-excel-export.service';
+import { AdminCreatorScoreService } from './services/admin-creator-score.service';
 import { NotificationQueueModule } from './queues/notification.queue.module';
 
 import { Admin } from './models/admin.model';
@@ -115,6 +116,7 @@ import { RolesGuard } from './guards/roles.guard';
     MaxSubscriptionBrandService,
     MaxSubscriptionInvoiceService,
     InvoiceExcelExportService,
+    AdminCreatorScoreService,
     AdminAuthGuard,
     RolesGuard,
   ],
