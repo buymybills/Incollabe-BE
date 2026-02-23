@@ -526,13 +526,14 @@ export class BrandService {
       'profileHeadline',
       'websiteUrl',
       'foundedYear',
-      'headquarterCountryId',
-      'headquarterCityId',
+      // 'headquarterCountryId',
+      // 'headquarterCityId',
       'activeRegions',
-      'pocName',
-      'pocDesignation',
-      'pocEmailId',
-      'pocContactNumber',
+      // POC fields are optional - not required for verification
+      // 'pocName',
+      // 'pocDesignation',
+      // 'pocEmailId',
+      // 'pocContactNumber',
       'profileImage',
       // 'profileBanner', // Optional - not required for 100% completion
       'incorporationDocument',
@@ -670,13 +671,15 @@ export class BrandService {
       'profileHeadline',
       'websiteUrl',
       'foundedYear',
-      'pocName',
-      'pocDesignation',
-      'pocEmailId',
-      'pocContactNumber',
+      // POC fields are optional - not required for verification
+      // 'pocName',
+      // 'pocDesignation',
+      // 'pocEmailId',
+      // 'pocContactNumber',
     ];
 
-    const requiredIdFields = ['headquarterCountryId', 'headquarterCityId'];
+    // Headquarter country and city are optional - not required for verification
+    // const requiredIdFields = ['headquarterCountryId', 'headquarterCityId'];
 
     const requiredDocuments = [
       'incorporationDocument',
@@ -691,10 +694,11 @@ export class BrandService {
       return value && value.toString().trim().length > 0;
     });
 
-    const allIdFieldsFilled = requiredIdFields.every((field) => {
-      const value = brand[field as keyof Brand];
-      return value !== null && value !== undefined && value > 0;
-    });
+    // Headquarter fields are optional now
+    // const allIdFieldsFilled = requiredIdFields.every((field) => {
+    //   const value = brand[field as keyof Brand];
+    //   return value !== null && value !== undefined && value > 0;
+    // });
 
     const hasActiveRegions =
       brand.activeRegions &&
@@ -722,7 +726,7 @@ export class BrandService {
 
     return (
       allFieldsFilled &&
-      allIdFieldsFilled &&
+      // allIdFieldsFilled && // Headquarter fields are optional now
       hasActiveRegions &&
       allDocumentsUploaded &&
       allImagesUploaded &&
