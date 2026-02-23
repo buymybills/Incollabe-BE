@@ -50,6 +50,8 @@ export class CampaignResponseDto {
   genderPreferences?: string[];
   isOpenToAllGenders: boolean;
   nicheIds?: number[];
+  selectAllNiches?: boolean;
+  influencerTypes?: string[];
   customInfluencerRequirements?: string;
   performanceExpectations?: string;
   brandSupport?: string;
