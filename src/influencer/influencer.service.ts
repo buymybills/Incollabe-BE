@@ -189,44 +189,18 @@ export class InfluencerService {
     const isActuallyComplete =
       this.checkInfluencerProfileCompletion(influencer);
     if (isActuallyComplete && !influencer.isProfileCompleted) {
-      // Check latest review status
-      const latestReview = await this.profileReviewModel.findOne({
-        where: { profileId: influencerId, profileType: ProfileType.INFLUENCER },
-        order: [['createdAt', 'DESC']],
+      // Profile is complete but flag is outdated - update it
+      await this.influencerRepository.updateInfluencer(influencerId, {
+        isProfileCompleted: true,
       });
-      if (!latestReview || latestReview.status !== ReviewStatus.REJECTED) {
-        // Profile is complete but flag is outdated - update it
-        await this.influencerRepository.updateInfluencer(influencerId, {
-          isProfileCompleted: true,
-        });
-        // ...existing code...
-        // Check if profile has ever been submitted for review
-        const hasBeenSubmitted = await this.hasProfileReview(influencerId);
-        // If profile just became complete and hasn't been submitted, create review
-        if (!hasBeenSubmitted) {
-          const reviewCreated = await this.createProfileReview(influencerId);
-          // Send verification pending push notification only if review was actually created
-          if (reviewCreated) {
-            const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencerId, DeviceUserType.INFLUENCER);
-            if (fcmTokens && fcmTokens.length > 0) {
-              this.notificationService.sendCustomNotification(
-                fcmTokens,
-                'Profile Under Review',
-                `Hi ${influencer.name}, your profile has been submitted for verification. You will be notified once the review is complete within 48 hours.`,
-                { type: 'profile_verification_pending' },
-              ).catch(err => console.error('Failed to send profile verification pending notification:', err));
-            }
-          }
-        }
-        // Refetch influencer to get updated state from database
-        const updatedInfluencer = await this.influencerRepository.findById(
-          influencerId,
-        );
-        if (updatedInfluencer) {
-          influencer = updatedInfluencer;
-        }
+
+      // Refetch influencer to get updated state from database
+      const updatedInfluencer = await this.influencerRepository.findById(
+        influencerId,
+      );
+      if (updatedInfluencer) {
+        influencer = updatedInfluencer;
       }
-      // else: latest review is rejected, require explicit resubmission
     }
 
     // Check if current user follows this influencer
@@ -689,52 +663,10 @@ export class InfluencerService {
     // Store the old completion status BEFORE any updates
     const wasComplete = influencer.isProfileCompleted;
 
-    // Check if profile has ever been submitted for review
-    const hasBeenSubmitted = await this.hasProfileReview(influencerId);
-
     // Pre-calculate what the profile will look like after update to determine completion
     const tempInfluencer = { ...influencer, ...processedData, ...fileUrls };
     const willBeComplete =
       this.checkInfluencerProfileCompletion(tempInfluencer);
-
-    // Check if this is a rejected profile trying to resubmit
-    const currentVerificationStatus =
-      await this.getVerificationStatus(influencerId);
-    if (currentVerificationStatus?.status === 'rejected' && willBeComplete) {
-      // Check if the WhatsApp number is already in use by another verified or pending account
-      const whatsappNumber = influencer.whatsappNumber;
-      if (whatsappNumber) {
-        const formattedNumber = whatsappNumber.startsWith('+91')
-          ? whatsappNumber
-          : `+91${whatsappNumber}`;
-
-        const whatsappHash = crypto
-          .createHash('sha256')
-          .update(formattedNumber)
-          .digest('hex');
-
-        const existingInfluencer =
-          await this.influencerRepository.findByWhatsappHash(
-            whatsappHash,
-            influencerId,
-          );
-
-        if (existingInfluencer) {
-          const existingVerificationStatus = await this.getVerificationStatus(
-            existingInfluencer.id,
-          );
-          if (
-            existingInfluencer.isWhatsappVerified &&
-            (existingVerificationStatus?.status === 'approved' ||
-              existingVerificationStatus?.status === 'pending')
-          ) {
-            throw new BadRequestException(
-              'This WhatsApp number is already in use by another verified influencer account. Please use a different number.',
-            );
-          }
-        }
-      }
-    }
 
     // Update influencer data - include isProfileCompleted flag if profile will be complete
     const updatedData = {
@@ -758,92 +690,36 @@ export class InfluencerService {
       this.calculateProfileCompletion(updatedInfluencer);
     const isComplete = profileCompletion.isCompleted;
 
-    // If profile just became complete and hasn't been submitted, create review
-    if (!wasComplete && isComplete && !hasBeenSubmitted) {
-      // Create profile review for admin verification
-      const reviewCreated = await this.createProfileReview(influencerId);
+    // Check if Instagram is connected
+    const isInstagramConnected = !!(updatedInfluencer.instagramUserId && updatedInfluencer.instagramAccessToken);
 
-      // Send verification pending push notification only if review was actually created
-      if (reviewCreated) {
-        const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencerId, DeviceUserType.INFLUENCER);
-        if (fcmTokens && fcmTokens.length > 0) {
-          this.notificationService.sendCustomNotification(
-            fcmTokens,
-            'Profile Under Review',
-            `Hi ${updatedInfluencer.name}, your profile has been submitted for verification. You will be notified once the review is complete within 48 hours.`,
-            { type: 'profile_verification_pending' },
-          ).catch(err => console.error('Failed to send profile verification pending notification:', err));
-        }
-      }
-    }
-
-    // If profile is already complete but has no review record, create one
-    // This handles cases where profile was already marked complete but hasn't been submitted yet
-    if (isComplete && !hasBeenSubmitted && wasComplete) {
-      const reviewCreated = await this.createProfileReview(influencerId);
-
-      // Send verification pending push notification only if review was actually created
-      if (reviewCreated) {
-        const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencerId, DeviceUserType.INFLUENCER);
-        if (fcmTokens && fcmTokens.length > 0) {
-          this.notificationService.sendCustomNotification(
-            fcmTokens,
-            'Profile Under Review',
-            `Hi ${updatedInfluencer.name}, your profile has been submitted for verification. You will be notified once the review is complete within 48 hours.`,
-            { type: 'profile_verification_pending' },
-          ).catch(err => console.error('Failed to send profile verification pending notification:', err));
-        }
-      }
-    }
-
-    // Send appropriate WhatsApp notification based on completion status
-    // Only send notifications if profile has never been submitted
-    if (!hasBeenSubmitted) {
-      if (!isComplete) {
-        // Profile is incomplete - send missing fields notifications (WhatsApp only for influencers)
-        console.log('Profile incomplete notification check:', {
-          influencerId: influencer.id,
-          name: influencer.name,
-          whatsappNumber: influencer.whatsappNumber,
-          isWhatsappVerified: influencer.isWhatsappVerified,
-          missingFieldsCount: profileCompletion.missingFields.length,
-          missingFields: profileCompletion.missingFields,
-        });
-
-        // Send profile incomplete push notification
-        const fcmTokens = await this.deviceTokenService.getAllUserTokens(influencer.id, DeviceUserType.INFLUENCER);
-        if (fcmTokens && fcmTokens.length > 0) {
-          const missingCount = profileCompletion.missingFields.length;
-          this.notificationService.sendCustomNotification(
-            fcmTokens,
-            'Complete Your Profile',
-            `Hi ${influencer.name}, you have ${missingCount} field${missingCount > 1 ? 's' : ''} remaining to complete your profile. Complete it to apply for campaigns!`,
-            {
-              type: 'profile_incomplete',
-              missingFieldsCount: missingCount.toString(),
-              missingFields: JSON.stringify(profileCompletion.missingFields)
-            },
-          ).catch(err => console.error('Failed to send profile incomplete notification:', err));
-        }
-      }
-    }
-    // else: Profile has been submitted before - no notification
+    // No manual verification process - profiles are only verified when Instagram is connected
 
     // Return updated profile with appropriate message
     const profileData = await this.getInfluencerProfile(influencerId);
 
     if (!wasComplete && isComplete) {
-      return {
-        ...profileData,
-        message:
-          'Profile submitted for verification. You will receive a notification once verification is complete within 48 hours.',
-        status: 'pending_verification',
-      };
+      // Profile is now complete
+      if (isInstagramConnected) {
+        // Instagram connected - profile is verified
+        return {
+          ...profileData,
+          message: SUCCESS_MESSAGES.PROFILE.UPDATED,
+          status: 'verified',
+        };
+      } else {
+        // Instagram not connected - profile remains unverified
+        return {
+          ...profileData,
+          message: 'Profile completed successfully. Connect your Instagram account to get verified and apply for campaigns.',
+          status: 'completed_unverified',
+        };
+      }
     } else if (!isComplete) {
       return {
         ...profileData,
         message:
-          'Profile updated successfully. Please complete the missing fields to submit for verification.',
+          'Profile updated successfully. Please complete the missing fields.',
         status: 'incomplete',
         missingFieldsCount: profileCompletion.missingFields.length,
       };
