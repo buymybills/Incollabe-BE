@@ -228,7 +228,9 @@ export class CampaignController {
             numberOfInfluencers: 10,
             isMaxCampaign: false,
             isInviteOnly: false,
-            createdAt: '2025-09-11T00:00:00Z',
+            nicheIds: [1, 5, 8],
+            influencerTypes: ['micro_10k_100k', 'mid_tier_100k_500k'],
+            createdAt: '2025-09-11T00:00:00Z', 
             brand: {
               id: 1,
               brandName: "L'Oréal Paris",
@@ -255,6 +257,8 @@ export class CampaignController {
             name: 'Exclusive Brand Launch',
             category: 'Fashion',
             status: 'active',
+            nicheIds: [2],
+            influencerTypes: ['nano_1k_10k', 'micro_10k_100k'],
             createdAt: '2025-09-10T00:00:00Z',
             campaignInvitations: [
               {
@@ -278,6 +282,8 @@ export class CampaignController {
             category: 'Fashion',
             status: 'completed',
             isActive: false,
+            nicheIds: [2, 3],
+            influencerTypes: ['micro_10k_100k'],
             createdAt: '2024-06-01T00:00:00Z',
           },
         ],
@@ -359,6 +365,8 @@ export class CampaignController {
             isMaxCampaign: false,
             isInviteOnly: false,
             promotionType: 'organic',
+            nicheIds: [1, 2],
+            influencerTypes: ['micro_10k_100k', 'mid_tier_100k_500k'],
             brandId: 1,
             brand: {
               id: 1,
@@ -420,6 +428,8 @@ export class CampaignController {
             isMaxCampaign: false,
             isInviteOnly: false,
             promotionType: 'organic',
+            nicheIds: [1, 2],
+            influencerTypes: ['micro_10k_100k', 'mid_tier_100k_500k'],
             deliverableFormat: ['Insta Reel / Post', 'Insta Story'],
             invitations: [{ status: 'pending' }, { status: 'accepted' }],
             totalApplications: 15,
@@ -495,6 +505,8 @@ export class CampaignController {
             isMaxCampaign: false,
             isInviteOnly: false,
             promotionType: 'organic',
+            nicheIds: [1, 2],
+            influencerTypes: ['micro_10k_100k', 'mid_tier_100k_500k'],
             deliverableFormat: ['Insta Reel / Post', 'Insta Story'],
             invitations: [{ status: 'pending' }, { status: 'accepted' }],
             totalApplications: 15,
@@ -735,6 +747,8 @@ export class CampaignController {
         maxAge: 24,
         genderPreferences: ['Female'],
         isOpenToAllGenders: false,
+        nicheIds: [1, 5, 8],
+        influencerTypes: ['micro_10k_100k', 'mid_tier_100k_500k'],
         niches: [
           {
             id: 1,
