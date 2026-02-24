@@ -121,11 +121,11 @@ export class SubscriptionSchedulerService implements OnModuleInit {
         console.log(`✅ Granted Pro access to ${paidWithoutProResult.grantedCount} user(s)`);
       }
 
-      if (paidWithoutProResult.skippedCount > 0) {
-        console.log(`⏭️  Skipped ${paidWithoutProResult.skippedCount} expired subscription(s)`);
+      if (paidWithoutProResult.failedCount > 0) {
+        console.error(`❌ Failed to grant access to ${paidWithoutProResult.failedCount} user(s)`);
       }
 
-      if (paidWithoutProResult.grantedCount === 0 && paidWithoutProResult.skippedCount === 0) {
+      if (paidWithoutProResult.grantedCount === 0 && paidWithoutProResult.failedCount === 0) {
         console.log('ℹ️ All paid users already have Pro access');
       }
     } catch (error) {

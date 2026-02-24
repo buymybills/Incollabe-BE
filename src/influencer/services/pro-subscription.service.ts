@@ -2856,6 +2856,7 @@ export class ProSubscriptionService {
     console.log(`\n🔍 Checking for paid invoices without Pro access granted...`);
 
     // Find all paid invoices where the influencer doesn't have Pro access
+    // AND the subscription is still active (not expired)
     const paidInvoices = await this.proInvoiceModel.findAll({
       where: {
         paymentStatus: InvoiceStatus.PAID,
@@ -2870,8 +2871,13 @@ export class ProSubscriptionService {
           required: true,
         },
         {
-          model: ProSubscription,
+          model: this.proSubscriptionModel,
           as: 'subscription',
+          where: {
+            currentPeriodEnd: {
+              [Op.gt]: new Date(), // Only active subscriptions
+            },
+          },
           required: true,
         },
       ],
@@ -2879,30 +2885,20 @@ export class ProSubscriptionService {
       limit: 100,
     });
 
-    console.log(`📊 Found ${paidInvoices.length} paid invoice(s) without Pro access`);
+    console.log(`📊 Found ${paidInvoices.length} active paid invoice(s) without Pro access`);
 
     let grantedCount = 0;
-    let skippedCount = 0;
+    let failedCount = 0;
 
     for (const invoice of paidInvoices) {
       try {
         const subscription = invoice.subscription;
         const influencer = invoice.influencer;
+        const periodEnd = subscription.currentPeriodEnd;
 
         console.log(
           `\n📋 Processing invoice ${invoice.invoiceNumber} (${invoice.id}) for ${influencer.username}`,
         );
-
-        // Check if subscription is still valid
-        const now = new Date();
-        const periodEnd = subscription.currentPeriodEnd;
-
-        if (periodEnd < now) {
-          console.log(`  ⏭️  Subscription expired on ${toIST(periodEnd)} - skipping`);
-          skippedCount++;
-          continue;
-        }
-
         console.log(`  ✅ Subscription valid until ${toIST(periodEnd)}`);
 
         // Grant Pro access
@@ -2922,16 +2918,19 @@ export class ProSubscriptionService {
           `  ❌ Failed to grant Pro access for invoice ${invoice.id}:`,
           error.message,
         );
+        failedCount++;
       }
     }
 
     console.log(`\n🎯 PAID INVOICES RECONCILIATION COMPLETE`);
     console.log(`  ✅ Pro access granted: ${grantedCount}`);
-    console.log(`  ⏭️  Skipped (expired): ${skippedCount}`);
+    if (failedCount > 0) {
+      console.log(`  ❌ Failed: ${failedCount}`);
+    }
 
     return {
       grantedCount,
-      skippedCount,
+      failedCount,
       totalChecked: paidInvoices.length,
     };
   }
