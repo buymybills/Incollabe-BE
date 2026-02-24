@@ -2493,12 +2493,78 @@ export class ProSubscriptionService {
     console.log(`  ⏭️  Skipped (cannot auto-reconcile): ${skippedCount}`);
     console.log(`  ❌ Failed: ${failedCount}`);
 
+    // ============================================================================
+    // SECOND PASS: Fix database inconsistencies
+    // Find PAID invoices where subscription is still PAYMENT_FAILED or EXPIRED
+    // This catches cases where webhook race condition left subscription stuck
+    // ============================================================================
+    console.log(`\n🔧 Checking for database inconsistencies...`);
+
+    const stuckSubscriptions = await this.proInvoiceModel.findAll({
+      where: {
+        paymentStatus: InvoiceStatus.PAID,
+        createdAt: {
+          [Op.gte]: thirtyDaysAgo,
+        },
+      },
+      include: [
+        {
+          model: this.proSubscriptionModel,
+          as: 'subscription',
+          required: true,
+          where: {
+            status: {
+              [Op.in]: [SubscriptionStatus.PAYMENT_FAILED, SubscriptionStatus.EXPIRED],
+            },
+            currentPeriodEnd: {
+              [Op.gt]: now, // Subscription should still be active
+            },
+          },
+        },
+      ],
+      limit: 50,
+    });
+
+    console.log(`Found ${stuckSubscriptions.length} paid invoice(s) with stuck subscriptions`);
+
+    let fixedSubscriptionsCount = 0;
+
+    for (const invoice of stuckSubscriptions) {
+      try {
+        const subscription = invoice.subscription;
+        console.log(`\n🔧 Fixing stuck subscription ${subscription.id} for invoice ${invoice.id}`);
+        console.log(`  Current status: ${subscription.status}, should be: active`);
+
+        const paymentDate = invoice.paidAt || invoice.createdAt;
+        const calculatedExpiry = new Date(paymentDate);
+        calculatedExpiry.setDate(calculatedExpiry.getDate() + 30);
+
+        await subscription.update({
+          status: SubscriptionStatus.ACTIVE,
+          currentPeriodStart: paymentDate,
+          currentPeriodEnd: calculatedExpiry,
+        });
+
+        console.log(`  ✅ Subscription ${subscription.id} activated (was ${subscription.status})`);
+        fixedSubscriptionsCount++;
+      } catch (error) {
+        console.error(`  ❌ Failed to fix subscription ${invoice.subscription?.id}:`, error.message);
+      }
+    }
+
+    if (fixedSubscriptionsCount > 0) {
+      console.log(`\n✅ Fixed ${fixedSubscriptionsCount} stuck subscription(s)`);
+    } else {
+      console.log(`\nℹ️  No stuck subscriptions found`);
+    }
+
     return {
       reconciledCount,
       alreadyPaidCount,
       skippedCount,
       failedCount,
       totalChecked: unpaidInvoices.length,
+      fixedSubscriptionsCount,
     };
   }
 
