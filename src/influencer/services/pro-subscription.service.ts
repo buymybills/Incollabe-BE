@@ -1637,8 +1637,8 @@ export class ProSubscriptionService {
       return { success: true, message: 'Event type not applicable to invoices' };
     }
 
-    // Find the invoice by razorpayPaymentId or razorpayOrderId
-    const invoice = await this.proInvoiceModel.findOne({
+    // Try to find invoice by payment ID or order ID first
+    let invoice = await this.proInvoiceModel.findOne({
       where: {
         [Op.or]: [
           { razorpayPaymentId: payload.payment?.entity?.id },
@@ -1647,8 +1647,41 @@ export class ProSubscriptionService {
       },
     });
 
+    // If not found and this is an autopay payment (has subscription_id), find by subscription
+    if (!invoice && payload.payment?.entity?.subscription_id) {
+      console.log(
+        `📋 Invoice not found by payment/order ID, searching by subscription ID: ${payload.payment.entity.subscription_id}`,
+      );
+
+      // Find subscription by Razorpay subscription ID
+      const subscription = await this.proSubscriptionModel.findOne({
+        where: { razorpaySubscriptionId: payload.payment.entity.subscription_id },
+      });
+
+      if (subscription) {
+        // Find the most recent PENDING or CANCELLED invoice for this subscription
+        // This handles cases where payment was captured but webhook processing failed
+        invoice = await this.proInvoiceModel.findOne({
+          where: {
+            subscriptionId: subscription.id,
+            paymentStatus: { [Op.in]: [InvoiceStatus.PENDING, 'cancelled'] },
+          },
+          order: [['createdAt', 'DESC']], // Get the most recent one
+        });
+
+        if (invoice) {
+          console.log(
+            `✅ Found invoice ${invoice.id} via subscription ${subscription.id} (status: ${invoice.paymentStatus})`,
+          );
+        }
+      }
+    }
+
     if (!invoice) {
-      console.log('Invoice not found for webhook payload');
+      console.log('❌ Invoice not found for webhook payload');
+      console.log('Payment ID:', payload.payment?.entity?.id);
+      console.log('Order ID:', payload.payment?.entity?.order_id);
+      console.log('Subscription ID:', payload.payment?.entity?.subscription_id);
       return { success: false, message: 'Invoice not found' };
     }
 
@@ -1981,69 +2014,257 @@ export class ProSubscriptionService {
   /**
    * Reconcile stuck payments - Fix cases where payment was captured but webhook was missed
    * This catches payments where money was deducted but Pro wasn't activated
+   * Handles both PENDING and CANCELLED invoices with or without payment IDs
    */
   async reconcileStuckPayments() {
     const now = new Date();
 
-    console.log(`💰 Checking for stuck payments (captured but not processed)...`);
+    console.log(`💰 Starting comprehensive payment reconciliation...`);
 
-    // Find all PENDING invoices older than 5 minutes with a razorpayPaymentId
+    // Find ALL unpaid invoices (PENDING or cancelled) from last 30 days
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
 
-    const stuckInvoices = await this.proInvoiceModel.findAll({
+    // Find ALL unpaid invoices (PENDING or cancelled) from last 30 days
+    const unpaidInvoices = await this.proInvoiceModel.findAll({
       where: {
-        paymentStatus: InvoiceStatus.PENDING,
-        razorpayPaymentId: {
-          [Op.ne]: null, // Has a payment ID
+        paymentStatus: {
+          [Op.in]: [InvoiceStatus.PENDING, 'cancelled'],
         },
         createdAt: {
-          [Op.lt]: fiveMinutesAgo, // Older than 5 minutes
+          [Op.gte]: thirtyDaysAgo,
+          [Op.lt]: fiveMinutesAgo, // Give webhooks 5 minutes to process
         },
       },
-      limit: 50, // Process max 50 at a time
+      include: [
+        {
+          model: this.proSubscriptionModel,
+          as: 'subscription',
+          required: false, // Include invoices even if subscription is missing
+        },
+      ],
+      limit: 100, // Process max 100 at a time
+      order: [['createdAt', 'DESC']],
     });
 
-    console.log(`Found ${stuckInvoices.length} potentially stuck invoice(s)`);
+    console.log(`Found ${unpaidInvoices.length} unpaid invoice(s) to reconcile`);
 
     let reconciledCount = 0;
     let alreadyPaidCount = 0;
     let failedCount = 0;
+    let skippedCount = 0;
 
-    for (const invoice of stuckInvoices) {
+    for (const invoice of unpaidInvoices) {
       try {
+        console.log(`\n📋 Processing invoice ${invoice.id} (${invoice.paymentStatus})`);
+
         // Check if invoice was already marked as PAID (race condition)
         await invoice.reload();
         if (invoice.paymentStatus === InvoiceStatus.PAID) {
-          console.log(`  ✅ Invoice ${invoice.id} already marked as PAID, skipping`);
+          console.log(`  ✅ Already PAID, skipping`);
           alreadyPaidCount++;
           continue;
         }
 
-        // Fetch payment details from Razorpay to verify actual status
-        let paymentEntity;
-        try {
-          paymentEntity = await this.razorpayService.getPaymentDetails(invoice.razorpayPaymentId);
-        } catch (error) {
-          console.error(`  ❌ Failed to fetch payment ${invoice.razorpayPaymentId} from Razorpay:`, error.message);
-          failedCount++;
-          continue;
-        }
-
-        // Check if payment was actually captured
-        if (paymentEntity.status !== 'captured') {
-          console.log(`  ⏸️  Payment ${invoice.razorpayPaymentId} status: ${paymentEntity.status}, skipping`);
-          continue;
-        }
-
-        // Payment was captured! Process it now
-        console.log(`  💳 Found captured payment for invoice ${invoice.id}, reconciling...`);
-
-        const subscription = await this.proSubscriptionModel.findByPk(invoice.subscriptionId);
+        const subscription = invoice.subscription;
         if (!subscription) {
-          console.error(`  ❌ Subscription ${invoice.subscriptionId} not found for invoice ${invoice.id}`);
-          failedCount++;
+          console.log(`  ⚠️  No subscription found for invoice ${invoice.id}, skipping`);
+          skippedCount++;
           continue;
         }
+
+        let capturedPayment: any = null;
+        let reconciliationStrategy = '';
+
+        // ============================================================================
+        // STRATEGY 1: If invoice has razorpayPaymentId, verify that specific payment
+        // ============================================================================
+        if (invoice.razorpayPaymentId) {
+          console.log(`  🔍 Strategy 1: Checking existing payment ID ${invoice.razorpayPaymentId}`);
+          reconciliationStrategy = 'existing_payment_id';
+
+          try {
+            const response = await this.razorpayService.getPaymentDetails(invoice.razorpayPaymentId);
+            if (response.success && response.data?.status === 'captured') {
+              capturedPayment = response.data;
+              console.log(`  ✅ Payment ${invoice.razorpayPaymentId} is captured`);
+            } else {
+              console.log(`  ⏸️  Payment status: ${response.data?.status || 'unknown'}, skipping`);
+              continue;
+            }
+          } catch (error) {
+            console.error(`  ❌ Failed to fetch payment:`, error.message);
+            failedCount++;
+            continue;
+          }
+        }
+        // ============================================================================
+        // STRATEGY 2: If subscription has Razorpay ID, query all subscription payments
+        // ============================================================================
+        else if (subscription.razorpaySubscriptionId && subscription.razorpaySubscriptionId !== '') {
+          console.log(`  🔍 Strategy 2: Querying payments for subscription ${subscription.razorpaySubscriptionId}`);
+          reconciliationStrategy = 'subscription_payment_search';
+
+          try {
+            const paymentsResponse = await this.razorpayService.getSubscriptionPayments(
+              subscription.razorpaySubscriptionId,
+            );
+            const payments = paymentsResponse.items || [];
+
+            console.log(`  📊 Found ${payments.length} payment(s) for subscription`);
+
+            // Find captured payment matching invoice amount
+            const matchingPayment = payments.find(
+              (payment) =>
+                payment.status === 'captured' &&
+                payment.amount === invoice.totalAmount, // Amount in paise
+            );
+
+            if (matchingPayment) {
+              // Check if this payment is already used by another invoice
+              const existingInvoice = await this.proInvoiceModel.findOne({
+                where: {
+                  razorpayPaymentId: matchingPayment.id,
+                  paymentStatus: InvoiceStatus.PAID,
+                },
+              });
+
+              if (existingInvoice) {
+                console.log(`  ⚠️  Payment ${matchingPayment.id} already used by invoice ${existingInvoice.id}, skipping`);
+                continue;
+              }
+
+              capturedPayment = matchingPayment;
+              console.log(`  ✅ Found matching payment: ${matchingPayment.id} for ${matchingPayment.amount} paise`);
+            } else {
+              console.log(`  ℹ️  No captured payment matching amount ${invoice.totalAmount} paise`);
+              continue;
+            }
+          } catch (error) {
+            console.error(`  ❌ Failed to fetch subscription payments:`, error.message);
+            failedCount++;
+            continue;
+          }
+        }
+        // ============================================================================
+        // STRATEGY 3: Check pro_payment_transactions table
+        // Handles cases where webhook was received but failed to update invoice
+        // ============================================================================
+        else {
+          console.log(`  🔍 Strategy 3: Checking pro_payment_transactions for captured webhook`);
+          reconciliationStrategy = 'transaction_table_search';
+
+          try {
+            // Find captured payment transaction for this invoice
+            const capturedTransaction = await this.proPaymentTransactionModel.findOne({
+              where: {
+                invoiceId: invoice.id,
+                transactionType: 'payment.captured',
+                status: 'captured',
+              },
+              order: [['createdAt', 'DESC']],
+            });
+
+            if (capturedTransaction && capturedTransaction.razorpayPaymentId) {
+              // Check if this payment is already used by another invoice
+              const existingInvoice = await this.proInvoiceModel.findOne({
+                where: {
+                  razorpayPaymentId: capturedTransaction.razorpayPaymentId,
+                  paymentStatus: InvoiceStatus.PAID,
+                },
+              });
+
+              if (existingInvoice) {
+                console.log(
+                  `  ⚠️  Payment ${capturedTransaction.razorpayPaymentId} already used by invoice ${existingInvoice.id}, skipping`,
+                );
+                continue;
+              }
+
+              capturedPayment = {
+                id: capturedTransaction.razorpayPaymentId,
+                status: 'captured',
+                amount: capturedTransaction.amount,
+                created_at: Math.floor(capturedTransaction.createdAt.getTime() / 1000),
+              };
+              console.log(
+                `  ✅ Found captured payment in transaction log: ${capturedPayment.id}`,
+              );
+            } else {
+              console.log(`  ℹ️  No captured transaction found in payment logs`);
+            }
+          } catch (error) {
+            console.error(`  ❌ Failed to check transaction table:`, error.message);
+          }
+        }
+
+        // ============================================================================
+        // STRATEGY 4: Check Razorpay order for payments
+        // Handles cases where payment succeeded but webhook processing failed completely
+        // ============================================================================
+        if (!capturedPayment && invoice.razorpayOrderId) {
+          console.log(`  🔍 Strategy 4: Querying Razorpay for order ${invoice.razorpayOrderId}`);
+          reconciliationStrategy = 'order_payment_search';
+
+          try {
+            const orderResponse = await this.razorpayService.getOrderPayments(
+              invoice.razorpayOrderId,
+            );
+            const payments = orderResponse.payments || [];
+
+            console.log(`  📊 Found ${payments.length} payment(s) for order`);
+
+            // Find captured payment matching invoice amount
+            const matchingPayment = payments.find(
+              (payment) =>
+                payment.status === 'captured' &&
+                payment.amount === invoice.totalAmount,
+            );
+
+            if (matchingPayment) {
+              // Check if this payment is already used by another invoice
+              const existingInvoice = await this.proInvoiceModel.findOne({
+                where: {
+                  razorpayPaymentId: matchingPayment.id,
+                  paymentStatus: InvoiceStatus.PAID,
+                },
+              });
+
+              if (existingInvoice) {
+                console.log(
+                  `  ⚠️  Payment ${matchingPayment.id} already used by invoice ${existingInvoice.id}, skipping`,
+                );
+              } else {
+                capturedPayment = matchingPayment;
+                console.log(
+                  `  ✅ Found captured payment on order: ${matchingPayment.id} for ${matchingPayment.amount} paise`,
+                );
+              }
+            } else {
+              console.log(`  ℹ️  No captured payment matching amount ${invoice.totalAmount} paise on order`);
+            }
+          } catch (error) {
+            console.error(`  ❌ Failed to fetch order payments:`, error.message);
+          }
+        }
+
+        // ============================================================================
+        // STRATEGY 5: Still no payment found - cannot reconcile
+        // ============================================================================
+        if (!capturedPayment) {
+          console.log(`  ⚠️  All strategies exhausted - cannot auto-reconcile`);
+          console.log(
+            `  📝 Manual review needed for invoice ${invoice.id}, influencer ${invoice.influencerId}, amount: ${invoice.totalAmount} paise`,
+          );
+          skippedCount++;
+          continue;
+        }
+
+        // ============================================================================
+        // If we found a captured payment, reconcile the invoice
+        // ============================================================================
+
+        console.log(`  💳 Reconciling invoice ${invoice.id} with payment ${capturedPayment.id}...`);
 
         // Generate invoice number if missing
         let invoiceNumber = invoice.invoiceNumber;
@@ -2055,73 +2276,90 @@ export class ProSubscriptionService {
         await invoice.update({
           invoiceNumber,
           paymentStatus: InvoiceStatus.PAID,
-          paidAt: new Date(),
+          razorpayPaymentId: capturedPayment.id,
+          paidAt: capturedPayment.created_at
+            ? new Date(capturedPayment.created_at * 1000)
+            : new Date(),
         });
 
-        // Update subscription status based on current state
+        console.log(`  ✅ Invoice ${invoice.id} marked as PAID`);
+
+        // Calculate Pro expiry as payment date + 30 days
+        const paymentDate = capturedPayment.created_at
+          ? new Date(capturedPayment.created_at * 1000)
+          : new Date();
+        const calculatedExpiry = new Date(paymentDate);
+        calculatedExpiry.setDate(calculatedExpiry.getDate() + 30); // Add 30 days
+
+        console.log(
+          `  📅 Calculated expiry: Payment ${paymentDate.toISOString()} + 30 days = ${calculatedExpiry.toISOString()}`,
+        );
+
+        // Update subscription status and period based on current state
         if (subscription.status === SubscriptionStatus.PAYMENT_PENDING) {
-          // Normal case: payment was pending, now mark as active
           await subscription.update({
             status: SubscriptionStatus.ACTIVE,
+            currentPeriodEnd: calculatedExpiry, // Fix period end
           });
-          console.log(`  ✅ Subscription ${subscription.id} activated`);
+          console.log(`  ✅ Subscription ${subscription.id} activated with correct period end`);
         } else if (subscription.status === SubscriptionStatus.CANCELLED) {
-          // Critical case: User cancelled autopay due to stuck payment
-          // Keep status as CANCELLED (don't reactivate autopay)
-          // But give them Pro access for the period they paid for
-          console.log(`  ⚠️  Subscription ${subscription.id} is CANCELLED - keeping as cancelled but activating Pro for paid period`);
+          console.log(`  ⚠️  Subscription is CANCELLED - keeping as cancelled but activating Pro`);
 
-          // Safety measure: Verify Razorpay subscription is cancelled to prevent future charges
+          // Update the period end even though cancelled, for record accuracy
+          await subscription.update({
+            currentPeriodEnd: calculatedExpiry,
+          });
+
+          // Ensure Razorpay subscription is cancelled to prevent future charges
           if (subscription.razorpaySubscriptionId) {
-            console.log(`  🔒 Verifying Razorpay subscription is cancelled to prevent future charges...`);
             try {
-              const subDetails = await this.razorpayService.getSubscription(subscription.razorpaySubscriptionId);
-              if (subDetails.success && subDetails.data?.status !== 'cancelled' && subDetails.data?.status !== 'completed') {
-                // Razorpay subscription still active - cancel it!
-                console.log(`  ⚠️  Razorpay subscription status: ${subDetails.data?.status} - cancelling now...`);
+              const subDetails = await this.razorpayService.getSubscription(
+                subscription.razorpaySubscriptionId,
+              );
+              if (
+                subDetails.success &&
+                subDetails.data?.status !== 'cancelled' &&
+                subDetails.data?.status !== 'completed'
+              ) {
                 await this.razorpayService.cancelSubscription(
                   subscription.razorpaySubscriptionId,
-                  false, // Cancel immediately
+                  false,
                 );
                 console.log(`  ✅ Razorpay subscription cancelled`);
-              } else {
-                console.log(`  ✅ Razorpay subscription already cancelled/completed`);
               }
-              // Ensure local flag is set
               if (subscription.autoRenew !== false) {
                 await subscription.update({ autoRenew: false });
               }
             } catch (cancelError) {
               console.error(`  ⚠️  Failed to verify/cancel Razorpay subscription:`, cancelError.message);
-              // Continue anyway - local status is already CANCELLED which is most important
             }
           }
-          // Don't change subscription status - keep it CANCELLED
-          // This prevents auto-renewal while still honoring their payment
         }
 
-        // Update influencer Pro status - they paid for it, they deserve it
-        // Even if they cancelled autopay afterwards
+        // Update influencer Pro status
         const currentProExpiry = await this.influencerModel.findByPk(invoice.influencerId, {
-          attributes: ['proExpiresAt'],
+          attributes: ['proExpiresAt', 'username'],
         });
 
-        // Only update if this extends their Pro access
-        const newExpiry = subscription.currentPeriodEnd;
-        const shouldUpdate = !currentProExpiry?.proExpiresAt || newExpiry > currentProExpiry.proExpiresAt;
+        // Use the calculated expiry from above (payment date + 30 days)
+        const shouldUpdate = !currentProExpiry?.proExpiresAt || calculatedExpiry > currentProExpiry.proExpiresAt;
 
         if (shouldUpdate) {
           await this.influencerModel.update(
             {
               isPro: true,
               proActivatedAt: new Date(),
-              proExpiresAt: subscription.currentPeriodEnd,
+              proExpiresAt: calculatedExpiry,
             },
             { where: { id: invoice.influencerId } },
           );
-          console.log(`  ✅ Pro access granted until ${subscription.currentPeriodEnd.toISOString()}`);
+          console.log(
+            `  ✅ Pro access granted to ${currentProExpiry?.username || invoice.influencerId} until ${calculatedExpiry.toISOString()}`,
+          );
         } else {
-          console.log(`  ℹ️  Influencer already has Pro until ${currentProExpiry.proExpiresAt.toISOString()} (not updating)`);
+          console.log(
+            `  ℹ️  Already has Pro until ${currentProExpiry.proExpiresAt.toISOString()}`,
+          );
         }
 
         // Generate invoice PDF
@@ -2129,26 +2367,34 @@ export class ProSubscriptionService {
           await this.generateInvoicePDF(invoice.id);
           console.log(`  📄 Invoice PDF generated: ${invoiceNumber}`);
         } catch (pdfError) {
-          console.error('  ⚠️  Failed to generate invoice PDF:', pdfError.message);
-          // Don't fail reconciliation if PDF generation fails
+          console.error('  ⚠️  Failed to generate PDF:', pdfError.message);
         }
 
-        console.log(`  ✅ Reconciled stuck payment for invoice ${invoice.id} (${invoiceNumber}), influencer ${invoice.influencerId} now has Pro`);
+        console.log(
+          `  🎉 Successfully reconciled invoice ${invoice.id} using ${reconciliationStrategy}`,
+        );
         reconciledCount++;
 
       } catch (error) {
         console.error(`  ❌ Error reconciling invoice ${invoice.id}:`, error.message);
+        console.error(error.stack);
         failedCount++;
       }
     }
 
-    console.log(`✅ Reconciliation complete: ${reconciledCount} fixed, ${alreadyPaidCount} already paid, ${failedCount} failed`);
+
+    console.log(`\n🎯 RECONCILIATION COMPLETE`);
+    console.log(`  ✅ Reconciled: ${reconciledCount}`);
+    console.log(`  ℹ️  Already paid: ${alreadyPaidCount}`);
+    console.log(`  ⏭️  Skipped (cannot auto-reconcile): ${skippedCount}`);
+    console.log(`  ❌ Failed: ${failedCount}`);
 
     return {
       reconciledCount,
       alreadyPaidCount,
+      skippedCount,
       failedCount,
-      totalChecked: stuckInvoices.length,
+      totalChecked: unpaidInvoices.length,
     };
   }
 

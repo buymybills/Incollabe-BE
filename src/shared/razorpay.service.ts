@@ -185,6 +185,27 @@ export class RazorpayService {
   }
 
   /**
+   * Get all payments for an order
+   */
+  async getOrderPayments(orderId: string) {
+    try {
+      const order = await this.razorpay.orders.fetch(orderId);
+
+      // Fetch all payments associated with this order
+      const payments = await this.razorpay.orders.fetchPayments(orderId);
+
+      return {
+        success: true,
+        order: order,
+        payments: payments.items || [],
+      };
+    } catch (error) {
+      console.error('Error fetching order payments:', error);
+      throw new Error(`Failed to fetch order payments: ${error.message}`);
+    }
+  }
+
+  /**
    * Transfer funds to influencer (simplified version)
    */
   async transferToInfluencer(
@@ -572,6 +593,22 @@ export class RazorpayService {
         success: false,
         error: error.message,
       };
+    }
+  }
+
+  /**
+   * Get all payments for a subscription
+   */
+  async getSubscriptionPayments(subscriptionId: string) {
+    try {
+      const payments = await this.razorpay.payments.all({
+        'subscription_id': subscriptionId,
+      });
+
+      return payments;
+    } catch (error) {
+      console.error('Error fetching subscription payments:', error);
+      throw new Error(`Failed to fetch payments: ${error.message}`);
     }
   }
 
