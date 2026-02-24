@@ -34,6 +34,7 @@ import { Experience } from '../influencer/models/experience.model';
 import { CreditTransaction } from '../admin/models/credit-transaction.model';
 import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
 import { MaxCampaignInvoice } from './models/max-campaign-invoice.model';
+import { InviteOnlyCampaignInvoice } from './models/invite-only-campaign-invoice.model';
 import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
 import { InstagramMediaInsight } from '../shared/models/instagram-media-insight.model';
 import { InfluencerProfileScore } from '../shared/models/influencer-profile-score.model';
@@ -150,6 +151,10 @@ describe('CampaignService', () => {
         },
         {
           provide: getModelToken(MaxCampaignInvoice),
+          useValue: mockModel(),
+        },
+        {
+          provide: getModelToken(InviteOnlyCampaignInvoice),
           useValue: mockModel(),
         },
         {
