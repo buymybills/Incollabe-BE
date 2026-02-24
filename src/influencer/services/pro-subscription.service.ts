@@ -2679,7 +2679,8 @@ export class ProSubscriptionService {
           required: false,
         },
       ],
-      limit: 50,
+      order: [['createdAt', 'DESC']], // Newest first
+      limit: 200, // Increased from 50 to handle all subscriptions
     });
 
     console.log(`📊 Total subscriptions found: ${subscriptionsWithoutInvoices.length}`);
