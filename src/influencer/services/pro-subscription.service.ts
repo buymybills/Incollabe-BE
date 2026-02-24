@@ -2849,6 +2849,94 @@ export class ProSubscriptionService {
   }
 
   /**
+   * Reconcile paid invoices where user doesn't have Pro access
+   * Grants Pro access to users who paid but didn't get isPro flag set
+   */
+  async reconcilePaidInvoicesWithoutProAccess() {
+    console.log(`\n🔍 Checking for paid invoices without Pro access granted...`);
+
+    // Find all paid invoices where the influencer doesn't have Pro access
+    const paidInvoices = await this.proInvoiceModel.findAll({
+      where: {
+        paymentStatus: InvoiceStatus.PAID,
+      },
+      include: [
+        {
+          model: this.influencerModel,
+          as: 'influencer',
+          where: {
+            isPro: false,
+          },
+          required: true,
+        },
+        {
+          model: ProSubscription,
+          as: 'subscription',
+          required: true,
+        },
+      ],
+      order: [['paidAt', 'DESC']],
+      limit: 100,
+    });
+
+    console.log(`📊 Found ${paidInvoices.length} paid invoice(s) without Pro access`);
+
+    let grantedCount = 0;
+    let skippedCount = 0;
+
+    for (const invoice of paidInvoices) {
+      try {
+        const subscription = invoice.subscription;
+        const influencer = invoice.influencer;
+
+        console.log(
+          `\n📋 Processing invoice ${invoice.invoiceNumber} (${invoice.id}) for ${influencer.username}`,
+        );
+
+        // Check if subscription is still valid
+        const now = new Date();
+        const periodEnd = subscription.currentPeriodEnd;
+
+        if (periodEnd < now) {
+          console.log(`  ⏭️  Subscription expired on ${toIST(periodEnd)} - skipping`);
+          skippedCount++;
+          continue;
+        }
+
+        console.log(`  ✅ Subscription valid until ${toIST(periodEnd)}`);
+
+        // Grant Pro access
+        await this.influencerModel.update(
+          {
+            isPro: true,
+            proActivatedAt: invoice.paidAt || new Date(),
+            proExpiresAt: periodEnd,
+          },
+          { where: { id: influencer.id } },
+        );
+
+        console.log(`  ✅ Pro access granted to ${influencer.username} until ${toIST(periodEnd)}`);
+        grantedCount++;
+      } catch (error) {
+        console.error(
+          `  ❌ Failed to grant Pro access for invoice ${invoice.id}:`,
+          error.message,
+        );
+      }
+    }
+
+    console.log(`\n🎯 PAID INVOICES RECONCILIATION COMPLETE`);
+    console.log(`  ✅ Pro access granted: ${grantedCount}`);
+    console.log(`  ⏭️  Skipped (expired): ${skippedCount}`);
+
+    return {
+      grantedCount,
+      skippedCount,
+      totalChecked: paidInvoices.length,
+    };
+  }
+
+  /**
    * Setup Autopay for Pro subscription (supports all payment methods)
    * User can choose UPI, Card, or any other available payment method at checkout
    */
@@ -2953,7 +3041,7 @@ export class ProSubscriptionService {
       console.log(`📅 Starting new billing period (ends: ${toIST(endDate)})`);
     }
 
-    let subscription;
+    let subscription: ProSubscription;
     if (existingSubscription) {
       // Update existing subscription (clear old cancellation data if restarting)
       subscription = await existingSubscription.update({

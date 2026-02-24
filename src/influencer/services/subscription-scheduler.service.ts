@@ -8,12 +8,20 @@ export class SubscriptionSchedulerService implements OnModuleInit {
 
   /**
    * Run cleanup on application startup to fix any stuck Pro subscriptions
+   * This ensures all payment reconciliation happens when the server starts
    */
   async onModuleInit() {
-    console.log('🚀 Running Pro subscription cleanup on startup...');
+    console.log('🚀 Running comprehensive Pro subscription cleanup on startup...');
     try {
+      // Step 1: Expire old subscriptions first
+      console.log('\n📍 Step 1: Checking for expired subscriptions...');
       await this.expireSubscriptions();
+
+      // Step 2: Reconcile all payment issues
+      console.log('\n📍 Step 2: Running comprehensive payment reconciliation...');
       await this.reconcilePayments();
+
+      console.log('\n✅ Startup cleanup completed successfully!');
     } catch (error) {
       console.error('❌ Error in startup subscription cleanup:', error);
     }
@@ -93,7 +101,7 @@ export class SubscriptionSchedulerService implements OnModuleInit {
         console.log('ℹ️ No stuck payments found');
       }
 
-      // Also check for subscriptions without invoices (missed webhooks)
+      // Check for subscriptions without invoices (missed webhooks)
       console.log('\n🔍 Checking for subscriptions without invoices...');
       const orphanedResult = await this.proSubscriptionService.reconcileSubscriptionsWithoutInvoices();
 
@@ -103,6 +111,22 @@ export class SubscriptionSchedulerService implements OnModuleInit {
 
       if (orphanedResult.abandonedCount > 0) {
         console.log(`⚠️ Marked ${orphanedResult.abandonedCount} abandoned subscription(s) as INACTIVE`);
+      }
+
+      // Check for paid invoices where Pro access wasn't granted
+      console.log('\n🔍 Checking for paid invoices without Pro access...');
+      const paidWithoutProResult = await this.proSubscriptionService.reconcilePaidInvoicesWithoutProAccess();
+
+      if (paidWithoutProResult.grantedCount > 0) {
+        console.log(`✅ Granted Pro access to ${paidWithoutProResult.grantedCount} user(s)`);
+      }
+
+      if (paidWithoutProResult.skippedCount > 0) {
+        console.log(`⏭️  Skipped ${paidWithoutProResult.skippedCount} expired subscription(s)`);
+      }
+
+      if (paidWithoutProResult.grantedCount === 0 && paidWithoutProResult.skippedCount === 0) {
+        console.log('ℹ️ All paid users already have Pro access');
       }
     } catch (error) {
       console.error('Error in payment reconciliation cron job:', error);
@@ -131,13 +155,15 @@ export class SubscriptionSchedulerService implements OnModuleInit {
   async manualReconcilePayments() {
     console.log('🔧 Manual trigger: Payment reconciliation');
 
-    // Run both reconciliation methods
+    // Run all three reconciliation methods
     const stuckPaymentsResult = await this.proSubscriptionService.reconcileStuckPayments();
     const orphanedSubsResult = await this.proSubscriptionService.reconcileSubscriptionsWithoutInvoices();
+    const paidWithoutProResult = await this.proSubscriptionService.reconcilePaidInvoicesWithoutProAccess();
 
     return {
       stuckPayments: stuckPaymentsResult,
       orphanedSubscriptions: orphanedSubsResult,
+      paidInvoicesWithoutPro: paidWithoutProResult,
     };
   }
 }
