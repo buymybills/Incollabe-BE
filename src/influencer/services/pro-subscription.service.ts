@@ -2778,8 +2778,8 @@ export class ProSubscriptionService {
           influencerId: subscription.influencerId,
           invoiceNumber,
           paymentStatus: InvoiceStatus.PAID,
-          totalAmount,
-          baseAmount,
+          amount: baseAmount, // Base amount before tax
+          totalAmount, // Final amount including tax
           igst,
           cgst,
           sgst,
