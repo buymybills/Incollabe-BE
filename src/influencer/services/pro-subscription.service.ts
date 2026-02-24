@@ -1473,6 +1473,16 @@ export class ProSubscriptionService {
         // Get payment ID from payload (it's in payment.entity, not subscription.entity)
         const chargedPaymentId = payload.payment?.entity?.id;
 
+        // Check if this is the first payment (already handled by subscription.activated)
+        const paidCount = subscriptionEntity.paid_count || 0;
+
+        if (paidCount === 1) {
+          console.log(`✅ First payment - invoice already created by subscription.activated webhook, skipping`);
+          break;
+        }
+
+        console.log(`📋 Recurring payment (payment ${paidCount}), creating invoice...`);
+
         // Build query conditions dynamically
         const orConditions: any[] = [
           {
