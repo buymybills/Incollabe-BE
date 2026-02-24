@@ -1,16 +1,29 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ProSubscriptionService } from './pro-subscription.service';
 
 @Injectable()
-export class SubscriptionSchedulerService {
+export class SubscriptionSchedulerService implements OnModuleInit {
   constructor(private readonly proSubscriptionService: ProSubscriptionService) {}
 
   /**
-   * Check and auto-resume paused subscriptions
-   * Runs every hour
+   * Run cleanup on application startup to fix any stuck Pro subscriptions
    */
-  @Cron(CronExpression.EVERY_HOUR)
+  async onModuleInit() {
+    console.log('🚀 Running Pro subscription cleanup on startup...');
+    try {
+      await this.expireSubscriptions();
+      await this.reconcilePayments();
+    } catch (error) {
+      console.error('❌ Error in startup subscription cleanup:', error);
+    }
+  }
+
+  /**
+   * Check and auto-resume paused subscriptions
+   * Runs every day at 9:10 AM (after expiration and reconciliation)
+   */
+  @Cron('10 9 * * *')
   async autoResumeSubscriptions() {
     console.log('🔄 Running auto-resume check for paused subscriptions...');
 
@@ -36,9 +49,9 @@ export class SubscriptionSchedulerService {
 
   /**
    * Check and expire subscriptions
-   * Runs every day at 1:00 AM
+   * Runs every day at 9:00 AM
    */
-  @Cron('0 1 * * *')
+  @Cron('0 9 * * *')
   async expireSubscriptions() {
     console.log('🔍 Checking for expired subscriptions...');
 
@@ -56,6 +69,34 @@ export class SubscriptionSchedulerService {
   }
 
   /**
+   * Reconcile stuck payments - Fix missed webhooks
+   * Runs every day at 9:05 AM (5 minutes after expiration check)
+   * This ensures expired subscriptions are handled before reconciling payments
+   */
+  @Cron('5 9 * * *')
+  async reconcilePayments() {
+    console.log('💰 Running payment reconciliation...');
+
+    try {
+      const result = await this.proSubscriptionService.reconcileStuckPayments();
+
+      if (result.reconciledCount > 0) {
+        console.log(`✅ Reconciled ${result.reconciledCount} stuck payment(s)`);
+      }
+
+      if (result.failedCount > 0) {
+        console.error(`❌ Failed to reconcile ${result.failedCount} payment(s)`);
+      }
+
+      if (result.reconciledCount === 0 && result.failedCount === 0) {
+        console.log('ℹ️ No stuck payments found');
+      }
+    } catch (error) {
+      console.error('Error in payment reconciliation cron job:', error);
+    }
+  }
+
+  /**
    * Manual trigger for testing (can be called via admin endpoint)
    */
   async manualAutoResume() {
@@ -69,5 +110,13 @@ export class SubscriptionSchedulerService {
   async manualExpireCheck() {
     console.log('🔧 Manual trigger: Expire check');
     return await this.proSubscriptionService.checkAndExpireSubscriptions();
+  }
+
+  /**
+   * Manual trigger for testing (can be called via admin endpoint)
+   */
+  async manualReconcilePayments() {
+    console.log('🔧 Manual trigger: Payment reconciliation');
+    return await this.proSubscriptionService.reconcileStuckPayments();
   }
 }
