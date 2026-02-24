@@ -78,6 +78,7 @@ export class SubscriptionSchedulerService implements OnModuleInit {
     console.log('💰 Running payment reconciliation...');
 
     try {
+      // Reconcile stuck payments (unpaid invoices with captured payments)
       const result = await this.proSubscriptionService.reconcileStuckPayments();
 
       if (result.reconciledCount > 0) {
@@ -90,6 +91,18 @@ export class SubscriptionSchedulerService implements OnModuleInit {
 
       if (result.reconciledCount === 0 && result.failedCount === 0) {
         console.log('ℹ️ No stuck payments found');
+      }
+
+      // Also check for subscriptions without invoices (missed webhooks)
+      console.log('\n🔍 Checking for subscriptions without invoices...');
+      const orphanedResult = await this.proSubscriptionService.reconcileSubscriptionsWithoutInvoices();
+
+      if (orphanedResult.reconciledCount > 0) {
+        console.log(`✅ Reconciled ${orphanedResult.reconciledCount} orphaned subscription(s)`);
+      }
+
+      if (orphanedResult.abandonedCount > 0) {
+        console.log(`⚠️ Marked ${orphanedResult.abandonedCount} abandoned subscription(s) as INACTIVE`);
       }
     } catch (error) {
       console.error('Error in payment reconciliation cron job:', error);
@@ -117,6 +130,14 @@ export class SubscriptionSchedulerService implements OnModuleInit {
    */
   async manualReconcilePayments() {
     console.log('🔧 Manual trigger: Payment reconciliation');
-    return await this.proSubscriptionService.reconcileStuckPayments();
+
+    // Run both reconciliation methods
+    const stuckPaymentsResult = await this.proSubscriptionService.reconcileStuckPayments();
+    const orphanedSubsResult = await this.proSubscriptionService.reconcileSubscriptionsWithoutInvoices();
+
+    return {
+      stuckPayments: stuckPaymentsResult,
+      orphanedSubscriptions: orphanedSubsResult,
+    };
   }
 }

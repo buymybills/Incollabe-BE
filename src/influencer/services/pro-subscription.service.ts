@@ -2487,8 +2487,91 @@ export class ProSubscriptionService {
     }
 
 
+    // ============================================================================
+    // ADDITIONAL CHECK: Fix subscriptions stuck in PAYMENT_PENDING/PAYMENT_FAILED
+    // status but have PAID invoices (webhook race condition)
+    // ============================================================================
+    console.log(`\n🔧 Checking for subscriptions stuck in wrong status...`);
+
+    const stuckSubscriptions = await this.proSubscriptionModel.findAll({
+      where: {
+        status: {
+          [Op.in]: [SubscriptionStatus.PAYMENT_PENDING, SubscriptionStatus.PAYMENT_FAILED],
+        },
+        createdAt: {
+          [Op.gte]: thirtyDaysAgo,
+        },
+      },
+      include: [
+        {
+          model: this.proInvoiceModel,
+          as: 'invoices',
+          where: {
+            paymentStatus: InvoiceStatus.PAID,
+          },
+          required: true, // Only include subscriptions with at least one PAID invoice
+        },
+      ],
+      limit: 50,
+    });
+
+    console.log(`Found ${stuckSubscriptions.length} subscription(s) with PAID invoices but wrong status`);
+
+    let activatedCount = 0;
+    for (const subscription of stuckSubscriptions) {
+      try {
+        console.log(`\n🔄 Activating subscription ${subscription.id} (status: ${subscription.status})`);
+
+        // Find the most recent PAID invoice
+        const latestPaidInvoice = await this.proInvoiceModel.findOne({
+          where: {
+            subscriptionId: subscription.id,
+            paymentStatus: InvoiceStatus.PAID,
+          },
+          order: [['paidAt', 'DESC']],
+        });
+
+        if (!latestPaidInvoice || !latestPaidInvoice.paidAt) {
+          console.log(`  ⚠️  No valid paid invoice found, skipping`);
+          continue;
+        }
+
+        // Calculate expiry from payment date
+        const paymentDate = latestPaidInvoice.paidAt;
+        const calculatedExpiry = new Date(paymentDate);
+        calculatedExpiry.setDate(calculatedExpiry.getDate() + 30);
+
+        console.log(
+          `  📅 Payment date: ${paymentDate.toISOString()}, Calculated expiry: ${calculatedExpiry.toISOString()}`,
+        );
+
+        // Activate subscription
+        await subscription.update({
+          status: SubscriptionStatus.ACTIVE,
+          currentPeriodStart: paymentDate,
+          currentPeriodEnd: calculatedExpiry,
+        });
+
+        // Ensure influencer has Pro access
+        await this.influencerModel.update(
+          {
+            isPro: true,
+            proActivatedAt: paymentDate,
+            proExpiresAt: calculatedExpiry,
+          },
+          { where: { id: subscription.influencerId } },
+        );
+
+        console.log(`  ✅ Subscription ${subscription.id} activated for influencer ${subscription.influencerId}`);
+        activatedCount++;
+      } catch (error) {
+        console.error(`  ❌ Error activating subscription ${subscription.id}:`, error.message);
+      }
+    }
+
     console.log(`\n🎯 RECONCILIATION COMPLETE`);
-    console.log(`  ✅ Reconciled: ${reconciledCount}`);
+    console.log(`  ✅ Reconciled invoices: ${reconciledCount}`);
+    console.log(`  ✅ Activated stuck subscriptions: ${activatedCount}`);
     console.log(`  ℹ️  Already paid: ${alreadyPaidCount}`);
     console.log(`  ⏭️  Skipped (cannot auto-reconcile): ${skippedCount}`);
     console.log(`  ❌ Failed: ${failedCount}`);
@@ -2500,7 +2583,7 @@ export class ProSubscriptionService {
     // ============================================================================
     console.log(`\n🔧 Checking for database inconsistencies...`);
 
-    const stuckSubscriptions = await this.proInvoiceModel.findAll({
+    const inconsistentInvoices = await this.proInvoiceModel.findAll({
       where: {
         paymentStatus: InvoiceStatus.PAID,
         createdAt: {
@@ -2525,11 +2608,11 @@ export class ProSubscriptionService {
       limit: 50,
     });
 
-    console.log(`Found ${stuckSubscriptions.length} paid invoice(s) with stuck subscriptions`);
+    console.log(`Found ${inconsistentInvoices.length} paid invoice(s) with stuck subscriptions`);
 
     let fixedSubscriptionsCount = 0;
 
-    for (const invoice of stuckSubscriptions) {
+    for (const invoice of inconsistentInvoices) {
       try {
         const subscription = invoice.subscription;
         console.log(`\n🔧 Fixing stuck subscription ${subscription.id} for invoice ${invoice.id}`);
@@ -2560,11 +2643,198 @@ export class ProSubscriptionService {
 
     return {
       reconciledCount,
+      activatedSubscriptionsCount: activatedCount,
       alreadyPaidCount,
       skippedCount,
       failedCount,
       totalChecked: unpaidInvoices.length,
+      stuckSubscriptionsChecked: stuckSubscriptions.length,
       fixedSubscriptionsCount,
+    };
+  }
+
+  /**
+   * Check and reconcile subscriptions with no invoices
+   * Queries Razorpay to see if payments were made but webhooks were missed
+   */
+  async reconcileSubscriptionsWithoutInvoices() {
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    console.log(`\n🔍 Checking for subscriptions without invoices...`);
+
+    // Find subscriptions with razorpaySubscriptionId but no invoices
+    const subscriptionsWithoutInvoices = await this.proSubscriptionModel.findAll({
+      where: {
+        razorpaySubscriptionId: {
+          [Op.ne]: null,
+        },
+        createdAt: {
+          [Op.gte]: thirtyDaysAgo,
+        },
+      },
+      include: [
+        {
+          model: this.proInvoiceModel,
+          as: 'invoices',
+          required: false,
+        },
+      ],
+      limit: 50,
+    });
+
+    // Filter to only those with NO invoices
+    const orphanedSubscriptions = subscriptionsWithoutInvoices.filter(
+      (sub) => !sub.invoices || sub.invoices.length === 0,
+    );
+
+    console.log(`Found ${orphanedSubscriptions.length} subscription(s) without any invoices`);
+
+    let reconciledCount = 0;
+    let abandonedCount = 0;
+
+    for (const subscription of orphanedSubscriptions) {
+      try {
+        console.log(
+          `\n📋 Checking subscription ${subscription.id} (Razorpay: ${subscription.razorpaySubscriptionId})`,
+        );
+
+        // Query Razorpay for this subscription's payments
+        const paymentsResponse = await this.razorpayService.getSubscriptionPayments(
+          subscription.razorpaySubscriptionId,
+        );
+        const payments = paymentsResponse.items || [];
+
+        console.log(`  📊 Found ${payments.length} payment(s) on Razorpay`);
+
+        // Find any captured payments
+        const capturedPayments = payments.filter((p: any) => p.status === 'captured');
+
+        if (capturedPayments.length === 0) {
+          console.log(`  ⚠️  No captured payments - subscription appears abandoned`);
+
+          // Mark subscription as INACTIVE if it's been more than 24 hours
+          const hoursSinceCreation =
+            (now.getTime() - subscription.createdAt.getTime()) / (1000 * 60 * 60);
+          if (hoursSinceCreation > 24) {
+            await subscription.update({ status: SubscriptionStatus.INACTIVE });
+            console.log(`  ✅ Marked subscription as INACTIVE (abandoned after 24h)`);
+            abandonedCount++;
+          } else {
+            console.log(`  ⏳ Created less than 24h ago, keeping as PAYMENT_PENDING`);
+          }
+          continue;
+        }
+
+        // Found captured payment(s) - create invoice retroactively
+        const latestPayment = capturedPayments[0]; // Most recent captured payment
+        console.log(
+          `  ✅ Found captured payment: ${latestPayment.id} for ${latestPayment.amount} paise`,
+        );
+
+        // Get influencer details for tax calculation
+        const influencer = await this.influencerModel.findByPk(subscription.influencerId, {
+          include: [
+            {
+              model: this.cityModel,
+              as: 'city',
+            },
+          ],
+        });
+
+        if (!influencer) {
+          console.log(`  ❌ Influencer not found, skipping`);
+          continue;
+        }
+
+        // Calculate tax breakdown (amount is already inclusive)
+        const totalAmount = latestPayment.amount; // In paise
+        const taxRate = 0.18;
+        const baseAmount = Math.round(totalAmount / (1 + taxRate));
+        const taxAmount = totalAmount - baseAmount;
+
+        const headquarterCity = (influencer as any).city;
+        let igst = 0;
+        let cgst = 0;
+        let sgst = 0;
+
+        if (!headquarterCity || headquarterCity.state !== 'Delhi') {
+          igst = taxAmount;
+        } else {
+          cgst = Math.round(taxAmount / 2);
+          sgst = taxAmount - cgst;
+        }
+
+        // Generate invoice number
+        const invoiceNumber = await this.generateInvoiceNumber(influencer.id);
+
+        // Create invoice
+        const paymentDate = new Date(latestPayment.created_at * 1000);
+        const calculatedExpiry = new Date(paymentDate);
+        calculatedExpiry.setDate(calculatedExpiry.getDate() + 30);
+
+        const invoice = await this.proInvoiceModel.create({
+          subscriptionId: subscription.id,
+          influencerId: subscription.influencerId,
+          invoiceNumber,
+          paymentStatus: InvoiceStatus.PAID,
+          totalAmount,
+          baseAmount,
+          igst,
+          cgst,
+          sgst,
+          razorpayPaymentId: latestPayment.id,
+          razorpayOrderId: latestPayment.order_id || null,
+          paidAt: paymentDate,
+          billingPeriodStart: paymentDate,
+          billingPeriodEnd: calculatedExpiry,
+        } as any);
+
+        console.log(`  📄 Created invoice ${invoice.id} (${invoiceNumber})`);
+
+        // Update subscription status
+        await subscription.update({
+          status: SubscriptionStatus.ACTIVE,
+          currentPeriodStart: paymentDate,
+          currentPeriodEnd: calculatedExpiry,
+          autoRenew: true, // Enable auto-renewal since payment was successful
+        });
+
+        // Update influencer Pro status
+        await this.influencerModel.update(
+          {
+            isPro: true,
+            proActivatedAt: paymentDate,
+            proExpiresAt: calculatedExpiry,
+          },
+          { where: { id: subscription.influencerId } },
+        );
+
+        console.log(`  ✅ Subscription ${subscription.id} activated for influencer ${subscription.influencerId}`);
+
+        // Generate invoice PDF
+        try {
+          await this.generateInvoicePDF(invoice.id);
+          console.log(`  📄 Invoice PDF generated`);
+        } catch (pdfError) {
+          console.error(`  ⚠️  Failed to generate PDF:`, pdfError.message);
+        }
+
+        reconciledCount++;
+      } catch (error) {
+        console.error(`  ❌ Error checking subscription ${subscription.id}:`, error.message);
+      }
+    }
+
+    console.log(`\n🎯 ORPHANED SUBSCRIPTIONS CHECK COMPLETE`);
+    console.log(`  ✅ Reconciled: ${reconciledCount}`);
+    console.log(`  ⚠️  Marked as abandoned: ${abandonedCount}`);
+    console.log(`  📊 Total checked: ${orphanedSubscriptions.length}`);
+
+    return {
+      reconciledCount,
+      abandonedCount,
+      totalChecked: orphanedSubscriptions.length,
     };
   }
 
