@@ -28,6 +28,7 @@ import { Influencer } from '../auth/model/influencer.model';
 import { Niche } from '../auth/model/niche.model';
 import { InvoiceStatus } from '../influencer/models/payment-enums';
 import { MaxCampaignInvoice } from './models/max-campaign-invoice.model';
+import { InviteOnlyCampaignInvoice } from './models/invite-only-campaign-invoice.model';
 // REMOVED: Imports only needed for early selection bonus feature (now disabled)
 // import { CreditTransactionType, PaymentStatus } from '../admin/models/credit-transaction.model';
 // import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
@@ -79,6 +80,8 @@ export class CampaignService {
     private readonly experienceModel: typeof Experience,
     @InjectModel(MaxCampaignInvoice)
     private readonly maxCampaignInvoiceModel: typeof MaxCampaignInvoice,
+    @InjectModel(InviteOnlyCampaignInvoice)
+    private readonly inviteOnlyInvoiceModel: typeof InviteOnlyCampaignInvoice,
     @InjectModel(Post)
     private readonly postModel: typeof Post,
     @InjectModel(InstagramProfileAnalysis)
@@ -704,7 +707,7 @@ export class CampaignService {
     // Check if campaign is being marked as organic
     // If so, cancel any pending Max Campaign payment and set status to active
     if (updateCampaignDto.isOrganic === true && !campaign.isOrganic) {
-      console.log(`🌿 Campaign ${campaignId} marked as organic - checking for pending Max Campaign payment to cancel`);
+      console.log(`🌿 Campaign ${campaignId} marked as organic - checking for pending payments to cancel`);
 
       // Cancel pending Max Campaign payment if exists
       if (campaign.maxCampaignPaymentStatus === 'pending') {
@@ -724,6 +727,27 @@ export class CampaignService {
           maxCampaignOrderId: null,
           maxCampaignPaymentId: null,
           maxCampaignAmount: null,
+        } as any);
+      }
+
+      // Cancel pending Invite-Only payment if exists
+      if (campaign.inviteOnlyPaymentStatus === 'pending') {
+        console.log(`  ❌ Cancelling pending Invite-Only payment (orderId: ${campaign.inviteOnlyOrderId})`);
+
+        // Delete pending Invite-Only invoice
+        await this.inviteOnlyInvoiceModel.destroy({
+          where: {
+            campaignId,
+            paymentStatus: 'pending',
+          },
+        });
+
+        // Clear Invite-Only payment fields
+        await campaign.update({
+          inviteOnlyPaymentStatus: null,
+          inviteOnlyOrderId: null,
+          inviteOnlyPaymentId: null,
+          inviteOnlyAmount: null,
         } as any);
       }
 
