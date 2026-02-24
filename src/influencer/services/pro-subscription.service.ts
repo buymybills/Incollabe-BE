@@ -1433,6 +1433,9 @@ export class ProSubscriptionService {
 
           const activationInvoiceNumber = await this.generateInvoiceNumber(subscription.influencerId);
 
+          // Get payment ID from payload
+          const activationPaymentId = payload.payment?.entity?.id;
+
           const activationInvoice = await this.proInvoiceModel.create({
             invoiceNumber: activationInvoiceNumber,
             subscriptionId: subscription.id,
@@ -1447,7 +1450,7 @@ export class ProSubscriptionService {
             billingPeriodEnd: subscription.currentPeriodEnd,
             paymentStatus: 'paid',
             paymentMethod: 'razorpay',
-            razorpayPaymentId: subscriptionEntity.notes?.razorpay_payment_id || subscriptionEntity.id,
+            razorpayPaymentId: activationPaymentId, // Use payment ID from payload
             paidAt: createDatabaseDate(),
           });
 
@@ -1467,18 +1470,27 @@ export class ProSubscriptionService {
         // Recurring payment successful
         console.log(`💰 Subscription ${subscription.id} charged successfully`);
 
+        // Get payment ID from payload (it's in payment.entity, not subscription.entity)
+        const chargedPaymentId = payload.payment?.entity?.id;
+
+        // Build query conditions dynamically
+        const orConditions: any[] = [
+          {
+            subscriptionId: subscription.id,
+            paymentStatus: 'paid',
+            billingPeriodStart: subscription.currentPeriodStart,
+            billingPeriodEnd: subscription.currentPeriodEnd,
+          },
+        ];
+
+        if (chargedPaymentId) {
+          orConditions.push({ razorpayPaymentId: chargedPaymentId });
+        }
+
         // Check if invoice already exists (prevent duplicates from race conditions)
         const existingChargeInvoice = await this.proInvoiceModel.findOne({
           where: {
-            [Op.or]: [
-              { razorpayPaymentId: subscriptionEntity.payment_id },
-              {
-                subscriptionId: subscription.id,
-                paymentStatus: 'paid',
-                billingPeriodStart: subscription.currentPeriodStart,
-                billingPeriodEnd: subscription.currentPeriodEnd,
-              },
-            ],
+            [Op.or]: orConditions,
           },
         });
 
@@ -1540,7 +1552,7 @@ export class ProSubscriptionService {
             billingPeriodEnd: subscription.currentPeriodEnd,
             paymentStatus: 'paid',
             paymentMethod: 'razorpay',
-            razorpayPaymentId: subscriptionEntity.payment_id,
+            razorpayPaymentId: chargedPaymentId, // Use payment ID from payload
             paidAt: createDatabaseDate(),
           });
 
