@@ -1786,12 +1786,18 @@ export class ProSubscriptionService {
           console.log(`✅ Invoice ${invoice.id} marked as PAID`);
 
           // Update subscription status and period end
-          if (capturedSubscription.status === SubscriptionStatus.PAYMENT_PENDING) {
+          // FIX: Also activate if status is PAYMENT_FAILED (race condition from payment.failed webhook)
+          if (
+            capturedSubscription.status === SubscriptionStatus.PAYMENT_PENDING ||
+            capturedSubscription.status === SubscriptionStatus.PAYMENT_FAILED ||
+            capturedSubscription.status === SubscriptionStatus.EXPIRED
+          ) {
             await capturedSubscription.update({
               status: SubscriptionStatus.ACTIVE,
+              currentPeriodStart: paymentDate,
               currentPeriodEnd: calculatedExpiry, // Fix period end to correct value
             });
-            console.log(`✅ Subscription ${capturedSubscription.id} activated with period end ${calculatedExpiry.toISOString()}`);
+            console.log(`✅ Subscription ${capturedSubscription.id} activated (was ${capturedSubscription.status}) with period end ${calculatedExpiry.toISOString()}`);
           } else {
             // Even if not pending, update the period end to correct value
             await capturedSubscription.update({
@@ -1831,26 +1837,49 @@ export class ProSubscriptionService {
         } catch (error) {
           console.error(`❌ Error processing payment.captured for invoice ${invoice.id}:`, error);
           console.error(error.stack);
+          console.error('📋 Invoice details:', {
+            invoiceId: invoice.id,
+            influencerId: invoice.influencerId,
+            subscriptionId: invoice.subscriptionId,
+            paymentStatus: invoice.paymentStatus,
+            razorpayPaymentId: payload.payment?.entity?.id,
+          });
           // Don't throw - return success to Razorpay to prevent retries
           // Reconciliation cron will catch this later
+          // TODO: Consider sending alert to monitoring service
         }
         break;
 
       case 'payment.failed':
+        // FIX: Don't overwrite if invoice is already PAID (race condition protection)
+        if (invoice.paymentStatus === InvoiceStatus.PAID) {
+          console.log(
+            `⚠️ Ignoring payment.failed for invoice ${invoice.id} - already marked as PAID (likely race condition with payment.captured)`,
+          );
+          break;
+        }
+
         await invoice.update({ paymentStatus: 'failed' });
 
         // Increment failure count for subscription
         const subscription = await this.proSubscriptionModel.findByPk(invoice.subscriptionId);
         if (subscription) {
-          await subscription.update({
-            status: SubscriptionStatus.PAYMENT_FAILED,
-            lastAutoChargeAttempt: createDatabaseDate(),
-            autoChargeFailures: subscription.autoChargeFailures + 1,
-          });
+          // Don't mark as failed if already active (payment might have succeeded)
+          if (subscription.status !== SubscriptionStatus.ACTIVE) {
+            await subscription.update({
+              status: SubscriptionStatus.PAYMENT_FAILED,
+              lastAutoChargeAttempt: createDatabaseDate(),
+              autoChargeFailures: subscription.autoChargeFailures + 1,
+            });
 
-          // If too many failures, pause the subscription
-          if (subscription.autoChargeFailures >= 3) {
-            console.error(`⚠️ Subscription ${subscription.id} has ${subscription.autoChargeFailures} failures, consider manual intervention`);
+            // If too many failures, pause the subscription
+            if (subscription.autoChargeFailures >= 3) {
+              console.error(`⚠️ Subscription ${subscription.id} has ${subscription.autoChargeFailures} failures, consider manual intervention`);
+            }
+          } else {
+            console.log(
+              `ℹ️ Subscription ${subscription.id} is already ACTIVE, not marking as failed`,
+            );
           }
         }
 
@@ -2141,16 +2170,22 @@ export class ProSubscriptionService {
 
         // ============================================================================
         // STRATEGY 1: If invoice has razorpayPaymentId, verify that specific payment
+        // This handles race conditions where payment.failed webhook came after payment.captured
+        // Invoice will have status 'failed' but razorpayPaymentId is already set
         // ============================================================================
         if (invoice.razorpayPaymentId) {
           console.log(`  🔍 Strategy 1: Checking existing payment ID ${invoice.razorpayPaymentId}`);
+          console.log(`  📊 Invoice status: ${invoice.paymentStatus} (expected: pending/failed/cancelled)`);
           reconciliationStrategy = 'existing_payment_id';
 
           try {
             const response = await this.razorpayService.getPaymentDetails(invoice.razorpayPaymentId);
             if (response.success && response.data?.status === 'captured') {
               capturedPayment = response.data;
-              console.log(`  ✅ Payment ${invoice.razorpayPaymentId} is captured`);
+              console.log(`  ✅ Payment ${invoice.razorpayPaymentId} is captured on Razorpay`);
+              if (invoice.paymentStatus === 'failed') {
+                console.log(`  🔧 RACE CONDITION DETECTED: Invoice marked as failed but payment was captured!`);
+              }
             } else {
               console.log(`  ⏸️  Payment status: ${response.data?.status || 'unknown'}, skipping`);
               continue;
@@ -2359,12 +2394,18 @@ export class ProSubscriptionService {
         );
 
         // Update subscription status and period based on current state
-        if (subscription.status === SubscriptionStatus.PAYMENT_PENDING) {
+        // FIX: Also activate if PAYMENT_FAILED or EXPIRED (race condition from payment.failed webhook)
+        if (
+          subscription.status === SubscriptionStatus.PAYMENT_PENDING ||
+          subscription.status === SubscriptionStatus.PAYMENT_FAILED ||
+          subscription.status === SubscriptionStatus.EXPIRED
+        ) {
           await subscription.update({
             status: SubscriptionStatus.ACTIVE,
+            currentPeriodStart: paymentDate,
             currentPeriodEnd: calculatedExpiry, // Fix period end
           });
-          console.log(`  ✅ Subscription ${subscription.id} activated with correct period end`);
+          console.log(`  ✅ Subscription ${subscription.id} activated (was ${subscription.status}) with correct period end`);
         } else if (subscription.status === SubscriptionStatus.CANCELLED) {
           console.log(`  ⚠️  Subscription is CANCELLED - keeping as cancelled but activating Pro`);
 
