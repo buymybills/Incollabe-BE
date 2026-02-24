@@ -2675,13 +2675,23 @@ export class ProSubscriptionService {
       },
       include: [
         {
-          model: this.proInvoiceModel,
-          as: 'invoices',
+          model: ProInvoice,
           required: false,
         },
       ],
       limit: 50,
     });
+
+    console.log(`📊 Total subscriptions found: ${subscriptionsWithoutInvoices.length}`);
+    console.log(
+      `📋 Debug - Sample subscription data:`,
+      subscriptionsWithoutInvoices.slice(0, 2).map((s) => ({
+        id: s.id,
+        razorpayId: s.razorpaySubscriptionId,
+        invoicesLoaded: s.invoices !== undefined,
+        invoiceCount: s.invoices ? s.invoices.length : 'undefined',
+      })),
+    );
 
     // Filter to only those with NO invoices
     const orphanedSubscriptions = subscriptionsWithoutInvoices.filter(
