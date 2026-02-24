@@ -137,7 +137,7 @@ export async function generateBrandInvoicePDF(
       .text('Plot A-18, Manjeet farm', col3X, detailsStartY + 31, { width: 200 })
       .text('Uttam Nagar, Delhi', col3X, detailsStartY + 44, { width: 200 })
       .text('West Delhi, Delhi, 110059, IN', col3X, detailsStartY + 57, { width: 200 })
-      .text('GSTIN – 07AACD05691K1ZB', col3X, detailsStartY + 70, { width: 200 });
+      .text('GSTIN – 07AALCD0569K1ZB', col3X, detailsStartY + 70, { width: 200 });
 
     /* ================= TABLE ================= */
 
