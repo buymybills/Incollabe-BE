@@ -272,6 +272,14 @@ export class ProSubscriptionService {
 
     const now = createDatabaseDate();
 
+    // Calculate Pro expiry: payment date + 30 days
+    const calculatedExpiry = new Date(now);
+    calculatedExpiry.setDate(calculatedExpiry.getDate() + 30);
+
+    console.log(
+      `📅 Calculated Pro expiry: ${now.toISOString()} + 30 days = ${calculatedExpiry.toISOString()}`,
+    );
+
     // Generate invoice number now that payment is successful
     const invoiceNumber = await this.generateInvoiceNumber(invoice.influencerId);
 
@@ -283,17 +291,18 @@ export class ProSubscriptionService {
       paidAt: now,
     });
 
-    // Update subscription
+    // Update subscription with correct period end
     await subscription.update({
       status: SubscriptionStatus.ACTIVE,
+      currentPeriodEnd: calculatedExpiry,
     });
 
-    // Update influencer isPro status
+    // Update influencer isPro status with calculated expiry
     await this.influencerModel.update(
       {
         isPro: true,
         proActivatedAt: now,
-        proExpiresAt: subscription.currentPeriodEnd,
+        proExpiresAt: calculatedExpiry,
       },
       {
         where: { id: subscription.influencerId },
@@ -1424,6 +1433,9 @@ export class ProSubscriptionService {
 
           const activationInvoiceNumber = await this.generateInvoiceNumber(subscription.influencerId);
 
+          // Get payment ID from payload
+          const activationPaymentId = payload.payment?.entity?.id;
+
           const activationInvoice = await this.proInvoiceModel.create({
             invoiceNumber: activationInvoiceNumber,
             subscriptionId: subscription.id,
@@ -1438,7 +1450,7 @@ export class ProSubscriptionService {
             billingPeriodEnd: subscription.currentPeriodEnd,
             paymentStatus: 'paid',
             paymentMethod: 'razorpay',
-            razorpayPaymentId: subscriptionEntity.notes?.razorpay_payment_id || subscriptionEntity.id,
+            razorpayPaymentId: activationPaymentId, // Use payment ID from payload
             paidAt: createDatabaseDate(),
           });
 
@@ -1458,18 +1470,37 @@ export class ProSubscriptionService {
         // Recurring payment successful
         console.log(`💰 Subscription ${subscription.id} charged successfully`);
 
+        // Get payment ID from payload (it's in payment.entity, not subscription.entity)
+        const chargedPaymentId = payload.payment?.entity?.id;
+
+        // Check if this is the first payment (already handled by subscription.activated)
+        const paidCount = subscriptionEntity.paid_count || 0;
+
+        if (paidCount === 1) {
+          console.log(`✅ First payment - invoice already created by subscription.activated webhook, skipping`);
+          break;
+        }
+
+        console.log(`📋 Recurring payment (payment ${paidCount}), creating invoice...`);
+
+        // Build query conditions dynamically
+        const orConditions: any[] = [
+          {
+            subscriptionId: subscription.id,
+            paymentStatus: 'paid',
+            billingPeriodStart: subscription.currentPeriodStart,
+            billingPeriodEnd: subscription.currentPeriodEnd,
+          },
+        ];
+
+        if (chargedPaymentId) {
+          orConditions.push({ razorpayPaymentId: chargedPaymentId });
+        }
+
         // Check if invoice already exists (prevent duplicates from race conditions)
         const existingChargeInvoice = await this.proInvoiceModel.findOne({
           where: {
-            [Op.or]: [
-              { razorpayPaymentId: subscriptionEntity.payment_id },
-              {
-                subscriptionId: subscription.id,
-                paymentStatus: 'paid',
-                billingPeriodStart: subscription.currentPeriodStart,
-                billingPeriodEnd: subscription.currentPeriodEnd,
-              },
-            ],
+            [Op.or]: orConditions,
           },
         });
 
@@ -1531,7 +1562,7 @@ export class ProSubscriptionService {
             billingPeriodEnd: subscription.currentPeriodEnd,
             paymentStatus: 'paid',
             paymentMethod: 'razorpay',
-            razorpayPaymentId: subscriptionEntity.payment_id,
+            razorpayPaymentId: chargedPaymentId, // Use payment ID from payload
             paidAt: createDatabaseDate(),
           });
 
@@ -1704,73 +1735,105 @@ export class ProSubscriptionService {
     // Handle different payment events
     switch (event) {
       case 'payment.captured':
-        // Find subscription
-        const capturedSubscription = await this.proSubscriptionModel.findByPk(
-          invoice.subscriptionId,
-        );
-
-        if (!capturedSubscription) {
-          console.error(`❌ Subscription not found for invoice ${invoice.id}`);
-          break;
-        }
-
-        // Idempotency check - prevent duplicate processing
-        if (invoice.paymentStatus === InvoiceStatus.PAID) {
-          console.log(
-            `✅ Invoice ${invoice.id} already processed as PAID, skipping duplicate webhook`,
-          );
-          break;
-        }
-
-        console.log(`💰 Processing payment.captured for invoice ${invoice.id}`);
-
-        const now = createDatabaseDate();
-
-        // Generate invoice number if not present
-        let invoiceNumber = invoice.invoiceNumber;
-        if (!invoiceNumber) {
-          invoiceNumber = await this.generateInvoiceNumber(invoice.influencerId);
-        }
-
-        // Update invoice to PAID
-        await invoice.update({
-          invoiceNumber,
-          paymentStatus: InvoiceStatus.PAID,
-          razorpayPaymentId: payload.payment?.entity?.id,
-          paidAt: now,
-        });
-
-        // Update subscription to ACTIVE (if still pending)
-        if (capturedSubscription.status === SubscriptionStatus.PAYMENT_PENDING) {
-          await capturedSubscription.update({
-            status: SubscriptionStatus.ACTIVE,
-          });
-        }
-
-        // Update influencer Pro status
-        await this.influencerModel.update(
-          {
-            isPro: true,
-            proActivatedAt: now,
-            proExpiresAt: capturedSubscription.currentPeriodEnd,
-          },
-          { where: { id: invoice.influencerId } },
-        );
-
-        // Generate invoice PDF
         try {
-          await this.generateInvoicePDF(invoice.id);
-          console.log(
-            `📄 Invoice PDF generated for payment.captured: ${invoiceNumber}`,
+          // Find subscription
+          const capturedSubscription = await this.proSubscriptionModel.findByPk(
+            invoice.subscriptionId,
           );
-        } catch (pdfError) {
-          console.error('Failed to generate invoice PDF:', pdfError);
-          // Don't fail the webhook if PDF generation fails
-        }
 
-        console.log(
-          `✅ Payment captured successfully processed for invoice ${invoice.id} (${invoiceNumber})`,
-        );
+          if (!capturedSubscription) {
+            console.error(`❌ Subscription not found for invoice ${invoice.id}`);
+            break;
+          }
+
+          // Idempotency check - prevent duplicate processing
+          if (invoice.paymentStatus === InvoiceStatus.PAID) {
+            console.log(
+              `✅ Invoice ${invoice.id} already processed as PAID, skipping duplicate webhook`,
+            );
+            break;
+          }
+
+          console.log(`💰 Processing payment.captured for invoice ${invoice.id}`);
+
+          const now = createDatabaseDate();
+
+          // Calculate Pro expiry: payment date + 30 days (not subscription.currentPeriodEnd which may be wrong)
+          const paymentDate = payload.payment?.entity?.created_at
+            ? new Date(payload.payment.entity.created_at * 1000)
+            : now;
+          const calculatedExpiry = new Date(paymentDate);
+          calculatedExpiry.setDate(calculatedExpiry.getDate() + 30);
+
+          console.log(
+            `📅 Calculated Pro expiry: ${paymentDate.toISOString()} + 30 days = ${calculatedExpiry.toISOString()}`,
+          );
+
+          // Generate invoice number if not present
+          let invoiceNumber = invoice.invoiceNumber;
+          if (!invoiceNumber) {
+            invoiceNumber = await this.generateInvoiceNumber(invoice.influencerId);
+          }
+
+          // Update invoice to PAID
+          await invoice.update({
+            invoiceNumber,
+            paymentStatus: InvoiceStatus.PAID,
+            razorpayPaymentId: payload.payment?.entity?.id,
+            paidAt: now,
+          });
+
+          console.log(`✅ Invoice ${invoice.id} marked as PAID`);
+
+          // Update subscription status and period end
+          if (capturedSubscription.status === SubscriptionStatus.PAYMENT_PENDING) {
+            await capturedSubscription.update({
+              status: SubscriptionStatus.ACTIVE,
+              currentPeriodEnd: calculatedExpiry, // Fix period end to correct value
+            });
+            console.log(`✅ Subscription ${capturedSubscription.id} activated with period end ${calculatedExpiry.toISOString()}`);
+          } else {
+            // Even if not pending, update the period end to correct value
+            await capturedSubscription.update({
+              currentPeriodEnd: calculatedExpiry,
+            });
+            console.log(`✅ Subscription ${capturedSubscription.id} period end updated to ${calculatedExpiry.toISOString()}`);
+          }
+
+          // Update influencer Pro status with calculated expiry
+          await this.influencerModel.update(
+            {
+              isPro: true,
+              proActivatedAt: now,
+              proExpiresAt: calculatedExpiry, // Use calculated expiry, not subscription.currentPeriodEnd
+            },
+            { where: { id: invoice.influencerId } },
+          );
+
+          console.log(
+            `✅ Pro access granted to influencer ${invoice.influencerId} until ${calculatedExpiry.toISOString()}`,
+          );
+
+          // Generate invoice PDF
+          try {
+            await this.generateInvoicePDF(invoice.id);
+            console.log(
+              `📄 Invoice PDF generated for payment.captured: ${invoiceNumber}`,
+            );
+          } catch (pdfError) {
+            console.error('Failed to generate invoice PDF:', pdfError);
+            // Don't fail the webhook if PDF generation fails
+          }
+
+          console.log(
+            `✅ Payment captured successfully processed for invoice ${invoice.id} (${invoiceNumber})`,
+          );
+        } catch (error) {
+          console.error(`❌ Error processing payment.captured for invoice ${invoice.id}:`, error);
+          console.error(error.stack);
+          // Don't throw - return success to Razorpay to prevent retries
+          // Reconciliation cron will catch this later
+        }
         break;
 
       case 'payment.failed':
@@ -2025,11 +2088,11 @@ export class ProSubscriptionService {
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
 
-    // Find ALL unpaid invoices (PENDING or cancelled) from last 30 days
+    // Find ALL unpaid invoices (PENDING, cancelled, or failed) from last 30 days
     const unpaidInvoices = await this.proInvoiceModel.findAll({
       where: {
         paymentStatus: {
-          [Op.in]: [InvoiceStatus.PENDING, 'cancelled'],
+          [Op.in]: [InvoiceStatus.PENDING, 'cancelled', 'failed'],
         },
         createdAt: {
           [Op.gte]: thirtyDaysAgo,
