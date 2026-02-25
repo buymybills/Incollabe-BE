@@ -390,10 +390,10 @@ export class MaxxSubscriptionAdminService {
       }
 
       // Determine payment type
-      // Check upiMandateStatus to identify autopay even if cancelled
-      // Autopay subscriptions will have upiMandateStatus set (pending/authenticated/paused/cancelled)
-      // Manual subscriptions will have upiMandateStatus as null
-      const paymentType = subscription.upiMandateStatus ? 'autopay' : 'monthly';
+      // Check autoRenew flag to identify autopay vs monthly
+      // autoRenew: true = autopay (automatic recurring payments)
+      // autoRenew: false = monthly (manual/one-time payments)
+      const paymentType = subscription.autoRenew ? 'autopay' : 'monthly';
 
       // Calculate search priority
       const profileName = influencer?.name || 'N/A';
@@ -540,10 +540,10 @@ export class MaxxSubscriptionAdminService {
         isVerified: influencer.isVerified,
       },
       subscriptionStatus: formatStatus(subscription.status),
-      // Check upiMandateStatus to identify autopay even if cancelled
-      // Autopay subscriptions will have upiMandateStatus set (pending/authenticated/paused/cancelled)
-      // Manual subscriptions will have upiMandateStatus as null
-      paymentType: subscription.upiMandateStatus ? 'autopay' : 'monthly',
+      // Check autoRenew flag to identify autopay vs monthly
+      // autoRenew: true = autopay (automatic recurring payments)
+      // autoRenew: false = monthly (manual/one-time payments)
+      paymentType: subscription.autoRenew ? 'autopay' : 'monthly',
       razorpaySubscriptionId: subscription.razorpaySubscriptionId,
       subscriptionStartDate: toIST(subscription.startDate),
       subscriptionEndDate: toIST(subscription.currentPeriodEnd),
