@@ -56,6 +56,7 @@ import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
 import { AdminRole, AdminStatus } from './models/admin.model';
 import { ProfileType } from './models/profile-review.model';
+import { ProSubscriptionService } from '../influencer/services/pro-subscription.service';
 
 // DTOs
 import { AdminLoginDto, AdminLoginResponseDto } from './dto/admin-login.dto';
@@ -202,6 +203,7 @@ export class AdminController {
     private readonly appVersionService: AppVersionService,
     private readonly invoiceExcelExportService: InvoiceExcelExportService,
     private readonly adminCreatorScoreService: AdminCreatorScoreService,
+    private readonly proSubscriptionService: ProSubscriptionService,
   ) {}
 
   @Post('login')
@@ -3822,5 +3824,522 @@ export class AdminController {
   @ApiNotFoundResponse({ description: 'Influencer not found' })
   async getCreatorScore(@Param('influencerId', ParseIntPipe) influencerId: number) {
     return this.adminCreatorScoreService.getCreatorScore(influencerId);
+  }
+
+  /**
+   * Fix missing tax values on existing invoices
+   */
+  @Post('pro-subscriptions/fix-missing-taxes')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiOperation({
+    summary: 'Fix missing tax values on existing invoices',
+    description: `
+      This endpoint:
+      1. Finds invoices where tax = 0 but cgst/sgst/igst have values
+      2. Calculates correct tax value (cgst + sgst + igst)
+      3. Updates the tax field
+      4. Optionally regenerates PDF files with correct tax
+
+      Query Parameters:
+      - regeneratePdf=true: Regenerate PDF files after fixing tax (recommended)
+      - regeneratePdf=false or omit: Only update database, don't regenerate PDFs
+    `,
+  })
+  @ApiQuery({
+    name: 'regeneratePdf',
+    required: false,
+    type: String,
+    description: 'Set to "true" to regenerate PDF files with correct tax values',
+    example: 'true',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Tax values fixed',
+    schema: {
+      example: {
+        message: 'Fixed tax values for 9 invoices, regenerated 9 PDFs',
+        fixedCount: 9,
+        pdfRegeneratedCount: 9,
+        fixedInvoices: [
+          { id: 149, oldTax: 0, newTax: 3036, cgst: 1518, sgst: 1518, igst: 0, pdfRegenerated: true },
+          { id: 150, oldTax: 0, newTax: 3036, cgst: 0, sgst: 0, igst: 3036, pdfRegenerated: true },
+        ],
+      },
+    },
+  })
+  @ApiBearerAuth()
+  async fixMissingTaxes(@Query('regeneratePdf') regeneratePdf?: string) {
+    console.log('🔧 Fixing missing tax values on invoices...');
+
+    const shouldRegeneratePdf = regeneratePdf === 'true';
+    const ProInvoice = this.proSubscriptionService['proInvoiceModel'];
+
+    // Find invoices where tax = 0 but have cgst/sgst/igst values
+    const invoicesWithMissingTax = await ProInvoice.findAll({
+      where: {
+        tax: 0,
+      },
+    });
+
+    console.log(`📊 Found ${invoicesWithMissingTax.length} invoices with tax = 0`);
+
+    const fixedInvoices: Array<{
+      id: number;
+      invoiceNumber: string;
+      oldTax: number;
+      newTax: number;
+      cgst: number;
+      sgst: number;
+      igst: number;
+      pdfRegenerated: boolean;
+    }> = [];
+    let fixedCount = 0;
+    let pdfRegeneratedCount = 0;
+
+    for (const invoice of invoicesWithMissingTax) {
+      // Calculate correct tax value
+      const correctTax = (invoice.cgst || 0) + (invoice.sgst || 0) + (invoice.igst || 0);
+
+      // Only update if there's actually tax to add
+      if (correctTax > 0) {
+        const oldTax = invoice.tax;
+        await invoice.update({ tax: correctTax });
+
+        console.log(
+          `✅ Fixed invoice ${invoice.id}: tax ${oldTax} → ${correctTax} (cgst: ${invoice.cgst}, sgst: ${invoice.sgst}, igst: ${invoice.igst})`,
+        );
+
+        let pdfRegenerated = false;
+
+        // Regenerate PDF if requested and invoice has payment
+        if (shouldRegeneratePdf && invoice.paymentStatus === 'paid') {
+          try {
+            await this.proSubscriptionService['generateInvoicePDF'](invoice.id);
+            console.log(`  📄 Regenerated PDF for invoice ${invoice.id}`);
+            pdfRegenerated = true;
+            pdfRegeneratedCount++;
+          } catch (error) {
+            console.error(`  ⚠️  Failed to regenerate PDF for invoice ${invoice.id}:`, error.message);
+          }
+        }
+
+        fixedInvoices.push({
+          id: invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          oldTax,
+          newTax: correctTax,
+          cgst: invoice.cgst,
+          sgst: invoice.sgst,
+          igst: invoice.igst,
+          pdfRegenerated,
+        });
+
+        fixedCount++;
+      }
+    }
+
+    console.log(`✅ Fixed tax values for ${fixedCount} invoices`);
+    if (shouldRegeneratePdf) {
+      console.log(`📄 Regenerated ${pdfRegeneratedCount} PDF files`);
+    }
+
+    return {
+      message: `Fixed tax values for ${fixedCount} invoices${shouldRegeneratePdf ? `, regenerated ${pdfRegeneratedCount} PDFs` : ''}`,
+      fixedCount,
+      pdfRegeneratedCount: shouldRegeneratePdf ? pdfRegeneratedCount : 0,
+      fixedInvoices,
+    };
+  }
+
+  /**
+   * Clean up duplicate payment IDs and re-run reconciliation (UPDATE mode - keeps invoice numbers)
+   */
+  @Post('pro-subscriptions/cleanup-and-reconcile-update')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiOperation({
+    summary: 'Clean up duplicate payment IDs by updating with correct ones (keeps invoice numbers)',
+    description: `
+      This endpoint:
+      1. Identifies invoices with duplicate payment ID (pay_SK6f9NQJo6v4HW)
+      2. For each duplicate invoice, queries Razorpay for correct payment ID
+      3. Updates invoice with correct payment ID and tax value
+      4. Regenerates PDF with same invoice number
+      5. Updates Pro access based on real payment status
+
+      This keeps the same invoice numbers (INV-U2602-83, etc.) but fixes the data.
+    `,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Invoices updated with correct payment IDs',
+    schema: {
+      example: {
+        message: 'Updated 9 invoices with correct payment IDs',
+        totalInvoices: 10,
+        keptOriginal: 1,
+        updatedCount: 9,
+        updatedInvoices: [
+          {
+            id: 149,
+            invoiceNumber: 'INV-U2602-83',
+            influencerId: 195,
+            username: 'himanshi',
+            oldPaymentId: 'pay_SK6f9NQJo6v4HW',
+            newPaymentId: 'pay_XYZ123',
+            taxFixed: true,
+            pdfRegenerated: true,
+          },
+        ],
+      },
+    },
+  })
+  @ApiBearerAuth()
+  async cleanupAndReconcileWithUpdate() {
+    console.log('🧹 Starting Pro subscription cleanup (UPDATE mode - keeping invoice numbers)...');
+
+    const duplicatePaymentId = 'pay_SK6f9NQJo6v4HW';
+
+    const ProInvoice = this.proSubscriptionService['proInvoiceModel'];
+    const ProSubscription = this.proSubscriptionService['proSubscriptionModel'];
+    const Influencer = this.proSubscriptionService['influencerModel'];
+
+    // Step 1: Find all invoices with duplicate payment ID
+    const duplicateInvoices = await ProInvoice.findAll({
+      where: { razorpayPaymentId: duplicatePaymentId },
+      order: [['id', 'ASC']],
+      include: [
+        {
+          model: ProSubscription,
+          as: 'subscription',
+        },
+        {
+          model: Influencer,
+          as: 'influencer',
+          attributes: ['id', 'username'],
+        },
+      ],
+    });
+
+    console.log(`📊 Found ${duplicateInvoices.length} invoices with payment ID ${duplicatePaymentId}`);
+
+    if (duplicateInvoices.length === 0) {
+      return {
+        message: 'No duplicate payment IDs found',
+        totalInvoices: 0,
+        keptOriginal: 0,
+        updatedCount: 0,
+        updatedInvoices: [],
+      };
+    }
+
+    // Step 2: First invoice is the real owner, skip it
+    const [realOwnerInvoice, ...invoicesToUpdate] = duplicateInvoices;
+    console.log(`✅ Invoice ${realOwnerInvoice.id} (${realOwnerInvoice.invoiceNumber}) is the real owner - keeping as is`);
+
+    const updatedInvoices: Array<{
+      id: number;
+      invoiceNumber: string;
+      influencerId: number;
+      username: string;
+      subscriptionId: number;
+      razorpaySubscriptionId: string;
+      oldPaymentId: string;
+      newPaymentId: string | null;
+      taxFixed: boolean;
+      pdfRegenerated: boolean;
+      status: 'updated' | 'no_payment_found' | 'failed';
+      error?: string;
+    }> = [];
+
+    // Step 3: For each duplicate invoice, get correct payment ID from Razorpay
+    for (const invoice of invoicesToUpdate) {
+      const subscription = invoice.subscription;
+      const influencer = invoice.influencer;
+
+      console.log(
+        `\n🔍 Processing invoice ${invoice.id} (${invoice.invoiceNumber}) for ${influencer.username}`,
+      );
+      console.log(`  Subscription: ${subscription.razorpaySubscriptionId}`);
+
+      try {
+        // Query Razorpay for this subscription's real payment
+        const paymentsResponse = await this.proSubscriptionService['razorpayService'].getSubscriptionPayments(
+          subscription.razorpaySubscriptionId,
+        );
+        const payments = paymentsResponse.items || [];
+
+        console.log(`  📊 Found ${payments.length} payment(s) on Razorpay`);
+
+        // Find captured payment
+        const capturedPayments = payments.filter((p: any) => p.status === 'captured');
+
+        if (capturedPayments.length === 0) {
+          console.log(`  ⚠️  No captured payments found - marking as no payment`);
+          updatedInvoices.push({
+            id: invoice.id,
+            invoiceNumber: invoice.invoiceNumber,
+            influencerId: invoice.influencerId,
+            username: influencer.username,
+            subscriptionId: subscription.id,
+            razorpaySubscriptionId: subscription.razorpaySubscriptionId,
+            oldPaymentId: duplicatePaymentId,
+            newPaymentId: null,
+            taxFixed: false,
+            pdfRegenerated: false,
+            status: 'no_payment_found',
+          });
+          continue;
+        }
+
+        // Get the first captured payment (should be the real one)
+        const realPayment = capturedPayments[0];
+        const realPaymentId = realPayment.id;
+
+        console.log(`  ✅ Found real payment: ${realPaymentId}`);
+
+        // Calculate correct tax
+        const correctTax = (invoice.cgst || 0) + (invoice.sgst || 0) + (invoice.igst || 0);
+
+        // Update invoice with correct payment ID and tax
+        await invoice.update({
+          razorpayPaymentId: realPaymentId,
+          tax: correctTax,
+        });
+
+        console.log(`  ✅ Updated invoice ${invoice.id}: payment ${duplicatePaymentId} → ${realPaymentId}, tax → ${correctTax}`);
+
+        // Regenerate PDF with same invoice number
+        let pdfRegenerated = false;
+        try {
+          await this.proSubscriptionService['generateInvoicePDF'](invoice.id);
+          console.log(`  📄 Regenerated PDF for ${invoice.invoiceNumber}`);
+          pdfRegenerated = true;
+        } catch (pdfError) {
+          console.error(`  ⚠️  Failed to regenerate PDF:`, pdfError.message);
+        }
+
+        // Update Pro access if needed
+        await Influencer.update(
+          {
+            isPro: true,
+            proActivatedAt: invoice.paidAt || new Date(),
+            proExpiresAt: subscription.currentPeriodEnd,
+          },
+          { where: { id: invoice.influencerId } },
+        );
+
+        console.log(`  ✅ Updated Pro access for ${influencer.username}`);
+
+        updatedInvoices.push({
+          id: invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          influencerId: invoice.influencerId,
+          username: influencer.username,
+          subscriptionId: subscription.id,
+          razorpaySubscriptionId: subscription.razorpaySubscriptionId,
+          oldPaymentId: duplicatePaymentId,
+          newPaymentId: realPaymentId,
+          taxFixed: true,
+          pdfRegenerated,
+          status: 'updated',
+        });
+      } catch (error) {
+        console.error(`  ❌ Failed to process invoice ${invoice.id}:`, error.message);
+        updatedInvoices.push({
+          id: invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          influencerId: invoice.influencerId,
+          username: influencer.username,
+          subscriptionId: subscription.id,
+          razorpaySubscriptionId: subscription.razorpaySubscriptionId,
+          oldPaymentId: duplicatePaymentId,
+          newPaymentId: null,
+          taxFixed: false,
+          pdfRegenerated: false,
+          status: 'failed',
+          error: error.message,
+        });
+      }
+    }
+
+    const updatedCount = updatedInvoices.filter(i => i.status === 'updated').length;
+    const noPaymentCount = updatedInvoices.filter(i => i.status === 'no_payment_found').length;
+    const failedCount = updatedInvoices.filter(i => i.status === 'failed').length;
+
+    console.log(`\n✅ Cleanup completed!`);
+    console.log(`  ✅ Updated: ${updatedCount}`);
+    console.log(`  ⚠️  No payment found: ${noPaymentCount}`);
+    console.log(`  ❌ Failed: ${failedCount}`);
+
+    return {
+      message: `Updated ${updatedCount} invoices with correct payment IDs`,
+      totalInvoices: duplicateInvoices.length,
+      keptOriginal: 1,
+      updatedCount,
+      noPaymentCount,
+      failedCount,
+      updatedInvoices,
+    };
+  }
+
+  /**
+   * Clean up duplicate payment IDs and re-run reconciliation (DELETE mode)
+   */
+  @Post('pro-subscriptions/cleanup-and-reconcile')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiOperation({
+    summary: 'Clean up duplicate payment IDs and re-run reconciliation (deletes and recreates)',
+    description: `
+      This endpoint:
+      1. Identifies duplicate payment IDs from broken reconciliation
+      2. Keeps the first/real invoice, deletes duplicates
+      3. Resets affected subscriptions to payment_pending
+      4. Removes incorrect Pro access
+      5. Re-runs reconciliation with fixed code
+      6. Returns detailed results
+
+      Note: This creates NEW invoice numbers. Use cleanup-and-reconcile-update to keep existing numbers.
+    `,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Cleanup and reconciliation completed',
+    schema: {
+      example: {
+        cleanup: {
+          duplicatePaymentId: 'pay_SK6f9NQJo6v4HW',
+          totalInvoices: 10,
+          keptInvoiceId: 148,
+          deletedInvoiceIds: [149, 150, 151, 152, 153, 154, 155, 156, 157],
+          deletedCount: 9,
+          resetSubscriptions: 9,
+          removedProAccess: 9,
+        },
+        reconciliation: {
+          stuckPayments: {
+            reconciledCount: 0,
+            activatedSubscriptionsCount: 0,
+            alreadyPaidCount: 0,
+            skippedCount: 0,
+            failedCount: 0,
+          },
+          orphanedSubscriptions: {
+            reconciledCount: 9,
+            abandonedCount: 0,
+            totalChecked: 9,
+          },
+          paidInvoicesWithoutPro: {
+            grantedCount: 9,
+            failedCount: 0,
+            totalChecked: 9,
+          },
+        },
+      },
+    },
+  })
+  @ApiBearerAuth()
+  async cleanupAndReconcileProSubscriptions() {
+    console.log('🧹 Starting Pro subscription cleanup and reconciliation...');
+
+    // Define the duplicate payment ID
+    const duplicatePaymentId = 'pay_SK6f9NQJo6v4HW';
+
+    // Step 1: Find all invoices with duplicate payment ID
+    const ProInvoice = this.proSubscriptionService['proInvoiceModel'];
+    const ProSubscription = this.proSubscriptionService['proSubscriptionModel'];
+    const Influencer = this.proSubscriptionService['influencerModel'];
+
+    const duplicateInvoices = await ProInvoice.findAll({
+      where: { razorpayPaymentId: duplicatePaymentId },
+      order: [['id', 'ASC']],
+    });
+
+    console.log(`📊 Found ${duplicateInvoices.length} invoices with payment ID ${duplicatePaymentId}`);
+
+    if (duplicateInvoices.length === 0) {
+      return {
+        message: 'No duplicate payment IDs found',
+        cleanup: null,
+        reconciliation: null,
+      };
+    }
+
+    // Step 2: Keep the first invoice (likely the real one), delete the rest
+    const [firstInvoice, ...duplicatesToDelete] = duplicateInvoices;
+    const keptInvoiceId = firstInvoice.id;
+    const deletedInvoiceIds = duplicatesToDelete.map(inv => inv.id);
+
+    console.log(`✅ Keeping invoice ${keptInvoiceId} (first created)`);
+    console.log(`🗑️ Deleting invoices: ${deletedInvoiceIds.join(', ')}`);
+
+    // Step 3: Get affected subscription IDs before deletion
+    const affectedSubscriptionIds = duplicatesToDelete.map(inv => inv.subscriptionId);
+
+    // Step 4: Delete duplicate invoices
+    await ProInvoice.destroy({
+      where: { id: deletedInvoiceIds },
+    });
+
+    console.log(`✅ Deleted ${deletedInvoiceIds.length} duplicate invoices`);
+
+    // Step 5: Reset affected subscriptions to payment_pending
+    const resetResult = await ProSubscription.update(
+      { status: 'payment_pending' },
+      {
+        where: { id: affectedSubscriptionIds },
+        returning: true,
+      },
+    );
+
+    console.log(`✅ Reset ${affectedSubscriptionIds.length} subscriptions to payment_pending`);
+
+    // Step 6: Get influencer IDs from affected subscriptions
+    const affectedSubscriptions = await ProSubscription.findAll({
+      where: { id: affectedSubscriptionIds },
+      attributes: ['influencerId'],
+    });
+
+    const affectedInfluencerIds = affectedSubscriptions.map(sub => sub.influencerId);
+
+    // Step 7: Remove Pro access from affected users
+    const proRemovalResult = await Influencer.update(
+      {
+        isPro: false,
+        proExpiresAt: null,
+      },
+      {
+        where: { id: affectedInfluencerIds },
+      },
+    );
+
+    console.log(`✅ Removed Pro access from ${affectedInfluencerIds.length} users`);
+
+    // Step 8: Re-run reconciliation with fixed code
+    console.log('\n🔄 Re-running reconciliation with fixed code...\n');
+
+    const reconciliationResults = {
+      stuckPayments: await this.proSubscriptionService.reconcileStuckPayments(),
+      orphanedSubscriptions: await this.proSubscriptionService.reconcileSubscriptionsWithoutInvoices(),
+      paidInvoicesWithoutPro: await this.proSubscriptionService.reconcilePaidInvoicesWithoutProAccess(),
+    };
+
+    console.log('✅ Cleanup and reconciliation completed!');
+
+    return {
+      message: 'Cleanup and reconciliation completed successfully',
+      cleanup: {
+        duplicatePaymentId,
+        totalInvoices: duplicateInvoices.length,
+        keptInvoiceId,
+        deletedInvoiceIds,
+        deletedCount: deletedInvoiceIds.length,
+        resetSubscriptions: affectedSubscriptionIds.length,
+        removedProAccess: affectedInfluencerIds.length,
+      },
+      reconciliation: reconciliationResults,
+    };
   }
 }
