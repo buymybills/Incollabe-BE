@@ -1704,6 +1704,102 @@ export class ProSubscriptionService {
           console.log(
             `✅ Found invoice ${invoice.id} via subscription ${subscription.id} (status: ${invoice.paymentStatus})`,
           );
+        } else {
+          // FALLBACK: No invoice found - create one from payment.captured webhook
+          // This handles BOTH first payments (when subscription.activated missed) AND recurring payments (when subscription.charged missed)
+          console.log(
+            `⚠️ No invoice found for subscription ${subscription.id}, creating invoice from payment.captured webhook...`,
+          );
+
+          // Check if this is a first payment or recurring payment
+          const existingInvoiceCount = await this.proInvoiceModel.count({
+            where: {
+              subscriptionId: subscription.id,
+              paymentStatus: InvoiceStatus.PAID,
+            },
+          });
+
+          const isFirstPayment = existingInvoiceCount === 0;
+          console.log(
+            isFirstPayment
+              ? `🆕 First payment detected - subscription.activated webhook was missed`
+              : `🔄 Recurring payment detected (${existingInvoiceCount} previous invoices) - subscription.charged webhook was missed`,
+          );
+
+            // Get influencer with city information for tax calculation
+            const influencerWithCity = await this.influencerModel.findByPk(
+              subscription.influencerId,
+              {
+                include: [
+                  {
+                    model: this.cityModel,
+                    as: 'city',
+                  },
+                ],
+              },
+            );
+
+            // Calculate taxes based on location
+            const totalAmount = this.PRO_SUBSCRIPTION_AMOUNT; // 19900 paise
+            const baseAmount = 16864; // Rs 168.64 in paise
+
+            let cgst = 0;
+            let sgst = 0;
+            let igst = 0;
+            let totalTax = 0;
+
+            // Check if influencer location is Delhi
+            const cityName = influencerWithCity?.city?.name?.toLowerCase();
+            const isDelhi = cityName === 'delhi' || cityName === 'new delhi';
+
+            if (isDelhi) {
+              // For Delhi: CGST and SGST (total tax = 3035 paise = Rs 30.35)
+              cgst = 1518; // Rs 15.18
+              sgst = 1517; // Rs 15.17 (total: 3035 paise)
+              totalTax = cgst + sgst; // 3035
+            } else {
+              // For other locations: IGST
+              igst = 3035; // Rs 30.35
+              totalTax = igst;
+            }
+
+            // Calculate billing period (payment date + 30 days)
+            const paymentDate = payload.payment?.entity?.created_at
+              ? new Date(payload.payment.entity.created_at * 1000)
+              : createDatabaseDate();
+            const periodEnd = new Date(paymentDate);
+            periodEnd.setDate(periodEnd.getDate() + 30);
+
+            const invoiceNumber = await this.generateInvoiceNumber(subscription.influencerId);
+
+            // Create invoice for recurring payment
+            invoice = await this.proInvoiceModel.create({
+              invoiceNumber,
+              subscriptionId: subscription.id,
+              influencerId: subscription.influencerId,
+              amount: baseAmount,
+              tax: totalTax,
+              cgst,
+              sgst,
+              igst,
+              totalAmount: totalAmount,
+              billingPeriodStart: paymentDate,
+              billingPeriodEnd: periodEnd,
+              paymentStatus: InvoiceStatus.PENDING, // Will be marked as PAID by payment.captured handler below
+              paymentMethod: 'razorpay',
+              razorpayPaymentId: payload.payment?.entity?.id,
+            });
+
+            // Update subscription period
+            await subscription.update({
+              currentPeriodStart: paymentDate,
+              currentPeriodEnd: periodEnd,
+              nextBillingDate: periodEnd,
+            });
+
+            console.log(
+              `✅ Created invoice ${invoice.invoiceNumber} (${invoice.id}) from payment.captured webhook (${isFirstPayment ? 'first payment' : 'recurring payment'}) (CGST: ${cgst}, SGST: ${sgst}, IGST: ${igst})`,
+            );
         }
       }
     }
@@ -2718,8 +2814,17 @@ export class ProSubscriptionService {
 
         console.log(`  📊 Found ${payments.length} payment(s) on Razorpay`);
 
+        if (payments.length > 0) {
+          // Log payment details for debugging
+          payments.forEach((p: any, index: number) => {
+            console.log(`    Payment ${index + 1}: ${p.id} - status: ${p.status}, amount: ${p.amount}, subscription_id: ${p.subscription_id || 'N/A'}`);
+          });
+        }
+
         // Find any captured payments
         const capturedPayments = payments.filter((p: any) => p.status === 'captured');
+
+        console.log(`  💰 Found ${capturedPayments.length} captured payment(s)`);
 
         if (capturedPayments.length === 0) {
           console.log(`  ⚠️  No captured payments - subscription appears abandoned`);
@@ -2738,9 +2843,29 @@ export class ProSubscriptionService {
         }
 
         // Found captured payment(s) - create invoice retroactively
-        const latestPayment = capturedPayments[0]; // Most recent captured payment
+        // Check if payment is already used by another invoice
+        let unusedPayment: any = null;
+        for (const payment of capturedPayments) {
+          const existingInvoice = await this.proInvoiceModel.findOne({
+            where: { razorpayPaymentId: (payment as any).id },
+          });
+
+          if (!existingInvoice) {
+            unusedPayment = payment;
+            break;
+          } else {
+            console.log(`  ⚠️  Payment ${(payment as any).id} already used by invoice ${existingInvoice.id}, skipping`);
+          }
+        }
+
+        if (!unusedPayment) {
+          console.log(`  ❌ All payments already used by other invoices, skipping`);
+          continue;
+        }
+
+        const latestPayment = unusedPayment;
         console.log(
-          `  ✅ Found captured payment: ${latestPayment.id} for ${latestPayment.amount} paise`,
+          `  ✅ Found unused captured payment: ${latestPayment.id} for ${latestPayment.amount} paise`,
         );
 
         // Get influencer details for tax calculation
@@ -2790,6 +2915,7 @@ export class ProSubscriptionService {
           invoiceNumber,
           paymentStatus: InvoiceStatus.PAID,
           amount: baseAmount, // Base amount before tax
+          tax: taxAmount, // Total tax amount
           totalAmount, // Final amount including tax
           igst,
           cgst,

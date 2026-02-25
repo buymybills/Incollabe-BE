@@ -598,16 +598,47 @@ export class RazorpayService {
 
   /**
    * Get all payments for a subscription
+   * NOTE: Razorpay SDK doesn't have a direct method, so we query the subscription
+   * and get payment details from it
    */
   async getSubscriptionPayments(subscriptionId: string) {
     try {
-      const payments = await this.razorpay.payments.all({
-        'subscription_id': subscriptionId,
+      console.log(`🔍 Fetching payments for subscription: ${subscriptionId}`);
+
+      // First, fetch the subscription to see what Razorpay has
+      const subscription = await this.razorpay.subscriptions.fetch(subscriptionId);
+
+      console.log(`  📊 Subscription status: ${subscription.status}`);
+      console.log(`  📊 Paid count: ${subscription.paid_count || 0}`);
+      console.log(`  📊 Total count: ${subscription.total_count || 0}`);
+
+      // If subscription has no paid invoices, return empty
+      if (!subscription.paid_count || subscription.paid_count === 0) {
+        console.log(`  ℹ️  No payments found for subscription ${subscriptionId}`);
+        return { items: [] };
+      }
+
+      // Query payments with proper filtering
+      // Use count to limit results and avoid fetching unrelated payments
+      const paymentsResponse = await this.razorpay.payments.all({
+        count: 100, // Limit to prevent getting all payments in system
       });
 
-      return payments;
+      // Filter payments that match this subscription ID
+      const subscriptionPayments = (paymentsResponse.items || []).filter((payment: any) => {
+        // Check if payment has subscription_id matching our subscription
+        return payment.subscription_id === subscriptionId;
+      });
+
+      console.log(`  ✅ Found ${subscriptionPayments.length} payment(s) for subscription ${subscriptionId}`);
+
+      if (subscriptionPayments.length > 0) {
+        console.log(`  💰 Payment IDs:`, subscriptionPayments.map((p: any) => p.id).join(', '));
+      }
+
+      return { items: subscriptionPayments };
     } catch (error) {
-      console.error('Error fetching subscription payments:', error);
+      console.error(`❌ Error fetching subscription payments for ${subscriptionId}:`, error);
       throw new Error(`Failed to fetch payments: ${error.message}`);
     }
   }
