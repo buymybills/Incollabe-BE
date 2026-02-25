@@ -4481,10 +4481,13 @@ export class AdminController {
         influencerId: influencerIdNum,
         razorpaySubscriptionId: `manual_setup_${influencerIdNum}_${Date.now()}`,
         status: 'active',
+        startDate: now,
         currentPeriodStart: now,
         currentPeriodEnd: periodEnd,
         nextBillingDate: periodEnd,
-        planType: 'monthly',
+        subscriptionAmount: 19899,
+        paymentMethod: 'manual',
+        autoRenew: false,
       });
 
       console.log(`✅ Created subscription ID: ${subscription.id}`);
@@ -4494,9 +4497,11 @@ export class AdminController {
       // Update subscription to active
       await subscription.update({
         status: 'active',
+        startDate: now,
         currentPeriodStart: now,
         currentPeriodEnd: periodEnd,
         nextBillingDate: periodEnd,
+        autoRenew: false,
       });
 
       console.log('✅ Updated subscription to active');
