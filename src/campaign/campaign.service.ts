@@ -3472,13 +3472,35 @@ export class CampaignService {
           influencer.id,
           campaign.brandId,
         )
-        .then((conversation) => {
+        .then(async (conversation) => {
           this.chatGateway.emitCampaignConversationCreated(
             conversation.id,
             influencer.id,
             campaign.brandId,
             campaignId,
           );
+
+          // Send automatic welcome message from brand to influencer
+          try {
+            const welcomeMessage = `Congratulations! You've been selected for the campaign "${campaign.name}". We're excited to work with you! Please review the campaign details and feel free to reach out if you have any questions.`;
+
+            await this.chatService.sendMessage(
+              campaign.brandId,
+              'brand',
+              {
+                conversationId: conversation.id,
+                content: welcomeMessage,
+                messageType: 'text' as any,
+              },
+            );
+
+            console.log(`[CampaignChat] Automatic welcome message sent for application ${applicationId}`);
+          } catch (messageError) {
+            console.error(
+              `[CampaignChat] Failed to send welcome message for application ${applicationId}:`,
+              messageError,
+            );
+          }
         })
         .catch((err) =>
           console.error(
