@@ -4064,13 +4064,40 @@ export class AdminController {
       console.log(`  Subscription: ${subscription.razorpaySubscriptionId}`);
 
       try {
-        // Query Razorpay for this subscription's real payment
-        const paymentsResponse = await this.proSubscriptionService['razorpayService'].getSubscriptionPayments(
+        // Strategy 1: Try to find payments linked to subscription
+        let paymentsResponse = await this.proSubscriptionService['razorpayService'].getSubscriptionPayments(
           subscription.razorpaySubscriptionId,
         );
-        const payments = paymentsResponse.items || [];
+        let payments = paymentsResponse.items || [];
 
-        console.log(`  📊 Found ${payments.length} payment(s) on Razorpay`);
+        console.log(`  📊 Found ${payments.length} payment(s) linked to subscription`);
+
+        // Strategy 2: If no payments found, search by amount and date range
+        if (payments.length === 0) {
+          console.log(`  🔍 No subscription payments found, searching by amount and date...`);
+
+          // Calculate date range (invoice creation date ± 3 days)
+          const invoiceDate = new Date(invoice.createdAt);
+          const startDate = new Date(invoiceDate);
+          startDate.setDate(startDate.getDate() - 3);
+          const endDate = new Date(invoiceDate);
+          endDate.setDate(endDate.getDate() + 3);
+
+          // Query all payments in date range
+          const allPaymentsResponse = await this.proSubscriptionService['razorpayService']['razorpay'].payments.all({
+            from: Math.floor(startDate.getTime() / 1000),
+            to: Math.floor(endDate.getTime() / 1000),
+            count: 100,
+          });
+
+          // Filter by amount (19900 paise = 199 Rs)
+          const matchingPayments = (allPaymentsResponse.items || []).filter((p: any) => {
+            return p.amount === 19900 && p.status === 'captured';
+          });
+
+          console.log(`  📊 Found ${matchingPayments.length} payment(s) with amount 19900 in date range`);
+          payments = matchingPayments;
+        }
 
         // Find captured payment
         const capturedPayments = payments.filter((p: any) => p.status === 'captured');
@@ -4093,11 +4120,17 @@ export class AdminController {
           continue;
         }
 
-        // Get the first captured payment (should be the real one)
-        const realPayment = capturedPayments[0];
+        // Get the payment closest to invoice creation date
+        const invoiceTimestamp = new Date(invoice.createdAt).getTime();
+        const realPayment = capturedPayments.reduce((closest: any, payment: any) => {
+          const closestDiff = Math.abs(closest.created_at * 1000 - invoiceTimestamp);
+          const currentDiff = Math.abs(payment.created_at * 1000 - invoiceTimestamp);
+          return currentDiff < closestDiff ? payment : closest;
+        }, capturedPayments[0]);
+
         const realPaymentId = realPayment.id;
 
-        console.log(`  ✅ Found real payment: ${realPaymentId}`);
+        console.log(`  ✅ Found real payment: ${realPaymentId} (created: ${new Date(realPayment.created_at * 1000).toISOString()})`);
 
         // Calculate correct tax
         const correctTax = (invoice.cgst || 0) + (invoice.sgst || 0) + (invoice.igst || 0);
@@ -4286,7 +4319,7 @@ export class AdminController {
     console.log(`✅ Deleted ${deletedInvoiceIds.length} duplicate invoices`);
 
     // Step 5: Reset affected subscriptions to payment_pending
-    const resetResult = await ProSubscription.update(
+    await ProSubscription.update(
       { status: 'payment_pending' },
       {
         where: { id: affectedSubscriptionIds },
@@ -4305,7 +4338,7 @@ export class AdminController {
     const affectedInfluencerIds = affectedSubscriptions.map(sub => sub.influencerId);
 
     // Step 7: Remove Pro access from affected users
-    const proRemovalResult = await Influencer.update(
+    await Influencer.update(
       {
         isPro: false,
         proExpiresAt: null,
@@ -4340,6 +4373,211 @@ export class AdminController {
         removedProAccess: affectedInfluencerIds.length,
       },
       reconciliation: reconciliationResults,
+    };
+  }
+
+  /**
+   * Manually setup Pro subscription for an influencer (1 month)
+   */
+  @Post('pro-subscriptions/manual-setup/:influencerId')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiOperation({
+    summary: 'Manually setup 1-month Pro subscription for an influencer',
+    description: `
+      This endpoint:
+      1. Creates or finds subscription for influencer
+      2. Creates a paid invoice for 1 month
+      3. Grants Pro access for 30 days
+      4. Generates invoice PDF
+
+      Use case: Manual payment setup for influencers
+    `,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Pro subscription setup successful',
+    schema: {
+      example: {
+        message: 'Pro subscription setup successful for influencer 6547',
+        influencerId: 6547,
+        username: 'example_user',
+        subscription: {
+          id: 181,
+          status: 'active',
+          razorpaySubscriptionId: 'manual_setup_6547_1234567890',
+        },
+        invoice: {
+          id: 200,
+          invoiceNumber: 'INV-U2602-100',
+          amount: 16864,
+          tax: 3035,
+          totalAmount: 19899,
+          paymentStatus: 'paid',
+          pdfUrl: 'https://...',
+        },
+        proAccess: {
+          isPro: true,
+          proActivatedAt: '2026-02-25T12:00:00.000Z',
+          proExpiresAt: '2026-03-27T12:00:00.000Z',
+        },
+      },
+    },
+  })
+  @ApiBearerAuth()
+  async manuallySetupProSubscription(@Param('influencerId') influencerId: string) {
+    const influencerIdNum = parseInt(influencerId, 10);
+
+    console.log(`🔧 Starting manual Pro subscription setup for influencer ${influencerIdNum}...`);
+
+    const ProInvoice = this.proSubscriptionService['proInvoiceModel'];
+    const ProSubscription = this.proSubscriptionService['proSubscriptionModel'];
+    const Influencer = this.proSubscriptionService['influencerModel'];
+    const City = this.proSubscriptionService['cityModel'];
+
+    // Step 1: Check if influencer exists
+    const influencer = await Influencer.findByPk(influencerIdNum, {
+      include: [{ model: City, as: 'city' }],
+    });
+
+    if (!influencer) {
+      throw new NotFoundException(`Influencer with ID ${influencerIdNum} not found`);
+    }
+
+    console.log(`✅ Found influencer: ${influencer.username || `ID ${influencerIdNum}`}`);
+
+    // Step 2: Calculate amounts and taxes
+    const totalAmount = 19899; // Rs. 199
+    const baseAmount = 16864;
+    const cityName = influencer.city?.name?.toLowerCase();
+    const isDelhi = cityName === 'delhi' || cityName === 'new delhi';
+
+    let cgst = 0, sgst = 0, igst = 0, totalTax = 0;
+    if (isDelhi) {
+      cgst = 1518;
+      sgst = 1517;
+      totalTax = 3035;
+    } else {
+      igst = 3035;
+      totalTax = 3035;
+    }
+
+    console.log(`📍 Location: ${cityName || 'Unknown'} (${isDelhi ? 'Delhi - CGST+SGST' : 'Other - IGST'})`);
+
+    // Step 3: Find or create subscription
+    let subscription = await ProSubscription.findOne({
+      where: { influencerId: influencerIdNum },
+      order: [['createdAt', 'DESC']],
+    });
+
+    const now = new Date();
+    const periodEnd = new Date(now);
+    periodEnd.setDate(periodEnd.getDate() + 30); // 30 days from now
+
+    if (!subscription) {
+      console.log('📝 Creating new subscription...');
+
+      subscription = await ProSubscription.create({
+        influencerId: influencerIdNum,
+        razorpaySubscriptionId: `manual_setup_${influencerIdNum}_${Date.now()}`,
+        status: 'active',
+        currentPeriodStart: now,
+        currentPeriodEnd: periodEnd,
+        nextBillingDate: periodEnd,
+        planType: 'monthly',
+      });
+
+      console.log(`✅ Created subscription ID: ${subscription.id}`);
+    } else {
+      console.log(`✅ Found existing subscription ID: ${subscription.id}`);
+
+      // Update subscription to active
+      await subscription.update({
+        status: 'active',
+        currentPeriodStart: now,
+        currentPeriodEnd: periodEnd,
+        nextBillingDate: periodEnd,
+      });
+
+      console.log('✅ Updated subscription to active');
+    }
+
+    // Step 4: Generate invoice number
+    const invoiceNumber = await this.proSubscriptionService['generateInvoiceNumber'](influencerIdNum);
+
+    console.log(`📄 Generated invoice number: ${invoiceNumber}`);
+
+    // Step 5: Create paid invoice
+    const invoice = await ProInvoice.create({
+      invoiceNumber,
+      subscriptionId: subscription.id,
+      influencerId: influencerIdNum,
+      amount: baseAmount,
+      tax: totalTax,
+      cgst,
+      sgst,
+      igst,
+      totalAmount,
+      billingPeriodStart: now,
+      billingPeriodEnd: periodEnd,
+      paymentStatus: 'paid',
+      paymentMethod: 'manual',
+      razorpayPaymentId: `manual_${Date.now()}`,
+      paidAt: now,
+    });
+
+    console.log(`✅ Created paid invoice ID: ${invoice.id}`);
+
+    // Step 6: Grant Pro access
+    await Influencer.update(
+      {
+        isPro: true,
+        proActivatedAt: now,
+        proExpiresAt: periodEnd,
+      },
+      { where: { id: influencerIdNum } },
+    );
+
+    console.log('✅ Granted Pro access for 30 days');
+
+    // Step 7: Generate invoice PDF
+    let pdfUrl: string | null = null;
+    try {
+      const result = await this.proSubscriptionService['generateInvoicePDF'](invoice.id);
+      pdfUrl = typeof result === 'string' ? result : null;
+      console.log(`📄 Generated invoice PDF: ${pdfUrl}`);
+    } catch (pdfError) {
+      console.error('⚠️  Failed to generate PDF:', pdfError.message);
+    }
+
+    console.log('✅ Manual Pro subscription setup completed!');
+
+    return {
+      message: `Pro subscription setup successful for influencer ${influencerIdNum}`,
+      influencerId: influencerIdNum,
+      username: influencer.username || null,
+      subscription: {
+        id: subscription.id,
+        status: subscription.status,
+        razorpaySubscriptionId: subscription.razorpaySubscriptionId,
+        currentPeriodStart: subscription.currentPeriodStart,
+        currentPeriodEnd: subscription.currentPeriodEnd,
+      },
+      invoice: {
+        id: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        amount: invoice.amount,
+        tax: invoice.tax,
+        totalAmount: invoice.totalAmount,
+        paymentStatus: invoice.paymentStatus,
+        paidAt: invoice.paidAt,
+        pdfUrl,
+      },
+      proAccess: {
+        isPro: true,
+        proActivatedAt: now,
+        proExpiresAt: periodEnd,
+      },
     };
   }
 }
