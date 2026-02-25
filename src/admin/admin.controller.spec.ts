@@ -21,6 +21,7 @@ import { S3Service } from '../shared/s3.service';
 import { AppVersionService } from '../shared/services/app-version.service';
 import { InvoiceExcelExportService } from './services/invoice-excel-export.service';
 import { AdminCreatorScoreService } from './services/admin-creator-score.service';
+import { ProSubscriptionService } from '../influencer/services/pro-subscription.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { getModelToken } from '@nestjs/sequelize';
@@ -172,6 +173,29 @@ const mockAdminCreatorScoreService = {
   getDashboardStats: jest.fn(),
 };
 
+const mockProSubscriptionService = {
+  reconcileStuckPayments: jest.fn(),
+  reconcileSubscriptionsWithoutInvoices: jest.fn(),
+  reconcilePaidInvoicesWithoutProAccess: jest.fn(),
+  proInvoiceModel: {
+    findAll: jest.fn(),
+    findOne: jest.fn(),
+    destroy: jest.fn(),
+  },
+  proSubscriptionModel: {
+    findAll: jest.fn(),
+    findOne: jest.fn(),
+    update: jest.fn(),
+  },
+  influencerModel: {
+    update: jest.fn(),
+  },
+  razorpayService: {
+    getSubscriptionPayments: jest.fn(),
+  },
+  generateInvoicePDF: jest.fn(),
+};
+
 const mockInfluencerRepository = {
   findAll: jest.fn(),
   findOne: jest.fn(),
@@ -281,6 +305,10 @@ describe('AdminController', () => {
         {
           provide: AdminCreatorScoreService,
           useValue: mockAdminCreatorScoreService,
+        },
+        {
+          provide: ProSubscriptionService,
+          useValue: mockProSubscriptionService,
         },
         {
           provide: getModelToken(Influencer),
