@@ -128,6 +128,42 @@ export class Conversation extends Model<Conversation> {
   })
   declare isActive: boolean;
 
+  // Campaign chat fields
+  @Column({
+    type: DataType.STRING(20),
+    defaultValue: 'personal',
+    field: 'conversation_type',
+  })
+  declare conversationType: 'personal' | 'campaign';
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    field: 'campaign_id',
+  })
+  declare campaignId: number | null;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    field: 'campaign_application_id',
+  })
+  declare campaignApplicationId: number | null;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+    field: 'is_campaign_closed',
+  })
+  declare isCampaignClosed: boolean;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+    field: 'campaign_closed_at',
+  })
+  declare campaignClosedAt: Date | null;
+
   // Associations
   @BelongsTo(() => Influencer)
   declare influencer: Influencer;

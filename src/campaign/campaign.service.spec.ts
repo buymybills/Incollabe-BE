@@ -19,6 +19,7 @@ import { Platform, DeliverableType } from './models/campaign-deliverable.model';
 import { City } from '../shared/models/city.model';
 import { Brand } from '../brand/model/brand.model';
 import { Influencer } from '../auth/model/influencer.model';
+import { Niche } from '../auth/model/niche.model';
 import { WhatsAppService } from '../shared/whatsapp.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { GetCampaignsDto } from './dto/get-campaigns.dto';
@@ -33,11 +34,14 @@ import { Experience } from '../influencer/models/experience.model';
 import { CreditTransaction } from '../admin/models/credit-transaction.model';
 import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
 import { MaxCampaignInvoice } from './models/max-campaign-invoice.model';
+import { InviteOnlyCampaignInvoice } from './models/invite-only-campaign-invoice.model';
 import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
 import { InstagramMediaInsight } from '../shared/models/instagram-media-insight.model';
 import { InfluencerProfileScore } from '../shared/models/influencer-profile-score.model';
 import { AIScoringService } from '../shared/services/ai-scoring.service';
 import { MaxCampaignScoringQueueService } from './services/max-campaign-scoring-queue.service';
+import { ChatService } from '../shared/chat.service';
+import { ChatGateway } from '../shared/chat.gateway';
 
 const mockModel = () => ({
   findOne: jest.fn(),
@@ -150,6 +154,10 @@ describe('CampaignService', () => {
           useValue: mockModel(),
         },
         {
+          provide: getModelToken(InviteOnlyCampaignInvoice),
+          useValue: mockModel(),
+        },
+        {
           provide: getModelToken(Post),
           useValue: mockModel(),
         },
@@ -163,6 +171,10 @@ describe('CampaignService', () => {
         },
         {
           provide: getModelToken(InfluencerProfileScore),
+          useValue: mockModel(),
+        },
+        {
+          provide: getModelToken(Niche),
           useValue: mockModel(),
         },
         {
@@ -196,6 +208,14 @@ describe('CampaignService', () => {
         {
           provide: getModelToken(InfluencerReferralUsage),
           useValue: mockModel(),
+        },
+        {
+          provide: ChatService,
+          useValue: { createConversation: jest.fn(), sendMessage: jest.fn() },
+        },
+        {
+          provide: ChatGateway,
+          useValue: { notifyNewMessage: jest.fn() },
         },
       ],
     }).compile();

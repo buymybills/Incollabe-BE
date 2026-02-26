@@ -17,6 +17,7 @@ export enum ApplicationStatus {
   SELECTED = 'selected',
   REJECTED = 'rejected',
   WITHDRAWN = 'withdrawn',
+  COMPLETED = 'completed',
 }
 
 @Table({

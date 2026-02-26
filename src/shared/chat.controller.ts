@@ -36,6 +36,7 @@ import {
   GetMessagesDto,
   MarkAsReadDto,
   MarkAsReadBodyDto,
+  SubmitReviewDto,
 } from './dto/chat.dto';
 
 @ApiTags('Chat')
@@ -116,11 +117,8 @@ export class ChatController {
       req.user.userType,
       dto,
     );
-    // Return flattened structure - interceptor will wrap it
-    return {
-      conversations: result.conversations,
-      pagination: result.pagination,
-    };
+    // Return the result as-is - service handles different structures for personal vs campaign
+    return result;
   }
 
   @Get('chat/conversations/:id/messages')
@@ -519,6 +517,88 @@ export class ChatController {
       uploadedBy: req.user.userType,
       uploadedById: req.user.id,
     };
+  }
+
+  // ================================
+  // Campaign Chat Endpoints
+  // ================================
+
+  @Post('chat/campaign-conversations/:id/close')
+  @ApiOperation({
+    summary: 'Close campaign chat with an influencer (brand only)',
+    description: 'Brand closes the campaign chat with a specific influencer. Chat is locked for both parties. Application status is set to COMPLETED.',
+  })
+  @ApiParam({ name: 'id', description: 'Conversation ID' })
+  @ApiResponse({ status: 200, description: 'Campaign chat closed successfully' })
+  @ApiResponse({ status: 403, description: 'Only the brand can close a campaign chat' })
+  async closeCampaignConversation(
+    @Req() req: RequestWithUser,
+    @Param('id', ParseIntPipe) conversationId: number,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new BadRequestException('Only brands can close campaign conversations');
+    }
+    await this.chatService.closeCampaignConversation(conversationId, req.user.id);
+
+    // Notify both parties via WebSocket
+    this.chatGateway.emitCampaignConversationClosed(conversationId, req.user.id);
+
+    return { message: 'Campaign chat closed successfully' };
+  }
+
+  @Post('chat/campaigns/:campaignId/finish')
+  @ApiOperation({
+    summary: 'Finish campaign — close all influencer chats (brand only)',
+    description: 'Brand bulk-closes all open campaign conversations for a campaign. All linked applications are set to COMPLETED.',
+  })
+  @ApiParam({ name: 'campaignId', description: 'Campaign ID' })
+  @ApiResponse({ status: 200, description: 'Campaign finished successfully' })
+  async finishCampaign(
+    @Req() req: RequestWithUser,
+    @Param('campaignId', ParseIntPipe) campaignId: number,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new BadRequestException('Only brands can finish campaigns');
+    }
+    const result = await this.chatService.finishCampaign(campaignId, req.user.id);
+    return result;
+  }
+
+  @Post('chat/campaign-conversations/:id/review')
+  @ApiOperation({
+    summary: 'Submit review after campaign chat is closed',
+    description: 'Both brand and influencer can submit one review each after the brand has closed the chat.',
+  })
+  @ApiParam({ name: 'id', description: 'Conversation ID' })
+  @ApiResponse({ status: 201, description: 'Review submitted successfully' })
+  async submitCampaignReview(
+    @Req() req: RequestWithUser,
+    @Param('id', ParseIntPipe) conversationId: number,
+    @Body() dto: SubmitReviewDto,
+  ) {
+    const review = await this.chatService.submitCampaignReview(
+      conversationId,
+      req.user.userType,
+      req.user.id,
+      dto,
+    );
+    return review;
+  }
+
+  @Get('chat/campaign-conversations/:id/review')
+  @ApiOperation({ summary: 'Get review status for a campaign conversation' })
+  @ApiParam({ name: 'id', description: 'Conversation ID' })
+  @ApiResponse({ status: 200, description: 'Review status retrieved' })
+  async getCampaignReviewStatus(
+    @Req() req: RequestWithUser,
+    @Param('id', ParseIntPipe) conversationId: number,
+  ) {
+    const result = await this.chatService.getCampaignReviewStatus(
+      conversationId,
+      req.user.id,
+      req.user.userType,
+    );
+    return result;
   }
 
   // ================================

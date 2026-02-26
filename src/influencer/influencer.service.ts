@@ -1375,6 +1375,43 @@ export class InfluencerService {
       });
     }
 
+    // Influencer type filter (based on follower count)
+    // Determine influencer's tier based on Instagram follower count
+    const followerCount = influencer.instagramFollowersCount || 0;
+    let influencerType: string | null = null;
+
+    if (followerCount < 1000) {
+      influencerType = 'below_1k';
+    } else if (followerCount >= 1000 && followerCount < 10000) {
+      influencerType = 'nano_1k_10k';
+    } else if (followerCount >= 10000 && followerCount < 100000) {
+      influencerType = 'micro_10k_100k';
+    } else if (followerCount >= 100000 && followerCount < 500000) {
+      influencerType = 'mid_tier_100k_500k';
+    } else if (followerCount >= 500000 && followerCount < 1000000) {
+      influencerType = 'macro_500k_1m';
+    } else if (followerCount >= 1000000) {
+      influencerType = 'mega_celebrity_1m_plus';
+    }
+
+    // Add influencer type filter (applies to non-invited campaigns only via OR with invited check)
+    if (influencerType) {
+      whereCondition[Op.and].push({
+        [Op.or]: [
+          { id: { [Op.in]: invitedCampaignIds.length > 0 ? invitedCampaignIds : [-1] } },
+          {
+            [Op.or]: [
+              // Campaign has no influencer type restrictions (null or empty array)
+              { influencerTypes: null },
+              literal(
+                `("Campaign"."influencer_types" IS NULL OR "Campaign"."influencer_types"::jsonb = '[]'::jsonb OR "Campaign"."influencer_types"::jsonb @> '["${influencerType}"]'::jsonb)`,
+              ),
+            ],
+          },
+        ],
+      });
+    }
+
     // Apply pagination at database level
     const { count, rows: campaigns } = await this.campaignModel.findAndCountAll(
       {
@@ -1395,6 +1432,7 @@ export class InfluencerService {
           'genderPreferences',
           'isOpenToAllGenders',
           'nicheIds',
+          'influencerTypes',
           'customInfluencerRequirements',
           'performanceExpectations',
           'brandSupport',
@@ -1833,6 +1871,7 @@ export class InfluencerService {
         'genderPreferences',
         'isOpenToAllGenders',
         'nicheIds',
+        'influencerTypes',
         'customInfluencerRequirements',
         'performanceExpectations',
         'brandSupport',

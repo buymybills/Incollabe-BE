@@ -65,37 +65,41 @@ export class BrandProfileCompletionDto {
   companyType: string;
 
   @ApiProperty({
-    description: 'Point of contact name',
+    description: 'Point of contact name (optional)',
     example: 'John Smith',
+    required: false,
   })
-  @IsString()
-  @IsNotEmpty()
-  pocName: string;
+  @Allow()
+  @IsOptional()
+  pocName?: string;
 
   @ApiProperty({
-    description: 'Point of contact designation',
+    description: 'Point of contact designation (optional)',
     example: 'Marketing Manager',
+    required: false,
   })
-  @IsString()
-  @IsNotEmpty()
-  pocDesignation: string;
+  @Allow()
+  @IsOptional()
+  pocDesignation?: string;
 
   @ApiProperty({
-    description: 'Point of contact email address',
+    description: 'Point of contact email address (optional)',
     example: 'john.smith@examplebrand.com',
     format: 'email',
+    required: false,
   })
-  @IsString()
-  @IsNotEmpty()
-  pocEmailId: string;
+  @Allow()
+  @IsOptional()
+  pocEmailId?: string;
 
   @ApiProperty({
-    description: 'Point of contact phone number',
+    description: 'Point of contact phone number (optional)',
     example: '+919876543210',
+    required: false,
   })
-  @IsString()
-  @IsNotEmpty()
-  pocContactNumber: string;
+  @Allow()
+  @IsOptional()
+  pocContactNumber?: string;
 
   @ApiProperty({
     description: 'Brand bio or description (optional)',

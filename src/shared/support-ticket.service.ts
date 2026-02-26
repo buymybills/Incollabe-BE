@@ -26,6 +26,9 @@ import { Admin } from '../admin/models/admin.model';
 import { Op, CreationAttributes } from 'sequelize';
 import { ReportedUserDto } from './types/support-ticket.types';
 import { EncryptionService } from './services/encryption.service';
+import { NotificationService } from './notification.service';
+import { DeviceTokenService } from './device-token.service';
+import { UserType as DeviceUserType } from './models/device-token.model';
 
 @Injectable()
 export class SupportTicketService {
@@ -39,6 +42,8 @@ export class SupportTicketService {
     @InjectModel(Brand)
     private brandModel: typeof Brand,
     private encryptionService: EncryptionService,
+    private notificationService: NotificationService,
+    private deviceTokenService: DeviceTokenService,
   ) {}
 
   /**
@@ -555,11 +560,75 @@ export class SupportTicketService {
 
     const reply = await this.supportTicketReplyModel.create(replyData);
 
+    // Send push notification when admin replies to user's ticket
+    if (userType === 'admin') {
+      this.sendAdminReplyNotification(ticket, replyDto.message).catch((error) => {
+        console.error('Failed to send admin reply notification:', error);
+      });
+    }
+
     return {
       message: 'Reply added successfully',
       replyId: reply.id,
       createdAt: reply.createdAt,
     };
+  }
+
+  /**
+   * Send push notification when admin replies to a support ticket
+   */
+  private async sendAdminReplyNotification(
+    ticket: SupportTicket,
+    replyMessage: string,
+  ) {
+    try {
+      // Determine user type and ID
+      const userType = ticket.userType === UserType.INFLUENCER
+        ? DeviceUserType.INFLUENCER
+        : DeviceUserType.BRAND;
+      const userId = ticket.userType === UserType.INFLUENCER
+        ? ticket.influencerId
+        : ticket.brandId;
+
+      // Get all device tokens for the user
+      const deviceTokens = await this.deviceTokenService.getAllUserTokens(
+        userId,
+        userType,
+      );
+
+      if (deviceTokens.length === 0) {
+        console.log(`No device tokens found for ${userType} ${userId}`);
+        return;
+      }
+
+      // Truncate message if too long
+      const truncatedMessage = replyMessage.length > 100
+        ? replyMessage.substring(0, 100) + '...'
+        : replyMessage;
+
+      // Send push notification
+      await this.notificationService.sendCustomNotification(
+        deviceTokens,
+        'Support Team Replied',
+        `Re: ${ticket.subject}\n${truncatedMessage}`,
+        {
+          type: 'support_ticket_reply',
+          ticketId: ticket.id.toString(),
+          ticketSubject: ticket.subject,
+          action: 'view_ticket',
+        },
+        {
+          priority: 'high',
+          androidChannelId: 'support_updates',
+          sound: 'default',
+        },
+      );
+
+      console.log(`✅ Push notification sent to ${userType} ${userId} for ticket ${ticket.id}`);
+    } catch (error) {
+      console.error('Error sending admin reply notification:', error);
+      throw error;
+    }
   }
 
   /**

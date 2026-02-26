@@ -6,6 +6,8 @@ import {
   IsOptional,
   IsEnum,
   MaxLength,
+  Min,
+  Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { MessageType } from '../models/message.model';
@@ -105,6 +107,30 @@ export class GetConversationsDto {
   @IsString()
   @IsOptional()
   search?: string;
+
+  @ApiProperty({
+    description: 'Filter by conversation type',
+    enum: ['personal', 'campaign'],
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  type?: 'personal' | 'campaign';
+}
+
+export class SubmitReviewDto {
+  @ApiProperty({ description: 'Rating from 1 to 5', minimum: 1, maximum: 5, example: 5 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  rating: number;
+
+  @ApiProperty({ description: 'Optional review text', required: false, example: 'Great collaboration!' })
+  @IsString()
+  @IsOptional()
+  @MaxLength(1000)
+  reviewText?: string;
 }
 
 export class GetMessagesDto {

@@ -72,6 +72,7 @@ import { DeviceTokenService } from './device-token.service';
 import { AppVersion } from './models/app-version.model';
 import { AppVersionService } from './services/app-version.service';
 import { AIScoringService } from './services/ai-scoring.service';
+import { CampaignReview } from './models/campaign-review.model';
 
 @Module({
   imports: [
@@ -106,6 +107,7 @@ import { AIScoringService } from './services/ai-scoring.service';
       CampaignInvitation,
       DeviceToken,
       AppVersion,
+      CampaignReview,
     ]),
   ],
   controllers: [
@@ -169,6 +171,7 @@ import { AIScoringService } from './services/ai-scoring.service';
     EncryptionService,
     SupportTicketService,
     ChatService,
+    ChatGateway,
     InstagramSyncGateway,
     IsValidUsernameConstraint,
     RazorpayService,
