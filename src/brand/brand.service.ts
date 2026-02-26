@@ -524,10 +524,10 @@ export class BrandService {
       'companyTypeId',
       'brandBio',
       'profileHeadline',
-      'websiteUrl',
-      'foundedYear',
-      // 'headquarterCountryId',
-      // 'headquarterCityId',
+      // 'websiteUrl', // Optional - not required for verification
+      // 'foundedYear', // Optional - not required for verification
+      // 'headquarterCountryId', // Optional - not required for verification
+      // 'headquarterCityId', // Optional - not required for verification
       'activeRegions',
       // POC fields are optional - not required for verification
       // 'pocName',
@@ -669,8 +669,8 @@ export class BrandService {
       'companyTypeId',
       'brandBio',
       'profileHeadline',
-      'websiteUrl',
-      'foundedYear',
+      // 'websiteUrl', // Optional - not required for verification
+      // 'foundedYear', // Optional - not required for verification
       // POC fields are optional - not required for verification
       // 'pocName',
       // 'pocDesignation',
