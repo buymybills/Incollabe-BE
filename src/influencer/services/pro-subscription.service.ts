@@ -885,8 +885,9 @@ export class ProSubscriptionService {
 
   /**
    * Generate invoice PDF and upload to S3
+   * Public method so admin services can also use it
    */
-  private async generateInvoicePDF(invoiceId: number) {
+  async generateInvoicePDF(invoiceId: number) {
     const invoice = await this.proInvoiceModel.findByPk(invoiceId, {
       include: [
         {
@@ -1483,13 +1484,23 @@ export class ProSubscriptionService {
 
         console.log(`📋 Recurring payment (payment ${paidCount}), creating invoice...`);
 
-        // Build query conditions dynamically
+        // Get NEW billing period from webhook payload (not from database subscription which has old dates)
+        const newPeriodStart = subscriptionEntity.current_start
+          ? new Date(subscriptionEntity.current_start * 1000)
+          : subscription.currentPeriodStart;
+        const newPeriodEnd = subscriptionEntity.current_end
+          ? new Date(subscriptionEntity.current_end * 1000)
+          : subscription.currentPeriodEnd;
+
+        console.log(`🗓️  Checking for invoice with NEW period: ${newPeriodStart.toISOString()} to ${newPeriodEnd.toISOString()}`);
+
+        // Build query conditions dynamically - use NEW period dates from webhook, not old database dates
         const orConditions: any[] = [
           {
             subscriptionId: subscription.id,
             paymentStatus: 'paid',
-            billingPeriodStart: subscription.currentPeriodStart,
-            billingPeriodEnd: subscription.currentPeriodEnd,
+            billingPeriodStart: newPeriodStart,  // Use webhook dates
+            billingPeriodEnd: newPeriodEnd,      // Use webhook dates
           },
         ];
 
@@ -1558,8 +1569,8 @@ export class ProSubscriptionService {
             sgst,
             igst,
             totalAmount: totalAmount,
-            billingPeriodStart: subscription.currentPeriodStart,
-            billingPeriodEnd: subscription.currentPeriodEnd,
+            billingPeriodStart: newPeriodStart,  // Use webhook dates
+            billingPeriodEnd: newPeriodEnd,      // Use webhook dates
             paymentStatus: 'paid',
             paymentMethod: 'razorpay',
             razorpayPaymentId: chargedPaymentId, // Use payment ID from payload
@@ -1577,13 +1588,10 @@ export class ProSubscriptionService {
           }
         }
 
-        // Update subscription period
-        const newPeriodStart = createDatabaseDate();
-        const newPeriodEnd = addDaysForDatabase(newPeriodStart, this.SUBSCRIPTION_DURATION_DAYS);
-
+        // Update subscription period - use dates from webhook payload (already extracted above)
         await subscription.update({
-          currentPeriodStart: newPeriodStart,
-          currentPeriodEnd: newPeriodEnd,
+          currentPeriodStart: newPeriodStart,  // Already extracted from webhook
+          currentPeriodEnd: newPeriodEnd,      // Already extracted from webhook
           nextBillingDate: newPeriodEnd,
           lastAutoChargeAttempt: createDatabaseDate(),
           autoChargeFailures: 0, // Reset failures on success
@@ -1597,7 +1605,7 @@ export class ProSubscriptionService {
 
         const updateData: any = {
           isPro: true,
-          proExpiresAt: newPeriodEnd,
+          proExpiresAt: newPeriodEnd,  // Use webhook date (already extracted from subscriptionEntity.current_end)
         };
 
         // Set activation timestamp only on first payment
@@ -1609,6 +1617,8 @@ export class ProSubscriptionService {
           updateData,
           { where: { id: subscription.influencerId } },
         );
+
+        console.log(`✅ Subscription ${subscription.id} updated with new period: ${newPeriodStart.toISOString()} to ${newPeriodEnd.toISOString()}`);
 
         break;
 

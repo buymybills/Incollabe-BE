@@ -687,6 +687,51 @@ export class SupportTicketService {
     };
   }
 
+  /**
+   * Mark all admin replies as read when user opens the ticket
+   * Only marks admin replies as read, not user replies
+   */
+  async markAdminRepliesAsRead(
+    ticketId: number,
+    userId: number,
+    userType: 'influencer' | 'brand',
+  ) {
+    const ticket = await this.supportTicketModel.findByPk(ticketId);
+
+    if (!ticket) {
+      throw new NotFoundException('Support ticket not found');
+    }
+
+    // Validate that user owns this ticket
+    if (userType === 'influencer' && ticket.influencerId !== userId) {
+      throw new ForbiddenException(
+        'You can only mark replies on your own tickets as read',
+      );
+    }
+    if (userType === 'brand' && ticket.brandId !== userId) {
+      throw new ForbiddenException(
+        'You can only mark replies on your own tickets as read',
+      );
+    }
+
+    // Mark all unread admin replies as read
+    const [updatedCount] = await this.supportTicketReplyModel.update(
+      { isReadByUser: true },
+      {
+        where: {
+          ticketId,
+          authorType: ReplyAuthorType.ADMIN,
+          isReadByUser: false,
+        },
+      },
+    );
+
+    return {
+      message: 'Admin replies marked as read',
+      markedCount: updatedCount,
+    };
+  }
+
   // Helper methods
   private async validateUser(
     userId: number,
@@ -787,6 +832,7 @@ export class SupportTicketService {
       message: reply.message,
       imageUrls: reply.imageUrls || [],
       author,
+      isReadByUser: reply.isReadByUser,
       createdAt: reply.createdAt,
     };
   }

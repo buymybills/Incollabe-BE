@@ -7,6 +7,7 @@ import { Influencer } from '../../auth/model/influencer.model';
 import { City } from '../../shared/models/city.model';
 import { SubscriptionStatus, PaymentMethod } from '../../influencer/models/payment-enums';
 import { toIST, createDatabaseDate } from '../../shared/utils/date.utils';
+import { ProSubscriptionService } from '../../influencer/services/pro-subscription.service';
 import {
   GetMaxxSubscriptionsDto,
   MaxxSubscriptionStatisticsDto,
@@ -20,6 +21,7 @@ import {
   ResumeSubscriptionDto,
   AdminCancelSubscriptionDto,
   SubscriptionActionResponseDto,
+  FixMissingInvoiceResponseDto,
 } from '../dto/maxx-subscription.dto';
 
 @Injectable()
@@ -33,6 +35,7 @@ export class MaxxSubscriptionAdminService {
     private readonly influencerModel: typeof Influencer,
     @InjectModel(City)
     private readonly cityModel: typeof City,
+    private readonly proSubscriptionService: ProSubscriptionService,
   ) {}
 
   /**
@@ -794,6 +797,216 @@ export class MaxxSubscriptionAdminService {
       success: true,
       message: `Cleaned up ${cancelledCount} stale pending subscription(s)`,
       cancelledCount,
+    };
+  }
+
+  /**
+   * Fix missing invoices and subscription status for a given subscription
+   * This method:
+   * 1. Identifies missing invoices by checking gaps in billing periods
+   * 2. Creates missing invoice records with proper billing periods
+   * 3. Generates PDF invoices and uploads to S3
+   * 4. Updates subscription status to 'active' if period is still valid
+   */
+  async fixMissingInvoice(subscriptionId: number): Promise<FixMissingInvoiceResponseDto> {
+    // Fetch subscription with all related data
+    const subscription = await this.proSubscriptionModel.findByPk(subscriptionId, {
+      include: [
+        {
+          model: Influencer,
+          as: 'influencer',
+          include: [
+            {
+              model: this.cityModel,
+              as: 'city',
+            },
+          ],
+        },
+        {
+          model: ProInvoice,
+          as: 'invoices',
+          where: { paymentStatus: InvoiceStatus.PAID },
+          required: false,
+          order: [['billingPeriodEnd', 'DESC']],
+        },
+      ],
+    });
+
+    if (!subscription) {
+      throw new NotFoundException(`Subscription with ID ${subscriptionId} not found`);
+    }
+
+    const influencer = subscription.influencer;
+    const previousStatus = subscription.status;
+    const createdInvoices: Array<{
+      invoiceId: number;
+      invoiceNumber: string;
+      amount: number;
+      billingPeriod: string;
+      pdfUrl: string | null;
+    }> = [];
+
+    // Get existing paid invoices, sorted by billing period
+    const existingInvoices = (subscription.invoices || [])
+      .sort((a, b) => new Date(a.billingPeriodEnd).getTime() - new Date(b.billingPeriodEnd).getTime());
+
+    // Find gaps in billing periods
+    const missingPeriods: Array<{ start: Date; end: Date }> = [];
+
+    if (existingInvoices.length === 0) {
+      // No invoices exist - shouldn't happen, but handle it
+      throw new BadRequestException('No existing invoices found for this subscription');
+    }
+
+    // Check if there's a gap between the last invoice and current period end
+    const lastInvoice = existingInvoices[existingInvoices.length - 1];
+    const lastInvoiceEnd = new Date(lastInvoice.billingPeriodEnd);
+    const currentPeriodEnd = new Date(subscription.currentPeriodEnd);
+
+    // If subscription extends beyond last invoice, we have missing period(s)
+    if (currentPeriodEnd > lastInvoiceEnd) {
+      // Calculate missing period - from last invoice end to current period end
+      const periodStart = new Date(lastInvoiceEnd);
+      periodStart.setSeconds(periodStart.getSeconds() + 1); // Start 1 second after last invoice ends
+
+      // For simplicity, create one invoice for the missing period
+      // In reality, this should match the subscription's billing cycle
+      missingPeriods.push({
+        start: subscription.currentPeriodStart ? new Date(subscription.currentPeriodStart) : periodStart,
+        end: currentPeriodEnd,
+      });
+    }
+
+    if (missingPeriods.length === 0) {
+      throw new BadRequestException('No missing invoices detected for this subscription');
+    }
+
+    // Create missing invoices
+    for (const period of missingPeriods) {
+      // Calculate taxes based on influencer's city
+      const cityName = influencer.city?.name?.toLowerCase() || '';
+      const isDelhi = cityName === 'delhi' || cityName === 'new delhi';
+
+      const baseAmount = 16864; // Rs 168.64 in paise
+      const taxAmount = 3035;   // Rs 30.35 in paise (18% GST)
+      const totalAmount = 19900; // Rs 199.00 in paise
+
+      let cgst = 0;
+      let sgst = 0;
+      let igst = 0;
+
+      if (isDelhi) {
+        cgst = 1518;  // Rs 15.18 (9% CGST)
+        sgst = 1517;  // Rs 15.17 (9% SGST)
+        igst = 0;
+      } else {
+        cgst = 0;
+        sgst = 0;
+        igst = 3035;  // Rs 30.35 (18% IGST)
+      }
+
+      // Generate next invoice number
+      const currentYear = new Date().getFullYear();
+      const currentMonth = String(new Date().getMonth() + 1).padStart(2, '0');
+      const currentPrefix = `MAXXINV-${currentYear}${currentMonth}-`;
+
+      const existingInvoiceNumbers = await this.proInvoiceModel.findAll({
+        where: {
+          influencerId: subscription.influencerId,
+          invoiceNumber: {
+            [Op.like]: `${currentPrefix}%`,
+          },
+        },
+        attributes: ['invoiceNumber'],
+      });
+
+      let nextNumber = 1;
+      for (const inv of existingInvoiceNumbers) {
+        const parts = inv.invoiceNumber.split('-');
+        const num = parseInt(parts[2], 10);
+        if (!isNaN(num)) {
+          nextNumber = Math.max(nextNumber, num + 1);
+        }
+      }
+
+      const invoiceNumber = `${currentPrefix}${String(nextNumber).padStart(2, '0')}`;
+
+      // Create invoice record
+      const newInvoice = await this.proInvoiceModel.create({
+        invoiceNumber,
+        subscriptionId: subscription.id,
+        influencerId: subscription.influencerId,
+        amount: baseAmount,
+        tax: taxAmount,
+        cgst,
+        sgst,
+        igst,
+        totalAmount,
+        billingPeriodStart: period.start,
+        billingPeriodEnd: period.end,
+        paymentStatus: InvoiceStatus.PAID,
+        paymentMethod: PaymentMethod.RAZORPAY,
+        razorpayPaymentId: subscription.razorpaySubscriptionId || `admin_fix_${Date.now()}`,
+        razorpayOrderId: null,
+        paidAt: createDatabaseDate(),
+        createdAt: createDatabaseDate(),
+        updatedAt: createDatabaseDate(),
+      });
+
+      console.log(`✅ Created missing invoice ${invoiceNumber} for subscription ${subscriptionId}`);
+
+      // Generate PDF and upload to S3
+      let pdfUrl: string | null = null;
+      try {
+        await this.proSubscriptionService.generateInvoicePDF(newInvoice.id);
+
+        // Fetch updated invoice to get PDF URL
+        const updatedInvoice = await this.proInvoiceModel.findByPk(newInvoice.id);
+        pdfUrl = updatedInvoice?.invoiceUrl || null;
+
+        console.log(`📄 Generated PDF for invoice ${invoiceNumber}`);
+      } catch (pdfError) {
+        console.error(`Failed to generate PDF for invoice ${invoiceNumber}:`, pdfError);
+      }
+
+      // Add to created invoices list
+      createdInvoices.push({
+        invoiceId: newInvoice.id,
+        invoiceNumber: newInvoice.invoiceNumber,
+        amount: totalAmount / 100,
+        billingPeriod: `${period.start.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} - ${period.end.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`,
+        pdfUrl,
+      });
+    }
+
+    // Fix subscription status if needed
+    let statusFixed = false;
+    const now = new Date();
+    if (subscription.currentPeriodEnd > now && subscription.status !== SubscriptionStatus.ACTIVE) {
+      await subscription.update({
+        status: SubscriptionStatus.ACTIVE,
+        updatedAt: createDatabaseDate(),
+      });
+      statusFixed = true;
+      console.log(`✅ Updated subscription ${subscriptionId} status to 'active'`);
+    }
+
+    const currentStatus = statusFixed ? SubscriptionStatus.ACTIVE : subscription.status;
+
+    return {
+      success: true,
+      message: `Successfully fixed subscription ${subscriptionId}: Created ${createdInvoices.length} missing invoice(s)${statusFixed ? ', updated subscription status to active' : ''}`,
+      details: {
+        subscriptionId: subscription.id,
+        influencerId: subscription.influencerId,
+        influencerName: influencer.name,
+        previousStatus,
+        currentStatus,
+        createdInvoices,
+        subscriptionUpdated: true,
+        statusFixed,
+      },
+      timestamp: new Date(),
     };
   }
 

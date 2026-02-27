@@ -542,3 +542,62 @@ export class SubscriptionActionResponseDto {
   })
   timestamp: Date | null;
 }
+
+// ============================================
+// FIX MISSING INVOICE
+// ============================================
+
+export class FixMissingInvoiceResponseDto {
+  @ApiProperty({ example: true, description: 'Whether the fix was successful' })
+  success: boolean;
+
+  @ApiProperty({
+    example: 'Successfully fixed subscription 72: Created 1 missing invoice, updated subscription status to active',
+    description: 'Summary message'
+  })
+  message: string;
+
+  @ApiProperty({
+    description: 'Details of what was fixed',
+    example: {
+      subscriptionId: 72,
+      influencerId: 7051,
+      influencerName: 'Nidhi Rao',
+      previousStatus: 'expired',
+      currentStatus: 'active',
+      createdInvoices: [
+        {
+          invoiceId: 1234,
+          invoiceNumber: 'MAXXINV-202602-49',
+          amount: 199.00,
+          billingPeriod: 'Feb 26, 2026 - Mar 26, 2026',
+          pdfUrl: 'https://s3.amazonaws.com/...',
+        }
+      ],
+      subscriptionUpdated: true,
+      statusFixed: true,
+    }
+  })
+  details: {
+    subscriptionId: number;
+    influencerId: number;
+    influencerName: string;
+    previousStatus: string;
+    currentStatus: string;
+    createdInvoices: Array<{
+      invoiceId: number;
+      invoiceNumber: string;
+      amount: number;
+      billingPeriod: string;
+      pdfUrl: string | null;
+    }>;
+    subscriptionUpdated: boolean;
+    statusFixed: boolean;
+  };
+
+  @ApiProperty({
+    example: '2026-02-27T10:30:00.000Z',
+    description: 'Timestamp of action',
+  })
+  timestamp: Date;
+}
