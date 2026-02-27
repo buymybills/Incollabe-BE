@@ -31,8 +31,10 @@ export class CreateConversationDto {
 export class SendMessageDto {
   @ApiProperty({
     description:
-      'Conversation ID (either conversationId OR otherPartyId+otherPartyType required)',
+      'Conversation ID - REQUIRED for CAMPAIGN chats. Optional for personal chats (can use otherPartyId+otherPartyType instead). ' +
+      'Get campaign conversation IDs from GET /api/chat/conversations?type=campaign',
     required: false,
+    example: 129,
   })
   @Type(() => Number)
   @IsInt()
@@ -41,8 +43,10 @@ export class SendMessageDto {
 
   @ApiProperty({
     description:
-      'ID of the other party (required if conversationId not provided)',
+      'ID of the other party - ONLY for PERSONAL conversations. Backend will auto-create/find personal conversation. ' +
+      'DO NOT use for campaign chats! Campaign chats must use conversationId.',
     required: false,
+    example: 92,
   })
   @Type(() => Number)
   @IsInt()
@@ -51,9 +55,11 @@ export class SendMessageDto {
 
   @ApiProperty({
     description:
-      'Type of other party (required if conversationId not provided)',
+      'Type of other party - ONLY for PERSONAL conversations. Required when using otherPartyId. ' +
+      'DO NOT use for campaign chats!',
     enum: ['influencer', 'brand'],
     required: false,
+    example: 'brand',
   })
   @IsString()
   @IsOptional()
