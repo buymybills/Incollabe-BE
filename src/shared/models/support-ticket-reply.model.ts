@@ -76,6 +76,14 @@ export class SupportTicketReply extends Model<SupportTicketReply> {
   })
   declare imageUrls: string[];
 
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'is_read_by_user',
+  })
+  declare isReadByUser: boolean;
+
   // Associations
   @BelongsTo(() => SupportTicket)
   declare ticket: SupportTicket;

@@ -106,8 +106,155 @@ export class ChatController {
   }
 
   @Get('chat/conversations')
-  @ApiOperation({ summary: 'Get all conversations for current user' })
-  @ApiResponse({ status: 200, description: 'Conversations retrieved' })
+  @ApiOperation({
+    summary: 'Get all conversations for current user',
+    description:
+      'Retrieve all conversations (personal or campaign) for the authenticated user.\n\n' +
+      '**Query Parameters:**\n' +
+      '- `type=personal` - Returns personal one-on-one conversations\n' +
+      '- `type=campaign` - Returns campaign conversations grouped by campaign\n' +
+      '- No type parameter - Defaults to personal conversations\n\n' +
+      '**Response includes:**\n' +
+      '- `unreadCounts.personal` - Total unread messages in ALL personal conversations\n' +
+      '- `unreadCounts.campaign` - Total unread messages in ALL campaign conversations\n' +
+      '- Individual conversation unread counts\n' +
+      '- Pagination information\n\n' +
+      '💡 **Both unread counts are always returned** regardless of which type you query, ' +
+      'so you can display badges for both tabs with a single API call!',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Conversations retrieved successfully',
+    schema: {
+      oneOf: [
+        {
+          // Personal conversations response
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                type: { type: 'string', example: 'personal' },
+                unreadCounts: {
+                  type: 'object',
+                  description: 'Unread message counts for BOTH personal and campaign conversations',
+                  properties: {
+                    personal: {
+                      type: 'number',
+                      example: 5,
+                      description: 'Total unread messages in all personal conversations',
+                    },
+                    campaign: {
+                      type: 'number',
+                      example: 8,
+                      description: 'Total unread messages in all campaign conversations',
+                    },
+                  },
+                },
+                conversations: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'number', example: 45 },
+                      otherParty: { type: 'object' },
+                      otherPartyType: { type: 'string', example: 'brand' },
+                      lastMessage: { type: 'string', example: 'Hello!' },
+                      lastMessageType: { type: 'string', example: 'text' },
+                      lastMessageAt: { type: 'string', example: '2026-02-27T10:00:00.000Z' },
+                      lastMessageSenderType: { type: 'string', example: 'brand' },
+                      unreadCount: { type: 'number', example: 2 },
+                      createdAt: { type: 'string' },
+                      updatedAt: { type: 'string' },
+                    },
+                  },
+                },
+                pagination: {
+                  type: 'object',
+                  properties: {
+                    page: { type: 'number', example: 1 },
+                    limit: { type: 'number', example: 20 },
+                    total: { type: 'number', example: 15 },
+                    totalPages: { type: 'number', example: 1 },
+                  },
+                },
+              },
+            },
+          },
+        },
+        {
+          // Campaign conversations response
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                type: { type: 'string', example: 'campaign' },
+                unreadCounts: {
+                  type: 'object',
+                  description: 'Unread message counts for BOTH personal and campaign conversations',
+                  properties: {
+                    personal: {
+                      type: 'number',
+                      example: 5,
+                      description: 'Total unread messages in all personal conversations',
+                    },
+                    campaign: {
+                      type: 'number',
+                      example: 8,
+                      description: 'Total unread messages in all campaign conversations',
+                    },
+                  },
+                },
+                campaigns: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      campaignId: { type: 'number', example: 123 },
+                      campaignName: { type: 'string', example: 'Summer Campaign 2026' },
+                      brandImage: { type: 'string', example: 'https://...' },
+                      totalSelectedInfluencers: { type: 'number', example: 5 },
+                      totalUnreadMessages: { type: 'number', example: 3 },
+                      isCampaignClosed: { type: 'boolean', example: false },
+                      conversations: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            id: { type: 'number', example: 129 },
+                            otherParty: { type: 'object' },
+                            otherPartyType: { type: 'string', example: 'brand' },
+                            lastMessage: { type: 'string' },
+                            unreadCount: { type: 'number', example: 1 },
+                            campaignId: { type: 'number', example: 123 },
+                            campaignApplicationId: { type: 'number', example: 456 },
+                            isCampaignClosed: { type: 'boolean', example: false },
+                            campaignClosedAt: { type: 'string', nullable: true },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+                pagination: {
+                  type: 'object',
+                  properties: {
+                    page: { type: 'number', example: 1 },
+                    limit: { type: 'number', example: 20 },
+                    total: { type: 'number', example: 10 },
+                    totalPages: { type: 'number', example: 1 },
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
+    },
+  })
   async getConversations(
     @Req() req: RequestWithUser,
     @Query() dto: GetConversationsDto,
@@ -153,49 +300,41 @@ export class ChatController {
       "3. Fetch recipient's public key: GET /api/e2ee/public-key/:userType/:userIdentifier\n" +
       "4. Encrypt AES key with recipient's RSA-2048 public key\n" +
       '5. Send encrypted message using this endpoint\n\n' +
-      '**Recommended Approach:**\n' +
-      'Use `otherPartyId` + `otherPartyType` (conversation auto-created by backend):\n' +
-      '```json\n' +
-      '{\n' +
-      '  "otherPartyId": 32,\n' +
-      '  "otherPartyType": "brand",\n' +
-      '  "content": "{\\\"encryptedKey\\\":\\\"...\\\",\\\"iv\\\":\\\"...\\\",\\\"ciphertext\\\":\\\"...\\\",\\\"version\\\":\\\"v1\\\"}",\n' +
-      '  "messageType": "text"\n' +
-      '}\n' +
-      '```\n\n' +
+      '**Sending Messages:**\n' +
+      '- Option 1: Use `conversationId` if you already have it\n' +
+      '- Option 2: Use `otherPartyId` + `otherPartyType` and backend will auto-create/find conversation\n\n' +
       '**Content Format:**\n' +
       'The `content` field must be a JSON string with:\n' +
       "- `encryptedKey`: AES key encrypted with recipient's RSA public key (Base64)\n" +
       '- `iv`: AES-GCM initialization vector (Base64)\n' +
       '- `ciphertext`: AES-256-GCM encrypted message (Base64)\n' +
-      '- `version`: Protocol version (currently "v1")\n\n' +
-      '⚠️ **Note**: conversationId is optional - backend will auto-create/find conversation.',
+      '- `version`: Protocol version (currently "v1")',
   })
   @ApiBody({
     description:
       '🔒 E2EE Encrypted Message Data\n\n' +
-      '**Recommended**: Use otherPartyId + otherPartyType (backend auto-creates conversation)\n' +
-      '**Alternative**: Use conversationId if you already have it',
+      '**Option 1:** Use conversationId if you already have it\n' +
+      '**Option 2:** Use otherPartyId + otherPartyType and backend will auto-create/find conversation',
     schema: {
       type: 'object',
       properties: {
         conversationId: {
           type: 'number',
           description:
-            '(Optional) Conversation ID - not needed if using otherPartyId + otherPartyType',
-          example: 1,
+            '(Option 1) Conversation ID - use this if you already have the conversation ID',
+          example: 129,
         },
         otherPartyId: {
           type: 'number',
           description:
-            '(Recommended) Recipient user ID - backend will find/create conversation automatically',
+            '(Option 2) Recipient user ID - backend will find/create conversation automatically',
           example: 32,
         },
         otherPartyType: {
           type: 'string',
           enum: ['influencer', 'brand'],
           description:
-            '(Recommended) Recipient user type - required with otherPartyId',
+            '(Option 2) Recipient user type - required with otherPartyId',
           example: 'brand',
         },
         content: {
@@ -234,7 +373,7 @@ export class ChatController {
       oneOf: [
         {
           required: ['conversationId', 'content', 'messageType'],
-          description: 'Option 1: Send using conversation ID',
+          description: 'Option 1: Send using conversation ID (Works for both personal and campaign chats)',
         },
         {
           required: [
@@ -243,28 +382,28 @@ export class ChatController {
             'content',
             'messageType',
           ],
-          description: 'Option 2 (Recommended): Send using recipient details',
+          description: 'Option 2: Send using recipient details (ONLY for PERSONAL conversations - will NOT work for campaign chats)',
         },
       ],
     },
     examples: {
-      encryptedText: {
-        summary: '🔒 E2EE Text Message (Recommended)',
+      personalChatText: {
+        summary: '💬 Personal Chat - Text Message (otherPartyId method)',
         value: {
           otherPartyId: 32,
           otherPartyType: 'brand',
           content:
-            '{"encryptedKey":"QeGPkee/OBXSmQTHqSUl6acwC1be4HJvwqwdLuCfkfXoOIO6GJrvZTAgt7oxB1Z6c10aTxNqPxgiQ74buA39gHc5hIrkeGmSQ77COV5UISj9AuErAAkBgHtHg+kBmY6sZ+m2X4GvcHaF7ErGAarrPCF0BmyycWJbHkXW2ldmf8g4FCR2t+RdHICFb9C1jHtbb3kjuZvis3rVv2ewW84ECrnk0DpCp8r9D61wXdruQ3SRPODL/Y7oo6sx3O8zZsn/3YnK34u5lpuZoiH0XWGqAWfQoZGcE9FwMkXfX7OV2sLyymMOJ60akg8m7Ef7uM/KZe1loG1mR65NsgTuFmlu9g==","iv":"oeb3PbPUWVbxZu9g","ciphertext":"MzM7rZE6Zb9LR3Ja8RH/SuO3Ak/53TpYfDMZgyJtRJ4nyi155wCtTazdBBbOoFOuBAjgViD6qhgMB+CZCQsh7n8=","version":"v1"}',
+            '{"encryptedKeyForRecipient":"QeGPkee/OBXSmQTHqSUl6acwC1be4HJvwqwdLuCfkfXoOIO6GJrvZTAgt7oxB1Z6c10aTxNqPxgiQ74buA39gHc5hIrkeGmSQ77COV5UISj9AuErAAkBgHtHg+kBmY6sZ+m2X4GvcHaF7ErGAarrPCF0BmyycWJbHkXW2ldmf8g4FCR2t+RdHICFb9C1jHtbb3kjuZvis3rVv2ewW84ECrnk0DpCp8r9D61wXdruQ3SRPODL/Y7oo6sx3O8zZsn/3YnK34u5lpuZoiH0XWGqAWfQoZGcE9FwMkXfX7OV2sLyymMOJ60akg8m7Ef7uM/KZe1loG1mR65NsgTuFmlu9g==","encryptedKeyForSender":"B8H0sKPJMXxx2pTmjYaD2HD8vbSLbYLOgf4yQsFudUT0rrKeBQK9YSNfHNGILJ2/NQRQPQ...","iv":"oeb3PbPUWVbxZu9g","ciphertext":"MzM7rZE6Zb9LR3Ja8RH/SuO3Ak/53TpYfDMZgyJtRJ4nyi155wCtTazdBBbOoFOuBAjgViD6qhgMB+CZCQsh7n8=","version":"v1"}',
           messageType: 'text',
         },
       },
-      encryptedImage: {
-        summary: '🔒 E2EE Image Message with Attachment',
+      personalChatImage: {
+        summary: '💬 Personal Chat - Image Message',
         value: {
           otherPartyId: 32,
           otherPartyType: 'brand',
           content:
-            '{"encryptedKey":"BfGH2kff/PCYTnRUI...","iv":"pfC4QcQVWcYZv0Ah","ciphertext":"OzQ8sAF7Ac0MS4Kb9SI+TvP4Bl/64UqZgENAhzKuSK5ozj266xDuUb0eCCcPpGPvCBkhWjE7riHnC/Da...","version":"v1"}',
+            '{"encryptedKeyForRecipient":"BfGH2kff/PCYTnRUI...","encryptedKeyForSender":"tV+gb7CRYpC2IldY868q8VpaeFdj5c2P182QO...","iv":"pfC4QcQVWcYZv0Ah","ciphertext":"OzQ8sAF7Ac0MS4Kb9SI+TvP4Bl/64UqZgENAhzKuSK5ozj266xDuUb0eCCcPpGPvCBkhWjE7riHnC/Da...","version":"v1"}',
           messageType: 'image',
           attachmentUrl:
             'https://incollabstaging.s3.ap-south-1.amazonaws.com/chat/images/photo-12345.jpg',
@@ -272,12 +411,34 @@ export class ChatController {
           mediaType: 'image/jpeg',
         },
       },
-      encryptedWithConversationId: {
-        summary: '🔒 E2EE using Conversation ID',
+      campaignChatText: {
+        summary: '🎯 Campaign Chat - Text Message (conversationId method)',
         value: {
-          conversationId: 1,
+          conversationId: 129,
           content:
-            '{"encryptedKey":"QeGPkee/OBXSmQTHqSUl6acwC1be4HJvwqwdLuCfkfXo...","iv":"oeb3PbPUWVbxZu9g","ciphertext":"MzM7rZE6Zb9LR3Ja8RH/SuO3Ak/53TpYfDMZgyJtRJ4nyi155wCtTazdBBbOoFOuBAjgViD6qhgMB+CZCQsh7n8=","version":"v1"}',
+            '{"encryptedKeyForRecipient":"x3ENCEGv0iqVZYfG8WncIRGj3YsUQAORAUow4EK4bwkMm6fVv2xXYDt79OFZiKS9LuLhZSIi7qHmzbXh6JJ555zqLKAq65cMbIhfL9c+40q+3QLWdzr92j6RUxbEaQbNOxycPu4b3sH3vncaCE2olY9PPhkX3hzgQ+nDymQf616hsUyYHttjE5Z6Qgr+i236qE/nt72NVXIfW0PMROFDLTPQsmdySnectGzime6uPrdyefQd+ny7/UheeNcUaawgYWyhKuuTb1SHcWjBbmi0BLd+FdkSaci+dc7Trz5r/cc5MZMHzrMFYSHzki9NIxmA7wHYU4BS23AKnM85/5dj/w==","encryptedKeyForSender":"DZ7GiAbXProuv0tap0zXyuWr3RikndRNmfxZQBl3dhNcRDP...","iv":"veYIthG2b8jam79Q","ciphertext":"ulXhYtP7HA3sSKSygOUUsoVT2uKi","version":"v1"}',
+          messageType: 'text',
+        },
+      },
+      campaignChatImage: {
+        summary: '🎯 Campaign Chat - Image Message',
+        value: {
+          conversationId: 129,
+          content:
+            '{"encryptedKeyForRecipient":"OT6WTujyAl1AwFwQWAXZY/Q/uxHOd6aKoPTL53AB2JvYfsgD067rVzJGCmanGqR74nz4MU...","encryptedKeyForSender":"E382TZB+flwEy/qR+i/ng4OFR+FqkC9j0duCesVimRDTNqCASQgMZHc80mxF/dfW7TtIfrkmA...","iv":"Rc+DNQa603pA8OzY","ciphertext":"qSs9xT0nCM8/juydyrmm44m+0LLJ+luVUhfKb7nRlwkpgLl2dyzcK0ZL4oLYIK5ACeVFFNsutLvLSh4eRpzOl3/fk1O8r3i/0b1RLFEN17gRSyQGyHAZZ8FsK7Bxe4K1IZSST3sUnLQ0dfJ1okFI3w19PnA1z8Ax8FidykvOVPlZMAvFBk83fCNBm2n2X7HXlJegsj0ncCqRR31Q3GyFquJKSBmpIZf4P7EVMC+Dmv7DzI2+inFSaS21KK/xezhC6V/smMsHKlN+HGJCgK+iTxZR1+RRyhTwMQKCp9bQei3lcGxvbWbyDlVz36fId0D+ZSzsp7Dy7uZ4vCwMf/r+","version":"v1"}',
+          messageType: 'image',
+          attachmentUrl:
+            'https://incollabstaging.s3.ap-south-1.amazonaws.com/chat/images/campaign-deliverable.jpg',
+          attachmentName: 'deliverable-photo.jpg',
+          mediaType: 'image/jpeg',
+        },
+      },
+      personalChatWithConversationId: {
+        summary: '💬 Personal Chat - Using Conversation ID (alternative method)',
+        value: {
+          conversationId: 45,
+          content:
+            '{"encryptedKeyForRecipient":"QeGPkee/OBXSmQTHqSUl6acwC1be4HJvwqwdLuCfkfXo...","encryptedKeyForSender":"B8H0sKPJMXxx2pTmjYaD2HD8vbSLbYLOgf4yQsFudUT0...","iv":"oeb3PbPUWVbxZu9g","ciphertext":"MzM7rZE6Zb9LR3Ja8RH/SuO3Ak/53TpYfDMZgyJtRJ4nyi155wCtTazdBBbOoFOuBAjgViD6qhgMB+CZCQsh7n8=","version":"v1"}',
           messageType: 'text',
         },
       },
@@ -328,11 +489,16 @@ export class ChatController {
   @ApiResponse({
     status: 400,
     description:
-      'Bad request - Either conversationId OR (otherPartyId + otherPartyType) must be provided',
+      'Bad request - Either conversationId OR (otherPartyId + otherPartyType) must be provided. ' +
+      'Note: For campaign chats, you MUST use conversationId.',
   })
   @ApiResponse({
     status: 401,
     description: 'Unauthorized - JWT token required',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - This campaign chat has been closed (no new messages allowed)',
   })
   @ApiResponse({
     status: 404,

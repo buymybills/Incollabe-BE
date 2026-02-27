@@ -1205,6 +1205,45 @@ export class InfluencerController {
     );
   }
 
+  @Put('support-tickets/:id/mark-admin-replies-read')
+  @ApiOperation({
+    summary: 'Mark all admin replies as read',
+    description:
+      'Marks all unread admin replies in a support ticket as read when the influencer opens/views the ticket. Only the ticket creator can mark replies as read.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Support ticket ID',
+    type: 'number',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Admin replies marked as read successfully',
+    schema: {
+      example: {
+        message: 'Admin replies marked as read',
+        markedCount: 3,
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Ticket not found' })
+  @ApiResponse({
+    status: 403,
+    description: 'Cannot mark replies for this ticket - not the ticket owner',
+  })
+  async markAdminRepliesAsRead(
+    @Req() req: RequestWithUser,
+    @Param('id', ParseIntPipe) ticketId: number,
+  ) {
+    const userId = req.user.id;
+    return this.supportTicketService.markAdminRepliesAsRead(
+      ticketId,
+      userId,
+      'influencer',
+    );
+  }
+
   // Pro Subscription Endpoints
 
   // Test Razorpay connection

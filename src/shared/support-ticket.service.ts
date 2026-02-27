@@ -634,6 +634,7 @@ export class SupportTicketService {
   /**
    * Get all replies for a ticket
    * Users can only get replies for their own tickets, admins can get any
+   * Returns unread admin replies count for non-admin users
    */
   async getTicketReplies(
     ticketId: number,
@@ -682,8 +683,65 @@ export class SupportTicketService {
       order: [['createdAt', 'ASC']],
     });
 
+    // Count unread admin replies
+    // For users: "How many admin replies I haven't read"
+    // For admins: "How many of my replies the user hasn't seen"
+    const unreadAdminRepliesCount = await this.supportTicketReplyModel.count({
+      where: {
+        ticketId,
+        authorType: ReplyAuthorType.ADMIN,
+        isReadByUser: false,
+      },
+    });
+
     return {
       replies: replies.map((reply) => this.formatReplyResponse(reply)),
+      unreadAdminRepliesCount,
+    };
+  }
+
+  /**
+   * Mark all admin replies as read when user opens the ticket
+   * Only marks admin replies as read, not user replies
+   */
+  async markAdminRepliesAsRead(
+    ticketId: number,
+    userId: number,
+    userType: 'influencer' | 'brand',
+  ) {
+    const ticket = await this.supportTicketModel.findByPk(ticketId);
+
+    if (!ticket) {
+      throw new NotFoundException('Support ticket not found');
+    }
+
+    // Validate that user owns this ticket
+    if (userType === 'influencer' && ticket.influencerId !== userId) {
+      throw new ForbiddenException(
+        'You can only mark replies on your own tickets as read',
+      );
+    }
+    if (userType === 'brand' && ticket.brandId !== userId) {
+      throw new ForbiddenException(
+        'You can only mark replies on your own tickets as read',
+      );
+    }
+
+    // Mark all unread admin replies as read
+    const [updatedCount] = await this.supportTicketReplyModel.update(
+      { isReadByUser: true },
+      {
+        where: {
+          ticketId,
+          authorType: ReplyAuthorType.ADMIN,
+          isReadByUser: false,
+        },
+      },
+    );
+
+    return {
+      message: 'Admin replies marked as read',
+      markedCount: updatedCount,
     };
   }
 
@@ -787,6 +845,7 @@ export class SupportTicketService {
       message: reply.message,
       imageUrls: reply.imageUrls || [],
       author,
+      isReadByUser: reply.isReadByUser,
       createdAt: reply.createdAt,
     };
   }

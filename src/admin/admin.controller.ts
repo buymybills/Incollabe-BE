@@ -159,6 +159,7 @@ import {
   ResumeSubscriptionDto,
   AdminCancelSubscriptionDto,
   SubscriptionActionResponseDto,
+  FixMissingInvoiceResponseDto,
 } from './dto/maxx-subscription.dto';
 import {
   MaxSubscriptionBrandStatisticsDto,
@@ -2423,6 +2424,42 @@ export class AdminController {
       influencerId,
       cancelDto?.reason,
     );
+  }
+
+  @Post('maxx-subscription/subscriptions/:id/fix-missing-invoice')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: '[SUPER ADMIN ONLY] Fix missing invoices for a subscription',
+    description: 'Identifies and creates missing invoices for a subscription by detecting gaps in billing periods. Also generates PDF invoices, uploads to S3, and fixes subscription status if needed. Useful for fixing issues where webhooks failed to create invoices for recurring payments.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Subscription ID to fix',
+    example: 72,
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Missing invoices fixed successfully',
+    type: FixMissingInvoiceResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Subscription not found',
+  })
+  @ApiBadRequestResponse({
+    description: 'No missing invoices detected or invalid subscription state',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - Super Admin only',
+  })
+  async fixMissingInvoice(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return await this.maxxSubscriptionAdminService.fixMissingInvoice(id);
   }
 
   // ============================================

@@ -199,7 +199,7 @@ export class ChatService {
         ],
         isActive: true,
       },
-    });
+    } as any);
 
     // Create new conversation if doesn't exist
     if (!conversation) {
@@ -254,6 +254,78 @@ export class ChatService {
    * Get all conversations for a user
    * Supports type='personal' | 'campaign' filter
    */
+  /**
+   * Helper method to get unread counts for both personal and campaign conversations
+   */
+  private async getUnreadCounts(
+    userId: number,
+    userParticipantType: ParticipantType,
+  ): Promise<{ personalUnreadCount: number; campaignUnreadCount: number }> {
+    // Fetch ALL personal conversations (just for counting)
+    const personalConversations = await this.conversationModel.findAll({
+      where: {
+        [Op.or]: [
+          { participant1Type: userParticipantType, participant1Id: userId },
+          { participant2Type: userParticipantType, participant2Id: userId },
+        ],
+        isActive: true,
+        conversationType: 'personal',
+        lastMessageAt: { [Op.ne]: null } as any,
+      },
+      attributes: [
+        'id',
+        'unreadCountParticipant1',
+        'unreadCountParticipant2',
+        'participant1Type',
+        'participant1Id',
+      ],
+      raw: true,
+    });
+
+    // Calculate personal unread count
+    const personalUnreadCount = personalConversations.reduce((sum, conv: any) => {
+      const unread = this.getUserUnreadCountForConversation(
+        conv as any,
+        userId,
+        userParticipantType,
+      );
+      return sum + unread;
+    }, 0);
+
+    // Fetch ALL campaign conversations (just for counting)
+    // Include both active AND closed campaign conversations
+    const campaignConversations = await this.conversationModel.findAll({
+      where: {
+        [Op.or]: [
+          { participant1Type: userParticipantType, participant1Id: userId },
+          { participant2Type: userParticipantType, participant2Id: userId },
+        ],
+        // Don't filter by isActive - we want to count unread messages from closed campaigns too
+        conversationType: 'campaign',
+      },
+      attributes: [
+        'id',
+        'unreadCountParticipant1',
+        'unreadCountParticipant2',
+        'participant1Type',
+        'participant1Id',
+      ],
+      raw: true,
+    });
+
+    // Calculate campaign unread count
+    const campaignUnreadCount = campaignConversations.reduce((sum, conv: any) => {
+      const unread = this.getUserUnreadCountForConversation(
+        conv as any,
+        userId,
+        userParticipantType,
+      );
+      return sum + unread;
+    }, 0);
+
+    return { personalUnreadCount, campaignUnreadCount };
+  }
+
   async getConversations(
     userId: number,
     userType: 'influencer' | 'brand',
@@ -262,6 +334,12 @@ export class ChatService {
     const { page = 1, limit = 20, search, type } = dto;
     const offset = (page - 1) * limit;
     const userParticipantType = userType as ParticipantType;
+
+    // Get unread counts for BOTH types (always)
+    const { personalUnreadCount, campaignUnreadCount } = await this.getUnreadCounts(
+      userId,
+      userParticipantType,
+    );
 
     // Campaign conversations: show immediately, no lastMessageAt requirement
     // Personal conversations: only show after first message
@@ -275,7 +353,8 @@ export class ChatService {
             { participant2Type: userParticipantType, participant2Id: userId },
           ],
         },
-        { isActive: true },
+        // Only filter by isActive for personal chats; show ALL campaign conversations (including closed ones)
+        ...(!isCampaignQuery ? [{ isActive: true }] : []),
         // Filter by conversation type
         ...(type ? [{ conversationType: type }] : [{ conversationType: 'personal' }]),
         // Personal chats require at least one message; campaign chats appear immediately
@@ -379,30 +458,6 @@ export class ChatService {
         ],
       });
 
-      // Fetch selected influencer counts for each campaign
-      const selectedCounts = await this.campaignApplicationModel.findAll({
-        where: {
-          campaignId: { [Op.in]: campaignIds.length ? campaignIds : [0] },
-          status: ApplicationStatus.SELECTED,
-        },
-        attributes: [
-          'campaignId',
-          [
-            this.campaignApplicationModel.sequelize!.fn(
-              'COUNT',
-              this.campaignApplicationModel.sequelize!.col('id'),
-            ),
-            'count',
-          ],
-        ],
-        group: ['campaignId'],
-        raw: true,
-      });
-
-      const countMap = new Map(
-        selectedCounts.map((item: any) => [item.campaignId, parseInt(item.count, 10)]),
-      );
-
       const grouped: Record<number, any> = {};
       for (const conv of campaignConversations) {
         if (!conv) continue;
@@ -413,7 +468,7 @@ export class ChatService {
             campaignId: cId,
             campaignName: campaign?.name ?? null,
             brandImage: (campaign as any)?.brand?.profileImage ?? null,
-            totalSelectedInfluencers: countMap.get(cId) ?? 0,
+            totalSelectedInfluencers: 0, // Will be set to actual conversation count after loop
             totalUnreadMessages: 0,
             conversations: [],
           };
@@ -423,8 +478,25 @@ export class ChatService {
         grouped[cId].totalUnreadMessages += conv.unreadCount ?? 0;
       }
 
+      // Set totalSelectedInfluencers to the actual number of conversations
+      for (const cId in grouped) {
+        grouped[cId].totalSelectedInfluencers = grouped[cId].conversations.length;
+      }
+
+      // Determine if all conversations in each campaign are closed
+      for (const cId in grouped) {
+        const allClosed = grouped[cId].conversations.every(
+          (conv: any) => conv.isCampaignClosed === true
+        );
+        grouped[cId].isCampaignClosed = allClosed;
+      }
+
       return {
         type: 'campaign',
+        unreadCounts: {
+          personal: personalUnreadCount,
+          campaign: campaignUnreadCount,
+        },
         campaigns: Object.values(grouped),
         pagination: {
           page,
@@ -438,6 +510,11 @@ export class ChatService {
     }
 
     return {
+      type: 'personal',
+      unreadCounts: {
+        personal: personalUnreadCount,
+        campaign: campaignUnreadCount,
+      },
       conversations: filteredConversations,
       pagination: {
         page,
