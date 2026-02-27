@@ -423,6 +423,14 @@ export class ChatService {
         grouped[cId].totalUnreadMessages += conv.unreadCount ?? 0;
       }
 
+      // Determine if all conversations in each campaign are closed
+      for (const cId in grouped) {
+        const allClosed = grouped[cId].conversations.every(
+          (conv: any) => conv.isCampaignClosed === true
+        );
+        grouped[cId].isCampaignClosed = allClosed;
+      }
+
       return {
         type: 'campaign',
         campaigns: Object.values(grouped),
