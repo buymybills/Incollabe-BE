@@ -634,6 +634,7 @@ export class SupportTicketService {
   /**
    * Get all replies for a ticket
    * Users can only get replies for their own tickets, admins can get any
+   * Returns unread admin replies count for non-admin users
    */
   async getTicketReplies(
     ticketId: number,
@@ -682,8 +683,20 @@ export class SupportTicketService {
       order: [['createdAt', 'ASC']],
     });
 
+    // Count unread admin replies
+    // For users: "How many admin replies I haven't read"
+    // For admins: "How many of my replies the user hasn't seen"
+    const unreadAdminRepliesCount = await this.supportTicketReplyModel.count({
+      where: {
+        ticketId,
+        authorType: ReplyAuthorType.ADMIN,
+        isReadByUser: false,
+      },
+    });
+
     return {
       replies: replies.map((reply) => this.formatReplyResponse(reply)),
+      unreadAdminRepliesCount,
     };
   }
 
