@@ -3,6 +3,7 @@ import {
   Get,
   Put,
   Post,
+  Patch,
   Body,
   Param,
   Query,
@@ -34,6 +35,8 @@ import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto'
 import { CreateExperienceDto } from './dto/create-experience.dto';
 import { UpdateExperienceDto } from './dto/update-experience.dto';
 import { GetExperiencesDto } from './dto/get-experiences.dto';
+import { RespondInvitationDto } from './dto/respond-invitation.dto';
+import { InvitationStatus } from '../campaign/models/campaign-invitation.model';
 import {
   SendWhatsAppOTPDto,
   VerifyWhatsAppOTPDto,
@@ -660,6 +663,132 @@ export class InfluencerController {
     return this.influencerService.withdrawApplication(
       applicationId,
       influencerId,
+    );
+  }
+
+  @Get('campaigns/invitations')
+  @ApiOperation({
+    summary: 'Get my campaign invitations',
+    description:
+      'Retrieve all campaign invitations sent by brands. Filter by status (pending, accepted, declined, expired).',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: InvitationStatus,
+    description: 'Filter by invitation status',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Invitations retrieved successfully',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          invitations: [
+            {
+              id: 1,
+              status: 'pending',
+              message: 'We love your content! Would love to collaborate.',
+              expiresAt: '2026-03-07T10:00:00.000Z',
+              respondedAt: null,
+              responseMessage: null,
+              createdAt: '2026-02-28T10:00:00.000Z',
+              campaign: {
+                id: 225,
+                name: 'Summer Fashion Campaign',
+                description: 'Promote our new summer collection',
+                type: 'paid',
+                status: 'active',
+                isInviteOnly: true,
+                isOrganic: false,
+                brand: {
+                  id: 92,
+                  brandName: 'FashionBrand',
+                  profileImage: 'https://example.com/brand.jpg',
+                },
+              },
+            },
+          ],
+        },
+      },
+    },
+  })
+  async getMyInvitations(
+    @Req() req: RequestWithUser,
+    @Query('status') status?: InvitationStatus,
+  ) {
+    const influencerId = req.user.id;
+    return this.influencerService.getMyInvitations(influencerId, status);
+  }
+
+  @Patch('campaigns/invitations/:id/respond')
+  @ApiOperation({
+    summary: 'Accept or decline a campaign invitation',
+    description:
+      'Respond to a campaign invitation. When accepted, automatically creates a campaign application with SELECTED status and initiates campaign conversation.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Invitation ID',
+    example: 1,
+  })
+  @ApiBody({
+    type: RespondInvitationDto,
+    examples: {
+      accept: {
+        summary: 'Accept Invitation',
+        value: {
+          status: 'accepted',
+          responseMessage:
+            'Thank you for the opportunity! Excited to collaborate.',
+        },
+      },
+      decline: {
+        summary: 'Decline Invitation',
+        value: {
+          status: 'declined',
+          responseMessage:
+            'Thank you, but I have to decline at this time.',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Invitation response recorded successfully',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          message: 'Invitation accepted successfully',
+          invitation: {
+            id: 1,
+            status: 'accepted',
+            respondedAt: '2026-02-28T11:30:00.000Z',
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Invitation not found',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invitation already responded to or expired',
+  })
+  async respondToInvitation(
+    @Req() req: RequestWithUser,
+    @Param('id', ParseIntPipe) invitationId: number,
+    @Body() respondDto: RespondInvitationDto,
+  ) {
+    const influencerId = req.user.id;
+    return this.influencerService.respondToInvitation(
+      invitationId,
+      influencerId,
+      respondDto,
     );
   }
 

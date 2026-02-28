@@ -10,12 +10,14 @@ import { EmailService } from '../shared/email.service';
 import { WhatsAppService } from '../shared/whatsapp.service';
 import { NotificationService } from '../shared/notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
+import { ChatService } from '../shared/chat.service';
 import { UserType as DeviceUserType } from '../shared/models/device-token.model';
 import { AppVersionService } from '../shared/services/app-version.service';
 import { AppReviewService } from '../shared/services/app-review.service';
 import { OtpService } from '../shared/services/otp.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto';
+import { RespondInvitationDto } from './dto/respond-invitation.dto';
 import {
   ProfileReview,
   ProfileType,
@@ -44,7 +46,7 @@ import {
   CampaignApplication,
   ApplicationStatus,
 } from '../campaign/models/campaign-application.model';
-import { CampaignInvitation } from '../campaign/models/campaign-invitation.model';
+import { CampaignInvitation, InvitationStatus } from '../campaign/models/campaign-invitation.model';
 import { CampaignDeliverable } from '../campaign/models/campaign-deliverable.model';
 import { CampaignCity } from '../campaign/models/campaign-city.model';
 import { City } from '../shared/models/city.model';
@@ -142,6 +144,9 @@ export class InfluencerService {
     // @Inject('HOME_PAGE_HISTORY_MODEL')
     // private readonly homePageHistoryModel: typeof HomePageHistory,
     private readonly maxCampaignScoringQueueService: MaxCampaignScoringQueueService,
+    @Inject('BRAND_MODEL')
+    private readonly brandModel: typeof Brand,
+    private readonly chatService: ChatService,
   ) {}
 
   /**
@@ -3097,4 +3102,216 @@ export class InfluencerService {
   //     },
   //   };
   // }
+
+  /**
+   * Get all campaign invitations for an influencer
+   */
+  async getMyInvitations(
+    influencerId: number,
+    status?: InvitationStatus,
+  ): Promise<any> {
+    const whereClause: any = { influencerId };
+
+    if (status) {
+      whereClause.status = status;
+    }
+
+    const invitations = await this.campaignInvitationModel.findAll({
+      where: whereClause,
+      include: [
+        {
+          model: Campaign,
+          attributes: [
+            'id',
+            'name',
+            'description',
+            'type',
+            'status',
+            'brandId',
+            'isInviteOnly',
+            'isOrganic',
+          ],
+          include: [
+            {
+              model: Brand,
+              attributes: ['id', 'brandName', 'profileImage'],
+            },
+          ],
+        },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+
+    return {
+      invitations: invitations.map((inv) => ({
+        id: inv.id,
+        status: inv.status,
+        message: inv.message,
+        expiresAt: inv.expiresAt,
+        respondedAt: inv.respondedAt,
+        responseMessage: inv.responseMessage,
+        createdAt: inv.createdAt,
+        campaign: {
+          id: inv.campaign.id,
+          name: inv.campaign.name,
+          description: inv.campaign.description,
+          type: inv.campaign.type,
+          status: inv.campaign.status,
+          isInviteOnly: inv.campaign.isInviteOnly,
+          isOrganic: inv.campaign.isOrganic,
+          brand: {
+            id: inv.campaign.brand.id,
+            brandName: inv.campaign.brand.brandName,
+            profileImage: inv.campaign.brand.profileImage,
+          },
+        },
+      })),
+    };
+  }
+
+  /**
+   * Accept or decline a campaign invitation
+   */
+  async respondToInvitation(
+    invitationId: number,
+    influencerId: number,
+    respondDto: RespondInvitationDto,
+  ): Promise<any> {
+    const invitation = await this.campaignInvitationModel.findOne({
+      where: { id: invitationId, influencerId },
+      include: [
+        {
+          model: Campaign,
+          include: [{ model: Brand }],
+        },
+      ],
+    });
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    if (invitation.status !== InvitationStatus.PENDING) {
+      throw new BadRequestException(
+        `You have already ${invitation.status} this invitation`,
+      );
+    }
+
+    // Check if invitation has expired
+    if (invitation.expiresAt && new Date() > new Date(invitation.expiresAt)) {
+      // Mark as expired
+      await invitation.update({ status: InvitationStatus.EXPIRED });
+      throw new BadRequestException('This invitation has expired');
+    }
+
+    // Update invitation status
+    await invitation.update({
+      status: respondDto.status,
+      respondedAt: new Date(),
+      responseMessage: respondDto.responseMessage || undefined,
+    });
+
+    // If ACCEPTED, create a campaign application with SELECTED status
+    if (respondDto.status === InvitationStatus.ACCEPTED) {
+      // Check if application already exists
+      let existingApplication = await this.campaignApplicationModel.findOne({
+        where: {
+          campaignId: invitation.campaignId,
+          influencerId,
+        },
+      });
+
+      if (!existingApplication) {
+        // Create new application with SELECTED status (auto-selected since invited)
+        existingApplication = await this.campaignApplicationModel.create({
+          campaignId: invitation.campaignId,
+          influencerId,
+          status: ApplicationStatus.SELECTED,
+          proposalMessage: respondDto.responseMessage || 'Accepted invitation',
+          reviewedAt: new Date(),
+        } as any);
+
+        // Create campaign conversation
+        await this.chatService.createCampaignConversation(
+          invitation.campaignId,
+          existingApplication.id,
+          influencerId,
+          invitation.campaign.brandId,
+        );
+      }
+    }
+
+    // Send notification to brand
+    await this.sendInvitationResponseNotification(
+      invitation,
+      respondDto.status,
+      respondDto.responseMessage,
+    );
+
+    return {
+      message: `Invitation ${respondDto.status} successfully`,
+      invitation: {
+        id: invitation.id,
+        status: respondDto.status,
+        respondedAt: invitation.respondedAt,
+      },
+    };
+  }
+
+  /**
+   * Send notification to brand when influencer responds to invitation
+   */
+  private async sendInvitationResponseNotification(
+    invitation: CampaignInvitation,
+    status: InvitationStatus,
+    responseMessage?: string,
+  ): Promise<void> {
+    try {
+      const influencer = await this.influencerRepository.findById(
+        invitation.influencerId,
+      );
+      const brand = invitation.campaign.brand;
+
+      if (!influencer || !brand) return;
+
+      const deviceTokens = await this.deviceTokenService.getAllUserTokens(
+        brand.id,
+        DeviceUserType.BRAND,
+      );
+
+      if (deviceTokens.length === 0) {
+        console.log(`No device tokens found for brand ${brand.id}`);
+        return;
+      }
+
+      const statusText =
+        status === InvitationStatus.ACCEPTED ? 'accepted' : 'declined';
+      const title = `Invitation ${statusText}`;
+      const body = `${influencer.name} has ${statusText} your invitation for "${invitation.campaign.name}"`;
+
+      await this.notificationService.sendCustomNotification(
+        deviceTokens,
+        title,
+        responseMessage ? `${body}\n\n"${responseMessage}"` : body,
+        {
+          type: 'invitation_response',
+          campaignId: invitation.campaignId.toString(),
+          influencerId: influencer.id.toString(),
+          invitationId: invitation.id.toString(),
+          status,
+        },
+        {
+          priority: 'high',
+          androidChannelId: 'campaign_updates',
+          sound: 'default',
+        },
+      );
+
+      console.log(
+        `✅ Notification sent to brand ${brand.id} for invitation response`,
+      );
+    } catch (error) {
+      console.error('Error sending invitation response notification:', error);
+    }
+  }
 }

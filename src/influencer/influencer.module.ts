@@ -141,6 +141,10 @@ import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-ana
       provide: 'HOME_PAGE_HISTORY_MODEL',
       useValue: HomePageHistory,
     },
+    {
+      provide: 'BRAND_MODEL',
+      useValue: Brand,
+    },
   ],
   exports: [InfluencerService, InfluencerRepository, ProSubscriptionService],
 })

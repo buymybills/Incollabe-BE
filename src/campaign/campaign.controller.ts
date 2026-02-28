@@ -1289,6 +1289,103 @@ export class CampaignController {
     return this.campaignService.inviteInfluencers(inviteDto, req.user.id);
   }
 
+  @Get(':campaignId/invitations')
+  @ApiOperation({
+    summary: 'Get campaign invitations sent by brand',
+    description:
+      'View all invitations sent for a specific campaign with their response status (pending, accepted, declined, expired).',
+  })
+  @ApiParam({
+    name: 'campaignId',
+    type: Number,
+    description: 'Campaign ID',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Invitations retrieved successfully',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          invitations: [
+            {
+              id: 1,
+              status: 'accepted',
+              message: 'We love your content! Would love to collaborate.',
+              expiresAt: '2026-03-07T10:00:00.000Z',
+              respondedAt: '2026-02-28T11:30:00.000Z',
+              responseMessage:
+                'Thank you for the opportunity! Excited to collaborate.',
+              createdAt: '2026-02-28T10:00:00.000Z',
+              influencer: {
+                id: 11,
+                name: 'Dhruv Bhatia',
+                username: 'its_db_here',
+                profileImage: 'https://example.com/profile.jpg',
+                instagramFollowersCount: 15000,
+                isVerified: true,
+              },
+            },
+            {
+              id: 2,
+              status: 'pending',
+              message: 'Great profile! Interested in collaboration.',
+              expiresAt: '2026-03-07T10:00:00.000Z',
+              respondedAt: null,
+              responseMessage: null,
+              createdAt: '2026-02-28T10:05:00.000Z',
+              influencer: {
+                id: 18,
+                name: 'Priya Sharma',
+                username: 'priya_fitness',
+                profileImage: 'https://example.com/priya.jpg',
+                instagramFollowersCount: 25000,
+                isVerified: false,
+              },
+            },
+            {
+              id: 3,
+              status: 'declined',
+              message: 'Would love to work together!',
+              expiresAt: '2026-03-07T10:00:00.000Z',
+              respondedAt: '2026-02-28T12:00:00.000Z',
+              responseMessage:
+                'Thank you, but I have to decline at this time.',
+              createdAt: '2026-02-28T10:10:00.000Z',
+              influencer: {
+                id: 25,
+                name: 'Rahul Kumar',
+                username: 'rahul_tech',
+                profileImage: 'https://example.com/rahul.jpg',
+                instagramFollowersCount: 30000,
+                isVerified: true,
+              },
+            },
+          ],
+          summary: {
+            total: 10,
+            pending: 5,
+            accepted: 3,
+            declined: 2,
+            expired: 0,
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Campaign not found or access denied' })
+  async getCampaignInvitations(
+    @Param('campaignId', ParseIntPipe) campaignId: number,
+    @Req() req: RequestWithUser,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new ForbiddenException('Only brands can view campaign invitations');
+    }
+
+    return this.campaignService.getCampaignInvitations(campaignId, req.user.id);
+  }
+
   @Get(':campaignId/applications')
   @ApiOperation({
     summary: 'Get campaign applications for brand',

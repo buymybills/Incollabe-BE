@@ -12,6 +12,7 @@ import { AppReviewService } from '../shared/services/app-review.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import { CampaignService } from '../campaign/campaign.service';
 import { MaxCampaignScoringQueueService } from '../campaign/services/max-campaign-scoring-queue.service';
+import { ChatService } from '../shared/chat.service';
 import {
   ProfileReview,
   ProfileType,
@@ -177,6 +178,12 @@ const mockCampaignService = {
 const mockMaxCampaignScoringQueueService = {
   queueCampaignScoring: jest.fn(),
   queueInfluencerScoring: jest.fn(),
+};
+
+const mockChatService = {
+  createCampaignConversation: jest.fn(),
+  getConversations: jest.fn(),
+  sendMessage: jest.fn(),
 };
 
 describe('InfluencerService', () => {
@@ -379,6 +386,18 @@ describe('InfluencerService', () => {
         {
           provide: MaxCampaignScoringQueueService,
           useValue: mockMaxCampaignScoringQueueService,
+        },
+        {
+          provide: 'BRAND_MODEL',
+          useValue: {
+            findByPk: jest.fn(),
+            findOne: jest.fn(),
+            findAll: jest.fn(),
+          },
+        },
+        {
+          provide: ChatService,
+          useValue: mockChatService,
         },
       ],
     }).compile();

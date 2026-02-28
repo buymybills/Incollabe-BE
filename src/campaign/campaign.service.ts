@@ -1385,6 +1385,78 @@ export class CampaignService {
     };
   }
 
+  /**
+   * Get all invitations sent for a campaign (brand view)
+   */
+  async getCampaignInvitations(
+    campaignId: number,
+    brandId: number,
+  ): Promise<any> {
+    // Verify campaign exists and belongs to the brand
+    const campaign = await this.campaignModel.findOne({
+      where: { id: campaignId, brandId },
+    });
+
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found or access denied');
+    }
+
+    // Fetch all invitations for this campaign
+    const invitations = await this.campaignInvitationModel.findAll({
+      where: { campaignId },
+      include: [
+        {
+          model: Influencer,
+          attributes: [
+            'id',
+            'name',
+            'username',
+            'profileImage',
+            'instagramFollowersCount',
+            'isVerified',
+          ],
+        },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+
+    // Group by status for summary
+    const summary = {
+      total: invitations.length,
+      pending: invitations.filter((inv) => inv.status === InvitationStatus.PENDING)
+        .length,
+      accepted: invitations.filter(
+        (inv) => inv.status === InvitationStatus.ACCEPTED,
+      ).length,
+      declined: invitations.filter(
+        (inv) => inv.status === InvitationStatus.DECLINED,
+      ).length,
+      expired: invitations.filter((inv) => inv.status === InvitationStatus.EXPIRED)
+        .length,
+    };
+
+    return {
+      invitations: invitations.map((inv) => ({
+        id: inv.id,
+        status: inv.status,
+        message: inv.message,
+        expiresAt: inv.expiresAt,
+        respondedAt: inv.respondedAt,
+        responseMessage: inv.responseMessage,
+        createdAt: inv.createdAt,
+        influencer: {
+          id: inv.influencer.id,
+          name: inv.influencer.name,
+          username: inv.influencer.username,
+          profileImage: inv.influencer.profileImage,
+          instagramFollowersCount: inv.influencer.instagramFollowersCount,
+          isVerified: inv.influencer.isVerified,
+        },
+      })),
+      summary,
+    };
+  }
+
   async getCampaignApplications(
     campaignId: number,
     getApplicationsDto: GetCampaignApplicationsDto,
