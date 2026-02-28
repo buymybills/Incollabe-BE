@@ -137,6 +137,7 @@ import { CreateSupportTicketDto } from '../shared/dto/create-support-ticket.dto'
 import { GetSupportTicketsDto } from '../shared/dto/get-support-tickets.dto';
 import { UpdateSupportTicketDto } from '../shared/dto/update-support-ticket.dto';
 import { CreateTicketReplyDto } from '../shared/dto/create-ticket-reply.dto';
+import { GetTicketsResponseDto, GetRepliesResponseDto } from '../shared/dto/support-ticket-response.dto';
 import {
   GetNewAccountsWithReferralDto,
   NewAccountsWithReferralResponseDto,
@@ -2808,6 +2809,7 @@ export class AdminController {
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Support tickets retrieved successfully',
+    type: GetTicketsResponseDto,
   })
   @ApiUnauthorizedResponse({
     description: 'Authentication required',
@@ -2984,6 +2986,7 @@ export class AdminController {
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Replies fetched successfully',
+    type: GetRepliesResponseDto,
   })
   @ApiNotFoundResponse({
     description: 'Ticket not found',
