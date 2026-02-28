@@ -80,6 +80,18 @@ export class SupportTicketDetailDto {
 
   @ApiPropertyOptional({ type: AssignedAdminDto })
   assignedAdmin?: AssignedAdminDto;
+
+  @ApiPropertyOptional({
+    example: 2,
+    description: 'Number of unread replies from influencer/brand (for admin view)',
+  })
+  unreadUserRepliesCount?: number;
+
+  @ApiPropertyOptional({
+    example: 3,
+    description: 'Number of unread replies from admin (for influencer/brand view)',
+  })
+  unreadAdminRepliesCount?: number;
 }
 
 export class TicketAuthorDto {
@@ -172,4 +184,11 @@ export class GetTicketsResponseDto {
 export class GetRepliesResponseDto {
   @ApiProperty({ type: [TicketReplyDto] })
   replies: TicketReplyDto[];
+
+  @ApiProperty({
+    example: 3,
+    description:
+      'Unread count before marking as read. For users: unread admin replies. For admins: unread user replies.',
+  })
+  unreadCount: number;
 }

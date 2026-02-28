@@ -169,6 +169,32 @@ export class SupportTicketService {
         offset,
       });
 
+    // Fetch unread admin replies count for each ticket (for influencer/brand)
+    const ticketIds = tickets.map((t) => t.id);
+    const unreadCounts = await this.supportTicketReplyModel.findAll({
+      where: {
+        ticketId: { [Op.in]: ticketIds.length ? ticketIds : [0] },
+        authorType: ReplyAuthorType.ADMIN, // Admin replies
+        isReadByUser: false, // Not read by user
+      },
+      attributes: [
+        'ticketId',
+        [
+          this.supportTicketReplyModel.sequelize!.fn(
+            'COUNT',
+            this.supportTicketReplyModel.sequelize!.col('id'),
+          ),
+          'count',
+        ],
+      ],
+      group: ['ticketId'],
+      raw: true,
+    });
+
+    const unreadCountMap = new Map(
+      unreadCounts.map((item: any) => [item.ticketId, parseInt(item.count, 10)]),
+    );
+
     return {
       tickets: tickets.map((ticket) => ({
         id: ticket.id,
@@ -187,6 +213,7 @@ export class SupportTicketService {
               name: ticket.assignedAdmin.name,
             }
           : null,
+        unreadAdminRepliesCount: unreadCountMap.get(ticket.id) ?? 0, // Unread replies by admin
       })),
       pagination: {
         total,
@@ -296,8 +323,37 @@ export class SupportTicketService {
         distinct: true, // Ensure accurate count with joins
       });
 
+    // Fetch unread user replies count for each ticket (for admin)
+    const ticketIds = tickets.map((t) => t.id);
+    const unreadCounts = await this.supportTicketReplyModel.findAll({
+      where: {
+        ticketId: { [Op.in]: ticketIds.length ? ticketIds : [0] },
+        authorType: { [Op.ne]: ReplyAuthorType.ADMIN }, // User replies (influencer/brand)
+        isReadByUser: false, // Not read by admin
+      },
+      attributes: [
+        'ticketId',
+        [
+          this.supportTicketReplyModel.sequelize!.fn(
+            'COUNT',
+            this.supportTicketReplyModel.sequelize!.col('id'),
+          ),
+          'count',
+        ],
+      ],
+      group: ['ticketId'],
+      raw: true,
+    });
+
+    const unreadCountMap = new Map(
+      unreadCounts.map((item: any) => [item.ticketId, parseInt(item.count, 10)]),
+    );
+
     return {
-      tickets: tickets.map((ticket) => this.formatTicketResponse(ticket)),
+      tickets: tickets.map((ticket) => ({
+        ...this.formatTicketResponse(ticket),
+        unreadUserRepliesCount: unreadCountMap.get(ticket.id) ?? 0, // Unread replies by influencer/brand
+      })),
       pagination: {
         total,
         page,
@@ -683,20 +739,60 @@ export class SupportTicketService {
       order: [['createdAt', 'ASC']],
     });
 
-    // Count unread admin replies
-    // For users: "How many admin replies I haven't read"
-    // For admins: "How many of my replies the user hasn't seen"
-    const unreadAdminRepliesCount = await this.supportTicketReplyModel.count({
-      where: {
-        ticketId,
-        authorType: ReplyAuthorType.ADMIN,
-        isReadByUser: false,
-      },
-    });
+    // Count unread replies BEFORE marking as read
+    let unreadCount = 0;
+
+    if (userType === 'admin') {
+      // For admins: Count unread user replies (influencer/brand replies)
+      unreadCount = await this.supportTicketReplyModel.count({
+        where: {
+          ticketId,
+          authorType: { [Op.ne]: ReplyAuthorType.ADMIN }, // User replies
+          isReadByUser: false,
+        },
+      });
+
+      // Auto-mark user replies as read when admin views them
+      if (unreadCount > 0) {
+        await this.supportTicketReplyModel.update(
+          { isReadByUser: true },
+          {
+            where: {
+              ticketId,
+              authorType: { [Op.ne]: ReplyAuthorType.ADMIN },
+              isReadByUser: false,
+            },
+          },
+        );
+      }
+    } else {
+      // For users: Count unread admin replies
+      unreadCount = await this.supportTicketReplyModel.count({
+        where: {
+          ticketId,
+          authorType: ReplyAuthorType.ADMIN,
+          isReadByUser: false,
+        },
+      });
+
+      // Auto-mark admin replies as read when user views them
+      if (unreadCount > 0) {
+        await this.supportTicketReplyModel.update(
+          { isReadByUser: true },
+          {
+            where: {
+              ticketId,
+              authorType: ReplyAuthorType.ADMIN,
+              isReadByUser: false,
+            },
+          },
+        );
+      }
+    }
 
     return {
       replies: replies.map((reply) => this.formatReplyResponse(reply)),
-      unreadAdminRepliesCount,
+      unreadCount, // Returns count BEFORE marking as read (admin replies for users, user replies for admins)
     };
   }
 
