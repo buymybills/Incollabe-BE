@@ -528,7 +528,7 @@ export class BrandService {
       // 'foundedYear', // Optional - not required for verification
       // 'headquarterCountryId', // Optional - not required for verification
       // 'headquarterCityId', // Optional - not required for verification
-      'activeRegions',
+      // 'activeRegions', // Optional - not required for verification
       // POC fields are optional - not required for verification
       // 'pocName',
       // 'pocDesignation',
