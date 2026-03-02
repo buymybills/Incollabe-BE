@@ -738,7 +738,7 @@ export class BrandService {
     return (
       allFieldsFilled &&
       // allIdFieldsFilled && // Headquarter fields are optional now
-      hasActiveRegions &&
+      // hasActiveRegions && // Active regions are optional now
       allDocumentsUploaded &&
       allImagesUploaded &&
       hasSocialMediaLink
