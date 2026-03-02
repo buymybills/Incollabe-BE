@@ -601,3 +601,42 @@ export class FixMissingInvoiceResponseDto {
   })
   timestamp: Date;
 }
+
+// ============================================
+// DELETE INVOICE
+// ============================================
+
+export class DeleteInvoiceResponseDto {
+  @ApiProperty({ example: true, description: 'Whether the deletion was successful' })
+  success: boolean;
+
+  @ApiProperty({
+    example: 'Invoice 167 (MAXXINV-202602-01) deleted successfully',
+    description: 'Confirmation message'
+  })
+  message: string;
+
+  @ApiProperty({
+    description: 'Details of deleted invoice',
+    example: {
+      invoiceId: 167,
+      invoiceNumber: 'MAXXINV-202602-01',
+      subscriptionId: 72,
+      influencerId: 7051,
+      amount: 199.00,
+    }
+  })
+  deletedInvoice: {
+    invoiceId: number;
+    invoiceNumber: string;
+    subscriptionId: number;
+    influencerId: number;
+    amount: number;
+  };
+
+  @ApiProperty({
+    example: '2026-02-27T14:00:00.000Z',
+    description: 'Timestamp of deletion',
+  })
+  timestamp: Date;
+}

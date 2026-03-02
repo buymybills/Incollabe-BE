@@ -845,10 +845,16 @@ export class ProSubscriptionService {
    * Generate unique invoice number for Pro Subscription
    * Format: INV-UYYMM-SEQ
    * Example: INV-U2602-1 (1st invoice in Feb 2026)
+   * Public method so admin services can also use it
+   *
+   * @param influencerId - The influencer ID
+   * @param billingDate - Optional date to use for year/month (defaults to current date)
+   *                      Use billing period start date for historical invoices
    */
-  private async generateInvoiceNumber(influencerId: number): Promise<string> {
-    const year = String(new Date().getFullYear()).slice(-2);
-    const month = String(new Date().getMonth() + 1).padStart(2, '0');
+  async generateInvoiceNumber(influencerId: number, billingDate?: Date): Promise<string> {
+    const referenceDate = billingDate || new Date();
+    const year = String(referenceDate.getFullYear()).slice(-2);
+    const month = String(referenceDate.getMonth() + 1).padStart(2, '0');
     const yearMonth = `${year}${month}`;
     const currentPrefix = `INV-U${yearMonth}-`;
 

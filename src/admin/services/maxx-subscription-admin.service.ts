@@ -22,6 +22,7 @@ import {
   AdminCancelSubscriptionDto,
   SubscriptionActionResponseDto,
   FixMissingInvoiceResponseDto,
+  DeleteInvoiceResponseDto,
 } from '../dto/maxx-subscription.dto';
 
 @Injectable()
@@ -865,15 +866,32 @@ export class MaxxSubscriptionAdminService {
 
     // If subscription extends beyond last invoice, we have missing period(s)
     if (currentPeriodEnd > lastInvoiceEnd) {
-      // Calculate missing period - from last invoice end to current period end
-      const periodStart = new Date(lastInvoiceEnd);
-      periodStart.setSeconds(periodStart.getSeconds() + 1); // Start 1 second after last invoice ends
+      // Verify that currentPeriodStart exists (it should be set during payment capture)
+      if (!subscription.currentPeriodStart) {
+        throw new BadRequestException(
+          'Cannot fix missing invoice: subscription.currentPeriodStart is missing. ' +
+          'This indicates a data corruption issue. Please investigate when the payment was captured.'
+        );
+      }
 
-      // For simplicity, create one invoice for the missing period
-      // In reality, this should match the subscription's billing cycle
+      // Calculate the correct end date: start date + 30 days (subscription duration)
+      const periodStart = new Date(subscription.currentPeriodStart);
+      const periodEnd = new Date(periodStart);
+      periodEnd.setDate(periodEnd.getDate() + 30); // Add 30 days
+
+      // Validate: If calculated end is beyond currentPeriodEnd, there might be multiple missing invoices
+      // This function only handles single missing invoice for now
+      if (periodEnd > currentPeriodEnd) {
+        console.warn(
+          `⚠️  Calculated period end (${periodEnd.toISOString()}) is beyond current period end (${currentPeriodEnd.toISOString()}). ` +
+          `This might indicate multiple missing invoices. Creating invoice for the first period only.`
+        );
+      }
+
+      // Create invoice for exactly 30 days from payment date
       missingPeriods.push({
-        start: subscription.currentPeriodStart ? new Date(subscription.currentPeriodStart) : periodStart,
-        end: currentPeriodEnd,
+        start: periodStart,
+        end: periodEnd,
       });
     }
 
@@ -905,31 +923,15 @@ export class MaxxSubscriptionAdminService {
         igst = 3035;  // Rs 30.35 (18% IGST)
       }
 
-      // Generate next invoice number
-      const currentYear = new Date().getFullYear();
-      const currentMonth = String(new Date().getMonth() + 1).padStart(2, '0');
-      const currentPrefix = `MAXXINV-${currentYear}${currentMonth}-`;
+      // Generate next invoice number using existing service method
+      // Pass billing period start date to ensure correct month/year in invoice number
+      // This ensures invoice number matches the billing period, not current date
+      const invoiceNumber = await this.proSubscriptionService.generateInvoiceNumber(
+        subscription.influencerId,
+        period.start  // Use billing period start date for invoice numbering
+      );
 
-      const existingInvoiceNumbers = await this.proInvoiceModel.findAll({
-        where: {
-          influencerId: subscription.influencerId,
-          invoiceNumber: {
-            [Op.like]: `${currentPrefix}%`,
-          },
-        },
-        attributes: ['invoiceNumber'],
-      });
-
-      let nextNumber = 1;
-      for (const inv of existingInvoiceNumbers) {
-        const parts = inv.invoiceNumber.split('-');
-        const num = parseInt(parts[2], 10);
-        if (!isNaN(num)) {
-          nextNumber = Math.max(nextNumber, num + 1);
-        }
-      }
-
-      const invoiceNumber = `${currentPrefix}${String(nextNumber).padStart(2, '0')}`;
+      console.log(`📄 Generated invoice number ${invoiceNumber} for period ${period.start.toISOString()} to ${period.end.toISOString()}`);
 
       // Create invoice record
       const newInvoice = await this.proInvoiceModel.create({
@@ -1006,6 +1008,40 @@ export class MaxxSubscriptionAdminService {
         subscriptionUpdated: true,
         statusFixed,
       },
+      timestamp: new Date(),
+    };
+  }
+
+  /**
+   * Delete an invoice by ID
+   * Useful for removing wrongly created invoices before recreating them properly
+   * CAUTION: This permanently deletes the invoice record
+   */
+  async deleteInvoice(invoiceId: number) {
+    const invoice = await this.proInvoiceModel.findByPk(invoiceId);
+
+    if (!invoice) {
+      throw new NotFoundException(`Invoice with ID ${invoiceId} not found`);
+    }
+
+    // Store invoice details before deletion
+    const deletedDetails = {
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      subscriptionId: invoice.subscriptionId,
+      influencerId: invoice.influencerId,
+      amount: invoice.totalAmount / 100,
+    };
+
+    // Delete from database
+    await invoice.destroy();
+
+    console.log(`🗑️  Deleted invoice ${invoice.invoiceNumber} (ID: ${invoiceId})`);
+
+    return {
+      success: true,
+      message: `Invoice ${invoiceId} (${invoice.invoiceNumber}) deleted successfully`,
+      deletedInvoice: deletedDetails,
       timestamp: new Date(),
     };
   }

@@ -160,6 +160,7 @@ import {
   AdminCancelSubscriptionDto,
   SubscriptionActionResponseDto,
   FixMissingInvoiceResponseDto,
+  DeleteInvoiceResponseDto,
 } from './dto/maxx-subscription.dto';
 import {
   MaxSubscriptionBrandStatisticsDto,
@@ -2460,6 +2461,39 @@ export class AdminController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     return await this.maxxSubscriptionAdminService.fixMissingInvoice(id);
+  }
+
+  @Delete('maxx-subscription/invoices/:invoiceId')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: '[SUPER ADMIN ONLY] Delete an invoice',
+    description: 'Permanently deletes an invoice from the system. Use this to remove wrongly created invoices before recreating them with correct details. CAUTION: This is a destructive operation and cannot be undone.',
+  })
+  @ApiParam({
+    name: 'invoiceId',
+    description: 'Invoice ID to delete',
+    example: 167,
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Invoice deleted successfully',
+    type: DeleteInvoiceResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Invoice not found',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - Super Admin only',
+  })
+  async deleteInvoice(
+    @Param('invoiceId', ParseIntPipe) invoiceId: number,
+  ) {
+    return await this.maxxSubscriptionAdminService.deleteInvoice(invoiceId);
   }
 
   // ============================================
