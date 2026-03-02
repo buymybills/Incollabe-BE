@@ -47,6 +47,7 @@ import { AuthService } from '../auth/auth.service';
 import { CampaignService } from '../campaign/campaign.service';
 import { S3Service } from '../shared/s3.service';
 import { AppVersionService } from '../shared/services/app-version.service';
+import { DeviceTokenService } from '../shared/device-token.service';
 import { InvoiceExcelExportService } from './services/invoice-excel-export.service';
 import { AdminCreatorScoreService } from './services/admin-creator-score.service';
 import { GetCreatorScoresDto, GetCreatorScoresDashboardDto } from './dto/get-creator-scores.dto';
@@ -127,6 +128,11 @@ import {
 import { LogoutDto, LogoutResponseDto } from './dto/logout.dto';
 import { GetAuditLogsDto, AuditLogListResponseDto } from './dto/audit-log.dto';
 import { UpdateDisplayOrderDto } from './dto/update-display-order.dto';
+import {
+  CleanupPreviewResponseDto,
+  CleanupExecuteResponseDto,
+  TokenStatisticsDto,
+} from './dto/device-token-cleanup.dto';
 import { AuditLogService } from './services/audit-log.service';
 import { ReferralProgramService } from './services/referral-program.service';
 import { MaxxSubscriptionAdminService } from './services/maxx-subscription-admin.service';
@@ -203,6 +209,7 @@ export class AdminController {
     private readonly campaignService: CampaignService,
     private readonly s3Service: S3Service,
     private readonly appVersionService: AppVersionService,
+    private readonly deviceTokenService: DeviceTokenService,
     private readonly invoiceExcelExportService: InvoiceExcelExportService,
     private readonly adminCreatorScoreService: AdminCreatorScoreService,
     private readonly proSubscriptionService: ProSubscriptionService,
@@ -4623,6 +4630,115 @@ export class AdminController {
         proActivatedAt: now,
         proExpiresAt: periodEnd,
       },
+    };
+  }
+
+  // ============================================
+  // DEVICE TOKEN CLEANUP
+  // ============================================
+
+  @Get('device-tokens/statistics')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: '[SUPER ADMIN ONLY] Get device token statistics',
+    description: 'Get statistics about active device tokens, including total counts by user type and inactive token counts.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Device token statistics retrieved successfully',
+    type: TokenStatisticsDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - Super Admin only',
+  })
+  async getDeviceTokenStatistics(): Promise<TokenStatisticsDto> {
+    const stats = await this.deviceTokenService.getTokenStatistics();
+    const { tokens } = await this.deviceTokenService.findOrphanedTokens();
+
+    return {
+      ...stats,
+      orphanedTokens: tokens.length,
+      timestamp: new Date(),
+    };
+  }
+
+  @Get('device-tokens/orphaned/preview')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: '[SUPER ADMIN ONLY] Preview orphaned device tokens',
+    description: 'Preview FCM tokens belonging to deleted accounts without removing them. Use this to see what will be deleted before executing cleanup.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Orphaned tokens preview retrieved successfully',
+    type: CleanupPreviewResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - Super Admin only',
+  })
+  async previewOrphanedTokens(): Promise<CleanupPreviewResponseDto> {
+    const result = await this.deviceTokenService.findOrphanedTokens();
+
+    return {
+      totalOrphanedTokens: result.totalOrphaned,
+      deletedInfluencerTokens: result.deletedInfluencerTokens,
+      deletedBrandTokens: result.deletedBrandTokens,
+      deletedAdminTokens: result.deletedAdminTokens,
+      orphanedTokens: result.tokens.map((token) => ({
+        id: token.id,
+        userId: token.userId,
+        userType: token.userType,
+        fcmToken: token.fcmToken.substring(0, 50) + '...', // Truncate for security
+        deviceName: token.deviceName,
+        deviceOs: token.deviceOs,
+        lastUsedAt: token.lastUsedAt,
+        createdAt: token.createdAt,
+      })),
+      timestamp: new Date(),
+    };
+  }
+
+  @Delete('device-tokens/orphaned')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: '[SUPER ADMIN ONLY] Remove orphaned device tokens',
+    description: 'Permanently remove FCM tokens belonging to deleted accounts. This prevents sending notifications to deleted users and cleans up the database. CAUTION: This action cannot be undone.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Orphaned tokens removed successfully',
+    type: CleanupExecuteResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - Super Admin only',
+  })
+  async removeOrphanedTokens(): Promise<CleanupExecuteResponseDto> {
+    const result = await this.deviceTokenService.removeOrphanedTokens();
+
+    return {
+      success: true,
+      message: `Successfully removed ${result.totalRemoved} orphaned FCM tokens`,
+      totalRemoved: result.totalRemoved,
+      influencerTokensRemoved: result.influencerTokensRemoved,
+      brandTokensRemoved: result.brandTokensRemoved,
+      adminTokensRemoved: result.adminTokensRemoved,
+      removedTokenIds: result.removedTokenIds,
+      timestamp: new Date(),
     };
   }
 }

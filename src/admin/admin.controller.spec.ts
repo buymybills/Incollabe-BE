@@ -19,6 +19,7 @@ import { AuthService } from '../auth/auth.service';
 import { CampaignService } from '../campaign/campaign.service';
 import { S3Service } from '../shared/s3.service';
 import { AppVersionService } from '../shared/services/app-version.service';
+import { DeviceTokenService } from '../shared/device-token.service';
 import { InvoiceExcelExportService } from './services/invoice-excel-export.service';
 import { AdminCreatorScoreService } from './services/admin-creator-score.service';
 import { ProSubscriptionService } from '../influencer/services/pro-subscription.service';
@@ -196,6 +197,20 @@ const mockProSubscriptionService = {
   generateInvoicePDF: jest.fn(),
 };
 
+const mockDeviceTokenService = {
+  addOrUpdateDeviceToken: jest.fn(),
+  getAllUserTokens: jest.fn(),
+  getUserDevices: jest.fn(),
+  removeDeviceToken: jest.fn(),
+  removeAllUserDevices: jest.fn(),
+  cleanupOldTokens: jest.fn(),
+  getUserDeviceCount: jest.fn(),
+  getUserTypeFromDevice: jest.fn(),
+  findOrphanedTokens: jest.fn(),
+  removeOrphanedTokens: jest.fn(),
+  getTokenStatistics: jest.fn(),
+};
+
 const mockInfluencerRepository = {
   findAll: jest.fn(),
   findOne: jest.fn(),
@@ -297,6 +312,10 @@ describe('AdminController', () => {
         {
           provide: AppVersionService,
           useValue: mockAppVersionService,
+        },
+        {
+          provide: DeviceTokenService,
+          useValue: mockDeviceTokenService,
         },
         {
           provide: InvoiceExcelExportService,

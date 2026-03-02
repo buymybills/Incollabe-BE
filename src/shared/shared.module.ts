@@ -60,6 +60,7 @@ import { AppReviewRequest } from './models/app-review-request.model';
 import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
 import { CreditTransaction } from '../admin/models/credit-transaction.model';
 import { ProfileReview } from '../admin/models/profile-review.model';
+import { Admin } from '../admin/models/admin.model';
 import { Campaign } from '../campaign/models/campaign.model';
 import { CampaignApplication } from '../campaign/models/campaign-application.model';
 import { CampaignInvitation } from '../campaign/models/campaign-invitation.model';
@@ -102,6 +103,7 @@ import { CampaignReview } from './models/campaign-review.model';
       InfluencerReferralUsage,
       CreditTransaction,
       ProfileReview,
+      Admin,
       Campaign,
       CampaignApplication,
       CampaignInvitation,

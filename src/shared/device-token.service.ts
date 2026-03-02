@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { DeviceToken, UserType } from './models/device-token.model';
+import { Influencer } from '../auth/model/influencer.model';
+import { Brand } from '../brand/model/brand.model';
+import { Admin } from '../admin/models/admin.model';
 import { Op } from 'sequelize';
 
 interface AddDeviceTokenParams {
@@ -21,6 +24,12 @@ export class DeviceTokenService {
   constructor(
     @InjectModel(DeviceToken)
     private deviceTokenModel: typeof DeviceToken,
+    @InjectModel(Influencer)
+    private influencerModel: typeof Influencer,
+    @InjectModel(Brand)
+    private brandModel: typeof Brand,
+    @InjectModel(Admin)
+    private adminModel: typeof Admin,
   ) {}
 
   /**
@@ -251,5 +260,149 @@ export class DeviceTokenService {
     });
 
     return device ? device.userType : null;
+  }
+
+  /**
+   * Find all orphaned tokens (tokens belonging to deleted accounts)
+   * Returns tokens for users that no longer exist in the database
+   */
+  async findOrphanedTokens(): Promise<{
+    tokens: DeviceToken[];
+    totalOrphaned: number;
+    deletedInfluencerTokens: number;
+    deletedBrandTokens: number;
+    deletedAdminTokens: number;
+  }> {
+    // Get all tokens
+    const allTokens = await this.deviceTokenModel.findAll({
+      order: [['userType', 'ASC'], ['userId', 'ASC']],
+    });
+
+    const orphanedTokens: DeviceToken[] = [];
+    let deletedInfluencerTokens = 0;
+    let deletedBrandTokens = 0;
+    let deletedAdminTokens = 0;
+
+    // Check each token to see if the user still exists
+    for (const token of allTokens) {
+      let userExists = false;
+
+      switch (token.userType) {
+        case UserType.INFLUENCER:
+          const influencer = await this.influencerModel.findByPk(token.userId);
+          userExists = !!influencer;
+          if (!userExists) deletedInfluencerTokens++;
+          break;
+
+        case UserType.BRAND:
+          const brand = await this.brandModel.findByPk(token.userId);
+          userExists = !!brand;
+          if (!userExists) deletedBrandTokens++;
+          break;
+
+        case UserType.ADMIN:
+          const admin = await this.adminModel.findByPk(token.userId);
+          userExists = !!admin;
+          if (!userExists) deletedAdminTokens++;
+          break;
+      }
+
+      if (!userExists) {
+        orphanedTokens.push(token);
+      }
+    }
+
+    console.log(
+      `🔍 Found ${orphanedTokens.length} orphaned tokens (Influencers: ${deletedInfluencerTokens}, Brands: ${deletedBrandTokens}, Admins: ${deletedAdminTokens})`,
+    );
+
+    return {
+      tokens: orphanedTokens,
+      totalOrphaned: orphanedTokens.length,
+      deletedInfluencerTokens,
+      deletedBrandTokens,
+      deletedAdminTokens,
+    };
+  }
+
+  /**
+   * Remove all orphaned tokens (tokens belonging to deleted accounts)
+   * Returns the number of tokens removed
+   */
+  async removeOrphanedTokens(): Promise<{
+    totalRemoved: number;
+    influencerTokensRemoved: number;
+    brandTokensRemoved: number;
+    adminTokensRemoved: number;
+    removedTokenIds: number[];
+  }> {
+    const { tokens, deletedInfluencerTokens, deletedBrandTokens, deletedAdminTokens } =
+      await this.findOrphanedTokens();
+
+    const removedTokenIds: number[] = [];
+
+    for (const token of tokens) {
+      removedTokenIds.push(token.id);
+      await token.destroy();
+    }
+
+    console.log(
+      `🗑️ Removed ${tokens.length} orphaned tokens (Influencers: ${deletedInfluencerTokens}, Brands: ${deletedBrandTokens}, Admins: ${deletedAdminTokens})`,
+    );
+
+    return {
+      totalRemoved: tokens.length,
+      influencerTokensRemoved: deletedInfluencerTokens,
+      brandTokensRemoved: deletedBrandTokens,
+      adminTokensRemoved: deletedAdminTokens,
+      removedTokenIds,
+    };
+  }
+
+  /**
+   * Get statistics about device tokens
+   */
+  async getTokenStatistics(): Promise<{
+    totalActiveTokens: number;
+    influencerTokens: number;
+    brandTokens: number;
+    adminTokens: number;
+    inactiveTokensLast30Days: number;
+    inactiveTokensLast90Days: number;
+  }> {
+    const cutoff30Days = new Date();
+    cutoff30Days.setDate(cutoff30Days.getDate() - 30);
+
+    const cutoff90Days = new Date();
+    cutoff90Days.setDate(cutoff90Days.getDate() - 90);
+
+    const [
+      totalActiveTokens,
+      influencerTokens,
+      brandTokens,
+      adminTokens,
+      inactiveTokensLast30Days,
+      inactiveTokensLast90Days,
+    ] = await Promise.all([
+      this.deviceTokenModel.count(),
+      this.deviceTokenModel.count({ where: { userType: UserType.INFLUENCER } }),
+      this.deviceTokenModel.count({ where: { userType: UserType.BRAND } }),
+      this.deviceTokenModel.count({ where: { userType: UserType.ADMIN } }),
+      this.deviceTokenModel.count({
+        where: { lastUsedAt: { [Op.lt]: cutoff30Days } },
+      }),
+      this.deviceTokenModel.count({
+        where: { lastUsedAt: { [Op.lt]: cutoff90Days } },
+      }),
+    ]);
+
+    return {
+      totalActiveTokens,
+      influencerTokens,
+      brandTokens,
+      adminTokens,
+      inactiveTokensLast30Days,
+      inactiveTokensLast90Days,
+    };
   }
 }
