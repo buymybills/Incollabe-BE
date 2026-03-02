@@ -511,7 +511,8 @@ export class BrandService {
       'foundedYear',
       'headquarterCountryId',
       'headquarterCityId',
-      'activeRegions',
+      // activeRegions is optional and should not affect completion percentage
+      // 'activeRegions',
       'pocName',
       'pocDesignation',
       'pocEmailId',
@@ -549,6 +550,10 @@ export class BrandService {
 
     const filledFields = allFields.filter((field) => {
       const value = brand[field as keyof Brand];
+      // arrays (like activeRegions) should only count if they have entries
+      if (Array.isArray(value)) {
+        return value.length > 0;
+      }
       return value && value.toString().trim().length > 0;
     });
 
@@ -590,7 +595,7 @@ export class BrandService {
         'websiteUrl',
         'foundedYear',
       ],
-      location: ['headquarterCountryId', 'headquarterCityId', 'activeRegions'],
+      location: ['headquarterCountryId', 'headquarterCityId'], // activeRegions optional
       contact: ['pocName', 'pocDesignation', 'pocEmailId', 'pocContactNumber'],
       media: ['profileImage', 'profileBanner', 'profileHeadline'],
       documents: ['incorporationDocument', 'gstDocument', 'panDocument'],
