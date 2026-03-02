@@ -682,6 +682,46 @@ describe('BrandService', () => {
       expect(result.profileCompletion.nextSteps.length).toBeGreaterThan(0);
     });
 
+    it('should not penalize empty activeRegions when calculating completion', async () => {
+      const completeBrand = {
+        id: 2,
+        brandName: 'Complete Brand',
+        username: 'completebrand',
+        legalEntityName: 'Legal Entity',
+        companyTypeId: 1,
+        brandBio: 'Complete bio',
+        profileHeadline: 'Complete headline',
+        websiteUrl: 'https://complete.com',
+        foundedYear: 2020,
+        headquarterCountryId: 1,
+        headquarterCityId: 1,
+        activeRegions: [], // intentionally empty
+        pocName: 'John Doe',
+        pocDesignation: 'CEO',
+        pocEmailId: 'john@complete.com',
+        pocContactNumber: '+919876543210',
+        profileImage: 'https://s3.amazonaws.com/profile.jpg',
+        profileBanner: 'https://s3.amazonaws.com/banner.jpg',
+        incorporationDocument: 'https://s3.amazonaws.com/incorporation.pdf',
+        gstDocument: 'https://s3.amazonaws.com/gst.pdf',
+        panDocument: 'https://s3.amazonaws.com/pan.pdf',
+        facebookUrl: 'https://facebook.com/testbrand',
+        instagramUrl: null,
+        youtubeUrl: null,
+        linkedinUrl: null,
+        twitterUrl: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      brandModel.findByPk.mockResolvedValue(completeBrand as any);
+
+      const result = await service.getBrandProfile(2);
+
+      expect(result.profileCompletion.completionPercentage).toBe(100);
+      expect(result.profileCompletion.isCompleted).toBe(true);
+    });
+
     it('should create document info correctly', async () => {
       const mockBrand = {
         id: 1,
