@@ -76,13 +76,13 @@ export class Post extends Model {
   declare updatedAt: Date;
 
   @BelongsTo(() => Influencer)
-  influencer: Influencer;
+  declare influencer: Influencer;
 
   @BelongsTo(() => Brand)
-  brand: Brand;
+  declare brand: Brand;
 
   @HasMany(() => Like)
-  likes: Like[];
+  declare likes: Like[];
 
   get user() {
     return this.userType === UserType.INFLUENCER ? this.influencer : this.brand;
