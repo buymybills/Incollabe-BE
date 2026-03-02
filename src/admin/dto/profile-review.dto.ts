@@ -24,6 +24,15 @@ export class GetPendingProfilesDto {
   profileType?: ProfileType;
 
   @ApiProperty({
+    description: 'Search by name, email, or username',
+    required: false,
+    example: 'john',
+  })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @ApiProperty({
     description: 'Page number for pagination',
     required: false,
     example: 1,
