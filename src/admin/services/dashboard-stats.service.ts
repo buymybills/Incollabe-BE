@@ -358,6 +358,8 @@ export class DashboardStatsService {
     if (timeFrame === DashboardTimeFrame.CUSTOM && startDate && endDate) {
       chartStartDate = new Date(startDate);
       chartEndDate = new Date(endDate);
+      // Set end date to end of day (23:59:59) to include all data on that day
+      chartEndDate.setHours(23, 59, 59, 999);
     } else {
       // Handle predefined time frames
       switch (timeFrame) {
@@ -756,6 +758,8 @@ export class DashboardStatsService {
     if (timeFrame === DashboardTimeFrame.CUSTOM && startDateStr && endDateStr) {
       startDate = new Date(startDateStr);
       endDate = new Date(endDateStr);
+      // Set end date to end of day (23:59:59) to include all data on that day
+      endDate.setHours(23, 59, 59, 999);
     } else {
       // Handle predefined time frames
       switch (timeFrame) {
@@ -1317,6 +1321,8 @@ export class DashboardStatsService {
     ) {
       chartStartDate = new Date(chartStartDateStr);
       chartEndDate = new Date(chartEndDateStr);
+      // Set end date to end of day (23:59:59) to include all data on that day
+      chartEndDate.setHours(23, 59, 59, 999);
     } else {
       // Handle predefined time frames for chart
       switch (chartTimeFrame) {
@@ -1348,6 +1354,8 @@ export class DashboardStatsService {
     if (metricsStartDateStr && metricsEndDateStr) {
       metricsStartDate = new Date(metricsStartDateStr);
       metricsEndDate = new Date(metricsEndDateStr);
+      // Set end date to end of day (23:59:59) to include all data on that day
+      metricsEndDate.setHours(23, 59, 59, 999);
     } else {
       // Default to current month
       const now = new Date();
@@ -1733,6 +1741,8 @@ export class DashboardStatsService {
     ) {
       chartStartDate = new Date(chartStartDateStr);
       chartEndDate = new Date(chartEndDateStr);
+      // Set end date to end of day (23:59:59) to include all posts on that day
+      chartEndDate.setHours(23, 59, 59, 999);
     } else {
       // Handle predefined time frames for chart
       switch (chartTimeFrame) {
@@ -1763,6 +1773,8 @@ export class DashboardStatsService {
     if (metricsStartDateStr && metricsEndDateStr) {
       metricsStart = new Date(metricsStartDateStr);
       metricsEnd = new Date(metricsEndDateStr);
+      // Set end date to end of day (23:59:59) to include all posts on that day
+      metricsEnd.setHours(23, 59, 59, 999);
     } else {
       // Default to current month for metrics
       const now = new Date();
