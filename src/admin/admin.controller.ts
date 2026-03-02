@@ -903,6 +903,7 @@ export class AdminController {
       filters.profileType,
       filters.page || 1,
       filters.limit || 20,
+      filters.search,
     );
   }
 
