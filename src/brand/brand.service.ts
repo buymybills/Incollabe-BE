@@ -342,6 +342,12 @@ export class BrandService {
     // Remove clearProfileBanner from update data as it's not a database field
     delete brandUpdateData.clearProfileBanner;
 
+    // Auto-populate brandEmailId from login email if it's null or empty
+    // This ensures existing brands get brandEmailId set automatically
+    if (!brand.brandEmailId || brand.brandEmailId.trim() === '') {
+      brandUpdateData.brandEmailId = brand.email;
+    }
+
     // Update brand data
     const updatedData = {
       ...brandUpdateData,
@@ -528,7 +534,7 @@ export class BrandService {
       // 'foundedYear', // Optional - not required for verification
       // 'headquarterCountryId', // Optional - not required for verification
       // 'headquarterCityId', // Optional - not required for verification
-      'activeRegions',
+      // 'activeRegions', // Optional - not required for verification
       // POC fields are optional - not required for verification
       // 'pocName',
       // 'pocDesignation',
