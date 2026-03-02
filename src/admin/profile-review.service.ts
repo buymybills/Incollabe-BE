@@ -106,6 +106,7 @@ export class ProfileReviewService {
     profileType?: ProfileType,
     page: number = 1,
     limit: number = 20,
+    search?: string,
   ) {
     const whereConditions: any = { status: ReviewStatus.PENDING };
 
@@ -117,9 +118,71 @@ export class ProfileReviewService {
     // Calculate offset for pagination
     const offset = (page - 1) * limit;
 
+    // If search is provided, we need to filter by profile IDs that match search
+    let searchFilteredProfileIds: number[] | null = null;
+    if (search && search.trim().length > 0) {
+      const searchTerm = search.trim();
+      const searchCondition = {
+        [Op.or]: [
+          { name: { [Op.iLike]: `%${searchTerm}%` } },
+          { email: { [Op.iLike]: `%${searchTerm}%` } },
+          { username: { [Op.iLike]: `%${searchTerm}%` } },
+        ],
+      };
+
+      // Search in brands if not filtering for influencer only
+      let matchedBrandIds: number[] = [];
+      if (!profileType || profileType === ProfileType.BRAND) {
+        const brands = await this.brandModel.findAll({
+          where: {
+            [Op.or]: [
+              { brandName: { [Op.iLike]: `%${searchTerm}%` } },
+              { legalEntityName: { [Op.iLike]: `%${searchTerm}%` } },
+              { email: { [Op.iLike]: `%${searchTerm}%` } },
+              { username: { [Op.iLike]: `%${searchTerm}%` } },
+            ],
+          },
+          attributes: ['id'],
+        });
+        matchedBrandIds = brands.map((b) => b.id);
+      }
+
+      // Search in influencers if not filtering for brand only
+      let matchedInfluencerIds: number[] = [];
+      if (!profileType || profileType === ProfileType.INFLUENCER) {
+        const influencers = await this.influencerModel.findAll({
+          where: searchCondition,
+          attributes: ['id'],
+        });
+        matchedInfluencerIds = influencers.map((i) => i.id);
+      }
+
+      // Combine all matched IDs
+      searchFilteredProfileIds = [...matchedBrandIds, ...matchedInfluencerIds];
+
+      // If no matches found, return empty result early
+      if (searchFilteredProfileIds.length === 0) {
+        return {
+          data: [],
+          pagination: {
+            total: 0,
+            page,
+            limit,
+            totalPages: 0,
+          },
+        };
+      }
+    }
+
+    // Build the final where conditions for ProfileReview query
+    const finalWhereConditions: any = { ...whereConditions };
+    if (searchFilteredProfileIds !== null) {
+      finalWhereConditions.profileId = { [Op.in]: searchFilteredProfileIds };
+    }
+
     const { count, rows: profiles } =
       await this.profileReviewModel.findAndCountAll({
-        where: whereConditions,
+        where: finalWhereConditions,
         include: [
           {
             model: Admin,
