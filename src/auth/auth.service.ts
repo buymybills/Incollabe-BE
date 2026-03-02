@@ -1140,6 +1140,8 @@ export class AuthService {
       const createdBrand = await this.brandModel.create(
         {
           ...brandData,
+          // If brandEmailId is not provided, default to the login email
+          brandEmailId: brandData.brandEmailId ?? brandData.email,
           profileImage: fileUrls.profileImage ?? brandData.profileImage,
           incorporationDocument:
             fileUrls.incorporationDocument ?? brandData.incorporationDocument,
