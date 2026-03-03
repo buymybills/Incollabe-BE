@@ -83,6 +83,15 @@ function IsValidGenderList(validationOptions?: ValidationOptions) {
 }
 
 export class GetCampaignApplicationsDto {
+  @ApiPropertyOptional({
+    description: 'Search by influencer name or username',
+    example: 'john',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
   @IsOptional()
   @IsEnum(ApplicationStatus)
   status?: ApplicationStatus;
