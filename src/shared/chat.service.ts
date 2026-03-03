@@ -8,6 +8,7 @@ import { InjectModel } from '@nestjs/sequelize';
 import { Conversation, ParticipantType } from './models/conversation.model';
 import { Message, MessageType, SenderType } from './models/message.model';
 import { CampaignReview, ReviewerType } from './models/campaign-review.model';
+import { GroupMember, MemberRole } from './models/group-member.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { Campaign } from '../campaign/models/campaign.model';
@@ -39,6 +40,8 @@ export class ChatService {
     private campaignApplicationModel: typeof CampaignApplication,
     @InjectModel(CampaignReview)
     private campaignReviewModel: typeof CampaignReview,
+    @InjectModel(GroupMember)
+    private groupMemberModel: typeof GroupMember,
   ) {}
 
   /**
@@ -114,13 +117,13 @@ export class ChatService {
       conversation.participant1Id === userId
     ) {
       return {
-        type: conversation.participant2Type,
-        id: conversation.participant2Id,
+        type: conversation.participant2Type!,
+        id: conversation.participant2Id!,
       };
     }
     return {
-      type: conversation.participant1Type,
-      id: conversation.participant1Id,
+      type: conversation.participant1Type!,
+      id: conversation.participant1Id!,
     };
   }
 
@@ -589,6 +592,25 @@ export class ChatService {
     // Block messaging in closed campaign chats
     if (conversation.isCampaignClosed) {
       throw new ForbiddenException('This campaign chat has been closed');
+    }
+
+    // For group chats, only admin can send messages (broadcast)
+    if (conversation.conversationType === 'group') {
+      const groupMember = await this.groupMemberModel.findOne({
+        where: {
+          groupChatId: conversation.groupChatId,
+          memberId: userId,
+          memberType: userType,
+          role: MemberRole.ADMIN,
+          leftAt: { [Op.is]: null },
+        } as any,
+      });
+
+      if (!groupMember) {
+        throw new ForbiddenException(
+          'Only group admins can send messages in this group',
+        );
+      }
     }
 
     // Validate message has content

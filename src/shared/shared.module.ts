@@ -16,6 +16,7 @@ import { EncryptionService } from './services/encryption.service';
 import { SearchService } from './services/search.service';
 import { SupportTicketService } from './support-ticket.service';
 import { ChatService } from './chat.service';
+import { GroupChatService } from './group-chat.service';
 import { ChatGateway } from './chat.gateway';
 import { InstagramSyncGateway } from './instagram-sync.gateway';
 import { SearchController } from './controllers/search.controller';
@@ -74,6 +75,8 @@ import { AppVersion } from './models/app-version.model';
 import { AppVersionService } from './services/app-version.service';
 import { AIScoringService } from './services/ai-scoring.service';
 import { CampaignReview } from './models/campaign-review.model';
+import { GroupChat } from './models/group-chat.model';
+import { GroupMember } from './models/group-member.model';
 
 @Module({
   imports: [
@@ -110,6 +113,8 @@ import { CampaignReview } from './models/campaign-review.model';
       DeviceToken,
       AppVersion,
       CampaignReview,
+      GroupChat,
+      GroupMember,
     ]),
   ],
   controllers: [
@@ -137,6 +142,7 @@ import { CampaignReview } from './models/campaign-review.model';
     SearchService,
     SupportTicketService,
     ChatService,
+    GroupChatService,
     ChatGateway,
     InstagramSyncGateway,
     IsValidUsernameConstraint,
@@ -173,6 +179,7 @@ import { CampaignReview } from './models/campaign-review.model';
     EncryptionService,
     SupportTicketService,
     ChatService,
+    GroupChatService,
     ChatGateway,
     InstagramSyncGateway,
     IsValidUsernameConstraint,

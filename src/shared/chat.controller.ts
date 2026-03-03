@@ -25,6 +25,7 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { ChatService } from './chat.service';
+import { GroupChatService } from './group-chat.service';
 import { ChatGateway } from './chat.gateway';
 import { S3Service } from './s3.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
@@ -38,6 +39,13 @@ import {
   MarkAsReadBodyDto,
   SubmitReviewDto,
 } from './dto/chat.dto';
+import {
+  CreateGroupDto,
+  AddMembersDto,
+  RemoveMemberDto,
+  UpdateGroupDto,
+  GetGroupsDto,
+} from './dto/group-chat.dto';
 
 @ApiTags('Chat')
 @ApiBearerAuth()
@@ -83,6 +91,7 @@ export class ChatController {
 
   constructor(
     private readonly chatService: ChatService,
+    private readonly groupChatService: GroupChatService,
     private readonly chatGateway: ChatGateway,
     private readonly s3Service: S3Service,
   ) {}
@@ -965,5 +974,166 @@ export class ChatController {
       req.user.userType,
     );
     return result; // Let interceptor wrap it
+  }
+
+  // ============================================================
+  // Group Chat Endpoints
+  // ============================================================
+
+  @Post('groups')
+  @ApiOperation({
+    summary: 'Create a new group chat',
+    description:
+      'Create a new group chat with up to 10 members (including creator). Creator becomes admin.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Group created successfully',
+  })
+  async createGroup(
+    @Req() req: RequestWithUser,
+    @Body() dto: CreateGroupDto,
+  ) {
+    return this.groupChatService.createGroup(
+      req.user.id,
+      req.user.userType as any,
+      dto.name,
+      dto.avatarUrl,
+      dto.initialMemberIds,
+    );
+  }
+
+  @Get('groups')
+  @ApiOperation({
+    summary: 'Get all groups for current user',
+    description: 'Returns all groups the current user is a member of',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Groups retrieved successfully',
+  })
+  async getUserGroups(
+    @Req() req: RequestWithUser,
+    @Query() dto: GetGroupsDto,
+  ) {
+    return this.groupChatService.getUserGroups(
+      req.user.id,
+      req.user.userType,
+      dto.page,
+      dto.limit,
+    );
+  }
+
+  @Get('groups/:groupId')
+  @ApiOperation({
+    summary: 'Get group details',
+    description: 'Get detailed information about a specific group including members',
+  })
+  @ApiParam({ name: 'groupId', description: 'Group ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Group details retrieved successfully',
+  })
+  async getGroupDetails(
+    @Req() req: RequestWithUser,
+    @Param('groupId', ParseIntPipe) groupId: number,
+  ) {
+    return this.groupChatService.getGroupDetails(
+      groupId,
+      req.user.id,
+      req.user.userType,
+    );
+  }
+
+  @Put('groups/:groupId')
+  @ApiOperation({
+    summary: 'Update group details',
+    description: 'Update group name or avatar. Only admins can update group details.',
+  })
+  @ApiParam({ name: 'groupId', description: 'Group ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Group updated successfully',
+  })
+  async updateGroup(
+    @Req() req: RequestWithUser,
+    @Param('groupId', ParseIntPipe) groupId: number,
+    @Body() dto: UpdateGroupDto,
+  ) {
+    return this.groupChatService.updateGroup(
+      groupId,
+      dto,
+      req.user.id,
+      req.user.userType,
+    );
+  }
+
+  @Post('groups/:groupId/members')
+  @ApiOperation({
+    summary: 'Add members to group',
+    description: 'Add new members to an existing group. Only admins can add members.',
+  })
+  @ApiParam({ name: 'groupId', description: 'Group ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Members added successfully',
+  })
+  async addMembers(
+    @Req() req: RequestWithUser,
+    @Param('groupId', ParseIntPipe) groupId: number,
+    @Body() dto: AddMembersDto,
+  ) {
+    return this.groupChatService.addMembers(
+      groupId,
+      dto.memberIds,
+      dto.memberTypes,
+      req.user.id,
+      req.user.userType,
+    );
+  }
+
+  @Delete('groups/:groupId/members')
+  @ApiOperation({
+    summary: 'Remove a member from group',
+    description: 'Remove a member from the group. Admins can remove anyone, members can only remove themselves.',
+  })
+  @ApiParam({ name: 'groupId', description: 'Group ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Member removed successfully',
+  })
+  async removeMember(
+    @Req() req: RequestWithUser,
+    @Param('groupId', ParseIntPipe) groupId: number,
+    @Body() dto: RemoveMemberDto,
+  ) {
+    return this.groupChatService.removeMember(
+      groupId,
+      dto.memberId,
+      dto.memberType,
+      req.user.id,
+      req.user.userType,
+    );
+  }
+
+  @Post('groups/:groupId/leave')
+  @ApiOperation({
+    summary: 'Leave a group',
+    description: 'Leave a group chat. If you are the last admin, you must promote another member first.',
+  })
+  @ApiParam({ name: 'groupId', description: 'Group ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Left group successfully',
+  })
+  async leaveGroup(
+    @Req() req: RequestWithUser,
+    @Param('groupId', ParseIntPipe) groupId: number,
+  ) {
+    return this.groupChatService.leaveGroup(
+      groupId,
+      req.user.id,
+      req.user.userType,
+    );
   }
 }
