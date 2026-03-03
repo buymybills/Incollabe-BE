@@ -1482,6 +1482,7 @@ export class CampaignService {
 
     console.log('Platform filter - platformList:', platformList);
     console.log('Gender filter - genderList:', genderList);
+    console.log('Search filter - search:', search);
 
     const whereCondition: any = { campaignId };
     let filteredInfluencerIds: number[] | undefined = undefined;
@@ -1610,16 +1611,24 @@ export class CampaignService {
         where: influencerFilter,
       });
       filteredInfluencerIds = nicheInfluencers.map((i) => i.id);
-    } else if (Object.keys(influencerFilter).length > 0) {
-      // If only age/location/platform/gender filter
+    } else if (
+      Object.keys(influencerFilter).length > 0 ||
+      Object.getOwnPropertySymbols(influencerFilter).length > 0
+    ) {
+      // If only age/location/platform/gender/search filter
+      // Note: Op.or, Op.and are Symbols and not included in Object.keys(), so we check getOwnPropertySymbols too
+      console.log('Applying influencer filter:', influencerFilter);
       const filteredInfluencers = await this.influencerModel.findAll({
         where: influencerFilter,
         attributes: ['id'],
       });
       filteredInfluencerIds = filteredInfluencers.map((i) => i.id);
+      console.log('Filtered influencer IDs:', filteredInfluencerIds);
     }
 
-    if (filteredInfluencerIds) {
+    // Apply influencer filter if we have filtered IDs (including empty array from search with no results)
+    if (filteredInfluencerIds !== undefined) {
+      console.log('Applying influencer filter to applications with IDs:', filteredInfluencerIds);
       whereCondition.influencerId = { [Op.in]: filteredInfluencerIds };
     }
 
