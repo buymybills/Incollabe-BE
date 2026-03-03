@@ -1491,6 +1491,7 @@ export class CampaignService {
     }
 
     const {
+      search,
       status,
       gender,
       niches,
@@ -1578,9 +1579,8 @@ export class CampaignService {
     }
 
     // Platform filter - support multiple platforms
+    const platformConditions: any[] = [];
     if (platformList.length > 0) {
-      const platformConditions: any[] = [];
-
       platformList.forEach((platformLower) => {
         switch (platformLower) {
           case 'instagram':
@@ -1611,11 +1611,32 @@ export class CampaignService {
             break;
         }
       });
+    }
 
+    // Search filter - search by name or username
+    const searchConditions: any[] = [];
+    if (search && search.trim()) {
+      const searchTerm = search.trim();
+      searchConditions.push(
+        { name: { [Op.iLike]: `%${searchTerm}%` } },
+        { username: { [Op.iLike]: `%${searchTerm}%` } },
+      );
+    }
+
+    // Combine search and platform conditions using Op.or
+    // If both exist, we need Op.and at the top level with nested Op.or for each
+    if (searchConditions.length > 0 && platformConditions.length > 0) {
+      influencerFilter[Op.and] = [
+        { [Op.or]: searchConditions },
+        { [Op.or]: platformConditions },
+      ];
+    } else if (searchConditions.length > 0) {
+      influencerFilter[Op.or] = searchConditions;
+    } else if (platformConditions.length > 0) {
       // If only one platform, add directly; if multiple, use Op.or
       if (platformConditions.length === 1) {
         Object.assign(influencerFilter, platformConditions[0]);
-      } else if (platformConditions.length > 1) {
+      } else {
         influencerFilter[Op.or] = platformConditions;
       }
     }
