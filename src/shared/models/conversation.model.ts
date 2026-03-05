@@ -10,6 +10,7 @@ import {
 } from 'sequelize-typescript';
 import { Influencer } from '../../auth/model/influencer.model';
 import { Brand } from '../../brand/model/brand.model';
+import { GroupChat } from './group-chat.model';
 // import { Message } from './message.model'; // Circular dependency - will be resolved at runtime
 
 export enum ParticipantType {
@@ -158,6 +159,7 @@ export class Conversation extends Model<Conversation> {
   declare campaignApplicationId: number | null;
 
   // Group chat field
+  @ForeignKey(() => GroupChat)
   @Column({
     type: DataType.INTEGER,
     allowNull: true,
@@ -185,6 +187,9 @@ export class Conversation extends Model<Conversation> {
 
   @BelongsTo(() => Brand)
   declare brand: Brand;
+
+  @BelongsTo(() => GroupChat)
+  declare groupChat: GroupChat;
 
   @HasMany(() => require('./message.model').Message)
   declare messages: any[];
