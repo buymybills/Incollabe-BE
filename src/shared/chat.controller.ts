@@ -118,18 +118,20 @@ export class ChatController {
   @ApiOperation({
     summary: 'Get all conversations for current user',
     description:
-      'Retrieve all conversations (personal or campaign) for the authenticated user.\n\n' +
+      'Retrieve all conversations (personal, campaign, or group) for the authenticated user.\n\n' +
       '**Query Parameters:**\n' +
       '- `type=personal` - Returns personal one-on-one conversations\n' +
       '- `type=campaign` - Returns campaign conversations grouped by campaign\n' +
+      '- `type=group` - Returns group conversations\n' +
       '- No type parameter - Defaults to personal conversations\n\n' +
       '**Response includes:**\n' +
       '- `unreadCounts.personal` - Total unread messages in ALL personal conversations\n' +
       '- `unreadCounts.campaign` - Total unread messages in ALL campaign conversations\n' +
+      '- `unreadCounts.group` - Total unread messages in ALL group conversations\n' +
       '- Individual conversation unread counts\n' +
       '- Pagination information\n\n' +
-      '💡 **Both unread counts are always returned** regardless of which type you query, ' +
-      'so you can display badges for both tabs with a single API call!',
+      '💡 **All unread counts are always returned** regardless of which type you query, ' +
+      'so you can display badges for all tabs with a single API call!',
   })
   @ApiResponse({
     status: 200,
@@ -158,6 +160,11 @@ export class ChatController {
                       type: 'number',
                       example: 8,
                       description: 'Total unread messages in all campaign conversations',
+                    },
+                    group: {
+                      type: 'number',
+                      example: 3,
+                      description: 'Total unread messages in all group conversations',
                     },
                   },
                 },
@@ -215,6 +222,11 @@ export class ChatController {
                       example: 8,
                       description: 'Total unread messages in all campaign conversations',
                     },
+                    group: {
+                      type: 'number',
+                      example: 3,
+                      description: 'Total unread messages in all group conversations',
+                    },
                   },
                 },
                 campaigns: {
@@ -254,6 +266,70 @@ export class ChatController {
                     page: { type: 'number', example: 1 },
                     limit: { type: 'number', example: 20 },
                     total: { type: 'number', example: 10 },
+                    totalPages: { type: 'number', example: 1 },
+                  },
+                },
+              },
+            },
+          },
+        },
+        {
+          // Group conversations response
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                type: { type: 'string', example: 'group' },
+                unreadCounts: {
+                  type: 'object',
+                  description: 'Unread message counts for ALL conversation types',
+                  properties: {
+                    personal: {
+                      type: 'number',
+                      example: 5,
+                      description: 'Total unread messages in all personal conversations',
+                    },
+                    campaign: {
+                      type: 'number',
+                      example: 8,
+                      description: 'Total unread messages in all campaign conversations',
+                    },
+                    group: {
+                      type: 'number',
+                      example: 3,
+                      description: 'Total unread messages in all group conversations',
+                    },
+                  },
+                },
+                conversations: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'number', example: 78 },
+                      conversationType: { type: 'string', example: 'group' },
+                      groupChatId: { type: 'number', example: 15 },
+                      groupName: { type: 'string', example: 'Team Collaboration' },
+                      groupAvatar: { type: 'string', example: 'https://...', nullable: true },
+                      memberCount: { type: 'number', example: 5 },
+                      lastMessage: { type: 'string', example: 'See you tomorrow!' },
+                      lastMessageType: { type: 'string', example: 'text' },
+                      lastMessageAt: { type: 'string', example: '2026-03-05T10:00:00.000Z' },
+                      lastMessageSenderType: { type: 'string', example: 'influencer' },
+                      unreadCount: { type: 'number', example: 2 },
+                      createdAt: { type: 'string' },
+                      updatedAt: { type: 'string' },
+                    },
+                  },
+                },
+                pagination: {
+                  type: 'object',
+                  properties: {
+                    page: { type: 'number', example: 1 },
+                    limit: { type: 'number', example: 20 },
+                    total: { type: 'number', example: 8 },
                     totalPages: { type: 'number', example: 1 },
                   },
                 },
@@ -1106,6 +1182,104 @@ export class ChatController {
     @Body() body: { users: Array<{ userId: number; userType: 'influencer' | 'brand' }> },
   ) {
     const result = await this.chatService.getBatchPublicKeys(body.users);
+    return result; // Let interceptor wrap it
+  }
+
+  @Get('e2ee/conversation/:conversationId/public-keys')
+  @ApiOperation({
+    summary: 'Get public keys for all participants in a conversation (simplified)',
+    description:
+      'Retrieve public keys for all participants in a conversation by just passing the conversation ID.\n\n' +
+      '**Simpler Alternative to Batch Endpoint:**\n' +
+      'Instead of manually fetching all members and their IDs, just pass the conversation ID and ' +
+      'the backend will automatically fetch all participants/members and return their public keys.\n\n' +
+      '**Works for:**\n' +
+      '- Personal conversations (1-to-1 chats)\n' +
+      '- Campaign conversations\n' +
+      '- Group conversations (automatically fetches all group members)\n\n' +
+      '**Use Case:**\n' +
+      'When sending an E2EE message to a conversation, use this endpoint to get all recipient public keys ' +
+      'in a single API call without needing to know the participant details.',
+  })
+  @ApiParam({
+    name: 'conversationId',
+    description: 'Conversation ID',
+    example: 78,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Public keys for all conversation participants',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          type: 'object',
+          properties: {
+            conversationId: { type: 'number', example: 78 },
+            conversationType: {
+              type: 'string',
+              enum: ['personal', 'campaign', 'group'],
+              example: 'group',
+            },
+            participants: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  userId: { type: 'number', example: 32 },
+                  userType: { type: 'string', example: 'influencer' },
+                  name: { type: 'string', example: 'John Doe' },
+                  username: { type: 'string', example: 'johndoe' },
+                  publicKey: {
+                    type: 'string',
+                    nullable: true,
+                    example: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A...',
+                    description: 'Public key in Base64 format, or null if not set',
+                  },
+                  publicKeyCreatedAt: {
+                    type: 'string',
+                    nullable: true,
+                    example: '2025-11-15T10:00:00.000Z',
+                  },
+                  publicKeyUpdatedAt: {
+                    type: 'string',
+                    nullable: true,
+                    example: '2025-11-15T10:00:00.000Z',
+                  },
+                },
+              },
+            },
+          },
+        },
+        message: {
+          type: 'string',
+          example: 'Public keys retrieved for conversation',
+        },
+        timestamp: {
+          type: 'string',
+          example: '2025-11-17T12:00:00.000Z',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Conversation not found or user not a participant',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - JWT token required',
+  })
+  async getConversationPublicKeys(
+    @Req() req: RequestWithUser,
+    @Param('conversationId', ParseIntPipe) conversationId: number,
+  ) {
+    const result = await this.chatService.getConversationPublicKeys(
+      conversationId,
+      req.user.id,
+      req.user.userType,
+    );
     return result; // Let interceptor wrap it
   }
 

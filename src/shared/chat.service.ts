@@ -266,7 +266,11 @@ export class ChatService {
   private async getUnreadCounts(
     userId: number,
     userParticipantType: ParticipantType,
-  ): Promise<{ personalUnreadCount: number; campaignUnreadCount: number }> {
+  ): Promise<{
+    personalUnreadCount: number;
+    campaignUnreadCount: number;
+    groupUnreadCount: number;
+  }> {
     // Fetch ALL personal conversations (just for counting)
     const personalConversations = await this.conversationModel.findAll({
       where: {
@@ -329,7 +333,38 @@ export class ChatService {
       return sum + unread;
     }, 0);
 
-    return { personalUnreadCount, campaignUnreadCount };
+    // Fetch ALL group conversations (just for counting)
+    const groupConversations = await this.conversationModel.findAll({
+      where: {
+        [Op.or]: [
+          { participant1Type: userParticipantType, participant1Id: userId },
+          { participant2Type: userParticipantType, participant2Id: userId },
+        ],
+        isActive: true,
+        conversationType: 'group',
+        lastMessageAt: { [Op.ne]: null } as any,
+      },
+      attributes: [
+        'id',
+        'unreadCountParticipant1',
+        'unreadCountParticipant2',
+        'participant1Type',
+        'participant1Id',
+      ],
+      raw: true,
+    });
+
+    // Calculate group unread count
+    const groupUnreadCount = groupConversations.reduce((sum, conv: any) => {
+      const unread = this.getUserUnreadCountForConversation(
+        conv as any,
+        userId,
+        userParticipantType,
+      );
+      return sum + unread;
+    }, 0);
+
+    return { personalUnreadCount, campaignUnreadCount, groupUnreadCount };
   }
 
   async getConversations(
@@ -341,11 +376,9 @@ export class ChatService {
     const offset = (page - 1) * limit;
     const userParticipantType = userType as ParticipantType;
 
-    // Get unread counts for BOTH types (always)
-    const { personalUnreadCount, campaignUnreadCount } = await this.getUnreadCounts(
-      userId,
-      userParticipantType,
-    );
+    // Get unread counts for ALL types (always)
+    const { personalUnreadCount, campaignUnreadCount, groupUnreadCount } =
+      await this.getUnreadCounts(userId, userParticipantType);
 
     // Campaign conversations: show immediately, no lastMessageAt requirement
     // Personal conversations: only show after first message
@@ -503,6 +536,7 @@ export class ChatService {
         unreadCounts: {
           personal: personalUnreadCount,
           campaign: campaignUnreadCount,
+          group: groupUnreadCount,
         },
         campaigns: Object.values(grouped),
         pagination: {
@@ -517,10 +551,11 @@ export class ChatService {
     }
 
     return {
-      type: 'personal',
+      type: type || 'personal',
       unreadCounts: {
         personal: personalUnreadCount,
         campaign: campaignUnreadCount,
+        group: groupUnreadCount,
       },
       conversations: filteredConversations,
       pagination: {
@@ -600,6 +635,11 @@ export class ChatService {
 
     // For group chats, verify user is a member and enforce broadcast rules
     if (conversation.conversationType === 'group') {
+      // Ensure groupChatId exists
+      if (!conversation.groupChatId) {
+        throw new NotFoundException('Group chat ID missing');
+      }
+
       // Get group details to check if it's broadcast-only
       const group = await this.groupChatModel.findByPk(conversation.groupChatId);
 
@@ -1565,5 +1605,101 @@ export class ChatService {
     }
 
     return publicKeys;
+  }
+
+  /**
+   * Get public keys for all participants in a conversation
+   * Simplified endpoint - just pass conversation ID instead of manually fetching all participants
+   */
+  async getConversationPublicKeys(
+    conversationId: number,
+    currentUserId: number,
+    currentUserType: 'influencer' | 'brand',
+  ) {
+    // Fetch the conversation
+    const conversation = await this.conversationModel.findByPk(conversationId);
+
+    if (!conversation) {
+      throw new NotFoundException('Conversation not found');
+    }
+
+    // Verify current user is a participant
+    const currentUserParticipantType = currentUserType as ParticipantType;
+    const isParticipant =
+      (conversation.participant1Type === currentUserParticipantType &&
+        conversation.participant1Id === currentUserId) ||
+      (conversation.participant2Type === currentUserParticipantType &&
+        conversation.participant2Id === currentUserId);
+
+    if (!isParticipant && conversation.conversationType !== 'group') {
+      throw new ForbiddenException('You are not a participant in this conversation');
+    }
+
+    // Collect all participants based on conversation type
+    const participants: Array<{ userId: number; userType: 'influencer' | 'brand' }> = [];
+
+    if (conversation.conversationType === 'group') {
+      // For group chats, fetch all group members
+      if (!conversation.groupChatId) {
+        throw new NotFoundException('Group chat ID missing');
+      }
+
+      const group = await this.groupChatModel.findByPk(conversation.groupChatId);
+      if (!group) {
+        throw new NotFoundException('Group not found');
+      }
+
+      // Get all group members (import GroupMember model if needed)
+      const { GroupMember } = require('./models/group-member.model');
+      const members = await GroupMember.findAll({
+        where: {
+          groupChatId: conversation.groupChatId,
+          leftAt: null, // Only active members
+        },
+        attributes: ['memberId', 'memberType'],
+      });
+
+      // Verify current user is a member
+      const isMember = members.some(
+        (m: any) =>
+          m.memberId === currentUserId &&
+          m.memberType === currentUserType,
+      );
+
+      if (!isMember) {
+        throw new ForbiddenException('You are not a member of this group');
+      }
+
+      // Add all members to participants list
+      for (const member of members) {
+        participants.push({
+          userId: member.memberId,
+          userType: member.memberType,
+        });
+      }
+    } else {
+      // For personal and campaign conversations, add both participants
+      if (conversation.participant1Id && conversation.participant1Type) {
+        participants.push({
+          userId: conversation.participant1Id,
+          userType: conversation.participant1Type,
+        });
+      }
+      if (conversation.participant2Id && conversation.participant2Type) {
+        participants.push({
+          userId: conversation.participant2Id,
+          userType: conversation.participant2Type,
+        });
+      }
+    }
+
+    // Use existing getBatchPublicKeys method to fetch all public keys
+    const publicKeys = await this.getBatchPublicKeys(participants);
+
+    return {
+      conversationId: conversation.id,
+      conversationType: conversation.conversationType,
+      participants: publicKeys,
+    };
   }
 }

@@ -116,12 +116,12 @@ export class GetConversationsDto {
 
   @ApiProperty({
     description: 'Filter by conversation type',
-    enum: ['personal', 'campaign'],
+    enum: ['personal', 'campaign', 'group'],
     required: false,
   })
   @IsString()
   @IsOptional()
-  type?: 'personal' | 'campaign';
+  type?: 'personal' | 'campaign' | 'group';
 }
 
 export class SubmitReviewDto {
