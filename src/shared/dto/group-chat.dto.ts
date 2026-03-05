@@ -9,6 +9,7 @@ import {
   ArrayMinSize,
   ArrayMaxSize,
   IsEnum,
+  IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { MemberType } from '../models/group-member.model';
@@ -24,6 +25,16 @@ export class CreateGroupDto {
   @IsString()
   @IsOptional()
   avatarUrl?: string;
+
+  @ApiProperty({
+    description: 'Broadcast-only mode: When true, only admins can send messages (announcement channel). When false, any member can send messages (regular group chat). Default: false',
+    required: false,
+    default: false,
+    example: false,
+  })
+  @IsBoolean()
+  @IsOptional()
+  isBroadcastOnly?: boolean;
 
   @ApiProperty({
     description: 'Initial members to add to the group (optional, max 9 members plus creator)',

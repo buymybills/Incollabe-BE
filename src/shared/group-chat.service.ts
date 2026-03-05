@@ -43,6 +43,7 @@ export class GroupChatService {
     name: string,
     avatarUrl?: string,
     initialMemberIds?: Array<{ memberId: number; memberType: MemberType }>,
+    isBroadcastOnly: boolean = false,
   ) {
     // Validate group name
     if (!name || name.trim().length === 0) {
@@ -69,6 +70,7 @@ export class GroupChatService {
       createdByType: creatorType,
       maxMembers: 10,
       isActive: true,
+      isBroadcastOnly: isBroadcastOnly || false,
     } as any);
 
     // Create conversation for the group
@@ -430,9 +432,11 @@ export class GroupChatService {
       createdByType: group.createdByType,
       maxMembers: group.maxMembers,
       isActive: group.isActive,
+      isBroadcastOnly: group.isBroadcastOnly,
       memberCount: enrichedMembers.length,
       members: enrichedMembers,
       conversation: group.conversation,
+      currentUserRole: isMember.role, // 'admin' or 'member'
       createdAt: group.createdAt,
       updatedAt: group.updatedAt,
     };
@@ -497,11 +501,12 @@ export class GroupChatService {
           id: group.id,
           name: group.name,
           avatarUrl: group.avatarUrl,
+          isBroadcastOnly: group.isBroadcastOnly,
           memberCount,
           unreadCount,
           conversation: group.conversation,
           lastJoinedAt: membership.joinedAt,
-          role: membership.role,
+          currentUserRole: membership.role, // 'admin' or 'member'
         };
       }),
     );

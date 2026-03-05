@@ -63,6 +63,13 @@ export class GroupChat extends Model<GroupChat> {
   })
   declare isActive: boolean;
 
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+    field: 'is_broadcast_only',
+  })
+  declare isBroadcastOnly: boolean;
+
   // Timestamps
   @Column({
     type: DataType.DATE,

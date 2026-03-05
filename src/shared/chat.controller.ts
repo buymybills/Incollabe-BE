@@ -1117,7 +1117,11 @@ export class ChatController {
   @ApiOperation({
     summary: 'Create a new group chat',
     description:
-      'Create a new group chat with up to 10 members (including creator). Creator becomes admin.',
+      'Create a new group chat with up to 10 members (including creator). Creator becomes admin.\n\n' +
+      '**Group Types:**\n' +
+      '- **Regular Group** (`isBroadcastOnly: false`): Any member can send messages (default)\n' +
+      '- **Broadcast/Announcement Group** (`isBroadcastOnly: true`): Only admins can send messages\n\n' +
+      'Use broadcast mode for announcement channels, newsletters, or community updates where you want to limit who can post.',
   })
   @ApiResponse({
     status: 201,
@@ -1133,6 +1137,7 @@ export class ChatController {
       dto.name,
       dto.avatarUrl,
       dto.initialMemberIds,
+      dto.isBroadcastOnly,
     );
   }
 

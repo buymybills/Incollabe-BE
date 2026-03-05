@@ -9,6 +9,7 @@ import { Conversation, ParticipantType } from './models/conversation.model';
 import { Message, MessageType, SenderType } from './models/message.model';
 import { CampaignReview, ReviewerType } from './models/campaign-review.model';
 import { GroupMember, MemberRole } from './models/group-member.model';
+import { GroupChat } from './models/group-chat.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { Campaign } from '../campaign/models/campaign.model';
@@ -42,6 +43,8 @@ export class ChatService {
     private campaignReviewModel: typeof CampaignReview,
     @InjectModel(GroupMember)
     private groupMemberModel: typeof GroupMember,
+    @InjectModel(GroupChat)
+    private groupChatModel: typeof GroupChat,
   ) {}
 
   /**
@@ -406,6 +409,7 @@ export class ChatService {
 
         const base = {
           id: conv.id,
+          conversationType: conv.conversationType, // 'personal', 'campaign', or 'group'
           otherParty: otherPartyDetails,
           otherPartyType: otherParticipant.type,
           lastMessage: conv.lastMessage,
@@ -594,21 +598,35 @@ export class ChatService {
       throw new ForbiddenException('This campaign chat has been closed');
     }
 
-    // For group chats, only admin can send messages (broadcast)
+    // For group chats, verify user is a member and enforce broadcast rules
     if (conversation.conversationType === 'group') {
+      // Get group details to check if it's broadcast-only
+      const group = await this.groupChatModel.findByPk(conversation.groupChatId);
+
+      if (!group) {
+        throw new NotFoundException('Group not found');
+      }
+
+      // Check if user is an active member
       const groupMember = await this.groupMemberModel.findOne({
         where: {
           groupChatId: conversation.groupChatId,
           memberId: userId,
           memberType: userType,
-          role: MemberRole.ADMIN,
           leftAt: { [Op.is]: null },
         } as any,
       });
 
       if (!groupMember) {
         throw new ForbiddenException(
-          'Only group admins can send messages in this group',
+          'You are not a member of this group or have left the group',
+        );
+      }
+
+      // If broadcast-only mode, only admins can send messages
+      if (group.isBroadcastOnly && groupMember.role !== MemberRole.ADMIN) {
+        throw new ForbiddenException(
+          'Only admins can send messages in this broadcast group',
         );
       }
     }
