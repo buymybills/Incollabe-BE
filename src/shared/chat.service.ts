@@ -625,7 +625,18 @@ export class ChatService {
     if (content) {
       try {
         const parsed = JSON.parse(content);
-        // Check for new dual-key format: { encryptedKeyForRecipient, encryptedKeyForSender, iv, ciphertext }
+
+        // Check for group chat multi-recipient format: { encryptedKeys, iv, ciphertext }
+        const isMultiRecipient =
+          parsed.encryptedKeys &&
+          parsed.iv &&
+          parsed.ciphertext &&
+          typeof parsed.encryptedKeys === 'object' &&
+          typeof parsed.iv === 'string' &&
+          typeof parsed.ciphertext === 'string' &&
+          Object.keys(parsed.encryptedKeys).length > 0;
+
+        // Check for dual-key format (1-to-1): { encryptedKeyForRecipient, encryptedKeyForSender, iv, ciphertext }
         const isDualKey =
           parsed.encryptedKeyForRecipient &&
           parsed.encryptedKeyForSender &&
@@ -635,6 +646,7 @@ export class ChatService {
           typeof parsed.encryptedKeyForSender === 'string' &&
           typeof parsed.iv === 'string' &&
           typeof parsed.ciphertext === 'string';
+
         // Check for legacy format: { encryptedKey, iv, ciphertext }
         const isLegacy =
           parsed.encryptedKey &&
@@ -643,7 +655,8 @@ export class ChatService {
           typeof parsed.encryptedKey === 'string' &&
           typeof parsed.iv === 'string' &&
           typeof parsed.ciphertext === 'string';
-        if (isDualKey || isLegacy) {
+
+        if (isMultiRecipient || isDualKey || isLegacy) {
           isEncrypted = true;
           encryptionVersion = parsed.version || 'v1';
         }
@@ -1453,5 +1466,86 @@ export class ChatService {
       default:
         throw new BadRequestException('Invalid user type');
     }
+  }
+
+  /**
+   * E2EE: Get public keys for multiple users (batch endpoint for group chat)
+   */
+  async getBatchPublicKeys(
+    users: Array<{ userId: number; userType: 'influencer' | 'brand' }>,
+  ) {
+    const publicKeys: Array<{
+      userId: number;
+      userType: string;
+      name: string;
+      username: string;
+      publicKey: string | null;
+      publicKeyCreatedAt: Date | null;
+      publicKeyUpdatedAt: Date | null;
+    }> = [];
+
+    // Separate users by type for efficient batch queries
+    const influencerIds = users
+      .filter((u) => u.userType === 'influencer')
+      .map((u) => u.userId);
+    const brandIds = users
+      .filter((u) => u.userType === 'brand')
+      .map((u) => u.userId);
+
+    // Fetch all influencers in one query
+    if (influencerIds.length > 0) {
+      const influencers = await this.influencerModel.findAll({
+        where: { id: influencerIds },
+        attributes: [
+          'id',
+          'name',
+          'username',
+          'publicKey',
+          'publicKeyCreatedAt',
+          'publicKeyUpdatedAt',
+        ],
+      });
+
+      for (const influencer of influencers) {
+        publicKeys.push({
+          userId: influencer.id,
+          userType: 'influencer',
+          name: influencer.name,
+          username: influencer.username,
+          publicKey: influencer.publicKey || null,
+          publicKeyCreatedAt: influencer.publicKeyCreatedAt || null,
+          publicKeyUpdatedAt: influencer.publicKeyUpdatedAt || null,
+        });
+      }
+    }
+
+    // Fetch all brands in one query
+    if (brandIds.length > 0) {
+      const brands = await this.brandModel.findAll({
+        where: { id: brandIds },
+        attributes: [
+          'id',
+          'brandName',
+          'username',
+          'publicKey',
+          'publicKeyCreatedAt',
+          'publicKeyUpdatedAt',
+        ],
+      });
+
+      for (const brand of brands) {
+        publicKeys.push({
+          userId: brand.id,
+          userType: 'brand',
+          name: brand.brandName,
+          username: brand.username,
+          publicKey: brand.publicKey || null,
+          publicKeyCreatedAt: brand.publicKeyCreatedAt || null,
+          publicKeyUpdatedAt: brand.publicKeyUpdatedAt || null,
+        });
+      }
+    }
+
+    return publicKeys;
   }
 }

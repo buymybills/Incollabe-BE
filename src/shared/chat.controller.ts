@@ -303,18 +303,31 @@ export class ChatController {
     description:
       '🔒 **All messages are End-to-End Encrypted (E2EE)**\n\n' +
       'Send encrypted messages using RSA-2048 + AES-256-GCM hybrid encryption.\n\n' +
-      '**E2EE Message Flow:**\n' +
+      '**E2EE Message Flow (1-to-1 Chat):**\n' +
       '1. Generate AES-256 session key on your device\n' +
       '2. Encrypt message content with AES-256-GCM\n' +
       "3. Fetch recipient's public key: GET /api/e2ee/public-key/:userType/:userIdentifier\n" +
       "4. Encrypt AES key with recipient's RSA-2048 public key\n" +
       '5. Send encrypted message using this endpoint\n\n' +
+      '**E2EE Message Flow (Group Chat):**\n' +
+      '1. Generate AES-256 session key on your device\n' +
+      '2. Encrypt message content with AES-256-GCM\n' +
+      '3. Fetch all group members: GET /api/groups/:groupId OR POST /api/e2ee/public-keys/batch\n' +
+      '4. Encrypt AES key separately with EACH member\'s RSA public key\n' +
+      '5. Send message with multi-recipient format (see Group Chat example)\n\n' +
       '**Sending Messages:**\n' +
       '- Option 1: Use `conversationId` if you already have it\n' +
       '- Option 2: Use `otherPartyId` + `otherPartyType` and backend will auto-create/find conversation\n\n' +
-      '**Content Format:**\n' +
+      '**Content Format (1-to-1 & Campaign):**\n' +
       'The `content` field must be a JSON string with:\n' +
-      "- `encryptedKey`: AES key encrypted with recipient's RSA public key (Base64)\n" +
+      '- `encryptedKeyForRecipient`: AES key encrypted for recipient (Base64)\n' +
+      '- `encryptedKeyForSender`: AES key encrypted for sender (Base64)\n' +
+      '- `iv`: AES-GCM initialization vector (Base64)\n' +
+      '- `ciphertext`: AES-256-GCM encrypted message (Base64)\n' +
+      '- `version`: Protocol version (currently "v1")\n\n' +
+      '**Content Format (Group Chat):**\n' +
+      'The `content` field must be a JSON string with:\n' +
+      '- `encryptedKeys`: Object mapping "userId:userType" to encrypted AES keys\n' +
       '- `iv`: AES-GCM initialization vector (Base64)\n' +
       '- `ciphertext`: AES-256-GCM encrypted message (Base64)\n' +
       '- `version`: Protocol version (currently "v1")',
@@ -448,6 +461,18 @@ export class ChatController {
           conversationId: 45,
           content:
             '{"encryptedKeyForRecipient":"QeGPkee/OBXSmQTHqSUl6acwC1be4HJvwqwdLuCfkfXo...","encryptedKeyForSender":"B8H0sKPJMXxx2pTmjYaD2HD8vbSLbYLOgf4yQsFudUT0...","iv":"oeb3PbPUWVbxZu9g","ciphertext":"MzM7rZE6Zb9LR3Ja8RH/SuO3Ak/53TpYfDMZgyJtRJ4nyi155wCtTazdBBbOoFOuBAjgViD6qhgMB+CZCQsh7n8=","version":"v1"}',
+          messageType: 'text',
+        },
+      },
+      groupChatText: {
+        summary: '👥 Group Chat - E2EE Multi-Recipient Message',
+        description:
+          'Group chat messages use a multi-recipient encryption format where the AES key is encrypted separately for each member. ' +
+          'The encryptedKeys object maps "userId:userType" to the AES key encrypted with that member\'s public key.',
+        value: {
+          conversationId: 78,
+          content:
+            '{"encryptedKeys":{"32:influencer":"QeGPkee/OBXSmQTHqSUl6acwC1be4HJvwqwdLuCfkfXo...","15:brand":"x3ENCEGv0iqVZYfG8WncIRGj3YsUQAORAUow4EK4bwk...","18:influencer":"BfGH2kff/PCYTnRUI8e9Zk2pL7mN3qR5sT6uV8wX0yA...","11:influencer":"tV+gb7CRYpC2IldY868q8VpaeFdj5c2P182QOaBcDe..."},"iv":"oeb3PbPUWVbxZu9g","ciphertext":"MzM7rZE6Zb9LR3Ja8RH/SuO3Ak/53TpYfDMZgyJtRJ4nyi155wCtTazdBBbOoFOuBAjgViD6qhgMB+CZCQsh7n8=","version":"v1"}',
           messageType: 'text',
         },
       },
@@ -976,6 +1001,114 @@ export class ChatController {
     return result; // Let interceptor wrap it
   }
 
+  @Post('e2ee/public-keys/batch')
+  @ApiOperation({
+    summary: 'Get public keys for multiple users (for group chat E2EE)',
+    description:
+      'Retrieve RSA-2048 public keys for multiple users at once. Required for encrypting group chat messages.\n\n' +
+      '**Group Chat E2EE Flow:**\n' +
+      '1. Fetch all group members using GET /api/groups/:groupId\n' +
+      '2. Use this endpoint to get public keys for all members\n' +
+      '3. Generate AES-256 session key\n' +
+      '4. Encrypt message with AES-256-GCM\n' +
+      '5. Encrypt AES key with each member\'s RSA public key\n' +
+      '6. Send message with multi-recipient format\n\n' +
+      '**Important:** Users without public keys will have `publicKey: null` in the response. ' +
+      'You should handle this gracefully (skip encryption for those users or show a warning).',
+  })
+  @ApiBody({
+    description: 'Array of users to fetch public keys for',
+    schema: {
+      type: 'object',
+      required: ['users'],
+      properties: {
+        users: {
+          type: 'array',
+          description: 'List of users to fetch public keys for',
+          items: {
+            type: 'object',
+            required: ['userId', 'userType'],
+            properties: {
+              userId: {
+                type: 'number',
+                description: 'User ID',
+                example: 32,
+              },
+              userType: {
+                type: 'string',
+                enum: ['influencer', 'brand'],
+                description: 'User type',
+                example: 'influencer',
+              },
+            },
+          },
+          example: [
+            { userId: 32, userType: 'influencer' },
+            { userId: 15, userType: 'brand' },
+            { userId: 18, userType: 'influencer' },
+          ],
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Public keys retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              userId: { type: 'number', example: 32 },
+              userType: { type: 'string', example: 'influencer' },
+              name: { type: 'string', example: 'John Doe' },
+              username: { type: 'string', example: 'johndoe' },
+              publicKey: {
+                type: 'string',
+                nullable: true,
+                example: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A...',
+                description: 'Public key in Base64 format, or null if not set',
+              },
+              publicKeyCreatedAt: {
+                type: 'string',
+                nullable: true,
+                example: '2025-11-15T10:00:00.000Z',
+              },
+              publicKeyUpdatedAt: {
+                type: 'string',
+                nullable: true,
+                example: '2025-11-15T10:00:00.000Z',
+              },
+            },
+          },
+        },
+        message: { type: 'string', example: 'Public keys retrieved' },
+        timestamp: {
+          type: 'string',
+          example: '2025-11-17T12:00:00.000Z',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid user data',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - JWT token required',
+  })
+  async getBatchPublicKeys(
+    @Body() body: { users: Array<{ userId: number; userType: 'influencer' | 'brand' }> },
+  ) {
+    const result = await this.chatService.getBatchPublicKeys(body.users);
+    return result; // Let interceptor wrap it
+  }
+
   // ============================================================
   // Group Chat Endpoints
   // ============================================================
@@ -1027,7 +1160,11 @@ export class ChatController {
   @Get('groups/:groupId')
   @ApiOperation({
     summary: 'Get group details',
-    description: 'Get detailed information about a specific group including members',
+    description:
+      'Get detailed information about a specific group including members and their public keys.\n\n' +
+      '**E2EE Support:** Member details include `publicKey`, `publicKeyCreatedAt`, and `publicKeyUpdatedAt` fields ' +
+      'for implementing end-to-end encryption in group chats. Members without E2EE set up will have `publicKey: null`.\n\n' +
+      '**Alternative:** For better performance when you only need public keys, use POST /api/e2ee/public-keys/batch instead.',
   })
   @ApiParam({ name: 'groupId', description: 'Group ID' })
   @ApiResponse({

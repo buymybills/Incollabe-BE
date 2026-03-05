@@ -28,6 +28,8 @@ import { Message } from '../shared/models/message.model';
 import { InfluencerReferralUsage } from 'src/auth/model/influencer-referral-usage.model';
 import { PushNotification } from '../admin/models/push-notification.model';
 import { InfluencerCredibilityScore } from '../shared/models/influencer-credibility-score.model';
+import { GroupChat } from '../shared/models/group-chat.model';
+import { GroupMember } from '../shared/models/group-member.model';
 
 @Module({
   imports: [
@@ -122,6 +124,8 @@ import { InfluencerCredibilityScore } from '../shared/models/influencer-credibil
             InfluencerReferralUsage,
             PushNotification,
             InfluencerCredibilityScore,
+            GroupChat,
+            GroupMember,
           ],
           autoLoadModels: true,
           synchronize: false, // Disabled to prevent index conflicts with existing database

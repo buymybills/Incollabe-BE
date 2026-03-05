@@ -379,19 +379,35 @@ export class GroupChatService {
       throw new ForbiddenException('You are not a member of this group');
     }
 
-    // Enrich member details with user info
+    // Enrich member details with user info (including public keys for E2EE)
     const enrichedMembers = await Promise.all(
       (group.members || []).map(async (member: GroupMember) => {
         let userDetails: any = null;
 
         if (member.memberType === MemberType.INFLUENCER) {
           const influencer = await this.influencerModel.findByPk(member.memberId, {
-            attributes: ['id', 'username', 'name', 'profileImage'],
+            attributes: [
+              'id',
+              'username',
+              'name',
+              'profileImage',
+              'publicKey',
+              'publicKeyCreatedAt',
+              'publicKeyUpdatedAt',
+            ],
           });
           userDetails = influencer ? influencer.toJSON() : null;
         } else if (member.memberType === MemberType.BRAND) {
           const brand = await this.brandModel.findByPk(member.memberId, {
-            attributes: ['id', 'username', 'brandName', 'profileImage'],
+            attributes: [
+              'id',
+              'username',
+              'brandName',
+              'profileImage',
+              'publicKey',
+              'publicKeyCreatedAt',
+              'publicKeyUpdatedAt',
+            ],
           });
           userDetails = brand ? brand.toJSON() : null;
         }
