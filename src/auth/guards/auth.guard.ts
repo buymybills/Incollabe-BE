@@ -16,10 +16,15 @@ import { Brand } from '../../brand/model/brand.model';
 
 interface JwtPayload {
   id: number;
+  sub?: string; // For cross-app compatibility
   profileCompleted: boolean;
   userType?: string;
+  role?: string; // For cross-app compatibility (same as userType)
   email?: string;
   username?: string;
+  brandId?: string; // For brands - cross-app compatibility
+  brandName?: string; // For brands - cross-app compatibility
+  brandLogo?: string; // For brands - cross-app compatibility
   jti: string;
 }
 

@@ -429,6 +429,7 @@ export class AuthService {
         user.id,
         profileCompleted,
         'influencer',
+        { username: user.username },
       );
 
       const sessionKey = this.sessionKey(user.id, jti);
@@ -746,6 +747,7 @@ export class AuthService {
       completeInfluencer.id,
       true,
       'influencer',
+      { username: completeInfluencer.username },
     );
     const sessionKey = this.sessionKey(completeInfluencer.id, jti);
     const sessionsSetKey = this.sessionsSetKey(completeInfluencer.id);
@@ -944,14 +946,34 @@ export class AuthService {
     userId: number,
     profileCompleted: boolean = false,
     userType: 'influencer' | 'brand' = 'influencer',
+    additionalPayload?: {
+      brandName?: string;
+      brandLogo?: string;
+      email?: string;
+      username?: string;
+    },
   ): Promise<{ accessToken: string; refreshToken: string; jti: string }> {
     // 1. Create short-lived access token
     // Payload contains user ID, profile completion status, and user type
+    // For brands, also includes brandName, email, and brandLogo for cross-app authentication
     const accessToken = this.jwtService.sign(
       {
         id: userId,
+        sub: userId.toString(), // For compatibility with campus-be
         profileCompleted: profileCompleted,
         userType: userType,
+        role: userType, // For compatibility with campus-be (uses 'role' instead of 'userType')
+        ...(userType === 'brand' && additionalPayload?.brandName
+          ? {
+              brandId: userId.toString(),
+              brandName: additionalPayload.brandName,
+              brandLogo: additionalPayload.brandLogo || null,
+              email: additionalPayload.email,
+            }
+          : {}),
+        ...(userType === 'influencer' && additionalPayload?.username
+          ? { username: additionalPayload.username }
+          : {}),
       },
       { jwtid: randomUUID() },
     );
@@ -1441,10 +1463,16 @@ export class AuthService {
     await otpRecord.update({ isUsed: true });
 
     // Generate tokens with appropriate profile status
+    // Include brand details for cross-app authentication (campus-be)
     const { accessToken, refreshToken, jti } = await this.generateTokens(
       brandId,
       brand.isProfileCompleted,
       'brand',
+      {
+        brandName: brand.brandName,
+        brandLogo: brand.profileImage,
+        email: brand.email,
+      },
     );
 
     // Store session in Redis for multi-device support
@@ -1653,11 +1681,25 @@ export class AuthService {
       : Boolean(brand?.brandName && brand?.email);
 
     // Step 4: Rotate refresh token (security best practice)
+    // Include brand/influencer details for cross-app authentication
     const {
       accessToken,
       refreshToken: newRefresh,
       jti: newJti,
-    } = await this.generateTokens(userId, profileCompleted, userType);
+    } = await this.generateTokens(
+      userId,
+      profileCompleted,
+      userType,
+      userType === 'brand' && brand
+        ? {
+            brandName: brand.brandName,
+            brandLogo: brand.profileImage,
+            email: brand.email,
+          }
+        : influencer
+          ? { username: influencer.username }
+          : undefined,
+    );
 
     await this.rotateSession(userId, jti, newJti, {
       // carry forward device info, userAgent, etc. if needed
