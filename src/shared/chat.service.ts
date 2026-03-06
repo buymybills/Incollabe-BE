@@ -68,23 +68,26 @@ export class ChatService {
     };
   }
 
-  /**
+/**
    * Helper: Get participant info (influencer or brand details)
+   * Includes soft-deleted users so conversations with deleted participants still display
    */
   private async getParticipantDetails(type: ParticipantType, id: number) {
     if (type === ParticipantType.INFLUENCER) {
       const influencer = await this.influencerModel.findByPk(id, {
         attributes: ['id', 'username', 'name', 'profileImage'],
+        paranoid: false, // Include soft-deleted influencers
       });
       return influencer ? influencer.toJSON() : null;
     } else {
       const brand = await this.brandModel.findByPk(id, {
         attributes: ['id', 'username', 'brandName', 'profileImage'],
+        paranoid: false, // Include soft-deleted brands (if paranoid is enabled)
       });
       return brand ? brand.toJSON() : null;
     }
   }
-
+  
   /**
    * Helper: Check if user is participant in conversation
    */
