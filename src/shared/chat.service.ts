@@ -759,11 +759,13 @@ export class ChatService {
             model: Influencer,
             attributes: ['id', 'username', 'name', 'profileImage'],
             required: false,
+            paranoid: false, // Include soft-deleted influencers
           },
           {
             model: Brand,
             attributes: ['id', 'username', 'brandName', 'profileImage'],
             required: false,
+            paranoid: false, // Include soft-deleted brands
           },
         ],
         order: [['createdAt', 'DESC']],
