@@ -11,7 +11,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { HypeStoreService } from './hype-store.service';
 import { CreateHypeStoreDto, UpdateHypeStoreDto } from './dto/create-hype-store.dto';
 import { UpdateCashbackConfigDto } from './dto/cashback-config.dto';
@@ -42,9 +42,193 @@ export class HypeStoreController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Create new hype store (Brands only)',
-    description: 'Create a new hype store for your brand. Store name is auto-generated (Store 1, Store 2, etc.). Creates brand wallet if it doesn\'t exist. Minimum cashback is fixed at Rs 100.'
+    description:
+      'Create a new hype store for your brand.\n\n' +
+      '**Auto-generated Fields:**\n' +
+      '- Store name: Automatically generated as "Store 1", "Store 2", etc.\n' +
+      '- Brand wallet: Created automatically if it doesn\'t exist\n\n' +
+      '**Fixed Values:**\n' +
+      '- Minimum cashback: Rs 100 (cannot be changed)\n\n' +
+      '**Configurable Fields:**\n' +
+      '- Max cashback for reels/posts: Default Rs 12,000\n' +
+      '- Max cashback for stories: Default Rs 12,000\n' +
+      '- Monthly claim count: 1-6 claims (determines claim strategy)\n' +
+      '- Cashback percentage: Default 20%\n' +
+      '- Creator targeting preferences: Age, gender, niche, locations\n\n' +
+      '**Claim Strategy (Auto-derived from monthly claim count):**\n' +
+      '- 1 claim = PILOT_RUN\n' +
+      '- 2 claims = VALIDATE_ROI\n' +
+      '- 3 claims = OPTIMIZED_SPEND (default)\n' +
+      '- 4 claims = BALANCED_GROWTH\n' +
+      '- 5 claims = AGGRESSIVE_ACQUISITION\n' +
+      '- 6 claims = MAXIMUM_REACH'
   })
-  @ApiResponse({ status: 201, description: 'Store created successfully' })
+  @ApiBody({
+    description: 'Hype Store Configuration',
+    schema: {
+      type: 'object',
+      properties: {
+        bannerImageUrl: {
+          type: 'string',
+          format: 'uri',
+          description: 'Banner image URL for the store',
+          example: 'https://example.com/images/store-banner.jpg'
+        },
+        reelPostMaxCashback: {
+          type: 'number',
+          description: 'Maximum cashback for reel/post (Rs). Min is fixed at 100.',
+          example: 12000,
+          default: 12000
+        },
+        storyMaxCashback: {
+          type: 'number',
+          description: 'Maximum cashback for story (Rs). Min is fixed at 100.',
+          example: 12000,
+          default: 12000
+        },
+        monthlyClaimCount: {
+          type: 'number',
+          description: 'Number of cashback claims allowed per creator per month (1-6)',
+          minimum: 1,
+          maximum: 6,
+          example: 3,
+          default: 3
+        },
+        cashbackPercentage: {
+          type: 'number',
+          description: 'Cashback percentage (0-100)',
+          example: 20.0,
+          default: 20.0
+        },
+        influencerTypes: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Target influencer types: nano, micro, macro, mega',
+          example: ['micro', 'macro']
+        },
+        minAge: {
+          type: 'number',
+          description: 'Minimum creator age',
+          example: 18,
+          default: 18
+        },
+        maxAge: {
+          type: 'number',
+          description: 'Maximum creator age',
+          example: 35,
+          default: 60
+        },
+        genderPreference: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Target genders: Male, Female, Other',
+          example: ['Male', 'Female']
+        },
+        nicheCategories: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Target niche categories',
+          example: ['Fashion', 'Lifestyle', 'Beauty']
+        },
+        preferredLocations: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Target city/location names',
+          example: ['Mumbai', 'Delhi', 'Bangalore']
+        },
+        isPanIndia: {
+          type: 'boolean',
+          description: 'Target all locations in India',
+          example: false,
+          default: false
+        }
+      }
+    },
+    examples: {
+      minimalConfig: {
+        summary: 'Minimal Configuration (All defaults)',
+        description: 'Create store with default settings. All fields are optional.',
+        value: {}
+      },
+      basicConfig: {
+        summary: 'Basic Configuration',
+        description: 'Simple store setup with banner and custom max cashback',
+        value: {
+          bannerImageUrl: 'https://example.com/images/fashion-store-banner.jpg',
+          reelPostMaxCashback: 15000,
+          storyMaxCashback: 10000,
+          monthlyClaimCount: 3
+        }
+      },
+      targetedConfig: {
+        summary: 'Targeted Creator Configuration',
+        description: 'Store with specific creator targeting preferences',
+        value: {
+          bannerImageUrl: 'https://example.com/images/beauty-store-banner.jpg',
+          reelPostMaxCashback: 20000,
+          storyMaxCashback: 15000,
+          monthlyClaimCount: 5,
+          cashbackPercentage: 25.0,
+          influencerTypes: ['micro', 'macro'],
+          minAge: 20,
+          maxAge: 35,
+          genderPreference: ['Female'],
+          nicheCategories: ['Beauty', 'Fashion', 'Lifestyle'],
+          preferredLocations: ['Mumbai', 'Delhi', 'Bangalore', 'Pune']
+        }
+      },
+      panIndiaConfig: {
+        summary: 'Pan-India Store',
+        description: 'Store targeting all India with high cashback',
+        value: {
+          bannerImageUrl: 'https://example.com/images/electronics-banner.jpg',
+          reelPostMaxCashback: 25000,
+          storyMaxCashback: 20000,
+          monthlyClaimCount: 6,
+          cashbackPercentage: 30.0,
+          influencerTypes: ['nano', 'micro', 'macro', 'mega'],
+          isPanIndia: true,
+          nicheCategories: ['Technology', 'Gadgets', 'Gaming']
+        }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Store created successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          type: 'object',
+          properties: {
+            id: { type: 'number', example: 1 },
+            brandId: { type: 'number', example: 15 },
+            storeName: { type: 'string', example: 'Store 1' },
+            storeDescription: { type: 'string', nullable: true },
+            bannerImageUrl: { type: 'string', example: 'https://example.com/banner.jpg' },
+            logoUrl: { type: 'string', nullable: true },
+            isActive: { type: 'boolean', example: true },
+            monthlyCreatorLimit: { type: 'number', example: 5 },
+            createdAt: { type: 'string', example: '2026-03-07T10:00:00.000Z' },
+            cashbackConfig: {
+              type: 'object',
+              properties: {
+                reelPostMinCashback: { type: 'number', example: 100 },
+                reelPostMaxCashback: { type: 'number', example: 12000 },
+                storyMinCashback: { type: 'number', example: 100 },
+                storyMaxCashback: { type: 'number', example: 12000 },
+                monthlyClaimCount: { type: 'number', example: 3 },
+                claimStrategy: { type: 'string', example: 'OPTIMIZED_SPEND' }
+              }
+            }
+          }
+        },
+        message: { type: 'string', example: 'Hype store created successfully' }
+      }
+    }
+  })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async createStore(@Request() req: any, @Body() createDto: CreateHypeStoreDto) {
