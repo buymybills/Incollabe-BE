@@ -20,24 +20,25 @@ export class CreateHypeStoreDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
-  reelPostMaxCashback?: number;
+  reelPostMinCashback?: number;
+
+  @IsNumber()
+  @Min(0)
+  reelPostMaxCashback: number;
 
   @IsOptional()
   @IsNumber()
   @Min(0)
-  storyMaxCashback?: number;
+  storyMinCashback?: number;
 
-  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  storyMaxCashback: number;
+
   @IsNumber()
   @Min(1)
   @Max(6)
-  monthlyClaimCount?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Max(100)
-  cashbackPercentage?: number;
+  monthlyClaimCount: number;
 }
 
 export class UpdateHypeStoreDto {

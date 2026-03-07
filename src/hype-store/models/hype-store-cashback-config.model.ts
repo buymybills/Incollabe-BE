@@ -13,10 +13,11 @@ import { CashbackClaimStrategy } from '../constants/cashback-strategies';
 
 export interface HypeStoreCashbackConfigCreationAttributes {
   storeId: number;
+  reelPostMinCashback?: number;
   reelPostMaxCashback?: number;
+  storyMinCashback?: number;
   storyMaxCashback?: number;
   monthlyClaimCount?: number;
-  cashbackPercentage?: number;
   claimStrategy?: CashbackClaimStrategy;
 }
 

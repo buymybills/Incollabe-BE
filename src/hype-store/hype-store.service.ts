@@ -18,6 +18,7 @@ import { UpdateCreatorPreferenceDto } from './dto/creator-preference.dto';
 import { Sequelize } from 'sequelize-typescript';
 import { getStrategyForClaimCount } from './constants/cashback-strategies';
 import { RazorpayService } from '../shared/razorpay.service';
+import { Brand } from '../brand/model/brand.model';
 
 @Injectable()
 export class HypeStoreService {
@@ -34,6 +35,8 @@ export class HypeStoreService {
     private creatorPreferenceModel: typeof HypeStoreCreatorPreference,
     @InjectModel(HypeStoreOrder)
     private orderModel: typeof HypeStoreOrder,
+    @InjectModel(Brand)
+    private brandModel: typeof Brand,
     private sequelize: Sequelize,
     private razorpayService: RazorpayService,
   ) {}
@@ -46,18 +49,26 @@ export class HypeStoreService {
     const transaction: Transaction = await this.sequelize.transaction();
 
     try {
+      // Fetch brand profile to get banner and logo
+      const brand = await this.brandModel.findByPk(brandId);
+      if (!brand) {
+        throw new NotFoundException('Brand not found');
+      }
+
       // Auto-generate store name (Store 1, Store 2, etc.)
       // Count existing stores for this brand to determine the next number
       const storeCount = await this.hypeStoreModel.count({ where: { brandId } });
       const storeName = `Store ${storeCount + 1}`;
 
       // Create the main store
-      // Note: storeName is auto-generated, storeDescription and logoUrl come from brand profile
+      // Auto-populate banner and logo from brand profile if not provided
       const store = await this.hypeStoreModel.create(
         {
           brandId,
           storeName,
-          bannerImageUrl: createDto.bannerImageUrl,
+          bannerImageUrl: createDto.bannerImageUrl || brand.profileBanner || undefined,
+          logoUrl: brand.profileImage || undefined,
+          storeDescription: brand.brandBio || undefined,
           isActive: createDto.isActive ?? true,
           monthlyCreatorLimit: createDto.monthlyCreatorLimit ?? 5,
         },
@@ -72,11 +83,12 @@ export class HypeStoreService {
       await this.cashbackConfigModel.create(
         {
           storeId: store.id,
-          reelPostMaxCashback: createDto.reelPostMaxCashback ?? 12000,
-          storyMaxCashback: createDto.storyMaxCashback ?? 12000,
+          reelPostMinCashback: createDto.reelPostMinCashback ?? 100,
+          reelPostMaxCashback: createDto.reelPostMaxCashback,
+          storyMinCashback: createDto.storyMinCashback ?? 100,
+          storyMaxCashback: createDto.storyMaxCashback,
           monthlyClaimCount,
           claimStrategy,
-          cashbackPercentage: createDto.cashbackPercentage ?? 20.0,
         },
         { transaction },
       );
@@ -123,8 +135,17 @@ export class HypeStoreService {
 
       await transaction.commit();
 
-      // Return store with all associations
-      return this.getStoreById(store.id);
+      // Return store with only cashbackConfig (not creatorPreference which is just defaults)
+      const createdStore = await this.hypeStoreModel.findOne({
+        where: { id: store.id },
+        include: [{ model: HypeStoreCashbackConfig }],
+      });
+
+      if (!createdStore) {
+        throw new NotFoundException('Failed to retrieve created store');
+      }
+
+      return createdStore;
     } catch (error) {
       await transaction.rollback();
       throw error;

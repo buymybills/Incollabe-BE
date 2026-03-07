@@ -46,17 +46,20 @@ export class HypeStoreController {
     summary: 'Create new hype store (Brands only)',
     description:
       'Create a new hype store for your brand.\n\n' +
-      '**Auto-generated Fields:**\n' +
+      '**Auto-generated/Auto-populated Fields:**\n' +
       '- Store name: Automatically generated as "Store 1", "Store 2", etc.\n' +
+      '- Banner image: Auto-populated from brand profile banner (optional: can override with bannerImageUrl)\n' +
+      '- Logo: Auto-populated from brand profile image\n' +
+      '- Description: Auto-populated from brand bio\n' +
       '- Brand wallet: Created automatically if it doesn\'t exist\n\n' +
-      '**Fixed Values:**\n' +
-      '- Minimum cashback: Rs 100 (cannot be changed)\n\n' +
-      '**Configurable Fields:**\n' +
-      '- Max cashback for reels/posts: Default Rs 12,000\n' +
-      '- Max cashback for stories: Default Rs 12,000\n' +
-      '- Monthly claim count: 1-6 claims (determines claim strategy)\n' +
-      '- Cashback percentage: Default 20%\n' +
-      '- Creator targeting preferences: Age, gender, niche, locations\n\n' +
+      '**Required Cashback Fields:**\n' +
+      '- reelPostMaxCashback: Maximum cashback for reels/posts (Rs)\n' +
+      '- storyMaxCashback: Maximum cashback for stories (Rs)\n' +
+      '- monthlyClaimCount: Number of claims allowed per creator per month (1-6)\n\n' +
+      '**Optional Cashback Fields:**\n' +
+      '- reelPostMinCashback: Minimum cashback for reels/posts (default: Rs 100)\n' +
+      '- storyMinCashback: Minimum cashback for stories (default: Rs 100)\n\n' +
+      '**Note:** Creator targeting preferences (age, gender, niche, locations) should be configured separately using the PUT /:storeId/creator-preferences endpoint after store creation.\n\n' +
       '**Claim Strategy (Auto-derived from monthly claim count):**\n' +
       '- 1 claim = PILOT_RUN\n' +
       '- 2 claims = VALIDATE_ROI\n' +
@@ -69,128 +72,93 @@ export class HypeStoreController {
     description: 'Hype Store Configuration',
     schema: {
       type: 'object',
+      required: ['reelPostMaxCashback', 'storyMaxCashback', 'monthlyClaimCount'],
       properties: {
         bannerImageUrl: {
           type: 'string',
           format: 'uri',
-          description: 'Banner image URL for the store',
+          description: 'Banner image URL for the store (optional - auto-populated from brand profile)',
           example: 'https://example.com/images/store-banner.jpg'
+        },
+        reelPostMinCashback: {
+          type: 'number',
+          description: 'Minimum cashback for reel/post in Rs (optional - default: 100)',
+          example: 100,
+          default: 100,
+          minimum: 0
         },
         reelPostMaxCashback: {
           type: 'number',
-          description: 'Maximum cashback for reel/post (Rs). Min is fixed at 100.',
-          example: 12000,
-          default: 12000
+          description: 'Maximum cashback for reel/post in Rs (required)',
+          example: 15000,
+          minimum: 0
+        },
+        storyMinCashback: {
+          type: 'number',
+          description: 'Minimum cashback for story in Rs (optional - default: 100)',
+          example: 100,
+          default: 100,
+          minimum: 0
         },
         storyMaxCashback: {
           type: 'number',
-          description: 'Maximum cashback for story (Rs). Min is fixed at 100.',
-          example: 12000,
-          default: 12000
+          description: 'Maximum cashback for story in Rs (required)',
+          example: 10000,
+          minimum: 0
         },
         monthlyClaimCount: {
           type: 'number',
-          description: 'Number of cashback claims allowed per creator per month (1-6)',
+          description: 'Number of cashback claims allowed per creator per month (required: 1-6)',
           minimum: 1,
           maximum: 6,
-          example: 3,
-          default: 3
-        },
-        cashbackPercentage: {
-          type: 'number',
-          description: 'Cashback percentage (0-100)',
-          example: 20.0,
-          default: 20.0
-        },
-        influencerTypes: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Target influencer types: nano, micro, macro, mega',
-          example: ['micro', 'macro']
-        },
-        minAge: {
-          type: 'number',
-          description: 'Minimum creator age',
-          example: 18,
-          default: 18
-        },
-        maxAge: {
-          type: 'number',
-          description: 'Maximum creator age',
-          example: 35,
-          default: 60
-        },
-        genderPreference: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Target genders: Male, Female, Other',
-          example: ['Male', 'Female']
-        },
-        nicheCategories: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Target niche categories',
-          example: ['Fashion', 'Lifestyle', 'Beauty']
-        },
-        preferredLocations: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Target city/location names',
-          example: ['Mumbai', 'Delhi', 'Bangalore']
-        },
-        isPanIndia: {
-          type: 'boolean',
-          description: 'Target all locations in India',
-          example: false,
-          default: false
+          example: 3
         }
       }
     },
     examples: {
       minimalConfig: {
-        summary: 'Minimal Configuration (All defaults)',
-        description: 'Create store with default settings. All fields are optional.',
-        value: {}
-      },
-      basicConfig: {
-        summary: 'Basic Configuration',
-        description: 'Simple store setup with banner and custom max cashback',
+        summary: 'Minimal Configuration (Required fields only)',
+        description: 'Create store with only required fields. Min cashback will default to Rs 100 for both.',
         value: {
-          bannerImageUrl: 'https://example.com/images/fashion-store-banner.jpg',
           reelPostMaxCashback: 15000,
           storyMaxCashback: 10000,
           monthlyClaimCount: 3
         }
       },
-      targetedConfig: {
-        summary: 'Targeted Creator Configuration',
-        description: 'Store with specific creator targeting preferences',
+      basicConfig: {
+        summary: 'Basic Configuration',
+        description: 'Simple store setup with banner and custom cashback range',
         value: {
-          bannerImageUrl: 'https://example.com/images/beauty-store-banner.jpg',
-          reelPostMaxCashback: 20000,
-          storyMaxCashback: 15000,
-          monthlyClaimCount: 5,
-          cashbackPercentage: 25.0,
-          influencerTypes: ['micro', 'macro'],
-          minAge: 20,
-          maxAge: 35,
-          genderPreference: ['Female'],
-          nicheCategories: ['Beauty', 'Fashion', 'Lifestyle'],
-          preferredLocations: ['Mumbai', 'Delhi', 'Bangalore', 'Pune']
+          bannerImageUrl: 'https://example.com/images/fashion-store-banner.jpg',
+          reelPostMinCashback: 200,
+          reelPostMaxCashback: 15000,
+          storyMinCashback: 150,
+          storyMaxCashback: 10000,
+          monthlyClaimCount: 3
         }
       },
-      panIndiaConfig: {
-        summary: 'Pan-India Store',
-        description: 'Store targeting all India with high cashback',
+      highCashbackConfig: {
+        summary: 'High Cashback Configuration',
+        description: 'Store with higher cashback amounts for premium campaigns',
+        value: {
+          bannerImageUrl: 'https://example.com/images/beauty-store-banner.jpg',
+          reelPostMinCashback: 500,
+          reelPostMaxCashback: 20000,
+          storyMinCashback: 300,
+          storyMaxCashback: 15000,
+          monthlyClaimCount: 5
+        }
+      },
+      maximumReachConfig: {
+        summary: 'Maximum Reach Configuration',
+        description: 'Store with highest cashback and 6 monthly claims for maximum creator reach',
         value: {
           bannerImageUrl: 'https://example.com/images/electronics-banner.jpg',
+          reelPostMinCashback: 1000,
           reelPostMaxCashback: 25000,
+          storyMinCashback: 500,
           storyMaxCashback: 20000,
-          monthlyClaimCount: 6,
-          cashbackPercentage: 30.0,
-          influencerTypes: ['nano', 'micro', 'macro', 'mega'],
-          isPanIndia: true,
-          nicheCategories: ['Technology', 'Gadgets', 'Gaming']
+          monthlyClaimCount: 6
         }
       }
     }
@@ -275,8 +243,7 @@ export class HypeStoreController {
                   storyMinCashback: { type: 'number', example: 100 },
                   storyMaxCashback: { type: 'number', example: 12000 },
                   monthlyClaimCount: { type: 'number', example: 3 },
-                  claimStrategy: { type: 'string', example: 'OPTIMIZED_SPEND' },
-                  cashbackPercentage: { type: 'number', example: 20.0 }
+                  claimStrategy: { type: 'string', example: 'OPTIMIZED_SPEND' }
                 }
               },
               creatorPreferences: {

@@ -16,10 +16,4 @@ export class UpdateCashbackConfigDto {
   @Min(1)
   @Max(6)
   monthlyClaimCount?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Max(100)
-  cashbackPercentage?: number;
 }
