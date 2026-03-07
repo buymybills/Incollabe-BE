@@ -255,7 +255,27 @@ export class HypeStoreController {
     summary: 'Get wallet balance',
     description: 'Get brand-level wallet balance shared across all stores. Wallet is created automatically when first store is created.'
   })
-  @ApiResponse({ status: 200, description: 'Wallet balance retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Wallet balance retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', example: 1 },
+        userId: { type: 'number', example: 92, description: 'Brand ID' },
+        userType: { type: 'string', example: 'brand', enum: ['brand', 'influencer'] },
+        balance: { type: 'number', example: 25000.00, description: 'Current wallet balance in Rs' },
+        totalCredited: { type: 'number', example: 50000.00, description: 'Total amount added to wallet (recharges + refunds)' },
+        totalDebited: { type: 'number', example: 25000.00, description: 'Total amount spent from wallet (payments to influencers)' },
+        totalCashbackReceived: { type: 'number', example: 0.00, description: 'Total cashback received (influencers only)' },
+        totalRedeemed: { type: 'number', example: 0.00, description: 'Total amount withdrawn (influencers only)' },
+        isActive: { type: 'boolean', example: true },
+        createdAt: { type: 'string', example: '2026-03-07T10:00:00.000Z' },
+        updatedAt: { type: 'string', example: '2026-03-07T12:30:00.000Z' }
+      }
+    }
+  })
+  @ApiResponse({ status: 404, description: 'Wallet not found for this brand' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getWalletBalance(@Request() req: any) {
     const brandId = req.user.id;
@@ -269,7 +289,58 @@ export class HypeStoreController {
   })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Number of records (default: 50)' })
   @ApiQuery({ name: 'offset', required: false, type: Number, description: 'Offset for pagination (default: 0)' })
-  @ApiResponse({ status: 200, description: 'Transactions retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Transactions retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        transactions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number', example: 1 },
+              walletId: { type: 'number', example: 1 },
+              transactionType: {
+                type: 'string',
+                example: 'recharge',
+                enum: ['recharge', 'debit', 'cashback', 'redemption', 'refund', 'adjustment'],
+                description: 'recharge: Brand adds money | debit: Brand pays influencer | cashback: Influencer receives cashback | redemption: Influencer withdraws | refund: Money returned | adjustment: Admin adjustment'
+              },
+              amount: { type: 'number', example: 10000.00, description: 'Transaction amount in Rs' },
+              balanceBefore: { type: 'number', example: 15000.00, description: 'Wallet balance before transaction' },
+              balanceAfter: { type: 'number', example: 25000.00, description: 'Wallet balance after transaction' },
+              status: {
+                type: 'string',
+                example: 'completed',
+                enum: ['pending', 'processing', 'completed', 'failed', 'cancelled']
+              },
+              paymentGateway: { type: 'string', example: 'razorpay', nullable: true },
+              paymentOrderId: { type: 'string', example: 'order_NXt7aB3kEFG9H2', nullable: true },
+              paymentTransactionId: { type: 'string', example: 'pay_NXt7aB3kEFG9H2', nullable: true },
+              paymentReferenceId: { type: 'string', nullable: true },
+              upiId: { type: 'string', nullable: true, description: 'UPI ID for redemptions' },
+              relatedUserId: { type: 'number', nullable: true, description: 'Recipient influencer ID for debits' },
+              relatedUserType: { type: 'string', nullable: true, example: 'influencer' },
+              campaignId: { type: 'number', nullable: true },
+              hypeStoreId: { type: 'number', nullable: true },
+              description: { type: 'string', example: 'Wallet recharge via Razorpay' },
+              notes: { type: 'string', nullable: true },
+              metadata: { type: 'object', nullable: true, description: 'Additional data (e.g., razorpay response)' },
+              processedBy: { type: 'number', nullable: true, description: 'Admin who processed (for redemptions)' },
+              processedAt: { type: 'string', nullable: true },
+              failedReason: { type: 'string', nullable: true },
+              createdAt: { type: 'string', example: '2026-03-07T10:00:00.000Z' },
+              updatedAt: { type: 'string', example: '2026-03-07T10:00:00.000Z' }
+            }
+          }
+        },
+        total: { type: 'number', example: 15, description: 'Total number of transactions' }
+      }
+    }
+  })
+  @ApiResponse({ status: 404, description: 'Wallet not found for this brand' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getWalletTransactions(
     @Request() req: any,
@@ -290,8 +361,22 @@ export class HypeStoreController {
     summary: 'Create Razorpay order for wallet recharge',
     description: 'Step 1 of wallet recharge: Creates Razorpay payment order. Minimum recharge: Rs 5,000. Returns orderId and amount for Razorpay checkout.'
   })
-  @ApiResponse({ status: 200, description: 'Razorpay order created successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Razorpay order created successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        orderId: { type: 'string', example: 'order_NXt7aB3kEFG9H2', description: 'Razorpay order ID - use this in Razorpay checkout' },
+        amount: { type: 'number', example: 10000, description: 'Amount in paise (divide by 100 for Rs)' },
+        currency: { type: 'string', example: 'INR' },
+        receipt: { type: 'string', example: 'WALLET_92_1709805600000' }
+      }
+    }
+  })
   @ApiResponse({ status: 400, description: 'Amount below minimum (Rs 5,000)' })
+  @ApiResponse({ status: 404, description: 'Wallet not found for this brand' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async createWalletRechargeOrder(
     @Request() req: any,
@@ -307,8 +392,28 @@ export class HypeStoreController {
     summary: 'Verify Razorpay payment and credit wallet',
     description: 'Step 2 of wallet recharge: Verifies Razorpay payment signature and credits wallet balance'
   })
-  @ApiResponse({ status: 200, description: 'Payment verified and wallet credited' })
-  @ApiResponse({ status: 400, description: 'Invalid payment signature' })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment verified and wallet credited',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', example: 1 },
+        userId: { type: 'number', example: 92 },
+        userType: { type: 'string', example: 'brand' },
+        balance: { type: 'number', example: 35000.00, description: 'Updated balance after recharge' },
+        totalCredited: { type: 'number', example: 60000.00, description: 'Total amount credited including this recharge' },
+        totalDebited: { type: 'number', example: 25000.00 },
+        totalCashbackReceived: { type: 'number', example: 0.00 },
+        totalRedeemed: { type: 'number', example: 0.00 },
+        isActive: { type: 'boolean', example: true },
+        createdAt: { type: 'string', example: '2026-03-07T10:00:00.000Z' },
+        updatedAt: { type: 'string', example: '2026-03-07T12:45:00.000Z' }
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Invalid payment signature or payment not successful' })
+  @ApiResponse({ status: 404, description: 'Wallet not found for this brand' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async verifyWalletPayment(
     @Request() req: any,
