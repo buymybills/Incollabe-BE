@@ -9,6 +9,7 @@ import {
   ForeignKey,
   BelongsTo,
   HasMany,
+  HasOne,
   BeforeCreate,
   BeforeUpdate,
   AfterFind,
@@ -20,6 +21,7 @@ import { City } from '../../shared/models/city.model';
 import { CompanyType } from '../../shared/models/company-type.model';
 import { CustomNiche } from '../../auth/model/custom-niche.model';
 import { Campaign } from '../../campaign/models/campaign.model';
+import { HypeStoreWallet } from '../../hype-store/models/hype-store-wallet.model';
 import { EncryptionService } from '../../shared/services/encryption.service';
 
 export interface BrandCreationAttributes {
@@ -413,6 +415,9 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
 
   @HasMany(() => Campaign, 'brandId')
   declare campaigns?: Campaign[];
+
+  @HasOne(() => HypeStoreWallet, 'brandId')
+  declare hypeStoreWallet?: HypeStoreWallet;
 
   // Encryption hooks
   @BeforeCreate

@@ -15,6 +15,8 @@ import { AdminModule } from './admin/admin.module';
 import { PostModule } from './post/post.module';
 import { CampaignModule } from './campaign/campaign.module';
 import { RedisModule } from './redis/redis.module';
+import { WalletModule } from './wallet/wallet.module';
+import { HypeStoreModule } from './hype-store/hype-store.module';
 import { LoggingMiddleware } from './shared/middleware/logging.middleware';
 
 @Module({
@@ -42,6 +44,8 @@ import { LoggingMiddleware } from './shared/middleware/logging.middleware';
     AdminModule,
     PostModule,
     CampaignModule,
+    WalletModule,
+    HypeStoreModule,
   ],
   controllers: [AppController],
   providers: [AppService],
