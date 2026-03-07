@@ -4,8 +4,8 @@ import { HypeStoreController } from './hype-store.controller';
 import { HypeStoreService } from './hype-store.service';
 import { HypeStore } from './models/hype-store.model';
 import { HypeStoreCashbackConfig } from './models/hype-store-cashback-config.model';
-import { HypeStoreWallet } from './models/hype-store-wallet.model';
-import { HypeStoreWalletTransaction } from './models/hype-store-wallet-transaction.model';
+import { Wallet } from '../wallet/models/wallet.model';
+import { WalletTransaction } from '../wallet/models/wallet-transaction.model';
 import { HypeStoreCreatorPreference } from './models/hype-store-creator-preference.model';
 import { HypeStoreOrder } from './models/hype-store-order.model';
 import { HypeStoreCashbackTransaction } from './models/hype-store-cashback-transaction.model';
@@ -18,8 +18,8 @@ import { SharedModule } from '../shared/shared.module';
     SequelizeModule.forFeature([
       HypeStore,
       HypeStoreCashbackConfig,
-      HypeStoreWallet,
-      HypeStoreWalletTransaction,
+      Wallet,
+      WalletTransaction,
       HypeStoreCreatorPreference,
       HypeStoreOrder,
       HypeStoreCashbackTransaction,

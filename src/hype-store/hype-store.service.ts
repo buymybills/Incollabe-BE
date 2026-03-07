@@ -7,8 +7,8 @@ import { InjectModel } from '@nestjs/sequelize';
 import { Transaction } from 'sequelize';
 import { HypeStore } from './models/hype-store.model';
 import { HypeStoreCashbackConfig } from './models/hype-store-cashback-config.model';
-import { HypeStoreWallet } from './models/hype-store-wallet.model';
-import { HypeStoreWalletTransaction, WalletTransactionType } from './models/hype-store-wallet-transaction.model';
+import { Wallet, UserType } from '../wallet/models/wallet.model';
+import { WalletTransaction, TransactionType, TransactionStatus } from '../wallet/models/wallet-transaction.model';
 import { HypeStoreCreatorPreference } from './models/hype-store-creator-preference.model';
 import { HypeStoreOrder } from './models/hype-store-order.model';
 import { CreateHypeStoreDto, UpdateHypeStoreDto } from './dto/create-hype-store.dto';
@@ -26,10 +26,10 @@ export class HypeStoreService {
     private hypeStoreModel: typeof HypeStore,
     @InjectModel(HypeStoreCashbackConfig)
     private cashbackConfigModel: typeof HypeStoreCashbackConfig,
-    @InjectModel(HypeStoreWallet)
-    private walletModel: typeof HypeStoreWallet,
-    @InjectModel(HypeStoreWalletTransaction)
-    private walletTransactionModel: typeof HypeStoreWalletTransaction,
+    @InjectModel(Wallet)
+    private walletModel: typeof Wallet,
+    @InjectModel(WalletTransaction)
+    private walletTransactionModel: typeof WalletTransaction,
     @InjectModel(HypeStoreCreatorPreference)
     private creatorPreferenceModel: typeof HypeStoreCreatorPreference,
     @InjectModel(HypeStoreOrder)
@@ -83,18 +83,25 @@ export class HypeStoreService {
 
       // Create wallet only if it doesn't exist (one wallet per brand, shared across stores)
       const existingWallet = await this.walletModel.findOne({
-        where: { brandId },
+        where: {
+          userId: brandId,
+          userType: UserType.BRAND
+        },
         transaction,
       });
 
       if (!existingWallet) {
         await this.walletModel.create(
           {
-            brandId,
+            userId: brandId,
+            userType: UserType.BRAND,
             balance: 0,
-            totalAdded: 0,
-            totalSpent: 0,
-          },
+            totalCredited: 0,
+            totalDebited: 0,
+            totalCashbackReceived: 0,
+            totalRedeemed: 0,
+            isActive: true,
+          } as any,
           { transaction },
         );
       }
@@ -250,7 +257,10 @@ export class HypeStoreService {
     }
 
     const wallet = await this.walletModel.findOne({
-      where: { brandId },
+      where: {
+        userId: brandId,
+        userType: UserType.BRAND
+      },
     });
 
     if (!wallet) {
@@ -290,7 +300,7 @@ export class HypeStoreService {
     orderId: string,
     paymentId: string,
     signature: string,
-  ): Promise<HypeStoreWallet> {
+  ): Promise<Wallet> {
     // Verify payment signature
     const isValid = this.razorpayService.verifyPaymentSignature(
       orderId,
@@ -316,7 +326,10 @@ export class HypeStoreService {
     }
 
     const wallet = await this.walletModel.findOne({
-      where: { brandId },
+      where: {
+        userId: brandId,
+        userType: UserType.BRAND
+      },
     });
 
     if (!wallet) {
@@ -333,7 +346,7 @@ export class HypeStoreService {
       await wallet.update(
         {
           balance: newBalance,
-          totalAdded: parseFloat(wallet.totalAdded.toString()) + amount,
+          totalCredited: parseFloat(wallet.totalCredited.toString()) + amount,
         },
         { transaction },
       );
@@ -342,14 +355,15 @@ export class HypeStoreService {
       await this.walletTransactionModel.create(
         {
           walletId: wallet.id,
-          transactionType: WalletTransactionType.ADD_MONEY,
+          transactionType: TransactionType.RECHARGE,
           amount,
-          previousBalance,
-          newBalance,
+          balanceBefore: previousBalance,
+          balanceAfter: newBalance,
+          status: TransactionStatus.COMPLETED,
+          paymentGateway: payment.method || 'razorpay',
+          paymentTransactionId: paymentId,
           description: 'Wallet recharge via Razorpay',
-          paymentMethod: payment.method || 'RAZORPAY',
-          paymentReferenceId: paymentId,
-        },
+        } as any,
         { transaction },
       );
 
@@ -368,13 +382,16 @@ export class HypeStoreService {
   async addMoneyToWallet(
     brandId: number,
     addMoneyDto: AddMoneyToWalletDto,
-  ): Promise<HypeStoreWallet> {
+  ): Promise<Wallet> {
     if (addMoneyDto.amount < 5000) {
       throw new BadRequestException('Minimum wallet recharge is ₹5000');
     }
 
     const wallet = await this.walletModel.findOne({
-      where: { brandId },
+      where: {
+        userId: brandId,
+        userType: UserType.BRAND
+      },
     });
 
     if (!wallet) {
@@ -383,7 +400,7 @@ export class HypeStoreService {
 
     const transaction: Transaction = await this.sequelize.transaction();
 
-    try {
+    try{
       const previousBalance = parseFloat(wallet.balance.toString());
       const newBalance = previousBalance + addMoneyDto.amount;
 
@@ -391,7 +408,7 @@ export class HypeStoreService {
       await wallet.update(
         {
           balance: newBalance,
-          totalAdded: parseFloat(wallet.totalAdded.toString()) + addMoneyDto.amount,
+          totalCredited: parseFloat(wallet.totalCredited.toString()) + addMoneyDto.amount,
         },
         { transaction },
       );
@@ -400,14 +417,15 @@ export class HypeStoreService {
       await this.walletTransactionModel.create(
         {
           walletId: wallet.id,
-          transactionType: WalletTransactionType.ADD_MONEY,
+          transactionType: TransactionType.RECHARGE,
           amount: addMoneyDto.amount,
-          previousBalance,
-          newBalance,
+          balanceBefore: previousBalance,
+          balanceAfter: newBalance,
+          status: TransactionStatus.COMPLETED,
           description: addMoneyDto.description || 'Wallet recharge',
-          paymentMethod: addMoneyDto.paymentMethod,
-          paymentReferenceId: addMoneyDto.paymentReferenceId,
-        },
+          paymentGateway: addMoneyDto.paymentMethod || undefined,
+          paymentReferenceId: addMoneyDto.paymentReferenceId || undefined,
+        } as any,
         { transaction },
       );
 
@@ -423,9 +441,12 @@ export class HypeStoreService {
   /**
    * Get wallet balance
    */
-  async getWalletBalance(brandId: number): Promise<HypeStoreWallet> {
+  async getWalletBalance(brandId: number): Promise<Wallet> {
     const wallet = await this.walletModel.findOne({
-      where: { brandId },
+      where: {
+        userId: brandId,
+        userType: UserType.BRAND
+      },
     });
 
     if (!wallet) {
@@ -442,9 +463,12 @@ export class HypeStoreService {
     brandId: number,
     limit: number = 50,
     offset: number = 0,
-  ): Promise<{ transactions: HypeStoreWalletTransaction[]; total: number }> {
+  ): Promise<{ transactions: WalletTransaction[]; total: number }> {
     const wallet = await this.walletModel.findOne({
-      where: { brandId },
+      where: {
+        userId: brandId,
+        userType: UserType.BRAND
+      },
     });
 
     if (!wallet) {
@@ -535,7 +559,10 @@ export class HypeStoreService {
 
     // Get brand wallet
     const wallet = await this.walletModel.findOne({
-      where: { brandId },
+      where: {
+        userId: brandId,
+        userType: UserType.BRAND
+      },
     });
 
     // Get order statistics
