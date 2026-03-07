@@ -1,4 +1,5 @@
 import { IsOptional, IsNumber, IsBoolean, IsUrl, Min, Max } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateHypeStoreDto {
   // Banner image will be handled as file upload in controller
@@ -9,6 +10,7 @@ export class CreateHypeStoreDto {
   isActive?: boolean;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(1)
   @Max(100)
@@ -16,23 +18,28 @@ export class CreateHypeStoreDto {
 
   // Cashback Config
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   reelPostMinCashback?: number;
 
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   reelPostMaxCashback: number;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   storyMinCashback?: number;
 
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   storyMaxCashback: number;
 
+  @Type(() => Number)
   @IsNumber()
   @Min(1)
   @Max(6)
@@ -50,6 +57,7 @@ export class UpdateHypeStoreDto {
   isActive?: boolean;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(1)
   @Max(100)
