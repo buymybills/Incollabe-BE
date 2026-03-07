@@ -1,4 +1,4 @@
-import { IsOptional, IsNumber, IsBoolean, Min, Max } from 'class-validator';
+import { IsOptional, IsNumber, IsBoolean, IsUrl, Min, Max } from 'class-validator';
 
 export class CreateHypeStoreDto {
   // Banner image will be handled as file upload in controller
