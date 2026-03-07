@@ -30,6 +30,16 @@ import { PushNotification } from '../admin/models/push-notification.model';
 import { InfluencerCredibilityScore } from '../shared/models/influencer-credibility-score.model';
 import { GroupChat } from '../shared/models/group-chat.model';
 import { GroupMember } from '../shared/models/group-member.model';
+import { HypeStore } from '../hype-store/models/hype-store.model';
+import { HypeStoreWallet } from '../hype-store/models/hype-store-wallet.model';
+import { HypeStoreWalletTransaction } from '../hype-store/models/hype-store-wallet-transaction.model';
+import { HypeStoreCashbackConfig } from '../hype-store/models/hype-store-cashback-config.model';
+import { HypeStoreCreatorPreference } from '../hype-store/models/hype-store-creator-preference.model';
+import { HypeStoreOrder } from '../hype-store/models/hype-store-order.model';
+import { HypeStoreCashbackTransaction } from '../hype-store/models/hype-store-cashback-transaction.model';
+import { Wallet } from '../wallet/models/wallet.model';
+import { WalletTransaction } from '../wallet/models/wallet-transaction.model';
+import { WalletRechargeLimit } from '../wallet/models/wallet-recharge-limit.model';
 
 @Module({
   imports: [
@@ -126,6 +136,16 @@ import { GroupMember } from '../shared/models/group-member.model';
             InfluencerCredibilityScore,
             GroupChat,
             GroupMember,
+            HypeStore,
+            HypeStoreWallet,
+            HypeStoreWalletTransaction,
+            HypeStoreCashbackConfig,
+            HypeStoreCreatorPreference,
+            HypeStoreOrder,
+            HypeStoreCashbackTransaction,
+            Wallet,
+            WalletTransaction,
+            WalletRechargeLimit,
           ],
           autoLoadModels: true,
           synchronize: false, // Disabled to prevent index conflicts with existing database
