@@ -361,6 +361,44 @@ export class HypeStoreController {
     summary: 'Create Razorpay order for wallet recharge',
     description: 'Step 1 of wallet recharge: Creates Razorpay payment order. Minimum recharge: Rs 5,000. Returns orderId and amount for Razorpay checkout.'
   })
+  @ApiBody({
+    description: 'Wallet recharge amount',
+    schema: {
+      type: 'object',
+      required: ['amount'],
+      properties: {
+        amount: {
+          type: 'number',
+          description: 'Amount to add to wallet in Rs (minimum 5000)',
+          example: 10000,
+          minimum: 5000
+        }
+      }
+    },
+    examples: {
+      minimumRecharge: {
+        summary: 'Minimum Recharge',
+        description: 'Minimum allowed recharge amount',
+        value: {
+          amount: 5000
+        }
+      },
+      standardRecharge: {
+        summary: 'Standard Recharge',
+        description: 'Common recharge amount',
+        value: {
+          amount: 10000
+        }
+      },
+      largeRecharge: {
+        summary: 'Large Recharge',
+        description: 'Large recharge for campaigns',
+        value: {
+          amount: 50000
+        }
+      }
+    }
+  })
   @ApiResponse({
     status: 200,
     description: 'Razorpay order created successfully',
@@ -369,7 +407,7 @@ export class HypeStoreController {
       properties: {
         success: { type: 'boolean', example: true },
         orderId: { type: 'string', example: 'order_NXt7aB3kEFG9H2', description: 'Razorpay order ID - use this in Razorpay checkout' },
-        amount: { type: 'number', example: 10000, description: 'Amount in paise (divide by 100 for Rs)' },
+        amount: { type: 'number', example: 1000000, description: 'Amount in paise (Rs 10,000 = 1000000 paise)' },
         currency: { type: 'string', example: 'INR' },
         receipt: { type: 'string', example: 'WALLET_92_1709805600000' }
       }
@@ -390,7 +428,42 @@ export class HypeStoreController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Verify Razorpay payment and credit wallet',
-    description: 'Step 2 of wallet recharge: Verifies Razorpay payment signature and credits wallet balance'
+    description: 'Step 2 of wallet recharge: Verifies Razorpay payment signature and credits wallet balance. Call this after user completes payment on Razorpay checkout.'
+  })
+  @ApiBody({
+    description: 'Razorpay payment verification details',
+    schema: {
+      type: 'object',
+      required: ['orderId', 'paymentId', 'signature'],
+      properties: {
+        orderId: {
+          type: 'string',
+          description: 'Razorpay order ID received from create-order API',
+          example: 'order_NXt7aB3kEFG9H2'
+        },
+        paymentId: {
+          type: 'string',
+          description: 'Razorpay payment ID received after successful payment',
+          example: 'pay_NXt7aB3kEFG9H2'
+        },
+        signature: {
+          type: 'string',
+          description: 'Razorpay signature received after successful payment',
+          example: 'a8b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t1u2v3w4x5y6z7'
+        }
+      }
+    },
+    examples: {
+      successfulPayment: {
+        summary: 'Successful Payment Verification',
+        description: 'Example with valid Razorpay payment details',
+        value: {
+          orderId: 'order_NXt7aB3kEFG9H2',
+          paymentId: 'pay_NXt7aB3kEFG9H2',
+          signature: 'a8b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t1u2v3w4x5y6z7'
+        }
+      }
+    }
   })
   @ApiResponse({
     status: 200,
