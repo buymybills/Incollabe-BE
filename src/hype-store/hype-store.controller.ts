@@ -19,10 +19,12 @@ import { AddMoneyToWalletDto } from './dto/wallet.dto';
 import { UpdateCreatorPreferenceDto } from './dto/creator-preference.dto';
 import { CASHBACK_CLAIM_STRATEGIES } from './constants/cashback-strategies';
 import { CreateWalletRechargeOrderDto, VerifyWalletPaymentDto } from './dto/wallet.dto';
+import { AuthGuard } from '../auth/guards/auth.guard';
 
 @ApiTags('Hype Store')
-@ApiBearerAuth()
 @Controller('api/brand/hype-store')
+@UseGuards(AuthGuard)
+@ApiBearerAuth()
 export class HypeStoreController {
   constructor(private readonly hypeStoreService: HypeStoreService) {}
 
