@@ -11,8 +11,8 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { WalletService } from './wallet.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RequestWithUser } from '../shared/interfaces/request-with-user.interface';
+import { AuthGuard } from '../auth/guards/auth.guard';
+import type { RequestWithUser } from '../types/request.types';
 import { UserType } from './models/wallet.model';
 import {
   RechargeWalletDto,
@@ -31,7 +31,7 @@ import {
 
 @ApiTags('Wallet')
 @Controller('wallet')
-@UseGuards(JwtAuthGuard)
+@UseGuards(AuthGuard)
 @ApiBearerAuth()
 export class WalletController {
   constructor(private readonly walletService: WalletService) {}
@@ -49,7 +49,7 @@ export class WalletController {
   async getBalance(@Req() req: RequestWithUser) {
     return this.walletService.getWalletBalance(
       req.user.id,
-      req.user.userType as UserType,
+      req.user.userType as unknown as UserType,
     );
   }
 
@@ -83,7 +83,7 @@ export class WalletController {
   ) {
     return this.walletService.initiateRecharge(
       req.user.id,
-      req.user.userType as UserType,
+      req.user.userType as unknown as UserType,
       dto,
     );
   }
@@ -110,7 +110,7 @@ export class WalletController {
   ) {
     return this.walletService.verifyAndCreditRecharge(
       req.user.id,
-      req.user.userType as UserType,
+      req.user.userType as unknown as UserType,
       dto,
     );
   }
@@ -216,7 +216,7 @@ export class WalletController {
   ) {
     return this.walletService.getTransactionHistory(
       req.user.id,
-      req.user.userType as UserType,
+      req.user.userType as unknown as UserType,
       dto,
     );
   }

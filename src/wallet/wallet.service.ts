@@ -446,12 +446,12 @@ export class WalletService {
     if (!upiId) {
       // Get default UPI from influencer
       const influencer = await this.influencerModel.findByPk(influencerId, {
-        attributes: ['selectedUpiId'],
+        attributes: ['upiId'],
       });
-      if (!influencer?.selectedUpiId) {
+      if (!influencer?.upiId) {
         throw new BadRequestException('UPI ID not found. Please provide one.');
       }
-      upiId = influencer.selectedUpiId;
+      upiId = influencer.upiId;
     }
 
     // Create redemption transaction
@@ -507,7 +507,7 @@ export class WalletService {
         status: TransactionStatus.CANCELLED,
         processedBy: adminId,
         processedAt: new Date(),
-        adminNotes: dto.adminNotes,
+        notes: dto.adminNotes,
         failedReason: 'Rejected by admin',
       });
 
@@ -570,7 +570,7 @@ export class WalletService {
           paymentReferenceId: payoutResult.payoutId,
           processedBy: adminId,
           processedAt: new Date(),
-          adminNotes: dto.adminNotes,
+          notes: dto.adminNotes,
           metadata: payoutResult.data,
         },
         { transaction: t },
