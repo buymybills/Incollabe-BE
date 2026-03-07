@@ -74,23 +74,65 @@ export class ChatService {
     };
   }
 
-  /**
+/**
    * Helper: Get participant info (influencer or brand details)
+   * Includes soft-deleted users so conversations with deleted participants still display
+   * Returns accountStatus flag: 'active', 'soft_deleted', or 'hard_deleted'
    */
   private async getParticipantDetails(type: ParticipantType, id: number) {
     if (type === ParticipantType.INFLUENCER) {
       const influencer = await this.influencerModel.findByPk(id, {
-        attributes: ['id', 'username', 'name', 'profileImage'],
+        attributes: ['id', 'username', 'name', 'profileImage', 'deletedAt'],
+        paranoid: false, // Include soft-deleted influencers
       });
-      return influencer ? influencer.toJSON() : null;
+
+      if (!influencer) {
+        // Hard deleted - record removed from DB after 30 days
+        return {
+          id,
+          username: 'Deleted User',
+          name: 'Deleted User',
+          profileImage: null,
+          accountStatus: 'hard_deleted',
+        };
+      }
+
+      const data = influencer.toJSON();
+      return {
+        id: data.id,
+        username: data.username,
+        name: data.name,
+        profileImage: data.profileImage,
+        accountStatus: data.deletedAt ? 'soft_deleted' : 'active',
+      };
     } else {
       const brand = await this.brandModel.findByPk(id, {
-        attributes: ['id', 'username', 'brandName', 'profileImage'],
+        attributes: ['id', 'username', 'brandName', 'profileImage', 'deletedAt'],
+        paranoid: false, // Include soft-deleted brands
       });
-      return brand ? brand.toJSON() : null;
+
+      if (!brand) {
+        // Hard deleted - record removed from DB after 30 days
+        return {
+          id,
+          username: 'Deleted User',
+          brandName: 'Deleted User',
+          profileImage: null,
+          accountStatus: 'hard_deleted',
+        };
+      }
+
+      const data = brand.toJSON();
+      return {
+        id: data.id,
+        username: data.username,
+        brandName: data.brandName,
+        profileImage: data.profileImage,
+        accountStatus: data.deletedAt ? 'soft_deleted' : 'active',
+      };
     }
   }
-
+  
   /**
    * Helper: Check if user is participant in conversation
    */
@@ -114,7 +156,7 @@ export class ChatService {
     conversation: Conversation,
     userId: number,
     userType: ParticipantType,
-  ) {
+  ): { type: ParticipantType; id: number } {
     if (
       conversation.participant1Type === userType &&
       conversation.participant1Id === userId
@@ -261,16 +303,12 @@ export class ChatService {
    * Supports type='personal' | 'campaign' filter
    */
   /**
-   * Helper method to get unread counts for both personal and campaign conversations
+   * Helper method to get unread counts for personal, campaign, and group conversations
    */
   private async getUnreadCounts(
     userId: number,
     userParticipantType: ParticipantType,
-  ): Promise<{
-    personalUnreadCount: number;
-    campaignUnreadCount: number;
-    groupUnreadCount: number;
-  }> {
+  ): Promise<{ personalUnreadCount: number; campaignUnreadCount: number; groupUnreadCount: number }> {
     // Fetch ALL personal conversations (just for counting)
     const personalConversations = await this.conversationModel.findAll({
       where: {
@@ -342,7 +380,6 @@ export class ChatService {
         ],
         isActive: true,
         conversationType: 'group',
-        lastMessageAt: { [Op.ne]: null } as any,
       },
       attributes: [
         'id',
@@ -377,8 +414,10 @@ export class ChatService {
     const userParticipantType = userType as ParticipantType;
 
     // Get unread counts for ALL types (always)
-    const { personalUnreadCount, campaignUnreadCount, groupUnreadCount } =
-      await this.getUnreadCounts(userId, userParticipantType);
+    const { personalUnreadCount, campaignUnreadCount, groupUnreadCount } = await this.getUnreadCounts(
+      userId,
+      userParticipantType,
+    );
 
     // Campaign conversations: show immediately, no lastMessageAt requirement
     // Personal conversations: only show after first message
@@ -684,17 +723,16 @@ export class ChatService {
       try {
         const parsed = JSON.parse(content);
 
-        // Check for group chat multi-recipient format: { encryptedKeys, iv, ciphertext }
+        // Check for multi-recipient format (group chats): { recipients: { userId: encryptedKey }, iv, ciphertext }
         const isMultiRecipient =
-          parsed.encryptedKeys &&
+          parsed.recipients &&
+          typeof parsed.recipients === 'object' &&
           parsed.iv &&
           parsed.ciphertext &&
-          typeof parsed.encryptedKeys === 'object' &&
           typeof parsed.iv === 'string' &&
-          typeof parsed.ciphertext === 'string' &&
-          Object.keys(parsed.encryptedKeys).length > 0;
+          typeof parsed.ciphertext === 'string';
 
-        // Check for dual-key format (1-to-1): { encryptedKeyForRecipient, encryptedKeyForSender, iv, ciphertext }
+        // Check for new dual-key format: { encryptedKeyForRecipient, encryptedKeyForSender, iv, ciphertext }
         const isDualKey =
           parsed.encryptedKeyForRecipient &&
           parsed.encryptedKeyForSender &&
@@ -847,13 +885,15 @@ export class ChatService {
         include: [
           {
             model: Influencer,
-            attributes: ['id', 'username', 'name', 'profileImage'],
+            attributes: ['id', 'username', 'name', 'profileImage', 'deletedAt'],
             required: false,
+            paranoid: false, // Include soft-deleted influencers
           },
           {
             model: Brand,
-            attributes: ['id', 'username', 'brandName', 'profileImage'],
+            attributes: ['id', 'username', 'brandName', 'profileImage', 'deletedAt'],
             required: false,
+            paranoid: false, // Include soft-deleted brands
           },
         ],
         order: [['createdAt', 'DESC']],
@@ -861,20 +901,67 @@ export class ChatService {
         offset,
       });
 
-    const formattedMessages = messages.map((msg) => ({
-      id: msg.id,
-      sender:
-        msg.senderType === SenderType.INFLUENCER ? msg.influencer : msg.brand,
-      senderType: msg.senderType,
-      messageType: msg.messageType,
-      content: msg.content,
-      attachmentUrl: msg.attachmentUrl,
-      attachmentName: msg.attachmentName,
-      mediaType: msg.mediaType,
-      isRead: msg.isRead,
-      readAt: msg.readAt,
-      createdAt: msg.createdAt,
-    }));
+    const formattedMessages = messages.map((msg) => {
+      let sender: any;
+
+      if (msg.senderType === SenderType.INFLUENCER) {
+        if (msg.influencer) {
+          // Active or soft-deleted influencer
+          const influencerData = msg.influencer.toJSON();
+          sender = {
+            id: influencerData.id,
+            username: influencerData.username,
+            name: influencerData.name,
+            profileImage: influencerData.profileImage,
+            accountStatus: influencerData.deletedAt ? 'soft_deleted' : 'active',
+          };
+        } else {
+          // Hard deleted influencer
+          sender = {
+            id: msg.influencerId,
+            username: 'Deleted User',
+            name: 'Deleted User',
+            profileImage: null,
+            accountStatus: 'hard_deleted',
+          };
+        }
+      } else {
+        if (msg.brand) {
+          // Active or soft-deleted brand
+          const brandData = msg.brand.toJSON();
+          sender = {
+            id: brandData.id,
+            username: brandData.username,
+            brandName: brandData.brandName,
+            profileImage: brandData.profileImage,
+            accountStatus: brandData.deletedAt ? 'soft_deleted' : 'active',
+          };
+        } else {
+          // Hard deleted brand
+          sender = {
+            id: msg.brandId,
+            username: 'Deleted User',
+            brandName: 'Deleted User',
+            profileImage: null,
+            accountStatus: 'hard_deleted',
+          };
+        }
+      }
+
+      return {
+        id: msg.id,
+        sender,
+        senderType: msg.senderType,
+        messageType: msg.messageType,
+        content: msg.content,
+        attachmentUrl: msg.attachmentUrl,
+        attachmentName: msg.attachmentName,
+        mediaType: msg.mediaType,
+        isRead: msg.isRead,
+        readAt: msg.readAt,
+        createdAt: msg.createdAt,
+      };
+    });
 
     return {
       messages: formattedMessages.reverse(), // Return in chronological order
