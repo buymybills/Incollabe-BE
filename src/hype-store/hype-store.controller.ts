@@ -241,9 +241,65 @@ export class HypeStoreController {
   @Get()
   @ApiOperation({
     summary: 'Get all stores for current brand',
-    description: 'Returns all hype stores belonging to the authenticated brand'
+    description: 'Returns all hype stores belonging to the authenticated brand with cashback config and creator preferences'
   })
-  @ApiResponse({ status: 200, description: 'Stores retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Stores retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number', example: 1 },
+              brandId: { type: 'number', example: 92 },
+              storeName: { type: 'string', example: 'Store 1' },
+              storeDescription: { type: 'string', nullable: true, example: 'My awesome store' },
+              bannerImageUrl: { type: 'string', nullable: true, example: 'https://example.com/banner.jpg' },
+              logoUrl: { type: 'string', nullable: true },
+              isActive: { type: 'boolean', example: true },
+              monthlyCreatorLimit: { type: 'number', example: 5 },
+              createdAt: { type: 'string', example: '2026-03-07T10:00:00.000Z' },
+              updatedAt: { type: 'string', example: '2026-03-07T10:00:00.000Z' },
+              cashbackConfig: {
+                type: 'object',
+                properties: {
+                  id: { type: 'number', example: 1 },
+                  storeId: { type: 'number', example: 1 },
+                  reelPostMinCashback: { type: 'number', example: 100 },
+                  reelPostMaxCashback: { type: 'number', example: 12000 },
+                  storyMinCashback: { type: 'number', example: 100 },
+                  storyMaxCashback: { type: 'number', example: 12000 },
+                  monthlyClaimCount: { type: 'number', example: 3 },
+                  claimStrategy: { type: 'string', example: 'OPTIMIZED_SPEND' },
+                  cashbackPercentage: { type: 'number', example: 20.0 }
+                }
+              },
+              creatorPreferences: {
+                type: 'object',
+                properties: {
+                  id: { type: 'number', example: 1 },
+                  storeId: { type: 'number', example: 1 },
+                  influencerTypes: { type: 'array', items: { type: 'string' }, example: ['micro', 'macro'] },
+                  minAge: { type: 'number', example: 18 },
+                  maxAge: { type: 'number', example: 35 },
+                  genderPreference: { type: 'array', items: { type: 'string' }, example: ['Male', 'Female'] },
+                  nicheCategories: { type: 'array', items: { type: 'string' }, example: ['Fashion', 'Beauty'] },
+                  preferredLocations: { type: 'array', items: { type: 'string' }, example: ['Mumbai', 'Delhi'] },
+                  isPanIndia: { type: 'boolean', example: false }
+                }
+              }
+            }
+          }
+        },
+        message: { type: 'string', example: 'Stores retrieved successfully' }
+      }
+    }
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getMyStores(@Request() req: any) {
     const brandId = req.user.id;
