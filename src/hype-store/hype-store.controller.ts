@@ -10,8 +10,11 @@ import {
   Request,
   HttpCode,
   HttpStatus,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery, ApiBody, ApiConsumes } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { HypeStoreService } from './hype-store.service';
 import { CreateHypeStoreDto, UpdateHypeStoreDto } from './dto/create-hype-store.dto';
 import { UpdateCashbackConfigDto } from './dto/cashback-config.dto';
@@ -42,13 +45,14 @@ export class HypeStoreController {
 
   @Post('create')
   @HttpCode(HttpStatus.CREATED)
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Create new hype store (Brands only)',
     description:
       'Create a new hype store for your brand.\n\n' +
       '**Auto-generated/Auto-populated Fields:**\n' +
       '- Store name: Automatically generated as "Store 1", "Store 2", etc.\n' +
-      '- Banner image: Auto-populated from brand profile banner (optional: can override with bannerImageUrl)\n' +
+      '- Banner image: Auto-populated from brand profile banner (optional: can upload custom banner)\n' +
       '- Logo: Auto-populated from brand profile image\n' +
       '- Description: Auto-populated from brand bio\n' +
       '- Brand wallet: Created automatically if it doesn\'t exist\n\n' +
@@ -58,7 +62,8 @@ export class HypeStoreController {
       '- monthlyClaimCount: Number of claims allowed per creator per month (1-6)\n\n' +
       '**Optional Cashback Fields:**\n' +
       '- reelPostMinCashback: Minimum cashback for reels/posts (default: Rs 100)\n' +
-      '- storyMinCashback: Minimum cashback for stories (default: Rs 100)\n\n' +
+      '- storyMinCashback: Minimum cashback for stories (default: Rs 100)\n' +
+      '- bannerImage: Upload custom banner image (JPG, PNG, max 5MB) - overrides brand profile banner\n\n' +
       '**Note:** Creator targeting preferences (age, gender, niche, locations) should be configured separately using the PUT /:storeId/creator-preferences endpoint after store creation.\n\n' +
       '**Claim Strategy (Auto-derived from monthly claim count):**\n' +
       '- 1 claim = PILOT_RUN\n' +
@@ -74,11 +79,10 @@ export class HypeStoreController {
       type: 'object',
       required: ['reelPostMaxCashback', 'storyMaxCashback', 'monthlyClaimCount'],
       properties: {
-        bannerImageUrl: {
+        bannerImage: {
           type: 'string',
-          format: 'uri',
-          description: 'Banner image URL for the store (optional - auto-populated from brand profile)',
-          example: 'https://example.com/images/store-banner.jpg'
+          format: 'binary',
+          description: 'Banner image file for the store (optional - auto-populated from brand profile if not provided). Max 5MB. Supported formats: JPG, PNG, WEBP',
         },
         reelPostMinCashback: {
           type: 'number',
@@ -118,18 +122,17 @@ export class HypeStoreController {
     examples: {
       minimalConfig: {
         summary: 'Minimal Configuration (Required fields only)',
-        description: 'Create store with only required fields. Min cashback will default to Rs 100 for both.',
+        description: 'Create store with only required fields. Min cashback will default to Rs 100 for both. Banner will be auto-populated from brand profile.',
         value: {
           reelPostMaxCashback: 15000,
           storyMaxCashback: 10000,
           monthlyClaimCount: 3
         }
       },
-      basicConfig: {
-        summary: 'Basic Configuration',
-        description: 'Simple store setup with banner and custom cashback range',
+      customCashbackConfig: {
+        summary: 'Custom Cashback Configuration',
+        description: 'Store setup with custom cashback range. Upload banner image as file (not shown in example). Banner will be auto-populated from brand profile if not uploaded.',
         value: {
-          bannerImageUrl: 'https://example.com/images/fashion-store-banner.jpg',
           reelPostMinCashback: 200,
           reelPostMaxCashback: 15000,
           storyMinCashback: 150,
@@ -139,9 +142,8 @@ export class HypeStoreController {
       },
       highCashbackConfig: {
         summary: 'High Cashback Configuration',
-        description: 'Store with higher cashback amounts for premium campaigns',
+        description: 'Store with higher cashback amounts for premium campaigns. Upload custom banner via file upload field (not shown in example).',
         value: {
-          bannerImageUrl: 'https://example.com/images/beauty-store-banner.jpg',
           reelPostMinCashback: 500,
           reelPostMaxCashback: 20000,
           storyMinCashback: 300,
@@ -151,9 +153,8 @@ export class HypeStoreController {
       },
       maximumReachConfig: {
         summary: 'Maximum Reach Configuration',
-        description: 'Store with highest cashback and 6 monthly claims for maximum creator reach',
+        description: 'Store with highest cashback and 6 monthly claims for maximum creator reach. Banner can be uploaded separately.',
         value: {
-          bannerImageUrl: 'https://example.com/images/electronics-banner.jpg',
           reelPostMinCashback: 1000,
           reelPostMaxCashback: 25000,
           storyMinCashback: 500,
@@ -201,9 +202,20 @@ export class HypeStoreController {
   })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async createStore(@Request() req: any, @Body() createDto: CreateHypeStoreDto) {
+  @UseInterceptors(
+    FileInterceptor('bannerImage', {
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB max
+      },
+    }),
+  )
+  async createStore(
+    @Request() req: any,
+    @Body() createDto: CreateHypeStoreDto,
+    @UploadedFile() bannerImage?: Express.Multer.File,
+  ) {
     const brandId = req.user.id;
-    return this.hypeStoreService.createStore(brandId, createDto);
+    return this.hypeStoreService.createStore(brandId, createDto, bannerImage);
   }
 
   @Get()

@@ -19,6 +19,7 @@ import { Sequelize } from 'sequelize-typescript';
 import { getStrategyForClaimCount } from './constants/cashback-strategies';
 import { RazorpayService } from '../shared/razorpay.service';
 import { Brand } from '../brand/model/brand.model';
+import { S3Service } from '../shared/s3.service';
 
 @Injectable()
 export class HypeStoreService {
@@ -39,12 +40,17 @@ export class HypeStoreService {
     private brandModel: typeof Brand,
     private sequelize: Sequelize,
     private razorpayService: RazorpayService,
+    private s3Service: S3Service,
   ) {}
 
   /**
    * Create a new Hype Store for a brand
    */
-  async createStore(brandId: number, createDto: CreateHypeStoreDto): Promise<HypeStore> {
+  async createStore(
+    brandId: number,
+    createDto: CreateHypeStoreDto,
+    bannerImage?: Express.Multer.File,
+  ): Promise<HypeStore> {
     // Use transaction to ensure all related records are created atomically
     const transaction: Transaction = await this.sequelize.transaction();
 
@@ -55,18 +61,28 @@ export class HypeStoreService {
         throw new NotFoundException('Brand not found');
       }
 
+      // Upload banner image to S3 if provided
+      let bannerImageUrl: string | undefined = undefined;
+      if (bannerImage) {
+        bannerImageUrl = await this.s3Service.uploadFileToS3(
+          bannerImage,
+          'hype-store/banners',
+          `brand-${brandId}-store`,
+        );
+      }
+
       // Auto-generate store name (Store 1, Store 2, etc.)
       // Count existing stores for this brand to determine the next number
       const storeCount = await this.hypeStoreModel.count({ where: { brandId } });
       const storeName = `Store ${storeCount + 1}`;
 
       // Create the main store
-      // Auto-populate banner and logo from brand profile if not provided
+      // Use uploaded banner, or auto-populate from brand profile if not provided
       const store = await this.hypeStoreModel.create(
         {
           brandId,
           storeName,
-          bannerImageUrl: createDto.bannerImageUrl || brand.profileBanner || undefined,
+          bannerImageUrl: bannerImageUrl || brand.profileBanner || undefined,
           logoUrl: brand.profileImage || undefined,
           storeDescription: brand.brandBio || undefined,
           isActive: createDto.isActive ?? true,
