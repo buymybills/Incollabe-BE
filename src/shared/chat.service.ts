@@ -23,6 +23,7 @@ import {
   MarkAsReadDto,
   SubmitReviewDto,
 } from './dto/chat.dto';
+import { S3Service } from './s3.service';
 
 @Injectable()
 export class ChatService {
@@ -45,6 +46,7 @@ export class ChatService {
     private groupMemberModel: typeof GroupMember,
     @InjectModel(GroupChat)
     private groupChatModel: typeof GroupChat,
+    private s3Service: S3Service,
   ) {}
 
   /**
@@ -836,7 +838,7 @@ export class ChatService {
       senderType: message.senderType,
       messageType: message.messageType,
       content: message.content,
-      attachmentUrl: message.attachmentUrl,
+      attachmentUrl: this.s3Service.convertToSignedUrl(message.attachmentUrl, 120), // 2 minutes expiry
       attachmentName: message.attachmentName,
       mediaType: message.mediaType,
       isRead: message.isRead,
@@ -954,7 +956,7 @@ export class ChatService {
         senderType: msg.senderType,
         messageType: msg.messageType,
         content: msg.content,
-        attachmentUrl: msg.attachmentUrl,
+        attachmentUrl: this.s3Service.convertToSignedUrl(msg.attachmentUrl, 120), // 2 minutes expiry
         attachmentName: msg.attachmentName,
         mediaType: msg.mediaType,
         isRead: msg.isRead,

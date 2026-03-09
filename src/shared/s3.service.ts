@@ -44,6 +44,67 @@ export class S3Service {
     return `https://${this.bucketName}.s3.${this.configService.get('AWS_REGION')}.amazonaws.com/${key}`;
   }
 
+  /**
+   * Generate a signed URL for temporary access to a private S3 object
+   * @param key - S3 object key
+   * @param expiresIn - Expiration time in seconds (default: 2 minutes)
+   * @returns Signed URL string
+   */
+  getSignedUrl(key: string, expiresIn: number = 120): string {
+    const params = {
+      Bucket: this.bucketName,
+      Key: key,
+      Expires: expiresIn, // URL expires in 2 minutes by default
+    };
+
+    return this.s3.getSignedUrl('getObject', params);
+  }
+
+  /**
+   * Extract S3 key from a full S3 URL
+   * @param url - Full S3 URL
+   * @returns S3 key or null if URL is invalid
+   */
+  extractKeyFromUrl(url: string): string | null {
+    try {
+      // Handle both formats:
+      // https://bucket.s3.region.amazonaws.com/key
+      // https://s3.region.amazonaws.com/bucket/key
+      const urlObj = new URL(url);
+      const hostname = urlObj.hostname;
+      const pathname = urlObj.pathname;
+
+      // Format: bucket.s3.region.amazonaws.com/key
+      if (hostname.startsWith(this.bucketName)) {
+        return pathname.startsWith('/') ? pathname.substring(1) : pathname;
+      }
+
+      // Format: s3.region.amazonaws.com/bucket/key
+      if (hostname.includes('s3') && pathname.startsWith(`/${this.bucketName}/`)) {
+        return pathname.substring(this.bucketName.length + 2);
+      }
+
+      return null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /**
+   * Convert a public S3 URL to a signed URL
+   * @param url - Public S3 URL
+   * @param expiresIn - Expiration time in seconds (default: 2 minutes)
+   * @returns Signed URL or original URL if conversion fails
+   */
+  convertToSignedUrl(url: string | null, expiresIn: number = 120): string | null {
+    if (!url) return null;
+
+    const key = this.extractKeyFromUrl(url);
+    if (!key) return url; // Return original URL if we can't extract the key
+
+    return this.getSignedUrl(key, expiresIn);
+  }
+
   async uploadFileToS3(
     file: Express.Multer.File,
     folder: string,
