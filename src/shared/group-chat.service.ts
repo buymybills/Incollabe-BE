@@ -447,6 +447,23 @@ export class GroupChatService {
   }
 
   /**
+   * Unified method to get groups with filter
+   */
+  async getGroups(
+    userId: number,
+    userType: string,
+    filter: 'my' | 'all' = 'my',
+    page: number = 1,
+    limit: number = 20,
+  ) {
+    if (filter === 'all') {
+      return this.getAvailableGroups(userId, userType, page, limit);
+    } else {
+      return this.getUserGroups(userId, userType, page, limit);
+    }
+  }
+
+  /**
    * Get all groups for a user
    */
   async getUserGroups(

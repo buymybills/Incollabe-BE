@@ -1389,44 +1389,35 @@ export class ChatController {
 
   @Get('groups')
   @ApiOperation({
-    summary: 'Get all groups for current user',
-    description: 'Returns all groups the current user is a member of',
+    summary: 'Get groups (my groups or all community groups)',
+    description:
+      'Returns groups based on filter parameter:\n\n' +
+      '**Filter Options:**\n' +
+      '- `filter=my` (default): Returns only groups you are a member of\n' +
+      '- `filter=all`: Returns all joinable community groups\n\n' +
+      '**When filter=my:**\n' +
+      '- Shows only groups you joined\n' +
+      '- Always includes `isMember: true`\n' +
+      '- Use for "My Groups" tab\n\n' +
+      '**When filter=all:**\n' +
+      '- Shows ALL joinable community groups\n' +
+      '- Includes `isMember` flag (true/false)\n' +
+      '- Includes `isFull` flag\n' +
+      '- Use for "Discover Groups" tab\n\n' +
+      '**Response always includes:**\n' +
+      '- `isMember`: Boolean flag (use for "Join" vs "Joined" button)\n' +
+      '- `memberCount` and `maxMembers`: Current and maximum counts\n' +
+      '- `isFull`: Boolean (only in filter=all)',
+  })
+  @ApiQuery({
+    name: 'filter',
+    required: false,
+    enum: ['my', 'all'],
+    description: 'Filter: "my" for your groups (default), "all" for all community groups',
   })
   @ApiResponse({
     status: 200,
     description: 'Groups retrieved successfully',
-  })
-  async getUserGroups(
-    @Req() req: RequestWithUser,
-    @Query() dto: GetGroupsDto,
-  ) {
-    return this.groupChatService.getUserGroups(
-      req.user.id,
-      req.user.userType,
-      dto.page,
-      dto.limit,
-    );
-  }
-
-  @Get('groups/available')
-  @ApiOperation({
-    summary: 'Get all community groups (joinable groups)',
-    description:
-      'Returns ALL joinable community groups, including ones the user is already a member of. This allows influencers to:\n' +
-      '- Discover new groups to join\n' +
-      '- See all groups they\'re part of\n' +
-      '- Navigate to group chats\n\n' +
-      '**Filters applied:**\n' +
-      '- Active groups only (`isActive: true`)\n' +
-      '- Joinable groups only (`isJoinable: true`)\n\n' +
-      '**Response includes:**\n' +
-      '- `isMember`: Boolean flag indicating if user is already a member (use this to show "Join" or "Joined" button)\n' +
-      '- `isFull`: Boolean flag indicating if group has reached max capacity\n' +
-      '- `memberCount` and `maxMembers`: Current and maximum member counts',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Community groups retrieved successfully',
     schema: {
       example: {
         groups: [
@@ -1436,8 +1427,8 @@ export class ChatController {
             avatarUrl: 'https://example.com/avatar.png',
             isBroadcastOnly: false,
             memberCount: 5,
-            maxMembers: 10,
-            isMember: false, // User not a member - show "Join" button
+            maxMembers: 100,
+            isMember: false,
             isFull: false,
             conversation: {
               id: 123,
@@ -1445,36 +1436,22 @@ export class ChatController {
             },
             createdAt: '2026-03-07T10:00:00.000Z',
           },
-          {
-            id: 2,
-            name: 'Design Community',
-            avatarUrl: 'https://example.com/avatar2.png',
-            isBroadcastOnly: true,
-            memberCount: 8,
-            maxMembers: 10,
-            isMember: true, // User is already a member - show "Joined" or "Open Chat"
-            isFull: false,
-            conversation: {
-              id: 124,
-              conversationType: 'group',
-            },
-            createdAt: '2026-03-06T10:00:00.000Z',
-          },
         ],
-        total: 2,
+        total: 1,
         page: 1,
         limit: 20,
         totalPages: 1,
       },
     },
   })
-  async getAvailableGroups(
+  async getUserGroups(
     @Req() req: RequestWithUser,
     @Query() dto: GetGroupsDto,
   ) {
-    return this.groupChatService.getAvailableGroups(
+    return this.groupChatService.getGroups(
       req.user.id,
       req.user.userType,
+      dto.filter || 'my',
       dto.page,
       dto.limit,
     );

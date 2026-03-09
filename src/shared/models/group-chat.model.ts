@@ -73,7 +73,6 @@ export class GroupChat extends Model<GroupChat> {
   @Column({
     type: DataType.BOOLEAN,
     defaultValue: true,
-    field: 'is_joinable',
   })
   declare isJoinable: boolean;
 

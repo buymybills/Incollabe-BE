@@ -120,6 +120,18 @@ export class UpdateGroupDto {
 }
 
 export class GetGroupsDto {
+  @ApiProperty({
+    description: 'Filter groups: "my" shows only groups you joined, "all" shows all joinable community groups',
+    required: false,
+    default: 'my',
+    enum: ['my', 'all'],
+    example: 'my',
+  })
+  @IsString()
+  @IsOptional()
+  @IsEnum(['my', 'all'])
+  filter?: 'my' | 'all';
+
   @ApiProperty({ description: 'Page number', required: false, default: 1 })
   @Type(() => Number)
   @IsInt()
