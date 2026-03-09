@@ -137,12 +137,29 @@ export class ChatService {
   
   /**
    * Helper: Check if user is participant in conversation
+   * For group conversations, checks group_members table
+   * For personal/campaign conversations, checks participant1/participant2
    */
-  private isParticipant(
+  private async isParticipant(
     conversation: Conversation,
     userId: number,
     userType: ParticipantType,
-  ): boolean {
+  ): Promise<boolean> {
+    // For group conversations, check group_members table
+    if (conversation.conversationType === 'group' && conversation.groupChatId) {
+      const { GroupMember } = require('./models/group-member.model');
+      const membership = await GroupMember.findOne({
+        where: {
+          groupChatId: conversation.groupChatId,
+          memberId: userId,
+          memberType: userType,
+          leftAt: { [Op.is]: null },
+        },
+      });
+      return !!membership;
+    }
+
+    // For personal/campaign conversations, check participant1/participant2
     return (
       (conversation.participant1Type === userType &&
         conversation.participant1Id === userId) ||
@@ -730,7 +747,7 @@ export class ChatService {
         throw new NotFoundException('Conversation not found');
       }
 
-      if (!this.isParticipant(conversation, userId, userParticipantType)) {
+      if (!(await this.isParticipant(conversation, userId, userParticipantType))) {
         throw new ForbiddenException(
           'You are not a participant in this conversation',
         );
@@ -952,7 +969,7 @@ export class ChatService {
       throw new NotFoundException('Conversation not found');
     }
 
-    if (!this.isParticipant(conversation, userId, userParticipantType)) {
+    if (!(await this.isParticipant(conversation, userId, userParticipantType))) {
       throw new ForbiddenException(
         'You are not a participant in this conversation',
       );
@@ -1080,7 +1097,7 @@ export class ChatService {
       throw new NotFoundException('Conversation not found');
     }
 
-    if (!this.isParticipant(conversation, userId, userParticipantType)) {
+    if (!(await this.isParticipant(conversation, userId, userParticipantType))) {
       throw new ForbiddenException(
         'You are not a participant in this conversation',
       );
@@ -1222,7 +1239,7 @@ export class ChatService {
       throw new NotFoundException('Conversation not found');
     }
 
-    if (!this.isParticipant(conversation, userId, userParticipantType)) {
+    if (!(await this.isParticipant(conversation, userId, userParticipantType))) {
       throw new ForbiddenException(
         'You are not a participant in this conversation',
       );
@@ -1398,7 +1415,7 @@ export class ChatService {
 
     // Validate reviewer is a participant
     const userType = reviewerType as ParticipantType;
-    if (!this.isParticipant(conversation, reviewerId, userType)) {
+    if (!(await this.isParticipant(conversation, reviewerId, userType))) {
       throw new ForbiddenException('You are not a participant in this conversation');
     }
 
@@ -1451,7 +1468,7 @@ export class ChatService {
     }
 
     const participantType = userType as ParticipantType;
-    if (!this.isParticipant(conversation, userId, participantType)) {
+    if (!(await this.isParticipant(conversation, userId, participantType))) {
       throw new ForbiddenException('You are not a participant in this conversation');
     }
 

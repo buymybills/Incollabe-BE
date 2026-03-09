@@ -106,6 +106,34 @@ export class RemoveMemberDto {
   memberType: string;
 }
 
+export class UpdateMemberRoleDto {
+  @ApiProperty({ description: 'Member ID to promote/demote', example: 101 })
+  @Type(() => Number)
+  @IsInt()
+  @IsNotEmpty()
+  memberId: number;
+
+  @ApiProperty({
+    description: 'Member type',
+    enum: ['influencer', 'brand'],
+    example: 'influencer',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @IsEnum(['influencer', 'brand'])
+  memberType: string;
+
+  @ApiProperty({
+    description: 'New role for the member',
+    enum: ['admin', 'member'],
+    example: 'admin',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @IsEnum(['admin', 'member'])
+  role: 'admin' | 'member';
+}
+
 export class UpdateGroupDto {
   @ApiProperty({ description: 'New group name (optional)', required: false })
   @IsString()

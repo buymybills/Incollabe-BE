@@ -211,6 +211,83 @@ export class GroupChatService {
   }
 
   /**
+   * Update member role (promote to admin or demote to member)
+   */
+  async updateMemberRole(
+    groupId: number,
+    targetMemberId: number,
+    targetMemberType: string,
+    newRole: 'admin' | 'member',
+    requesterId: number,
+    requesterType: string,
+  ) {
+    // Get group
+    const group = await this.groupChatModel.findByPk(groupId);
+    if (!group) {
+      throw new NotFoundException('Group not found');
+    }
+
+    // Get target member
+    const targetMember = await this.groupMemberModel.findOne({
+      where: {
+        groupChatId: groupId,
+        memberId: targetMemberId,
+        memberType: targetMemberType,
+        leftAt: { [Op.is]: null },
+      } as any,
+    });
+
+    if (!targetMember) {
+      throw new NotFoundException('Member not found in group');
+    }
+
+    // Check if requester is admin
+    const requesterMembership = await this.groupMemberModel.findOne({
+      where: {
+        groupChatId: groupId,
+        memberId: requesterId,
+        memberType: requesterType,
+        leftAt: { [Op.is]: null },
+      } as any,
+    });
+
+    if (!requesterMembership || requesterMembership.role !== MemberRole.ADMIN) {
+      throw new ForbiddenException('Only group admins can change member roles');
+    }
+
+    // Prevent demoting yourself if you're the last admin
+    if (newRole === 'member' && targetMember.role === MemberRole.ADMIN) {
+      const adminCount = await this.groupMemberModel.count({
+        where: {
+          groupChatId: groupId,
+          role: MemberRole.ADMIN,
+          leftAt: { [Op.is]: null },
+        } as any,
+      });
+
+      if (adminCount === 1) {
+        throw new BadRequestException(
+          'Cannot demote the last admin. Promote another member to admin first.',
+        );
+      }
+    }
+
+    // Update the role
+    await targetMember.update({
+      role: newRole === 'admin' ? MemberRole.ADMIN : MemberRole.MEMBER,
+    });
+
+    return {
+      success: true,
+      groupId,
+      memberId: targetMemberId,
+      memberType: targetMemberType,
+      newRole,
+      message: `Member ${newRole === 'admin' ? 'promoted to admin' : 'demoted to member'} successfully`,
+    };
+  }
+
+  /**
    * Remove a member from the group
    */
   async removeMember(

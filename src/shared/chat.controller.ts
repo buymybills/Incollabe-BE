@@ -13,6 +13,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Patch,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -44,6 +45,7 @@ import {
   CreateGroupDto,
   AddMembersDto,
   RemoveMemberDto,
+  UpdateMemberRoleDto,
   UpdateGroupDto,
   GetGroupsDto,
 } from './dto/group-chat.dto';
@@ -1524,6 +1526,54 @@ export class ChatController {
       groupId,
       dto.memberIds,
       dto.memberTypes,
+      req.user.id,
+      req.user.userType,
+    );
+  }
+
+  @Patch('groups/:groupId/members/role')
+  @ApiOperation({
+    summary: 'Update member role (promote/demote)',
+    description:
+      'Change a member\'s role in the group. Only admins can use this.\n\n' +
+      '**Use Cases:**\n' +
+      '- Promote a member to admin: Set `role: "admin"`\n' +
+      '- Demote an admin to member: Set `role: "member"`\n\n' +
+      '**Restrictions:**\n' +
+      '- Only group admins can change roles\n' +
+      '- Cannot demote the last admin (promote someone else first)\n' +
+      '- Before leaving as the last admin, you must promote another member',
+  })
+  @ApiParam({ name: 'groupId', description: 'Group ID' })
+  @ApiBody({ type: () => require('./dto/group-chat.dto').UpdateMemberRoleDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Member role updated successfully',
+    schema: {
+      example: {
+        success: true,
+        groupId: 1,
+        memberId: 7,
+        memberType: 'influencer',
+        newRole: 'admin',
+        message: 'Member promoted to admin successfully',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Only admins can change member roles',
+  })
+  async updateMemberRole(
+    @Req() req: RequestWithUser,
+    @Param('groupId', ParseIntPipe) groupId: number,
+    @Body() dto: any,
+  ) {
+    return this.groupChatService.updateMemberRole(
+      groupId,
+      dto.memberId,
+      dto.memberType,
+      dto.role,
       req.user.id,
       req.user.userType,
     );
