@@ -37,7 +37,17 @@ export class CreateGroupDto {
   isBroadcastOnly?: boolean;
 
   @ApiProperty({
-    description: 'Initial members to add to the group (optional, max 9 members plus creator)',
+    description: 'Allow users to join this group themselves. When true, influencers can discover and join the group. When false, only admins can add members. Default: true',
+    required: false,
+    default: true,
+    example: true,
+  })
+  @IsBoolean()
+  @IsOptional()
+  isJoinable?: boolean;
+
+  @ApiProperty({
+    description: 'Initial members to add to the group (optional, max 99 members plus creator = 100 total)',
     required: false,
     type: 'array',
     items: {
@@ -50,18 +60,18 @@ export class CreateGroupDto {
   })
   @IsArray()
   @IsOptional()
-  @ArrayMaxSize(9) // Max 9 + creator = 10 total
+  @ArrayMaxSize(99) // Max 99 + creator = 100 total
   initialMemberIds?: Array<{ memberId: number; memberType: MemberType }>;
 }
 
 export class AddMembersDto {
   @ApiProperty({
-    description: 'Array of member IDs to add',
+    description: 'Array of member IDs to add (max 50 at once)',
     example: [101, 102, 103],
   })
   @IsArray()
   @ArrayMinSize(1)
-  @ArrayMaxSize(5)
+  @ArrayMaxSize(50)
   @Type(() => Number)
   @IsInt({ each: true })
   memberIds: number[];

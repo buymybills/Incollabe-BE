@@ -53,7 +53,7 @@ export class GroupChat extends Model<GroupChat> {
 
   @Column({
     type: DataType.INTEGER,
-    defaultValue: 10,
+    defaultValue: 100,
   })
   declare maxMembers: number;
 
@@ -69,6 +69,13 @@ export class GroupChat extends Model<GroupChat> {
     field: 'is_broadcast_only',
   })
   declare isBroadcastOnly: boolean;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: true,
+    field: 'is_joinable',
+  })
+  declare isJoinable: boolean;
 
   // Timestamps
   @Column({

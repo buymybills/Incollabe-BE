@@ -424,26 +424,72 @@ export class ChatService {
     // Campaign conversations: show immediately, no lastMessageAt requirement
     // Personal conversations: only show after first message
     const isCampaignQuery = type === 'campaign';
+    const isGroupQuery = type === 'group';
 
-    const whereClause: any = {
-      [Op.and]: [
-        {
-          [Op.or]: [
-            { participant1Type: userParticipantType, participant1Id: userId },
-            { participant2Type: userParticipantType, participant2Id: userId },
-          ],
+    // For group conversations, query differently
+    let conversations: any[] = [];
+    let total = 0;
+
+    if (isGroupQuery) {
+      // Get group conversations through group_members table
+      const { GroupMember } = require('./models/group-member.model');
+      const { GroupChat } = require('./models/group-chat.model');
+
+      const groupMemberships = await GroupMember.findAll({
+        where: {
+          memberId: userId,
+          memberType: userType,
+          leftAt: { [Op.is]: null },
         },
-        // Only filter by isActive for personal chats; show ALL campaign conversations (including closed ones)
-        ...(!isCampaignQuery ? [{ isActive: true }] : []),
-        // Filter by conversation type
-        ...(type ? [{ conversationType: type }] : [{ conversationType: 'personal' }]),
-        // Personal chats require at least one message; campaign chats appear immediately
-        ...(!isCampaignQuery ? [{ lastMessageAt: { [Op.ne]: null as any } }] : []),
-      ],
-    };
+        include: [
+          {
+            model: GroupChat,
+            as: 'groupChat',
+            where: { isActive: true },
+            required: true,
+          },
+        ],
+      });
 
-    const { rows: conversations, count: total } =
-      await this.conversationModel.findAndCountAll({
+      const groupChatIds = groupMemberships.map((gm: any) => gm.groupChatId);
+
+      if (groupChatIds.length > 0) {
+        const result = await this.conversationModel.findAndCountAll({
+          where: {
+            conversationType: 'group',
+            groupChatId: { [Op.in]: groupChatIds },
+            isActive: true,
+          },
+          order: [
+            ['lastMessageAt', 'DESC NULLS LAST'],
+            ['createdAt', 'DESC'],
+          ],
+          limit,
+          offset,
+        });
+        conversations = result.rows;
+        total = result.count;
+      }
+    } else {
+      // For personal/campaign conversations, use existing logic
+      const whereClause: any = {
+        [Op.and]: [
+          {
+            [Op.or]: [
+              { participant1Type: userParticipantType, participant1Id: userId },
+              { participant2Type: userParticipantType, participant2Id: userId },
+            ],
+          },
+          // Only filter by isActive for personal chats; show ALL campaign conversations (including closed ones)
+          ...(!isCampaignQuery ? [{ isActive: true }] : []),
+          // Filter by conversation type
+          ...(type ? [{ conversationType: type }] : [{ conversationType: 'personal' }]),
+          // Personal chats require at least one message; campaign chats appear immediately
+          ...(!isCampaignQuery ? [{ lastMessageAt: { [Op.ne]: null as any } }] : []),
+        ],
+      };
+
+      const result = await this.conversationModel.findAndCountAll({
         where: whereClause,
         order: [
           ['lastMessageAt', 'DESC NULLS LAST'],
@@ -452,10 +498,51 @@ export class ChatService {
         limit,
         offset,
       });
+      conversations = result.rows;
+      total = result.count;
+    }
 
     // Format conversations with other party details
     const formattedConversations = await Promise.all(
       conversations.map(async (conv) => {
+        // Handle group conversations differently
+        if (isGroupQuery && conv.conversationType === 'group') {
+          const { GroupChat } = require('./models/group-chat.model');
+          const groupChat = await GroupChat.findByPk(conv.groupChatId);
+
+          if (!groupChat) return null;
+
+          // Apply search filter if provided
+          if (search) {
+            const searchLower = search.toLowerCase();
+            const groupName = groupChat.name?.toLowerCase() || '';
+            if (!groupName.includes(searchLower)) {
+              return null;
+            }
+          }
+
+          return {
+            id: conv.id,
+            conversationType: 'group',
+            groupChatId: conv.groupChatId,
+            groupName: groupChat.name,
+            groupAvatar: groupChat.avatarUrl,
+            isBroadcastOnly: groupChat.isBroadcastOnly,
+            lastMessage: conv.lastMessage,
+            lastMessageType: conv.lastMessageType ?? 'text',
+            lastMessageAt: conv.lastMessageAt,
+            lastMessageSenderType: conv.lastMessageSenderType,
+            unreadCount: this.getUserUnreadCountForConversation(
+              conv,
+              userId,
+              userParticipantType,
+            ),
+            createdAt: conv.createdAt,
+            updatedAt: conv.updatedAt,
+          };
+        }
+
+        // Handle personal/campaign conversations
         const otherParticipant = this.getOtherParticipant(
           conv,
           userId,
@@ -483,7 +570,7 @@ export class ChatService {
 
         const base = {
           id: conv.id,
-          conversationType: conv.conversationType, // 'personal', 'campaign', or 'group'
+          conversationType: conv.conversationType, // 'personal' or 'campaign'
           otherParty: otherPartyDetails,
           otherPartyType: otherParticipant.type,
           lastMessage: conv.lastMessage,

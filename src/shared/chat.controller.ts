@@ -23,6 +23,7 @@ import {
   ApiConsumes,
   ApiBody,
   ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { ChatService } from './chat.service';
 import { GroupChatService } from './group-chat.service';
@@ -795,6 +796,73 @@ export class ChatController {
     };
   }
 
+  @Get('chat/download')
+  @ApiOperation({
+    summary: 'Generate signed URL for chat attachment download',
+    description:
+      'Generates a temporary signed URL (valid for 2 minutes) for downloading chat attachments securely. ' +
+      'Use this endpoint to get a secure download link for images, videos, audio, or documents from chat. ' +
+      'The key parameter should be the S3 file path (e.g., "chat/images/brand-32-1773036150127-225588063.png").',
+  })
+  @ApiQuery({
+    name: 'key',
+    description: 'S3 file key/path for the chat attachment',
+    example: 'chat/images/brand-32-1773036150127-225588063.png',
+    required: true,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Signed URL generated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          type: 'object',
+          properties: {
+            signedUrl: {
+              type: 'string',
+              example: 'https://bucket.s3.region.amazonaws.com/chat/images/file.png?AWSAccessKeyId=xxx&Expires=xxx&Signature=xxx',
+              description: 'Temporary signed URL valid for 2 minutes',
+            },
+            expiresIn: {
+              type: 'number',
+              example: 120,
+              description: 'Time in seconds until the URL expires',
+            },
+          },
+        },
+        message: { type: 'string', example: 'Signed URL generated successfully' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid or missing file key' })
+  @ApiResponse({ status: 403, description: 'Access denied to this file' })
+  async downloadFile(
+    @Req() req: RequestWithUser,
+    @Query('key') key: string,
+  ) {
+    if (!key) {
+      throw new BadRequestException('File key is required');
+    }
+
+    // Security: Validate that key starts with allowed chat prefixes
+    const allowedPrefixes = ['chat/images/', 'chat/videos/', 'chat/audio/', 'chat/documents/'];
+    const isValidPrefix = allowedPrefixes.some(prefix => key.startsWith(prefix));
+
+    if (!isValidPrefix) {
+      throw new BadRequestException('Invalid file path. Only chat attachments are allowed.');
+    }
+
+    // Generate signed URL (2 minutes expiry)
+    const signedUrl = this.s3Service.getSignedUrl(key, 120);
+
+    return {
+      signedUrl,
+      expiresIn: 120,
+    };
+  }
+
   // ================================
   // Campaign Chat Endpoints
   // ================================
@@ -1291,10 +1359,13 @@ export class ChatController {
   @ApiOperation({
     summary: 'Create a new group chat',
     description:
-      'Create a new group chat with up to 10 members (including creator). Creator becomes admin.\n\n' +
+      'Create a new group chat with up to 100 members (including creator). Creator becomes admin.\n\n' +
       '**Group Types:**\n' +
       '- **Regular Group** (`isBroadcastOnly: false`): Any member can send messages (default)\n' +
       '- **Broadcast/Announcement Group** (`isBroadcastOnly: true`): Only admins can send messages\n\n' +
+      '**Joining Options:**\n' +
+      '- **Joinable** (`isJoinable: true`): Influencers can discover and join the group themselves (default)\n' +
+      '- **Invite-Only** (`isJoinable: false`): Only admins can add members\n\n' +
       'Use broadcast mode for announcement channels, newsletters, or community updates where you want to limit who can post.',
   })
   @ApiResponse({
@@ -1312,6 +1383,7 @@ export class ChatController {
       dto.avatarUrl,
       dto.initialMemberIds,
       dto.isBroadcastOnly,
+      dto.isJoinable,
     );
   }
 
@@ -1329,6 +1401,78 @@ export class ChatController {
     @Query() dto: GetGroupsDto,
   ) {
     return this.groupChatService.getUserGroups(
+      req.user.id,
+      req.user.userType,
+      dto.page,
+      dto.limit,
+    );
+  }
+
+  @Get('groups/available')
+  @ApiOperation({
+    summary: 'Get all community groups (joinable groups)',
+    description:
+      'Returns ALL joinable community groups, including ones the user is already a member of. This allows influencers to:\n' +
+      '- Discover new groups to join\n' +
+      '- See all groups they\'re part of\n' +
+      '- Navigate to group chats\n\n' +
+      '**Filters applied:**\n' +
+      '- Active groups only (`isActive: true`)\n' +
+      '- Joinable groups only (`isJoinable: true`)\n\n' +
+      '**Response includes:**\n' +
+      '- `isMember`: Boolean flag indicating if user is already a member (use this to show "Join" or "Joined" button)\n' +
+      '- `isFull`: Boolean flag indicating if group has reached max capacity\n' +
+      '- `memberCount` and `maxMembers`: Current and maximum member counts',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Community groups retrieved successfully',
+    schema: {
+      example: {
+        groups: [
+          {
+            id: 1,
+            name: 'Marketing Team',
+            avatarUrl: 'https://example.com/avatar.png',
+            isBroadcastOnly: false,
+            memberCount: 5,
+            maxMembers: 10,
+            isMember: false, // User not a member - show "Join" button
+            isFull: false,
+            conversation: {
+              id: 123,
+              conversationType: 'group',
+            },
+            createdAt: '2026-03-07T10:00:00.000Z',
+          },
+          {
+            id: 2,
+            name: 'Design Community',
+            avatarUrl: 'https://example.com/avatar2.png',
+            isBroadcastOnly: true,
+            memberCount: 8,
+            maxMembers: 10,
+            isMember: true, // User is already a member - show "Joined" or "Open Chat"
+            isFull: false,
+            conversation: {
+              id: 124,
+              conversationType: 'group',
+            },
+            createdAt: '2026-03-06T10:00:00.000Z',
+          },
+        ],
+        total: 2,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      },
+    },
+  })
+  async getAvailableGroups(
+    @Req() req: RequestWithUser,
+    @Query() dto: GetGroupsDto,
+  ) {
+    return this.groupChatService.getAvailableGroups(
       req.user.id,
       req.user.userType,
       dto.page,
@@ -1427,6 +1571,49 @@ export class ChatController {
       groupId,
       dto.memberId,
       dto.memberType,
+      req.user.id,
+      req.user.userType,
+    );
+  }
+
+  @Post('groups/:groupId/join')
+  @ApiOperation({
+    summary: 'Join a group (self-join)',
+    description:
+      'Join a group chat yourself without needing an admin invitation. Requirements:\n' +
+      '- Group must have `isJoinable: true`\n' +
+      '- Group must be active\n' +
+      '- Group must not be full (less than maxMembers)\n' +
+      '- You must not already be a member\n\n' +
+      'This allows influencers to discover groups via GET /api/groups/available and join them independently.',
+  })
+  @ApiParam({ name: 'groupId', description: 'Group ID to join' })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully joined the group',
+    schema: {
+      example: {
+        success: true,
+        message: 'Successfully joined the group',
+        groupId: 1,
+        conversationId: 123,
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Group not joinable, full, or already a member',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Group not found',
+  })
+  async joinGroup(
+    @Req() req: RequestWithUser,
+    @Param('groupId', ParseIntPipe) groupId: number,
+  ) {
+    return this.groupChatService.joinGroup(
+      groupId,
       req.user.id,
       req.user.userType,
     );

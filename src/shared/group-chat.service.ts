@@ -44,6 +44,7 @@ export class GroupChatService {
     avatarUrl?: string,
     initialMemberIds?: Array<{ memberId: number; memberType: MemberType }>,
     isBroadcastOnly: boolean = false,
+    isJoinable: boolean = true,
   ) {
     // Validate group name
     if (!name || name.trim().length === 0) {
@@ -56,9 +57,9 @@ export class GroupChatService {
 
     // Calculate total members (creator + initial members)
     const totalMembers = 1 + (initialMemberIds?.length || 0);
-    if (totalMembers > 10) {
+    if (totalMembers > 100) {
       throw new BadRequestException(
-        'Group cannot have more than 10 members including creator',
+        'Group cannot have more than 100 members including creator',
       );
     }
 
@@ -68,9 +69,10 @@ export class GroupChatService {
       avatarUrl: avatarUrl || null,
       createdById: creatorId,
       createdByType: creatorType,
-      maxMembers: 10,
+      maxMembers: 100,
       isActive: true,
       isBroadcastOnly: isBroadcastOnly || false,
+      isJoinable: isJoinable ?? true,
     } as any);
 
     // Create conversation for the group
@@ -433,9 +435,11 @@ export class GroupChatService {
       maxMembers: group.maxMembers,
       isActive: group.isActive,
       isBroadcastOnly: group.isBroadcastOnly,
+      isJoinable: group.isJoinable,
       memberCount: enrichedMembers.length,
       members: enrichedMembers,
       conversation: group.conversation,
+      isMember: !!isMember, // Boolean flag: true if user is a member
       currentUserRole: isMember.role, // 'admin' or 'member'
       createdAt: group.createdAt,
       updatedAt: group.updatedAt,
@@ -502,9 +506,11 @@ export class GroupChatService {
           name: group.name,
           avatarUrl: group.avatarUrl,
           isBroadcastOnly: group.isBroadcastOnly,
+          isJoinable: group.isJoinable,
           memberCount,
           unreadCount,
           conversation: group.conversation,
+          isMember: true, // Always true for this endpoint (user's groups)
           lastJoinedAt: membership.joinedAt,
           currentUserRole: membership.role, // 'admin' or 'member'
         };
@@ -533,6 +539,180 @@ export class GroupChatService {
       page,
       limit,
       totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  /**
+   * Join a group (self-join for influencers)
+   */
+  async joinGroup(groupId: number, userId: number, userType: string) {
+    // Get group
+    const group = await this.groupChatModel.findByPk(groupId);
+    if (!group) {
+      throw new NotFoundException('Group not found');
+    }
+
+    if (!group.isActive) {
+      throw new BadRequestException('Cannot join inactive group');
+    }
+
+    if (!group.isJoinable) {
+      throw new BadRequestException('This group does not allow self-joining. You must be invited by an admin.');
+    }
+
+    // Check if user is already a member
+    const existingMember = await this.groupMemberModel.findOne({
+      where: {
+        groupChatId: groupId,
+        memberId: userId,
+        memberType: userType,
+        leftAt: { [Op.is]: null },
+      } as any,
+    });
+
+    if (existingMember) {
+      throw new BadRequestException('You are already a member of this group');
+    }
+
+    // Check if user previously left and is rejoining
+    const previousMember = await this.groupMemberModel.findOne({
+      where: {
+        groupChatId: groupId,
+        memberId: userId,
+        memberType: userType,
+        leftAt: { [Op.not]: null },
+      } as any,
+      order: [['leftAt', 'DESC']],
+    });
+
+    // Count current active members
+    const currentMemberCount = await this.groupMemberModel.count({
+      where: {
+        groupChatId: groupId,
+        leftAt: { [Op.is]: null },
+      } as any,
+    });
+
+    // Validate member limit
+    if (currentMemberCount >= group.maxMembers) {
+      throw new BadRequestException(
+        `Cannot join group. Maximum member limit (${group.maxMembers}) reached.`,
+      );
+    }
+
+    // If user previously was a member, reactivate their membership
+    if (previousMember) {
+      await previousMember.update({
+        leftAt: null as any,
+        joinedAt: new Date(),
+      });
+    } else {
+      // Create new membership
+      await this.groupMemberModel.create({
+        groupChatId: groupId,
+        memberId: userId,
+        memberType: userType as MemberType,
+        role: MemberRole.MEMBER,
+        joinedAt: new Date(),
+      } as any);
+    }
+
+    // Get conversation ID for WebSocket broadcast
+    const conversation = await this.conversationModel.findOne({
+      where: { groupChatId: groupId },
+    });
+
+    // Emit WebSocket event
+    if (conversation && this.chatGateway) {
+      await this.chatGateway.emitGroupMemberAdded(
+        groupId,
+        conversation.id,
+        userId,
+        userType,
+        userId, // Self-joined
+        userType,
+      );
+    }
+
+    return {
+      success: true,
+      message: 'Successfully joined the group',
+      groupId,
+      conversationId: conversation?.id,
+    };
+  }
+
+  /**
+   * Get available/joinable groups (shows all community groups to users)
+   */
+  async getAvailableGroups(
+    userId: number,
+    userType: string,
+    page: number = 1,
+    limit: number = 20,
+  ) {
+    const offset = (page - 1) * limit;
+
+    // Find all active, joinable groups (community groups)
+    const { rows: groups, count: totalCount } = await this.groupChatModel.findAndCountAll({
+      where: {
+        isActive: true,
+        isJoinable: true,
+      },
+      include: [
+        {
+          model: this.conversationModel,
+          as: 'conversation',
+        },
+      ],
+      limit,
+      offset,
+      order: [['createdAt', 'DESC']],
+    });
+
+    // Enrich with member status for each group
+    const groupsWithMemberStatus = await Promise.all(
+      groups.map(async (group) => {
+        const isMember = await this.groupMemberModel.findOne({
+          where: {
+            groupChatId: group.id,
+            memberId: userId,
+            memberType: userType,
+            leftAt: { [Op.is]: null },
+          } as any,
+        });
+
+        // Get member count
+        const memberCount = await this.groupMemberModel.count({
+          where: {
+            groupChatId: group.id,
+            leftAt: { [Op.is]: null },
+          } as any,
+        });
+
+        return {
+          id: group.id,
+          name: group.name,
+          avatarUrl: group.avatarUrl,
+          isBroadcastOnly: group.isBroadcastOnly,
+          memberCount,
+          maxMembers: group.maxMembers,
+          isMember: !!isMember, // Flag to show "Join" or "Joined" in UI
+          isFull: memberCount >= group.maxMembers,
+          conversation: group.conversation,
+          createdAt: group.createdAt,
+        };
+      }),
+    );
+
+    // Return ALL groups (including ones user is already in)
+    // The UI can use isMember flag to show different states
+    return {
+      groups: groupsWithMemberStatus,
+      total: totalCount,
+      page,
+      limit,
+      totalPages: Math.ceil(totalCount / limit),
     };
   }
 
