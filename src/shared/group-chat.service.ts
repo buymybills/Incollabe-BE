@@ -423,9 +423,14 @@ export class GroupChatService {
   }
 
   /**
-   * Get group details with members
+   * Get group details with members (with optional search)
    */
-  async getGroupDetails(groupId: number, requesterId: number, requesterType: string) {
+  async getGroupDetails(
+    groupId: number,
+    requesterId: number,
+    requesterType: string,
+    search?: string,
+  ) {
     // Get group
     const group = await this.groupChatModel.findByPk(groupId, {
       include: [
@@ -503,6 +508,24 @@ export class GroupChatService {
       }),
     );
 
+    // Filter members based on search query if provided
+    let filteredMembers = enrichedMembers;
+    if (search && search.trim()) {
+      const searchLower = search.toLowerCase().trim();
+      filteredMembers = enrichedMembers.filter((member) => {
+        if (!member.userDetails) return false;
+
+        // Search in name (for influencers) or brandName (for brands)
+        const name = member.userDetails.name || member.userDetails.brandName || '';
+        const username = member.userDetails.username || '';
+
+        return (
+          name.toLowerCase().includes(searchLower) ||
+          username.toLowerCase().includes(searchLower)
+        );
+      });
+    }
+
     return {
       id: group.id,
       name: group.name,
@@ -513,8 +536,9 @@ export class GroupChatService {
       isActive: group.isActive,
       isBroadcastOnly: group.isBroadcastOnly,
       isJoinable: group.isJoinable,
-      memberCount: enrichedMembers.length,
-      members: enrichedMembers,
+      memberCount: enrichedMembers.length, // Total count (before filtering)
+      filteredMemberCount: filteredMembers.length, // Filtered count (after search)
+      members: filteredMembers, // Return filtered members
       conversation: group.conversation,
       isMember: !!isMember, // Boolean flag: true if user is a member
       currentUserRole: isMember.role, // 'admin' or 'member'

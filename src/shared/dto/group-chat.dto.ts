@@ -172,3 +172,14 @@ export class GetGroupsDto {
   @IsOptional()
   limit?: number;
 }
+
+export class GetGroupDetailsDto {
+  @ApiProperty({
+    description: 'Search members by name or username',
+    required: false,
+    example: 'john',
+  })
+  @IsString()
+  @IsOptional()
+  search?: string;
+}
