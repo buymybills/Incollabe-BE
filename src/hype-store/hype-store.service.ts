@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Transaction } from 'sequelize';
@@ -10,7 +11,8 @@ import { HypeStoreCashbackConfig } from './models/hype-store-cashback-config.mod
 import { Wallet, UserType } from '../wallet/models/wallet.model';
 import { WalletTransaction, TransactionType, TransactionStatus } from '../wallet/models/wallet-transaction.model';
 import { HypeStoreCreatorPreference } from './models/hype-store-creator-preference.model';
-import { HypeStoreOrder } from './models/hype-store-order.model';
+import { HypeStoreOrder as HypeStoreOrderOld } from './models/hype-store-order.model';
+import { HypeStoreOrder } from '../wallet/models/hype-store-order.model';
 import { CreateHypeStoreDto, UpdateHypeStoreDto } from './dto/create-hype-store.dto';
 import { UpdateCashbackConfigDto } from './dto/cashback-config.dto';
 import { AddMoneyToWalletDto } from './dto/wallet.dto';
@@ -20,6 +22,14 @@ import { getStrategyForClaimCount } from './constants/cashback-strategies';
 import { RazorpayService } from '../shared/razorpay.service';
 import { Brand } from '../brand/model/brand.model';
 import { S3Service } from '../shared/s3.service';
+import { HypeStoreCouponCode } from '../wallet/models/hype-store-coupon-code.model';
+import { HypeStoreCashbackTier, CashbackType } from '../wallet/models/hype-store-cashback-tier.model';
+import { HypeStoreWebhookLog } from '../wallet/models/hype-store-webhook-log.model';
+import { HypeStoreWebhookSecret } from '../wallet/models/hype-store-webhook-secret.model';
+import { OrderStatus, CashbackStatus } from '../wallet/models/hype-store-order.model';
+import { PurchaseWebhookDto, ReturnWebhookDto } from '../wallet/dto/hype-store-webhook.dto';
+import { Influencer } from '../auth/model/influencer.model';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class HypeStoreService {
@@ -34,10 +44,22 @@ export class HypeStoreService {
     private walletTransactionModel: typeof WalletTransaction,
     @InjectModel(HypeStoreCreatorPreference)
     private creatorPreferenceModel: typeof HypeStoreCreatorPreference,
+    @InjectModel(HypeStoreOrderOld)
+    private orderModelOld: typeof HypeStoreOrderOld,
     @InjectModel(HypeStoreOrder)
     private orderModel: typeof HypeStoreOrder,
     @InjectModel(Brand)
     private brandModel: typeof Brand,
+    @InjectModel(HypeStoreCouponCode)
+    private couponCodeModel: typeof HypeStoreCouponCode,
+    @InjectModel(HypeStoreCashbackTier)
+    private cashbackTierModel: typeof HypeStoreCashbackTier,
+    @InjectModel(HypeStoreWebhookLog)
+    private webhookLogModel: typeof HypeStoreWebhookLog,
+    @InjectModel(HypeStoreWebhookSecret)
+    private webhookSecretModel: typeof HypeStoreWebhookSecret,
+    @InjectModel(Influencer)
+    private influencerModel: typeof Influencer,
     private sequelize: Sequelize,
     private razorpayService: RazorpayService,
     private s3Service: S3Service,
@@ -603,15 +625,15 @@ export class HypeStoreService {
     });
 
     // Get order statistics
-    const totalOrders = await this.orderModel.count({
+    const totalOrders = await this.orderModelOld.count({
       where: { storeId },
     });
 
-    const totalSales = await this.orderModel.sum('orderAmount', {
+    const totalSales = await this.orderModelOld.sum('orderAmount', {
       where: { storeId },
     });
 
-    const totalCashbackSent = await this.orderModel.sum('cashbackAmount', {
+    const totalCashbackSent = await this.orderModelOld.sum('cashbackAmount', {
       where: { storeId },
     });
 
@@ -619,14 +641,14 @@ export class HypeStoreService {
     const lastMonthDate = new Date();
     lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
 
-    const lastMonthOrders = await this.orderModel.count({
+    const lastMonthOrders = await this.orderModelOld.count({
       where: {
         storeId,
         createdAt: { [require('sequelize').Op.gte]: lastMonthDate },
       },
     });
 
-    const lastMonthSales = await this.orderModel.sum('orderAmount', {
+    const lastMonthSales = await this.orderModelOld.sum('orderAmount', {
       where: {
         storeId,
         createdAt: { [require('sequelize').Op.gte]: lastMonthDate },
@@ -661,7 +683,7 @@ export class HypeStoreService {
     brandId: number,
     limit: number = 50,
     offset: number = 0,
-  ): Promise<{ orders: HypeStoreOrder[]; total: number }> {
+  ): Promise<{ orders: HypeStoreOrderOld[]; total: number }> {
     const store = await this.hypeStoreModel.findOne({
       where: { id: storeId, brandId },
     });
@@ -670,7 +692,7 @@ export class HypeStoreService {
       throw new NotFoundException('Hype Store not found');
     }
 
-    const { count, rows } = await this.orderModel.findAndCountAll({
+    const { count, rows } = await this.orderModelOld.findAndCountAll({
       where: { storeId },
       limit,
       offset,
@@ -686,7 +708,7 @@ export class HypeStoreService {
   /**
    * Get order details
    */
-  async getOrderDetails(storeId: number, brandId: number, orderId: string): Promise<HypeStoreOrder> {
+  async getOrderDetails(storeId: number, brandId: number, orderId: string): Promise<HypeStoreOrderOld> {
     const store = await this.hypeStoreModel.findOne({
       where: { id: storeId, brandId },
     });
@@ -695,7 +717,7 @@ export class HypeStoreService {
       throw new NotFoundException('Hype Store not found');
     }
 
-    const order = await this.orderModel.findOne({
+    const order = await this.orderModelOld.findOne({
       where: { storeId, orderId },
     });
 
@@ -704,5 +726,653 @@ export class HypeStoreService {
     }
 
     return order;
+  }
+
+  /**
+   * Process purchase webhook from brand
+   * Called when a customer makes a purchase using an influencer's coupon
+   */
+  async processPurchaseWebhook(
+    apiKey: string,
+    webhookDto: PurchaseWebhookDto,
+    signature: string,
+    ipAddress: string,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    orderId?: number;
+    cashbackAmount?: number;
+    cashbackStatus?: string;
+  }> {
+    const startTime = Date.now();
+    let webhookSecret: HypeStoreWebhookSecret | null = null;
+    let responseStatus = 200;
+    let responseBody: any = { success: false, message: 'Processing failed' };
+    let processedOrderId: number | null = null;
+
+    try {
+      // 1. Find store by API key
+      webhookSecret = await this.webhookSecretModel.findOne({
+        where: { apiKey, isActive: true },
+        include: [{ model: this.hypeStoreModel }],
+      });
+
+      if (!webhookSecret) {
+        responseStatus = 401;
+        responseBody = { success: false, message: 'Invalid API key' };
+        throw new UnauthorizedException('Invalid API key');
+      }
+
+      const hypeStore = webhookSecret.hypeStore;
+
+      // 2. Verify webhook signature
+      const isValidSignature = this.verifyWebhookSignature(
+        JSON.stringify(webhookDto),
+        signature,
+        webhookSecret.webhookSecret,
+      );
+
+      if (!isValidSignature) {
+        responseStatus = 401;
+        responseBody = { success: false, message: 'Invalid webhook signature' };
+        await this.logWebhookRequest({
+          hypeStoreId: hypeStore.id,
+          method: 'POST',
+          path: '/webhooks/purchase',
+          headers: { 'x-webhook-signature': signature },
+          body: webhookDto,
+          ipAddress,
+          status: responseStatus,
+          responseBody,
+          isValid: false,
+          errorMessage: 'Invalid webhook signature',
+        });
+        throw new UnauthorizedException('Invalid webhook signature');
+      }
+
+      // 3. Check for duplicate order (idempotency)
+      const existingOrder = await this.orderModel.findOne({
+        where: { externalOrderId: webhookDto.externalOrderId },
+      });
+
+      if (existingOrder) {
+        responseStatus = 200;
+        responseBody = {
+          success: true,
+          message: 'Order already processed',
+          orderId: existingOrder.id,
+          cashbackAmount: parseFloat(existingOrder.cashbackAmount.toString()),
+          cashbackStatus: existingOrder.cashbackStatus,
+        };
+        await this.logWebhookRequest({
+          hypeStoreId: hypeStore.id,
+          method: 'POST',
+          path: '/webhooks/purchase',
+          headers: { 'x-webhook-signature': signature },
+          body: webhookDto,
+          ipAddress,
+          status: responseStatus,
+          responseBody,
+          isValid: true,
+          processedOrderId: existingOrder.id,
+        });
+        return responseBody;
+      }
+
+      // 4. Find coupon code
+      const couponCode = await this.couponCodeModel.findOne({
+        where: { couponCode: webhookDto.couponCode, isActive: true },
+        include: [{ model: this.influencerModel }],
+      });
+
+      if (!couponCode) {
+        responseStatus = 400;
+        responseBody = { success: false, message: 'Invalid or inactive coupon code' };
+        await this.logWebhookRequest({
+          hypeStoreId: hypeStore.id,
+          method: 'POST',
+          path: '/webhooks/purchase',
+          headers: { 'x-webhook-signature': signature },
+          body: webhookDto,
+          ipAddress,
+          status: responseStatus,
+          responseBody,
+          isValid: true,
+          errorMessage: 'Coupon code not found',
+        });
+        throw new BadRequestException('Invalid or inactive coupon code');
+      }
+
+      // Validate coupon belongs to this store OR is a universal coupon
+      // Universal coupons have hypeStoreId = null and work for all stores
+      const isUniversalCoupon = couponCode.hypeStoreId === null || (couponCode as any).isUniversal === true;
+      if (!isUniversalCoupon && couponCode.hypeStoreId !== hypeStore.id) {
+        responseStatus = 400;
+        responseBody = { success: false, message: 'Coupon does not belong to this store' };
+        throw new BadRequestException('Coupon does not belong to this store');
+      }
+
+      // 5. Calculate cashback
+      const { cashbackAmount, tierId } = await this.calculateCashbackAmount(
+        webhookDto.orderAmount,
+        couponCode.influencerId,
+        hypeStore.id,
+      );
+
+      // 6. Create order in transaction
+      const transaction: Transaction = await this.sequelize.transaction();
+
+      try {
+        // Calculate return period end date (30 days from order date)
+        const orderDate = new Date(webhookDto.orderDate);
+        const returnPeriodDays = 30;
+        const returnPeriodEndsAt = new Date(orderDate);
+        returnPeriodEndsAt.setDate(returnPeriodEndsAt.getDate() + returnPeriodDays);
+
+        const order = await this.orderModel.create(
+          {
+            hypeStoreId: hypeStore.id,
+            couponCodeId: couponCode.id,
+            influencerId: couponCode.influencerId,
+            externalOrderId: webhookDto.externalOrderId,
+            orderAmount: webhookDto.orderAmount,
+            orderCurrency: webhookDto.orderCurrency || 'INR',
+            orderDate: orderDate,
+            customerEmail: webhookDto.customerEmail,
+            customerPhone: webhookDto.customerPhone,
+            customerName: webhookDto.customerName,
+            orderStatus: webhookDto.orderStatus || OrderStatus.PENDING,
+            cashbackAmount,
+            cashbackStatus: CashbackStatus.PENDING,
+            cashbackTierId: tierId,
+            webhookReceivedAt: new Date(),
+            webhookSignature: signature,
+            webhookIpAddress: ipAddress,
+            metadata: webhookDto.metadata,
+            // Return period tracking fields
+            returnPeriodDays: returnPeriodDays,
+            returnPeriodEndsAt: returnPeriodEndsAt,
+            visibleToInfluencer: false, // Hidden until return period ends
+          } as any,
+          { transaction },
+        );
+
+        processedOrderId = order.id;
+
+        // Update coupon usage count
+        await couponCode.increment('totalUses', { by: 1, transaction });
+
+        // Update webhook secret last used timestamp
+        await webhookSecret.update({ lastUsedAt: new Date() }, { transaction });
+
+        await transaction.commit();
+
+        responseStatus = 200;
+        responseBody = {
+          success: true,
+          message: 'Order processed successfully',
+          orderId: order.id,
+          cashbackAmount,
+          cashbackStatus: CashbackStatus.PENDING,
+        };
+
+        // Log successful webhook
+        await this.logWebhookRequest({
+          hypeStoreId: hypeStore.id,
+          method: 'POST',
+          path: '/webhooks/purchase',
+          headers: { 'x-webhook-signature': signature },
+          body: webhookDto,
+          ipAddress,
+          status: responseStatus,
+          responseBody,
+          isValid: true,
+          processedOrderId: order.id,
+        });
+
+        return responseBody;
+      } catch (error) {
+        await transaction.rollback();
+        throw error;
+      }
+    } catch (error) {
+      responseStatus = responseStatus === 200 ? 500 : responseStatus;
+      responseBody = {
+        success: false,
+        message: error.message || 'Internal server error',
+      };
+
+      // Log failed webhook
+      if (webhookSecret) {
+        await this.logWebhookRequest({
+          hypeStoreId: webhookSecret.hypeStoreId,
+          method: 'POST',
+          path: '/webhooks/purchase',
+          headers: { 'x-webhook-signature': signature },
+          body: webhookDto,
+          ipAddress,
+          status: responseStatus,
+          responseBody,
+          isValid: false,
+          errorMessage: error.message,
+          processedOrderId,
+        });
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Process return/refund webhook from brand
+   * Called when a customer returns a product or gets a refund
+   */
+  async processReturnWebhook(
+    apiKey: string,
+    webhookDto: ReturnWebhookDto,
+    signature: string,
+    ipAddress: string,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    orderId?: number;
+    cashbackReversed?: boolean;
+  }> {
+    let webhookSecret: HypeStoreWebhookSecret | null = null;
+    let responseStatus = 200;
+    let responseBody: any = { success: false, message: 'Processing failed' };
+    let processedOrderId: number | null = null;
+
+    try {
+      // 1. Find store by API key
+      webhookSecret = await this.webhookSecretModel.findOne({
+        where: { apiKey, isActive: true },
+        include: [{ model: this.hypeStoreModel }],
+      });
+
+      if (!webhookSecret) {
+        responseStatus = 401;
+        responseBody = { success: false, message: 'Invalid API key' };
+        throw new UnauthorizedException('Invalid API key');
+      }
+
+      const hypeStore = webhookSecret.hypeStore;
+
+      // 2. Verify webhook signature
+      const isValidSignature = this.verifyWebhookSignature(
+        JSON.stringify(webhookDto),
+        signature,
+        webhookSecret.webhookSecret,
+      );
+
+      if (!isValidSignature) {
+        responseStatus = 401;
+        responseBody = { success: false, message: 'Invalid webhook signature' };
+        await this.logWebhookRequest({
+          hypeStoreId: hypeStore.id,
+          method: 'POST',
+          path: '/webhooks/return',
+          headers: { 'x-webhook-signature': signature },
+          body: webhookDto,
+          ipAddress,
+          status: responseStatus,
+          responseBody,
+          isValid: false,
+          errorMessage: 'Invalid webhook signature',
+        });
+        throw new UnauthorizedException('Invalid webhook signature');
+      }
+
+      // 3. Find existing order
+      const order = await this.orderModel.findOne({
+        where: {
+          hypeStoreId: hypeStore.id,
+          externalOrderId: webhookDto.externalOrderId,
+        },
+      });
+
+      if (!order) {
+        responseStatus = 404;
+        responseBody = { success: false, message: 'Order not found' };
+        await this.logWebhookRequest({
+          hypeStoreId: hypeStore.id,
+          method: 'POST',
+          path: '/webhooks/return',
+          headers: { 'x-webhook-signature': signature },
+          body: webhookDto,
+          ipAddress,
+          status: responseStatus,
+          responseBody,
+          isValid: true,
+          errorMessage: 'Order not found',
+        });
+        throw new NotFoundException('Order not found');
+      }
+
+      processedOrderId = order.id;
+
+      // 4. Update order status and reverse cashback if needed
+      const transaction: Transaction = await this.sequelize.transaction();
+      let cashbackReversed = false;
+
+      try {
+        // Update order status to returned/refunded
+        await order.update(
+          {
+            orderStatus: OrderStatus.RETURNED,
+            cashbackStatus:
+              order.cashbackStatus === CashbackStatus.CREDITED
+                ? CashbackStatus.CANCELLED
+                : order.cashbackStatus,
+            visibleToInfluencer: false, // Ensure order stays hidden from influencer
+            notes: `Return processed on ${new Date(webhookDto.returnDate).toISOString()}. Reason: ${webhookDto.returnReason || 'Not specified'}`,
+          },
+          { transaction },
+        );
+
+        // If cashback was already credited, reverse it
+        if (
+          order.cashbackStatus === CashbackStatus.CREDITED &&
+          order.walletTransactionId
+        ) {
+          const influencerWallet = await this.walletModel.findOne({
+            where: {
+              userId: order.influencerId,
+              userType: UserType.INFLUENCER,
+            },
+            transaction,
+          });
+
+          if (influencerWallet) {
+            const previousBalance = parseFloat(influencerWallet.balance.toString());
+            const cashbackAmount = parseFloat(order.cashbackAmount.toString());
+            const newBalance = previousBalance - cashbackAmount;
+
+            // Deduct cashback from influencer wallet
+            await influencerWallet.update(
+              {
+                balance: newBalance,
+                totalDebited: parseFloat(influencerWallet.totalDebited.toString()) + cashbackAmount,
+              },
+              { transaction },
+            );
+
+            // Create reversal transaction
+            await this.walletTransactionModel.create(
+              {
+                walletId: influencerWallet.id,
+                transactionType: TransactionType.DEBIT,
+                amount: cashbackAmount,
+                balanceBefore: previousBalance,
+                balanceAfter: newBalance,
+                status: TransactionStatus.COMPLETED,
+                description: `Cashback reversal for returned order ${order.externalOrderId}`,
+                storeId: hypeStore.id,
+              } as any,
+              { transaction },
+            );
+
+            cashbackReversed = true;
+          }
+        }
+
+        // Update webhook secret last used timestamp
+        await webhookSecret.update({ lastUsedAt: new Date() }, { transaction });
+
+        await transaction.commit();
+
+        responseStatus = 200;
+        responseBody = {
+          success: true,
+          message: 'Return processed successfully',
+          orderId: order.id,
+          cashbackReversed,
+        };
+
+        // Log successful webhook
+        await this.logWebhookRequest({
+          hypeStoreId: hypeStore.id,
+          method: 'POST',
+          path: '/webhooks/return',
+          headers: { 'x-webhook-signature': signature },
+          body: webhookDto,
+          ipAddress,
+          status: responseStatus,
+          responseBody,
+          isValid: true,
+          processedOrderId: order.id,
+        });
+
+        return responseBody;
+      } catch (error) {
+        await transaction.rollback();
+        throw error;
+      }
+    } catch (error) {
+      responseStatus = responseStatus === 200 ? 500 : responseStatus;
+      responseBody = {
+        success: false,
+        message: error.message || 'Internal server error',
+      };
+
+      // Log failed webhook
+      if (webhookSecret) {
+        await this.logWebhookRequest({
+          hypeStoreId: webhookSecret.hypeStoreId,
+          method: 'POST',
+          path: '/webhooks/return',
+          headers: { 'x-webhook-signature': signature },
+          body: webhookDto,
+          ipAddress,
+          status: responseStatus,
+          responseBody,
+          isValid: false,
+          errorMessage: error.message,
+          processedOrderId,
+        });
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Verify webhook signature using HMAC-SHA256
+   */
+  private verifyWebhookSignature(
+    payload: string,
+    signature: string,
+    secret: string,
+  ): boolean {
+    try {
+      const hmac = crypto.createHmac('sha256', secret);
+      const expectedSignature = hmac.update(payload).digest('hex');
+      return crypto.timingSafeEqual(
+        Buffer.from(signature),
+        Buffer.from(expectedSignature),
+      );
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Calculate cashback amount based on influencer's follower tier
+   */
+  private async calculateCashbackAmount(
+    orderAmount: number,
+    influencerId: number,
+    hypeStoreId: number,
+  ): Promise<{ cashbackAmount: number; tierId: number | null }> {
+    // Get influencer details to determine follower count
+    const influencer = await this.influencerModel.findByPk(influencerId);
+
+    if (!influencer) {
+      throw new NotFoundException('Influencer not found');
+    }
+
+    const followerCount = influencer.instagramFollowersCount || 0;
+
+    // Find applicable cashback tier
+    const tier = await this.cashbackTierModel.findOne({
+      where: {
+        hypeStoreId,
+        isActive: true,
+        minFollowers: { [require('sequelize').Op.lte]: followerCount },
+        ...(followerCount > 0
+          ? {
+              [require('sequelize').Op.or]: [
+                { maxFollowers: { [require('sequelize').Op.gte]: followerCount } },
+                { maxFollowers: null },
+              ],
+            }
+          : {}),
+      },
+      order: [['priority', 'DESC']],
+    });
+
+    if (!tier) {
+      // No tier found, return minimum default
+      return { cashbackAmount: 0, tierId: null };
+    }
+
+    let cashbackAmount = 0;
+
+    // Calculate based on tier type
+    if (tier.cashbackType === CashbackType.PERCENTAGE) {
+      cashbackAmount = (orderAmount * parseFloat(tier.cashbackValue.toString())) / 100;
+    } else {
+      // Fixed amount
+      cashbackAmount = parseFloat(tier.cashbackValue.toString());
+    }
+
+    // Apply min/max limits
+    const minCashback = parseFloat(tier.minCashbackAmount.toString());
+    const maxCashback = parseFloat(tier.maxCashbackAmount.toString());
+
+    cashbackAmount = Math.max(minCashback, Math.min(maxCashback, cashbackAmount));
+
+    return { cashbackAmount, tierId: tier.id };
+  }
+
+  /**
+   * Credit cashback to influencer wallet (called separately, e.g., after order confirmation)
+   */
+  async creditCashbackToInfluencer(orderId: number): Promise<void> {
+    const order = await this.orderModel.findByPk(orderId);
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    if (order.cashbackStatus === CashbackStatus.CREDITED) {
+      throw new BadRequestException('Cashback already credited');
+    }
+
+    // Find or create influencer wallet
+    let influencerWallet = await this.walletModel.findOne({
+      where: {
+        userId: order.influencerId,
+        userType: UserType.INFLUENCER,
+      },
+    });
+
+    if (!influencerWallet) {
+      influencerWallet = await this.walletModel.create({
+        userId: order.influencerId,
+        userType: UserType.INFLUENCER,
+        balance: 0,
+        totalCredited: 0,
+        totalDebited: 0,
+        totalCashbackReceived: 0,
+        totalRedeemed: 0,
+        isActive: true,
+      } as any);
+    }
+
+    const transaction: Transaction = await this.sequelize.transaction();
+
+    try {
+      const previousBalance = parseFloat(influencerWallet.balance.toString());
+      const cashbackAmount = parseFloat(order.cashbackAmount.toString());
+      const newBalance = previousBalance + cashbackAmount;
+
+      // Update wallet
+      await influencerWallet.update(
+        {
+          balance: newBalance,
+          totalCredited: parseFloat(influencerWallet.totalCredited.toString()) + cashbackAmount,
+          totalCashbackReceived:
+            parseFloat(influencerWallet.totalCashbackReceived.toString()) + cashbackAmount,
+        },
+        { transaction },
+      );
+
+      // Create transaction record
+      const walletTransaction = await this.walletTransactionModel.create(
+        {
+          walletId: influencerWallet.id,
+          transactionType: TransactionType.CASHBACK,
+          amount: cashbackAmount,
+          balanceBefore: previousBalance,
+          balanceAfter: newBalance,
+          status: TransactionStatus.COMPLETED,
+          description: `Cashback for order ${order.externalOrderId}`,
+          storeId: order.hypeStoreId,
+        } as any,
+        { transaction },
+      );
+
+      // Update order
+      await order.update(
+        {
+          cashbackStatus: CashbackStatus.CREDITED,
+          cashbackCreditedAt: new Date(),
+          walletTransactionId: walletTransaction.id,
+        },
+        { transaction },
+      );
+
+      await transaction.commit();
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  /**
+   * Log webhook request for audit trail
+   */
+  private async logWebhookRequest(data: {
+    hypeStoreId: number;
+    method: string;
+    path: string;
+    headers: Record<string, any>;
+    body: any;
+    ipAddress: string;
+    status: number;
+    responseBody: any;
+    isValid: boolean;
+    errorMessage?: string;
+    processedOrderId?: number | null;
+  }): Promise<void> {
+    try {
+      await this.webhookLogModel.create({
+        hypeStoreId: data.hypeStoreId,
+        requestMethod: data.method,
+        requestPath: data.path,
+        requestHeaders: data.headers,
+        requestBody: data.body,
+        requestIp: data.ipAddress,
+        responseStatus: data.status,
+        responseBody: data.responseBody,
+        isValid: data.isValid,
+        errorMessage: data.errorMessage,
+        processedOrderId: data.processedOrderId,
+      } as any);
+    } catch (error) {
+      // Don't throw on logging errors
+      console.error('Failed to log webhook request:', error);
+    }
   }
 }

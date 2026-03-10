@@ -12,8 +12,10 @@ import {
   HttpStatus,
   UseInterceptors,
   UploadedFile,
+  Headers,
+  Ip,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery, ApiBody, ApiConsumes } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery, ApiBody, ApiConsumes, ApiHeader } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { HypeStoreService } from './hype-store.service';
 import { CreateHypeStoreDto, UpdateHypeStoreDto } from './dto/create-hype-store.dto';
@@ -23,6 +25,7 @@ import { UpdateCreatorPreferenceDto } from './dto/creator-preference.dto';
 import { CASHBACK_CLAIM_STRATEGIES } from './constants/cashback-strategies';
 import { CreateWalletRechargeOrderDto, VerifyWalletPaymentDto } from './dto/wallet.dto';
 import { AuthGuard } from '../auth/guards/auth.guard';
+import { PurchaseWebhookDto, ReturnWebhookDto, WebhookResponseDto } from '../wallet/dto/hype-store-webhook.dto';
 
 @ApiTags('Hype Store')
 @Controller('api/brand/hype-store')

@@ -28,7 +28,7 @@ export class HypeStoreCouponCode extends Model<HypeStoreCouponCode> {
   @Index
   @Column({
     type: DataType.INTEGER,
-    allowNull: false,
+    allowNull: true, // NULL for universal coupons
   })
   declare hypeStoreId: number;
 
@@ -85,6 +85,14 @@ export class HypeStoreCouponCode extends Model<HypeStoreCouponCode> {
     allowNull: true,
   })
   declare deactivatedAt: Date;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: true,
+    allowNull: false,
+    comment: 'If true, coupon works for all Hype Stores. If false, only for specific hypeStoreId',
+  })
+  declare isUniversal: boolean;
 
   @Column({
     type: DataType.DATE,

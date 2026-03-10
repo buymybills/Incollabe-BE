@@ -6,8 +6,10 @@ import {
   Index,
   ForeignKey,
   BelongsTo,
+  HasOne,
 } from 'sequelize-typescript';
 import { Brand } from '../../brand/model/brand.model';
+import { HypeStoreCashbackConfig } from '../../hype-store/models/hype-store-cashback-config.model';
 
 @Table({
   tableName: 'hype_stores',
@@ -132,4 +134,7 @@ export class HypeStore extends Model<HypeStore> {
   // Associations
   @BelongsTo(() => Brand)
   declare brand: Brand;
+
+  @HasOne(() => HypeStoreCashbackConfig, 'hypeStoreId')
+  declare cashbackConfig: HypeStoreCashbackConfig;
 }

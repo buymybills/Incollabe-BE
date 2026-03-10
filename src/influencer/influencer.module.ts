@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { InfluencerController } from './influencer.controller';
+import { InfluencerHypeStoreController } from './influencer-hype-store.controller';
 import { InfluencerService } from './influencer.service';
+import { InfluencerHypeStoreService } from './services/influencer-hype-store.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
@@ -31,6 +33,12 @@ import { InfluencerUpi } from './models/influencer-upi.model';
 import { HomePageHistory } from './models/home-page-history.model';
 import { CampaignModule } from '../campaign/campaign.module';
 import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
+import { HypeStore } from '../hype-store/models/hype-store.model';
+import { HypeStoreCashbackConfig } from '../hype-store/models/hype-store-cashback-config.model';
+import { HypeStoreCouponCode } from '../wallet/models/hype-store-coupon-code.model';
+import { HypeStoreOrder } from '../wallet/models/hype-store-order.model';
+import { Wallet } from '../wallet/models/wallet.model';
+import { WalletTransaction } from '../wallet/models/wallet-transaction.model';
 
 @Module({
   imports: [
@@ -59,13 +67,20 @@ import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-ana
       InfluencerUpi,
       InstagramProfileAnalysis,
       HomePageHistory,
+      HypeStore,
+      HypeStoreCashbackConfig,
+      HypeStoreCouponCode,
+      HypeStoreOrder,
+      Wallet,
+      WalletTransaction,
     ]),
     SharedModule,
     CampaignModule,
   ],
-  controllers: [InfluencerController],
+  controllers: [InfluencerController, InfluencerHypeStoreController],
   providers: [
     InfluencerService,
+    InfluencerHypeStoreService,
     InfluencerRepository,
     ProSubscriptionService,
     SubscriptionSchedulerService,

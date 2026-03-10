@@ -192,6 +192,57 @@ export class HypeStoreOrder extends Model<HypeStoreOrder> {
   declare notes: string;
 
   @Column({
+    type: DataType.STRING(500),
+    allowNull: true,
+  })
+  declare instagramProofUrl: string;
+
+  @Column({
+    type: DataType.STRING(50),
+    allowNull: true,
+  })
+  declare proofContentType: string;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare proofSubmittedAt: Date;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+  })
+  declare minimumCashbackClaimed: boolean;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 30,
+  })
+  declare returnPeriodDays: number;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare returnPeriodEndsAt: Date;
+
+  @Index
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  declare visibleToInfluencer: boolean;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare visibilityCheckedAt: Date;
+
+  @Column({
     type: DataType.DATE,
     allowNull: false,
     defaultValue: DataType.NOW,

@@ -509,14 +509,17 @@ export class GroupChatService {
     );
 
     // Filter members based on search query if provided
+    // Note: Search only filters influencers (community members), not brands (admins)
     let filteredMembers = enrichedMembers;
     if (search && search.trim()) {
       const searchLower = search.toLowerCase().trim();
       filteredMembers = enrichedMembers.filter((member) => {
+        // Only search influencer members (brands are admins, not searchable community members)
+        if (member.memberType !== MemberType.INFLUENCER) return true; // Keep brands in results
         if (!member.userDetails) return false;
 
-        // Search in name (for influencers) or brandName (for brands)
-        const name = member.userDetails.name || member.userDetails.brandName || '';
+        // Search in influencer name and username
+        const name = member.userDetails.name || '';
         const username = member.userDetails.username || '';
 
         return (

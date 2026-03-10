@@ -1,16 +1,23 @@
 import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { HypeStoreController } from './hype-store.controller';
+import { HypeStoreWebhookController } from './hype-store-webhook.controller';
 import { HypeStoreService } from './hype-store.service';
+import { OrderVisibilitySchedulerService } from './services/order-visibility-scheduler.service';
 import { HypeStore } from './models/hype-store.model';
 import { HypeStoreCashbackConfig } from './models/hype-store-cashback-config.model';
 import { Wallet } from '../wallet/models/wallet.model';
 import { WalletTransaction } from '../wallet/models/wallet-transaction.model';
 import { HypeStoreCreatorPreference } from './models/hype-store-creator-preference.model';
-import { HypeStoreOrder } from './models/hype-store-order.model';
+import { HypeStoreOrder as HypeStoreOrderOld } from './models/hype-store-order.model';
+import { HypeStoreOrder } from '../wallet/models/hype-store-order.model';
 import { HypeStoreCashbackTransaction } from './models/hype-store-cashback-transaction.model';
 import { Brand } from '../brand/model/brand.model';
 import { Influencer } from '../auth/model/influencer.model';
+import { HypeStoreCouponCode } from '../wallet/models/hype-store-coupon-code.model';
+import { HypeStoreCashbackTier } from '../wallet/models/hype-store-cashback-tier.model';
+import { HypeStoreWebhookLog } from '../wallet/models/hype-store-webhook-log.model';
+import { HypeStoreWebhookSecret } from '../wallet/models/hype-store-webhook-secret.model';
 import { SharedModule } from '../shared/shared.module';
 
 @Module({
@@ -21,15 +28,20 @@ import { SharedModule } from '../shared/shared.module';
       Wallet,
       WalletTransaction,
       HypeStoreCreatorPreference,
+      HypeStoreOrderOld,
       HypeStoreOrder,
       HypeStoreCashbackTransaction,
       Brand,
       Influencer,
+      HypeStoreCouponCode,
+      HypeStoreCashbackTier,
+      HypeStoreWebhookLog,
+      HypeStoreWebhookSecret,
     ]),
     SharedModule,
   ],
-  controllers: [HypeStoreController],
-  providers: [HypeStoreService],
+  controllers: [HypeStoreController, HypeStoreWebhookController],
+  providers: [HypeStoreService, OrderVisibilitySchedulerService],
   exports: [HypeStoreService],
 })
 export class HypeStoreModule {}

@@ -1462,12 +1462,16 @@ export class ChatController {
 
   @Get('groups/:groupId')
   @ApiOperation({
-    summary: 'Get group details with optional member search',
+    summary: 'Get group details with optional influencer search',
     description:
       'Get detailed information about a specific group including members and their public keys.\n\n' +
-      '**Member Search:** Use the `search` query parameter to filter members by name or username.\n' +
-      '- Example: `?search=john` will return only members whose name or username contains "john"\n' +
-      '- Search is case-insensitive\n' +
+      '**Group Structure:**\n' +
+      '- Brands create and admin community groups\n' +
+      '- Influencers join as community members\n\n' +
+      '**Influencer Search:** Use the `search` query parameter to filter influencer members by name or username.\n' +
+      '- Example: `?search=john` will return only influencers whose name or username contains "john"\n' +
+      '- Search is case-insensitive and only applies to influencers (not brand admins)\n' +
+      '- Brand admins are always included in results regardless of search\n' +
       '- If no search is provided, all members are returned\n\n' +
       '**E2EE Support:** Member details include `publicKey`, `publicKeyCreatedAt`, and `publicKeyUpdatedAt` fields ' +
       'for implementing end-to-end encryption in group chats. Members without E2EE set up will have `publicKey: null`.\n\n' +
@@ -1477,7 +1481,7 @@ export class ChatController {
   @ApiQuery({
     name: 'search',
     required: false,
-    description: 'Search members by name or username (case-insensitive)',
+    description: 'Search influencer members by name or username (case-insensitive). Brand admins are not filtered.',
     example: 'john',
   })
   @ApiResponse({

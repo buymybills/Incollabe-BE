@@ -175,7 +175,7 @@ export class GetGroupsDto {
 
 export class GetGroupDetailsDto {
   @ApiProperty({
-    description: 'Search members by name or username',
+    description: 'Search influencer members by name or username (brand admins are not filtered by search)',
     required: false,
     example: 'john',
   })
