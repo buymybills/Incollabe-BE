@@ -7,7 +7,7 @@ import {
 import { InjectModel } from '@nestjs/sequelize';
 import { Op, Transaction } from 'sequelize';
 import { Sequelize } from 'sequelize-typescript';
-import { HypeStore } from '../../hype-store/models/hype-store.model';
+import { HypeStore } from '../../wallet/models/hype-store.model';
 import { HypeStoreCashbackConfig } from '../../hype-store/models/hype-store-cashback-config.model';
 import { HypeStoreCouponCode } from '../../wallet/models/hype-store-coupon-code.model';
 import { HypeStoreOrder, OrderStatus, CashbackStatus } from '../../wallet/models/hype-store-order.model';
@@ -128,8 +128,8 @@ export class InfluencerHypeStoreService {
           id: store.id,
           storeName: store.storeName,
           storeDescription: store.storeDescription,
-          bannerImageUrl: store.bannerImageUrl,
-          logoUrl: store.logoUrl,
+          bannerImageUrl: store.storeBanner,
+          logoUrl: store.storeLogo,
           brand: store.brand,
           cashbackConfig: store.cashbackConfig,
           hasCoupon: !!universalCoupon, // Same coupon works for all stores
@@ -228,8 +228,8 @@ export class InfluencerHypeStoreService {
         id: store.id,
         storeName: store.storeName,
         storeDescription: store.storeDescription,
-        bannerImageUrl: store.bannerImageUrl,
-        logoUrl: store.logoUrl,
+        bannerImageUrl: store.storeBanner,
+        logoUrl: store.storeLogo,
         isActive: store.isActive,
         brand: store.brand,
         cashbackConfig: store.cashbackConfig,
@@ -330,66 +330,6 @@ export class InfluencerHypeStoreService {
    * @deprecated Use getOrCreateUniversalCoupon instead
    * Legacy method for generating store-specific coupons
    */
-  async generateCouponCode(influencerId: number, storeId: number) {
-    // Now just return the universal coupon regardless of store
-    // This maintains backward compatibility while using new approach
-    return this.getOrCreateUniversalCoupon(influencerId);
-  }
-
-  /**
-   * Get universal coupon for influencer
-   * Note: Now returns single universal coupon instead of multiple store-specific coupons
-   */
-  async getMyCoupons(influencerId: number) {
-    // Get universal coupon
-    const universalCoupon = await this.couponCodeModel.findOne({
-      where: {
-        influencerId,
-        isUniversal: true,
-        isActive: true,
-      },
-    });
-
-    // Also get any legacy store-specific coupons (for backward compatibility)
-    const storeCoupons = await this.couponCodeModel.findAll({
-      where: {
-        influencerId,
-        isUniversal: false,
-      },
-      include: [
-        {
-          model: this.hypeStoreModel,
-          as: 'hypeStore',
-          attributes: ['id', 'storeName', 'bannerImageUrl', 'logoUrl'],
-          include: [
-            {
-              model: this.brandModel,
-              as: 'brand',
-              attributes: ['id', 'brandName', 'username', 'profileImage'],
-            },
-          ],
-        },
-      ],
-      order: [['createdAt', 'DESC']],
-    });
-
-    // Return universal coupon first, then any legacy coupons
-    const allCoupons = universalCoupon
-      ? [universalCoupon, ...storeCoupons]
-      : storeCoupons;
-
-    return {
-      success: true,
-      data: {
-        universalCoupon: universalCoupon || null,
-        storeCoupons: storeCoupons,
-        // For backward compatibility, also return flat array
-        allCoupons: allCoupons,
-      },
-      message: 'Coupon codes retrieved successfully',
-    };
-  }
-
   /**
    * Get all orders for influencer with filters
    */
@@ -423,7 +363,7 @@ export class InfluencerHypeStoreService {
         {
           model: this.hypeStoreModel,
           as: 'hypeStore',
-          attributes: ['id', 'storeName', 'logoUrl'],
+          attributes: ['id', 'storeName', 'storeLogo'],
           include: [
             {
               model: this.brandModel,
