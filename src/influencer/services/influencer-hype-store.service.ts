@@ -74,7 +74,7 @@ export class InfluencerHypeStoreService {
         {
           model: this.brandModel,
           as: 'brand',
-          attributes: ['id', 'brand_name', 'username', 'profile_image', 'profile_banner'],
+          attributes: ['id', 'brandName', 'username', 'profileImage', 'profileBanner'],
           where: search && search.trim() ? brandWhere : undefined,
           required: false,
         },
@@ -170,12 +170,12 @@ export class InfluencerHypeStoreService {
           as: 'brand',
           attributes: [
             'id',
-            'brand_name',
+            'brandName',
             'username',
-            'brand_bio',
-            'profile_image',
-            'profile_banner',
-            'website_url',
+            'brandBio',
+            'profileImage',
+            'profileBanner',
+            'websiteUrl',
           ],
         },
         {
@@ -368,7 +368,7 @@ export class InfluencerHypeStoreService {
             {
               model: this.brandModel,
               as: 'brand',
-              attributes: ['id', 'brand_name', 'profile_image'],
+              attributes: ['id', 'brandName', 'profileImage'],
             },
           ],
         },
@@ -548,7 +548,7 @@ export class InfluencerHypeStoreService {
             {
               model: this.brandModel,
               as: 'brand',
-              attributes: ['id', 'brand_name'],
+              attributes: ['id', 'brandName'],
             },
           ],
         },
