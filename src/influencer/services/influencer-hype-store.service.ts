@@ -175,7 +175,7 @@ export class InfluencerHypeStoreService {
             'brandBio',
             'profileImage',
             'profileBanner',
-            'website',
+            'websiteUrl',
           ],
         },
         {
