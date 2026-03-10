@@ -164,6 +164,24 @@ export class InfluencerHypeStoreService {
         id: storeId,
         isActive: true,
       },
+      attributes: [
+        'id',
+        'brand_id',
+        'store_name',
+        'store_slug',
+        'store_description',
+        'store_logo',
+        'store_banner',
+        'is_active',
+        'is_verified',
+        'min_order_value',
+        'max_order_value',
+        'total_orders',
+        'total_revenue',
+        'total_cashback_given',
+        'created_at',
+        'updated_at',
+      ],
       include: [
         {
           model: this.brandModel,
@@ -181,6 +199,15 @@ export class InfluencerHypeStoreService {
         {
           model: this.cashbackConfigModel,
           as: 'cashbackConfig',
+          attributes: [
+            'id',
+            'reel_post_min_cashback',
+            'reel_post_max_cashback',
+            'story_min_cashback',
+            'story_max_cashback',
+            'monthly_claim_count',
+            'claim_strategy',
+          ],
         },
       ],
     });
