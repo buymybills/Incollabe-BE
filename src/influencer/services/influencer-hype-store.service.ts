@@ -74,7 +74,7 @@ export class InfluencerHypeStoreService {
         {
           model: this.brandModel,
           as: 'brand',
-          attributes: ['id', 'brandName', 'username', 'profileImage', 'profileBanner'],
+          attributes: ['id', 'brand_name', 'username', 'profile_image', 'profile_banner'],
           where: search && search.trim() ? brandWhere : undefined,
           required: false,
         },
@@ -83,12 +83,12 @@ export class InfluencerHypeStoreService {
           as: 'cashbackConfig',
           attributes: [
             'id',
-            'reelPostMinCashback',
-            'reelPostMaxCashback',
-            'storyMinCashback',
-            'storyMaxCashback',
-            'monthlyClaimCount',
-            'claimStrategy',
+            'reel_post_min_cashback',
+            'reel_post_max_cashback',
+            'story_min_cashback',
+            'story_max_cashback',
+            'monthly_claim_count',
+            'claim_strategy',
           ],
         },
       ],
@@ -115,7 +115,7 @@ export class InfluencerHypeStoreService {
             hypeStoreId: store.id,
             influencerId,
           },
-          attributes: ['cashbackAmount', 'cashbackStatus'],
+          attributes: ['cashback_amount', 'cashback_status'],
         });
 
         const totalOrders = orders.length;
@@ -170,12 +170,12 @@ export class InfluencerHypeStoreService {
           as: 'brand',
           attributes: [
             'id',
-            'brandName',
+            'brand_name',
             'username',
-            'brandBio',
-            'profileImage',
-            'profileBanner',
-            'websiteUrl',
+            'brand_bio',
+            'profile_image',
+            'profile_banner',
+            'website_url',
           ],
         },
         {
@@ -363,19 +363,19 @@ export class InfluencerHypeStoreService {
         {
           model: this.hypeStoreModel,
           as: 'hypeStore',
-          attributes: ['id', 'storeName', 'storeLogo'],
+          attributes: ['id', 'store_name', 'store_logo'],
           include: [
             {
               model: this.brandModel,
               as: 'brand',
-              attributes: ['id', 'brandName', 'profileImage'],
+              attributes: ['id', 'brand_name', 'profile_image'],
             },
           ],
         },
         {
           model: this.couponCodeModel,
           as: 'couponCode',
-          attributes: ['id', 'couponCode'],
+          attributes: ['id', 'coupon_code'],
         },
       ],
       limit,
@@ -548,7 +548,7 @@ export class InfluencerHypeStoreService {
             {
               model: this.brandModel,
               as: 'brand',
-              attributes: ['id', 'brandName'],
+              attributes: ['id', 'brand_name'],
             },
           ],
         },
@@ -626,7 +626,7 @@ export class InfluencerHypeStoreService {
             {
               model: this.cashbackConfigModel,
               as: 'cashbackConfig',
-              attributes: ['reelPostMinCashback', 'storyMinCashback'],
+              attributes: ['reel_post_min_cashback', 'story_min_cashback'],
             },
           ],
         },
