@@ -83,12 +83,12 @@ export class InfluencerHypeStoreService {
           as: 'cashbackConfig',
           attributes: [
             'id',
-            'reel_post_min_cashback',
-            'reel_post_max_cashback',
-            'story_min_cashback',
-            'story_max_cashback',
-            'monthly_claim_count',
-            'claim_strategy',
+            'reelPostMinCashback',
+            'reelPostMaxCashback',
+            'storyMinCashback',
+            'storyMaxCashback',
+            'monthlyClaimCount',
+            'claimStrategy',
           ],
         },
       ],
@@ -115,7 +115,7 @@ export class InfluencerHypeStoreService {
             hypeStoreId: store.id,
             influencerId,
           },
-          attributes: ['cashback_amount', 'cashback_status'],
+          attributes: ['cashbackAmount', 'cashbackStatus'],
         });
 
         const totalOrders = orders.length;
@@ -166,21 +166,14 @@ export class InfluencerHypeStoreService {
       },
       attributes: [
         'id',
-        'brand_id',
-        'store_name',
-        'store_slug',
-        'store_description',
-        'store_logo',
-        'store_banner',
-        'is_active',
-        'is_verified',
-        'min_order_value',
-        'max_order_value',
-        'total_orders',
-        'total_revenue',
-        'total_cashback_given',
-        'created_at',
-        'updated_at',
+        'brandId',
+        'storeName',
+        'storeDescription',
+        'storeLogo',
+        'storeBanner',
+        'isActive',
+        'createdAt',
+        'updatedAt',
       ],
       include: [
         {
@@ -201,12 +194,12 @@ export class InfluencerHypeStoreService {
           as: 'cashbackConfig',
           attributes: [
             'id',
-            'reel_post_min_cashback',
-            'reel_post_max_cashback',
-            'story_min_cashback',
-            'story_max_cashback',
-            'monthly_claim_count',
-            'claim_strategy',
+            'reelPostMinCashback',
+            'reelPostMaxCashback',
+            'storyMinCashback',
+            'storyMaxCashback',
+            'monthlyClaimCount',
+            'claimStrategy',
           ],
         },
       ],
@@ -390,7 +383,7 @@ export class InfluencerHypeStoreService {
         {
           model: this.hypeStoreModel,
           as: 'hypeStore',
-          attributes: ['id', 'store_name', 'store_logo'],
+          attributes: ['id', 'storeName', 'storeLogo'],
           include: [
             {
               model: this.brandModel,
@@ -402,7 +395,7 @@ export class InfluencerHypeStoreService {
         {
           model: this.couponCodeModel,
           as: 'couponCode',
-          attributes: ['id', 'coupon_code'],
+          attributes: ['id', 'couponCode'],
         },
       ],
       limit,
@@ -653,7 +646,7 @@ export class InfluencerHypeStoreService {
             {
               model: this.cashbackConfigModel,
               as: 'cashbackConfig',
-              attributes: ['reel_post_min_cashback', 'story_min_cashback'],
+              attributes: ['reelPostMinCashback', 'storyMinCashback'],
             },
           ],
         },
