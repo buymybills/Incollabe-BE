@@ -55,7 +55,7 @@ export class HypeStoreCreatorPreference extends Model<
     type: DataType.INTEGER,
     allowNull: false,
     unique: true,
-    field: 'store_id',
+    field: 'hype_store_id',
   })
   declare storeId: number;
 

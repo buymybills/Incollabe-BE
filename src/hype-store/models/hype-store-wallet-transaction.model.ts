@@ -56,7 +56,7 @@ export class HypeStoreWalletTransaction extends Model<
   @Column({
     type: DataType.INTEGER,
     allowNull: true, // Nullable: ADD_MONEY is brand-level, CASHBACK_DEBIT might be store-specific
-    field: 'store_id',
+    field: 'hype_store_id',
   })
   declare storeId: number;
 

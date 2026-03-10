@@ -49,7 +49,7 @@ export class HypeStoreCashbackTransaction extends Model<
   @Column({
     type: DataType.INTEGER,
     allowNull: false,
-    field: 'store_id',
+    field: 'hype_store_id',
   })
   declare storeId: number;
 
