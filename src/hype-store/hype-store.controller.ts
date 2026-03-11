@@ -29,7 +29,7 @@ import { AuthGuard } from '../auth/guards/auth.guard';
 import { PurchaseWebhookDto, ReturnWebhookDto, WebhookResponseDto } from '../wallet/dto/hype-store-webhook.dto';
 
 @ApiTags('Hype Store')
-@Controller('api/brand/hype-store')
+@Controller('brand/hype-store')
 @UseGuards(AuthGuard)
 @ApiBearerAuth()
 export class HypeStoreController {

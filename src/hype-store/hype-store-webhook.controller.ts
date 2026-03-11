@@ -17,7 +17,7 @@ import { PurchaseWebhookDto, ReturnWebhookDto, WebhookResponseDto } from '../wal
  * No authentication guard - uses API key and signature verification instead
  */
 @ApiTags('Hype Store Webhooks (Public)')
-@Controller('api/webhooks/hype-store')
+@Controller('webhooks/hype-store')
 export class HypeStoreWebhookController {
   constructor(private readonly hypeStoreService: HypeStoreService) {}
 
