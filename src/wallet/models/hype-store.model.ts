@@ -152,6 +152,9 @@ export class HypeStore extends Model<HypeStore, HypeStoreCreationAttributes> {
   @BelongsTo(() => Brand)
   declare brand: Brand;
 
-  @HasOne(() => HypeStoreCashbackConfig, 'storeId')
+  @HasOne(() => HypeStoreCashbackConfig, {
+    foreignKey: 'storeId',
+    as: 'cashbackConfig',
+  })
   declare cashbackConfig: HypeStoreCashbackConfig;
 }

@@ -106,6 +106,6 @@ export class HypeStoreCashbackConfig extends Model<
   declare updatedAt: Date;
 
   // Associations
-  @BelongsTo(() => HypeStore)
+  @BelongsTo(() => HypeStore, 'storeId')
   declare store: HypeStore;
 }
