@@ -46,7 +46,6 @@ export class HypeStore extends Model<HypeStore, HypeStoreCreationAttributes> {
   @Column({
     type: DataType.INTEGER,
     allowNull: false,
-    unique: true,
   })
   declare brandId: number;
 
