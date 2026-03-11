@@ -8,7 +8,7 @@ import {
   ForeignKey,
   BelongsTo,
 } from 'sequelize-typescript';
-import { HypeStore } from './hype-store.model';
+import { HypeStore } from '../../wallet/models/hype-store.model';
 
 export enum InfluencerTierType {
   BELOW_1K = 'BELOW_1K',

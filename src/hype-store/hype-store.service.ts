@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Transaction } from 'sequelize';
-import { HypeStore } from './models/hype-store.model';
+import { HypeStore } from '../wallet/models/hype-store.model';
 import { HypeStoreCashbackConfig } from './models/hype-store-cashback-config.model';
 import { Wallet, UserType } from '../wallet/models/wallet.model';
 import { WalletTransaction, TransactionType, TransactionStatus } from '../wallet/models/wallet-transaction.model';
@@ -104,11 +104,10 @@ export class HypeStoreService {
         {
           brandId,
           storeName,
-          bannerImageUrl: bannerImageUrl || brand.profileBanner || undefined,
-          logoUrl: brand.profileImage || undefined,
-          storeDescription: brand.brandBio || undefined,
+          storeBanner: bannerImageUrl || brand.profileBanner || null,
+          storeLogo: brand.profileImage || null,
+          storeDescription: brand.brandBio || null,
           isActive: createDto.isActive ?? true,
-          monthlyCreatorLimit: createDto.monthlyCreatorLimit ?? 5,
         },
         { transaction },
       );

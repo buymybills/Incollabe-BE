@@ -8,7 +8,7 @@ import {
   ForeignKey,
   BelongsTo,
 } from 'sequelize-typescript';
-import { HypeStore } from './hype-store.model';
+import { HypeStore } from '../../wallet/models/hype-store.model';
 import { CashbackClaimStrategy } from '../constants/cashback-strategies';
 
 export interface HypeStoreCashbackConfigCreationAttributes {

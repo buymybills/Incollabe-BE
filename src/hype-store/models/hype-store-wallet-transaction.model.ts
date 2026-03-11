@@ -9,7 +9,7 @@ import {
   BelongsTo,
 } from 'sequelize-typescript';
 import { HypeStoreWallet } from './hype-store-wallet.model';
-import { HypeStore } from './hype-store.model';
+import { HypeStore } from '../../wallet/models/hype-store.model';
 
 export enum WalletTransactionType {
   ADD_MONEY = 'ADD_MONEY',

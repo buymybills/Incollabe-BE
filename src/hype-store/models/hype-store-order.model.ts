@@ -9,7 +9,7 @@ import {
   BelongsTo,
   HasMany,
 } from 'sequelize-typescript';
-import { HypeStore } from './hype-store.model';
+import { HypeStore } from '../../wallet/models/hype-store.model';
 import { Influencer } from '../../auth/model/influencer.model';
 import { HypeStoreCashbackTransaction } from './hype-store-cashback-transaction.model';
 

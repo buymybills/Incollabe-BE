@@ -4,7 +4,7 @@ import { HypeStoreController } from './hype-store.controller';
 import { HypeStoreWebhookController } from './hype-store-webhook.controller';
 import { HypeStoreService } from './hype-store.service';
 import { OrderVisibilitySchedulerService } from './services/order-visibility-scheduler.service';
-import { HypeStore } from './models/hype-store.model';
+import { HypeStore } from '../wallet/models/hype-store.model'; // NEW model
 import { HypeStoreCashbackConfig } from './models/hype-store-cashback-config.model';
 import { Wallet } from '../wallet/models/wallet.model';
 import { WalletTransaction } from '../wallet/models/wallet-transaction.model';

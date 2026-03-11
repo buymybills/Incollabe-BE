@@ -11,12 +11,29 @@ import {
 import { Brand } from '../../brand/model/brand.model';
 import { HypeStoreCashbackConfig } from '../../hype-store/models/hype-store-cashback-config.model';
 
+export interface HypeStoreCreationAttributes {
+  brandId: number;
+  storeName: string;
+  storeSlug?: string | null;
+  storeDescription?: string | null;
+  storeLogo?: string | null;
+  storeBanner?: string | null;
+  isActive?: boolean;
+  isVerified?: boolean;
+  minOrderValue?: number;
+  maxOrderValue?: number | null;
+  totalOrders?: number;
+  totalRevenue?: number;
+  totalCashbackGiven?: number;
+  settings?: Record<string, any> | null;
+}
+
 @Table({
   tableName: 'hype_stores',
   timestamps: true,
   underscored: true,
 })
-export class HypeStore extends Model<HypeStore> {
+export class HypeStore extends Model<HypeStore, HypeStoreCreationAttributes> {
   @Column({
     type: DataType.INTEGER,
     autoIncrement: true,
@@ -45,25 +62,25 @@ export class HypeStore extends Model<HypeStore> {
     allowNull: true,
     unique: true,
   })
-  declare storeSlug: string;
+  declare storeSlug: string | null;
 
   @Column({
     type: DataType.TEXT,
     allowNull: true,
   })
-  declare storeDescription: string;
+  declare storeDescription: string | null;
 
   @Column({
     type: DataType.STRING(500),
     allowNull: true,
   })
-  declare storeLogo: string;
+  declare storeLogo: string | null;
 
   @Column({
     type: DataType.STRING(500),
     allowNull: true,
   })
-  declare storeBanner: string;
+  declare storeBanner: string | null;
 
   // Store settings
   @Index
@@ -89,7 +106,7 @@ export class HypeStore extends Model<HypeStore> {
     type: DataType.DECIMAL(10, 2),
     allowNull: true,
   })
-  declare maxOrderValue: number;
+  declare maxOrderValue: number | null;
 
   // Statistics
   @Column({
@@ -115,7 +132,7 @@ export class HypeStore extends Model<HypeStore> {
     type: DataType.JSONB,
     allowNull: true,
   })
-  declare settings: Record<string, any>;
+  declare settings: Record<string, any> | null;
 
   @Column({
     type: DataType.DATE,
@@ -135,6 +152,6 @@ export class HypeStore extends Model<HypeStore> {
   @BelongsTo(() => Brand)
   declare brand: Brand;
 
-  @HasOne(() => HypeStoreCashbackConfig, 'hypeStoreId')
+  @HasOne(() => HypeStoreCashbackConfig, 'storeId')
   declare cashbackConfig: HypeStoreCashbackConfig;
 }

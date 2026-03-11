@@ -8,7 +8,7 @@ import {
   ForeignKey,
   BelongsTo,
 } from 'sequelize-typescript';
-import { HypeStore } from './hype-store.model';
+import { HypeStore } from '../../wallet/models/hype-store.model';
 import { HypeStoreOrder } from './hype-store-order.model';
 import { Influencer } from '../../auth/model/influencer.model';
 import { HypeStoreWallet } from './hype-store-wallet.model';
