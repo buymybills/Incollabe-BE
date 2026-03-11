@@ -165,7 +165,7 @@ import { WalletRechargeLimit } from '../wallet/models/wallet-recharge-limit.mode
           ],
           autoLoadModels: true,
           synchronize: false, // Disabled to prevent index conflicts with existing database
-          logging: console.log, // Enable SQL query logging for debugging
+          logging: false, // Disabled for performance
         };
       },
     }),

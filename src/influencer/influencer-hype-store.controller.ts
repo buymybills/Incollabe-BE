@@ -326,6 +326,48 @@ export class InfluencerHypeStoreController {
     );
   }
 
+  @Get('my-coupon')
+  @ApiOperation({
+    summary: 'Get or create universal coupon code',
+    description:
+      'Get your universal coupon code that works across ALL Hype Stores (Myntra, JBL, Social, etc.). ' +
+      'If you don\'t have one yet, it will be auto-generated. ' +
+      'Format: INFL{influencerId} (e.g., INFL123). ' +
+      'Share this ONE code with your audience - it works everywhere!',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Universal coupon retrieved or created successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          type: 'object',
+          properties: {
+            id: { type: 'number', example: 1 },
+            couponCode: { type: 'string', example: 'INFL123', description: 'Universal coupon - works for ALL stores' },
+            influencerId: { type: 'number', example: 123 },
+            isUniversal: { type: 'boolean', example: true, description: 'True = works for all stores' },
+            hypeStoreId: { type: 'number', nullable: true, example: null, description: 'NULL = universal coupon' },
+            isActive: { type: 'boolean', example: true },
+            totalUses: { type: 'number', example: 25, description: 'Total uses across ALL stores' },
+            maxUses: { type: 'number', nullable: true },
+            validFrom: { type: 'string', nullable: true },
+            validUntil: { type: 'string', nullable: true },
+            createdAt: { type: 'string', example: '2026-03-10T10:00:00.000Z' },
+          },
+        },
+        message: { type: 'string', example: 'Your universal coupon' },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getUniversalCoupon(@Request() req: any) {
+    const influencerId = req.user.id;
+    return this.hypeStoreService.getOrCreateUniversalCoupon(influencerId);
+  }
+
   @Get(':storeId')
   @ApiOperation({
     summary: 'Get Hype Store details',
@@ -406,48 +448,6 @@ export class InfluencerHypeStoreController {
   ) {
     const influencerId = req.user.id;
     return this.hypeStoreService.getStoreDetails(influencerId, parseInt(storeId));
-  }
-
-  @Get('my-coupon')
-  @ApiOperation({
-    summary: 'Get or create universal coupon code',
-    description:
-      'Get your universal coupon code that works across ALL Hype Stores (Myntra, JBL, Social, etc.). ' +
-      'If you don\'t have one yet, it will be auto-generated. ' +
-      'Format: INFL{influencerId} (e.g., INFL123). ' +
-      'Share this ONE code with your audience - it works everywhere!',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Universal coupon retrieved or created successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: true },
-        data: {
-          type: 'object',
-          properties: {
-            id: { type: 'number', example: 1 },
-            couponCode: { type: 'string', example: 'INFL123', description: 'Universal coupon - works for ALL stores' },
-            influencerId: { type: 'number', example: 123 },
-            isUniversal: { type: 'boolean', example: true, description: 'True = works for all stores' },
-            hypeStoreId: { type: 'number', nullable: true, example: null, description: 'NULL = universal coupon' },
-            isActive: { type: 'boolean', example: true },
-            totalUses: { type: 'number', example: 25, description: 'Total uses across ALL stores' },
-            maxUses: { type: 'number', nullable: true },
-            validFrom: { type: 'string', nullable: true },
-            validUntil: { type: 'string', nullable: true },
-            createdAt: { type: 'string', example: '2026-03-10T10:00:00.000Z' },
-          },
-        },
-        message: { type: 'string', example: 'Your universal coupon' },
-      },
-    },
-  })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getUniversalCoupon(@Request() req: any) {
-    const influencerId = req.user.id;
-    return this.hypeStoreService.getOrCreateUniversalCoupon(influencerId);
   }
 
   @Post('orders/:orderId/submit-proof')
