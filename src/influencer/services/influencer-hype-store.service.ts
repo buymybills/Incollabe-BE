@@ -159,6 +159,15 @@ export class InfluencerHypeStoreService {
    * Get specific store details with influencer data
    */
   async getStoreDetails(influencerId: number, storeId: number) {
+    // Debug logging
+    console.log('🔍 DEBUG: getStoreDetails called', { influencerId, storeId });
+    console.log('🔍 DEBUG: hypeStoreModel name:', this.hypeStoreModel.name);
+    console.log('🔍 DEBUG: cashbackConfigModel name:', this.cashbackConfigModel.name);
+    console.log('🔍 DEBUG: hypeStoreModel associations:', Object.keys(this.hypeStoreModel.associations || {}));
+    console.log('🔍 DEBUG: cashbackConfig association details:',
+      JSON.stringify((this.hypeStoreModel.associations as any)?.cashbackConfig?.options || {}, null, 2)
+    );
+
     const store = await this.hypeStoreModel.findOne({
       where: {
         id: storeId,
@@ -203,7 +212,14 @@ export class InfluencerHypeStoreService {
           ],
         },
       ],
+    }).catch(error => {
+      console.error('🚨 ERROR in getStoreDetails query:', error.message);
+      console.error('🚨 ERROR SQL:', error.sql);
+      console.error('🚨 ERROR stack:', error.stack);
+      throw error;
     });
+
+    console.log('✅ DEBUG: Query succeeded, store found:', !!store);
 
     if (!store) {
       throw new NotFoundException('Hype Store not found or inactive');
@@ -284,6 +300,10 @@ export class InfluencerHypeStoreService {
    * This is the new optimized approach - ONE coupon per influencer
    */
   async getOrCreateUniversalCoupon(influencerId: number) {
+    console.log('🔍 DEBUG: getOrCreateUniversalCoupon called', { influencerId });
+    console.log('🔍 DEBUG: couponCodeModel name:', this.couponCodeModel.name);
+    console.log('🔍 DEBUG: couponCodeModel associations:', Object.keys(this.couponCodeModel.associations || {}));
+
     // Check if universal coupon already exists
     const existingCoupon = await this.couponCodeModel.findOne({
       where: {
