@@ -14,12 +14,12 @@ import { TransactionType, TransactionStatus } from '../models/wallet-transaction
 
 export class RechargeWalletDto {
   @ApiProperty({
-    description: 'Amount to recharge (minimum ₹5,000)',
-    example: 10000,
-    minimum: 5000,
+    description: 'Amount to recharge in paise (minimum 500000 paise = ₹5,000)',
+    example: 1000000,
+    minimum: 500000,
   })
   @IsNumber()
-  @Min(5000, { message: 'Minimum recharge amount is ₹5,000' })
+  @Min(500000, { message: 'Minimum recharge amount is 500000 paise (₹5,000)' })
   amount: number;
 
   @ApiProperty({

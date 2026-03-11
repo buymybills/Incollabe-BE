@@ -99,6 +99,9 @@ export class WalletService {
       throw new ForbiddenException('Only brands can recharge wallet');
     }
 
+    // Convert paise to rupees for validation
+    const amountInRupees = dto.amount / 100;
+
     // Check recharge limits
     const limits = await this.walletRechargeLimitModel.findOne({
       where: { userType: 'brand' },
@@ -108,13 +111,13 @@ export class WalletService {
       throw new BadRequestException('Recharge limits not configured');
     }
 
-    if (dto.amount < limits.minRechargeAmount) {
+    if (amountInRupees < limits.minRechargeAmount) {
       throw new BadRequestException(
         `Minimum recharge amount is ₹${limits.minRechargeAmount}`,
       );
     }
 
-    if (limits.maxRechargeAmount && dto.amount > limits.maxRechargeAmount) {
+    if (limits.maxRechargeAmount && amountInRupees > limits.maxRechargeAmount) {
       throw new BadRequestException(
         `Maximum recharge amount is ₹${limits.maxRechargeAmount}`,
       );
@@ -123,7 +126,7 @@ export class WalletService {
     // Get or create wallet
     const wallet = await this.getOrCreateWallet(userId, userType);
 
-    // Create Razorpay order
+    // Create Razorpay order (Razorpay accepts paise)
     const receipt = `wallet_recharge_${userId}_${Date.now()}`;
     const razorpayOrder = await this.razorpayService.createOrder(
       dto.amount,
@@ -141,17 +144,17 @@ export class WalletService {
       throw new BadRequestException('Failed to create payment order');
     }
 
-    // Create pending transaction
+    // Create pending transaction (store in rupees)
     await this.walletTransactionModel.create({
       walletId: wallet.id,
       transactionType: TransactionType.RECHARGE,
-      amount: dto.amount,
+      amount: amountInRupees,
       balanceBefore: wallet.balance,
       balanceAfter: wallet.balance, // Will be updated after verification
       status: TransactionStatus.PENDING,
       paymentGateway: 'razorpay',
       paymentOrderId: razorpayOrder.orderId,
-      description: `Wallet recharge of ₹${dto.amount}`,
+      description: `Wallet recharge of ₹${amountInRupees}`,
       notes: dto.notes,
     } as any);
 

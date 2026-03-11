@@ -57,9 +57,9 @@ export class WalletController {
   @ApiOperation({
     summary: 'Initiate wallet recharge (Brands only)',
     description:
-      'Create a Razorpay payment order to add money to wallet. Minimum ₹5,000, no maximum limit.\n\n' +
+      'Create a Razorpay payment order to add money to wallet. Amount in paise (minimum 500000 paise = ₹5,000).\n\n' +
       '**Flow:**\n' +
-      '1. Call this endpoint to create Razorpay order\n' +
+      '1. Call this endpoint with amount in paise to create Razorpay order\n' +
       '2. Show Razorpay checkout on frontend\n' +
       '3. After payment, call POST /wallet/verify-payment\n\n' +
       '**Only brands can recharge their wallet.**',
