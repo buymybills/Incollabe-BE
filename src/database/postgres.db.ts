@@ -44,6 +44,8 @@ import { HypeStoreOrder } from '../wallet/models/hype-store-order.model';
 import { HypeStoreCreatorPreference } from '../wallet/models/hype-store-creator-preference.model';
 import { HypeStoreWebhookLog } from '../wallet/models/hype-store-webhook-log.model';
 import { HypeStoreWebhookSecret } from '../wallet/models/hype-store-webhook-secret.model';
+import { HypeStoreReferralCode } from '../wallet/models/hype-store-referral-code.model';
+import { HypeStoreReferralClick } from '../wallet/models/hype-store-referral-click.model';
 
 // Wallet models
 import { Wallet } from '../wallet/models/wallet.model';
@@ -153,6 +155,8 @@ import { WalletRechargeLimit } from '../wallet/models/wallet-recharge-limit.mode
             HypeStoreCreatorPreference,
             HypeStoreWebhookLog,
             HypeStoreWebhookSecret,
+            HypeStoreReferralCode,
+            HypeStoreReferralClick,
             // Old Hype Store models (legacy)
             HypeStoreWallet,
             HypeStoreWalletTransaction,

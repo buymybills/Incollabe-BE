@@ -76,6 +76,14 @@ export class Wallet extends Model<Wallet> {
   declare totalRedeemed: number;
 
   @Column({
+    type: DataType.DECIMAL(10, 2),
+    allowNull: false,
+    defaultValue: 0.00,
+    comment: 'Amount locked from cashback until return window closes',
+  })
+  declare lockedAmount: number;
+
+  @Column({
     type: DataType.BOOLEAN,
     defaultValue: true,
   })

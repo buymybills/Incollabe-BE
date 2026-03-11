@@ -77,6 +77,13 @@ export class HypeStoreOrder extends Model<HypeStoreOrder> {
   declare externalOrderId: string;
 
   @Column({
+    type: DataType.STRING(50),
+    allowNull: true,
+    comment: 'Referral code used for attribution (e.g., INFL15). Used with brand-shared coupons.',
+  })
+  declare referralCode: string;
+
+  @Column({
     type: DataType.DECIMAL(10, 2),
     allowNull: false,
   })
@@ -148,6 +155,13 @@ export class HypeStoreOrder extends Model<HypeStoreOrder> {
     allowNull: true,
   })
   declare walletTransactionId: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    comment: 'Reference to locked cashback transaction stored in wallet_transactions',
+  })
+  declare lockedCashbackTransactionId: number;
 
   @Column({
     type: DataType.DATE,
@@ -227,6 +241,21 @@ export class HypeStoreOrder extends Model<HypeStoreOrder> {
     allowNull: true,
   })
   declare returnPeriodEndsAt: Date;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    comment: 'Whether the item was returned by customer during return window',
+  })
+  declare isReturned: boolean;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+    comment: 'When the item was marked as returned',
+  })
+  declare returnedAt: Date;
 
   @Index
   @Column({

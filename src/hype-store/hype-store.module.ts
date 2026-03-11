@@ -18,6 +18,8 @@ import { HypeStoreCouponCode } from '../wallet/models/hype-store-coupon-code.mod
 import { HypeStoreCashbackTier } from '../wallet/models/hype-store-cashback-tier.model';
 import { HypeStoreWebhookLog } from '../wallet/models/hype-store-webhook-log.model';
 import { HypeStoreWebhookSecret } from '../wallet/models/hype-store-webhook-secret.model';
+import { HypeStoreReferralCode } from '../wallet/models/hype-store-referral-code.model';
+import { HypeStoreReferralClick } from '../wallet/models/hype-store-referral-click.model';
 import { SharedModule } from '../shared/shared.module';
 
 @Module({
@@ -37,6 +39,8 @@ import { SharedModule } from '../shared/shared.module';
       HypeStoreCashbackTier,
       HypeStoreWebhookLog,
       HypeStoreWebhookSecret,
+      HypeStoreReferralCode,
+      HypeStoreReferralClick,
     ]),
     SharedModule,
   ],

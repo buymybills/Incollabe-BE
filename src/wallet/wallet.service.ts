@@ -156,11 +156,13 @@ export class WalletService {
     } as any);
 
     return {
-      success: true,
-      orderId: razorpayOrder.orderId,
-      amount: dto.amount,
-      currency: 'INR',
-      razorpayKeyId: this.configService.get<string>('RAZORPAY_KEY_ID'),
+      id: receipt,
+      payment: {
+        orderId: razorpayOrder.orderId,
+        amount: razorpayOrder.amount,
+        currency: razorpayOrder.currency,
+        keyId: this.configService.get<string>('RAZORPAY_KEY_ID'),
+      },
     };
   }
 

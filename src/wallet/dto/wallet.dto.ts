@@ -253,20 +253,23 @@ export class WalletBalanceResponseDto {
 }
 
 export class RechargeInitiateResponseDto {
-  @ApiProperty({ example: true })
-  success: boolean;
+  @ApiProperty({ example: 'wallet_recharge_92_1709805600000' })
+  id: string;
 
-  @ApiProperty({ example: 'order_MNqwertyuiop1234' })
-  orderId: string;
-
-  @ApiProperty({ example: 10000 })
-  amount: number;
-
-  @ApiProperty({ example: 'INR' })
-  currency: string;
-
-  @ApiProperty({ example: 'rzp_test_abc123' })
-  razorpayKeyId: string;
+  @ApiProperty({
+    example: {
+      orderId: 'order_MNqwertyuiop1234',
+      amount: 1000000,
+      currency: 'INR',
+      keyId: 'rzp_test_abc123',
+    },
+  })
+  payment: {
+    orderId: string;
+    amount: number;
+    currency: string;
+    keyId: string;
+  };
 }
 
 export class RechargeVerifyResponseDto {

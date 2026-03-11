@@ -579,4 +579,138 @@ export class InfluencerHypeStoreController {
     const influencerId = req.user.id;
     return this.hypeStoreService.claimMinimumCashback(influencerId, parseInt(orderId));
   }
+
+  @Get(':storeId/referral-code')
+  @ApiOperation({
+    summary: 'Get or create referral code for a store',
+    description: 'Get the influencer\'s unique referral code for a specific store. Used for brand-shared coupon tracking.',
+  })
+  @ApiParam({
+    name: 'storeId',
+    description: 'Hype Store ID',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Referral code retrieved or created successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          type: 'object',
+          properties: {
+            referralCode: { type: 'string', example: 'INFL15' },
+            hypeStoreId: { type: 'number', example: 1 },
+            storeName: { type: 'string', example: 'Snitch Store' },
+            brandName: { type: 'string', example: 'Snitch' },
+            totalClicks: { type: 'number', example: 150 },
+            totalOrders: { type: 'number', example: 12 },
+            totalRevenue: { type: 'number', example: 45000.00 },
+            isActive: { type: 'boolean', example: true },
+          },
+        },
+        message: { type: 'string', example: 'Your referral code for this store' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Store not found' })
+  @ApiResponse({ status: 400, description: 'Store is not active' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getReferralCode(@Request() req: any, @Param('storeId') storeId: string) {
+    const influencerId = req.user.id;
+    return this.hypeStoreService.getOrCreateReferralCode(influencerId, parseInt(storeId));
+  }
+
+  @Get(':storeId/brand-coupon')
+  @ApiOperation({
+    summary: 'Get brand-shared coupon with tracking link',
+    description:
+      'Get the brand\'s shared coupon code along with your unique tracking link. ' +
+      'Share this tracking link with your followers so purchases can be attributed to you.',
+  })
+  @ApiParam({
+    name: 'storeId',
+    description: 'Hype Store ID',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Brand-shared coupon with tracking link',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          type: 'object',
+          properties: {
+            couponCode: { type: 'string', example: 'SNITCHCOLLABKAROO' },
+            referralCode: { type: 'string', example: 'INFL15' },
+            trackingLink: {
+              type: 'string',
+              example: 'https://snitch.com?ref=INFL15&coupon=SNITCHCOLLABKAROO',
+            },
+            hypeStoreId: { type: 'number', example: 1 },
+            storeName: { type: 'string', example: 'Snitch Store' },
+            brandName: { type: 'string', example: 'Snitch' },
+            instructions: {
+              type: 'string',
+              example: 'Share this link with your followers. When they use coupon SNITCHCOLLABKAROO at checkout, you\'ll get credited!',
+            },
+          },
+        },
+        message: { type: 'string', example: 'Brand-shared coupon with your referral tracking link' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Store not found or no brand-shared coupon available' })
+  @ApiResponse({ status: 400, description: 'Store is not active' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getBrandSharedCoupon(@Request() req: any, @Param('storeId') storeId: string) {
+    const influencerId = req.user.id;
+    return this.hypeStoreService.getBrandSharedCoupon(influencerId, parseInt(storeId));
+  }
+
+  @Post('orders/:orderId/mark-returned')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Mark order as returned by customer',
+    description:
+      'Mark an order as returned. This will remove the locked cashback from your wallet. ' +
+      'Can only be called if the customer returns the item before the return window closes.',
+  })
+  @ApiParam({ name: 'orderId', type: Number, description: 'Order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order marked as returned successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          type: 'object',
+          properties: {
+            orderId: { type: 'number', example: 1 },
+            removedCashback: { type: 'number', example: 2500.00 },
+            walletLockedAmount: { type: 'number', example: 0.00 },
+          },
+        },
+        message: { 
+          type: 'string', 
+          example: 'Return processed successfully. Cashback of ₹2500.00 has been removed from your wallet.' 
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  @ApiResponse({ status: 400, description: 'Order already marked as returned or no locked cashback' })
+  @ApiResponse({ status: 403, description: 'This order does not belong to you' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async markOrderReturned(
+    @Request() req: any,
+    @Param('orderId') orderId: string,
+  ) {
+    const influencerId = req.user.id;
+    return this.hypeStoreService.markOrderReturned(influencerId, parseInt(orderId));
+  }
 }

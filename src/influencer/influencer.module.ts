@@ -37,6 +37,8 @@ import { HypeStore } from '../wallet/models/hype-store.model';
 import { HypeStoreCashbackConfig } from '../hype-store/models/hype-store-cashback-config.model';
 import { HypeStoreCouponCode } from '../wallet/models/hype-store-coupon-code.model';
 import { HypeStoreOrder } from '../wallet/models/hype-store-order.model';
+import { HypeStoreReferralCode } from '../wallet/models/hype-store-referral-code.model';
+import { HypeStoreReferralClick } from '../wallet/models/hype-store-referral-click.model';
 import { Wallet } from '../wallet/models/wallet.model';
 import { WalletTransaction } from '../wallet/models/wallet-transaction.model';
 
@@ -71,6 +73,8 @@ import { WalletTransaction } from '../wallet/models/wallet-transaction.model';
       HypeStoreCashbackConfig,
       HypeStoreCouponCode,
       HypeStoreOrder,
+      HypeStoreReferralCode,
+      HypeStoreReferralClick,
       Wallet,
       WalletTransaction,
     ]),

@@ -140,6 +140,27 @@ export class WalletTransaction extends Model<WalletTransaction> {
   })
   declare hypeStoreId: number;
 
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  declare hypeStoreOrderId: number;
+
+  // Lock tracking
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+    comment: 'Whether this amount is locked (e.g., during return window)',
+  })
+  declare isLocked: boolean;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+    comment: 'When this locked amount will be unlocked',
+  })
+  declare lockExpiresAt: Date;
+
   // Metadata
   @Column({
     type: DataType.TEXT,

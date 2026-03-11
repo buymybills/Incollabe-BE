@@ -23,10 +23,19 @@ export class PurchaseWebhookDto {
 
   @ApiProperty({
     description: 'Coupon code used for this order',
-    example: 'MYNTRA-000123-A3F2B1',
+    example: 'SNITCHCOLLABKAROO',
   })
   @IsString()
   couponCode: string;
+
+  @ApiProperty({
+    description: 'Referral code to identify which influencer referred this customer (required for brand-shared coupons)',
+    example: 'INFL15',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  referralCode?: string;
 
   @ApiProperty({
     description: 'Order amount in rupees',
@@ -96,6 +105,17 @@ export class PurchaseWebhookDto {
   })
   @IsOptional()
   metadata?: Record<string, any>;
+
+  @ApiProperty({
+    description: 'Return period duration in days (defaults to 30 if not provided)',
+    example: 30,
+    default: 30,
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  returnPeriodDays?: number;
 }
 
 /**

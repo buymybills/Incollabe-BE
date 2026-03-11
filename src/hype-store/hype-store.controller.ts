@@ -22,6 +22,7 @@ import { CreateHypeStoreDto, UpdateHypeStoreDto } from './dto/create-hype-store.
 import { UpdateCashbackConfigDto } from './dto/cashback-config.dto';
 import { AddMoneyToWalletDto } from './dto/wallet.dto';
 import { UpdateCreatorPreferenceDto } from './dto/creator-preference.dto';
+import { CreateBrandSharedCouponDto } from './dto/create-brand-shared-coupon.dto';
 import { CASHBACK_CLAIM_STRATEGIES } from './constants/cashback-strategies';
 import { CreateWalletRechargeOrderDto, VerifyWalletPaymentDto } from './dto/wallet.dto';
 import { AuthGuard } from '../auth/guards/auth.guard';
@@ -393,151 +394,159 @@ export class HypeStoreController {
     );
   }
 
-  @Post('wallet/create-order')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Create Razorpay order for wallet recharge',
-    description: 'Step 1 of wallet recharge: Creates Razorpay payment order. Minimum recharge: Rs 5,000. Returns orderId and amount for Razorpay checkout.'
-  })
-  @ApiBody({
-    description: 'Wallet recharge amount',
-    schema: {
-      type: 'object',
-      required: ['amount'],
-      properties: {
-        amount: {
-          type: 'number',
-          description: 'Amount to add to wallet in Rs (minimum 5000)',
-          example: 10000,
-          minimum: 5000
-        }
-      }
-    },
-    examples: {
-      minimumRecharge: {
-        summary: 'Minimum Recharge',
-        description: 'Minimum allowed recharge amount',
-        value: {
-          amount: 5000
-        }
-      },
-      standardRecharge: {
-        summary: 'Standard Recharge',
-        description: 'Common recharge amount',
-        value: {
-          amount: 10000
-        }
-      },
-      largeRecharge: {
-        summary: 'Large Recharge',
-        description: 'Large recharge for campaigns',
-        value: {
-          amount: 50000
-        }
-      }
-    }
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Razorpay order created successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: true },
-        orderId: { type: 'string', example: 'order_NXt7aB3kEFG9H2', description: 'Razorpay order ID - use this in Razorpay checkout' },
-        amount: { type: 'number', example: 1000000, description: 'Amount in paise (Rs 10,000 = 1000000 paise)' },
-        currency: { type: 'string', example: 'INR' },
-        receipt: { type: 'string', example: 'WALLET_92_1709805600000' }
-      }
-    }
-  })
-  @ApiResponse({ status: 400, description: 'Amount below minimum (Rs 5,000)' })
-  @ApiResponse({ status: 404, description: 'Wallet not found for this brand' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async createWalletRechargeOrder(
-    @Request() req: any,
-    @Body() createOrderDto: CreateWalletRechargeOrderDto,
-  ) {
-    const brandId = req.user.id;
-    return this.hypeStoreService.createWalletRechargeOrder(brandId, createOrderDto.amount);
-  }
+  // DEPRECATED: Use POST /wallet/recharge from wallet module instead
+  // @Post('wallet/create-order')
+  // @HttpCode(HttpStatus.OK)
+  // @ApiOperation({
+  //   summary: 'Create Razorpay order for wallet recharge',
+  //   description: 'Step 1 of wallet recharge: Creates Razorpay payment order. Minimum recharge: Rs 5,000. Returns orderId and amount for Razorpay checkout.'
+  // })
+  // @ApiBody({
+  //   description: 'Wallet recharge amount',
+  //   schema: {
+  //     type: 'object',
+  //     required: ['amount'],
+  //     properties: {
+  //       amount: {
+  //         type: 'number',
+  //         description: 'Amount to add to wallet in Rs (minimum 5000)',
+  //         example: 10000,
+  //         minimum: 5000
+  //       }
+  //     }
+  //   },
+  //   examples: {
+  //     minimumRecharge: {
+  //       summary: 'Minimum Recharge',
+  //       description: 'Minimum allowed recharge amount',
+  //       value: {
+  //         amount: 5000
+  //       }
+  //     },
+  //     standardRecharge: {
+  //       summary: 'Standard Recharge',
+  //       description: 'Common recharge amount',
+  //       value: {
+  //         amount: 10000
+  //       }
+  //     },
+  //     largeRecharge: {
+  //       summary: 'Large Recharge',
+  //       description: 'Large recharge for campaigns',
+  //       value: {
+  //         amount: 50000
+  //       }
+  //     }
+  //   }
+  // })
+  // @ApiResponse({
+  //   status: 200,
+  //   description: 'Razorpay order created successfully',
+  //   schema: {
+  //     type: 'object',
+  //     properties: {
+  //       success: { type: 'boolean', example: true },
+  //       id: { type: 'string', example: 'WALLET_92_1709805600000', description: 'Unique wallet recharge order ID' },
+  //       payment: {
+  //         type: 'object',
+  //         properties: {
+  //           orderId: { type: 'string', example: 'order_NXt7aB3kEFG9H2', description: 'Razorpay order ID - use this in Razorpay checkout' },
+  //           amount: { type: 'number', example: 1000000, description: 'Amount in paise (Rs 10,000 = 1000000 paise)' },
+  //           currency: { type: 'string', example: 'INR' },
+  //           keyId: { type: 'string', example: 'rzp_test_...', description: 'Razorpay API Key ID for checkout' }
+  //         }
+  //       }
+  //     }
+  //   }
+  // })
+  // @ApiResponse({ status: 400, description: 'Amount below minimum (Rs 5,000)' })
+  // @ApiResponse({ status: 404, description: 'Wallet not found for this brand' })
+  // @ApiResponse({ status: 401, description: 'Unauthorized' })
+  // async createWalletRechargeOrder(
+  //   @Request() req: any,
+  //   @Body() createOrderDto: CreateWalletRechargeOrderDto,
+  // ) {
+  //   const brandId = req.user.id;
+  //   return this.hypeStoreService.createWalletRechargeOrder(brandId, createOrderDto.amount);
+  // }
 
-  @Post('wallet/verify-payment')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Verify Razorpay payment and credit wallet',
-    description: 'Step 2 of wallet recharge: Verifies Razorpay payment signature and credits wallet balance. Call this after user completes payment on Razorpay checkout.'
-  })
-  @ApiBody({
-    description: 'Razorpay payment verification details',
-    schema: {
-      type: 'object',
-      required: ['orderId', 'paymentId', 'signature'],
-      properties: {
-        orderId: {
-          type: 'string',
-          description: 'Razorpay order ID received from create-order API',
-          example: 'order_NXt7aB3kEFG9H2'
-        },
-        paymentId: {
-          type: 'string',
-          description: 'Razorpay payment ID received after successful payment',
-          example: 'pay_NXt7aB3kEFG9H2'
-        },
-        signature: {
-          type: 'string',
-          description: 'Razorpay signature received after successful payment',
-          example: 'a8b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t1u2v3w4x5y6z7'
-        }
-      }
-    },
-    examples: {
-      successfulPayment: {
-        summary: 'Successful Payment Verification',
-        description: 'Example with valid Razorpay payment details',
-        value: {
-          orderId: 'order_NXt7aB3kEFG9H2',
-          paymentId: 'pay_NXt7aB3kEFG9H2',
-          signature: 'a8b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t1u2v3w4x5y6z7'
-        }
-      }
-    }
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Payment verified and wallet credited',
-    schema: {
-      type: 'object',
-      properties: {
-        id: { type: 'number', example: 1 },
-        userId: { type: 'number', example: 92 },
-        userType: { type: 'string', example: 'brand' },
-        balance: { type: 'number', example: 35000.00, description: 'Updated balance after recharge' },
-        totalCredited: { type: 'number', example: 60000.00, description: 'Total amount credited including this recharge' },
-        totalDebited: { type: 'number', example: 25000.00 },
-        totalCashbackReceived: { type: 'number', example: 0.00 },
-        totalRedeemed: { type: 'number', example: 0.00 },
-        isActive: { type: 'boolean', example: true },
-        createdAt: { type: 'string', example: '2026-03-07T10:00:00.000Z' },
-        updatedAt: { type: 'string', example: '2026-03-07T12:45:00.000Z' }
-      }
-    }
-  })
-  @ApiResponse({ status: 400, description: 'Invalid payment signature or payment not successful' })
-  @ApiResponse({ status: 404, description: 'Wallet not found for this brand' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async verifyWalletPayment(
-    @Request() req: any,
-    @Body() verifyPaymentDto: VerifyWalletPaymentDto,
-  ) {
-    const brandId = req.user.id;
-    return this.hypeStoreService.verifyAndAddMoneyToWallet(
-      brandId,
-      verifyPaymentDto.orderId,
-      verifyPaymentDto.paymentId,
-      verifyPaymentDto.signature,
-    );
-  }
+  // DEPRECATED: Use POST /wallet/verify-payment from wallet module instead
+  // @Post('wallet/verify-payment')
+  // @HttpCode(HttpStatus.OK)
+  // @ApiOperation({
+  //   summary: 'Verify Razorpay payment and credit wallet',
+  //   description: 'Step 2 of wallet recharge: Verifies Razorpay payment signature and credits wallet balance. Call this after user completes payment on Razorpay checkout.'
+  // })
+  // @ApiBody({
+  //   description: 'Razorpay payment verification details',
+  //   schema: {
+  //     type: 'object',
+  //     required: ['orderId', 'paymentId', 'signature'],
+  //     properties: {
+  //       orderId: {
+  //         type: 'string',
+  //         description: 'Razorpay order ID received from create-order API',
+  //         example: 'order_NXt7aB3kEFG9H2'
+  //       },
+  //       paymentId: {
+  //         type: 'string',
+  //         description: 'Razorpay payment ID received after successful payment',
+  //         example: 'pay_NXt7aB3kEFG9H2'
+  //       },
+  //       signature: {
+  //         type: 'string',
+  //         description: 'Razorpay signature received after successful payment',
+  //         example: 'a8b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t1u2v3w4x5y6z7'
+  //       }
+  //     }
+  //   },
+  //   examples: {
+  //     successfulPayment: {
+  //       summary: 'Successful Payment Verification',
+  //       description: 'Example with valid Razorpay payment details',
+  //       value: {
+  //         orderId: 'order_NXt7aB3kEFG9H2',
+  //         paymentId: 'pay_NXt7aB3kEFG9H2',
+  //         signature: 'a8b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t1u2v3w4x5y6z7'
+  //       }
+  //     }
+  //   }
+  // })
+  // @ApiResponse({
+  //   status: 200,
+  //   description: 'Payment verified and wallet credited',
+  //   schema: {
+  //     type: 'object',
+  //     properties: {
+  //       id: { type: 'number', example: 1 },
+  //       userId: { type: 'number', example: 92 },
+  //       userType: { type: 'string', example: 'brand' },
+  //       balance: { type: 'number', example: 35000.00, description: 'Updated balance after recharge' },
+  //       totalCredited: { type: 'number', example: 60000.00, description: 'Total amount credited including this recharge' },
+  //       totalDebited: { type: 'number', example: 25000.00 },
+  //       totalCashbackReceived: { type: 'number', example: 0.00 },
+  //       totalRedeemed: { type: 'number', example: 0.00 },
+  //       isActive: { type: 'boolean', example: true },
+  //       createdAt: { type: 'string', example: '2026-03-07T10:00:00.000Z' },
+  //       updatedAt: { type: 'string', example: '2026-03-07T12:45:00.000Z' }
+  //     }
+  //   }
+  // })
+  // @ApiResponse({ status: 400, description: 'Invalid payment signature or payment not successful' })
+  // @ApiResponse({ status: 404, description: 'Wallet not found for this brand' })
+  // @ApiResponse({ status: 401, description: 'Unauthorized' })
+  // async verifyWalletPayment(
+  //   @Request() req: any,
+  //   @Body() verifyPaymentDto: VerifyWalletPaymentDto,
+  // ) {
+  //   const brandId = req.user.id;
+  //   return this.hypeStoreService.verifyAndAddMoneyToWallet(
+  //     brandId,
+  //     verifyPaymentDto.orderId,
+  //     verifyPaymentDto.paymentId,
+  //     verifyPaymentDto.signature,
+  //   );
+  // }
 
   @Post('wallet/add-money')
   @ApiOperation({
@@ -705,5 +714,144 @@ export class HypeStoreController {
   ) {
     const brandId = req.user.id;
     return this.hypeStoreService.getOrderDetails(parseInt(storeId), brandId, orderId);
+  }
+
+  // ==================== Brand-Shared Coupon Endpoints ====================
+
+  @Post(':storeId/brand-coupon')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Create brand-shared coupon for store',
+    description:
+      'Create a brand-shared coupon code (e.g., SNITCHCOLLABKAROO) that all influencers can use with their unique referral codes for attribution.',
+  })
+  @ApiParam({
+    name: 'storeId',
+    type: Number,
+    description: 'Store ID',
+    example: 1,
+  })
+  @ApiBody({ type: CreateBrandSharedCouponDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Brand-shared coupon created successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          type: 'object',
+          properties: {
+            id: { type: 'number', example: 1 },
+            couponCode: { type: 'string', example: 'SNITCHCOLLABKAROO' },
+            hypeStoreId: { type: 'number', example: 1 },
+            storeName: { type: 'string', example: 'Snitch Store' },
+            isBrandShared: { type: 'boolean', example: true },
+            isActive: { type: 'boolean', example: true },
+            totalUses: { type: 'number', example: 0 },
+            createdAt: { type: 'string', example: '2026-03-11T10:00:00Z' },
+          },
+        },
+        message: {
+          type: 'string',
+          example: 'Brand-shared coupon SNITCHCOLLABKAROO created successfully',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Coupon code already exists or store already has a brand-shared coupon',
+  })
+  @ApiResponse({ status: 404, description: 'Store not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async createBrandSharedCoupon(
+    @Request() req: any,
+    @Param('storeId') storeId: string,
+    @Body() dto: CreateBrandSharedCouponDto,
+  ) {
+    const brandId = req.user.id;
+    return this.hypeStoreService.createBrandSharedCoupon(
+      parseInt(storeId),
+      brandId,
+      dto.couponCode,
+      dto.description,
+    );
+  }
+
+  @Get(':storeId/brand-coupon')
+  @ApiOperation({
+    summary: 'Get brand-shared coupon for store',
+    description: 'Get the brand-shared coupon details including usage stats',
+  })
+  @ApiParam({
+    name: 'storeId',
+    type: Number,
+    description: 'Store ID',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Brand-shared coupon details',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          type: 'object',
+          properties: {
+            id: { type: 'number', example: 1 },
+            couponCode: { type: 'string', example: 'SNITCHCOLLABKAROO' },
+            hypeStoreId: { type: 'number', example: 1 },
+            storeName: { type: 'string', example: 'Snitch Store' },
+            isBrandShared: { type: 'boolean', example: true },
+            isActive: { type: 'boolean', example: true },
+            totalUses: { type: 'number', example: 145 },
+            influencersUsingCount: { type: 'number', example: 23 },
+            createdAt: { type: 'string', example: '2026-03-11T10:00:00Z' },
+          },
+        },
+        message: { type: 'string', example: 'Brand-shared coupon details' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Store not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getBrandSharedCoupon(@Request() req: any, @Param('storeId') storeId: string) {
+    const brandId = req.user.id;
+    return this.hypeStoreService.getBrandSharedCoupon(parseInt(storeId), brandId);
+  }
+
+  @Put(':storeId/brand-coupon/deactivate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Deactivate brand-shared coupon',
+    description: 'Deactivate the brand-shared coupon for this store',
+  })
+  @ApiParam({
+    name: 'storeId',
+    type: Number,
+    description: 'Store ID',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Brand-shared coupon deactivated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        message: {
+          type: 'string',
+          example: 'Brand-shared coupon SNITCHCOLLABKAROO has been deactivated',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Store or coupon not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async deactivateBrandSharedCoupon(@Request() req: any, @Param('storeId') storeId: string) {
+    const brandId = req.user.id;
+    return this.hypeStoreService.deactivateBrandSharedCoupon(parseInt(storeId), brandId);
   }
 }

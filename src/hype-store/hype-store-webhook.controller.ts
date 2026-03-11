@@ -41,7 +41,9 @@ export class HypeStoreWebhookController {
       '**Idempotency:**\n' +
       'Duplicate requests with the same externalOrderId will be safely ignored and return the original order details.\n\n' +
       '**Cashback Calculation:**\n' +
-      'Cashback is automatically calculated based on the influencer\'s follower count tier configured in the store.',
+      'Cashback is automatically calculated based on the influencer\'s follower count tier configured in the store.\n\n' +
+      '**Return Period:**\n' +
+      'Optionally specify returnPeriodDays (defaults to 30 days). The order will be hidden from the influencer until the return period ends.',
   })
   @ApiParam({
     name: 'apiKey',
@@ -81,6 +83,7 @@ export class HypeStoreWebhookController {
           customerPhone: '+919876543210',
           customerName: 'Rajesh Kumar',
           orderStatus: 'confirmed',
+          returnPeriodDays: 45,
           metadata: {
             items: [
               { sku: 'SHIRT-001', name: 'Blue Shirt', quantity: 2, price: 2500 },

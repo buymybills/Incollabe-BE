@@ -4,6 +4,7 @@ import {
   BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/sequelize';
 import { Transaction } from 'sequelize';
 import { HypeStore } from '../wallet/models/hype-store.model';
@@ -26,6 +27,7 @@ import { HypeStoreCouponCode } from '../wallet/models/hype-store-coupon-code.mod
 import { HypeStoreCashbackTier, CashbackType } from '../wallet/models/hype-store-cashback-tier.model';
 import { HypeStoreWebhookLog } from '../wallet/models/hype-store-webhook-log.model';
 import { HypeStoreWebhookSecret } from '../wallet/models/hype-store-webhook-secret.model';
+import { HypeStoreReferralCode } from '../wallet/models/hype-store-referral-code.model';
 import { OrderStatus, CashbackStatus } from '../wallet/models/hype-store-order.model';
 import { PurchaseWebhookDto, ReturnWebhookDto } from '../wallet/dto/hype-store-webhook.dto';
 import { Influencer } from '../auth/model/influencer.model';
@@ -60,9 +62,12 @@ export class HypeStoreService {
     private webhookSecretModel: typeof HypeStoreWebhookSecret,
     @InjectModel(Influencer)
     private influencerModel: typeof Influencer,
+    @InjectModel(HypeStoreReferralCode)
+    private referralCodeModel: typeof HypeStoreReferralCode,
     private sequelize: Sequelize,
     private razorpayService: RazorpayService,
     private s3Service: S3Service,
+    private configService: ConfigService,
   ) {}
 
   /**
@@ -307,6 +312,169 @@ export class HypeStoreService {
   }
 
   /**
+   * Create a brand-shared coupon for a store
+   * This coupon can be used by all influencers with their unique referral codes
+   */
+  async createBrandSharedCoupon(
+    storeId: number,
+    brandId: number,
+    couponCode: string,
+    description?: string,
+  ) {
+    // Verify store belongs to brand
+    const store = await this.hypeStoreModel.findOne({
+      where: { id: storeId, brandId },
+    });
+
+    if (!store) {
+      throw new NotFoundException('Store not found or does not belong to this brand');
+    }
+
+    // Check if coupon code already exists (must be globally unique)
+    const existingCoupon = await this.couponCodeModel.findOne({
+      where: { couponCode },
+    });
+
+    if (existingCoupon) {
+      throw new BadRequestException('This coupon code is already in use');
+    }
+
+    // Check if store already has a brand-shared coupon
+    const existingBrandCoupon = await this.couponCodeModel.findOne({
+      where: {
+        hypeStoreId: storeId,
+        isBrandShared: true,
+        isActive: true,
+      },
+    });
+
+    if (existingBrandCoupon) {
+      throw new BadRequestException(
+        `Store already has an active brand-shared coupon: ${existingBrandCoupon.couponCode}`,
+      );
+    }
+
+    // Create the brand-shared coupon
+    const brandCoupon = await this.couponCodeModel.create({
+      hypeStoreId: storeId,
+      influencerId: null, // NULL for brand-shared coupons
+      couponCode: couponCode.toUpperCase(),
+      isBrandShared: true,
+      isUniversal: false, // Specific to this store, not all stores
+      isActive: true,
+      totalUses: 0,
+      maxUses: null, // Unlimited uses
+      validFrom: null,
+      validUntil: null,
+    } as any);
+
+    return {
+      success: true,
+      data: {
+        id: brandCoupon.id,
+        couponCode: brandCoupon.couponCode,
+        hypeStoreId: storeId,
+        storeName: store.storeName,
+        isBrandShared: true,
+        isActive: true,
+        totalUses: 0,
+        createdAt: brandCoupon.createdAt,
+        description: description || `Brand-shared coupon for ${store.storeName}`,
+      },
+      message: `Brand-shared coupon ${couponCode} created successfully. Influencers can now use this with their referral codes.`,
+    };
+  }
+
+  /**
+   * Get brand-shared coupon for a store
+   */
+  async getBrandSharedCoupon(storeId: number, brandId: number) {
+    // Verify store belongs to brand
+    const store = await this.hypeStoreModel.findOne({
+      where: { id: storeId, brandId },
+    });
+
+    if (!store) {
+      throw new NotFoundException('Store not found or does not belong to this brand');
+    }
+
+    // Get brand-shared coupon
+    const brandCoupon = await this.couponCodeModel.findOne({
+      where: {
+        hypeStoreId: storeId,
+        isBrandShared: true,
+        isActive: true,
+      },
+    });
+
+    if (!brandCoupon) {
+      return {
+        success: true,
+        data: null,
+        message: 'No brand-shared coupon exists for this store yet',
+      };
+    }
+
+    // Get stats: how many influencers have referral codes for this store
+    const referralCodeCount = await this.referralCodeModel.count({
+      where: { hypeStoreId: storeId, isActive: true },
+    });
+
+    return {
+      success: true,
+      data: {
+        id: brandCoupon.id,
+        couponCode: brandCoupon.couponCode,
+        hypeStoreId: storeId,
+        storeName: store.storeName,
+        isBrandShared: true,
+        isActive: brandCoupon.isActive,
+        totalUses: brandCoupon.totalUses,
+        influencersUsingCount: referralCodeCount,
+        createdAt: brandCoupon.createdAt,
+      },
+      message: 'Brand-shared coupon details',
+    };
+  }
+
+  /**
+   * Deactivate brand-shared coupon for a store
+   */
+  async deactivateBrandSharedCoupon(storeId: number, brandId: number) {
+    // Verify store belongs to brand
+    const store = await this.hypeStoreModel.findOne({
+      where: { id: storeId, brandId },
+    });
+
+    if (!store) {
+      throw new NotFoundException('Store not found or does not belong to this brand');
+    }
+
+    // Find and deactivate brand-shared coupon
+    const brandCoupon = await this.couponCodeModel.findOne({
+      where: {
+        hypeStoreId: storeId,
+        isBrandShared: true,
+        isActive: true,
+      },
+    });
+
+    if (!brandCoupon) {
+      throw new NotFoundException('No active brand-shared coupon found for this store');
+    }
+
+    await brandCoupon.update({
+      isActive: false,
+      deactivatedAt: new Date(),
+    });
+
+    return {
+      success: true,
+      message: `Brand-shared coupon ${brandCoupon.couponCode} has been deactivated`,
+    };
+  }
+
+  /**
    * Create Razorpay order for wallet recharge
    */
   async createWalletRechargeOrder(brandId: number, amount: number) {
@@ -343,10 +511,13 @@ export class HypeStoreService {
     }
 
     return {
-      orderId: razorpayOrder.orderId,
-      amount: razorpayOrder.amount,
-      currency: razorpayOrder.currency,
-      receipt,
+      id: receipt,
+      payment: {
+        orderId: razorpayOrder.orderId,
+        amount: razorpayOrder.amount,
+        currency: razorpayOrder.currency,
+        keyId: this.configService.get<string>('RAZORPAY_KEY_ID'),
+      },
     };
   }
 
@@ -851,20 +1022,58 @@ export class HypeStoreService {
         throw new BadRequestException('Coupon does not belong to this store');
       }
 
-      // 5. Calculate cashback
+      // 5. Determine influencer attribution
+      let attributedInfluencerId: number;
+
+      // NEW SYSTEM: If referralCode is provided, use it for attribution (brand-shared coupons)
+      if (webhookDto.referralCode) {
+        const referralCodeRecord = await this.referralCodeModel.findOne({
+          where: { referralCode: webhookDto.referralCode, isActive: true },
+        });
+
+        if (!referralCodeRecord) {
+          responseStatus = 400;
+          responseBody = { success: false, message: 'Invalid or inactive referral code' };
+          await this.logWebhookRequest({
+            hypeStoreId: hypeStore.id,
+            method: 'POST',
+            path: '/webhooks/purchase',
+            headers: { 'x-webhook-signature': signature },
+            body: webhookDto,
+            ipAddress,
+            status: responseStatus,
+            responseBody,
+            isValid: true,
+            errorMessage: 'Referral code not found',
+          });
+          throw new BadRequestException('Invalid or inactive referral code');
+        }
+
+        attributedInfluencerId = referralCodeRecord.influencerId;
+      } else {
+        // OLD SYSTEM: Attribution from coupon's influencerId (personal influencer coupons)
+        if (!couponCode.influencerId) {
+          responseStatus = 400;
+          responseBody = { success: false, message: 'Coupon requires referral code for attribution' };
+          throw new BadRequestException('Coupon requires referral code for attribution');
+        }
+        attributedInfluencerId = couponCode.influencerId;
+      }
+
+      // 6. Calculate cashback
       const { cashbackAmount, tierId } = await this.calculateCashbackAmount(
         webhookDto.orderAmount,
-        couponCode.influencerId,
+        attributedInfluencerId,
         hypeStore.id,
       );
 
-      // 6. Create order in transaction
+      // 7. Create order in transaction
       const transaction: Transaction = await this.sequelize.transaction();
 
       try {
-        // Calculate return period end date (30 days from order date)
+        // Calculate return period end date (use webhook value or default to 30 days)
         const orderDate = new Date(webhookDto.orderDate);
-        const returnPeriodDays = 30;
+        const returnPeriodDays = webhookDto.returnPeriodDays || 30;
         const returnPeriodEndsAt = new Date(orderDate);
         returnPeriodEndsAt.setDate(returnPeriodEndsAt.getDate() + returnPeriodDays);
 
@@ -872,8 +1081,9 @@ export class HypeStoreService {
           {
             hypeStoreId: hypeStore.id,
             couponCodeId: couponCode.id,
-            influencerId: couponCode.influencerId,
+            influencerId: attributedInfluencerId, // Use attributed influencer (from referral or coupon)
             externalOrderId: webhookDto.externalOrderId,
+            referralCode: webhookDto.referralCode || null, // Store referral code if provided
             orderAmount: webhookDto.orderAmount,
             orderCurrency: webhookDto.orderCurrency || 'INR',
             orderDate: orderDate,
@@ -900,6 +1110,27 @@ export class HypeStoreService {
 
         // Update coupon usage count
         await couponCode.increment('totalUses', { by: 1, transaction });
+
+        // Update referral code stats if referral code was used
+        if (webhookDto.referralCode) {
+          await this.referralCodeModel.increment(
+            {
+              totalOrders: 1,
+              totalRevenue: webhookDto.orderAmount,
+            },
+            {
+              where: { referralCode: webhookDto.referralCode },
+              transaction,
+            },
+          );
+          await this.referralCodeModel.update(
+            { lastUsedAt: new Date() },
+            {
+              where: { referralCode: webhookDto.referralCode },
+              transaction,
+            },
+          );
+        }
 
         // Update webhook secret last used timestamp
         await webhookSecret.update({ lastUsedAt: new Date() }, { transaction });
