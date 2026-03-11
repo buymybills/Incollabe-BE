@@ -126,10 +126,10 @@ export class WalletService {
     // Get or create wallet
     const wallet = await this.getOrCreateWallet(userId, userType);
 
-    // Create Razorpay order (Razorpay accepts paise)
+    // Create Razorpay order (send amount in rupees, not paise)
     const receipt = `wallet_recharge_${userId}_${Date.now()}`;
     const razorpayOrder = await this.razorpayService.createOrder(
-      dto.amount,
+      amountInRupees,
       'INR',
       receipt,
       {
