@@ -587,56 +587,6 @@ export class HypeStoreController {
     return this.hypeStoreService.getStoreById(parseInt(storeId), brandId);
   }
 
-  @Put(':storeId')
-  @ApiOperation({
-    summary: 'Update store details',
-    description: 'Update store banner image, description, or active status'
-  })
-  @ApiParam({ name: 'storeId', type: Number, description: 'Store ID' })
-  @ApiResponse({ status: 200, description: 'Store updated successfully' })
-  @ApiResponse({ status: 404, description: 'Store not found' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async updateStore(
-    @Request() req: any,
-    @Param('storeId') storeId: string,
-    @Body() updateDto: UpdateHypeStoreDto,
-  ) {
-    const brandId = req.user.id;
-    return this.hypeStoreService.updateStore(parseInt(storeId), brandId, updateDto);
-  }
-
-  @Get(':storeId/cashback-config')
-  @ApiOperation({
-    summary: 'Get cashback configuration',
-    description: 'Get cashback configuration for the store. Minimum cashback is fixed at Rs 100.'
-  })
-  @ApiParam({ name: 'storeId', type: Number, description: 'Store ID' })
-  @ApiResponse({ status: 200, description: 'Cashback config retrieved successfully' })
-  @ApiResponse({ status: 404, description: 'Store not found' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getCashbackConfig(@Request() req: any, @Param('storeId') storeId: string) {
-    const brandId = req.user.id;
-    return this.hypeStoreService.getCashbackConfig(parseInt(storeId), brandId);
-  }
-
-  @Put(':storeId/cashback-config')
-  @ApiOperation({
-    summary: 'Update cashback configuration',
-    description: 'Update max cashback, cashback percentage, and monthly claim count (1-6). Minimum cashback is fixed at Rs 100 and cannot be changed. Claim strategy is automatically derived from claim count.'
-  })
-  @ApiParam({ name: 'storeId', type: Number, description: 'Store ID' })
-  @ApiResponse({ status: 200, description: 'Cashback config updated successfully' })
-  @ApiResponse({ status: 404, description: 'Store not found' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async updateCashbackConfig(
-    @Request() req: any,
-    @Param('storeId') storeId: string,
-    @Body() updateDto: UpdateCashbackConfigDto,
-  ) {
-    const brandId = req.user.id;
-    return this.hypeStoreService.updateCashbackConfig(parseInt(storeId), brandId, updateDto);
-  }
-
   @Put('creator-preferences')
   @ApiOperation({
     summary: 'Update brand-level creator targeting preferences',
@@ -688,6 +638,56 @@ export class HypeStoreController {
   ) {
     const brandId = req.user.id;
     return this.hypeStoreService.updateCreatorPreferences(brandId, updateDto);
+  }
+
+  @Put(':storeId')
+  @ApiOperation({
+    summary: 'Update store details',
+    description: 'Update store banner image, description, or active status'
+  })
+  @ApiParam({ name: 'storeId', type: Number, description: 'Store ID' })
+  @ApiResponse({ status: 200, description: 'Store updated successfully' })
+  @ApiResponse({ status: 404, description: 'Store not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async updateStore(
+    @Request() req: any,
+    @Param('storeId') storeId: string,
+    @Body() updateDto: UpdateHypeStoreDto,
+  ) {
+    const brandId = req.user.id;
+    return this.hypeStoreService.updateStore(parseInt(storeId), brandId, updateDto);
+  }
+
+  @Get(':storeId/cashback-config')
+  @ApiOperation({
+    summary: 'Get cashback configuration',
+    description: 'Get cashback configuration for the store. Minimum cashback is fixed at Rs 100.'
+  })
+  @ApiParam({ name: 'storeId', type: Number, description: 'Store ID' })
+  @ApiResponse({ status: 200, description: 'Cashback config retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Store not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getCashbackConfig(@Request() req: any, @Param('storeId') storeId: string) {
+    const brandId = req.user.id;
+    return this.hypeStoreService.getCashbackConfig(parseInt(storeId), brandId);
+  }
+
+  @Put(':storeId/cashback-config')
+  @ApiOperation({
+    summary: 'Update cashback configuration',
+    description: 'Update max cashback, cashback percentage, and monthly claim count (1-6). Minimum cashback is fixed at Rs 100 and cannot be changed. Claim strategy is automatically derived from claim count.'
+  })
+  @ApiParam({ name: 'storeId', type: Number, description: 'Store ID' })
+  @ApiResponse({ status: 200, description: 'Cashback config updated successfully' })
+  @ApiResponse({ status: 404, description: 'Store not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async updateCashbackConfig(
+    @Request() req: any,
+    @Param('storeId') storeId: string,
+    @Body() updateDto: UpdateCashbackConfigDto,
+  ) {
+    const brandId = req.user.id;
+    return this.hypeStoreService.updateCashbackConfig(parseInt(storeId), brandId, updateDto);
   }
 
   @Get(':storeId/dashboard')
