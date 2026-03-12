@@ -16,6 +16,7 @@ import { Wallet, UserType } from '../../wallet/models/wallet.model';
 import { WalletTransaction, TransactionType, TransactionStatus } from '../../wallet/models/wallet-transaction.model';
 import { Brand } from '../../brand/model/brand.model';
 import { SubmitProofDto } from '../dto/hype-store-order.dto';
+import { Niche } from '../../auth/model/niche.model';
 
 @Injectable()
 export class InfluencerHypeStoreService {
@@ -47,6 +48,8 @@ export class InfluencerHypeStoreService {
     page: number = 1,
     limit: number = 20,
     search?: string,
+    sortBy?: string,
+    niche?: string,
   ) {
     const offset = (page - 1) * limit;
 
@@ -54,6 +57,7 @@ export class InfluencerHypeStoreService {
     const whereClause: any = {
       isActive: true,
     };
+    const cashbackWhere: any = {};
 
     // If search provided, search in store name or brand name
     let brandWhere: any = {};
@@ -70,6 +74,9 @@ export class InfluencerHypeStoreService {
       };
     }
 
+    // Niche filter only if provided
+    const nicheFilter = niche && niche.trim() ? niche.trim() : undefined;
+
     // Get all stores with brand and cashback config
     const { rows: stores, count: total } = await this.hypeStoreModel.findAndCountAll({
       where: whereClause,
@@ -79,6 +86,18 @@ export class InfluencerHypeStoreService {
           as: 'brand',
           attributes: ['id', 'brandName', 'username', 'profileImage', 'profileBanner'],
           where: search && search.trim() ? brandWhere : undefined,
+          include: nicheFilter
+            ? [
+                {
+                  model: Niche,
+                  as: 'niches',
+                  attributes: ['id', 'name'],
+                  where: { name: { [Op.iLike]: nicheFilter } },
+                  required: true,
+                  through: { attributes: [] },
+                },
+              ]
+            : undefined,
           required: false,
         },
         {
@@ -93,11 +112,17 @@ export class InfluencerHypeStoreService {
             'monthlyClaimCount',
             'claimStrategy',
           ],
+          where: Object.keys(cashbackWhere).length ? cashbackWhere : undefined,
         },
       ],
       limit,
       offset,
-      order: [['createdAt', 'DESC']],
+      order:
+        sortBy === 'cashback_asc'
+          ? [[{ model: this.cashbackConfigModel, as: 'cashbackConfig' }, 'reelPostMaxCashback', 'ASC']]
+          : sortBy === 'cashback_desc'
+            ? [[{ model: this.cashbackConfigModel, as: 'cashbackConfig' }, 'reelPostMaxCashback', 'DESC']]
+            : [['createdAt', 'DESC']],
     });
 
     // Check if influencer has universal coupon (one-time check outside loop)

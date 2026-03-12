@@ -37,6 +37,19 @@ export class InfluencerHypeStoreController {
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 20)' })
   @ApiQuery({ name: 'search', required: false, type: String, description: 'Search by brand name or store name' })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    enum: ['cashback_desc', 'cashback_asc'],
+    description: 'Sort by max cashback (reel/post) descending or ascending',
+  })
+  @ApiQuery({
+    name: 'niche',
+    required: false,
+    enum: ['Fashion', 'Food', 'Beauty'],
+    description: 'Filter stores by brand niche/category',
+    example: 'Fashion',
+  })
   @ApiResponse({
     status: 200,
     description: 'List of available Hype Stores retrieved successfully',
@@ -103,6 +116,8 @@ export class InfluencerHypeStoreController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('search') search?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('niche') niche?: string,
   ) {
     const influencerId = req.user.id;
     return this.hypeStoreService.getAllStores(
@@ -110,6 +125,8 @@ export class InfluencerHypeStoreController {
       page ? parseInt(page) : 1,
       limit ? parseInt(limit) : 20,
       search,
+      sortBy,
+      niche,
     );
   }
 
