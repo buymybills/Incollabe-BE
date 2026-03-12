@@ -160,20 +160,28 @@ export class HypeStoreService {
         );
       }
 
-      // Create default creator preferences
-      await this.creatorPreferenceModel.create(
-        {
-          storeId: store.id,
-          influencerTypes: [],
-          minAge: 18,
-          maxAge: 60,
-          genderPreference: [],
-          nicheCategories: [],
-          preferredLocations: [],
-          isPanIndia: false,
-        },
-        { transaction },
-      );
+      // Ensure brand-level creator preferences exist (one per brand)
+      const existingPreferences = await this.creatorPreferenceModel.findOne({
+        where: { brandId },
+        transaction,
+      });
+
+      if (!existingPreferences) {
+        await this.creatorPreferenceModel.create(
+          {
+            brandId,
+            storeId: store.id,
+            influencerTypes: [],
+            minAge: 18,
+            maxAge: 60,
+            genderPreference: [],
+            nicheCategories: [],
+            preferredLocations: [],
+            isPanIndia: false,
+          },
+          { transaction },
+        );
+      }
 
       await transaction.commit();
 
@@ -721,24 +729,24 @@ export class HypeStoreService {
    * Update creator preferences
    */
   async updateCreatorPreferences(
-    storeId: number,
     brandId: number,
     updateDto: UpdateCreatorPreferenceDto,
   ): Promise<HypeStoreCreatorPreference> {
-    const store = await this.hypeStoreModel.findOne({
-      where: { id: storeId, brandId },
-    });
-
-    if (!store) {
-      throw new NotFoundException('Hype Store not found');
-    }
-
-    const preferences = await this.creatorPreferenceModel.findOne({
-      where: { storeId },
+    let preferences = await this.creatorPreferenceModel.findOne({
+      where: { brandId },
     });
 
     if (!preferences) {
-      throw new NotFoundException('Creator preferences not found');
+      preferences = await this.creatorPreferenceModel.create({
+        brandId,
+        influencerTypes: [],
+        minAge: 18,
+        maxAge: 60,
+        genderPreference: [],
+        nicheCategories: [],
+        preferredLocations: [],
+        isPanIndia: false,
+      } as any);
     }
 
     await preferences.update(updateDto);
@@ -746,26 +754,26 @@ export class HypeStoreService {
   }
 
   /**
-   * Get creator preferences
+   * Get brand-level creator preferences
    */
   async getCreatorPreferences(
-    storeId: number,
     brandId: number,
   ): Promise<HypeStoreCreatorPreference> {
-    const store = await this.hypeStoreModel.findOne({
-      where: { id: storeId, brandId },
-    });
-
-    if (!store) {
-      throw new NotFoundException('Hype Store not found');
-    }
-
-    const preferences = await this.creatorPreferenceModel.findOne({
-      where: { storeId },
+    let preferences = await this.creatorPreferenceModel.findOne({
+      where: { brandId },
     });
 
     if (!preferences) {
-      throw new NotFoundException('Creator preferences not found');
+      preferences = await this.creatorPreferenceModel.create({
+        brandId,
+        influencerTypes: [],
+        minAge: 18,
+        maxAge: 60,
+        genderPreference: [],
+        nicheCategories: [],
+        preferredLocations: [],
+        isPanIndia: false,
+      } as any);
     }
 
     return preferences;
@@ -795,32 +803,32 @@ export class HypeStoreService {
     });
 
     // Get order statistics
-    const totalOrders = await this.orderModelOld.count({
-      where: { storeId },
+    const totalOrders = await this.orderModel.count({
+      where: { hypeStoreId: storeId },
     });
 
-    const totalSales = await this.orderModelOld.sum('orderAmount', {
-      where: { storeId },
+    const totalSales = await this.orderModel.sum('orderAmount', {
+      where: { hypeStoreId: storeId },
     });
 
-    const totalCashbackSent = await this.orderModelOld.sum('cashbackAmount', {
-      where: { storeId },
+    const totalCashbackSent = await this.orderModel.sum('cashbackAmount', {
+      where: { hypeStoreId: storeId },
     });
 
     // Get orders from last month for comparison
     const lastMonthDate = new Date();
     lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
 
-    const lastMonthOrders = await this.orderModelOld.count({
+    const lastMonthOrders = await this.orderModel.count({
       where: {
-        storeId,
+        hypeStoreId: storeId,
         createdAt: { [require('sequelize').Op.gte]: lastMonthDate },
       },
     });
 
-    const lastMonthSales = await this.orderModelOld.sum('orderAmount', {
+    const lastMonthSales = await this.orderModel.sum('orderAmount', {
       where: {
-        storeId,
+        hypeStoreId: storeId,
         createdAt: { [require('sequelize').Op.gte]: lastMonthDate },
       },
     });
@@ -853,7 +861,7 @@ export class HypeStoreService {
     brandId: number,
     limit: number = 50,
     offset: number = 0,
-  ): Promise<{ orders: HypeStoreOrderOld[]; total: number }> {
+  ): Promise<{ orders: HypeStoreOrder[]; total: number }> {
     const store = await this.hypeStoreModel.findOne({
       where: { id: storeId, brandId },
     });
@@ -862,8 +870,8 @@ export class HypeStoreService {
       throw new NotFoundException('Hype Store not found');
     }
 
-    const { count, rows } = await this.orderModelOld.findAndCountAll({
-      where: { storeId },
+    const { count, rows } = await this.orderModel.findAndCountAll({
+      where: { hypeStoreId: storeId },
       limit,
       offset,
       order: [['createdAt', 'DESC']],
@@ -878,7 +886,7 @@ export class HypeStoreService {
   /**
    * Get order details
    */
-  async getOrderDetails(storeId: number, brandId: number, orderId: string): Promise<HypeStoreOrderOld> {
+  async getOrderDetails(storeId: number, brandId: number, orderId: string): Promise<HypeStoreOrder> {
     const store = await this.hypeStoreModel.findOne({
       where: { id: storeId, brandId },
     });
@@ -887,8 +895,8 @@ export class HypeStoreService {
       throw new NotFoundException('Hype Store not found');
     }
 
-    const order = await this.orderModelOld.findOne({
-      where: { storeId, orderId },
+    const order = await this.orderModel.findOne({
+      where: { hypeStoreId: storeId, externalOrderId: orderId },
     });
 
     if (!order) {

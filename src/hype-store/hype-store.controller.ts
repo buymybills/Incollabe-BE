@@ -68,7 +68,7 @@ export class HypeStoreController {
       '- reelPostMinCashback: Minimum cashback for reels/posts (default: Rs 100)\n' +
       '- storyMinCashback: Minimum cashback for stories (default: Rs 100)\n' +
       '- bannerImage: Upload custom banner image (JPG, PNG, max 5MB) - overrides brand profile banner\n\n' +
-      '**Note:** Creator targeting preferences (age, gender, niche, locations) should be configured separately using the PUT /:storeId/creator-preferences endpoint after store creation.\n\n' +
+      '**Note:** Creator targeting preferences (age, gender, niche, locations) are configured at brand level using the PUT /creator-preferences endpoint and apply to all stores.\n\n' +
       '**Claim Strategy (Auto-derived from monthly claim count):**\n' +
       '- 1 claim = PILOT_RUN\n' +
       '- 2 claims = VALIDATE_ROI\n' +
@@ -561,6 +561,18 @@ export class HypeStoreController {
     return this.hypeStoreService.addMoneyToWallet(brandId, addMoneyDto);
   }
 
+  @Get('creator-preferences')
+  @ApiOperation({
+    summary: 'Get brand-level creator targeting preferences',
+    description: 'Returns the creator targeting preferences configured for the authenticated brand (applies to all stores)'
+  })
+  @ApiResponse({ status: 200, description: 'Creator preferences retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getBrandCreatorPreferences(@Request() req: any) {
+    const brandId = req.user.id;
+    return this.hypeStoreService.getCreatorPreferences(brandId);
+  }
+
   @Get(':storeId')
   @ApiOperation({
     summary: 'Get store details by ID',
@@ -625,36 +637,19 @@ export class HypeStoreController {
     return this.hypeStoreService.updateCashbackConfig(parseInt(storeId), brandId, updateDto);
   }
 
-  @Get(':storeId/creator-preferences')
+  @Put('creator-preferences')
   @ApiOperation({
-    summary: 'Get creator targeting preferences',
-    description: 'Get creator targeting preferences including influencer types, age, gender, niche, and locations'
+    summary: 'Update brand-level creator targeting preferences',
+    description: 'Update creator targeting criteria that apply to all stores under the brand'
   })
-  @ApiParam({ name: 'storeId', type: Number, description: 'Store ID' })
-  @ApiResponse({ status: 200, description: 'Creator preferences retrieved successfully' })
-  @ApiResponse({ status: 404, description: 'Store not found' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getCreatorPreferences(@Request() req: any, @Param('storeId') storeId: string) {
-    const brandId = req.user.id;
-    return this.hypeStoreService.getCreatorPreferences(parseInt(storeId), brandId);
-  }
-
-  @Put(':storeId/creator-preferences')
-  @ApiOperation({
-    summary: 'Update creator targeting preferences',
-    description: 'Update creator targeting criteria for the store'
-  })
-  @ApiParam({ name: 'storeId', type: Number, description: 'Store ID' })
   @ApiResponse({ status: 200, description: 'Creator preferences updated successfully' })
-  @ApiResponse({ status: 404, description: 'Store not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async updateCreatorPreferences(
     @Request() req: any,
-    @Param('storeId') storeId: string,
     @Body() updateDto: UpdateCreatorPreferenceDto,
   ) {
     const brandId = req.user.id;
-    return this.hypeStoreService.updateCreatorPreferences(parseInt(storeId), brandId, updateDto);
+    return this.hypeStoreService.updateCreatorPreferences(brandId, updateDto);
   }
 
   @Get(':storeId/dashboard')

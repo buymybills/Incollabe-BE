@@ -160,8 +160,8 @@ export class HypeStore extends Model<HypeStore, HypeStoreCreationAttributes> {
   declare cashbackConfig: HypeStoreCashbackConfig;
 
   @HasOne(() => HypeStoreCreatorPreference, {
-    sourceKey: 'id',
-    foreignKey: 'storeId',
+    sourceKey: 'brandId',
+    foreignKey: 'brandId',
   })
   declare creatorPreference: HypeStoreCreatorPreference;
 }

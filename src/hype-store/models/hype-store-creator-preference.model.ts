@@ -9,6 +9,7 @@ import {
   BelongsTo,
 } from 'sequelize-typescript';
 import { HypeStore } from '../../wallet/models/hype-store.model';
+import { Brand } from '../../brand/model/brand.model';
 
 export enum InfluencerTierType {
   BELOW_1K = 'BELOW_1K',
@@ -26,7 +27,8 @@ export enum GenderPreference {
 }
 
 export interface HypeStoreCreatorPreferenceCreationAttributes {
-  storeId: number;
+  storeId?: number;
+  brandId: number;
   influencerTypes?: InfluencerTierType[];
   minAge?: number;
   maxAge?: number;
@@ -53,11 +55,18 @@ export class HypeStoreCreatorPreference extends Model<
   @ForeignKey(() => HypeStore)
   @Column({
     type: DataType.INTEGER,
-    allowNull: false,
-    unique: true,
+    allowNull: true,
     field: 'hype_store_id',
   })
   declare storeId: number;
+
+  @ForeignKey(() => Brand)
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    field: 'brand_id',
+  })
+  declare brandId: number;
 
   @Column({
     type: DataType.JSONB,
@@ -123,4 +132,7 @@ export class HypeStoreCreatorPreference extends Model<
   // Associations
   @BelongsTo(() => HypeStore)
   declare store: HypeStore;
+
+  @BelongsTo(() => Brand)
+  declare brand: Brand;
 }
