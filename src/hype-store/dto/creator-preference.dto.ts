@@ -1,4 +1,4 @@
-import { IsArray, IsNumber, IsBoolean, IsOptional, IsEnum, Min, Max } from 'class-validator';
+import { IsArray, IsNumber, IsBoolean, IsOptional, IsEnum, Min, Max, IsInt } from 'class-validator';
 import { InfluencerTierType, GenderPreference } from '../models/hype-store-creator-preference.model';
 
 export class UpdateCreatorPreferenceDto {
@@ -8,13 +8,13 @@ export class UpdateCreatorPreferenceDto {
   influencerTypes?: InfluencerTierType[];
 
   @IsOptional()
-  @IsNumber()
+  @IsInt()
   @Min(0)
   @Max(100)
   minAge?: number;
 
   @IsOptional()
-  @IsNumber()
+  @IsInt()
   @Min(0)
   @Max(100)
   maxAge?: number;

@@ -712,7 +712,51 @@ export class HypeStoreController {
   @ApiParam({ name: 'storeId', type: Number, description: 'Store ID' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Number of records (default: 50)' })
   @ApiQuery({ name: 'offset', required: false, type: Number, description: 'Offset for pagination (default: 0)' })
-  @ApiResponse({ status: 200, description: 'Orders retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Orders retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        orders: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number', example: 123 },
+              externalOrderId: { type: 'string', example: 'ORD-2026-0001' },
+              hypeStoreId: { type: 'number', example: 9 },
+              influencerId: { type: 'number', example: 45 },
+              couponCode: { type: 'string', example: 'BRAND123' },
+              orderAmount: { type: 'number', example: 1500 },
+              cashbackAmount: { type: 'number', example: 250 },
+              orderStatus: { type: 'string', example: 'COMPLETED' },
+              cashbackStatus: { type: 'string', example: 'SENT' },
+              createdAt: { type: 'string', example: '2026-03-11T10:00:00.000Z' },
+            },
+          },
+        },
+        total: { type: 'number', example: 120 },
+      },
+      example: {
+        orders: [
+          {
+            id: 123,
+            externalOrderId: 'ORD-2026-0001',
+            hypeStoreId: 9,
+            influencerId: 45,
+            couponCode: 'BRAND123',
+            orderAmount: 1500,
+            cashbackAmount: 250,
+            orderStatus: 'COMPLETED',
+            cashbackStatus: 'SENT',
+            createdAt: '2026-03-11T10:00:00.000Z',
+          },
+        ],
+        total: 120,
+      },
+    },
+  })
   @ApiResponse({ status: 404, description: 'Store not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getStoreOrders(
@@ -737,7 +781,110 @@ export class HypeStoreController {
   })
   @ApiParam({ name: 'storeId', type: Number, description: 'Store ID' })
   @ApiParam({ name: 'orderId', type: String, description: 'Order ID' })
-  @ApiResponse({ status: 200, description: 'Order details retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order details retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', example: 123 },
+        externalOrderId: { type: 'string', example: '346KJNRGB' },
+        orderTitle: {
+          type: 'string',
+          example: 'JBL Tune 770NC Active Noise Cancelling, 70Hr Playtime, Fast Pair & Multi Connect Bluetooth',
+        },
+        orderDate: { type: 'string', example: '2025-06-10T01:23:00.000Z' },
+        orderAmount: { type: 'number', example: 10800 },
+        cashback: {
+          type: 'object',
+          properties: {
+            type: { type: 'string', example: 'FLAT' },
+            value: { type: 'number', example: 20 },
+            currency: { type: 'string', example: 'INR' },
+            status: { type: 'string', example: 'SENT' },
+            amountSent: { type: 'number', example: 1000.0 },
+          },
+        },
+        promotionMedia: {
+          type: 'object',
+          properties: {
+            type: { type: 'string', example: 'REEL' },
+            thumbnailUrl: { type: 'string', example: 'https://cdn.example.com/reels/123-thumb.jpg' },
+            postedOn: { type: 'string', example: '2025-08-01' },
+            viewCount: { type: 'number', example: 32000 },
+            url: { type: 'string', example: 'https://instagram.com/reel/abc123' },
+          },
+        },
+        performance: {
+          type: 'object',
+          properties: {
+            expectedROI: { type: 'number', example: 1.4 },
+            estimatedEngagement: { type: 'number', example: 13100 },
+            estimatedReach: { type: 'number', example: 210000 },
+            tierLabels: {
+              type: 'object',
+              properties: {
+                expectedROI: { type: 'string', example: 'Elite' },
+                estimatedEngagement: { type: 'string', example: 'Elite' },
+                estimatedReach: { type: 'string', example: 'Elite' },
+              },
+            },
+          },
+        },
+        store: {
+          type: 'object',
+          properties: {
+            id: { type: 'number', example: 9 },
+            name: { type: 'string', example: 'Store 1' },
+          },
+        },
+        influencer: {
+          type: 'object',
+          properties: {
+            id: { type: 'number', example: 45 },
+            name: { type: 'string', example: 'Creator Name' },
+          },
+        },
+        createdAt: { type: 'string', example: '2026-03-11T10:00:00.000Z' },
+        updatedAt: { type: 'string', example: '2026-03-11T10:05:00.000Z' },
+      },
+      example: {
+        id: 123,
+        externalOrderId: '346KJNRGB',
+        orderTitle: 'JBL Tune 770NC Active Noise Cancelling, 70Hr Playtime, Fast Pair & Multi Connect Bluetooth',
+        orderDate: '2025-06-10T01:23:00.000Z',
+        orderAmount: 10800,
+        cashback: {
+          type: 'FLAT',
+          value: 20,
+          currency: 'INR',
+          status: 'SENT',
+          amountSent: 1000.0,
+        },
+        promotionMedia: {
+          type: 'REEL',
+          thumbnailUrl: 'https://cdn.example.com/reels/123-thumb.jpg',
+          postedOn: '2025-08-01',
+          viewCount: 32000,
+          url: 'https://instagram.com/reel/abc123',
+        },
+        performance: {
+          expectedROI: 1.4,
+          estimatedEngagement: 13100,
+          estimatedReach: 210000,
+          tierLabels: {
+            expectedROI: 'Elite',
+            estimatedEngagement: 'Elite',
+            estimatedReach: 'Elite',
+          },
+        },
+        store: { id: 9, name: 'Store 1' },
+        influencer: { id: 45, name: 'Creator Name' },
+        createdAt: '2026-03-11T10:00:00.000Z',
+        updatedAt: '2026-03-11T10:05:00.000Z',
+      },
+    },
+  })
   @ApiResponse({ status: 404, description: 'Order not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getOrderDetails(

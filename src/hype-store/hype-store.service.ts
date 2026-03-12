@@ -759,20 +759,34 @@ export class HypeStoreService {
     console.log('[creator-preferences] incoming', { brandId, updateDto });
 
     const updateData: Partial<UpdateCreatorPreferenceDto> = {};
-    if (updateDto.influencerTypes) updateData.influencerTypes = updateDto.influencerTypes;
-    if (updateDto.genderPreference) updateData.genderPreference = updateDto.genderPreference;
-    if (updateDto.nicheCategories) updateData.nicheCategories = updateDto.nicheCategories;
-    if (updateDto.preferredLocations) updateData.preferredLocations = updateDto.preferredLocations;
+
+    // Force arrays to string arrays (filter out non-strings)
+    if (Array.isArray(updateDto.influencerTypes)) {
+      updateData.influencerTypes = updateDto.influencerTypes.filter((v) => typeof v === 'string') as any;
+    }
+    if (Array.isArray(updateDto.genderPreference)) {
+      updateData.genderPreference = updateDto.genderPreference.filter((v) => typeof v === 'string') as any;
+    }
+    if (Array.isArray(updateDto.nicheCategories)) {
+      updateData.nicheCategories = updateDto.nicheCategories.filter((v) => typeof v === 'string');
+    }
+    if (Array.isArray(updateDto.preferredLocations)) {
+      updateData.preferredLocations = updateDto.preferredLocations.filter((v) => typeof v === 'string');
+    }
     if (typeof updateDto.isPanIndia === 'boolean') updateData.isPanIndia = updateDto.isPanIndia;
-    if (typeof updateDto.minAge === 'number' && Number.isFinite(updateDto.minAge)) {
-      updateData.minAge = updateDto.minAge;
+
+    const minAge = Number(updateDto.minAge);
+    if (Number.isFinite(minAge)) {
+      updateData.minAge = minAge;
     } else if (updateDto.minAge !== undefined) {
       this.logger.warn('Rejected non-finite minAge in creator preferences', { brandId, value: updateDto.minAge });
       // eslint-disable-next-line no-console
       console.warn('[creator-preferences] rejected minAge', { brandId, value: updateDto.minAge });
     }
-    if (typeof updateDto.maxAge === 'number' && Number.isFinite(updateDto.maxAge)) {
-      updateData.maxAge = updateDto.maxAge;
+
+    const maxAge = Number(updateDto.maxAge);
+    if (Number.isFinite(maxAge)) {
+      updateData.maxAge = maxAge;
     } else if (updateDto.maxAge !== undefined) {
       this.logger.warn('Rejected non-finite maxAge in creator preferences', { brandId, value: updateDto.maxAge });
       // eslint-disable-next-line no-console
@@ -783,7 +797,24 @@ export class HypeStoreService {
     // eslint-disable-next-line no-console
     console.log('[creator-preferences] sanitized update', { brandId, updateData });
 
-    await preferences.update(updateData);
+    if (Object.keys(updateData).length === 0) {
+      this.logger.warn('Creator preference update ignored because payload was empty after sanitization', {
+        brandId,
+        raw: updateDto,
+      });
+      // eslint-disable-next-line no-console
+      console.warn('[creator-preferences] update skipped (empty after sanitize)', { brandId, raw: updateDto });
+      return preferences;
+    }
+
+    try {
+      await preferences.update(updateData);
+    } catch (err) {
+      this.logger.error('Failed to update creator preferences', err?.stack, { brandId, updateData, raw: updateDto });
+      // eslint-disable-next-line no-console
+      console.error('[creator-preferences] update failed', { brandId, updateData, raw: updateDto, err });
+      throw err;
+    }
     // eslint-disable-next-line no-console
     console.log('[creator-preferences] update persisted', { brandId, preferencesId: preferences.id });
     return preferences;
