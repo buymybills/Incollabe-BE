@@ -78,6 +78,39 @@ export class InfluencerHypeStoreService {
     // Niche filter only if provided
     const nicheFilter = niche && niche.trim() ? niche.trim() : undefined;
 
+    // Pre-filter brandIds by niche to avoid complex includes that break validation
+    if (nicheFilter) {
+      const nicheRecord = await Niche.findOne({
+        where: { name: { [Op.iLike]: nicheFilter } },
+        include: [
+          {
+            model: Brand,
+            as: 'brands',
+            attributes: ['id'],
+            through: { attributes: [] },
+          },
+        ],
+      });
+
+      const brandIds =
+        nicheRecord && (nicheRecord as any).brands
+          ? ((nicheRecord as any).brands as Brand[]).map((b) => b.id)
+          : [];
+
+      if (brandIds.length === 0) {
+        return {
+          success: true,
+          data: {
+            stores: [],
+            pagination: { total: 0, page, limit, totalPages: 0 },
+          },
+          message: 'Hype stores retrieved successfully',
+        };
+      }
+
+      whereClause.brandId = { [Op.in]: brandIds };
+    }
+
     // Get all stores with brand and cashback config
     const { rows: stores, count: total } = await this.hypeStoreModel.findAndCountAll({
       where: whereClause,
@@ -87,18 +120,6 @@ export class InfluencerHypeStoreService {
           as: 'brand',
           attributes: ['id', 'brandName', 'username', 'profileImage', 'profileBanner'],
           where: search && search.trim() ? brandWhere : undefined,
-          include: nicheFilter
-            ? [
-                {
-                  model: Niche,
-                  as: 'niches',
-                  attributes: ['id', 'name'],
-                  where: { name: { [Op.iLike]: nicheFilter } },
-                  required: true,
-                  through: { attributes: [] },
-                },
-              ]
-            : undefined,
           required: false,
         },
         {
