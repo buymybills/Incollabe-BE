@@ -41,12 +41,14 @@ import { HypeStoreReferralCode } from '../wallet/models/hype-store-referral-code
 import { HypeStoreReferralClick } from '../wallet/models/hype-store-referral-click.model';
 import { Wallet } from '../wallet/models/wallet.model';
 import { WalletTransaction } from '../wallet/models/wallet-transaction.model';
+import { BrandNiche } from '../brand/model/brand-niche.model';
 
 @Module({
   imports: [
     SequelizeModule.forFeature([
       Influencer,
       Brand,
+      BrandNiche,
       Niche,
       InfluencerNiche,
       Experience,
