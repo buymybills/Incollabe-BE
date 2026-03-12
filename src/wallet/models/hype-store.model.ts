@@ -10,6 +10,7 @@ import {
 } from 'sequelize-typescript';
 import { Brand } from '../../brand/model/brand.model';
 import { HypeStoreCashbackConfig } from '../../hype-store/models/hype-store-cashback-config.model';
+import { HypeStoreCreatorPreference } from '../../hype-store/models/hype-store-creator-preference.model';
 
 export interface HypeStoreCreationAttributes {
   brandId: number;
@@ -157,4 +158,10 @@ export class HypeStore extends Model<HypeStore, HypeStoreCreationAttributes> {
     as: 'cashbackConfig',
   })
   declare cashbackConfig: HypeStoreCashbackConfig;
+
+  @HasOne(() => HypeStoreCreatorPreference, {
+    sourceKey: 'id',
+    foreignKey: 'storeId',
+  })
+  declare creatorPreference: HypeStoreCreatorPreference;
 }

@@ -202,7 +202,7 @@ export class HypeStoreService {
       where: { brandId },
       include: [
         { model: HypeStoreCashbackConfig },
-        { model: HypeStoreCreatorPreference },
+        { model: HypeStoreCreatorPreference, required: false },
       ],
       order: [['createdAt', 'ASC']],
     });
@@ -223,7 +223,7 @@ export class HypeStoreService {
       where: whereClause,
       include: [
         { model: HypeStoreCashbackConfig },
-        { model: HypeStoreCreatorPreference },
+        { model: HypeStoreCreatorPreference, required: false },
       ],
     });
 
