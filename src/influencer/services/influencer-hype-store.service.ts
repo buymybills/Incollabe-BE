@@ -15,6 +15,7 @@ import { HypeStoreReferralCode } from '../../wallet/models/hype-store-referral-c
 import { Wallet, UserType } from '../../wallet/models/wallet.model';
 import { WalletTransaction, TransactionType, TransactionStatus } from '../../wallet/models/wallet-transaction.model';
 import { Brand } from '../../brand/model/brand.model';
+import { BrandNiche } from '../../brand/model/brand-niche.model';
 import { SubmitProofDto } from '../dto/hype-store-order.dto';
 import { Niche } from '../../auth/model/niche.model';
 
@@ -114,7 +115,7 @@ export class InfluencerHypeStoreService {
           ],
           where: Object.keys(cashbackWhere).length ? cashbackWhere : undefined,
         },
-      ],
+      ] as any,
       limit,
       offset,
       order:
