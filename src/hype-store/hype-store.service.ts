@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/sequelize';
@@ -35,6 +36,7 @@ import * as crypto from 'crypto';
 
 @Injectable()
 export class HypeStoreService {
+  private readonly logger = new Logger(HypeStoreService.name);
   constructor(
     @InjectModel(HypeStore)
     private hypeStoreModel: typeof HypeStore,
@@ -749,7 +751,41 @@ export class HypeStoreService {
       } as any);
     }
 
-    await preferences.update(updateDto);
+    // Sanitize incoming payload to avoid NaN/undefined writes
+    this.logger.debug('Creator preference update received', { brandId, updateDto });
+    // Duplicate basic console logs to help DB-side tracing in lower environments
+    // (these appear in the PostgreSQL logs when using psql \watch scripts)
+    // eslint-disable-next-line no-console
+    console.log('[creator-preferences] incoming', { brandId, updateDto });
+
+    const updateData: Partial<UpdateCreatorPreferenceDto> = {};
+    if (updateDto.influencerTypes) updateData.influencerTypes = updateDto.influencerTypes;
+    if (updateDto.genderPreference) updateData.genderPreference = updateDto.genderPreference;
+    if (updateDto.nicheCategories) updateData.nicheCategories = updateDto.nicheCategories;
+    if (updateDto.preferredLocations) updateData.preferredLocations = updateDto.preferredLocations;
+    if (typeof updateDto.isPanIndia === 'boolean') updateData.isPanIndia = updateDto.isPanIndia;
+    if (typeof updateDto.minAge === 'number' && Number.isFinite(updateDto.minAge)) {
+      updateData.minAge = updateDto.minAge;
+    } else if (updateDto.minAge !== undefined) {
+      this.logger.warn('Rejected non-finite minAge in creator preferences', { brandId, value: updateDto.minAge });
+      // eslint-disable-next-line no-console
+      console.warn('[creator-preferences] rejected minAge', { brandId, value: updateDto.minAge });
+    }
+    if (typeof updateDto.maxAge === 'number' && Number.isFinite(updateDto.maxAge)) {
+      updateData.maxAge = updateDto.maxAge;
+    } else if (updateDto.maxAge !== undefined) {
+      this.logger.warn('Rejected non-finite maxAge in creator preferences', { brandId, value: updateDto.maxAge });
+      // eslint-disable-next-line no-console
+      console.warn('[creator-preferences] rejected maxAge', { brandId, value: updateDto.maxAge });
+    }
+
+    this.logger.debug('Creator preference update sanitized', { brandId, updateData });
+    // eslint-disable-next-line no-console
+    console.log('[creator-preferences] sanitized update', { brandId, updateData });
+
+    await preferences.update(updateData);
+    // eslint-disable-next-line no-console
+    console.log('[creator-preferences] update persisted', { brandId, preferencesId: preferences.id });
     return preferences;
   }
 

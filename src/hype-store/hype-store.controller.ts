@@ -642,6 +642,44 @@ export class HypeStoreController {
     summary: 'Update brand-level creator targeting preferences',
     description: 'Update creator targeting criteria that apply to all stores under the brand'
   })
+  @ApiBody({
+    description: 'Creator preference payload',
+    schema: {
+      type: 'object',
+      properties: {
+        influencerTypes: {
+          type: 'array',
+          items: { type: 'string', enum: ['BELOW_1K', 'NANO', 'MICRO', 'MID_TIER', 'MACRO', 'MEGA'] },
+          example: ['MICRO', 'MID_TIER']
+        },
+        minAge: { type: 'integer', example: 18 },
+        maxAge: { type: 'integer', example: 45 },
+        genderPreference: {
+          type: 'array',
+          items: { type: 'string', enum: ['MALE', 'FEMALE', 'OTHERS'] },
+          example: ['FEMALE']
+        },
+        nicheCategories: { type: 'array', items: { type: 'string' }, example: ['fashion', 'beauty'] },
+        preferredLocations: { type: 'array', items: { type: 'string' }, example: ['Delhi', 'Mumbai'] },
+        isPanIndia: { type: 'boolean', example: false },
+      },
+      required: [],
+    },
+    examples: {
+      basic: {
+        summary: 'Typical preference update',
+        value: {
+          influencerTypes: ['MICRO', 'MID_TIER'],
+          minAge: 21,
+          maxAge: 35,
+          genderPreference: ['FEMALE'],
+          nicheCategories: ['beauty', 'lifestyle'],
+          preferredLocations: ['Bengaluru', 'Delhi'],
+          isPanIndia: false,
+        },
+      },
+    },
+  })
   @ApiResponse({ status: 200, description: 'Creator preferences updated successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async updateCreatorPreferences(
