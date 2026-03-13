@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as AWS from 'aws-sdk';
 import * as crypto from 'crypto';
+import * as fs from 'fs';
 import 'multer';
 
 @Injectable()
@@ -21,7 +22,19 @@ export class S3Service {
     this.bucketName = this.configService.get('AWS_S3_BUCKET_NAME')!;
     this.cloudFrontDomain = this.configService.get('CLOUDFRONT_DOMAIN') || null;
     this.cloudFrontKeyPairId = this.configService.get('CLOUDFRONT_KEY_PAIR_ID') || null;
-    this.cloudFrontPrivateKey = this.configService.get('CLOUDFRONT_PRIVATE_KEY') || null;
+
+    // Load private key from either direct value or file path
+    const privateKeyPath = this.configService.get('CLOUDFRONT_PRIVATE_KEY_PATH');
+    if (privateKeyPath) {
+      try {
+        this.cloudFrontPrivateKey = fs.readFileSync(privateKeyPath, 'utf8');
+      } catch (error) {
+        console.error('Failed to load CloudFront private key from file:', error);
+        this.cloudFrontPrivateKey = null;
+      }
+    } else {
+      this.cloudFrontPrivateKey = this.configService.get('CLOUDFRONT_PRIVATE_KEY') || null;
+    }
   }
 
   async uploadFile(
