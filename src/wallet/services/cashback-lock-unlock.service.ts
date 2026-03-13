@@ -96,7 +96,7 @@ export class CashbackLockUnlockService {
       );
 
       // Create a new transaction record marking the unlock
-      await this.walletTransactionModel.create(
+      const unlockTransaction = await this.walletTransactionModel.create(
         {
           walletId: wallet.id,
           transactionType: TransactionType.CASHBACK,
@@ -120,13 +120,15 @@ export class CashbackLockUnlockService {
       if (lockedTx.lockExpiresAt) {
         updateData.lockExpiresAt = undefined;
       }
-      
+
       await lockedTx.update(updateData, { transaction });
 
-      // Update the hype store order to reflect unlocked status
+      // Update the hype store order to CREDITED status with wallet transaction reference
       if (lockedTx.hypeStoreOrderId) {
         await this.hypeStoreOrderModel.update(
           {
+            cashbackStatus: 'CREDITED' as any, // Mark as credited now that it's in available balance
+            walletTransactionId: unlockTransaction.id, // Reference to the unlock transaction
             notes: `Cashback unlocked after return window closed on ${new Date().toISOString()}`,
           },
           {

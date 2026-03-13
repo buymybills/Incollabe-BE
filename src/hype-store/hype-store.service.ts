@@ -1909,6 +1909,57 @@ export class HypeStoreService {
 
       processedOrderId = order.id;
 
+      // 3.5. Validate return window - CRITICAL BUSINESS RULE
+      const now = new Date();
+      const returnWindowEnds = order.returnPeriodEndsAt ||
+        new Date(order.createdAt.getTime() + parseFloat(order.returnPeriodDays.toString()) * 24 * 60 * 60 * 1000);
+
+      if (now > returnWindowEnds) {
+        responseStatus = 400;
+        responseBody = {
+          success: false,
+          message: 'Return window has closed. Returns are not allowed after the return period ends.',
+          returnWindowEndsAt: returnWindowEnds.toISOString(),
+          currentTime: now.toISOString(),
+        };
+        await this.logWebhookRequest({
+          hypeStoreId: hypeStore.id,
+          method: 'POST',
+          path: '/webhooks/return',
+          headers: { 'x-webhook-signature': signature },
+          body: webhookDto,
+          ipAddress,
+          status: responseStatus,
+          responseBody,
+          isValid: true,
+          errorMessage: 'Return window has closed',
+        });
+        throw new BadRequestException('Return window has closed. Cashback has already been unlocked and credited to influencer.');
+      }
+
+      // Additional validation: Only allow returns for orders with locked or pending cashback
+      if (order.cashbackStatus === CashbackStatus.CREDITED) {
+        responseStatus = 400;
+        responseBody = {
+          success: false,
+          message: 'Cannot process return. Cashback has already been credited to influencer.',
+          cashbackStatus: order.cashbackStatus,
+        };
+        await this.logWebhookRequest({
+          hypeStoreId: hypeStore.id,
+          method: 'POST',
+          path: '/webhooks/return',
+          headers: { 'x-webhook-signature': signature },
+          body: webhookDto,
+          ipAddress,
+          status: responseStatus,
+          responseBody,
+          isValid: true,
+          errorMessage: 'Cashback already credited',
+        });
+        throw new BadRequestException('Cannot process return. Cashback has already been credited to influencer.');
+      }
+
       // 4. Update order status and reverse cashback if needed
       const transaction: Transaction = await this.sequelize.transaction();
       let cashbackReversed = false;
@@ -1918,21 +1969,33 @@ export class HypeStoreService {
         await order.update(
           {
             orderStatus: OrderStatus.RETURNED,
-            cashbackStatus:
-              order.cashbackStatus === CashbackStatus.CREDITED
-                ? CashbackStatus.CANCELLED
-                : order.cashbackStatus,
+            cashbackStatus: CashbackStatus.CANCELLED,
             visibleToInfluencer: false, // Ensure order stays hidden from influencer
             notes: `Return processed on ${new Date(webhookDto.returnDate).toISOString()}. Reason: ${webhookDto.returnReason || 'Not specified'}`,
           },
           { transaction },
         );
 
-        // If cashback was already credited, reverse it
+        const cashbackAmount = parseFloat(order.cashbackAmount.toString());
+
+        // Prepare brand wallet credit (refund)
+        const brandWallet = await this.walletModel.findOne({
+          where: { userId: hypeStore.brandId, userType: UserType.BRAND },
+          transaction,
+        });
+
+        // Handle cashback reversal based on current status
+        // Note: CREDITED status should be prevented by validation above, but kept as defensive code
+        // TypeScript doesn't know about potential race conditions, so we use type assertion here
         if (
-          order.cashbackStatus === CashbackStatus.CREDITED &&
+          (order.cashbackStatus as any) === CashbackStatus.CREDITED &&
           order.walletTransactionId
         ) {
+          // This should never happen due to validation above
+          this.logger.error(
+            `⚠️ CRITICAL: Return processed for order ${order.id} with CREDITED cashback. This should have been blocked by validation!`,
+          );
+
           const influencerWallet = await this.walletModel.findOne({
             where: {
               userId: order.influencerId,
@@ -1943,7 +2006,6 @@ export class HypeStoreService {
 
           if (influencerWallet) {
             const previousBalance = parseFloat(influencerWallet.balance.toString());
-            const cashbackAmount = parseFloat(order.cashbackAmount.toString());
             const newBalance = previousBalance - cashbackAmount;
 
             // Deduct cashback from influencer wallet
@@ -1965,13 +2027,83 @@ export class HypeStoreService {
                 balanceAfter: newBalance,
                 status: TransactionStatus.COMPLETED,
                 description: `Cashback reversal for returned order ${order.externalOrderId}`,
-                storeId: hypeStore.id,
+                hypeStoreId: hypeStore.id,
+                hypeStoreOrderId: order.id,
               } as any,
               { transaction },
             );
 
             cashbackReversed = true;
           }
+        } else if (
+          order.cashbackStatus === CashbackStatus.PROCESSING &&
+          order.lockedCashbackTransactionId
+        ) {
+          // Cashback still locked: release lock and remove from influencer locked amount
+          const influencerWallet = await this.walletModel.findOne({
+            where: {
+              userId: order.influencerId,
+              userType: UserType.INFLUENCER,
+            },
+            transaction,
+          });
+
+          const lockedTx = await this.walletTransactionModel.findByPk(
+            order.lockedCashbackTransactionId,
+            { transaction },
+          );
+
+          if (influencerWallet && lockedTx) {
+            const newLockedAmount =
+              parseFloat(influencerWallet.lockedAmount.toString()) - cashbackAmount;
+
+            await influencerWallet.update(
+              {
+                lockedAmount: newLockedAmount < 0 ? 0 : newLockedAmount,
+                totalCashbackReceived:
+                  parseFloat(influencerWallet.totalCashbackReceived.toString()) - cashbackAmount,
+              },
+              { transaction },
+            );
+
+            await lockedTx.update(
+              {
+                status: TransactionStatus.CANCELLED,
+                isLocked: false,
+                notes: `Return processed before unlock for order ${order.externalOrderId}`,
+              },
+              { transaction },
+            );
+
+            cashbackReversed = true;
+          }
+        }
+
+        // Credit the brand wallet back if available
+        if (brandWallet) {
+          const brandBalance = parseFloat(brandWallet.balance.toString());
+          await this.walletTransactionModel.create(
+            {
+              walletId: brandWallet.id,
+              transactionType: TransactionType.REFUND,
+              amount: cashbackAmount,
+              balanceBefore: brandBalance,
+              balanceAfter: brandBalance + cashbackAmount,
+              status: TransactionStatus.COMPLETED,
+              description: `Cashback returned for order ${order.externalOrderId}`,
+              hypeStoreId: hypeStore.id,
+              hypeStoreOrderId: order.id,
+            } as any,
+            { transaction },
+          );
+
+          await brandWallet.update(
+            {
+              balance: brandBalance + cashbackAmount,
+              totalCredited: parseFloat(brandWallet.totalCredited.toString()) + cashbackAmount,
+            },
+            { transaction },
+          );
         }
 
         // Update webhook secret last used timestamp

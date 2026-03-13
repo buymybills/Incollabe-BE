@@ -1188,7 +1188,50 @@ export class InfluencerHypeStoreService {
         { transaction },
       );
 
-      // Update order with proof details, performance metrics, and locked transaction reference
+      // Deduct from brand wallet immediately to reserve cashback
+      const brandId = order.hypeStore?.brand?.id || order.hypeStore?.brandId;
+      if (!brandId) {
+        throw new NotFoundException('Brand not found for this store');
+      }
+
+      const brandWallet = await this.walletModel.findOne({
+        where: { userId: brandId, userType: UserType.BRAND },
+        transaction,
+      });
+
+      if (!brandWallet) {
+        throw new NotFoundException('Brand wallet not found');
+      }
+
+      const brandBalance = parseFloat(brandWallet.balance.toString());
+      if (brandBalance < cashbackAmount) {
+        throw new BadRequestException('Insufficient brand wallet balance to reserve cashback');
+      }
+
+      const brandDebitTx = await this.walletTransactionModel.create(
+        {
+          walletId: brandWallet.id,
+          transactionType: TransactionType.DEBIT,
+          amount: cashbackAmount,
+          balanceBefore: brandBalance,
+          balanceAfter: brandBalance - cashbackAmount,
+          status: TransactionStatus.COMPLETED,
+          description: `Cashback reserved for order ${order.externalOrderId}`,
+          hypeStoreId: order.hypeStoreId,
+          hypeStoreOrderId: order.id,
+        } as any,
+        { transaction },
+      );
+
+      await brandWallet.update(
+        {
+          balance: brandBalance - cashbackAmount,
+          totalDebited: parseFloat(brandWallet.totalDebited.toString()) + cashbackAmount,
+        },
+        { transaction },
+      );
+
+      // Update order with proof details, performance metrics, and references
       await order.update(
         {
           instagramProofUrl: submitProofDto.instagramUrl,
@@ -1203,6 +1246,10 @@ export class InfluencerHypeStoreService {
           estimatedReach: estimatedReach,
           cashbackStatus: CashbackStatus.PROCESSING,
           lockedCashbackTransactionId: lockedTransaction.id,
+          metadata: {
+            ...(order.metadata || {}),
+            brandDebitTransactionId: brandDebitTx.id,
+          },
           notes: submitProofDto.notes
             ? `${order.notes ? order.notes + '\n' : ''}Proof submitted: ${submitProofDto.notes}`
             : order.notes,
