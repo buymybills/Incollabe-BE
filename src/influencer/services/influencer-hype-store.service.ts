@@ -917,34 +917,47 @@ export class InfluencerHypeStoreService {
         `https://graph.instagram.com/v24.0/${influencer.instagramUserId}/media`,
         {
           params: {
-            fields: 'id,media_type,media_product_type,timestamp',
+            fields: 'id,media_type,media_product_type,timestamp,shortcode',
             access_token: influencer.instagramAccessToken,
             limit: 100, // Check recent 100 posts
           },
         },
       );
 
-      // Find the media matching this shortcode by checking permalinks
+      // Find the media matching this shortcode
       let mediaId: string | undefined = undefined;
       let timestamp: string | undefined = undefined;
+      let mediaProductType: string | undefined = undefined;
+      let mediaType: string | undefined = undefined;
 
       for (const media of mediaResponse.data.data || []) {
-        // We need to check if this is the right media
-        // Since we have shortcode, we'll try to match by fetching each media's permalink
+        // Direct shortcode match if available in API response
+        if (media.shortcode === shortcode) {
+          mediaId = media.id;
+          timestamp = media.timestamp;
+          mediaProductType = media.media_product_type;
+          mediaType = media.media_type;
+          break;
+        }
+
+        // Fallback: check permalink if shortcode not in response
         try {
           const mediaDetailResponse = await axios.get(
             `https://graph.instagram.com/v24.0/${media.id}`,
             {
               params: {
-                fields: 'id,permalink,timestamp',
+                fields: 'id,permalink,timestamp,shortcode,media_type,media_product_type',
                 access_token: influencer.instagramAccessToken,
               },
             },
           );
 
-          if (mediaDetailResponse.data.permalink?.includes(shortcode)) {
+          if (mediaDetailResponse.data.shortcode === shortcode ||
+              mediaDetailResponse.data.permalink?.includes(shortcode)) {
             mediaId = media.id;
             timestamp = mediaDetailResponse.data.timestamp;
+            mediaProductType = mediaDetailResponse.data.media_product_type;
+            mediaType = mediaDetailResponse.data.media_type;
             break;
           }
         } catch (err) {
@@ -956,20 +969,54 @@ export class InfluencerHypeStoreService {
         return { timestamp };
       }
 
+      // Choose appropriate metrics based on media type
+      let metrics: string;
+      if (mediaProductType === 'REELS' || mediaProductType === 'CLIPS') {
+        // For REELS: use 'views' metric (not 'ig_reels_aggregated_all_plays_count')
+        // Also fetch engagement metrics
+        metrics = 'views,reach,likes,comments,shares,saved,total_interactions';
+      } else if (mediaType === 'VIDEO') {
+        // For regular videos
+        metrics = 'reach,likes,comments,shares,saved';
+      } else if (mediaType === 'IMAGE' || mediaType === 'CAROUSEL_ALBUM') {
+        // For images and carousels
+        metrics = 'reach,likes,comments,shares,saved';
+      } else {
+        // Fallback
+        metrics = 'reach';
+      }
+
       // Fetch insights for this media
-      const insightsResponse = await axios.get(
-        `https://graph.instagram.com/v24.0/${mediaId}/insights`,
-        {
-          params: {
-            metric: 'reach,ig_reels_aggregated_all_plays_count',
-            access_token: influencer.instagramAccessToken,
+      let insightsResponse: any;
+      try {
+        insightsResponse = await axios.get(
+          `https://graph.instagram.com/v24.0/${mediaId}/insights`,
+          {
+            params: {
+              metric: metrics,
+              access_token: influencer.instagramAccessToken,
+            },
           },
-        },
-      );
+        );
+      } catch (insightError: any) {
+        // If specific metrics fail (e.g., for REELS), try with basic metrics
+        console.warn(`Failed to fetch insights with metrics ${metrics}, retrying with basic metrics...`);
+        insightsResponse = await axios.get(
+          `https://graph.instagram.com/v24.0/${mediaId}/insights`,
+          {
+            params: {
+              metric: 'reach',
+              access_token: influencer.instagramAccessToken,
+            },
+          },
+        );
+      }
 
       const insights = insightsResponse.data.data || [];
+
+      // Extract view count - for REELS it's 'views', for old videos it might be other metrics
       const viewCountMetric = insights.find(
-        (m: any) => m.name === 'ig_reels_aggregated_all_plays_count',
+        (m: any) => m.name === 'views' || m.name === 'ig_reels_aggregated_all_plays_count',
       );
       const reachMetric = insights.find((m: any) => m.name === 'reach');
 
@@ -1612,5 +1659,188 @@ export class InfluencerHypeStoreService {
       await transaction.rollback();
       throw error;
     }
+  }
+
+  /**
+   * Refresh Instagram metrics for a single order
+   * Updates view count, reach, and other engagement metrics
+   */
+  async refreshInstagramMetricsForOrder(orderId: number): Promise<{
+    success: boolean;
+    message: string;
+    data?: any;
+  }> {
+    const order = await this.orderModel.findOne({
+      where: { id: orderId },
+      include: [
+        {
+          model: this.influencerModel,
+          as: 'influencer',
+        },
+      ],
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    if (!order.instagramProofUrl) {
+      return {
+        success: false,
+        message: 'No Instagram proof URL found for this order',
+      };
+    }
+
+    const influencer = order.influencer;
+    if (!influencer || !influencer.instagramAccessToken) {
+      return {
+        success: false,
+        message: 'Influencer Instagram access token not available',
+      };
+    }
+
+    try {
+      // Extract shortcode from the proof URL
+      const shortcode = this.extractInstagramShortcode(order.instagramProofUrl);
+      if (!shortcode) {
+        return {
+          success: false,
+          message: 'Could not extract Instagram shortcode from URL',
+        };
+      }
+
+      // Fetch updated insights
+      const insights = await this.fetchInstagramMediaInsights(influencer, shortcode);
+
+      // Update order with new metrics
+      const updateData: any = {};
+      let hasUpdates = false;
+
+      if (insights.viewCount !== undefined && insights.viewCount !== order.proofViewCount) {
+        updateData.proofViewCount = insights.viewCount;
+        hasUpdates = true;
+      }
+
+      if (insights.reach !== undefined && insights.reach !== order.estimatedReach) {
+        updateData.estimatedReach = insights.reach;
+        hasUpdates = true;
+      }
+
+      if (hasUpdates) {
+        await order.update(updateData);
+
+        return {
+          success: true,
+          message: 'Instagram metrics updated successfully',
+          data: {
+            orderId: order.id,
+            previousViewCount: order.proofViewCount,
+            newViewCount: insights.viewCount,
+            previousReach: order.estimatedReach,
+            newReach: insights.reach,
+          },
+        };
+      }
+
+      return {
+        success: true,
+        message: 'No changes detected in Instagram metrics',
+        data: {
+          orderId: order.id,
+          viewCount: insights.viewCount,
+          reach: insights.reach,
+        },
+      };
+    } catch (error) {
+      console.error(`Failed to refresh metrics for order ${orderId}:`, error.message);
+      return {
+        success: false,
+        message: `Failed to refresh metrics: ${error.message}`,
+      };
+    }
+  }
+
+  /**
+   * Refresh Instagram metrics for all recent orders (last 30 days)
+   * This can be called by a cron job to keep metrics up-to-date
+   */
+  async refreshInstagramMetricsForRecentOrders(daysBack: number = 30): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      totalOrders: number;
+      successfulUpdates: number;
+      failedUpdates: number;
+      noChanges: number;
+      errors: Array<{ orderId: number; error: string }>;
+    };
+  }> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysBack);
+
+    // Find all orders with Instagram proof submitted in the last X days
+    const orders = await this.orderModel.findAll({
+      where: {
+        instagramProofUrl: { [Op.ne]: null as any },
+        proofSubmittedAt: { [Op.gte]: cutoffDate },
+      },
+      include: [
+        {
+          model: this.influencerModel,
+          as: 'influencer',
+          required: true,
+        },
+      ],
+      order: [['proofSubmittedAt', 'DESC']],
+    });
+
+    const results = {
+      totalOrders: orders.length,
+      successfulUpdates: 0,
+      failedUpdates: 0,
+      noChanges: 0,
+      errors: [] as Array<{ orderId: number; error: string }>,
+    };
+
+    console.log(`🔄 Starting Instagram metrics refresh for ${orders.length} orders from the last ${daysBack} days...`);
+
+    for (const order of orders) {
+      try {
+        const result = await this.refreshInstagramMetricsForOrder(order.id);
+
+        if (result.success) {
+          if (result.message.includes('updated successfully')) {
+            results.successfulUpdates++;
+            console.log(`✅ Updated order ${order.id}: ${result.data?.previousViewCount || 0} → ${result.data?.newViewCount || 0} views`);
+          } else {
+            results.noChanges++;
+          }
+        } else {
+          results.failedUpdates++;
+          results.errors.push({
+            orderId: order.id,
+            error: result.message,
+          });
+        }
+
+        // Add small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (error) {
+        results.failedUpdates++;
+        results.errors.push({
+          orderId: order.id,
+          error: error.message,
+        });
+        console.error(`❌ Failed to refresh order ${order.id}:`, error.message);
+      }
+    }
+
+    console.log(`✅ Refresh completed: ${results.successfulUpdates} updated, ${results.noChanges} unchanged, ${results.failedUpdates} failed`);
+
+    return {
+      success: true,
+      message: `Refreshed metrics for ${results.totalOrders} orders`,
+      data: results,
+    };
   }
 }

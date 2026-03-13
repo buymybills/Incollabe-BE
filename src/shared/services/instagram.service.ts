@@ -801,14 +801,15 @@ export class InstagramService {
       // Step 2: Select appropriate metrics based on media type
       let metrics: string;
 
-      // NOTE: Instagram's plays metric is inconsistently supported across different media types
-      // Even for Reels with product_type="REELS", plays often fails with permission errors
-      // So we exclude it entirely and use only reliably supported metrics
-      if (mediaProductType === 'REELS' || mediaProductType === 'CLIPS' || mediaType === 'REELS' || mediaType === 'VIDEO') {
-        // Metrics for videos and Reels (using updated Instagram API metric names)
-        // Note: Instagram deprecated total_video_views, avg_time_watched, total_video_view_total_time
-        // Replaced with: ig_reels_aggregated_all_plays_count, ig_reels_avg_watch_time, ig_reels_video_view_total_time
-        metrics = 'reach,total_interactions,saved,shares,comments,likes,ig_reels_aggregated_all_plays_count,ig_reels_avg_watch_time,ig_reels_video_view_total_time,clips_replays_count';
+      // NOTE: For REELS (media_product_type: "REELS"), use 'views' metric instead of
+      // 'ig_reels_aggregated_all_plays_count' which is not supported by Instagram API
+      if (mediaProductType === 'REELS' || mediaProductType === 'CLIPS') {
+        // Metrics for REELS - use 'views' (not ig_reels_aggregated_all_plays_count)
+        // The 'views' metric is the correct metric for REELS as of 2026
+        metrics = 'views,reach,total_interactions,saved,shares,comments,likes';
+      } else if (mediaType === 'VIDEO') {
+        // Metrics for regular videos (not reels)
+        metrics = 'reach,saved,likes,comments,shares';
       } else if (mediaType === 'IMAGE' || mediaType === 'CAROUSEL_ALBUM') {
         // Metrics for images and carousels
         metrics = 'reach,saved,likes,comments,shares';
@@ -831,11 +832,10 @@ export class InstagramService {
           }
         );
       } catch (error) {
-        // Fallback: If reel metrics fail, retry with basic metrics only
-        if (error.response?.status === 400 &&
-            (metrics.includes('ig_reels') || metrics.includes('clips_replays_count'))) {
-          console.warn(`⚠️  Reel metrics not supported for media ${mediaId}, retrying with basic metrics...`);
-          metrics = 'reach,saved,likes,comments,shares';
+        // Fallback: If specific metrics fail, retry with basic metrics only
+        if (error.response?.status === 400) {
+          console.warn(`⚠️  Specific metrics not supported for media ${mediaId}, retrying with basic metrics...`);
+          metrics = 'reach,likes,comments,shares';
           response = await axios.get(
             `https://graph.instagram.com/v24.0/${mediaId}/insights`,
             {
@@ -911,7 +911,9 @@ export class InstagramService {
           if (metric.name === 'shares') insightsData.shares = value;
           if (metric.name === 'total_interactions') insightsData.totalInteractions = value;
           // Handle both old and new Instagram API metric names
-          if (metric.name === 'total_video_views' || metric.name === 'ig_reels_aggregated_all_plays_count') insightsData.totalVideoViews = value;
+          // For REELS: 'views' is the correct metric (as of 2026)
+          // For older content: 'total_video_views' or 'ig_reels_aggregated_all_plays_count'
+          if (metric.name === 'views' || metric.name === 'total_video_views' || metric.name === 'ig_reels_aggregated_all_plays_count') insightsData.totalVideoViews = value;
           if (metric.name === 'total_video_complete_views') insightsData.totalVideoCompleteViews = value;
           if (metric.name === 'avg_time_watched' || metric.name === 'ig_reels_avg_watch_time') insightsData.avgTimeWatched = value;
           if (metric.name === 'total_video_view_total_time' || metric.name === 'ig_reels_video_view_total_time') insightsData.totalVideoViewTotalTime = value;

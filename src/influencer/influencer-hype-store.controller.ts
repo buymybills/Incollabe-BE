@@ -13,6 +13,7 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { InfluencerHypeStoreService } from './services/influencer-hype-store.service';
+import { InstagramMetricsSchedulerService } from './services/instagram-metrics-scheduler.service';
 import {
   SubmitProofDto,
   ClaimMinimumCashbackDto,
@@ -27,6 +28,7 @@ import {
 export class InfluencerHypeStoreController {
   constructor(
     private readonly hypeStoreService: InfluencerHypeStoreService,
+    private readonly instagramMetricsScheduler: InstagramMetricsSchedulerService,
   ) {}
 
   @Get()
@@ -861,5 +863,45 @@ export class InfluencerHypeStoreController {
   ) {
     const influencerId = req.user.id;
     return this.hypeStoreService.markOrderReturned(influencerId, parseInt(orderId));
+  }
+
+  @Post('orders/:orderId/refresh-instagram-metrics')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Refresh Instagram metrics for an order',
+    description:
+      'Manually refresh the Instagram view count, reach, and engagement metrics for a specific order. ' +
+      'This fetches the latest data from Instagram API and updates the order record.',
+  })
+  @ApiParam({ name: 'orderId', type: Number, description: 'Order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Instagram metrics refreshed successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        message: { type: 'string', example: 'Instagram metrics updated successfully' },
+        data: {
+          type: 'object',
+          properties: {
+            orderId: { type: 'number', example: 1 },
+            previousViewCount: { type: 'number', example: 75 },
+            newViewCount: { type: 'number', example: 125 },
+            previousReach: { type: 'number', example: 67 },
+            newReach: { type: 'number', example: 110 },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Order not found or no Instagram proof URL' })
+  @ApiResponse({ status: 403, description: 'This order does not belong to you' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async refreshInstagramMetrics(
+    @Param('orderId') orderId: string,
+  ) {
+    // Note: The refreshMetricsForOrder method will handle order validation
+    return this.instagramMetricsScheduler.refreshMetricsForOrder(parseInt(orderId));
   }
 }
