@@ -316,6 +316,11 @@ export class InfluencerService {
       // Instagram connection status with sync status
       instagram: await this.getInstagramSyncStatus(influencer),
 
+      // Hype Store universal coupon code (computed, no DB storage needed)
+      hypeStore: {
+        universalCouponCode: `INFL${influencer.id}`,
+      },
+
       // Collaboration costs (public)
       collaborationCosts: influencer.collaborationCosts || {},
 

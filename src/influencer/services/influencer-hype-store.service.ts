@@ -151,15 +151,6 @@ export class InfluencerHypeStoreService {
             : [['createdAt', 'DESC']],
     });
 
-    // Check if influencer has universal coupon (one-time check outside loop)
-    const universalCoupon = await this.couponCodeModel.findOne({
-      where: {
-        influencerId,
-        isUniversal: true,
-        isActive: true,
-      },
-    });
-
     // Enrich with influencer-specific data
     const enrichedStores = await Promise.all(
       stores.map(async (store) => {
@@ -178,6 +169,21 @@ export class InfluencerHypeStoreService {
           0,
         );
 
+        // Check if this store has an active coupon code
+        // This can be either:
+        // 1. Brand-shared coupon (isBrandShared: true, influencerId: null)
+        // 2. Influencer-specific coupon (influencerId: X, isUniversal: false)
+        const storeCoupon = await this.couponCodeModel.findOne({
+          where: {
+            hypeStoreId: store.id,
+            isActive: true,
+            [Op.or]: [
+              { isBrandShared: true },  // Brand-shared coupon
+              { influencerId },          // Influencer-specific coupon
+            ],
+          },
+        });
+
         return {
           id: store.id,
           storeName: store.storeName,
@@ -186,7 +192,7 @@ export class InfluencerHypeStoreService {
           logoUrl: store.storeLogo,
           brand: store.brand,
           cashbackConfig: store.cashbackConfig,
-          hasCoupon: !!universalCoupon, // Same coupon works for all stores
+          hasCoupon: !!storeCoupon, // Store has either brand-shared or influencer-specific coupon
           totalOrders,
           totalCashbackEarned,
           createdAt: store.createdAt,
@@ -263,14 +269,9 @@ export class InfluencerHypeStoreService {
       throw new NotFoundException('Hype Store not found or inactive');
     }
 
-    // Get influencer's universal coupon (works for all stores)
-    const myCoupon = await this.couponCodeModel.findOne({
-      where: {
-        influencerId,
-        isUniversal: true,
-        isActive: true,
-      },
-    });
+    // Compute influencer's universal coupon on-the-fly (no DB storage needed)
+    // Format: INFL{influencerId} - works across all stores
+    const universalCouponCode = `INFL${influencerId}`;
 
     // Get influencer's stats for this store
     const orders = await this.orderModel.findAll({
@@ -307,18 +308,10 @@ export class InfluencerHypeStoreService {
         isActive: store.isActive,
         brand: store.brand,
         cashbackConfig: store.cashbackConfig,
-        myCoupon: myCoupon
-          ? {
-              id: myCoupon.id,
-              couponCode: myCoupon.couponCode,
-              isActive: myCoupon.isActive,
-              totalUses: myCoupon.totalUses,
-              maxUses: myCoupon.maxUses,
-              validFrom: myCoupon.validFrom,
-              validUntil: myCoupon.validUntil,
-              createdAt: myCoupon.createdAt,
-            }
-          : null,
+        myCoupon: {
+          couponCode: universalCouponCode,
+          isActive: true,
+        },
         myStats: {
           totalOrders,
           totalOrderValue,

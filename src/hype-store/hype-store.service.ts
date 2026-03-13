@@ -236,7 +236,7 @@ export class HypeStoreService {
 
       await transaction.commit();
 
-      // Return store with only cashbackConfig (not creatorPreference which is just defaults)
+      // Return store with cashbackConfig and coupon code
       const createdStore = await this.hypeStoreModel.findOne({
         where: { id: store.id },
         include: [{ model: HypeStoreCashbackConfig }],
@@ -246,7 +246,19 @@ export class HypeStoreService {
         throw new NotFoundException('Failed to retrieve created store');
       }
 
-      return createdStore;
+      // Get the brand-shared coupon code we just created
+      const brandCoupon = await this.couponCodeModel.findOne({
+        where: {
+          hypeStoreId: store.id,
+          isBrandShared: true,
+          isActive: true,
+        },
+      });
+
+      return {
+        ...createdStore.toJSON(),
+        brandCouponCode: brandCoupon?.couponCode || null,
+      } as any;
     } catch (error) {
       await transaction.rollback();
       throw error;
@@ -256,7 +268,7 @@ export class HypeStoreService {
   /**
    * Get all stores by brand ID with all associations
    */
-  async getStoresByBrandId(brandId: number): Promise<HypeStore[]> {
+  async getStoresByBrandId(brandId: number): Promise<any[]> {
     const stores = await this.hypeStoreModel.findAll({
       where: { brandId },
       include: [
@@ -266,7 +278,26 @@ export class HypeStoreService {
       order: [['createdAt', 'ASC']],
     });
 
-    return stores;
+    // Enrich each store with its brand-shared coupon code
+    const enrichedStores = await Promise.all(
+      stores.map(async (store) => {
+        // Get the brand-shared coupon code for this store
+        const brandCoupon = await this.couponCodeModel.findOne({
+          where: {
+            hypeStoreId: store.id,
+            isBrandShared: true,
+            isActive: true,
+          },
+        });
+
+        return {
+          ...store.toJSON(),
+          brandCouponCode: brandCoupon?.couponCode || null,
+        };
+      }),
+    );
+
+    return enrichedStores;
   }
 
   /**
@@ -1604,39 +1635,55 @@ export class HypeStoreService {
       // 5. Determine influencer attribution
       let attributedInfluencerId: number;
 
-      // NEW SYSTEM: If referralCode is provided, use it for attribution (brand-shared coupons)
+      // ATTRIBUTION FLOW:
+      // 1. If referralCode is provided → parse influencerId from "INFL{id}" format
+      // 2. Else if coupon code is "INFL{id}" → parse influencerId directly
+      // 3. Else → use coupon's influencerId field (for brand-shared coupons)
+
       if (webhookDto.referralCode) {
-        const referralCodeRecord = await this.referralCodeModel.findOne({
-          where: { referralCode: webhookDto.referralCode, isActive: true },
-        });
-
-        if (!referralCodeRecord) {
-          responseStatus = 400;
-          responseBody = { success: false, message: 'Invalid or inactive referral code' };
-          await this.logWebhookRequest({
-            hypeStoreId: hypeStore.id,
-            method: 'POST',
-            path: '/webhooks/purchase',
-            headers: { 'x-webhook-signature': signature },
-            body: webhookDto,
-            ipAddress,
-            status: responseStatus,
-            responseBody,
-            isValid: true,
-            errorMessage: 'Referral code not found',
+        // Parse influencerId from referral code format: INFL123 → 123
+        const match = webhookDto.referralCode.match(/^INFL(\d+)$/);
+        if (match) {
+          attributedInfluencerId = parseInt(match[1], 10);
+        } else {
+          // Fallback: lookup in database for custom referral codes
+          const referralCodeRecord = await this.referralCodeModel.findOne({
+            where: { referralCode: webhookDto.referralCode, isActive: true },
           });
-          throw new BadRequestException('Invalid or inactive referral code');
-        }
 
-        attributedInfluencerId = referralCodeRecord.influencerId;
+          if (!referralCodeRecord) {
+            responseStatus = 400;
+            responseBody = { success: false, message: 'Invalid or inactive referral code' };
+            await this.logWebhookRequest({
+              hypeStoreId: hypeStore.id,
+              method: 'POST',
+              path: '/webhooks/purchase',
+              headers: { 'x-webhook-signature': signature },
+              body: webhookDto,
+              ipAddress,
+              status: responseStatus,
+              responseBody,
+              isValid: true,
+              errorMessage: 'Referral code not found',
+            });
+            throw new BadRequestException('Invalid or inactive referral code');
+          }
+
+          attributedInfluencerId = referralCodeRecord.influencerId;
+        }
       } else {
-        // OLD SYSTEM: Attribution from coupon's influencerId (personal influencer coupons)
-        if (!couponCode.influencerId) {
+        // Parse from coupon code if it's INFL{id} format
+        const match = webhookDto.couponCode.match(/^INFL(\d+)$/);
+        if (match) {
+          attributedInfluencerId = parseInt(match[1], 10);
+        } else if (couponCode.influencerId) {
+          // Use couponCode's influencerId (for old system compatibility)
+          attributedInfluencerId = couponCode.influencerId;
+        } else {
           responseStatus = 400;
           responseBody = { success: false, message: 'Coupon requires referral code for attribution' };
           throw new BadRequestException('Coupon requires referral code for attribution');
         }
-        attributedInfluencerId = couponCode.influencerId;
       }
 
       // 6. Calculate cashback
