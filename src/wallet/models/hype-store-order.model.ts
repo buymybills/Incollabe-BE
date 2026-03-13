@@ -84,6 +84,13 @@ export class HypeStoreOrder extends Model<HypeStoreOrder> {
   declare referralCode: string;
 
   @Column({
+    type: DataType.STRING(500),
+    allowNull: true,
+    comment: 'Product/order title from the brand',
+  })
+  declare orderTitle: string;
+
+  @Column({
     type: DataType.DECIMAL(10, 2),
     allowNull: false,
   })
@@ -133,6 +140,13 @@ export class HypeStoreOrder extends Model<HypeStoreOrder> {
     allowNull: false,
   })
   declare cashbackAmount: number;
+
+  @Column({
+    type: DataType.STRING(100),
+    allowNull: true,
+    comment: 'Cashback type description (e.g., Flat 20%, Fixed ₹500)',
+  })
+  declare cashbackType: string;
 
   @Index
   @Column({
@@ -224,6 +238,27 @@ export class HypeStoreOrder extends Model<HypeStoreOrder> {
   declare proofSubmittedAt: Date;
 
   @Column({
+    type: DataType.DATE,
+    allowNull: true,
+    comment: 'When the content was posted on Instagram',
+  })
+  declare proofPostedAt: Date;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    comment: 'View count on the Instagram proof (reel/story)',
+  })
+  declare proofViewCount: number;
+
+  @Column({
+    type: DataType.STRING(500),
+    allowNull: true,
+    comment: 'Thumbnail URL for the Instagram proof content',
+  })
+  declare proofThumbnailUrl: string;
+
+  @Column({
     type: DataType.BOOLEAN,
     defaultValue: false,
   })
@@ -256,6 +291,27 @@ export class HypeStoreOrder extends Model<HypeStoreOrder> {
     comment: 'When the item was marked as returned',
   })
   declare returnedAt: Date;
+
+  @Column({
+    type: DataType.DECIMAL(5, 2),
+    allowNull: true,
+    comment: 'Expected ROI percentage for this order',
+  })
+  declare expectedRoi: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    comment: 'Estimated engagement count',
+  })
+  declare estimatedEngagement: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    comment: 'Estimated reach count',
+  })
+  declare estimatedReach: number;
 
   @Index
   @Column({

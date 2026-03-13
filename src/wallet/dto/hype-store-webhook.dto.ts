@@ -38,12 +38,30 @@ export class PurchaseWebhookDto {
   referralCode?: string;
 
   @ApiProperty({
+    description: 'Order/Product title',
+    example: 'JBL Tune 770NC Active Noise Cancelling Headphones',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  orderTitle?: string;
+
+  @ApiProperty({
     description: 'Order amount in rupees',
     example: 5000.0,
   })
   @IsNumber()
   @Min(0)
   orderAmount: number;
+
+  @ApiProperty({
+    description: 'Cashback type/description (e.g., "Flat 20%", "₹500 off")',
+    example: 'Flat 20%',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  cashbackType?: string;
 
   @ApiProperty({
     description: 'Order currency code',

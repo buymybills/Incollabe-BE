@@ -18,6 +18,8 @@ import { Brand } from '../../brand/model/brand.model';
 import { BrandNiche } from '../../brand/model/brand-niche.model';
 import { SubmitProofDto } from '../dto/hype-store-order.dto';
 import { Niche } from '../../auth/model/niche.model';
+import { Influencer } from '../../auth/model/influencer.model';
+import axios from 'axios';
 
 @Injectable()
 export class InfluencerHypeStoreService {
@@ -38,6 +40,8 @@ export class InfluencerHypeStoreService {
     private brandModel: typeof Brand,
     @InjectModel(HypeStoreReferralCode)
     private referralCodeModel: typeof HypeStoreReferralCode,
+    @InjectModel(Influencer)
+    private influencerModel: typeof Influencer,
     private sequelize: Sequelize,
   ) {}
 
@@ -504,6 +508,156 @@ export class InfluencerHypeStoreService {
   }
 
   /**
+   * Get detailed information for a specific order (influencer view)
+   */
+  async getInfluencerOrderDetails(influencerId: number, orderId: number) {
+    // Find order with all related data
+    const order = await this.orderModel.findOne({
+      where: { id: orderId },
+      include: [
+        {
+          model: this.hypeStoreModel,
+          as: 'hypeStore',
+          attributes: ['id', 'storeName', 'storeLogo', 'storeBanner'],
+          include: [
+            {
+              model: this.brandModel,
+              as: 'brand',
+              attributes: ['id', 'brandName', 'username', 'profileImage'],
+              include: [
+                {
+                  model: Niche,
+                  as: 'niches',
+                  attributes: ['id', 'name'],
+                  through: { attributes: [] },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          model: this.couponCodeModel,
+          as: 'couponCode',
+          attributes: ['id', 'couponCode', 'isUniversal', 'isBrandShared'],
+        },
+      ],
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    // Verify this order belongs to the influencer
+    if (order.influencerId !== influencerId) {
+      throw new ForbiddenException('This order does not belong to you');
+    }
+
+    // Calculate tier labels for performance metrics
+    const getTierLabel = (value: number | null, type: 'roi' | 'engagement' | 'reach'): string => {
+      if (!value) return 'Unknown';
+
+      if (type === 'roi') {
+        if (value >= 150) return 'Elite';
+        if (value >= 100) return 'Excellent';
+        if (value >= 50) return 'Good';
+        if (value >= 0) return 'Average';
+        return 'Poor';
+      } else if (type === 'engagement') {
+        if (value >= 10000) return 'Elite';
+        if (value >= 5000) return 'Excellent';
+        if (value >= 2000) return 'Good';
+        if (value >= 500) return 'Average';
+        return 'Low';
+      } else if (type === 'reach') {
+        if (value >= 100000) return 'Elite';
+        if (value >= 50000) return 'Excellent';
+        if (value >= 20000) return 'Good';
+        if (value >= 5000) return 'Average';
+        return 'Low';
+      }
+      return 'Unknown';
+    };
+
+    // Format the response
+    return {
+      success: true,
+      data: {
+        id: order.id,
+        externalOrderId: order.externalOrderId,
+        orderTitle: order.orderTitle || null,
+        orderAmount: parseFloat(order.orderAmount.toString()),
+        orderCurrency: order.orderCurrency,
+        orderDate: order.orderDate,
+        orderStatus: order.orderStatus,
+        cashbackAmount: parseFloat(order.cashbackAmount.toString()),
+        cashbackType: order.cashbackType || null,
+        cashbackStatus: order.cashbackStatus,
+        cashbackCreditedAt: order.cashbackCreditedAt || null,
+        minimumCashbackClaimed: order.minimumCashbackClaimed || false,
+        isReturned: order.isReturned || false,
+        returnedAt: order.returnedAt || null,
+        returnPeriodDays: order.returnPeriodDays || 30,
+        returnWindowClosesAt: order.returnPeriodEndsAt || null,
+        instagramProof: {
+          url: order.instagramProofUrl || null,
+          contentType: order.proofContentType || null,
+          thumbnailUrl: order.proofThumbnailUrl || null,
+          viewCount: order.proofViewCount || null,
+          postedAt: order.proofPostedAt || null,
+          submittedAt: order.proofSubmittedAt || null,
+        },
+        performance: {
+          expectedROI: order.expectedRoi || null,
+          estimatedEngagement: order.estimatedEngagement || null,
+          estimatedReach: order.estimatedReach || null,
+          tierLabels: {
+            expectedROI: getTierLabel(order.expectedRoi || null, 'roi'),
+            estimatedEngagement: getTierLabel(order.estimatedEngagement || null, 'engagement'),
+            estimatedReach: getTierLabel(order.estimatedReach || null, 'reach'),
+          },
+        },
+        customer: {
+          name: order.customerName || null,
+          email: order.customerEmail || null,
+          phone: order.customerPhone || null,
+        },
+        couponCode: order.couponCode
+          ? {
+              id: order.couponCode.id,
+              couponCode: order.couponCode.couponCode,
+              isUniversal: order.couponCode.isUniversal,
+              isBrandShared: order.couponCode.isBrandShared,
+            }
+          : null,
+        hypeStore: order.hypeStore
+          ? {
+              id: order.hypeStore.id,
+              storeName: order.hypeStore.storeName,
+              logoUrl: order.hypeStore.storeLogo || null,
+              bannerImageUrl: order.hypeStore.storeBanner || null,
+              brand: order.hypeStore.brand
+                ? {
+                    id: order.hypeStore.brand.id,
+                    brandName: order.hypeStore.brand.brandName,
+                    username: order.hypeStore.brand.username,
+                    profileImage: order.hypeStore.brand.profileImage || null,
+                    niches: (order.hypeStore.brand as any).niches?.map((niche: any) => ({
+                      id: niche.id,
+                      name: niche.name,
+                    })) || [],
+                  }
+                : null,
+            }
+          : null,
+        metadata: order.metadata || null,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+      },
+      message: 'Order details retrieved successfully',
+    };
+  }
+
+  /**
    * Get influencer wallet
    */
   async getWallet(influencerId: number) {
@@ -690,6 +844,147 @@ export class InfluencerHypeStoreService {
   }
 
   /**
+   * Extract media shortcode from Instagram URL
+   * Examples:
+   * - https://www.instagram.com/reel/ABC123xyz/ -> ABC123xyz
+   * - https://www.instagram.com/p/ABC123xyz/ -> ABC123xyz
+   */
+  private extractInstagramShortcode(url: string): string | null {
+    try {
+      const patterns = [
+        /instagram\.com\/(?:reel|p|tv)\/([A-Za-z0-9_-]+)/,
+        /instagr\.am\/p\/([A-Za-z0-9_-]+)/,
+      ];
+
+      for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match && match[1]) {
+          return match[1];
+        }
+      }
+      return null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /**
+   * Fetch Instagram media details using oembed API (doesn't require access token)
+   * This gets basic info like media ID, thumbnail, and type
+   */
+  private async fetchInstagramMediaDetails(url: string): Promise<{
+    mediaId?: string;
+    thumbnailUrl?: string;
+    authorName?: string;
+    mediaType?: string;
+  }> {
+    try {
+      // Use Instagram's oEmbed API (public, no auth required)
+      const response = await axios.get('https://graph.instagram.com/oembed', {
+        params: { url },
+      });
+
+      return {
+        thumbnailUrl: response.data.thumbnail_url,
+        authorName: response.data.author_name,
+        mediaType: response.data.type, // "rich" for posts/reels
+      };
+    } catch (error) {
+      console.warn('Failed to fetch Instagram oembed data:', error.message);
+      return {};
+    }
+  }
+
+  /**
+   * Fetch Instagram media insights (view count, reach, etc.) using Graph API
+   * Requires user's Instagram access token
+   */
+  private async fetchInstagramMediaInsights(
+    influencer: Influencer,
+    shortcode: string,
+  ): Promise<{
+    viewCount?: number;
+    reach?: number;
+    timestamp?: string;
+  }> {
+    try {
+      if (!influencer.instagramAccessToken || !influencer.instagramUserId) {
+        return {};
+      }
+
+      // First, get media ID from shortcode using business discovery
+      const mediaResponse = await axios.get(
+        `https://graph.instagram.com/v24.0/${influencer.instagramUserId}/media`,
+        {
+          params: {
+            fields: 'id,media_type,media_product_type,timestamp',
+            access_token: influencer.instagramAccessToken,
+            limit: 100, // Check recent 100 posts
+          },
+        },
+      );
+
+      // Find the media matching this shortcode by checking permalinks
+      let mediaId: string | undefined = undefined;
+      let timestamp: string | undefined = undefined;
+
+      for (const media of mediaResponse.data.data || []) {
+        // We need to check if this is the right media
+        // Since we have shortcode, we'll try to match by fetching each media's permalink
+        try {
+          const mediaDetailResponse = await axios.get(
+            `https://graph.instagram.com/v24.0/${media.id}`,
+            {
+              params: {
+                fields: 'id,permalink,timestamp',
+                access_token: influencer.instagramAccessToken,
+              },
+            },
+          );
+
+          if (mediaDetailResponse.data.permalink?.includes(shortcode)) {
+            mediaId = media.id;
+            timestamp = mediaDetailResponse.data.timestamp;
+            break;
+          }
+        } catch (err) {
+          continue; // Skip this media if we can't fetch details
+        }
+      }
+
+      if (!mediaId) {
+        return { timestamp };
+      }
+
+      // Fetch insights for this media
+      const insightsResponse = await axios.get(
+        `https://graph.instagram.com/v24.0/${mediaId}/insights`,
+        {
+          params: {
+            metric: 'reach,ig_reels_aggregated_all_plays_count',
+            access_token: influencer.instagramAccessToken,
+          },
+        },
+      );
+
+      const insights = insightsResponse.data.data || [];
+      const viewCountMetric = insights.find(
+        (m: any) => m.name === 'ig_reels_aggregated_all_plays_count',
+      );
+      const reachMetric = insights.find((m: any) => m.name === 'reach');
+
+      return {
+        viewCount: viewCountMetric?.values?.[0]?.value,
+        reach: reachMetric?.values?.[0]?.value,
+        timestamp,
+      };
+    } catch (error) {
+      console.warn('Failed to fetch Instagram insights:', error.message);
+      return {};
+    }
+  }
+
+  /**
    * Submit Instagram proof (Reel/Post/Story) for cashback
    * Creates a LOCKED cashback transaction that will be unlocked when return window closes
    */
@@ -735,6 +1030,61 @@ export class InfluencerHypeStoreService {
     // Check if proof already submitted
     if (order.instagramProofUrl) {
       throw new BadRequestException('Proof has already been submitted for this order');
+    }
+
+    // Fetch influencer details (for Instagram access token)
+    const influencer = await this.influencerModel.findByPk(influencerId);
+    if (!influencer) {
+      throw new NotFoundException('Influencer not found');
+    }
+
+    // Extract Instagram shortcode from URL
+    const shortcode = this.extractInstagramShortcode(submitProofDto.instagramUrl);
+
+    // Fetch Instagram media details (thumbnail, etc.)
+    let thumbnailUrl: string | null = null;
+    let viewCount: number | null = null;
+    let postedAt: Date | null = null;
+    let estimatedReach: number | null = null;
+    let estimatedEngagement: number | null = null;
+    let expectedRoi: number | null = null;
+
+    try {
+      // Fetch basic media details (doesn't require auth)
+      const mediaDetails = await this.fetchInstagramMediaDetails(submitProofDto.instagramUrl);
+      thumbnailUrl = mediaDetails.thumbnailUrl || null;
+
+      // Fetch insights if possible (requires auth and media must be owned by influencer)
+      if (shortcode && influencer.instagramAccessToken) {
+        const insights = await this.fetchInstagramMediaInsights(influencer, shortcode);
+        viewCount = insights.viewCount || null;
+        postedAt = insights.timestamp ? new Date(insights.timestamp) : null;
+        estimatedReach = insights.reach || null;
+      }
+    } catch (error) {
+      // Don't fail the submission if Instagram fetch fails
+      console.warn('Failed to fetch Instagram media details:', error.message);
+    }
+
+    // Calculate performance metrics to store with the order
+    const followerCount = influencer.instagramFollowersCount || 0;
+
+    // Calculate estimated reach (use Instagram data or estimate from followers)
+    if (!estimatedReach && followerCount > 0) {
+      estimatedReach = Math.round(followerCount * 0.25); // 25% of followers
+    }
+
+    // Calculate estimated engagement (3.5% of followers)
+    if (followerCount > 0) {
+      estimatedEngagement = Math.round(followerCount * 0.035);
+    }
+
+    // Calculate ROI based on reach
+    if (estimatedReach && estimatedReach > 0) {
+      const cashbackAmount = parseFloat(order.cashbackAmount.toString());
+      const estimatedValue = (estimatedReach / 1000) * 50; // ₹50 CPM
+      expectedRoi = ((estimatedValue - cashbackAmount) / cashbackAmount) * 100;
+      expectedRoi = Math.round(expectedRoi * 10) / 10; // Round to 1 decimal
     }
 
     // Get or create influencer wallet
@@ -798,17 +1148,27 @@ export class InfluencerHypeStoreService {
         { transaction },
       );
 
-      // Update order with proof details and locked transaction reference
-      await order.update({
-        instagramProofUrl: submitProofDto.instagramUrl,
-        proofContentType: submitProofDto.contentType,
-        proofSubmittedAt: new Date(),
-        cashbackStatus: CashbackStatus.PROCESSING,
-        lockedCashbackTransactionId: lockedTransaction.id,
-        notes: submitProofDto.notes
-          ? `${order.notes ? order.notes + '\n' : ''}Proof submitted: ${submitProofDto.notes}`
-          : order.notes,
-      }, { transaction });
+      // Update order with proof details, performance metrics, and locked transaction reference
+      await order.update(
+        {
+          instagramProofUrl: submitProofDto.instagramUrl,
+          proofContentType: submitProofDto.contentType,
+          proofSubmittedAt: new Date(),
+          proofThumbnailUrl: thumbnailUrl,
+          proofViewCount: viewCount,
+          proofPostedAt: postedAt,
+          // Store calculated performance metrics
+          expectedRoi: expectedRoi,
+          estimatedEngagement: estimatedEngagement,
+          estimatedReach: estimatedReach,
+          cashbackStatus: CashbackStatus.PROCESSING,
+          lockedCashbackTransactionId: lockedTransaction.id,
+          notes: submitProofDto.notes
+            ? `${order.notes ? order.notes + '\n' : ''}Proof submitted: ${submitProofDto.notes}`
+            : order.notes,
+        } as any,
+        { transaction },
+      );
 
       await transaction.commit();
 

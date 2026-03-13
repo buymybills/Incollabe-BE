@@ -20,6 +20,7 @@ import { HypeStoreWebhookLog } from '../wallet/models/hype-store-webhook-log.mod
 import { HypeStoreWebhookSecret } from '../wallet/models/hype-store-webhook-secret.model';
 import { HypeStoreReferralCode } from '../wallet/models/hype-store-referral-code.model';
 import { HypeStoreReferralClick } from '../wallet/models/hype-store-referral-click.model';
+import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
 import { SharedModule } from '../shared/shared.module';
 
 @Module({
@@ -41,6 +42,7 @@ import { SharedModule } from '../shared/shared.module';
       HypeStoreWebhookSecret,
       HypeStoreReferralCode,
       HypeStoreReferralClick,
+      InstagramProfileAnalysis,
     ]),
     SharedModule,
   ],

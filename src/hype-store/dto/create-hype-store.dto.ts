@@ -44,6 +44,14 @@ export class CreateHypeStoreDto {
   @Min(1)
   @Max(6)
   monthlyClaimCount: number;
+
+  // Coupon code suffix (cashback percentage for display in coupon)
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(99)
+  cashbackPercentage?: number;
 }
 
 export class UpdateHypeStoreDto {

@@ -32,6 +32,8 @@ import { HypeStoreReferralCode } from '../wallet/models/hype-store-referral-code
 import { OrderStatus, CashbackStatus } from '../wallet/models/hype-store-order.model';
 import { PurchaseWebhookDto, ReturnWebhookDto } from '../wallet/dto/hype-store-webhook.dto';
 import { Influencer } from '../auth/model/influencer.model';
+import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
+import { InfluencerProfileScoringService } from '../shared/services/influencer-profile-scoring.service';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -66,6 +68,9 @@ export class HypeStoreService {
     private influencerModel: typeof Influencer,
     @InjectModel(HypeStoreReferralCode)
     private referralCodeModel: typeof HypeStoreReferralCode,
+    @InjectModel(InstagramProfileAnalysis)
+    private instagramProfileAnalysisModel: typeof InstagramProfileAnalysis,
+    private influencerProfileScoringService: InfluencerProfileScoringService,
     private sequelize: Sequelize,
     private razorpayService: RazorpayService,
     private s3Service: S3Service,
@@ -185,6 +190,50 @@ export class HypeStoreService {
         );
       }
 
+      // Auto-create brand-shared coupon code
+      // Format: {First 2 letters of brand name}COL{cashback percentage}
+      // Example: SNCOL25 (Snitch with 25% cashback), NICOL30, etc.
+      const brandPrefix = brand.brandName
+        .replace(/[^A-Za-z]/g, '') // Remove non-alphabetic characters
+        .substring(0, 2)
+        .toUpperCase();
+
+      // Use provided cashback percentage or default to 25
+      const cashbackPercentage = createDto.cashbackPercentage || 25;
+
+      // Ensure it's 2 digits (pad with 0 if needed)
+      const percentageSuffix = cashbackPercentage.toString().padStart(2, '0');
+      const couponCode = `${brandPrefix}COL${percentageSuffix}`;
+
+      // Check if coupon code already exists
+      const existingCoupon = await this.couponCodeModel.findOne({
+        where: { couponCode },
+        transaction,
+      });
+
+      if (existingCoupon) {
+        throw new BadRequestException(
+          `Coupon code ${couponCode} already exists. Please use a different cashback percentage.`,
+        );
+      }
+
+      // Create the brand-shared coupon
+      await this.couponCodeModel.create(
+        {
+          hypeStoreId: store.id,
+          influencerId: null, // NULL for brand-shared coupons
+          couponCode: couponCode,
+          isBrandShared: true,
+          isUniversal: false,
+          isActive: true,
+          totalUses: 0,
+          maxUses: null, // Unlimited uses
+          validFrom: null,
+          validUntil: null,
+        } as any,
+        { transaction },
+      );
+
       await transaction.commit();
 
       // Return store with only cashbackConfig (not creatorPreference which is just defaults)
@@ -223,7 +272,7 @@ export class HypeStoreService {
   /**
    * Get store by ID with all associations (with brand ownership verification)
    */
-  async getStoreById(storeId: number, brandId?: number): Promise<HypeStore> {
+  async getStoreById(storeId: number, brandId?: number): Promise<any> {
     const whereClause: any = { id: storeId };
     if (brandId) {
       whereClause.brandId = brandId;
@@ -241,7 +290,224 @@ export class HypeStoreService {
       throw new NotFoundException('Hype Store not found');
     }
 
-    return store;
+    // Get the brand-shared coupon code for this store
+    const brandCoupon = await this.couponCodeModel.findOne({
+      where: {
+        hypeStoreId: storeId,
+        isBrandShared: true,
+        isActive: true,
+      },
+    });
+
+    // Calculate aggregate performance metrics from all orders with submitted proof
+    const ordersWithProof = await this.orderModel.findAll({
+      where: {
+        hypeStoreId: storeId,
+        instagramProofUrl: { [require('sequelize').Op.ne]: null }, // Has proof submitted
+      },
+      include: [
+        {
+          model: this.influencerModel,
+          as: 'influencer',
+          attributes: ['id', 'instagramFollowersCount'],
+        },
+      ],
+    });
+
+    let avgExpectedROI: number | null = null;
+    let avgEstimatedEngagement: number | null = null;
+    let avgEstimatedReach: number | null = null;
+    let avgEngagementScore: number | null = null;
+
+    if (ordersWithProof.length > 0) {
+      const metrics = {
+        totalROI: 0,
+        countROI: 0,
+        totalEngagement: 0,
+        countEngagement: 0,
+        totalReach: 0,
+        countReach: 0,
+        totalEngagementScore: 0,
+        countEngagementScore: 0,
+      };
+
+      // Calculate metrics for each order and get averages
+      for (const order of ordersWithProof) {
+        // Use stored values or calculate on-the-fly
+        let expectedROI = order.expectedRoi ? parseFloat(order.expectedRoi.toString()) : null;
+        let estimatedEngagement = order.estimatedEngagement || null;
+        let estimatedReach = order.estimatedReach || null;
+
+        // Calculate missing metrics
+        if (!estimatedReach && order.influencer?.instagramFollowersCount) {
+          estimatedReach = Math.round(order.influencer.instagramFollowersCount * 0.25);
+        }
+
+        if (!estimatedEngagement && order.influencer?.instagramFollowersCount) {
+          estimatedEngagement = Math.round(order.influencer.instagramFollowersCount * 0.035);
+        }
+
+        if (!expectedROI && estimatedReach && estimatedReach > 0) {
+          const cashbackAmount = parseFloat(order.cashbackAmount.toString());
+          const estimatedValue = (estimatedReach / 1000) * 50;
+          expectedROI = ((estimatedValue - cashbackAmount) / cashbackAmount) * 100;
+          expectedROI = Math.round(expectedROI * 10) / 10;
+        }
+
+        // Get engagement score from profile scoring service
+        if (order.influencer) {
+          try {
+            const engagementStrength = await this.influencerProfileScoringService.calculateEngagementStrength(order.influencer);
+            if (engagementStrength?.score) {
+              metrics.totalEngagementScore += engagementStrength.score;
+              metrics.countEngagementScore++;
+            }
+          } catch (error) {
+            // Ignore if engagement calculation fails
+          }
+        }
+
+        // Add to totals
+        if (expectedROI !== null) {
+          metrics.totalROI += expectedROI;
+          metrics.countROI++;
+        }
+        if (estimatedEngagement !== null) {
+          metrics.totalEngagement += estimatedEngagement;
+          metrics.countEngagement++;
+        }
+        if (estimatedReach !== null) {
+          metrics.totalReach += estimatedReach;
+          metrics.countReach++;
+        }
+      }
+
+      // Calculate averages
+      avgExpectedROI = metrics.countROI > 0 ? Math.round((metrics.totalROI / metrics.countROI) * 10) / 10 : null;
+      avgEstimatedEngagement = metrics.countEngagement > 0 ? Math.round(metrics.totalEngagement / metrics.countEngagement) : null;
+      avgEstimatedReach = metrics.countReach > 0 ? Math.round(metrics.totalReach / metrics.countReach) : null;
+      avgEngagementScore = metrics.countEngagementScore > 0 ? Math.round((metrics.totalEngagementScore / metrics.countEngagementScore) * 10) / 10 : null;
+    }
+
+    // Determine tier labels
+    const getTierLabel = (value: number | null, type: 'roi' | 'engagement' | 'reach'): string => {
+      if (!value) return 'Unknown';
+
+      if (type === 'roi') {
+        if (value >= 150) return 'Elite';
+        if (value >= 100) return 'Excellent';
+        if (value >= 50) return 'Good';
+        if (value >= 0) return 'Average';
+        return 'Poor';
+      } else if (type === 'engagement') {
+        if (value >= 10000) return 'Elite';
+        if (value >= 5000) return 'Excellent';
+        if (value >= 2000) return 'Good';
+        if (value >= 500) return 'Average';
+        return 'Low';
+      } else if (type === 'reach') {
+        if (value >= 100000) return 'Elite';
+        if (value >= 50000) return 'Excellent';
+        if (value >= 20000) return 'Good';
+        if (value >= 5000) return 'Average';
+        return 'Low';
+      }
+      return 'Unknown';
+    };
+
+    // Get wallet details for budget information
+    const wallet = await this.walletModel.findOne({
+      where: {
+        userId: store.brandId,
+        userType: UserType.BRAND,
+      },
+    });
+
+    // Get all orders for this store (for total count and sales)
+    const allOrders = await this.orderModel.findAll({
+      where: { hypeStoreId: storeId },
+      attributes: ['id', 'orderAmount', 'createdAt'],
+    });
+
+    const totalOrders = allOrders.length;
+    const totalSales = allOrders.reduce((sum, order) => sum + parseFloat(order.orderAmount.toString()), 0);
+
+    // Calculate orders and sales from last month for comparison
+    const lastMonthDate = new Date();
+    lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
+
+    const lastMonthOrders = allOrders.filter(order => new Date(order.createdAt) >= lastMonthDate);
+    const lastMonthOrdersCount = lastMonthOrders.length;
+    const lastMonthSales = lastMonthOrders.reduce((sum, order) => sum + parseFloat(order.orderAmount.toString()), 0);
+
+    // Calculate previous month's data for growth comparison
+    const twoMonthsAgoDate = new Date();
+    twoMonthsAgoDate.setMonth(twoMonthsAgoDate.getMonth() - 2);
+
+    const previousMonthOrders = allOrders.filter(
+      order => new Date(order.createdAt) >= twoMonthsAgoDate && new Date(order.createdAt) < lastMonthDate
+    );
+    const previousMonthOrdersCount = previousMonthOrders.length;
+    const previousMonthSales = previousMonthOrders.reduce((sum, order) => sum + parseFloat(order.orderAmount.toString()), 0);
+
+    // Calculate growth percentages
+    const ordersGrowth = previousMonthOrdersCount > 0
+      ? Math.round(((lastMonthOrdersCount - previousMonthOrdersCount) / previousMonthOrdersCount) * 100)
+      : 0;
+
+    const salesGrowth = previousMonthSales > 0
+      ? Math.round(((lastMonthSales - previousMonthSales) / previousMonthSales) * 100)
+      : 0;
+
+    // Extract cashback percentage from coupon code (last 2 digits)
+    const cashbackPercentage = brandCoupon?.couponCode
+      ? parseInt(brandCoupon.couponCode.slice(-2))
+      : null;
+
+    // Calculate predicted validity based on avg order value and remaining budget
+    let predictedValidityTransactions: number | null = null;
+    if (wallet && totalOrders > 0) {
+      const avgCashbackPerOrder = parseFloat(wallet.totalDebited.toString()) / totalOrders;
+      const remainingBudget = parseFloat(wallet.balance.toString());
+      predictedValidityTransactions = avgCashbackPerOrder > 0
+        ? Math.floor(remainingBudget / avgCashbackPerOrder)
+        : null;
+    }
+
+    return {
+      ...store.toJSON(),
+      brandCouponCode: brandCoupon?.couponCode || null,
+      cashbackLimit: cashbackPercentage ? `${cashbackPercentage}%` : null,
+      monthlyPurchaseLimit: store.cashbackConfig?.monthlyClaimCount || null,
+      wallet: wallet
+        ? {
+            totalBudget: parseFloat(wallet.totalCredited.toString()),
+            budgetUtilised: parseFloat(wallet.totalDebited.toString()),
+            budgetRemaining: parseFloat(wallet.balance.toString()),
+            predictedValidityTransactions: predictedValidityTransactions,
+          }
+        : null,
+      orders: {
+        total: totalOrders,
+        growthPercentage: ordersGrowth,
+      },
+      sales: {
+        total: totalSales,
+        growthPercentage: salesGrowth,
+      },
+      aggregatePerformance: {
+        expectedROI: avgExpectedROI,
+        estimatedEngagement: avgEstimatedEngagement,
+        estimatedReach: avgEstimatedReach,
+        engagementScore: avgEngagementScore,
+        totalInfluencers: ordersWithProof.length,
+        tierLabels: {
+          expectedROI: getTierLabel(avgExpectedROI, 'roi'),
+          estimatedEngagement: getTierLabel(avgEstimatedEngagement, 'engagement'),
+          estimatedReach: getTierLabel(avgEstimatedReach, 'reach'),
+        },
+      },
+    };
   }
 
   /**
@@ -328,25 +594,73 @@ export class HypeStoreService {
   async createBrandSharedCoupon(
     storeId: number,
     brandId: number,
-    couponCode: string,
+    couponCode?: string,
     description?: string,
   ) {
     // Verify store belongs to brand
     const store = await this.hypeStoreModel.findOne({
       where: { id: storeId, brandId },
+      include: [{ model: this.brandModel, as: 'brand' }],
     });
 
     if (!store) {
       throw new NotFoundException('Store not found or does not belong to this brand');
     }
 
-    // Check if coupon code already exists (must be globally unique)
-    const existingCoupon = await this.couponCodeModel.findOne({
-      where: { couponCode },
-    });
+    // Auto-generate coupon code if not provided
+    // Format: {First 2 letters of brand name}COL{sequential number}
+    // Example: SNCOL12
+    if (!couponCode) {
+      const brand = store.brand;
+      if (!brand || !brand.brandName) {
+        throw new BadRequestException('Brand name not found for auto-generating coupon code');
+      }
 
-    if (existingCoupon) {
-      throw new BadRequestException('This coupon code is already in use');
+      // Get first 2 letters of brand name
+      const brandPrefix = brand.brandName
+        .replace(/[^A-Za-z]/g, '') // Remove non-alphabetic characters
+        .substring(0, 2)
+        .toUpperCase();
+
+      // Find the next sequential number by counting existing brand coupons
+      const existingBrandCoupons = await this.couponCodeModel.count({
+        where: {
+          couponCode: { [require('sequelize').Op.like]: `${brandPrefix}COL%` },
+        },
+      });
+
+      const sequentialNumber = existingBrandCoupons + 1;
+      couponCode = `${brandPrefix}COL${sequentialNumber}`;
+
+      // Ensure uniqueness
+      let attempts = 0;
+      while (attempts < 50) {
+        const existing = await this.couponCodeModel.findOne({
+          where: { couponCode },
+        });
+
+        if (!existing) {
+          break;
+        }
+
+        // Increment number if collision
+        const nextNumber = existingBrandCoupons + attempts + 2;
+        couponCode = `${brandPrefix}COL${nextNumber}`;
+        attempts++;
+      }
+
+      if (attempts >= 50) {
+        throw new BadRequestException('Failed to generate unique coupon code');
+      }
+    } else {
+      // Validate provided coupon code is unique
+      const existingCoupon = await this.couponCodeModel.findOne({
+        where: { couponCode: couponCode.toUpperCase() },
+      });
+
+      if (existingCoupon) {
+        throw new BadRequestException('This coupon code is already in use');
+      }
     }
 
     // Check if store already has a brand-shared coupon
@@ -953,7 +1267,7 @@ export class HypeStoreService {
   /**
    * Get order details
    */
-  async getOrderDetails(storeId: number, brandId: number, orderId: string): Promise<HypeStoreOrder> {
+  async getOrderDetails(storeId: number, brandId: number, orderId: string): Promise<any> {
     const store = await this.hypeStoreModel.findOne({
       where: { id: storeId, brandId },
     });
@@ -964,13 +1278,204 @@ export class HypeStoreService {
 
     const order = await this.orderModel.findOne({
       where: { hypeStoreId: storeId, externalOrderId: orderId },
+      include: [
+        {
+          model: this.influencerModel,
+          as: 'influencer',
+          attributes: [
+            'id',
+            'name',
+            'username',
+            'profileImage',
+            'instagramFollowersCount',
+            'instagramFollowsCount',
+            'instagramMediaCount',
+            'instagramUsername',
+          ],
+        },
+        {
+          model: this.hypeStoreModel,
+          as: 'hypeStore',
+          attributes: ['id', 'storeName'],
+        },
+        {
+          model: this.couponCodeModel,
+          as: 'couponCode',
+          attributes: ['id', 'couponCode'],
+        },
+      ],
     });
 
     if (!order) {
       throw new NotFoundException('Order not found');
     }
 
-    return order;
+    // Calculate performance metrics using existing engagement calculation service
+    let expectedROI = order.expectedRoi ? parseFloat(order.expectedRoi.toString()) : null;
+    let estimatedEngagement = order.estimatedEngagement || null;
+    let estimatedReach = order.estimatedReach || null;
+    let engagementScore: number | null = null;
+    let engagementRating: string | null = null;
+    let avgEngagementRate: number | null = null;
+    let dataSource = 'estimated';
+
+    // Get engagement data from profile scoring service
+    if (order.influencer) {
+      try {
+        const engagementStrength = await this.influencerProfileScoringService.calculateEngagementStrength(order.influencer);
+
+        if (engagementStrength && engagementStrength.breakdown?.engagementOverview?.details) {
+          const details = engagementStrength.breakdown.engagementOverview.details;
+
+          // Use calculated engagement score and rating
+          engagementScore = engagementStrength.score;
+          engagementRating = details.rating;
+          avgEngagementRate = details.engagementRate;
+
+          // Use actual reach from Instagram insights
+          if (!estimatedReach && details.avgReach) {
+            estimatedReach = details.avgReach;
+            dataSource = 'instagram_insights';
+          }
+
+          // Calculate total engagement count from followers and engagement rate
+          if (!estimatedEngagement && avgEngagementRate && order.influencer.instagramFollowersCount) {
+            estimatedEngagement = Math.round((order.influencer.instagramFollowersCount * avgEngagementRate) / 100);
+          }
+
+          // Calculate ROI based on actual reach data
+          if (!expectedROI && estimatedReach && estimatedReach > 0) {
+            const cashbackAmount = parseFloat(order.cashbackAmount.toString());
+            // ROI formula: (Value - Cost) / Cost
+            // Assuming value is based on reach multiplied by industry standard CPM
+            const estimatedValue = (estimatedReach / 1000) * 50; // ₹50 CPM industry standard
+            expectedROI = ((estimatedValue - cashbackAmount) / cashbackAmount) * 100;
+            expectedROI = Math.round(expectedROI * 10) / 10; // Round to 1 decimal
+          }
+        }
+      } catch (error) {
+        this.logger.warn(`Failed to calculate engagement strength for influencer ${order.influencerId}: ${error.message}`);
+      }
+
+      // Fallback to basic estimates if engagement service didn't provide data
+      if (!estimatedReach || !estimatedEngagement) {
+        const followerCount = order.influencer.instagramFollowersCount || 0;
+
+        if (!estimatedReach) {
+          estimatedReach = Math.round(followerCount * 0.25);
+        }
+
+        if (!estimatedEngagement) {
+          estimatedEngagement = Math.round(followerCount * 0.035);
+        }
+
+        if (!expectedROI && estimatedReach > 0) {
+          const cashbackAmount = parseFloat(order.cashbackAmount.toString());
+          const estimatedValue = (estimatedReach / 1000) * 50;
+          expectedROI = ((estimatedValue - cashbackAmount) / cashbackAmount) * 100;
+          expectedROI = Math.round(expectedROI * 10) / 10;
+        }
+      }
+    }
+
+    // Determine tier labels based on metrics
+    const getTierLabel = (value: number | null, type: 'roi' | 'engagement' | 'reach'): string => {
+      if (!value) return 'Unknown';
+
+      if (type === 'roi') {
+        if (value >= 150) return 'Elite';
+        if (value >= 100) return 'Excellent';
+        if (value >= 50) return 'Good';
+        if (value >= 0) return 'Average';
+        return 'Poor';
+      } else if (type === 'engagement') {
+        if (value >= 10000) return 'Elite';
+        if (value >= 5000) return 'Excellent';
+        if (value >= 2000) return 'Good';
+        if (value >= 500) return 'Average';
+        return 'Low';
+      } else if (type === 'reach') {
+        if (value >= 100000) return 'Elite';
+        if (value >= 50000) return 'Excellent';
+        if (value >= 20000) return 'Good';
+        if (value >= 5000) return 'Average';
+        return 'Low';
+      }
+      return 'Unknown';
+    };
+
+    // Calculate cashback percentage/type
+    let cashbackType = order.cashbackType;
+    if (!cashbackType && order.orderAmount && order.cashbackAmount) {
+      const percentage = (parseFloat(order.cashbackAmount.toString()) / parseFloat(order.orderAmount.toString())) * 100;
+      cashbackType = `Flat ${percentage.toFixed(0)}%`;
+    }
+
+    // Format response with performance metrics
+    return {
+      id: order.id,
+      externalOrderId: order.externalOrderId,
+      orderTitle: order.orderTitle || null,
+      orderDate: order.orderDate,
+      orderAmount: parseFloat(order.orderAmount.toString()),
+      orderStatus: order.orderStatus,
+      cashback: {
+        amount: parseFloat(order.cashbackAmount.toString()),
+        type: cashbackType,
+        status: order.cashbackStatus,
+        creditedAt: order.cashbackCreditedAt,
+      },
+      promotionMedia: order.instagramProofUrl
+        ? {
+            type: order.proofContentType,
+            url: order.instagramProofUrl,
+            thumbnailUrl: order.proofThumbnailUrl || null,
+            postedAt: order.proofPostedAt || order.proofSubmittedAt,
+            viewCount: order.proofViewCount || null,
+            submittedAt: order.proofSubmittedAt,
+          }
+        : null,
+      performance: {
+        expectedROI: expectedROI,
+        estimatedEngagement: estimatedEngagement,
+        estimatedReach: estimatedReach,
+        avgEngagementRate: avgEngagementRate,
+        engagementScore: engagementScore, // Score out of 100 from engagement calculation service
+        engagementRating: engagementRating, // Exceptional, Excellent, Good, Fair, etc.
+        dataSource: dataSource,
+        tierLabels: {
+          expectedROI: getTierLabel(expectedROI, 'roi'),
+          estimatedEngagement: getTierLabel(estimatedEngagement, 'engagement'),
+          estimatedReach: getTierLabel(estimatedReach, 'reach'),
+        },
+      },
+      store: order.hypeStore
+        ? {
+            id: order.hypeStore.id,
+            name: order.hypeStore.storeName,
+          }
+        : null,
+      influencer: order.influencer
+        ? {
+            id: order.influencer.id,
+            name: order.influencer.name,
+            username: order.influencer.username,
+            profileImage: order.influencer.profileImage,
+            instagramUsername: order.influencer.instagramUsername,
+            instagramFollowersCount: order.influencer.instagramFollowersCount,
+          }
+        : null,
+      couponCode: order.couponCode?.couponCode || null,
+      referralCode: order.referralCode || null,
+      returnPeriod: {
+        days: order.returnPeriodDays,
+        endsAt: order.returnPeriodEndsAt,
+        isReturned: order.isReturned,
+      },
+      notes: order.notes,
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+    };
   }
 
   /**
@@ -989,7 +1494,6 @@ export class HypeStoreService {
     cashbackAmount?: number;
     cashbackStatus?: string;
   }> {
-    const startTime = Date.now();
     let webhookSecret: HypeStoreWebhookSecret | null = null;
     let responseStatus = 200;
     let responseBody: any = { success: false, message: 'Processing failed' };
@@ -1159,6 +1663,7 @@ export class HypeStoreService {
             influencerId: attributedInfluencerId, // Use attributed influencer (from referral or coupon)
             externalOrderId: webhookDto.externalOrderId,
             referralCode: webhookDto.referralCode || null, // Store referral code if provided
+            orderTitle: webhookDto.orderTitle || null, // Store product/order title
             orderAmount: webhookDto.orderAmount,
             orderCurrency: webhookDto.orderCurrency || 'INR',
             orderDate: orderDate,
@@ -1167,6 +1672,7 @@ export class HypeStoreService {
             customerName: webhookDto.customerName,
             orderStatus: webhookDto.orderStatus || OrderStatus.PENDING,
             cashbackAmount,
+            cashbackType: webhookDto.cashbackType || null, // Store cashback type description
             cashbackStatus: CashbackStatus.PENDING,
             cashbackTierId: tierId,
             webhookReceivedAt: new Date(),

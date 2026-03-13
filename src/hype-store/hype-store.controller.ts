@@ -120,13 +120,21 @@ export class HypeStoreController {
           minimum: 1,
           maximum: 6,
           example: 3
+        },
+        cashbackPercentage: {
+          type: 'number',
+          description: 'Cashback percentage for coupon code suffix (optional: 1-99, default: 25). This becomes the last 2 digits of the auto-generated coupon code. Example: 25 generates SNCOL25',
+          minimum: 1,
+          maximum: 99,
+          example: 25,
+          default: 25
         }
       }
     },
     examples: {
       minimalConfig: {
         summary: 'Minimal Configuration (Required fields only)',
-        description: 'Create store with only required fields. Min cashback will default to Rs 100 for both. Banner will be auto-populated from brand profile.',
+        description: 'Create store with only required fields. Min cashback will default to Rs 100 for both. Banner will be auto-populated from brand profile. Coupon code will be auto-generated as XXCOL25 (25% default).',
         value: {
           reelPostMaxCashback: 15000,
           storyMaxCashback: 10000,
@@ -135,13 +143,14 @@ export class HypeStoreController {
       },
       customCashbackConfig: {
         summary: 'Custom Cashback Configuration',
-        description: 'Store setup with custom cashback range. Upload banner image as file (not shown in example). Banner will be auto-populated from brand profile if not uploaded.',
+        description: 'Store setup with custom cashback range and custom coupon percentage. Coupon will be auto-generated as XXCOL30 (30% cashback). Upload banner image as file (not shown in example).',
         value: {
           reelPostMinCashback: 200,
           reelPostMaxCashback: 15000,
           storyMinCashback: 150,
           storyMaxCashback: 10000,
-          monthlyClaimCount: 3
+          monthlyClaimCount: 3,
+          cashbackPercentage: 30
         }
       },
       highCashbackConfig: {
@@ -576,10 +585,67 @@ export class HypeStoreController {
   @Get(':storeId')
   @ApiOperation({
     summary: 'Get store details by ID',
-    description: 'Get specific store details including basic info, cashback config, and creator preferences'
+    description: 'Get comprehensive store details including performance metrics, budget, orders, and sales analytics'
   })
   @ApiParam({ name: 'storeId', type: Number, description: 'Store ID' })
-  @ApiResponse({ status: 200, description: 'Store details retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Store details retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', example: 9 },
+        storeName: { type: 'string', example: 'Store 1' },
+        brandCouponCode: { type: 'string', example: 'SNCOL25', description: 'Auto-generated coupon code' },
+        cashbackLimit: { type: 'string', example: '25%', description: 'Cashback percentage from coupon code' },
+        monthlyPurchaseLimit: { type: 'number', example: 5, description: 'Monthly purchase limit per influencer' },
+        wallet: {
+          type: 'object',
+          nullable: true,
+          properties: {
+            totalBudget: { type: 'number', example: 110000, description: 'Total amount added to wallet' },
+            budgetUtilised: { type: 'number', example: 10000, description: 'Total cashback paid to influencers' },
+            budgetRemaining: { type: 'number', example: 100000, description: 'Remaining wallet balance' },
+            predictedValidityTransactions: { type: 'number', example: 50, description: 'Predicted number of transactions till budget depletes', nullable: true },
+          },
+        },
+        orders: {
+          type: 'object',
+          properties: {
+            total: { type: 'number', example: 400, description: 'Total number of orders' },
+            growthPercentage: { type: 'number', example: 10, description: 'Growth percentage vs last month' },
+          },
+        },
+        sales: {
+          type: 'object',
+          properties: {
+            total: { type: 'number', example: 4250000, description: 'Total sales amount (₹42.5L)' },
+            growthPercentage: { type: 'number', example: -5, description: 'Growth percentage vs last month (negative = decline)' },
+          },
+        },
+        aggregatePerformance: {
+          type: 'object',
+          properties: {
+            expectedROI: { type: 'number', example: 1.4, description: 'Average ROI across all influencers' },
+            estimatedEngagement: { type: 'number', example: 13100, description: 'Average engagement count' },
+            estimatedReach: { type: 'number', example: 210000, description: 'Average reach' },
+            engagementScore: { type: 'number', example: 85.5, description: 'Average engagement score (0-100)' },
+            totalInfluencers: { type: 'number', example: 15, description: 'Number of influencers who submitted proof' },
+            tierLabels: {
+              type: 'object',
+              properties: {
+                expectedROI: { type: 'string', example: 'Elite' },
+                estimatedEngagement: { type: 'string', example: 'Elite' },
+                estimatedReach: { type: 'string', example: 'Elite' },
+              },
+            },
+          },
+        },
+        cashbackConfig: { type: 'object', description: 'Cashback configuration details' },
+        creatorPreferences: { type: 'object', description: 'Creator targeting preferences', nullable: true },
+      },
+    },
+  })
   @ApiResponse({ status: 404, description: 'Store not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getStoreById(@Request() req: any, @Param('storeId') storeId: string) {
@@ -792,35 +858,42 @@ export class HypeStoreController {
         orderTitle: {
           type: 'string',
           example: 'JBL Tune 770NC Active Noise Cancelling, 70Hr Playtime, Fast Pair & Multi Connect Bluetooth',
+          nullable: true,
         },
         orderDate: { type: 'string', example: '2025-06-10T01:23:00.000Z' },
         orderAmount: { type: 'number', example: 10800 },
+        orderStatus: { type: 'string', example: 'delivered' },
         cashback: {
           type: 'object',
           properties: {
-            type: { type: 'string', example: 'FLAT' },
-            value: { type: 'number', example: 20 },
-            currency: { type: 'string', example: 'INR' },
-            status: { type: 'string', example: 'SENT' },
-            amountSent: { type: 'number', example: 1000.0 },
+            amount: { type: 'number', example: 1000.0 },
+            type: { type: 'string', example: 'Flat 20%', nullable: true },
+            status: { type: 'string', example: 'credited' },
+            creditedAt: { type: 'string', example: '2025-08-15T10:00:00.000Z', nullable: true },
           },
         },
         promotionMedia: {
           type: 'object',
+          nullable: true,
           properties: {
-            type: { type: 'string', example: 'REEL' },
-            thumbnailUrl: { type: 'string', example: 'https://cdn.example.com/reels/123-thumb.jpg' },
-            postedOn: { type: 'string', example: '2025-08-01' },
-            viewCount: { type: 'number', example: 32000 },
-            url: { type: 'string', example: 'https://instagram.com/reel/abc123' },
+            type: { type: 'string', example: 'REEL', description: 'Content type: REEL, POST, or STORY' },
+            url: { type: 'string', example: 'https://instagram.com/reel/abc123', description: 'Instagram content URL' },
+            thumbnailUrl: { type: 'string', example: 'https://cdn.example.com/reels/123-thumb.jpg', nullable: true, description: 'Thumbnail image URL' },
+            postedAt: { type: 'string', example: '2025-08-01T10:00:00.000Z', nullable: true, description: 'When content was posted on Instagram' },
+            viewCount: { type: 'number', example: 32000, nullable: true, description: 'View count from Instagram Insights (updated asynchronously)' },
+            submittedAt: { type: 'string', example: '2025-08-01T10:30:00.000Z', description: 'When proof was submitted to the platform' },
           },
         },
         performance: {
           type: 'object',
           properties: {
-            expectedROI: { type: 'number', example: 1.4 },
-            estimatedEngagement: { type: 'number', example: 13100 },
-            estimatedReach: { type: 'number', example: 210000 },
+            expectedROI: { type: 'number', example: 1.4, description: 'Calculated ROI percentage based on reach value vs cashback cost' },
+            estimatedEngagement: { type: 'number', example: 13100, description: 'Total engagement count (likes + comments + shares + saves)' },
+            estimatedReach: { type: 'number', example: 210000, description: 'Average reach from Instagram insights' },
+            avgEngagementRate: { type: 'number', example: 3.5, description: 'Average engagement rate percentage' },
+            engagementScore: { type: 'number', example: 85.5, description: 'Engagement strength score (0-100) from profile scoring service' },
+            engagementRating: { type: 'string', example: 'Excellent', description: 'Engagement rating: Exceptional, Excellent, Good, Fair, or Poor' },
+            dataSource: { type: 'string', example: 'instagram_insights', enum: ['instagram_insights', 'estimated'], description: 'Source of performance data' },
             tierLabels: {
               type: 'object',
               properties: {
@@ -854,24 +927,29 @@ export class HypeStoreController {
         orderTitle: 'JBL Tune 770NC Active Noise Cancelling, 70Hr Playtime, Fast Pair & Multi Connect Bluetooth',
         orderDate: '2025-06-10T01:23:00.000Z',
         orderAmount: 10800,
+        orderStatus: 'delivered',
         cashback: {
-          type: 'FLAT',
-          value: 20,
-          currency: 'INR',
-          status: 'SENT',
-          amountSent: 1000.0,
+          amount: 1000.0,
+          type: 'Flat 20%',
+          status: 'credited',
+          creditedAt: '2025-08-15T10:00:00.000Z',
         },
         promotionMedia: {
           type: 'REEL',
-          thumbnailUrl: 'https://cdn.example.com/reels/123-thumb.jpg',
-          postedOn: '2025-08-01',
-          viewCount: 32000,
           url: 'https://instagram.com/reel/abc123',
+          thumbnailUrl: 'https://cdn.example.com/reels/123-thumb.jpg',
+          postedAt: '2025-08-01T10:00:00.000Z',
+          viewCount: 32000,
+          submittedAt: '2025-08-01T10:30:00.000Z',
         },
         performance: {
           expectedROI: 1.4,
           estimatedEngagement: 13100,
           estimatedReach: 210000,
+          avgEngagementRate: 3.5,
+          engagementScore: 85.5,
+          engagementRating: 'Excellent',
+          dataSource: 'instagram_insights',
           tierLabels: {
             expectedROI: 'Elite',
             estimatedEngagement: 'Elite',

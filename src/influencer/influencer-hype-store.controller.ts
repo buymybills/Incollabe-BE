@@ -235,6 +235,138 @@ export class InfluencerHypeStoreController {
     );
   }
 
+  @Get('orders/:orderId')
+  @ApiOperation({
+    summary: 'Get order details',
+    description: 'Get detailed information about a specific order including performance metrics, cashback status, and Instagram proof details'
+  })
+  @ApiParam({ name: 'orderId', type: Number, description: 'Order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order details retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          type: 'object',
+          properties: {
+            id: { type: 'number', example: 1 },
+            externalOrderId: { type: 'string', example: 'ORD123456' },
+            orderTitle: { type: 'string', nullable: true, example: 'JBL Tune 770NC Headphones' },
+            orderAmount: { type: 'number', example: 10800.00 },
+            orderCurrency: { type: 'string', example: 'INR' },
+            orderDate: { type: 'string', example: '2026-03-07T10:00:00.000Z' },
+            orderStatus: { type: 'string', example: 'delivered', enum: ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled', 'refunded', 'returned'] },
+            cashbackAmount: { type: 'number', example: 2000.00 },
+            cashbackType: { type: 'string', nullable: true, example: 'Flat 20%' },
+            cashbackStatus: { type: 'string', example: 'credited', enum: ['pending', 'processing', 'credited', 'failed', 'cancelled'] },
+            cashbackCreditedAt: { type: 'string', nullable: true, example: '2026-03-10T10:00:00.000Z' },
+            minimumCashbackClaimed: { type: 'boolean', example: false },
+            isReturned: { type: 'boolean', example: false },
+            returnedAt: { type: 'string', nullable: true },
+            returnPeriodDays: { type: 'number', example: 30 },
+            returnWindowClosesAt: { type: 'string', nullable: true, example: '2026-04-06T10:00:00.000Z' },
+            instagramProof: {
+              type: 'object',
+              nullable: true,
+              properties: {
+                url: { type: 'string', nullable: true, example: 'https://www.instagram.com/reel/ABC123xyz/' },
+                contentType: { type: 'string', nullable: true, example: 'reel' },
+                thumbnailUrl: { type: 'string', nullable: true, example: 'https://instagram.com/thumbnail.jpg' },
+                viewCount: { type: 'number', nullable: true, example: 15000 },
+                postedAt: { type: 'string', nullable: true, example: '2026-03-08T12:00:00.000Z' },
+                submittedAt: { type: 'string', nullable: true, example: '2026-03-08T14:00:00.000Z' },
+              }
+            },
+            performance: {
+              type: 'object',
+              nullable: true,
+              properties: {
+                expectedROI: { type: 'number', nullable: true, example: 1.4, description: 'ROI percentage based on reach value vs cashback cost' },
+                estimatedEngagement: { type: 'number', nullable: true, example: 13100, description: 'Estimated engagement count' },
+                estimatedReach: { type: 'number', nullable: true, example: 210000, description: 'Estimated reach count' },
+                tierLabels: {
+                  type: 'object',
+                  properties: {
+                    expectedROI: { type: 'string', example: 'Elite', enum: ['Elite', 'Excellent', 'Good', 'Average', 'Poor', 'Unknown'] },
+                    estimatedEngagement: { type: 'string', example: 'Elite', enum: ['Elite', 'Excellent', 'Good', 'Average', 'Low', 'Unknown'] },
+                    estimatedReach: { type: 'string', example: 'Elite', enum: ['Elite', 'Excellent', 'Good', 'Average', 'Low', 'Unknown'] },
+                  }
+                },
+              }
+            },
+            customer: {
+              type: 'object',
+              nullable: true,
+              properties: {
+                name: { type: 'string', nullable: true, example: 'John Doe' },
+                email: { type: 'string', nullable: true, example: 'customer@example.com' },
+                phone: { type: 'string', nullable: true, example: '+919876543210' },
+              }
+            },
+            couponCode: {
+              type: 'object',
+              properties: {
+                id: { type: 'number', example: 1 },
+                couponCode: { type: 'string', example: 'INFL123' },
+                isUniversal: { type: 'boolean', example: true },
+                isBrandShared: { type: 'boolean', example: false },
+              }
+            },
+            hypeStore: {
+              type: 'object',
+              properties: {
+                id: { type: 'number', example: 1 },
+                storeName: { type: 'string', example: 'Store 1' },
+                logoUrl: { type: 'string', nullable: true },
+                bannerImageUrl: { type: 'string', nullable: true },
+                brand: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'number', example: 15 },
+                    brandName: { type: 'string', example: 'Myntra' },
+                    username: { type: 'string', example: 'myntra_official' },
+                    profileImage: { type: 'string', nullable: true },
+                    niches: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          id: { type: 'number', example: 1 },
+                          name: { type: 'string', example: 'Fashion' },
+                        },
+                      },
+                      example: [
+                        { id: 1, name: 'Fashion' },
+                        { id: 2, name: 'Accessories' },
+                        { id: 3, name: 'Lifestyle' },
+                      ],
+                    },
+                  }
+                }
+              }
+            },
+            metadata: { type: 'object', nullable: true, description: 'Additional order metadata' },
+            createdAt: { type: 'string', example: '2026-03-07T10:00:00.000Z' },
+            updatedAt: { type: 'string', example: '2026-03-10T10:00:00.000Z' },
+          }
+        },
+        message: { type: 'string', example: 'Order details retrieved successfully' }
+      }
+    }
+  })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  @ApiResponse({ status: 403, description: 'This order does not belong to you' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getOrderById(
+    @Request() req: any,
+    @Param('orderId') orderId: string,
+  ) {
+    const influencerId = req.user.id;
+    return this.hypeStoreService.getInfluencerOrderDetails(influencerId, parseInt(orderId));
+  }
+
   @Get('wallet')
   @ApiOperation({
     summary: 'Get wallet balance',
