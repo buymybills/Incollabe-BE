@@ -1,12 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as AWS from 'aws-sdk';
+import * as crypto from 'crypto';
 import 'multer';
 
 @Injectable()
 export class S3Service {
   private s3: AWS.S3;
   private bucketName: string;
+  private cloudFrontDomain: string | null;
+  private cloudFrontKeyPairId: string | null;
+  private cloudFrontPrivateKey: string | null;
 
   constructor(private configService: ConfigService) {
     this.s3 = new AWS.S3({
@@ -15,6 +19,9 @@ export class S3Service {
       region: this.configService.get('AWS_REGION'),
     });
     this.bucketName = this.configService.get('AWS_S3_BUCKET_NAME')!;
+    this.cloudFrontDomain = this.configService.get('CLOUDFRONT_DOMAIN') || null;
+    this.cloudFrontKeyPairId = this.configService.get('CLOUDFRONT_KEY_PAIR_ID') || null;
+    this.cloudFrontPrivateKey = this.configService.get('CLOUDFRONT_PRIVATE_KEY') || null;
   }
 
   async uploadFile(
@@ -51,6 +58,12 @@ export class S3Service {
    * @returns Signed URL string
    */
   getSignedUrl(key: string, expiresIn: number = 120): string {
+    // Use CloudFront if configured, otherwise fall back to S3
+    if (this.cloudFrontDomain && this.cloudFrontKeyPairId && this.cloudFrontPrivateKey) {
+      return this.getCloudFrontSignedUrl(key, expiresIn);
+    }
+    
+    // Fallback to S3 signed URL
     const params = {
       Bucket: this.bucketName,
       Key: key,
@@ -58,6 +71,75 @@ export class S3Service {
     };
 
     return this.s3.getSignedUrl('getObject', params);
+  }
+
+  /**
+   * Generate a CloudFront signed URL for temporary access to a file
+   * @param key - S3 object key (path)
+   * @param expiresIn - Expiration time in seconds (default: 2 minutes)
+   * @returns CloudFront signed URL string
+   */
+  private getCloudFrontSignedUrl(key: string, expiresIn: number = 120): string {
+    if (!this.cloudFrontPrivateKey || !this.cloudFrontKeyPairId || !this.cloudFrontDomain) {
+      throw new Error('CloudFront signing attempted without required configuration');
+    }
+
+    const url = `https://${this.cloudFrontDomain}/${key}`;
+    const expiresAt = Math.floor(Date.now() / 1000) + expiresIn;
+
+    // Create the policy object
+    const policy = {
+      Statement: [
+        {
+          Resource: url,
+          Condition: {
+            DateLessThan: {
+              'AWS:EpochTime': expiresAt,
+            },
+          },
+        },
+      ],
+    };
+
+    // Encode the policy to URL-safe base64
+    const policyString = JSON.stringify(policy);
+    const encodedPolicy = this.toUrlSafeBase64(Buffer.from(policyString));
+
+    // Sign the policy with the private key using SHA256
+    const signature = crypto
+      .createSign('RSA-SHA256')
+      .update(policyString)
+      .sign(
+        {
+          key: this.cloudFrontPrivateKey,
+          format: 'pem',
+        },
+        'base64',
+      );
+
+    // Convert signature to URL-safe base64
+    const encodedSignature = this.toUrlSafeBase64(Buffer.from(signature, 'base64'));
+
+    // Build the signed URL with properly encoded parameters
+    const signedUrl =
+      `${url}?` +
+      `Policy=${encodedPolicy}` +
+      `&Signature=${encodedSignature}` +
+      `&Key-Pair-Id=${this.cloudFrontKeyPairId}`;
+
+    return signedUrl;
+  }
+
+  /**
+   * Convert base64 string to URL-safe base64
+   * Replaces + with -, / with _, and removes = padding
+   */
+  private toUrlSafeBase64(buffer: Buffer): string {
+    return buffer
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
   }
 
   /**
@@ -101,6 +183,11 @@ export class S3Service {
 
     const key = this.extractKeyFromUrl(url);
     if (!key) return url; // Return original URL if we can't extract the key
+
+    // Use CloudFront if configured, otherwise use S3 signed URL
+    if (this.cloudFrontDomain && this.cloudFrontKeyPairId && this.cloudFrontPrivateKey) {
+      return this.getCloudFrontSignedUrl(key, expiresIn);
+    }
 
     return this.getSignedUrl(key, expiresIn);
   }

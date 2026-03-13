@@ -805,7 +805,8 @@ export class ChatController {
     description:
       'Generates a temporary signed URL (valid for 2 minutes) for downloading chat attachments securely. ' +
       'Use this endpoint to get a secure download link for images, videos, audio, or documents from chat. ' +
-      'The key parameter should be the S3 file path (e.g., "chat/images/brand-32-1773036150127-225588063.png").',
+      'The key parameter should be the S3 file path (e.g., "chat/images/brand-32-1773036150127-225588063.png"). ' +
+      'Returns a CloudFront CDN URL (if configured) or direct S3 signed URL.',
   })
   @ApiQuery({
     name: 'key',
@@ -825,8 +826,8 @@ export class ChatController {
           properties: {
             signedUrl: {
               type: 'string',
-              example: 'https://bucket.s3.region.amazonaws.com/chat/images/file.png?AWSAccessKeyId=xxx&Expires=xxx&Signature=xxx',
-              description: 'Temporary signed URL valid for 2 minutes',
+              example: 'https://cdn.example.com/chat/images/file.png?Policy=xxx&Signature=xxx&Key-Pair-Id=xxx',
+              description: 'Temporary signed URL (CloudFront CDN) valid for 2 minutes. Does not expose S3 bucket path.',
             },
             expiresIn: {
               type: 'number',
