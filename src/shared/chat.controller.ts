@@ -13,6 +13,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Patch,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -23,8 +24,10 @@ import {
   ApiConsumes,
   ApiBody,
   ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { ChatService } from './chat.service';
+import { GroupChatService } from './group-chat.service';
 import { ChatGateway } from './chat.gateway';
 import { S3Service } from './s3.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
@@ -38,6 +41,15 @@ import {
   MarkAsReadBodyDto,
   SubmitReviewDto,
 } from './dto/chat.dto';
+import {
+  CreateGroupDto,
+  AddMembersDto,
+  RemoveMemberDto,
+  UpdateMemberRoleDto,
+  UpdateGroupDto,
+  GetGroupsDto,
+  GetGroupDetailsDto,
+} from './dto/group-chat.dto';
 
 @ApiTags('Chat')
 @ApiBearerAuth()
@@ -83,6 +95,7 @@ export class ChatController {
 
   constructor(
     private readonly chatService: ChatService,
+    private readonly groupChatService: GroupChatService,
     private readonly chatGateway: ChatGateway,
     private readonly s3Service: S3Service,
   ) {}
@@ -109,18 +122,20 @@ export class ChatController {
   @ApiOperation({
     summary: 'Get all conversations for current user',
     description:
-      'Retrieve all conversations (personal or campaign) for the authenticated user.\n\n' +
+      'Retrieve all conversations (personal, campaign, or group) for the authenticated user.\n\n' +
       '**Query Parameters:**\n' +
       '- `type=personal` - Returns personal one-on-one conversations\n' +
       '- `type=campaign` - Returns campaign conversations grouped by campaign\n' +
+      '- `type=group` - Returns group conversations\n' +
       '- No type parameter - Defaults to personal conversations\n\n' +
       '**Response includes:**\n' +
       '- `unreadCounts.personal` - Total unread messages in ALL personal conversations\n' +
       '- `unreadCounts.campaign` - Total unread messages in ALL campaign conversations\n' +
+      '- `unreadCounts.group` - Total unread messages in ALL group conversations\n' +
       '- Individual conversation unread counts\n' +
       '- Pagination information\n\n' +
-      '💡 **Both unread counts are always returned** regardless of which type you query, ' +
-      'so you can display badges for both tabs with a single API call!',
+      '💡 **All unread counts are always returned** regardless of which type you query, ' +
+      'so you can display badges for all tabs with a single API call!',
   })
   @ApiResponse({
     status: 200,
@@ -149,6 +164,11 @@ export class ChatController {
                       type: 'number',
                       example: 8,
                       description: 'Total unread messages in all campaign conversations',
+                    },
+                    group: {
+                      type: 'number',
+                      example: 3,
+                      description: 'Total unread messages in all group conversations',
                     },
                   },
                 },
@@ -206,6 +226,11 @@ export class ChatController {
                       example: 8,
                       description: 'Total unread messages in all campaign conversations',
                     },
+                    group: {
+                      type: 'number',
+                      example: 3,
+                      description: 'Total unread messages in all group conversations',
+                    },
                   },
                 },
                 campaigns: {
@@ -245,6 +270,70 @@ export class ChatController {
                     page: { type: 'number', example: 1 },
                     limit: { type: 'number', example: 20 },
                     total: { type: 'number', example: 10 },
+                    totalPages: { type: 'number', example: 1 },
+                  },
+                },
+              },
+            },
+          },
+        },
+        {
+          // Group conversations response
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                type: { type: 'string', example: 'group' },
+                unreadCounts: {
+                  type: 'object',
+                  description: 'Unread message counts for ALL conversation types',
+                  properties: {
+                    personal: {
+                      type: 'number',
+                      example: 5,
+                      description: 'Total unread messages in all personal conversations',
+                    },
+                    campaign: {
+                      type: 'number',
+                      example: 8,
+                      description: 'Total unread messages in all campaign conversations',
+                    },
+                    group: {
+                      type: 'number',
+                      example: 3,
+                      description: 'Total unread messages in all group conversations',
+                    },
+                  },
+                },
+                conversations: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'number', example: 78 },
+                      conversationType: { type: 'string', example: 'group' },
+                      groupChatId: { type: 'number', example: 15 },
+                      groupName: { type: 'string', example: 'Team Collaboration' },
+                      groupAvatar: { type: 'string', example: 'https://...', nullable: true },
+                      memberCount: { type: 'number', example: 5 },
+                      lastMessage: { type: 'string', example: 'See you tomorrow!' },
+                      lastMessageType: { type: 'string', example: 'text' },
+                      lastMessageAt: { type: 'string', example: '2026-03-05T10:00:00.000Z' },
+                      lastMessageSenderType: { type: 'string', example: 'influencer' },
+                      unreadCount: { type: 'number', example: 2 },
+                      createdAt: { type: 'string' },
+                      updatedAt: { type: 'string' },
+                    },
+                  },
+                },
+                pagination: {
+                  type: 'object',
+                  properties: {
+                    page: { type: 'number', example: 1 },
+                    limit: { type: 'number', example: 20 },
+                    total: { type: 'number', example: 8 },
                     totalPages: { type: 'number', example: 1 },
                   },
                 },
@@ -294,18 +383,31 @@ export class ChatController {
     description:
       '🔒 **All messages are End-to-End Encrypted (E2EE)**\n\n' +
       'Send encrypted messages using RSA-2048 + AES-256-GCM hybrid encryption.\n\n' +
-      '**E2EE Message Flow:**\n' +
+      '**E2EE Message Flow (1-to-1 Chat):**\n' +
       '1. Generate AES-256 session key on your device\n' +
       '2. Encrypt message content with AES-256-GCM\n' +
       "3. Fetch recipient's public key: GET /api/e2ee/public-key/:userType/:userIdentifier\n" +
       "4. Encrypt AES key with recipient's RSA-2048 public key\n" +
       '5. Send encrypted message using this endpoint\n\n' +
+      '**E2EE Message Flow (Group Chat):**\n' +
+      '1. Generate AES-256 session key on your device\n' +
+      '2. Encrypt message content with AES-256-GCM\n' +
+      '3. Fetch all group members: GET /api/groups/:groupId OR POST /api/e2ee/public-keys/batch\n' +
+      '4. Encrypt AES key separately with EACH member\'s RSA public key\n' +
+      '5. Send message with multi-recipient format (see Group Chat example)\n\n' +
       '**Sending Messages:**\n' +
       '- Option 1: Use `conversationId` if you already have it\n' +
       '- Option 2: Use `otherPartyId` + `otherPartyType` and backend will auto-create/find conversation\n\n' +
-      '**Content Format:**\n' +
+      '**Content Format (1-to-1 & Campaign):**\n' +
       'The `content` field must be a JSON string with:\n' +
-      "- `encryptedKey`: AES key encrypted with recipient's RSA public key (Base64)\n" +
+      '- `encryptedKeyForRecipient`: AES key encrypted for recipient (Base64)\n' +
+      '- `encryptedKeyForSender`: AES key encrypted for sender (Base64)\n' +
+      '- `iv`: AES-GCM initialization vector (Base64)\n' +
+      '- `ciphertext`: AES-256-GCM encrypted message (Base64)\n' +
+      '- `version`: Protocol version (currently "v1")\n\n' +
+      '**Content Format (Group Chat):**\n' +
+      'The `content` field must be a JSON string with:\n' +
+      '- `encryptedKeys`: Object mapping "userId:userType" to encrypted AES keys\n' +
       '- `iv`: AES-GCM initialization vector (Base64)\n' +
       '- `ciphertext`: AES-256-GCM encrypted message (Base64)\n' +
       '- `version`: Protocol version (currently "v1")',
@@ -439,6 +541,18 @@ export class ChatController {
           conversationId: 45,
           content:
             '{"encryptedKeyForRecipient":"QeGPkee/OBXSmQTHqSUl6acwC1be4HJvwqwdLuCfkfXo...","encryptedKeyForSender":"B8H0sKPJMXxx2pTmjYaD2HD8vbSLbYLOgf4yQsFudUT0...","iv":"oeb3PbPUWVbxZu9g","ciphertext":"MzM7rZE6Zb9LR3Ja8RH/SuO3Ak/53TpYfDMZgyJtRJ4nyi155wCtTazdBBbOoFOuBAjgViD6qhgMB+CZCQsh7n8=","version":"v1"}',
+          messageType: 'text',
+        },
+      },
+      groupChatText: {
+        summary: '👥 Group Chat - E2EE Multi-Recipient Message',
+        description:
+          'Group chat messages use a multi-recipient encryption format where the AES key is encrypted separately for each member. ' +
+          'The encryptedKeys object maps "userId:userType" to the AES key encrypted with that member\'s public key.',
+        value: {
+          conversationId: 78,
+          content:
+            '{"encryptedKeys":{"32:influencer":"QeGPkee/OBXSmQTHqSUl6acwC1be4HJvwqwdLuCfkfXo...","15:brand":"x3ENCEGv0iqVZYfG8WncIRGj3YsUQAORAUow4EK4bwk...","18:influencer":"BfGH2kff/PCYTnRUI8e9Zk2pL7mN3qR5sT6uV8wX0yA...","11:influencer":"tV+gb7CRYpC2IldY868q8VpaeFdj5c2P182QOaBcDe..."},"iv":"oeb3PbPUWVbxZu9g","ciphertext":"MzM7rZE6Zb9LR3Ja8RH/SuO3Ak/53TpYfDMZgyJtRJ4nyi155wCtTazdBBbOoFOuBAjgViD6qhgMB+CZCQsh7n8=","version":"v1"}',
           messageType: 'text',
         },
       },
@@ -682,6 +796,74 @@ export class ChatController {
       category,
       uploadedBy: req.user.userType,
       uploadedById: req.user.id,
+    };
+  }
+
+  @Get('chat/download')
+  @ApiOperation({
+    summary: 'Generate signed URL for chat attachment download',
+    description:
+      'Generates a temporary signed URL (valid for 2 minutes) for downloading chat attachments securely. ' +
+      'Use this endpoint to get a secure download link for images, videos, audio, or documents from chat. ' +
+      'The key parameter should be the S3 file path (e.g., "chat/images/brand-32-1773036150127-225588063.png"). ' +
+      'Returns a CloudFront CDN URL (if configured) or direct S3 signed URL.',
+  })
+  @ApiQuery({
+    name: 'key',
+    description: 'S3 file key/path for the chat attachment',
+    example: 'chat/images/brand-32-1773036150127-225588063.png',
+    required: true,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Signed URL generated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          type: 'object',
+          properties: {
+            signedUrl: {
+              type: 'string',
+              example: 'https://cdn.example.com/chat/images/file.png?Policy=xxx&Signature=xxx&Key-Pair-Id=xxx',
+              description: 'Temporary signed URL (CloudFront CDN) valid for 2 minutes. Does not expose S3 bucket path.',
+            },
+            expiresIn: {
+              type: 'number',
+              example: 120,
+              description: 'Time in seconds until the URL expires',
+            },
+          },
+        },
+        message: { type: 'string', example: 'Signed URL generated successfully' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid or missing file key' })
+  @ApiResponse({ status: 403, description: 'Access denied to this file' })
+  async downloadFile(
+    @Req() req: RequestWithUser,
+    @Query('key') key: string,
+  ) {
+    if (!key) {
+      throw new BadRequestException('File key is required');
+    }
+
+    // Security: Validate that key starts with allowed chat prefixes
+    const allowedPrefixes = ['chat/images/', 'chat/videos/', 'chat/audio/', 'chat/documents/'];
+    const isValidPrefix = allowedPrefixes.some(prefix => key.startsWith(prefix));
+
+    if (!isValidPrefix) {
+      throw new BadRequestException('Invalid file path. Only chat attachments are allowed.');
+    }
+
+    // Generate signed URL (2 minutes expiry)
+    const signedUrl = this.s3Service.getSignedUrl(key, 120);
+
+    return {
+      signedUrl,
+      expiresIn: 120,
     };
   }
 
@@ -965,5 +1147,541 @@ export class ChatController {
       req.user.userType,
     );
     return result; // Let interceptor wrap it
+  }
+
+  @Post('e2ee/public-keys/batch')
+  @ApiOperation({
+    summary: 'Get public keys for multiple users (for group chat E2EE)',
+    description:
+      'Retrieve RSA-2048 public keys for multiple users at once. Required for encrypting group chat messages.\n\n' +
+      '**Group Chat E2EE Flow:**\n' +
+      '1. Fetch all group members using GET /api/groups/:groupId\n' +
+      '2. Use this endpoint to get public keys for all members\n' +
+      '3. Generate AES-256 session key\n' +
+      '4. Encrypt message with AES-256-GCM\n' +
+      '5. Encrypt AES key with each member\'s RSA public key\n' +
+      '6. Send message with multi-recipient format\n\n' +
+      '**Important:** Users without public keys will have `publicKey: null` in the response. ' +
+      'You should handle this gracefully (skip encryption for those users or show a warning).',
+  })
+  @ApiBody({
+    description: 'Array of users to fetch public keys for',
+    schema: {
+      type: 'object',
+      required: ['users'],
+      properties: {
+        users: {
+          type: 'array',
+          description: 'List of users to fetch public keys for',
+          items: {
+            type: 'object',
+            required: ['userId', 'userType'],
+            properties: {
+              userId: {
+                type: 'number',
+                description: 'User ID',
+                example: 32,
+              },
+              userType: {
+                type: 'string',
+                enum: ['influencer', 'brand'],
+                description: 'User type',
+                example: 'influencer',
+              },
+            },
+          },
+          example: [
+            { userId: 32, userType: 'influencer' },
+            { userId: 15, userType: 'brand' },
+            { userId: 18, userType: 'influencer' },
+          ],
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Public keys retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              userId: { type: 'number', example: 32 },
+              userType: { type: 'string', example: 'influencer' },
+              name: { type: 'string', example: 'John Doe' },
+              username: { type: 'string', example: 'johndoe' },
+              publicKey: {
+                type: 'string',
+                nullable: true,
+                example: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A...',
+                description: 'Public key in Base64 format, or null if not set',
+              },
+              publicKeyCreatedAt: {
+                type: 'string',
+                nullable: true,
+                example: '2025-11-15T10:00:00.000Z',
+              },
+              publicKeyUpdatedAt: {
+                type: 'string',
+                nullable: true,
+                example: '2025-11-15T10:00:00.000Z',
+              },
+            },
+          },
+        },
+        message: { type: 'string', example: 'Public keys retrieved' },
+        timestamp: {
+          type: 'string',
+          example: '2025-11-17T12:00:00.000Z',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid user data',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - JWT token required',
+  })
+  async getBatchPublicKeys(
+    @Body() body: { users: Array<{ userId: number; userType: 'influencer' | 'brand' }> },
+  ) {
+    const result = await this.chatService.getBatchPublicKeys(body.users);
+    return result; // Let interceptor wrap it
+  }
+
+  @Get('e2ee/conversation/:conversationId/public-keys')
+  @ApiOperation({
+    summary: 'Get public keys for all participants in a conversation (simplified)',
+    description:
+      'Retrieve public keys for all participants in a conversation by just passing the conversation ID.\n\n' +
+      '**Simpler Alternative to Batch Endpoint:**\n' +
+      'Instead of manually fetching all members and their IDs, just pass the conversation ID and ' +
+      'the backend will automatically fetch all participants/members and return their public keys.\n\n' +
+      '**Works for:**\n' +
+      '- Personal conversations (1-to-1 chats)\n' +
+      '- Campaign conversations\n' +
+      '- Group conversations (automatically fetches all group members)\n\n' +
+      '**Use Case:**\n' +
+      'When sending an E2EE message to a conversation, use this endpoint to get all recipient public keys ' +
+      'in a single API call without needing to know the participant details.',
+  })
+  @ApiParam({
+    name: 'conversationId',
+    description: 'Conversation ID',
+    example: 78,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Public keys for all conversation participants',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          type: 'object',
+          properties: {
+            conversationId: { type: 'number', example: 78 },
+            conversationType: {
+              type: 'string',
+              enum: ['personal', 'campaign', 'group'],
+              example: 'group',
+            },
+            participants: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  userId: { type: 'number', example: 32 },
+                  userType: { type: 'string', example: 'influencer' },
+                  name: { type: 'string', example: 'John Doe' },
+                  username: { type: 'string', example: 'johndoe' },
+                  publicKey: {
+                    type: 'string',
+                    nullable: true,
+                    example: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A...',
+                    description: 'Public key in Base64 format, or null if not set',
+                  },
+                  publicKeyCreatedAt: {
+                    type: 'string',
+                    nullable: true,
+                    example: '2025-11-15T10:00:00.000Z',
+                  },
+                  publicKeyUpdatedAt: {
+                    type: 'string',
+                    nullable: true,
+                    example: '2025-11-15T10:00:00.000Z',
+                  },
+                },
+              },
+            },
+          },
+        },
+        message: {
+          type: 'string',
+          example: 'Public keys retrieved for conversation',
+        },
+        timestamp: {
+          type: 'string',
+          example: '2025-11-17T12:00:00.000Z',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Conversation not found or user not a participant',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - JWT token required',
+  })
+  async getConversationPublicKeys(
+    @Req() req: RequestWithUser,
+    @Param('conversationId', ParseIntPipe) conversationId: number,
+  ) {
+    const result = await this.chatService.getConversationPublicKeys(
+      conversationId,
+      req.user.id,
+      req.user.userType,
+    );
+    return result; // Let interceptor wrap it
+  }
+
+  // ============================================================
+  // Group Chat Endpoints
+  // ============================================================
+
+  @Post('groups')
+  @ApiOperation({
+    summary: 'Create a new group chat',
+    description:
+      'Create a new group chat with up to 100 members (including creator). Creator becomes admin.\n\n' +
+      '**Group Types:**\n' +
+      '- **Regular Group** (`isBroadcastOnly: false`): Any member can send messages (default)\n' +
+      '- **Broadcast/Announcement Group** (`isBroadcastOnly: true`): Only admins can send messages\n\n' +
+      '**Joining Options:**\n' +
+      '- **Joinable** (`isJoinable: true`): Influencers can discover and join the group themselves (default)\n' +
+      '- **Invite-Only** (`isJoinable: false`): Only admins can add members\n\n' +
+      'Use broadcast mode for announcement channels, newsletters, or community updates where you want to limit who can post.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Group created successfully',
+  })
+  async createGroup(
+    @Req() req: RequestWithUser,
+    @Body() dto: CreateGroupDto,
+  ) {
+    return this.groupChatService.createGroup(
+      req.user.id,
+      req.user.userType as any,
+      dto.name,
+      dto.avatarUrl,
+      dto.initialMemberIds,
+      dto.isBroadcastOnly,
+      dto.isJoinable,
+    );
+  }
+
+  @Get('groups')
+  @ApiOperation({
+    summary: 'Get groups (my groups or all community groups)',
+    description:
+      'Returns groups based on filter parameter:\n\n' +
+      '**Filter Options:**\n' +
+      '- `filter=my` (default): Returns only groups you are a member of\n' +
+      '- `filter=all`: Returns all joinable community groups\n\n' +
+      '**When filter=my:**\n' +
+      '- Shows only groups you joined\n' +
+      '- Always includes `isMember: true`\n' +
+      '- Use for "My Groups" tab\n\n' +
+      '**When filter=all:**\n' +
+      '- Shows ALL joinable community groups\n' +
+      '- Includes `isMember` flag (true/false)\n' +
+      '- Includes `isFull` flag\n' +
+      '- Use for "Discover Groups" tab\n\n' +
+      '**Response always includes:**\n' +
+      '- `isMember`: Boolean flag (use for "Join" vs "Joined" button)\n' +
+      '- `memberCount` and `maxMembers`: Current and maximum counts\n' +
+      '- `isFull`: Boolean (only in filter=all)',
+  })
+  @ApiQuery({
+    name: 'filter',
+    required: false,
+    enum: ['my', 'all'],
+    description: 'Filter: "my" for your groups (default), "all" for all community groups',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Groups retrieved successfully',
+    schema: {
+      example: {
+        groups: [
+          {
+            id: 1,
+            name: 'Marketing Team',
+            avatarUrl: 'https://example.com/avatar.png',
+            isBroadcastOnly: false,
+            memberCount: 5,
+            maxMembers: 100,
+            isMember: false,
+            isFull: false,
+            conversation: {
+              id: 123,
+              conversationType: 'group',
+            },
+            createdAt: '2026-03-07T10:00:00.000Z',
+          },
+        ],
+        total: 1,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      },
+    },
+  })
+  async getUserGroups(
+    @Req() req: RequestWithUser,
+    @Query() dto: GetGroupsDto,
+  ) {
+    return this.groupChatService.getGroups(
+      req.user.id,
+      req.user.userType,
+      dto.filter || 'my',
+      dto.page,
+      dto.limit,
+    );
+  }
+
+  @Get('groups/:groupId')
+  @ApiOperation({
+    summary: 'Get group details with optional influencer search',
+    description:
+      'Get detailed information about a specific group including members and their public keys.\n\n' +
+      '**Group Structure:**\n' +
+      '- Brands create and admin community groups\n' +
+      '- Influencers join as community members\n\n' +
+      '**Influencer Search:** Use the `search` query parameter to filter influencer members by name or username.\n' +
+      '- Example: `?search=john` will return only influencers whose name or username contains "john"\n' +
+      '- Search is case-insensitive and only applies to influencers (not brand admins)\n' +
+      '- Brand admins are always included in results regardless of search\n' +
+      '- If no search is provided, all members are returned\n\n' +
+      '**E2EE Support:** Member details include `publicKey`, `publicKeyCreatedAt`, and `publicKeyUpdatedAt` fields ' +
+      'for implementing end-to-end encryption in group chats. Members without E2EE set up will have `publicKey: null`.\n\n' +
+      '**Alternative:** For better performance when you only need public keys, use POST /api/e2ee/public-keys/batch instead.',
+  })
+  @ApiParam({ name: 'groupId', description: 'Group ID' })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    description: 'Search influencer members by name or username (case-insensitive). Brand admins are not filtered.',
+    example: 'john',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Group details retrieved successfully',
+  })
+  async getGroupDetails(
+    @Req() req: RequestWithUser,
+    @Param('groupId', ParseIntPipe) groupId: number,
+    @Query() dto: GetGroupDetailsDto,
+  ) {
+    return this.groupChatService.getGroupDetails(
+      groupId,
+      req.user.id,
+      req.user.userType,
+      dto.search,
+    );
+  }
+
+  @Put('groups/:groupId')
+  @ApiOperation({
+    summary: 'Update group details',
+    description: 'Update group name or avatar. Only admins can update group details.',
+  })
+  @ApiParam({ name: 'groupId', description: 'Group ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Group updated successfully',
+  })
+  async updateGroup(
+    @Req() req: RequestWithUser,
+    @Param('groupId', ParseIntPipe) groupId: number,
+    @Body() dto: UpdateGroupDto,
+  ) {
+    return this.groupChatService.updateGroup(
+      groupId,
+      dto,
+      req.user.id,
+      req.user.userType,
+    );
+  }
+
+  @Post('groups/:groupId/members')
+  @ApiOperation({
+    summary: 'Add members to group',
+    description: 'Add new members to an existing group. Only admins can add members.',
+  })
+  @ApiParam({ name: 'groupId', description: 'Group ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Members added successfully',
+  })
+  async addMembers(
+    @Req() req: RequestWithUser,
+    @Param('groupId', ParseIntPipe) groupId: number,
+    @Body() dto: AddMembersDto,
+  ) {
+    return this.groupChatService.addMembers(
+      groupId,
+      dto.memberIds,
+      dto.memberTypes,
+      req.user.id,
+      req.user.userType,
+    );
+  }
+
+  @Patch('groups/:groupId/members/role')
+  @ApiOperation({
+    summary: 'Update member role (promote/demote)',
+    description:
+      'Change a member\'s role in the group. Only admins can use this.\n\n' +
+      '**Use Cases:**\n' +
+      '- Promote a member to admin: Set `role: "admin"`\n' +
+      '- Demote an admin to member: Set `role: "member"`\n\n' +
+      '**Restrictions:**\n' +
+      '- Only group admins can change roles\n' +
+      '- Cannot demote the last admin (promote someone else first)\n' +
+      '- Before leaving as the last admin, you must promote another member',
+  })
+  @ApiParam({ name: 'groupId', description: 'Group ID' })
+  @ApiBody({ type: () => require('./dto/group-chat.dto').UpdateMemberRoleDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Member role updated successfully',
+    schema: {
+      example: {
+        success: true,
+        groupId: 1,
+        memberId: 7,
+        memberType: 'influencer',
+        newRole: 'admin',
+        message: 'Member promoted to admin successfully',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Only admins can change member roles',
+  })
+  async updateMemberRole(
+    @Req() req: RequestWithUser,
+    @Param('groupId', ParseIntPipe) groupId: number,
+    @Body() dto: any,
+  ) {
+    return this.groupChatService.updateMemberRole(
+      groupId,
+      dto.memberId,
+      dto.memberType,
+      dto.role,
+      req.user.id,
+      req.user.userType,
+    );
+  }
+
+  @Delete('groups/:groupId/members')
+  @ApiOperation({
+    summary: 'Remove a member from group',
+    description: 'Remove a member from the group. Admins can remove anyone, members can only remove themselves.',
+  })
+  @ApiParam({ name: 'groupId', description: 'Group ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Member removed successfully',
+  })
+  async removeMember(
+    @Req() req: RequestWithUser,
+    @Param('groupId', ParseIntPipe) groupId: number,
+    @Body() dto: RemoveMemberDto,
+  ) {
+    return this.groupChatService.removeMember(
+      groupId,
+      dto.memberId,
+      dto.memberType,
+      req.user.id,
+      req.user.userType,
+    );
+  }
+
+  @Post('groups/:groupId/join')
+  @ApiOperation({
+    summary: 'Join a group (self-join)',
+    description:
+      'Join a group chat yourself without needing an admin invitation. Requirements:\n' +
+      '- Group must have `isJoinable: true`\n' +
+      '- Group must be active\n' +
+      '- Group must not be full (less than maxMembers)\n' +
+      '- You must not already be a member\n\n' +
+      'This allows influencers to discover groups via GET /api/groups/available and join them independently.',
+  })
+  @ApiParam({ name: 'groupId', description: 'Group ID to join' })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully joined the group',
+    schema: {
+      example: {
+        success: true,
+        message: 'Successfully joined the group',
+        groupId: 1,
+        conversationId: 123,
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Group not joinable, full, or already a member',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Group not found',
+  })
+  async joinGroup(
+    @Req() req: RequestWithUser,
+    @Param('groupId', ParseIntPipe) groupId: number,
+  ) {
+    return this.groupChatService.joinGroup(
+      groupId,
+      req.user.id,
+      req.user.userType,
+    );
+  }
+
+  @Post('groups/:groupId/leave')
+  @ApiOperation({
+    summary: 'Leave a group',
+    description: 'Leave a group chat. If you are the last admin, you must promote another member first.',
+  })
+  @ApiParam({ name: 'groupId', description: 'Group ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Left group successfully',
+  })
+  async leaveGroup(
+    @Req() req: RequestWithUser,
+    @Param('groupId', ParseIntPipe) groupId: number,
+  ) {
+    return this.groupChatService.leaveGroup(
+      groupId,
+      req.user.id,
+      req.user.userType,
+    );
   }
 }

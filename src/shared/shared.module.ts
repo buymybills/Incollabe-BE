@@ -16,6 +16,7 @@ import { EncryptionService } from './services/encryption.service';
 import { SearchService } from './services/search.service';
 import { SupportTicketService } from './support-ticket.service';
 import { ChatService } from './chat.service';
+import { GroupChatService } from './group-chat.service';
 import { ChatGateway } from './chat.gateway';
 import { InstagramSyncGateway } from './instagram-sync.gateway';
 import { SearchController } from './controllers/search.controller';
@@ -23,9 +24,6 @@ import { ChatController } from './chat.controller';
 import { InstagramController } from './controllers/instagram.controller';
 import { ConfigController } from './controllers/config.controller';
 import { InstagramService } from './services/instagram.service';
-// import { InstagramSyncCronService } from './services/instagram-sync.cron';
-// import { InstagramDemographicsCronService } from './services/instagram-demographics.cron';
-// import { InstagramGrowthCronService } from './services/instagram-growth.cron';
 import { InstagramTokenRefreshCronService } from './services/instagram-token-refresh.cron';
 import { CredibilityScoreCronService } from './services/credibility-score.cron';
 import { InfluencerCredibilityScoringService } from './services/influencer-credibility-scoring.service';
@@ -60,6 +58,7 @@ import { AppReviewRequest } from './models/app-review-request.model';
 import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
 import { CreditTransaction } from '../admin/models/credit-transaction.model';
 import { ProfileReview } from '../admin/models/profile-review.model';
+import { Admin } from '../admin/models/admin.model';
 import { Campaign } from '../campaign/models/campaign.model';
 import { CampaignApplication } from '../campaign/models/campaign-application.model';
 import { CampaignInvitation } from '../campaign/models/campaign-invitation.model';
@@ -73,6 +72,8 @@ import { AppVersion } from './models/app-version.model';
 import { AppVersionService } from './services/app-version.service';
 import { AIScoringService } from './services/ai-scoring.service';
 import { CampaignReview } from './models/campaign-review.model';
+import { GroupChat } from './models/group-chat.model';
+import { GroupMember } from './models/group-member.model';
 
 @Module({
   imports: [
@@ -102,12 +103,15 @@ import { CampaignReview } from './models/campaign-review.model';
       InfluencerReferralUsage,
       CreditTransaction,
       ProfileReview,
+      Admin,
       Campaign,
       CampaignApplication,
       CampaignInvitation,
       DeviceToken,
       AppVersion,
       CampaignReview,
+      GroupChat,
+      GroupMember,
     ]),
   ],
   controllers: [
@@ -135,6 +139,7 @@ import { CampaignReview } from './models/campaign-review.model';
     SearchService,
     SupportTicketService,
     ChatService,
+    GroupChatService,
     ChatGateway,
     InstagramSyncGateway,
     IsValidUsernameConstraint,
@@ -142,9 +147,6 @@ import { CampaignReview } from './models/campaign-review.model';
     KeyBackupService,
     ChatDecryptionService,
     InstagramService,
-    // InstagramSyncCronService,
-    // InstagramDemographicsCronService,
-    // InstagramGrowthCronService,
     InstagramTokenRefreshCronService,
     CredibilityScoreCronService,
     InfluencerCredibilityScoringService,
@@ -171,6 +173,7 @@ import { CampaignReview } from './models/campaign-review.model';
     EncryptionService,
     SupportTicketService,
     ChatService,
+    GroupChatService,
     ChatGateway,
     InstagramSyncGateway,
     IsValidUsernameConstraint,

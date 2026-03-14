@@ -10,11 +10,18 @@ import {
 } from 'sequelize-typescript';
 import { Influencer } from '../../auth/model/influencer.model';
 import { Brand } from '../../brand/model/brand.model';
+import { GroupChat } from './group-chat.model';
 // import { Message } from './message.model'; // Circular dependency - will be resolved at runtime
 
 export enum ParticipantType {
   INFLUENCER = 'influencer',
   BRAND = 'brand',
+}
+
+export enum ConversationType {
+  PERSONAL = 'personal',
+  CAMPAIGN = 'campaign',
+  GROUP = 'group',
 }
 
 @Table({
@@ -30,33 +37,34 @@ export class Conversation extends Model<Conversation> {
   declare id: number;
 
   // New generic participant fields
+  // Nullable for group chats
   @Index
   @Column({
     type: DataType.STRING(20),
-    allowNull: false,
+    allowNull: true,
   })
-  declare participant1Type: ParticipantType;
+  declare participant1Type: ParticipantType | null;
 
   @Index
   @Column({
     type: DataType.INTEGER,
-    allowNull: false,
+    allowNull: true,
   })
-  declare participant1Id: number;
+  declare participant1Id: number | null;
 
   @Index
   @Column({
     type: DataType.STRING(20),
-    allowNull: false,
+    allowNull: true,
   })
-  declare participant2Type: ParticipantType;
+  declare participant2Type: ParticipantType | null;
 
   @Index
   @Column({
     type: DataType.INTEGER,
-    allowNull: false,
+    allowNull: true,
   })
-  declare participant2Id: number;
+  declare participant2Id: number | null;
 
   @Column({
     type: DataType.INTEGER,
@@ -134,7 +142,7 @@ export class Conversation extends Model<Conversation> {
     defaultValue: 'personal',
     field: 'conversation_type',
   })
-  declare conversationType: 'personal' | 'campaign';
+  declare conversationType: 'personal' | 'campaign' | 'group';
 
   @Column({
     type: DataType.INTEGER,
@@ -149,6 +157,15 @@ export class Conversation extends Model<Conversation> {
     field: 'campaign_application_id',
   })
   declare campaignApplicationId: number | null;
+
+  // Group chat field
+  @ForeignKey(() => GroupChat)
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    field: 'group_chat_id',
+  })
+  declare groupChatId: number | null;
 
   @Column({
     type: DataType.BOOLEAN,
@@ -170,6 +187,9 @@ export class Conversation extends Model<Conversation> {
 
   @BelongsTo(() => Brand)
   declare brand: Brand;
+
+  @BelongsTo(() => GroupChat)
+  declare groupChat: GroupChat;
 
   @HasMany(() => require('./message.model').Message)
   declare messages: any[];

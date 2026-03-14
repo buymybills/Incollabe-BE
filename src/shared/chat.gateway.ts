@@ -11,6 +11,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { Logger, UseGuards, UnauthorizedException } from '@nestjs/common';
 import { ChatService } from './chat.service';
+import { GroupChatService } from './group-chat.service';
 import { WsAuthGuard } from './guards/ws-auth.guard';
 import { SendMessageDto, MarkAsReadDto, TypingDto } from './dto/chat.dto';
 import { JwtService } from '@nestjs/jwt';
@@ -47,6 +48,7 @@ export class ChatGateway
 
   constructor(
     private readonly chatService: ChatService,
+    private readonly groupChatService: GroupChatService,
     private readonly jwtService: JwtService,
     private readonly notificationService: NotificationService,
     private readonly deviceTokenService: DeviceTokenService,
@@ -347,36 +349,54 @@ export class ChatGateway
       const conversationId = message.conversationId;
       console.log('Conversation ID:', conversationId);
 
-      // 🔔 Send push notification to the recipient
-      await this.sendPushNotificationToRecipient(
-        conversationId,
-        userId,
-        userType,
-        message,
-      );
+      // Get conversation to check if it's a group chat
+      const conversation =
+        await this.chatService['conversationModel'].findByPk(conversationId);
 
-      // Emit to conversation room (both sender and receiver)
-      const roomName = `conversation_${conversationId}`;
-      console.log('📡 Emitting to room:', roomName);
-      this.server.to(roomName).emit('message:new', message);
+      // Handle group chat broadcasts differently
+      if (conversation?.conversationType === 'group') {
+        console.log('📢 Broadcasting to group chat...');
+        await this.broadcastGroupMessage(
+          conversationId,
+          conversation.groupChatId!,
+          userId,
+          userType,
+          message,
+          client,
+        );
+      } else {
+        // Handle 1-1 chat (existing logic)
+        // 🔔 Send push notification to the recipient
+        await this.sendPushNotificationToRecipient(
+          conversationId,
+          userId,
+          userType,
+          message,
+        );
 
-      // Also send direct notification to the other user if they're not in the room
-      console.log('📬 Sending direct notification to recipient...');
-      await this.notifyUserDirectlyWithConversation(
-        conversationId,
-        userId,
-        userType,
-        message,
-      );
+        // Emit to conversation room (both sender and receiver)
+        const roomName = `conversation_${conversationId}`;
+        console.log('📡 Emitting to room:', roomName);
+        this.server.to(roomName).emit('message:new', message);
 
-      // 🆕 Send conversation update to SENDER as well
-      console.log('📤 Sending conversation update to sender...');
-      await this.sendConversationUpdateToSender(
-        conversationId,
-        userId,
-        userType,
-        client,
-      );
+        // Also send direct notification to the other user if they're not in the room
+        console.log('📬 Sending direct notification to recipient...');
+        await this.notifyUserDirectlyWithConversation(
+          conversationId,
+          userId,
+          userType,
+          message,
+        );
+
+        // 🆕 Send conversation update to SENDER as well
+        console.log('📤 Sending conversation update to sender...');
+        await this.sendConversationUpdateToSender(
+          conversationId,
+          userId,
+          userType,
+          client,
+        );
+      }
 
       this.logger.log(
         `Message sent by ${userId} (${userType}) in conversation ${conversationId}`,
@@ -401,6 +421,291 @@ export class ChatGateway
         error: error.message,
         tempId: dto['tempId'],
       });
+    }
+  }
+
+  /**
+   * Broadcast a message to all members of a group chat
+   */
+  private async broadcastGroupMessage(
+    conversationId: number,
+    groupChatId: number,
+    senderUserId: number,
+    senderUserType: string,
+    message: any,
+    senderSocket: Socket,
+  ) {
+    try {
+      console.log('📢 === BROADCASTING GROUP MESSAGE ===');
+      console.log('Group ID:', groupChatId);
+      console.log('Message ID:', message.id);
+      console.log('Sender:', senderUserId, '(' + senderUserType + ')');
+
+      // Get all active members of the group
+      const members = await this.groupChatService['groupMemberModel'].findAll({
+        where: {
+          groupChatId,
+          leftAt: { [this.chatService['Op'].is]: null } as any,
+        },
+      });
+
+      console.log('📋 Found', members.length, 'active members');
+
+      // Emit to conversation room (for members already in the room)
+      const roomName = `conversation_${conversationId}`;
+      console.log('📡 Emitting to room:', roomName);
+      this.server.to(roomName).emit('message:new', message);
+
+      // Send direct notifications and push notifications to all members
+      for (const member of members) {
+        const memberId = member.memberId;
+        const memberType = member.memberType;
+        const memberKey = `${memberId}:${memberType}`;
+
+        console.log('📬 Processing member:', memberId, '(' + memberType + ')');
+
+        // Skip sender for push notification
+        if (memberId === senderUserId && memberType === senderUserType) {
+          console.log('   ⏭️  Skipping sender');
+          continue;
+        }
+
+        const memberSocket = this.userSockets.get(memberKey);
+
+        if (memberSocket) {
+          console.log('   ✅ Member is online, sending WebSocket notification');
+          // Member is online, send WebSocket notification
+          memberSocket.emit('message:notification', {
+            conversationId,
+            message,
+          });
+
+          // Send group conversation update
+          memberSocket.emit('group:message:new', {
+            conversationId,
+            groupChatId,
+            message,
+          });
+        } else {
+          console.log('   📱 Member is offline, sending push notification');
+          // Member is offline, send push notification
+          await this.sendGroupPushNotification(
+            memberId,
+            memberType,
+            groupChatId,
+            conversationId,
+            senderUserId,
+            senderUserType,
+            message,
+          );
+        }
+      }
+
+      // Send conversation update to sender
+      senderSocket.emit('group:message:sent', {
+        conversationId,
+        groupChatId,
+        message,
+      });
+
+      console.log('✅ Group message broadcasted successfully');
+      console.log('======================================\n');
+
+      this.logger.log(
+        `Group message ${message.id} broadcasted to ${members.length} members`,
+      );
+    } catch (error) {
+      console.error('❌ GROUP BROADCAST ERROR:', error.message);
+      console.error('Stack:', error.stack);
+      console.log('======================================\n');
+
+      this.logger.error(`Group broadcast error: ${error.message}`, error.stack);
+    }
+  }
+
+  /**
+   * Send push notification for group message
+   */
+  private async sendGroupPushNotification(
+    recipientId: number,
+    recipientType: string,
+    groupChatId: number,
+    conversationId: number,
+    senderId: number,
+    senderType: string,
+    message: any,
+  ) {
+    try {
+      // Get group details
+      const group = await this.groupChatService['groupChatModel'].findByPk(
+        groupChatId,
+      );
+
+      if (!group) {
+        console.log('⚠️  Group not found');
+        return;
+      }
+
+      // Get sender details
+      const senderDetails = await this.chatService['getParticipantDetails'](
+        senderType as ParticipantType,
+        senderId,
+      );
+
+      if (!senderDetails) {
+        console.log('⚠️  Sender details not found');
+        return;
+      }
+
+      const senderName =
+        senderType === ParticipantType.INFLUENCER
+          ? senderDetails.name
+          : senderDetails.brandName;
+
+      // Get recipient's FCM tokens
+      const deviceUserType =
+        recipientType === ParticipantType.INFLUENCER
+          ? DeviceUserType.INFLUENCER
+          : DeviceUserType.BRAND;
+
+      const fcmTokens = await this.deviceTokenService.getAllUserTokens(
+        recipientId,
+        deviceUserType,
+      );
+
+      if (!fcmTokens || fcmTokens.length === 0) {
+        console.log('⚠️  No FCM tokens found for recipient');
+        return;
+      }
+
+      // Build notification body
+      const notificationBody = await this.chatDecryptionService.buildNotificationBody(
+        {
+          content: message.content,
+          messageType: message.messageType,
+          isEncrypted: message.isEncrypted,
+        },
+        recipientId,
+        recipientType as ParticipantType,
+      );
+
+      // Build deep link URL
+      const deepLinkUrl =
+        recipientType === ParticipantType.INFLUENCER
+          ? `app://influencers/group-chat/${groupChatId}`
+          : `app://brands/group-chat/${groupChatId}`;
+
+      // Send push notification
+      await this.notificationService.sendCustomNotification(
+        fcmTokens,
+        `${senderName} in ${group.name}`,
+        notificationBody,
+        {
+          type: 'group_chat_message',
+          action: 'view_group_chat',
+          groupChatId: groupChatId.toString(),
+          conversationId: conversationId.toString(),
+          messageId: message.id.toString(),
+          senderId: senderId.toString(),
+          senderType: senderType,
+          senderName: senderName,
+          groupName: group.name,
+          messageType: message.messageType,
+          isEncrypted: message.isEncrypted ? 'true' : 'false',
+        },
+        {
+          priority: 'high',
+          androidChannelId: 'chat_messages',
+          sound: 'default',
+          actionUrl: deepLinkUrl,
+        },
+      );
+
+      console.log('✅ Group push notification sent');
+    } catch (error) {
+      console.error('❌ GROUP PUSH NOTIFICATION ERROR:', error.message);
+      this.logger.error(`Group push notification error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Public method: Notify all group members when a new member is added
+   */
+  public async emitGroupMemberAdded(
+    groupChatId: number,
+    conversationId: number,
+    newMemberId: number,
+    newMemberType: string,
+    addedByUserId: number,
+    addedByUserType: string,
+  ) {
+    try {
+      console.log('\n👤 === GROUP MEMBER ADDED EVENT ===');
+      console.log('Group ID:', groupChatId);
+      console.log('New Member:', newMemberId, '(' + newMemberType + ')');
+      console.log('Added By:', addedByUserId, '(' + addedByUserType + ')');
+
+      // Get all active members
+      const members = await this.groupChatService['groupMemberModel'].findAll({
+        where: {
+          groupChatId,
+          leftAt: { [this.chatService['Op'].is]: null } as any,
+        },
+      });
+
+      // Get group details
+      const group = await this.groupChatService['groupChatModel'].findByPk(
+        groupChatId,
+      );
+
+      // Get new member details
+      const newMemberDetails = await this.chatService['getParticipantDetails'](
+        newMemberType as ParticipantType,
+        newMemberId,
+      );
+
+      const eventPayload = {
+        groupChatId,
+        conversationId,
+        newMember: {
+          id: newMemberId,
+          type: newMemberType,
+          details: newMemberDetails,
+        },
+        addedBy: {
+          id: addedByUserId,
+          type: addedByUserType,
+        },
+        group: {
+          id: groupChatId,
+          name: group?.name,
+          memberCount: members.length,
+        },
+      };
+
+      // Emit to conversation room
+      const roomName = `conversation_${conversationId}`;
+      this.server.to(roomName).emit('group:member:added', eventPayload);
+
+      // Send direct notifications to all online members
+      for (const member of members) {
+        const memberKey = `${member.memberId}:${member.memberType}`;
+        const memberSocket = this.userSockets.get(memberKey);
+
+        if (memberSocket) {
+          memberSocket.emit('group:member:added', eventPayload);
+        }
+      }
+
+      console.log('✅ Group member added event broadcasted');
+      console.log('======================================\n');
+
+      this.logger.log(
+        `Group member ${newMemberId}:${newMemberType} added to group ${groupChatId}`,
+      );
+    } catch (error) {
+      console.error('❌ GROUP MEMBER ADDED EVENT ERROR:', error.message);
+      this.logger.error(`Group member added event error: ${error.message}`);
     }
   }
 
@@ -440,17 +745,17 @@ export class ChatGateway
       const conversation =
         await this.chatService['conversationModel'].findByPk(dto.conversationId);
 
-      if (conversation) {
+      if (conversation && conversation.conversationType !== 'group') {
         const otherParticipant =
           conversation.participant1Type === userType &&
           conversation.participant1Id === userId
             ? {
-                type: conversation.participant2Type,
-                id: conversation.participant2Id,
+                type: conversation.participant2Type!,
+                id: conversation.participant2Id!,
               }
             : {
-                type: conversation.participant1Type,
-                id: conversation.participant1Id,
+                type: conversation.participant1Type!,
+                id: conversation.participant1Id!,
               };
 
         const otherPartyDetails = await this.chatService['getParticipantDetails'](
@@ -614,6 +919,12 @@ export class ChatGateway
 
       if (!conversation) return;
 
+      // Skip group conversations (handled differently)
+      if (conversation.conversationType === 'group') {
+        this.logger.debug('Skipping direct notification for group conversation');
+        return;
+      }
+
       // Determine the recipient using new participant fields
       let recipientUserId: number;
       let recipientUserType: string;
@@ -624,15 +935,15 @@ export class ChatGateway
         conversation.participant1Id === senderUserId
       ) {
         // Sender is participant1, so recipient is participant2
-        recipientUserId = conversation.participant2Id;
-        recipientUserType = conversation.participant2Type;
+        recipientUserId = conversation.participant2Id!;
+        recipientUserType = conversation.participant2Type!;
       } else if (
         conversation.participant2Type === senderUserType &&
         conversation.participant2Id === senderUserId
       ) {
         // Sender is participant2, so recipient is participant1
-        recipientUserId = conversation.participant1Id;
-        recipientUserType = conversation.participant1Type;
+        recipientUserId = conversation.participant1Id!;
+        recipientUserType = conversation.participant1Type!;
       } else {
         // Sender not in conversation - shouldn't happen but handle gracefully
         this.logger.warn(
@@ -820,6 +1131,9 @@ export class ChatGateway
 
       if (!conversation) return;
 
+      // Skip group conversations
+      if (conversation.conversationType === 'group') return;
+
       // Determine the recipient
       let recipientUserId: number;
       let recipientUserType: ParticipantType;
@@ -828,14 +1142,14 @@ export class ChatGateway
         conversation.participant1Type === senderUserType &&
         conversation.participant1Id === senderUserId
       ) {
-        recipientUserId = conversation.participant2Id;
-        recipientUserType = conversation.participant2Type;
+        recipientUserId = conversation.participant2Id!;
+        recipientUserType = conversation.participant2Type!;
       } else if (
         conversation.participant2Type === senderUserType &&
         conversation.participant2Id === senderUserId
       ) {
-        recipientUserId = conversation.participant1Id;
-        recipientUserType = conversation.participant1Type;
+        recipientUserId = conversation.participant1Id!;
+        recipientUserType = conversation.participant1Type!;
       } else {
         this.logger.warn(
           `Sender ${senderUserId}:${senderUserType} not in conversation ${conversationId}`,
@@ -916,6 +1230,9 @@ export class ChatGateway
 
       if (!conversation) return;
 
+      // Skip group conversations
+      if (conversation.conversationType === 'group') return;
+
       // Determine the other participant (recipient)
       let recipientUserId: number;
       let recipientUserType: ParticipantType;
@@ -925,15 +1242,15 @@ export class ChatGateway
         conversation.participant1Id === senderUserId
       ) {
         // Sender is participant1, so other party is participant2
-        recipientUserId = conversation.participant2Id;
-        recipientUserType = conversation.participant2Type;
+        recipientUserId = conversation.participant2Id!;
+        recipientUserType = conversation.participant2Type!;
       } else if (
         conversation.participant2Type === senderUserType &&
         conversation.participant2Id === senderUserId
       ) {
         // Sender is participant2, so other party is participant1
-        recipientUserId = conversation.participant1Id;
-        recipientUserType = conversation.participant1Type;
+        recipientUserId = conversation.participant1Id!;
+        recipientUserType = conversation.participant1Type!;
       } else {
         this.logger.warn(
           `Sender ${senderUserId}:${senderUserType} not in conversation ${conversationId}`,
@@ -1006,6 +1323,12 @@ export class ChatGateway
         return;
       }
 
+      // Skip group conversations
+      if (conversation.conversationType === 'group') {
+        console.log('⚠️  Skipping push notification for group conversation');
+        return;
+      }
+
       console.log('💬 Conversation Details:');
       console.log('   - participant1:', conversation.participant1Id, '(' + conversation.participant1Type + ')');
       console.log('   - participant2:', conversation.participant2Id, '(' + conversation.participant2Type + ')');
@@ -1019,15 +1342,15 @@ export class ChatGateway
         conversation.participant1Id === senderUserId
       ) {
         console.log('✅ Sender is participant1, so recipient is participant2');
-        recipientUserId = conversation.participant2Id;
-        recipientUserType = conversation.participant2Type;
+        recipientUserId = conversation.participant2Id!;
+        recipientUserType = conversation.participant2Type!;
       } else if (
         conversation.participant2Type === senderUserType &&
         conversation.participant2Id === senderUserId
       ) {
         console.log('✅ Sender is participant2, so recipient is participant1');
-        recipientUserId = conversation.participant1Id;
-        recipientUserType = conversation.participant1Type;
+        recipientUserId = conversation.participant1Id!;
+        recipientUserType = conversation.participant1Type!;
       } else {
         console.log('⚠️  Sender not in conversation');
         console.log('   - Expected sender:', senderUserId, '(' + senderUserType + ')');
