@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as AWS from 'aws-sdk';
-import * as crypto from 'crypto';
 import * as fs from 'fs';
 import 'multer';
 
@@ -12,6 +11,7 @@ export class S3Service {
   private cloudFrontDomain: string | null;
   private cloudFrontKeyPairId: string | null;
   private cloudFrontPrivateKey: string | null;
+  private cloudFrontSigner: AWS.CloudFront.Signer | null;
 
   constructor(private configService: ConfigService) {
     this.s3 = new AWS.S3({
@@ -34,6 +34,16 @@ export class S3Service {
       }
     } else {
       this.cloudFrontPrivateKey = this.configService.get('CLOUDFRONT_PRIVATE_KEY') || null;
+    }
+
+    // Initialize CloudFront signer if credentials are available
+    if (this.cloudFrontKeyPairId && this.cloudFrontPrivateKey) {
+      this.cloudFrontSigner = new AWS.CloudFront.Signer(
+        this.cloudFrontKeyPairId,
+        this.cloudFrontPrivateKey,
+      );
+    } else {
+      this.cloudFrontSigner = null;
     }
   }
 
@@ -88,71 +98,26 @@ export class S3Service {
 
   /**
    * Generate a CloudFront signed URL for temporary access to a file
+   * Uses AWS SDK's built-in CloudFront signer for proper URL generation
    * @param key - S3 object key (path)
    * @param expiresIn - Expiration time in seconds (default: 2 minutes)
    * @returns CloudFront signed URL string
    */
   private getCloudFrontSignedUrl(key: string, expiresIn: number = 120): string {
-    if (!this.cloudFrontPrivateKey || !this.cloudFrontKeyPairId || !this.cloudFrontDomain) {
+    if (!this.cloudFrontSigner || !this.cloudFrontDomain) {
       throw new Error('CloudFront signing attempted without required configuration');
     }
 
     const url = `https://${this.cloudFrontDomain}/${key}`;
-    const expiresAt = Math.floor(Date.now() / 1000) + expiresIn;
+    const expiresAt = Date.now() + expiresIn * 1000; // Convert seconds to milliseconds
 
-    // Create the policy object
-    const policy = {
-      Statement: [
-        {
-          Resource: url,
-          Condition: {
-            DateLessThan: {
-              'AWS:EpochTime': expiresAt,
-            },
-          },
-        },
-      ],
-    };
-
-    // Encode the policy to URL-safe base64
-    const policyString = JSON.stringify(policy);
-    const encodedPolicy = this.toUrlSafeBase64(Buffer.from(policyString));
-
-    // Sign the policy with the private key using SHA256
-    // Get signature as Buffer directly (no encoding)
-    const signature = crypto
-      .createSign('RSA-SHA256')
-      .update(policyString)
-      .sign({
-        key: this.cloudFrontPrivateKey,
-        format: 'pem',
-      });
-
-    // Convert signature Buffer to URL-safe base64
-    const encodedSignature = this.toUrlSafeBase64(signature);
-
-    // Build the signed URL with properly encoded parameters
-    // Note: encodedPolicy and encodedSignature are already base64url encoded (URL-safe)
-    // so we don't need encodeURIComponent() on them
-    const signedUrl =
-      `${url}?` +
-      `Policy=${encodedPolicy}` +
-      `&Signature=${encodedSignature}` +
-      `&Key-Pair-Id=${this.cloudFrontKeyPairId}`;
+    // Use AWS SDK's CloudFront signer with custom policy
+    const signedUrl = this.cloudFrontSigner.getSignedUrl({
+      url,
+      expires: expiresAt,
+    });
 
     return signedUrl;
-  }
-
-  /**
-   * Convert base64 string to URL-safe base64
-   * Replaces + with -, / with _, and removes = padding
-   */
-  private toUrlSafeBase64(buffer: Buffer): string {
-    return buffer
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=/g, '');
   }
 
   /**
