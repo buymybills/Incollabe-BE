@@ -162,77 +162,74 @@ export class InAppNotificationController {
     );
   }
 
-  @Put('mark-read/:id?')
+  @Put('mark-read/all')
   @ApiOperation({
-    summary: 'Mark notification(s) as read',
+    summary: 'Mark all notifications as read',
     description:
-      'Flexible endpoint to mark notifications as read with two modes:\n\n' +
-      '**Mode 1: Mark single notification by ID**\n' +
-      '- `PUT /notifications/mark-read/123` → Marks notification ID 123 as read\n' +
-      '- Use when user taps on a notification\n\n' +
-      '**Mode 2: Mark all unread notifications**\n' +
-      '- `PUT /notifications/mark-read` → Marks ALL unread notifications as read\n' +
-      '- Use for "Mark all as read" button\n\n' +
-      '💡 **Recommended Usage:**\n' +
-      '- Single notification tap → Mode 1 with ID in route\n' +
-      '- "Mark all as read" button → Mode 2 without ID',
-  })
-  @ApiParam({
-    name: 'id',
-    description: 'Optional notification ID. If provided, marks only that notification as read. If omitted, marks all as read.',
-    type: Number,
-    required: false,
+      'Mark all unread notifications as read for the current user.\n\n' +
+      'Use for "Mark all as read" or "Clear all" button.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Notifications marked as read',
+    description: 'All notifications marked as read',
     type: MarkAsReadResponseDto,
     schema: {
-      examples: {
-        single: {
-          summary: 'Single notification marked',
-          value: {
-            markedCount: 1,
-            message: '1 notification(s) marked as read',
-          },
-        },
-        all: {
-          summary: 'All unread notifications marked',
-          value: {
-            markedCount: 15,
-            message: 'All 15 notification(s) marked as read',
-          },
-        },
+      example: {
+        markedCount: 15,
+        message: 'All 15 notification(s) marked as read',
+      },
+    },
+  })
+  async markAllAsRead(
+    @Req() req: RequestWithUser,
+  ): Promise<MarkAsReadResponseDto> {
+    return await this.notificationService.markAllAsRead(
+      req.user.id,
+      req.user.userType,
+    );
+  }
+
+  @Put('mark-read/:id')
+  @ApiOperation({
+    summary: 'Mark single notification as read',
+    description:
+      'Mark a specific notification as read by ID.\n\n' +
+      'Use when user taps on a notification.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Notification ID to mark as read',
+    type: Number,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Notification marked as read',
+    type: MarkAsReadResponseDto,
+    schema: {
+      example: {
+        markedCount: 1,
+        message: '1 notification(s) marked as read',
       },
     },
   })
   @ApiResponse({
     status: 404,
-    description: 'Notification not found (when specific ID is provided)',
+    description: 'Notification not found',
   })
   async markAsRead(
     @Req() req: RequestWithUser,
-    @Param('id') id?: string,
+    @Param('id') id: string,
   ): Promise<MarkAsReadResponseDto> {
-    // Mode 1: Mark single notification by ID
-    if (id && id !== 'undefined' && !isNaN(Number(id))) {
-      const notificationId = parseInt(id, 10);
-      await this.notificationService.markSingleAsRead(
-        notificationId,
-        req.user.id,
-        req.user.userType,
-      );
-      return {
-        markedCount: 1,
-        message: '1 notification(s) marked as read',
-      };
-    }
-
-    // Mode 2: Mark all unread notifications
-    return await this.notificationService.markAllAsRead(
+    const notificationId = parseInt(id, 10);
+    await this.notificationService.markSingleAsRead(
+      notificationId,
       req.user.id,
       req.user.userType,
     );
+    return {
+      markedCount: 1,
+      message: '1 notification(s) marked as read',
+    };
   }
 
 }
