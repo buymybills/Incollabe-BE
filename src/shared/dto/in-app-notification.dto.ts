@@ -85,6 +85,16 @@ export class CreateInAppNotificationDto {
 // DTO for getting notifications (query params)
 export class GetNotificationsDto {
   @ApiPropertyOptional({
+    description: 'Return only unread count (no notification list). Set to true for badge display.',
+    example: false,
+    default: false,
+  })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  countOnly?: boolean;
+
+  @ApiPropertyOptional({
     description: 'Filter by read status: true = read only, false = unread only, undefined = all',
     example: false,
   })

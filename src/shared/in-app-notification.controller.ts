@@ -2,13 +2,10 @@ import {
   Controller,
   Get,
   Put,
-  Delete,
   Query,
   Param,
-  Body,
   Req,
   UseGuards,
-  ParseIntPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -23,10 +20,8 @@ import { AuthGuard } from '../auth/guards/auth.guard';
 import type { RequestWithUser } from '../types/request.types';
 import {
   GetNotificationsDto,
-  MarkNotificationsReadDto,
   GetNotificationsResponseDto,
   MarkAsReadResponseDto,
-  DeleteNotificationResponseDto,
   UnreadCountResponseDto,
 } from './dto/in-app-notification.dto';
 
@@ -41,22 +36,31 @@ export class InAppNotificationController {
 
   @Get()
   @ApiOperation({
-    summary: 'Get all notifications',
+    summary: 'Get notifications or unread count',
     description:
-      'Get paginated list of notifications for the authenticated user.\n\n' +
+      'Flexible endpoint to get notifications with different modes:\n\n' +
+      '**Mode 1: Get notification list (default)**\n' +
+      '- `GET /notifications` → Returns paginated notification list with unread count\n' +
+      '- `GET /notifications?isRead=false` → Returns only unread notifications\n' +
+      '- `GET /notifications?page=2&limit=10` → Paginated results\n\n' +
+      '**Mode 2: Get unread count only (for badge)**\n' +
+      '- `GET /notifications?countOnly=true` → Returns only unread count (no notification list)\n\n' +
       '**Features:**\n' +
       '- Pagination support\n' +
       '- Filter by read/unread status\n' +
       '- Filter by notification type(s)\n' +
       '- Unread notifications shown first\n' +
       '- Expired notifications are excluded\n' +
-      '- Returns unread count for badge display\n\n' +
-      '**Query Parameters:**\n' +
-      '- `isRead=false` - Get only unread notifications (DEFAULT behavior for notification center)\n' +
-      '- `isRead=true` - Get only read notifications\n' +
-      '- (no isRead parameter) - Get all notifications\n' +
-      '- `type=campaign_invite` - Filter by specific type\n' +
-      '- `types=campaign_invite,new_message` - Filter by multiple types',
+      '- Always includes unread count for badge display\n\n' +
+      '💡 **Recommended Usage:**\n' +
+      '- Notification center screen → Mode 1 (full list)\n' +
+      '- App badge / toolbar badge → Mode 2 (count only)',
+  })
+  @ApiQuery({
+    name: 'countOnly',
+    required: false,
+    type: Boolean,
+    description: 'Return only unread count (no list). Use for badge display.',
   })
   @ApiQuery({
     name: 'isRead',
@@ -90,45 +94,67 @@ export class InAppNotificationController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Notifications retrieved successfully',
-    type: GetNotificationsResponseDto,
+    description: 'Notifications or count retrieved successfully',
     schema: {
-      example: {
-        notifications: [
-          {
-            id: 123,
-            title: 'New Campaign Invitation',
-            body: 'FashionBrand has invited you to participate in "Summer Campaign 2026"',
-            type: 'campaign_invite',
-            actionUrl: 'app://campaigns/225',
-            actionType: 'view_campaign',
-            imageUrl: 'https://example.com/campaign-image.jpg',
-            relatedEntityType: 'campaign',
-            relatedEntityId: 225,
-            metadata: {
-              campaignId: 225,
-              brandName: 'FashionBrand',
+      oneOf: [
+        {
+          type: 'object',
+          description: 'Full notification list response',
+          properties: {
+            notifications: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'number', example: 123 },
+                  title: { type: 'string', example: 'New Campaign Invitation' },
+                  body: { type: 'string', example: 'FashionBrand has invited you...' },
+                  type: { type: 'string', example: 'campaign_invite' },
+                  actionUrl: { type: 'string', example: 'app://campaigns/225' },
+                  isRead: { type: 'boolean', example: false },
+                  priority: { type: 'string', example: 'high' },
+                  createdAt: { type: 'string', example: '2026-03-16T10:00:00.000Z' },
+                },
+              },
             },
-            isRead: false,
-            readAt: null,
-            priority: 'high',
-            expiresAt: null,
-            createdAt: '2026-03-16T10:00:00.000Z',
-            updatedAt: '2026-03-16T10:00:00.000Z',
+            unreadCount: { type: 'number', example: 5 },
+            total: { type: 'number', example: 25 },
+            page: { type: 'number', example: 1 },
+            limit: { type: 'number', example: 20 },
+            totalPages: { type: 'number', example: 2 },
           },
-        ],
-        unreadCount: 5,
-        total: 25,
-        page: 1,
-        limit: 20,
-        totalPages: 2,
-      },
+        },
+        {
+          type: 'object',
+          description: 'Count only response (when countOnly=true)',
+          properties: {
+            unreadCount: { type: 'number', example: 5 },
+            byType: {
+              type: 'object',
+              example: {
+                campaign_invite: 2,
+                new_message: 2,
+                payment_received: 1,
+              },
+            },
+          },
+        },
+      ],
     },
   })
   async getNotifications(
     @Req() req: RequestWithUser,
     @Query() filters: GetNotificationsDto,
-  ): Promise<GetNotificationsResponseDto> {
+  ): Promise<GetNotificationsResponseDto | UnreadCountResponseDto> {
+    // Mode 2: Count only
+    if (filters.countOnly) {
+      return await this.notificationService.getUnreadCount(
+        req.user.id,
+        req.user.userType,
+      );
+    }
+
+    // Mode 1: Full notification list
     return await this.notificationService.getNotifications(
       req.user.id,
       req.user.userType,
@@ -136,181 +162,77 @@ export class InAppNotificationController {
     );
   }
 
-  @Get('unread-count')
-  @ApiOperation({
-    summary: 'Get unread notifications count',
-    description:
-      'Get the total count of unread notifications for badge display.\n\n' +
-      'Also includes a breakdown by notification type for more granular UI updates.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Unread count retrieved successfully',
-    type: UnreadCountResponseDto,
-    schema: {
-      example: {
-        unreadCount: 5,
-        byType: {
-          campaign_invite: 2,
-          new_message: 2,
-          payment_received: 1,
-        },
-      },
-    },
-  })
-  async getUnreadCount(
-    @Req() req: RequestWithUser,
-  ): Promise<UnreadCountResponseDto> {
-    return await this.notificationService.getUnreadCount(
-      req.user.id,
-      req.user.userType,
-    );
-  }
-
-  @Put('mark-read')
+  @Put('mark-read/:id?')
   @ApiOperation({
     summary: 'Mark notification(s) as read',
     description:
-      'Mark specific notifications as read, or mark all as read if no IDs provided.\n\n' +
-      '**Usage:**\n' +
-      '- With `notificationIds`: Marks specific notifications as read\n' +
-      '- Without `notificationIds`: Marks ALL unread notifications as read',
+      'Flexible endpoint to mark notifications as read with two modes:\n\n' +
+      '**Mode 1: Mark single notification by ID**\n' +
+      '- `PUT /notifications/mark-read/123` → Marks notification ID 123 as read\n' +
+      '- Use when user taps on a notification\n\n' +
+      '**Mode 2: Mark all unread notifications**\n' +
+      '- `PUT /notifications/mark-read` → Marks ALL unread notifications as read\n' +
+      '- Use for "Mark all as read" button\n\n' +
+      '💡 **Recommended Usage:**\n' +
+      '- Single notification tap → Mode 1 with ID in route\n' +
+      '- "Mark all as read" button → Mode 2 without ID',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Optional notification ID. If provided, marks only that notification as read. If omitted, marks all as read.',
+    type: Number,
+    required: false,
   })
   @ApiResponse({
     status: 200,
     description: 'Notifications marked as read',
     type: MarkAsReadResponseDto,
     schema: {
-      example: {
-        markedCount: 3,
-        message: '3 notification(s) marked as read',
+      examples: {
+        single: {
+          summary: 'Single notification marked',
+          value: {
+            markedCount: 1,
+            message: '1 notification(s) marked as read',
+          },
+        },
+        all: {
+          summary: 'All unread notifications marked',
+          value: {
+            markedCount: 15,
+            message: 'All 15 notification(s) marked as read',
+          },
+        },
       },
     },
-  })
-  async markAsRead(
-    @Req() req: RequestWithUser,
-    @Body() dto: MarkNotificationsReadDto,
-  ): Promise<MarkAsReadResponseDto> {
-    return await this.notificationService.markAsRead(
-      req.user.id,
-      req.user.userType,
-      dto,
-    );
-  }
-
-  @Put(':id/mark-read')
-  @ApiOperation({
-    summary: 'Mark a single notification as read',
-    description: 'Mark a specific notification as read by ID.',
-  })
-  @ApiParam({
-    name: 'id',
-    description: 'Notification ID',
-    type: Number,
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Notification marked as read',
   })
   @ApiResponse({
     status: 404,
-    description: 'Notification not found',
+    description: 'Notification not found (when specific ID is provided)',
   })
-  async markSingleAsRead(
+  async markAsRead(
     @Req() req: RequestWithUser,
-    @Param('id', ParseIntPipe) notificationId: number,
-  ) {
-    return await this.notificationService.markSingleAsRead(
-      notificationId,
-      req.user.id,
-      req.user.userType,
-    );
-  }
-
-  @Put('mark-all-read')
-  @ApiOperation({
-    summary: 'Mark all notifications as read',
-    description: 'Mark all unread notifications as read for the current user.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'All notifications marked as read',
-    type: MarkAsReadResponseDto,
-    schema: {
-      example: {
-        markedCount: 10,
-        message: 'All 10 notification(s) marked as read',
-      },
-    },
-  })
-  async markAllAsRead(
-    @Req() req: RequestWithUser,
+    @Param('id') id?: string,
   ): Promise<MarkAsReadResponseDto> {
+    // Mode 1: Mark single notification by ID
+    if (id && id !== 'undefined' && !isNaN(Number(id))) {
+      const notificationId = parseInt(id, 10);
+      await this.notificationService.markSingleAsRead(
+        notificationId,
+        req.user.id,
+        req.user.userType,
+      );
+      return {
+        markedCount: 1,
+        message: '1 notification(s) marked as read',
+      };
+    }
+
+    // Mode 2: Mark all unread notifications
     return await this.notificationService.markAllAsRead(
       req.user.id,
       req.user.userType,
     );
   }
 
-  @Delete(':id')
-  @ApiOperation({
-    summary: 'Delete a notification',
-    description: 'Delete a specific notification by ID.',
-  })
-  @ApiParam({
-    name: 'id',
-    description: 'Notification ID',
-    type: Number,
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Notification deleted successfully',
-    type: DeleteNotificationResponseDto,
-    schema: {
-      example: {
-        message: 'Notification deleted successfully',
-      },
-    },
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Notification not found',
-  })
-  async deleteNotification(
-    @Req() req: RequestWithUser,
-    @Param('id', ParseIntPipe) notificationId: number,
-  ): Promise<DeleteNotificationResponseDto> {
-    await this.notificationService.deleteNotification(
-      notificationId,
-      req.user.id,
-      req.user.userType,
-    );
-    return { message: 'Notification deleted successfully' };
-  }
-
-  @Delete()
-  @ApiOperation({
-    summary: 'Delete all notifications',
-    description: 'Delete all notifications for the current user.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'All notifications deleted successfully',
-    schema: {
-      example: {
-        message: 'All notifications deleted successfully',
-        deletedCount: 25,
-      },
-    },
-  })
-  async deleteAllNotifications(@Req() req: RequestWithUser) {
-    const result = await this.notificationService.deleteAllNotifications(
-      req.user.id,
-      req.user.userType,
-    );
-    return {
-      message: 'All notifications deleted successfully',
-      ...result,
-    };
-  }
 }
