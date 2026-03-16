@@ -20,6 +20,7 @@ import {
   ApiBearerAuth,
   ApiConsumes,
   ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { PostService } from './post.service';
@@ -29,6 +30,7 @@ import { CreatePostMultipartDto } from './dto/create-post-multipart.dto';
 import { UpdatePostMultipartDto } from './dto/update-post-multipart.dto';
 import { FollowDto } from './dto/follow.dto';
 import { GetPostsDto, GetPostsQueryDto } from './dto/get-posts.dto';
+import { GetFollowersDto, GetFollowingDto } from './dto/get-followers.dto';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserType } from './models/post.model';
@@ -276,5 +278,337 @@ export class PostController {
     const currentUserType =
       user.userType === 'influencer' ? UserType.INFLUENCER : UserType.BRAND;
     return this.postService.getPosts(queryDto, currentUserType, user.id);
+  }
+
+  @Get('followers')
+  @ApiOperation({
+    summary: 'Get my followers list',
+    description:
+      'Get a paginated list of users who follow you. ' +
+      'Returns follower ID, type (influencer/brand), name, username, and profile image.\n\n' +
+      '**Response includes:**\n' +
+      '- Follower ID\n' +
+      '- Type (influencer or brand)\n' +
+      '- Name\n' +
+      '- Username\n' +
+      '- Profile image\n' +
+      '- When they followed you\n\n' +
+      '**Features:**\n' +
+      '- Search by name or username\n' +
+      '- Pagination support\n' +
+      '- Case-insensitive search\n\n' +
+      '**Use Cases:**\n' +
+      '- Display followers tab in user profile\n' +
+      '- Show who is following you\n' +
+      '- Search followers by name/username\n' +
+      '- Navigate to follower profiles\n' +
+      '- Check follower count',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search followers by name or username (case-insensitive)',
+    example: 'john',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20)',
+    example: 20,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Followers list retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        followers: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: {
+                type: 'number',
+                example: 15,
+                description: 'Follower user ID',
+              },
+              type: {
+                type: 'string',
+                enum: ['influencer', 'brand'],
+                example: 'influencer',
+                description: 'User type',
+              },
+              name: {
+                type: 'string',
+                example: 'John Doe',
+                description: 'Display name',
+              },
+              username: {
+                type: 'string',
+                example: 'johndoe',
+                description: 'Username',
+              },
+              profileImage: {
+                type: 'string',
+                nullable: true,
+                example: 'https://example.com/profile.jpg',
+                description: 'Profile image URL (null if not set)',
+              },
+              followedAt: {
+                type: 'string',
+                format: 'date-time',
+                example: '2026-03-15T10:00:00.000Z',
+                description: 'When they followed you',
+              },
+            },
+          },
+        },
+        total: {
+          type: 'number',
+          example: 150,
+          description: 'Total number of followers',
+        },
+        page: {
+          type: 'number',
+          example: 1,
+          description: 'Current page number',
+        },
+        limit: {
+          type: 'number',
+          example: 20,
+          description: 'Items per page',
+        },
+        totalPages: {
+          type: 'number',
+          example: 8,
+          description: 'Total number of pages',
+        },
+      },
+      example: {
+        followers: [
+          {
+            id: 15,
+            type: 'influencer',
+            name: 'John Doe',
+            username: 'johndoe',
+            profileImage: 'https://example.com/profile.jpg',
+            followedAt: '2026-03-15T10:00:00.000Z',
+          },
+          {
+            id: 32,
+            type: 'brand',
+            name: 'FashionBrand',
+            username: 'fashionbrand',
+            profileImage: 'https://example.com/brand.jpg',
+            followedAt: '2026-03-14T15:30:00.000Z',
+          },
+          {
+            id: 89,
+            type: 'influencer',
+            name: 'Sarah Johnson',
+            username: 'sarahj',
+            profileImage: null,
+            followedAt: '2026-03-13T08:20:00.000Z',
+          },
+        ],
+        total: 150,
+        page: 1,
+        limit: 20,
+        totalPages: 8,
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing authentication token',
+  })
+  async getFollowers(
+    @Query() dto: GetFollowersDto,
+    @CurrentUser() user: User,
+  ) {
+    const userType =
+      user.userType === 'influencer' ? UserType.INFLUENCER : UserType.BRAND;
+    return this.postService.getFollowers(
+      userType,
+      user.id,
+      dto.page,
+      dto.limit,
+      dto.search,
+    );
+  }
+
+  @Get('following')
+  @ApiOperation({
+    summary: 'Get my following list',
+    description:
+      'Get a paginated list of users that you follow. ' +
+      'Returns user ID, type (influencer/brand), name, username, and profile image.\n\n' +
+      '**Response includes:**\n' +
+      '- User ID\n' +
+      '- Type (influencer or brand)\n' +
+      '- Name\n' +
+      '- Username\n' +
+      '- Profile image\n' +
+      '- When you followed them\n\n' +
+      '**Features:**\n' +
+      '- Search by name or username\n' +
+      '- Pagination support\n' +
+      '- Case-insensitive search\n\n' +
+      '**Use Cases:**\n' +
+      '- Display following tab in user profile\n' +
+      '- Show who you are following\n' +
+      '- Search following by name/username\n' +
+      '- Navigate to following user profiles\n' +
+      '- Check following count',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search following by name or username (case-insensitive)',
+    example: 'jane',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20)',
+    example: 20,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Following list retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        following: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: {
+                type: 'number',
+                example: 42,
+                description: 'User ID that you are following',
+              },
+              type: {
+                type: 'string',
+                enum: ['influencer', 'brand'],
+                example: 'influencer',
+                description: 'User type',
+              },
+              name: {
+                type: 'string',
+                example: 'Jane Smith',
+                description: 'Display name',
+              },
+              username: {
+                type: 'string',
+                example: 'janesmith',
+                description: 'Username',
+              },
+              profileImage: {
+                type: 'string',
+                nullable: true,
+                example: 'https://example.com/jane.jpg',
+                description: 'Profile image URL (null if not set)',
+              },
+              followedAt: {
+                type: 'string',
+                format: 'date-time',
+                example: '2026-03-10T12:00:00.000Z',
+                description: 'When you followed them',
+              },
+            },
+          },
+        },
+        total: {
+          type: 'number',
+          example: 87,
+          description: 'Total number of users you are following',
+        },
+        page: {
+          type: 'number',
+          example: 1,
+          description: 'Current page number',
+        },
+        limit: {
+          type: 'number',
+          example: 20,
+          description: 'Items per page',
+        },
+        totalPages: {
+          type: 'number',
+          example: 5,
+          description: 'Total number of pages',
+        },
+      },
+      example: {
+        following: [
+          {
+            id: 42,
+            type: 'influencer',
+            name: 'Jane Smith',
+            username: 'janesmith',
+            profileImage: 'https://example.com/jane.jpg',
+            followedAt: '2026-03-10T12:00:00.000Z',
+          },
+          {
+            id: 18,
+            type: 'brand',
+            name: 'TechCompany',
+            username: 'techco',
+            profileImage: 'https://example.com/tech.jpg',
+            followedAt: '2026-03-05T09:15:00.000Z',
+          },
+          {
+            id: 73,
+            type: 'influencer',
+            name: 'Mike Wilson',
+            username: 'mikew',
+            profileImage: null,
+            followedAt: '2026-03-01T14:30:00.000Z',
+          },
+        ],
+        total: 87,
+        page: 1,
+        limit: 20,
+        totalPages: 5,
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing authentication token',
+  })
+  async getFollowing(
+    @Query() dto: GetFollowingDto,
+    @CurrentUser() user: User,
+  ) {
+    const userType =
+      user.userType === 'influencer' ? UserType.INFLUENCER : UserType.BRAND;
+    return this.postService.getFollowing(
+      userType,
+      user.id,
+      dto.page,
+      dto.limit,
+      dto.search,
+    );
   }
 }

@@ -21,6 +21,8 @@ import { BrandNiche } from '../brand/model/brand-niche.model';
 import { NotificationService } from '../shared/notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
 import { UserType as DeviceUserType } from '../shared/models/device-token.model';
+import { InAppNotificationService } from '../shared/in-app-notification.service';
+import { NotificationType } from '../shared/models/in-app-notification.model';
 import { S3Service } from '../shared/s3.service';
 import { Op, Sequelize } from 'sequelize';
 
@@ -39,6 +41,7 @@ export class PostService {
     private readonly brandModel: typeof Brand,
     private readonly notificationService: NotificationService,
     private readonly deviceTokenService: DeviceTokenService,
+    private readonly inAppNotificationService: InAppNotificationService,
     private readonly s3Service: S3Service,
   ) {}
 
@@ -274,6 +277,37 @@ export class PostService {
             ? DeviceUserType.INFLUENCER
             : DeviceUserType.BRAND;
 
+          // Create in-app notification for post like
+          const postAuthorDbUserType =
+            post.userType === UserType.INFLUENCER ? 'influencer' : 'brand';
+          const postAuthorUserId =
+            post.userType === UserType.INFLUENCER
+              ? post.influencerId
+              : post.brandId;
+
+          this.inAppNotificationService
+            .createNotification({
+              userId: postAuthorUserId,
+              userType: postAuthorDbUserType,
+              title: 'New Like',
+              body: `${likerName} liked your post`,
+              type: NotificationType.POST_LIKE,
+              actionUrl: `app://posts/${postId}`,
+              actionType: 'view_post',
+              relatedEntityType: 'post',
+              relatedEntityId: postId,
+              metadata: {
+                postId,
+                likerUserId: userId,
+                likerUserType: userType === UserType.INFLUENCER ? 'influencer' : 'brand',
+                likerName,
+              },
+            })
+            .catch((error: any) => {
+              console.error('Error creating in-app notification for post like:', error);
+            });
+
+          // Send push notification
           this.deviceTokenService
             .getAllUserTokens(postAuthor.id, postAuthorUserType)
             .then((deviceTokens: string[]) => {
@@ -867,6 +901,35 @@ export class PostService {
         ? DeviceUserType.INFLUENCER
         : DeviceUserType.BRAND;
 
+      // Create in-app notification for new follower
+      const followedDbUserType =
+        followedUserType === FollowUserType.INFLUENCER ? 'influencer' : 'brand';
+      const followerDbUserType =
+        followerUserType === UserType.INFLUENCER ? 'influencer' : 'brand';
+
+      this.inAppNotificationService
+        .createNotification({
+          userId: followedUserId,
+          userType: followedDbUserType,
+          title: 'New Follower',
+          body: `${followerName} started following you`,
+          type: NotificationType.NEW_FOLLOWER,
+          actionUrl: `app://profile/${followerDbUserType}/${followerUserId}`,
+          actionType: 'view_profile',
+          relatedEntityType: 'user',
+          relatedEntityId: followerUserId,
+          metadata: {
+            followerUserId,
+            followerUserType: followerDbUserType,
+            followerName,
+            followerUsername: followerUser.username,
+          },
+        })
+        .catch((error: any) => {
+          console.error('Error creating in-app notification for new follower:', error);
+        });
+
+      // Send push notification
       this.deviceTokenService
         .getAllUserTokens(followedUser.id, followedDeviceUserType)
         .then((deviceTokens: string[]) => {
@@ -887,5 +950,249 @@ export class PostService {
           console.error('Error sending follower notification:', error);
         });
     }
+  }
+
+  /**
+   * Get followers list (users who follow the current user)
+   */
+  async getFollowers(
+    currentUserType: UserType,
+    currentUserId: number,
+    page: number = 1,
+    limit: number = 20,
+    search?: string,
+  ): Promise<{
+    followers: Array<{
+      id: number;
+      type: 'influencer' | 'brand';
+      name: string;
+      username: string;
+      profileImage: string | null;
+      followedAt: Date;
+    }>;
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const followingType =
+      currentUserType === UserType.INFLUENCER
+        ? FollowingType.INFLUENCER
+        : FollowingType.BRAND;
+    const followingField =
+      currentUserType === UserType.INFLUENCER
+        ? 'followingInfluencerId'
+        : 'followingBrandId';
+
+    const offset = (page - 1) * limit;
+
+    // Build include options with search filter
+    const influencerInclude: any = {
+      model: Influencer,
+      as: 'followerInfluencer',
+      attributes: ['id', 'name', 'username', 'profileImage'],
+      required: false,
+    };
+
+    const brandInclude: any = {
+      model: Brand,
+      as: 'followerBrand',
+      attributes: ['id', 'brandName', 'username', 'profileImage'],
+      required: false,
+    };
+
+    // Add search filter if provided
+    if (search) {
+      const searchPattern = `%${search}%`;
+      influencerInclude.where = {
+        [Op.or]: [
+          { name: { [Op.iLike]: searchPattern } },
+          { username: { [Op.iLike]: searchPattern } },
+        ],
+      };
+      brandInclude.where = {
+        [Op.or]: [
+          { brandName: { [Op.iLike]: searchPattern } },
+          { username: { [Op.iLike]: searchPattern } },
+        ],
+      };
+    }
+
+    // Get total count with search filter
+    const total = await this.followModel.count({
+      where: {
+        followingType,
+        [followingField]: currentUserId,
+      },
+      include: [influencerInclude, brandInclude],
+      distinct: true,
+    });
+
+    // Get followers with pagination and search
+    const follows = await this.followModel.findAll({
+      where: {
+        followingType,
+        [followingField]: currentUserId,
+      },
+      include: [influencerInclude, brandInclude],
+      order: [['createdAt', 'DESC']],
+      limit,
+      offset,
+    });
+
+    const followers = follows.map((follow) => {
+      if (follow.followerType === FollowerType.INFLUENCER && follow.followerInfluencer) {
+        return {
+          id: follow.followerInfluencer.id,
+          type: 'influencer' as const,
+          name: follow.followerInfluencer.name,
+          username: follow.followerInfluencer.username,
+          profileImage: follow.followerInfluencer.profileImage || null,
+          followedAt: follow.createdAt,
+        };
+      } else if (follow.followerType === FollowerType.BRAND && follow.followerBrand) {
+        return {
+          id: follow.followerBrand.id,
+          type: 'brand' as const,
+          name: follow.followerBrand.brandName,
+          username: follow.followerBrand.username,
+          profileImage: follow.followerBrand.profileImage || null,
+          followedAt: follow.createdAt,
+        };
+      }
+      return null;
+    }).filter((follower): follower is NonNullable<typeof follower> => follower !== null);
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      followers,
+      total,
+      page,
+      limit,
+      totalPages,
+    };
+  }
+
+  /**
+   * Get following list (users that the current user follows)
+   */
+  async getFollowing(
+    currentUserType: UserType,
+    currentUserId: number,
+    page: number = 1,
+    limit: number = 20,
+    search?: string,
+  ): Promise<{
+    following: Array<{
+      id: number;
+      type: 'influencer' | 'brand';
+      name: string;
+      username: string;
+      profileImage: string | null;
+      followedAt: Date;
+    }>;
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const followerType =
+      currentUserType === UserType.INFLUENCER
+        ? FollowerType.INFLUENCER
+        : FollowerType.BRAND;
+    const followerField =
+      currentUserType === UserType.INFLUENCER
+        ? 'followerInfluencerId'
+        : 'followerBrandId';
+
+    const offset = (page - 1) * limit;
+
+    // Build include options with search filter
+    const influencerInclude: any = {
+      model: Influencer,
+      as: 'followingInfluencer',
+      attributes: ['id', 'name', 'username', 'profileImage'],
+      required: false,
+    };
+
+    const brandInclude: any = {
+      model: Brand,
+      as: 'followingBrand',
+      attributes: ['id', 'brandName', 'username', 'profileImage'],
+      required: false,
+    };
+
+    // Add search filter if provided
+    if (search) {
+      const searchPattern = `%${search}%`;
+      influencerInclude.where = {
+        [Op.or]: [
+          { name: { [Op.iLike]: searchPattern } },
+          { username: { [Op.iLike]: searchPattern } },
+        ],
+      };
+      brandInclude.where = {
+        [Op.or]: [
+          { brandName: { [Op.iLike]: searchPattern } },
+          { username: { [Op.iLike]: searchPattern } },
+        ],
+      };
+    }
+
+    // Get total count with search filter
+    const total = await this.followModel.count({
+      where: {
+        followerType,
+        [followerField]: currentUserId,
+      },
+      include: [influencerInclude, brandInclude],
+      distinct: true,
+    });
+
+    // Get following with pagination and search
+    const follows = await this.followModel.findAll({
+      where: {
+        followerType,
+        [followerField]: currentUserId,
+      },
+      include: [influencerInclude, brandInclude],
+      order: [['createdAt', 'DESC']],
+      limit,
+      offset,
+    });
+
+    const following = follows.map((follow) => {
+      if (follow.followingType === FollowingType.INFLUENCER && follow.followingInfluencer) {
+        return {
+          id: follow.followingInfluencer.id,
+          type: 'influencer' as const,
+          name: follow.followingInfluencer.name,
+          username: follow.followingInfluencer.username,
+          profileImage: follow.followingInfluencer.profileImage || null,
+          followedAt: follow.createdAt,
+        };
+      } else if (follow.followingType === FollowingType.BRAND && follow.followingBrand) {
+        return {
+          id: follow.followingBrand.id,
+          type: 'brand' as const,
+          name: follow.followingBrand.brandName,
+          username: follow.followingBrand.username,
+          profileImage: follow.followingBrand.profileImage || null,
+          followedAt: follow.createdAt,
+        };
+      }
+      return null;
+    }).filter((user): user is NonNullable<typeof user> => user !== null);
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      following,
+      total,
+      page,
+      limit,
+      totalPages,
+    };
   }
 }
