@@ -109,7 +109,8 @@ export class S3Service {
     }
 
     const url = `https://${this.cloudFrontDomain}/${key}`;
-    const expiresAt = Date.now() + expiresIn * 1000; // Convert seconds to milliseconds
+    // CloudFront Signer expects expires in seconds (Unix timestamp), not milliseconds
+    const expiresAt = Math.floor((Date.now() + expiresIn * 1000) / 1000);
 
     // Use AWS SDK's CloudFront signer with custom policy
     const signedUrl = this.cloudFrontSigner.getSignedUrl({
