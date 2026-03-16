@@ -248,9 +248,27 @@ export class PostService {
         liker = await this.influencerModel.findByPk(userId, {
           attributes: ['id', 'name', 'username', 'profileImage'],
         });
+        console.log('🔍 POST LIKE - Fetched Influencer Liker:', {
+          userId,
+          likerData: liker ? {
+            id: liker.id,
+            name: (liker as any).name,
+            username: (liker as any).username,
+            profileImage: (liker as any).profileImage,
+          } : null,
+        });
       } else {
         liker = await this.brandModel.findByPk(userId, {
           attributes: ['id', 'brandName', 'username', 'profileImage'],
+        });
+        console.log('🔍 POST LIKE - Fetched Brand Liker:', {
+          userId,
+          likerData: liker ? {
+            id: liker.id,
+            brandName: (liker as any).brandName,
+            username: (liker as any).username,
+            profileImage: (liker as any).profileImage,
+          } : null,
         });
       }
 
@@ -289,27 +307,45 @@ export class PostService {
               ? post.influencerId
               : post.brandId;
 
+          const likerProfileImage = (liker as Influencer | Brand).profileImage;
+          console.log('📝 POST LIKE - Preparing notification metadata:', {
+            postId,
+            likerUserId: userId,
+            likerUserType: userType === UserType.INFLUENCER ? 'influencer' : 'brand',
+            likerName,
+            likerProfileImage,
+            likerProfileImageType: typeof likerProfileImage,
+            likerObject: liker,
+          });
+
+          const notificationPayload: any = {
+            userId: postAuthorUserId,
+            userType: postAuthorDbUserType as 'influencer' | 'brand',
+            title: 'New Like',
+            body: `${likerName} liked your post`,
+            type: NotificationType.POST_LIKE,
+            actionUrl: `app://posts/${postId}`,
+            actionType: 'view_post',
+            relatedEntityType: 'post',
+            relatedEntityId: postId,
+            metadata: {
+              postId,
+              likerUserId: userId,
+              likerUserType: userType === UserType.INFLUENCER ? 'influencer' : 'brand',
+              likerName,
+              likerProfileImage,
+            },
+          };
+
+          console.log('🚀 POST LIKE - Creating in-app notification with payload:', JSON.stringify(notificationPayload, null, 2));
+
           this.inAppNotificationService
-            .createNotification({
-              userId: postAuthorUserId,
-              userType: postAuthorDbUserType,
-              title: 'New Like',
-              body: `${likerName} liked your post`,
-              type: NotificationType.POST_LIKE,
-              actionUrl: `app://posts/${postId}`,
-              actionType: 'view_post',
-              relatedEntityType: 'post',
-              relatedEntityId: postId,
-              metadata: {
-                postId,
-                likerUserId: userId,
-                likerUserType: userType === UserType.INFLUENCER ? 'influencer' : 'brand',
-                likerName,
-                likerProfileImage: (liker as Influencer | Brand).profileImage,
-              },
+            .createNotification(notificationPayload)
+            .then((result) => {
+              console.log('✅ POST LIKE - In-app notification created successfully:', result);
             })
             .catch((error: any) => {
-              console.error('Error creating in-app notification for post like:', error);
+              console.error('❌ POST LIKE - Error creating in-app notification:', error);
             });
 
           // Send push notification
@@ -889,9 +925,25 @@ export class PostService {
       followerUser = await this.influencerModel.findByPk(followerUserId, {
         attributes: ['name', 'username', 'profileImage'],
       });
+      console.log('🔍 NEW FOLLOWER - Fetched Influencer Follower:', {
+        followerUserId,
+        followerData: followerUser ? {
+          name: (followerUser as any).name,
+          username: (followerUser as any).username,
+          profileImage: (followerUser as any).profileImage,
+        } : null,
+      });
     } else {
       followerUser = await this.brandModel.findByPk(followerUserId, {
         attributes: ['brandName', 'username', 'profileImage'],
+      });
+      console.log('🔍 NEW FOLLOWER - Fetched Brand Follower:', {
+        followerUserId,
+        followerData: followerUser ? {
+          brandName: (followerUser as any).brandName,
+          username: (followerUser as any).username,
+          profileImage: (followerUser as any).profileImage,
+        } : null,
       });
     }
 
@@ -912,27 +964,45 @@ export class PostService {
       const followerDbUserType =
         followerUserType === UserType.INFLUENCER ? 'influencer' : 'brand';
 
+      const followerProfileImage = (followerUser as any).profileImage;
+      console.log('📝 NEW FOLLOWER - Preparing notification metadata:', {
+        followerUserId,
+        followerUserType: followerDbUserType,
+        followerName,
+        followerUsername: followerUser.username,
+        followerProfileImage,
+        followerProfileImageType: typeof followerProfileImage,
+        followerObject: followerUser,
+      });
+
+      const followerNotificationPayload: any = {
+        userId: followedUserId,
+        userType: followedDbUserType as 'influencer' | 'brand',
+        title: 'New Follower',
+        body: `${followerName} started following you`,
+        type: NotificationType.NEW_FOLLOWER,
+        actionUrl: `app://profile/${followerDbUserType}/${followerUserId}`,
+        actionType: 'view_profile',
+        relatedEntityType: 'user',
+        relatedEntityId: followerUserId,
+        metadata: {
+          followerUserId,
+          followerUserType: followerDbUserType,
+          followerName,
+          followerUsername: followerUser.username,
+          followerProfileImage,
+        },
+      };
+
+      console.log('🚀 NEW FOLLOWER - Creating in-app notification with payload:', JSON.stringify(followerNotificationPayload, null, 2));
+
       this.inAppNotificationService
-        .createNotification({
-          userId: followedUserId,
-          userType: followedDbUserType,
-          title: 'New Follower',
-          body: `${followerName} started following you`,
-          type: NotificationType.NEW_FOLLOWER,
-          actionUrl: `app://profile/${followerDbUserType}/${followerUserId}`,
-          actionType: 'view_profile',
-          relatedEntityType: 'user',
-          relatedEntityId: followerUserId,
-          metadata: {
-            followerUserId,
-            followerUserType: followerDbUserType,
-            followerName,
-            followerUsername: followerUser.username,
-            followerProfileImage: (followerUser as any).profileImage,
-          },
+        .createNotification(followerNotificationPayload)
+        .then((result) => {
+          console.log('✅ NEW FOLLOWER - In-app notification created successfully:', result);
         })
         .catch((error: any) => {
-          console.error('Error creating in-app notification for new follower:', error);
+          console.error('❌ NEW FOLLOWER - Error creating in-app notification:', error);
         });
 
       // Send push notification
