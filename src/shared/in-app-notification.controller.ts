@@ -22,7 +22,6 @@ import {
   GetNotificationsDto,
   GetNotificationsResponseDto,
   MarkAsReadResponseDto,
-  UnreadCountResponseDto,
 } from './dto/in-app-notification.dto';
 
 @ApiTags('In-App Notifications')
@@ -36,43 +35,38 @@ export class InAppNotificationController {
 
   @Get()
   @ApiOperation({
-    summary: 'Get notifications or unread count',
+    summary: 'Get latest 30 notifications with unread count',
     description:
-      'Flexible endpoint to get notifications with different modes:\n\n' +
-      '**Mode 1: Get notification list (default)**\n' +
-      '- `GET /notifications` → Returns paginated notification list with unread count\n' +
-      '- `GET /notifications?isRead=false` → Returns only unread notifications\n' +
-      '- `GET /notifications?page=2&limit=10` → Paginated results\n\n' +
-      '**Mode 2: Get unread count only (for badge)**\n' +
-      '- `GET /notifications?countOnly=true` → Returns only unread count (no notification list)\n\n' +
+      'Returns the latest 30 notifications with unread count for bell icon badge.\n\n' +
+      '**Always Returns:**\n' +
+      '- Latest 30 notifications (most recent first)\n' +
+      '- Unread count (0 if all read)\n' +
+      '- Total count matching filters\n\n' +
       '**Features:**\n' +
-      '- Pagination support\n' +
-      '- Filter by read/unread status\n' +
-      '- Filter by notification type(s)\n' +
-      '- Unread notifications shown first\n' +
+      '- Unread notifications shown first, then read\n' +
+      '- Optional filter by read/unread status\n' +
+      '- Optional filter by notification type(s)\n' +
       '- Expired notifications are excluded\n' +
-      '- Always includes unread count for badge display\n\n' +
-      '💡 **Recommended Usage:**\n' +
-      '- Notification center screen → Mode 1 (full list)\n' +
-      '- App badge / toolbar badge → Mode 2 (count only)',
-  })
-  @ApiQuery({
-    name: 'countOnly',
-    required: false,
-    type: Boolean,
-    description: 'Return only unread count (no list). Use for badge display.',
+      '- Unread count always included for badge display\n\n' +
+      '**Use Cases:**\n' +
+      '- Display notification center with latest 30 notifications\n' +
+      '- Show unread count on bell icon (unreadCount field)\n' +
+      '- Filter to show only unread: `?isRead=false`\n' +
+      '- Filter by type: `?type=campaign_invite`',
   })
   @ApiQuery({
     name: 'isRead',
     required: false,
     type: Boolean,
     description: 'Filter by read status (true=read only, false=unread only, omit=all)',
+    example: false,
   })
   @ApiQuery({
     name: 'type',
     required: false,
     type: String,
     description: 'Filter by single notification type',
+    example: 'campaign_invite',
   })
   @ApiQuery({
     name: 'types',
@@ -80,81 +74,99 @@ export class InAppNotificationController {
     type: [String],
     description: 'Filter by multiple notification types (comma-separated)',
   })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: Number,
-    description: 'Page number (default: 1)',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Items per page (default: 20)',
-  })
   @ApiResponse({
     status: 200,
-    description: 'Notifications or count retrieved successfully',
+    description: 'Latest 30 notifications with unread count retrieved successfully',
     schema: {
-      oneOf: [
-        {
-          type: 'object',
-          description: 'Full notification list response',
-          properties: {
-            notifications: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'number', example: 123 },
-                  title: { type: 'string', example: 'New Campaign Invitation' },
-                  body: { type: 'string', example: 'FashionBrand has invited you...' },
-                  type: { type: 'string', example: 'campaign_invite' },
-                  actionUrl: { type: 'string', example: 'app://campaigns/225' },
-                  isRead: { type: 'boolean', example: false },
-                  priority: { type: 'string', example: 'high' },
-                  createdAt: { type: 'string', example: '2026-03-16T10:00:00.000Z' },
-                },
-              },
+      example: {
+        notifications: [
+          {
+            id: 123,
+            title: 'New Campaign Invitation',
+            body: 'FashionBrand has invited you to participate in "Summer Campaign 2026"',
+            type: 'campaign_invite',
+            actionUrl: 'app://campaigns/225',
+            actionType: 'view_campaign',
+            imageUrl: 'https://example.com/campaign-banner.jpg',
+            relatedEntityType: 'campaign',
+            relatedEntityId: 225,
+            metadata: {
+              campaignId: 225,
+              brandName: 'FashionBrand',
+              campaignName: 'Summer Campaign 2026',
             },
-            unreadCount: { type: 'number', example: 5 },
-            total: { type: 'number', example: 25 },
-            page: { type: 'number', example: 1 },
-            limit: { type: 'number', example: 20 },
-            totalPages: { type: 'number', example: 2 },
+            isRead: false,
+            readAt: null,
+            priority: 'high',
+            expiresAt: null,
+            createdAt: '2026-03-16T10:00:00.000Z',
+            updatedAt: '2026-03-16T10:00:00.000Z',
           },
-        },
-        {
-          type: 'object',
-          description: 'Count only response (when countOnly=true)',
-          properties: {
-            unreadCount: { type: 'number', example: 5 },
-            byType: {
-              type: 'object',
-              example: {
-                campaign_invite: 2,
-                new_message: 2,
-                payment_received: 1,
-              },
+          {
+            id: 122,
+            title: 'Payment Received',
+            body: '₹5000 has been credited to your account for "Winter Fashion Campaign"',
+            type: 'payment_received',
+            actionUrl: 'app://wallet',
+            actionType: 'view_wallet',
+            imageUrl: null,
+            relatedEntityType: 'payment',
+            relatedEntityId: 456,
+            metadata: {
+              amount: 5000,
+              currency: 'INR',
+              campaignName: 'Winter Fashion Campaign',
             },
+            isRead: false,
+            readAt: null,
+            priority: 'high',
+            expiresAt: null,
+            createdAt: '2026-03-15T15:30:00.000Z',
+            updatedAt: '2026-03-15T15:30:00.000Z',
           },
-        },
-      ],
+          {
+            id: 121,
+            title: 'New Follower',
+            body: 'John Doe started following you',
+            type: 'new_follower',
+            actionUrl: 'app://profile/influencer/42',
+            actionType: 'view_profile',
+            imageUrl: null,
+            relatedEntityType: 'follow',
+            relatedEntityId: 789,
+            metadata: {
+              followerId: 42,
+              followerType: 'influencer',
+              followerName: 'John Doe',
+            },
+            isRead: true,
+            readAt: '2026-03-15T14:00:00.000Z',
+            priority: 'normal',
+            expiresAt: null,
+            createdAt: '2026-03-15T12:00:00.000Z',
+            updatedAt: '2026-03-15T14:00:00.000Z',
+          },
+        ],
+        unreadCount: 2,
+        total: 30,
+        page: 1,
+        limit: 30,
+        totalPages: 1,
+      },
     },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid query parameters',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing authentication token',
   })
   async getNotifications(
     @Req() req: RequestWithUser,
     @Query() filters: GetNotificationsDto,
-  ): Promise<GetNotificationsResponseDto | UnreadCountResponseDto> {
-    // Mode 2: Count only
-    if (filters.countOnly) {
-      return await this.notificationService.getUnreadCount(
-        req.user.id,
-        req.user.userType,
-      );
-    }
-
-    // Mode 1: Full notification list
+  ): Promise<GetNotificationsResponseDto> {
     return await this.notificationService.getNotifications(
       req.user.id,
       req.user.userType,
@@ -172,7 +184,6 @@ export class InAppNotificationController {
   @ApiResponse({
     status: 200,
     description: 'All notifications marked as read',
-    type: MarkAsReadResponseDto,
     schema: {
       example: {
         markedCount: 15,
@@ -204,7 +215,6 @@ export class InAppNotificationController {
   @ApiResponse({
     status: 200,
     description: 'Notification marked as read',
-    type: MarkAsReadResponseDto,
     schema: {
       example: {
         markedCount: 1,
@@ -231,5 +241,4 @@ export class InAppNotificationController {
       message: '1 notification(s) marked as read',
     };
   }
-
 }

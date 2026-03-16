@@ -70,16 +70,18 @@ export class InAppNotificationService {
   }
 
   /**
-   * Get notifications for a user with pagination and filters
+   * Get latest 30 notifications for a user with unread count
+   * Always returns top 30 most recent notifications
+   * Always includes unread count for bell icon badge
    */
   async getNotifications(
     userId: number,
     userType: 'influencer' | 'brand',
     filters: GetNotificationsDto,
   ): Promise<GetNotificationsResponseDto> {
-    const { isRead, type, types, page = 1, limit = 20 } = filters;
+    const { isRead, type, types } = filters;
 
-    // Build where clause
+    // Build where clause for fetching notifications
     const where: any = {
       userId,
       userType,
@@ -90,22 +92,19 @@ export class InAppNotificationService {
       ],
     };
 
-    // Filter by read status
+    // Optional filter by read status
     if (isRead !== undefined) {
       where.isRead = isRead;
     }
 
-    // Filter by notification type(s)
+    // Optional filter by notification type(s)
     if (type) {
       where.type = type;
     } else if (types && types.length > 0) {
       where.type = { [Op.in]: types };
     }
 
-    // Get total count
-    const total = await this.inAppNotificationModel.count({ where });
-
-    // Get total unread count (regardless of current filter)
+    // Get total unread count (always calculated, regardless of filters)
     const unreadCount = await this.inAppNotificationModel.count({
       where: {
         userId,
@@ -118,28 +117,26 @@ export class InAppNotificationService {
       },
     });
 
-    // Calculate pagination
-    const offset = (page - 1) * limit;
-    const totalPages = Math.ceil(total / limit);
-
-    // Get notifications
+    // Get latest 30 notifications (with filters applied)
     const notifications = await this.inAppNotificationModel.findAll({
       where,
       order: [
         ['isRead', 'ASC'], // Unread first
         ['createdAt', 'DESC'], // Newest first
       ],
-      limit,
-      offset,
+      limit: 30,
     });
+
+    // Get total count of notifications matching filters
+    const total = await this.inAppNotificationModel.count({ where });
 
     return {
       notifications: notifications.map((n) => n.toJSON()),
-      unreadCount,
+      unreadCount, // Always included (0 if all read)
       total,
-      page,
-      limit,
-      totalPages,
+      page: 1,
+      limit: 30,
+      totalPages: Math.ceil(total / 30),
     };
   }
 

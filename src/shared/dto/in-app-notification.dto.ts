@@ -85,16 +85,6 @@ export class CreateInAppNotificationDto {
 // DTO for getting notifications (query params)
 export class GetNotificationsDto {
   @ApiPropertyOptional({
-    description: 'Return only unread count (no notification list). Set to true for badge display.',
-    example: false,
-    default: false,
-  })
-  @IsOptional()
-  @Type(() => Boolean)
-  @IsBoolean()
-  countOnly?: boolean;
-
-  @ApiPropertyOptional({
     description: 'Filter by read status: true = read only, false = unread only, undefined = all',
     example: false,
   })
@@ -120,28 +110,6 @@ export class GetNotificationsDto {
   @IsArray()
   @IsString({ each: true })
   types?: string[];
-
-  @ApiPropertyOptional({
-    description: 'Page number for pagination',
-    default: 1,
-    minimum: 1,
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page?: number = 1;
-
-  @ApiPropertyOptional({
-    description: 'Number of notifications per page',
-    default: 20,
-    minimum: 1,
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  limit?: number = 20;
 }
 
 // DTO for marking notifications as read
