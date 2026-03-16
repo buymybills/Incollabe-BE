@@ -10,6 +10,7 @@ import { InfluencerNiche } from '../auth/model/influencer-niche.model';
 import { BrandNiche } from '../brand/model/brand-niche.model';
 import { NotificationService } from '../shared/notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
+import { InAppNotificationService } from '../shared/in-app-notification.service';
 import { S3Service } from '../shared/s3.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
@@ -76,6 +77,15 @@ const mockDeviceTokenService = {
   getUserDevices: jest.fn(),
 };
 
+const mockInAppNotificationService = {
+  createNotification: jest.fn().mockResolvedValue({ id: 1 }),
+  getNotifications: jest.fn(),
+  markAsRead: jest.fn(),
+  markAllAsRead: jest.fn(),
+  deleteNotification: jest.fn(),
+  getUnreadCount: jest.fn(),
+};
+
 const mockS3Service = {
   uploadFileToS3: jest.fn(),
   getFileUrl: jest.fn(),
@@ -128,6 +138,10 @@ describe('PostService', () => {
         {
           provide: DeviceTokenService,
           useValue: mockDeviceTokenService,
+        },
+        {
+          provide: InAppNotificationService,
+          useValue: mockInAppNotificationService,
         },
         {
           provide: S3Service,
@@ -373,10 +387,31 @@ describe('PostService', () => {
     it('should like a post when not already liked', async () => {
       const mockPost = {
         id: 1,
+        userType: UserType.INFLUENCER,
+        influencerId: 2, // Different user (post owner)
+        content: 'Test post content',
         increment: jest.fn().mockResolvedValue(true),
       };
 
+      const mockPostOwner = {
+        id: 2,
+        name: 'Post Owner',
+        username: 'postowner',
+      };
+
+      const mockLiker = {
+        id: 1,
+        name: 'Liker User',
+        username: 'liker',
+        profileImage: null,
+      };
+
       postModel.findByPk.mockResolvedValue(mockPost);
+      influencerModel.findByPk.mockImplementation((id) => {
+        if (id === 2) return Promise.resolve(mockPostOwner);
+        if (id === 1) return Promise.resolve(mockLiker);
+        return Promise.resolve(null);
+      });
       likeModel.findOne.mockResolvedValue(null); // Not already liked
       likeModel.create.mockResolvedValue({ id: 1 });
 
@@ -428,8 +463,23 @@ describe('PostService', () => {
         userId: 2,
       };
 
+      const mockFollowedBrand = {
+        id: 2,
+        brandName: 'Test Brand',
+        username: 'testbrand',
+      };
+
+      const mockFollowerInfluencer = {
+        id: 1,
+        name: 'Follower User',
+        username: 'follower',
+        profileImage: null,
+      };
+
       followModel.findOne.mockResolvedValue(null); // Not already following
       followModel.create.mockResolvedValue({ id: 1 });
+      brandModel.findByPk.mockResolvedValue(mockFollowedBrand);
+      influencerModel.findByPk.mockResolvedValue(mockFollowerInfluencer);
 
       const result = await service.followUser(
         followDto,
