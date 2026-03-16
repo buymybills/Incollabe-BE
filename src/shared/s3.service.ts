@@ -119,26 +119,26 @@ export class S3Service {
     const encodedPolicy = this.toUrlSafeBase64(Buffer.from(policyString));
 
     // Sign the policy with the private key using SHA256
+    // Get signature as Buffer directly (no encoding)
     const signature = crypto
       .createSign('RSA-SHA256')
       .update(policyString)
-      .sign(
-        {
-          key: this.cloudFrontPrivateKey,
-          format: 'pem',
-        },
-        'base64',
-      );
+      .sign({
+        key: this.cloudFrontPrivateKey,
+        format: 'pem',
+      });
 
-    // Convert signature to URL-safe base64
-    const encodedSignature = this.toUrlSafeBase64(Buffer.from(signature, 'base64'));
+    // Convert signature Buffer to URL-safe base64
+    const encodedSignature = this.toUrlSafeBase64(signature);
 
     // Build the signed URL with properly encoded parameters
+    // Note: encodedPolicy and encodedSignature are already base64url encoded (URL-safe)
+    // so we don't need encodeURIComponent() on them
     const signedUrl =
       `${url}?` +
-      `Policy=${encodeURIComponent(encodedPolicy)}` +
-      `&Signature=${encodeURIComponent(encodedSignature)}` +
-      `&Key-Pair-Id=${encodeURIComponent(this.cloudFrontKeyPairId)}`;
+      `Policy=${encodedPolicy}` +
+      `&Signature=${encodedSignature}` +
+      `&Key-Pair-Id=${this.cloudFrontKeyPairId}`;
 
     return signedUrl;
   }
