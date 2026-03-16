@@ -30,6 +30,7 @@ import { PushNotification } from '../admin/models/push-notification.model';
 import { InfluencerCredibilityScore } from '../shared/models/influencer-credibility-score.model';
 import { GroupChat } from '../shared/models/group-chat.model';
 import { GroupMember } from '../shared/models/group-member.model';
+import { InAppNotification } from '../shared/models/in-app-notification.model';
 // Old Hype Store models (legacy)
 import { HypeStoreWallet } from '../hype-store/models/hype-store-wallet.model';
 import { HypeStoreWalletTransaction } from '../hype-store/models/hype-store-wallet-transaction.model';
@@ -147,6 +148,7 @@ import { WalletRechargeLimit } from '../wallet/models/wallet-recharge-limit.mode
             InfluencerCredibilityScore,
             GroupChat,
             GroupMember,
+            InAppNotification,
             // Hype Store models
             HypeStore,
             HypeStoreCouponCode,

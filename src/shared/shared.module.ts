@@ -77,6 +77,9 @@ import { AIScoringService } from './services/ai-scoring.service';
 import { CampaignReview } from './models/campaign-review.model';
 import { GroupChat } from './models/group-chat.model';
 import { GroupMember } from './models/group-member.model';
+import { InAppNotification } from './models/in-app-notification.model';
+import { InAppNotificationService } from './in-app-notification.service';
+import { InAppNotificationController } from './in-app-notification.controller';
 
 @Module({
   imports: [
@@ -115,6 +118,7 @@ import { GroupMember } from './models/group-member.model';
       CampaignReview,
       GroupChat,
       GroupMember,
+      InAppNotification,
     ]),
   ],
   controllers: [
@@ -126,6 +130,7 @@ import { GroupMember } from './models/group-member.model';
     InfluencerProfileScoringController,
     CampusAmbassadorController,
     ConfigController,
+    InAppNotificationController,
   ],
   providers: [
     SmsService,
@@ -163,6 +168,7 @@ import { GroupMember } from './models/group-member.model';
     DeviceTokenService,
     AppVersionService,
     AIScoringService,
+    InAppNotificationService,
   ],
   exports: [
     SmsService,
@@ -193,6 +199,7 @@ import { GroupMember } from './models/group-member.model';
     DeviceTokenService,
     AppVersionService,
     AIScoringService,
+    InAppNotificationService,
   ],
 })
 export class SharedModule { }
