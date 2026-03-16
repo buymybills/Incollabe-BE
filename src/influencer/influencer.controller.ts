@@ -1820,7 +1820,7 @@ export class InfluencerController {
     }
 
     // Security: Validate that URL is for invoices (not other S3 files)
-    if (!url.includes('/invoices/pro/')) {
+    if (!url.includes('/invoices/pro-subscription/') && !url.includes('/invoices/pro/')) {
       throw new BadRequestException('Invalid invoice URL. Only Pro subscription invoices are allowed.');
     }
 
