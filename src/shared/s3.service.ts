@@ -136,9 +136,9 @@ export class S3Service {
     // Build the signed URL with properly encoded parameters
     const signedUrl =
       `${url}?` +
-      `Policy=${encodedPolicy}` +
-      `&Signature=${encodedSignature}` +
-      `&Key-Pair-Id=${this.cloudFrontKeyPairId}`;
+      `Policy=${encodeURIComponent(encodedPolicy)}` +
+      `&Signature=${encodeURIComponent(encodedSignature)}` +
+      `&Key-Pair-Id=${encodeURIComponent(this.cloudFrontKeyPairId)}`;
 
     return signedUrl;
   }
