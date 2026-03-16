@@ -1764,6 +1764,75 @@ export class InfluencerController {
     );
   }
 
+  @Get('pro/invoices/download')
+  @ApiOperation({
+    summary: 'Generate signed URL for invoice download',
+    description:
+      'Generates a temporary signed URL (valid for 2 minutes) for downloading Pro subscription invoices securely. ' +
+      'Use this endpoint to get a secure download link for invoice PDFs. ' +
+      'The url parameter should be the full S3 invoice URL from the invoice response. ' +
+      'Returns a CloudFront CDN URL (if configured) or direct S3 signed URL.',
+  })
+  @ApiQuery({
+    name: 'url',
+    description: 'Full S3 invoice URL from the invoice response',
+    example: 'https://incollabe-dev.s3.ap-south-1.amazonaws.com/invoices/pro/...',
+    required: true,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Signed URL generated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          type: 'object',
+          properties: {
+            signedUrl: {
+              type: 'string',
+              example: 'https://cdn.example.com/invoices/pro/invoice.pdf?Policy=xxx&Signature=xxx&Key-Pair-Id=xxx',
+              description: 'Temporary signed URL (CloudFront CDN) valid for 2 minutes.',
+            },
+            expiresIn: {
+              type: 'number',
+              example: 120,
+              description: 'Time in seconds until the URL expires',
+            },
+          },
+        },
+        message: { type: 'string', example: 'Success' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid or missing invoice URL' })
+  @ApiResponse({ status: 403, description: 'Access denied to this invoice' })
+  async downloadInvoiceFile(
+    @Req() req: RequestWithUser,
+    @Query('url') url: string,
+  ) {
+    if (req.user.userType !== 'influencer') {
+      throw new BadRequestException('Only influencers can download invoices');
+    }
+
+    if (!url) {
+      throw new BadRequestException('Invoice URL is required');
+    }
+
+    // Security: Validate that URL is for invoices (not other S3 files)
+    if (!url.includes('/invoices/pro/')) {
+      throw new BadRequestException('Invalid invoice URL. Only Pro subscription invoices are allowed.');
+    }
+
+    // Generate signed URL (2 minutes expiry)
+    const signedUrl = this.s3Service.convertToSignedUrl(url, 120);
+
+    return {
+      signedUrl,
+      expiresIn: 120,
+    };
+  }
+
   @Post('pro/setup-autopay')
   @ApiOperation({
     summary: '🎯 Setup Autopay (Unified - supports all payment methods)',
