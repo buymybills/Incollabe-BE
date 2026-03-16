@@ -301,6 +301,7 @@ export class PostService {
                 likerUserId: userId,
                 likerUserType: userType === UserType.INFLUENCER ? 'influencer' : 'brand',
                 likerName,
+                likerProfileImage: (liker as Influencer | Brand).profileImage,
               },
             })
             .catch((error: any) => {
@@ -923,6 +924,7 @@ export class PostService {
             followerUserType: followerDbUserType,
             followerName,
             followerUsername: followerUser.username,
+            followerProfileImage: (followerUser as any).profileImage,
           },
         })
         .catch((error: any) => {
