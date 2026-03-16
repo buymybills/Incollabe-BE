@@ -245,9 +245,13 @@ export class PostService {
       // Get liker details
       let liker;
       if (userType === UserType.INFLUENCER) {
-        liker = await this.influencerModel.findByPk(userId);
+        liker = await this.influencerModel.findByPk(userId, {
+          attributes: ['id', 'name', 'username', 'profileImage'],
+        });
       } else {
-        liker = await this.brandModel.findByPk(userId);
+        liker = await this.brandModel.findByPk(userId, {
+          attributes: ['id', 'brandName', 'username', 'profileImage'],
+        });
       }
 
       // Only send notification if we have both users and post author has device tokens
