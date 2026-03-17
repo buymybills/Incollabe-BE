@@ -51,11 +51,19 @@ export class S3Service {
     file: Express.Multer.File,
     key: string,
   ): Promise<AWS.S3.ManagedUpload.SendData> {
-    const uploadParams = {
+    // Detect if the file is a video
+    const isVideo = file.mimetype.startsWith('video/') ||
+                    key.includes('/videos/') ||
+                    key.match(/\.(mp4|mov|avi|quicktime|webm|mkv)$/i);
+
+    const uploadParams: AWS.S3.PutObjectRequest = {
       Bucket: this.bucketName,
       Key: key,
       Body: file.buffer,
       ContentType: file.mimetype,
+      // For videos and images, set ContentDisposition to 'inline' so they open in browser
+      // instead of downloading (important for iOS Safari)
+      ContentDisposition: isVideo || file.mimetype.startsWith('image/') ? 'inline' : undefined,
     };
 
     return this.s3.upload(uploadParams).promise();
@@ -108,24 +116,13 @@ export class S3Service {
       throw new Error('CloudFront signing attempted without required configuration');
     }
 
-    // Detect if the file is a video based on the key path
-    const isVideo = key.includes('/videos/') ||
-                    key.match(/\.(mp4|mov|avi|quicktime|webm|mkv)$/i) ||
-                    key.includes('video');
-
-    let url = `https://${this.cloudFrontDomain}/${key}`;
-
-    // For videos, add Content-Type and Content-Disposition to make them open in iOS Safari
-    if (isVideo) {
-      // Force video/mp4 content type for videos (most compatible with iOS Safari)
-      // Also set disposition to inline so Safari opens it instead of downloading
-      url += '?response-content-type=video/mp4&response-content-disposition=inline';
-    }
+    const url = `https://${this.cloudFrontDomain}/${key}`;
 
     // CloudFront Signer expects expires in seconds (Unix timestamp), not milliseconds
     const expiresAt = Math.floor((Date.now() + expiresIn * 1000) / 1000);
 
-    // Use AWS SDK's CloudFront signer with custom policy
+    // Use AWS SDK's CloudFront signer
+    // CloudFront will serve files with their stored Content-Type from S3 metadata
     const signedUrl = this.cloudFrontSigner.getSignedUrl({
       url,
       expires: expiresAt,
