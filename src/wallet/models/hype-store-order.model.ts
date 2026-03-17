@@ -93,6 +93,7 @@ export class HypeStoreOrder extends Model<HypeStoreOrder> {
   @Column({
     type: DataType.STRING(255),
     allowNull: true,
+    field: 'product_sku',
     comment: 'Product SKU/Item Code',
   })
   declare productSKU: string;
@@ -121,6 +122,7 @@ export class HypeStoreOrder extends Model<HypeStoreOrder> {
   @Column({
     type: DataType.STRING(500),
     allowNull: true,
+    field: 'product_image_url',
     comment: 'Product image URL',
   })
   declare productImageUrl: string;
