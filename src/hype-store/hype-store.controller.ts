@@ -17,6 +17,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery, ApiBody, ApiConsumes, ApiHeader } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ConfigService } from '@nestjs/config';
 import { HypeStoreService } from './hype-store.service';
 import { CreateHypeStoreDto, UpdateHypeStoreDto } from './dto/create-hype-store.dto';
 import { UpdateCashbackConfigDto } from './dto/cashback-config.dto';
@@ -33,7 +34,10 @@ import { PurchaseWebhookDto, ReturnWebhookDto, WebhookResponseDto } from '../wal
 @UseGuards(AuthGuard)
 @ApiBearerAuth()
 export class HypeStoreController {
-  constructor(private readonly hypeStoreService: HypeStoreService) {}
+  constructor(
+    private readonly hypeStoreService: HypeStoreService,
+    private readonly configService: ConfigService,
+  ) {}
 
   @Get('cashback-strategies')
   @ApiOperation({
@@ -205,6 +209,26 @@ export class HypeStoreController {
                 storyMaxCashback: { type: 'number', example: 12000 },
                 monthlyClaimCount: { type: 'number', example: 3 },
                 claimStrategy: { type: 'string', example: 'OPTIMIZED_SPEND' }
+              }
+            },
+            webhookCredentials: {
+              type: 'object',
+              description: 'Webhook integration for sending order events (purchase/return)',
+              properties: {
+                apiKey: {
+                  type: 'string',
+                  example: 'hs_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+                  description: 'API key included in webhook URL'
+                },
+                webhookUrl: {
+                  type: 'string',
+                  example: 'https://api.incollabe.com/webhooks/hype-store/hs_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+                  description: 'Unified webhook endpoint - POST with eventType in body'
+                },
+                message: {
+                  type: 'string',
+                  example: 'POST to this URL with eventType ("purchase" or "return") in the request body. See API docs for examples.'
+                }
               }
             }
           }
@@ -972,6 +996,71 @@ export class HypeStoreController {
   ) {
     const brandId = req.user.id;
     return this.hypeStoreService.getOrderDetails(parseInt(storeId), brandId, orderId);
+  }
+
+  // ==================== Webhook Credentials Endpoints ====================
+
+  @Get(':storeId/webhook-credentials')
+  @ApiOperation({
+    summary: 'Get webhook API key for store',
+    description:
+      'Get the API key for your webhook integration.\n\n' +
+      '**Important:** For security, the webhook secret is only shown ONCE during store creation. If you lost it, please contact support.',
+  })
+  @ApiParam({
+    name: 'storeId',
+    type: Number,
+    description: 'Store ID',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Webhook API key retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        apiKey: {
+          type: 'string',
+          example: 'hs_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+          description: 'API key for webhook URL path',
+        },
+        isActive: {
+          type: 'boolean',
+          example: true,
+          description: 'Whether credentials are active',
+        },
+        lastUsedAt: {
+          type: 'string',
+          nullable: true,
+          example: '2026-03-15T10:30:00.000Z',
+          description: 'Last time credentials were used',
+        },
+        createdAt: {
+          type: 'string',
+          example: '2026-03-10T08:00:00.000Z',
+          description: 'When credentials were created',
+        },
+        webhookUrl: {
+          type: 'string',
+          example: 'https://api.incollabe.com/webhooks/hype-store/hs_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+          description: 'Unified webhook endpoint - POST with eventType in body',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Store not found or credentials not configured' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getWebhookCredentials(@Request() req: any, @Param('storeId') storeId: string) {
+    const brandId = req.user.id;
+    const credentials = await this.hypeStoreService.getWebhookCredentials(parseInt(storeId), brandId);
+
+    // Add full webhook URL for convenience
+    const baseUrl = this.configService.get<string>('API_BASE_URL') || 'https://api.incollabe.com';
+
+    return {
+      ...credentials,
+      webhookUrl: `${baseUrl}/webhooks/hype-store/${credentials.apiKey}`,
+    };
   }
 
   // ==================== Brand-Shared Coupon Endpoints ====================

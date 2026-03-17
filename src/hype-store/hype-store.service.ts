@@ -78,6 +78,24 @@ export class HypeStoreService {
   ) {}
 
   /**
+   * Generate a secure API key for webhook authentication
+   * Format: hs_live_{32_char_random_string} or hs_test_{32_char_random_string}
+   */
+  private generateApiKey(isTestMode: boolean = false): string {
+    const prefix = isTestMode ? 'hs_test' : 'hs_live';
+    const randomString = crypto.randomBytes(16).toString('hex'); // 32 characters
+    return `${prefix}_${randomString}`;
+  }
+
+  /**
+   * Generate a secure webhook secret (for future use)
+   * Returns a 64-character random hex string
+   */
+  private generateWebhookSecret(): string {
+    return crypto.randomBytes(32).toString('hex'); // 64 characters
+  }
+
+  /**
    * Create a new Hype Store for a brand
    */
   async createStore(
@@ -234,6 +252,20 @@ export class HypeStoreService {
         { transaction },
       );
 
+      // Generate and create webhook credentials
+      const apiKey = this.generateApiKey(false); // Use live mode by default
+      const webhookSecret = this.generateWebhookSecret();
+
+      await this.webhookSecretModel.create(
+        {
+          hypeStoreId: store.id,
+          apiKey,
+          webhookSecret,
+          isActive: true,
+        } as any,
+        { transaction },
+      );
+
       await transaction.commit();
 
       // Return store with cashbackConfig and coupon code
@@ -255,9 +287,25 @@ export class HypeStoreService {
         },
       });
 
+      // Get the webhook credentials we just created
+      const webhookCredentials = await this.webhookSecretModel.findOne({
+        where: { hypeStoreId: store.id },
+      });
+
+      // Build webhook endpoint (unified)
+      const baseUrl = this.configService.get<string>('API_BASE_URL') || 'https://api.incollabe.com';
+      const webhookUrl = webhookCredentials
+        ? `${baseUrl}/webhooks/hype-store/${webhookCredentials.apiKey}`
+        : null;
+
       return {
         ...createdStore.toJSON(),
         brandCouponCode: brandCoupon?.couponCode || null,
+        webhookCredentials: webhookCredentials ? {
+          apiKey: webhookCredentials.apiKey,
+          webhookUrl,
+          message: 'POST to this URL with eventType ("purchase" or "return") in the request body. See API docs for examples.',
+        } : null,
       } as any;
     } catch (error) {
       await transaction.rollback();
@@ -593,6 +641,43 @@ export class HypeStoreService {
 
     await config.update(updateData);
     return config;
+  }
+
+  /**
+   * Get webhook credentials for a store
+   */
+  async getWebhookCredentials(storeId: number, brandId: number): Promise<{
+    apiKey: string;
+    webhookUrl: string | null;
+    isActive: boolean;
+    lastUsedAt: Date | null;
+    createdAt: Date;
+  }> {
+    // Verify store belongs to brand
+    const store = await this.hypeStoreModel.findOne({
+      where: { id: storeId, brandId },
+    });
+
+    if (!store) {
+      throw new NotFoundException('Hype Store not found');
+    }
+
+    // Get webhook credentials
+    const credentials = await this.webhookSecretModel.findOne({
+      where: { hypeStoreId: storeId },
+    });
+
+    if (!credentials) {
+      throw new NotFoundException('Webhook credentials not found for this store');
+    }
+
+    return {
+      apiKey: credentials.apiKey,
+      webhookUrl: credentials.webhookUrl,
+      isActive: credentials.isActive,
+      lastUsedAt: credentials.lastUsedAt,
+      createdAt: credentials.createdAt,
+    };
   }
 
   /**
@@ -1510,13 +1595,40 @@ export class HypeStoreService {
   }
 
   /**
+   * Process unified webhook from brand
+   * Handles both purchase and return events based on eventType
+   */
+  async processWebhook(
+    apiKey: string,
+    webhookDto: any, // UnifiedWebhookDto
+    ipAddress: string,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    orderId?: number;
+    cashbackAmount?: number;
+    cashbackStatus?: string;
+    cashbackReversed?: boolean;
+  }> {
+    const { eventType, ...data } = webhookDto;
+
+    // Route to appropriate handler based on event type
+    if (eventType === 'purchase') {
+      return this.processPurchaseWebhook(apiKey, data as any, ipAddress);
+    } else if (eventType === 'return') {
+      return this.processReturnWebhook(apiKey, data as any, ipAddress);
+    } else {
+      throw new BadRequestException(`Invalid event type: ${eventType}`);
+    }
+  }
+
+  /**
    * Process purchase webhook from brand
    * Called when a customer makes a purchase using an influencer's coupon
    */
   async processPurchaseWebhook(
     apiKey: string,
     webhookDto: PurchaseWebhookDto,
-    signature: string,
     ipAddress: string,
   ): Promise<{
     success: boolean;
@@ -1545,32 +1657,7 @@ export class HypeStoreService {
 
       const hypeStore = webhookSecret.hypeStore;
 
-      // 2. Verify webhook signature
-      const isValidSignature = this.verifyWebhookSignature(
-        JSON.stringify(webhookDto),
-        signature,
-        webhookSecret.webhookSecret,
-      );
-
-      if (!isValidSignature) {
-        responseStatus = 401;
-        responseBody = { success: false, message: 'Invalid webhook signature' };
-        await this.logWebhookRequest({
-          hypeStoreId: hypeStore.id,
-          method: 'POST',
-          path: '/webhooks/purchase',
-          headers: { 'x-webhook-signature': signature },
-          body: webhookDto,
-          ipAddress,
-          status: responseStatus,
-          responseBody,
-          isValid: false,
-          errorMessage: 'Invalid webhook signature',
-        });
-        throw new UnauthorizedException('Invalid webhook signature');
-      }
-
-      // 3. Check for duplicate order (idempotency)
+      // 2. Check for duplicate order (idempotency)
       const existingOrder = await this.orderModel.findOne({
         where: { externalOrderId: webhookDto.externalOrderId },
       });
@@ -1588,7 +1675,7 @@ export class HypeStoreService {
           hypeStoreId: hypeStore.id,
           method: 'POST',
           path: '/webhooks/purchase',
-          headers: { 'x-webhook-signature': signature },
+          headers: {},
           body: webhookDto,
           ipAddress,
           status: responseStatus,
@@ -1612,7 +1699,7 @@ export class HypeStoreService {
           hypeStoreId: hypeStore.id,
           method: 'POST',
           path: '/webhooks/purchase',
-          headers: { 'x-webhook-signature': signature },
+          headers: {},
           body: webhookDto,
           ipAddress,
           status: responseStatus,
@@ -1658,7 +1745,7 @@ export class HypeStoreService {
               hypeStoreId: hypeStore.id,
               method: 'POST',
               path: '/webhooks/purchase',
-              headers: { 'x-webhook-signature': signature },
+              headers: {},
               body: webhookDto,
               ipAddress,
               status: responseStatus,
@@ -1723,7 +1810,6 @@ export class HypeStoreService {
             cashbackStatus: CashbackStatus.PENDING,
             cashbackTierId: tierId,
             webhookReceivedAt: new Date(),
-            webhookSignature: signature,
             webhookIpAddress: ipAddress,
             metadata: webhookDto.metadata,
             // Return period tracking fields
@@ -1779,7 +1865,7 @@ export class HypeStoreService {
           hypeStoreId: hypeStore.id,
           method: 'POST',
           path: '/webhooks/purchase',
-          headers: { 'x-webhook-signature': signature },
+          headers: {},
           body: webhookDto,
           ipAddress,
           status: responseStatus,
@@ -1806,7 +1892,7 @@ export class HypeStoreService {
           hypeStoreId: webhookSecret.hypeStoreId,
           method: 'POST',
           path: '/webhooks/purchase',
-          headers: { 'x-webhook-signature': signature },
+          headers: {},
           body: webhookDto,
           ipAddress,
           status: responseStatus,
@@ -1828,7 +1914,6 @@ export class HypeStoreService {
   async processReturnWebhook(
     apiKey: string,
     webhookDto: ReturnWebhookDto,
-    signature: string,
     ipAddress: string,
   ): Promise<{
     success: boolean;
@@ -1856,32 +1941,7 @@ export class HypeStoreService {
 
       const hypeStore = webhookSecret.hypeStore;
 
-      // 2. Verify webhook signature
-      const isValidSignature = this.verifyWebhookSignature(
-        JSON.stringify(webhookDto),
-        signature,
-        webhookSecret.webhookSecret,
-      );
-
-      if (!isValidSignature) {
-        responseStatus = 401;
-        responseBody = { success: false, message: 'Invalid webhook signature' };
-        await this.logWebhookRequest({
-          hypeStoreId: hypeStore.id,
-          method: 'POST',
-          path: '/webhooks/return',
-          headers: { 'x-webhook-signature': signature },
-          body: webhookDto,
-          ipAddress,
-          status: responseStatus,
-          responseBody,
-          isValid: false,
-          errorMessage: 'Invalid webhook signature',
-        });
-        throw new UnauthorizedException('Invalid webhook signature');
-      }
-
-      // 3. Find existing order
+      // 2. Find existing order
       const order = await this.orderModel.findOne({
         where: {
           hypeStoreId: hypeStore.id,
@@ -1896,7 +1956,7 @@ export class HypeStoreService {
           hypeStoreId: hypeStore.id,
           method: 'POST',
           path: '/webhooks/return',
-          headers: { 'x-webhook-signature': signature },
+          headers: {},
           body: webhookDto,
           ipAddress,
           status: responseStatus,
@@ -1926,7 +1986,7 @@ export class HypeStoreService {
           hypeStoreId: hypeStore.id,
           method: 'POST',
           path: '/webhooks/return',
-          headers: { 'x-webhook-signature': signature },
+          headers: {},
           body: webhookDto,
           ipAddress,
           status: responseStatus,
@@ -1949,7 +2009,7 @@ export class HypeStoreService {
           hypeStoreId: hypeStore.id,
           method: 'POST',
           path: '/webhooks/return',
-          headers: { 'x-webhook-signature': signature },
+          headers: {},
           body: webhookDto,
           ipAddress,
           status: responseStatus,
@@ -2124,7 +2184,7 @@ export class HypeStoreService {
           hypeStoreId: hypeStore.id,
           method: 'POST',
           path: '/webhooks/return',
-          headers: { 'x-webhook-signature': signature },
+          headers: {},
           body: webhookDto,
           ipAddress,
           status: responseStatus,
@@ -2151,7 +2211,7 @@ export class HypeStoreService {
           hypeStoreId: webhookSecret.hypeStoreId,
           method: 'POST',
           path: '/webhooks/return',
-          headers: { 'x-webhook-signature': signature },
+          headers: {},
           body: webhookDto,
           ipAddress,
           status: responseStatus,
@@ -2166,25 +2226,6 @@ export class HypeStoreService {
     }
   }
 
-  /**
-   * Verify webhook signature using HMAC-SHA256
-   */
-  private verifyWebhookSignature(
-    payload: string,
-    signature: string,
-    secret: string,
-  ): boolean {
-    try {
-      const hmac = crypto.createHmac('sha256', secret);
-      const expectedSignature = hmac.update(payload).digest('hex');
-      return crypto.timingSafeEqual(
-        Buffer.from(signature),
-        Buffer.from(expectedSignature),
-      );
-    } catch (error) {
-      return false;
-    }
-  }
 
   /**
    * Calculate cashback amount based on influencer's follower tier
