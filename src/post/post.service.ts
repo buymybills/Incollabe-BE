@@ -1052,7 +1052,18 @@ export class PostService {
       offset,
     });
 
+    console.log('DEBUG: follows.length =', follows.length);
+    console.log('DEBUG: first follow =', JSON.stringify(follows[0]?.toJSON(), null, 2));
+
     const followers = follows.map((follow) => {
+      console.log('DEBUG: Processing follow', {
+        followerType: follow.followerType,
+        hasInfluencer: !!follow.followerInfluencer,
+        hasBrand: !!follow.followerBrand,
+        followerInfluencerId: follow.followerInfluencerId,
+        followerBrandId: follow.followerBrandId,
+      });
+
       if (follow.followerType === FollowerType.INFLUENCER && follow.followerInfluencer) {
         return {
           id: follow.followerInfluencer.id,
@@ -1074,6 +1085,8 @@ export class PostService {
       }
       return null;
     }).filter((follower): follower is NonNullable<typeof follower> => follower !== null);
+
+    console.log('DEBUG: followers.length after mapping =', followers.length);
 
     const totalPages = Math.ceil(total / limit);
 
@@ -1174,7 +1187,18 @@ export class PostService {
       offset,
     });
 
+    console.log('DEBUG FOLLOWING: follows.length =', follows.length);
+    console.log('DEBUG FOLLOWING: first follow =', JSON.stringify(follows[0]?.toJSON(), null, 2));
+
     const following = follows.map((follow) => {
+      console.log('DEBUG FOLLOWING: Processing follow', {
+        followingType: follow.followingType,
+        hasInfluencer: !!follow.followingInfluencer,
+        hasBrand: !!follow.followingBrand,
+        followingInfluencerId: follow.followingInfluencerId,
+        followingBrandId: follow.followingBrandId,
+      });
+
       if (follow.followingType === FollowingType.INFLUENCER && follow.followingInfluencer) {
         return {
           id: follow.followingInfluencer.id,
@@ -1196,6 +1220,8 @@ export class PostService {
       }
       return null;
     }).filter((user): user is NonNullable<typeof user> => user !== null);
+
+    console.log('DEBUG FOLLOWING: following.length after mapping =', following.length);
 
     const totalPages = Math.ceil(total / limit);
 
