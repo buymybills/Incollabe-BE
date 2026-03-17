@@ -25,15 +25,7 @@ export class InAppNotificationService {
   async createNotification(
     dto: CreateInAppNotificationDto,
   ): Promise<InAppNotification> {
-    console.log('💾 IN-APP NOTIFICATION SERVICE - Received create request:', {
-      userId: dto.userId,
-      userType: dto.userType,
-      type: dto.type,
-      metadata: dto.metadata,
-      metadataStringified: JSON.stringify(dto.metadata),
-    });
-
-    const notification = await this.inAppNotificationModel.create({
+    return await this.inAppNotificationModel.create({
       userId: dto.userId,
       userType: dto.userType,
       title: dto.title,
@@ -49,17 +41,6 @@ export class InAppNotificationService {
       expiresAt: dto.expiresAt,
       isRead: false,
     } as any);
-
-    console.log('✅ IN-APP NOTIFICATION SERVICE - Notification created in DB:', {
-      id: notification.id,
-      userId: notification.userId,
-      userType: notification.userType,
-      type: notification.type,
-      metadata: notification.metadata,
-      metadataStringified: JSON.stringify(notification.metadata),
-    });
-
-    return notification;
   }
 
   /**

@@ -108,7 +108,20 @@ export class S3Service {
       throw new Error('CloudFront signing attempted without required configuration');
     }
 
-    const url = `https://${this.cloudFrontDomain}/${key}`;
+    // Detect if the file is a video based on the key path
+    const isVideo = key.includes('/videos/') ||
+                    key.match(/\.(mp4|mov|avi|quicktime|webm|mkv)$/i) ||
+                    key.includes('video');
+
+    let url = `https://${this.cloudFrontDomain}/${key}`;
+
+    // For videos, add Content-Type and Content-Disposition to make them open in iOS Safari
+    if (isVideo) {
+      // Force video/mp4 content type for videos (most compatible with iOS Safari)
+      // Also set disposition to inline so Safari opens it instead of downloading
+      url += '?response-content-type=video/mp4&response-content-disposition=inline';
+    }
+
     // CloudFront Signer expects expires in seconds (Unix timestamp), not milliseconds
     const expiresAt = Math.floor((Date.now() + expiresIn * 1000) / 1000);
 
