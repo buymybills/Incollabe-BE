@@ -18,6 +18,7 @@ import { WhatsAppService } from '../shared/whatsapp.service';
 import { NotificationService } from '../shared/notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
 import { AuditLogService } from './services/audit-log.service';
+import { InAppNotificationService } from '../shared/in-app-notification.service';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { ProfileReviewDto } from './dto/profile-review.dto';
 import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
@@ -177,6 +178,15 @@ describe('ProfileReviewService', () => {
             getAllUserTokens: jest.fn().mockResolvedValue([]),
             addOrUpdateDeviceToken: jest.fn(),
             removeDeviceToken: jest.fn(),
+          },
+        },
+        {
+          provide: InAppNotificationService,
+          useValue: {
+            createNotification: jest.fn().mockResolvedValue(undefined),
+            getNotifications: jest.fn().mockResolvedValue([]),
+            markAsRead: jest.fn().mockResolvedValue(undefined),
+            deleteNotification: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

@@ -435,6 +435,26 @@ export class ProfileReviewService {
           ).catch(err => console.error('Failed to send profile verified notification:', err));
         }
 
+        // Create in-app notification for profile verified
+        this.inAppNotificationService
+          .createNotification({
+            userId: influencer.id,
+            userType: 'influencer',
+            title: 'Profile Verified!',
+            body: `Congratulations ${influencer.name}! Your profile has been verified and you can now apply for campaigns.`,
+            type: NotificationType.PROFILE_VERIFIED,
+            actionUrl: 'app://profile',
+            actionType: 'view_profile',
+            relatedEntityType: 'profile',
+            relatedEntityId: influencer.id,
+            metadata: {
+              profileType: 'influencer',
+            },
+          } as any)
+          .catch((error: any) => {
+            console.error('Error creating in-app notification for profile verified:', error);
+          });
+
         // Award referral credit if this influencer was referred by someone
         // Wrap in try-catch to prevent profile approval failure if referral fails
         try {
