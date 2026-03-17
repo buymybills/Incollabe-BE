@@ -54,6 +54,8 @@ import { InfluencerProfileScore } from '../shared/models/influencer-profile-scor
 import { MaxCampaignScoringQueueService } from './services/max-campaign-scoring-queue.service';
 import { ChatService } from '../shared/chat.service';
 import { ChatGateway } from '../shared/chat.gateway';
+import { InAppNotificationService } from '../shared/in-app-notification.service';
+import { NotificationType } from '../shared/models/in-app-notification.model';
 
 @Injectable()
 export class CampaignService {
@@ -105,6 +107,7 @@ export class CampaignService {
     private readonly maxCampaignScoringQueueService: MaxCampaignScoringQueueService,
     private readonly chatService: ChatService,
     private readonly chatGateway: ChatGateway,
+    private readonly inAppNotificationService: InAppNotificationService,
   ) {}
 
   /**
@@ -849,6 +852,30 @@ export class CampaignService {
                   brandName,
                 );
               }
+
+              // Create in-app notification for campaign completion
+              await this.inAppNotificationService
+                .createNotification({
+                  userId: application.influencer.id,
+                  userType: 'influencer',
+                  title: 'Campaign Completed',
+                  body: `Campaign "${campaign.name}" by ${brandName} has been marked as completed`,
+                  type: NotificationType.CAMPAIGN_COMPLETED,
+                  actionUrl: `app://campaigns/${campaignId}`,
+                  actionType: 'view_campaign',
+                  relatedEntityType: 'campaign',
+                  relatedEntityId: campaignId,
+                  metadata: {
+                    campaignId,
+                    campaignName: campaign.name,
+                    brandId: campaign.brandId,
+                    brandName,
+                    status: 'completed',
+                  },
+                } as any)
+                .catch((error: any) => {
+                  console.error(`Error creating in-app notification for campaign completion to influencer ${application.influencer.id}:`, error);
+                });
             } catch (error) {
               console.error(
                 `Failed to send completion notification to influencer ${application.influencer.id}:`,
@@ -1369,6 +1396,29 @@ export class CampaignService {
             brandName,
           );
         }
+
+        // Create in-app notification for campaign invitation
+        await this.inAppNotificationService
+          .createNotification({
+            userId: influencer.id,
+            userType: 'influencer',
+            title: 'Campaign Invitation',
+            body: `${brandName} has invited you to participate in "${campaign.name}"`,
+            type: NotificationType.CAMPAIGN_INVITE,
+            actionUrl: `app://campaigns/${campaign.id}`,
+            actionType: 'view_campaign',
+            relatedEntityType: 'campaign',
+            relatedEntityId: campaign.id,
+            metadata: {
+              campaignId: campaign.id,
+              campaignName: campaign.name,
+              brandId: campaign.brandId,
+              brandName,
+            },
+          } as any)
+          .catch((error: any) => {
+            console.error(`Error creating in-app notification for campaign invite to influencer ${influencer.id}:`, error);
+          });
       } catch (error) {
         console.error(
           `Failed to send push notification to influencer ${influencer.id}:`,
@@ -3566,6 +3616,34 @@ export class CampaignService {
           console.error('Failed to send persistent push notification to influencer:', error);
         });
 
+      // Create in-app notification for campaign selection
+      const selectionBody = updateStatusDto.reviewNotes
+        ? `Congratulations! You've been selected for "${campaign.name}" by ${brandName}. ${updateStatusDto.reviewNotes}`
+        : `Congratulations! You've been selected for "${campaign.name}" by ${brandName}`;
+
+      this.inAppNotificationService
+        .createNotification({
+          userId: influencer.id,
+          userType: 'influencer',
+          title: 'Campaign Selection',
+          body: selectionBody,
+          type: NotificationType.CAMPAIGN_SELECTED,
+          actionUrl: `app://campaigns/${campaign.id}`,
+          actionType: 'view_campaign',
+          relatedEntityType: 'campaign',
+          relatedEntityId: campaign.id,
+          metadata: {
+            campaignId: campaign.id,
+            campaignName: campaign.name,
+            brandId: campaign.brandId,
+            brandName,
+            reviewNotes: updateStatusDto.reviewNotes,
+          },
+        } as any)
+        .catch((error: any) => {
+          console.error('Error creating in-app notification for campaign selection:', error);
+        });
+
       // Auto-create campaign chat conversation and notify via WebSocket
       this.chatService
         .createCampaignConversation(
@@ -3641,6 +3719,47 @@ export class CampaignService {
         })
         .catch((error: any) => {
           console.error('Failed to send push notification to influencer:', error);
+        });
+
+      // Create in-app notification for application status update
+      let inAppTitle: string;
+      let inAppBody: string;
+      let inAppType: NotificationType;
+
+      if (updateStatusDto.status === ApplicationStatus.UNDER_REVIEW) {
+        inAppTitle = 'Application Under Review';
+        inAppBody = `Your application for "${campaign.name}" by ${brandName} is being reviewed`;
+        inAppType = NotificationType.CAMPAIGN_STATUS_UPDATE;
+      } else {
+        inAppTitle = 'Application Rejected';
+        inAppBody = updateStatusDto.reviewNotes
+          ? `Your application for "${campaign.name}" by ${brandName} was not selected. ${updateStatusDto.reviewNotes}`
+          : `Your application for "${campaign.name}" by ${brandName} was not selected`;
+        inAppType = NotificationType.APPLICATION_REJECTED;
+      }
+
+      this.inAppNotificationService
+        .createNotification({
+          userId: influencer.id,
+          userType: 'influencer',
+          title: inAppTitle,
+          body: inAppBody,
+          type: inAppType,
+          actionUrl: `app://campaigns/${campaign.id}`,
+          actionType: 'view_campaign',
+          relatedEntityType: 'campaign',
+          relatedEntityId: campaign.id,
+          metadata: {
+            campaignId: campaign.id,
+            campaignName: campaign.name,
+            brandId: campaign.brandId,
+            brandName,
+            status: updateStatusDto.status,
+            reviewNotes: updateStatusDto.reviewNotes,
+          },
+        } as any)
+        .catch((error: any) => {
+          console.error('Error creating in-app notification for application status update:', error);
         });
     }
 

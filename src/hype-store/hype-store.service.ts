@@ -96,6 +96,23 @@ export class HypeStoreService {
   }
 
   /**
+   * Auto-derive cashback type from coupon code
+   * Examples:
+   *  - SNCOL25 → "Flat 25%"
+   *  - BRAND30 → "Flat 30%"
+   *  - CUSTOMCODE → null (can't derive)
+   */
+  private deriveCashbackTypeFromCoupon(couponCode: string): string | null {
+    // Try to extract last 2 digits from coupon code
+    const match = couponCode.match(/(\d{2})$/);
+    if (match) {
+      const percentage = match[1];
+      return `Flat ${percentage}%`;
+    }
+    return null;
+  }
+
+  /**
    * Create a new Hype Store for a brand
    */
   async createStore(
@@ -378,6 +395,14 @@ export class HypeStoreService {
       },
     });
 
+    // Get webhook credentials (only if brandId is provided - i.e., brand is requesting their own store)
+    let webhookCredentials: HypeStoreWebhookSecret | null = null;
+    if (brandId) {
+      webhookCredentials = await this.webhookSecretModel.findOne({
+        where: { hypeStoreId: storeId },
+      });
+    }
+
     // Calculate aggregate performance metrics from all orders with submitted proof
     const ordersWithProof = await this.orderModel.findAll({
       where: {
@@ -553,11 +578,24 @@ export class HypeStoreService {
         : null;
     }
 
+    // Build webhook URL if credentials exist
+    const baseUrl = this.configService.get<string>('API_BASE_URL') || 'https://api.incollabe.com';
+    const webhookUrl = webhookCredentials
+      ? `${baseUrl}/webhooks/hype-store/${webhookCredentials.apiKey}`
+      : null;
+
     return {
       ...store.toJSON(),
       brandCouponCode: brandCoupon?.couponCode || null,
       cashbackLimit: cashbackPercentage ? `${cashbackPercentage}%` : null,
       monthlyPurchaseLimit: store.cashbackConfig?.monthlyClaimCount || null,
+      // Include webhook credentials only for brand requests
+      webhookCredentials: webhookCredentials ? {
+        apiKey: webhookCredentials.apiKey,
+        webhookUrl,
+        isActive: webhookCredentials.isActive,
+        createdAt: webhookCredentials.createdAt,
+      } : null,
       wallet: wallet
         ? {
             totalBudget: parseFloat(wallet.totalCredited.toString()),
@@ -1790,6 +1828,9 @@ export class HypeStoreService {
         const returnPeriodEndsAt = new Date(orderDate);
         returnPeriodEndsAt.setDate(returnPeriodEndsAt.getDate() + returnPeriodDays);
 
+        // Auto-derive cashback type from coupon code
+        const derivedCashbackType = this.deriveCashbackTypeFromCoupon(webhookDto.couponCode);
+
         const order = await this.orderModel.create(
           {
             hypeStoreId: hypeStore.id,
@@ -1798,6 +1839,13 @@ export class HypeStoreService {
             externalOrderId: webhookDto.externalOrderId,
             referralCode: webhookDto.referralCode || null, // Store referral code if provided
             orderTitle: webhookDto.orderTitle || null, // Store product/order title
+            // Product detail fields
+            productSKU: webhookDto.productSKU || null,
+            productCategory: webhookDto.productCategory || null,
+            productBrand: webhookDto.productBrand || null,
+            productVariant: webhookDto.productVariant || null,
+            productImageUrl: webhookDto.productImageUrl || null,
+            productQuantity: webhookDto.productQuantity || 1,
             orderAmount: webhookDto.orderAmount,
             orderCurrency: webhookDto.orderCurrency || 'INR',
             orderDate: orderDate,
@@ -1806,7 +1854,7 @@ export class HypeStoreService {
             customerName: webhookDto.customerName,
             orderStatus: webhookDto.orderStatus || OrderStatus.PENDING,
             cashbackAmount,
-            cashbackType: webhookDto.cashbackType || null, // Store cashback type description
+            cashbackType: derivedCashbackType, // Auto-derived from coupon code
             cashbackStatus: CashbackStatus.PENDING,
             cashbackTierId: tierId,
             webhookReceivedAt: new Date(),

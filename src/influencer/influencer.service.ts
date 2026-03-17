@@ -12,6 +12,8 @@ import { NotificationService } from '../shared/notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
 import { ChatService } from '../shared/chat.service';
 import { UserType as DeviceUserType } from '../shared/models/device-token.model';
+import { InAppNotificationService } from '../shared/in-app-notification.service';
+import { NotificationType } from '../shared/models/in-app-notification.model';
 import { AppVersionService } from '../shared/services/app-version.service';
 import { AppReviewService } from '../shared/services/app-review.service';
 import { OtpService } from '../shared/services/otp.service';
@@ -147,6 +149,7 @@ export class InfluencerService {
     @Inject('BRAND_MODEL')
     private readonly brandModel: typeof Brand,
     private readonly chatService: ChatService,
+    private readonly inAppNotificationService: InAppNotificationService,
   ) {}
 
   /**
@@ -1688,6 +1691,31 @@ export class InfluencerService {
       ).catch(err => console.error('Failed to send campaign application confirmation notification:', err));
     }
 
+    // Create in-app notification for application submission
+    const brandName = campaign.brand?.brandName || 'Brand';
+    this.inAppNotificationService
+      .createNotification({
+        userId: influencer.id,
+        userType: 'influencer',
+        title: 'Application Submitted!',
+        body: `Your application for "${campaign.name}" by ${brandName} has been submitted successfully. You will be notified about the status.`,
+        type: NotificationType.CAMPAIGN_STATUS_UPDATE,
+        actionUrl: `app://campaigns/${campaign.id}`,
+        actionType: 'view_campaign',
+        relatedEntityType: 'campaign',
+        relatedEntityId: campaign.id,
+        metadata: {
+          campaignId: campaign.id,
+          campaignName: campaign.name,
+          brandId: campaign.brandId,
+          brandName,
+          applicationId: application.id,
+        },
+      } as any)
+      .catch((error: any) => {
+        console.error('Error creating in-app notification for application submission:', error);
+      });
+
     // Send push notification to brand owner about new application asynchronously (fire-and-forget)
     const brand = campaign.brand;
     if (brand?.id) {
@@ -1705,6 +1733,30 @@ export class InfluencerService {
         })
         .catch((error: any) => {
           console.error('Failed to send push notification to brand:', error);
+        });
+
+      // Create in-app notification for new application to brand
+      this.inAppNotificationService
+        .createNotification({
+          userId: brand.id,
+          userType: 'brand',
+          title: 'New Application',
+          body: `${influencer.name} has applied for your campaign "${campaign.name}"`,
+          type: NotificationType.NEW_APPLICATION,
+          actionUrl: `app://campaigns/${campaign.id}/applications`,
+          actionType: 'view_applications',
+          relatedEntityType: 'campaign',
+          relatedEntityId: campaign.id,
+          metadata: {
+            campaignId: campaign.id,
+            campaignName: campaign.name,
+            influencerId: influencer.id,
+            influencerName: influencer.name,
+            applicationId: application.id,
+          },
+        } as any)
+        .catch((error: any) => {
+          console.error('Error creating in-app notification for new application to brand:', error);
         });
     }
 
@@ -3311,6 +3363,32 @@ export class InfluencerService {
           sound: 'default',
         },
       );
+
+      // Create in-app notification for invitation response
+      await this.inAppNotificationService
+        .createNotification({
+          userId: brand.id,
+          userType: 'brand',
+          title,
+          body: responseMessage ? `${body}. Message: "${responseMessage}"` : body,
+          type: NotificationType.CAMPAIGN_STATUS_UPDATE,
+          actionUrl: `app://campaigns/${invitation.campaignId}`,
+          actionType: 'view_campaign',
+          relatedEntityType: 'campaign',
+          relatedEntityId: invitation.campaignId,
+          metadata: {
+            campaignId: invitation.campaignId,
+            campaignName: invitation.campaign.name,
+            influencerId: influencer.id,
+            influencerName: influencer.name,
+            invitationId: invitation.id,
+            status,
+            responseMessage,
+          },
+        } as any)
+        .catch((error: any) => {
+          console.error('Error creating in-app notification for invitation response:', error);
+        });
 
       console.log(
         `✅ Notification sent to brand ${brand.id} for invitation response`,

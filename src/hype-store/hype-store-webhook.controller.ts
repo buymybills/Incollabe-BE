@@ -28,6 +28,19 @@ export class HypeStoreWebhookController {
       'Unified endpoint for all order events (purchase, return, etc.).\n\n' +
       '**Authentication:**\n' +
       '- API Key: Passed in URL path (:apiKey parameter) - obtained from store creation response\n\n' +
+      '**Required Fields for Purchase:**\n' +
+      '- `eventType`: Must be "purchase" or "return"\n' +
+      '- `externalOrderId`: Your unique order ID\n' +
+      '- `couponCode`: The coupon code used (e.g., SNCOL25, SNITCHCOLLABKAROO)\n' +
+      '- `referralCode`: Influencer referral code for attribution (e.g., INFL123)\n' +
+      '- `orderTitle`: Product/order name\n' +
+      '- `orderAmount`: Order amount in rupees\n' +
+      '- `orderDate`: ISO 8601 date format\n\n' +
+      '**Product Details (Optional but Recommended):**\n' +
+      '- `productSKU`, `productCategory`, `productBrand`, `productVariant`, `productImageUrl`, `productQuantity`\n\n' +
+      '**Return Window:**\n' +
+      '- `returnPeriodDays`: Number of days for return window (default: 30 days)\n' +
+      '- Cashback is locked until return period expires\n\n' +
       '**Event Types:**\n' +
       '- `purchase`: When a customer makes a purchase using an influencer\'s coupon\n' +
       '- `return`: When a customer returns a product or gets a refund\n\n' +
@@ -35,6 +48,7 @@ export class HypeStoreWebhookController {
       'Duplicate purchase requests with the same externalOrderId will be safely ignored and return the original order details.\n\n' +
       '**Cashback:**\n' +
       '- Purchase: Cashback is automatically calculated based on influencer tier\n' +
+      '- Cashback Type: Auto-derived from coupon code (e.g., SNCOL25 → "Flat 25%")\n' +
       '- Return: If cashback was credited, it will be automatically reversed',
   })
   @ApiParam({
@@ -44,39 +58,98 @@ export class HypeStoreWebhookController {
   })
   @ApiBody({
     type: UnifiedWebhookDto,
-    description: 'Order event data',
+    description: 'Order event data. Both couponCode and referralCode are required for proper influencer attribution.',
     examples: {
-      purchase: {
-        summary: 'Purchase Event',
-        description: 'Customer made a purchase using influencer coupon',
+      purchaseMinimal: {
+        summary: 'Minimal Purchase (Required Fields Only)',
+        description: 'Minimum required fields for a purchase event',
         value: {
           eventType: 'purchase',
           externalOrderId: 'ORD-2026-12345',
-          couponCode: 'MYNTRA-000123-A3F2B1',
-          orderAmount: 5000.0,
+          couponCode: 'SNCOL25',
+          referralCode: 'INFL123',
+          orderTitle: 'Men\'s Cotton Shirt - Blue',
+          orderAmount: 3500.0,
           orderDate: '2026-03-17T10:30:00Z',
-          customerEmail: 'customer@example.com',
-          customerPhone: '+919876543210',
-          orderTitle: 'Blue Shirt',
-          orderStatus: 'confirmed',
         },
       },
-      purchaseWithReferral: {
-        summary: 'Purchase with Referral Code',
-        description: 'Purchase using brand-shared coupon with influencer referral code',
+      purchaseComplete: {
+        summary: 'Complete Purchase Event (All Product Details)',
+        description: 'Purchase event with all product details, customer info, and return window',
         value: {
           eventType: 'purchase',
           externalOrderId: 'ORD-2026-12346',
+          couponCode: 'SNCOL25',
+          referralCode: 'INFL123',
+          orderTitle: 'Men\'s Premium Cotton Shirt - Blue Denim',
+          productSKU: 'SHIRT-BLU-L-2026',
+          productCategory: 'Clothing',
+          productBrand: 'Snitch',
+          productVariant: 'Blue - Size L',
+          productImageUrl: 'https://example.com/products/blue-shirt.jpg',
+          productQuantity: 1,
+          orderAmount: 5000.0,
+          orderCurrency: 'INR',
+          orderDate: '2026-03-17T10:30:00Z',
+          orderStatus: 'confirmed',
+          returnPeriodDays: 30,
+          customerName: 'Rajesh Kumar',
+          customerEmail: 'rajesh@example.com',
+          customerPhone: '+919876543210',
+        },
+      },
+      purchaseBrandShared: {
+        summary: 'Brand-Shared Coupon Purchase',
+        description: 'Purchase using brand-shared coupon (like SNITCHCOLLABKAROO) with influencer referral code for attribution',
+        value: {
+          eventType: 'purchase',
+          externalOrderId: 'ORD-2026-12347',
           couponCode: 'SNITCHCOLLABKAROO',
-          referralCode: 'INFL15',
+          referralCode: 'INFL456',
+          orderTitle: 'Winter Jacket - Black',
+          productSKU: 'JKT-BLK-M-001',
+          productCategory: 'Outerwear',
+          productBrand: 'Snitch',
+          productVariant: 'Black - Medium',
+          productImageUrl: 'https://example.com/jacket.jpg',
+          productQuantity: 1,
           orderAmount: 12500.0,
           orderDate: '2026-03-17T14:15:00Z',
-          customerName: 'Rajesh Kumar',
+          returnPeriodDays: 45,
+          customerName: 'Priya Sharma',
+          customerEmail: 'priya@example.com',
+          customerPhone: '+919876543210',
+        },
+      },
+      purchaseMultiProduct: {
+        summary: 'Multi-Item Purchase',
+        description: 'Purchase with multiple items using metadata for detailed item breakdown',
+        value: {
+          eventType: 'purchase',
+          externalOrderId: 'ORD-2026-12348',
+          couponCode: 'SNCOL30',
+          referralCode: 'INFL789',
+          orderTitle: 'Winter Combo - Jacket + Jeans',
+          productCategory: 'Combo',
+          productQuantity: 2,
+          orderAmount: 15000.0,
+          orderDate: '2026-03-17T16:00:00Z',
+          returnPeriodDays: 30,
+          customerName: 'Amit Verma',
+          customerEmail: 'amit@example.com',
+          metadata: {
+            items: [
+              { sku: 'JKT-001', name: 'Winter Jacket', price: 8000, quantity: 1 },
+              { sku: 'JEANS-002', name: 'Denim Jeans', price: 7000, quantity: 1 },
+            ],
+            paymentMethod: 'Credit Card',
+            appliedDiscount: 2000,
+          },
         },
       },
       return: {
         summary: 'Return Event',
-        description: 'Customer returned a product',
+        description: 'Customer returned a product - cashback will be automatically reversed',
         value: {
           eventType: 'return',
           externalOrderId: 'ORD-2026-12345',
@@ -87,13 +160,13 @@ export class HypeStoreWebhookController {
       },
       partialReturn: {
         summary: 'Partial Return',
-        description: 'Customer returned part of the order',
+        description: 'Customer returned part of the order - proportional cashback will be reversed',
         value: {
           eventType: 'return',
           externalOrderId: 'ORD-2026-12346',
           returnAmount: 2500.0,
           returnDate: '2026-03-20T14:00:00Z',
-          returnReason: 'Customer requested partial refund',
+          returnReason: 'One item damaged, keeping the other',
           metadata: {
             returnedItems: ['SHIRT-001'],
             retainedItems: ['JEANS-002'],

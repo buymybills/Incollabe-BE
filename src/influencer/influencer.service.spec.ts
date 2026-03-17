@@ -6,6 +6,7 @@ import { WhatsAppService } from '../shared/whatsapp.service';
 import { OtpService } from '../shared/services/otp.service';
 import { CustomNicheService } from '../shared/services/custom-niche.service';
 import { NotificationService } from '../shared/notification.service';
+import { InAppNotificationService } from '../shared/in-app-notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
 import { AppVersionService } from '../shared/services/app-version.service';
 import { AppReviewService } from '../shared/services/app-review.service';
@@ -398,6 +399,15 @@ describe('InfluencerService', () => {
         {
           provide: ChatService,
           useValue: mockChatService,
+        },
+        {
+          provide: InAppNotificationService,
+          useValue: {
+            createNotification: jest.fn().mockResolvedValue(undefined),
+            getNotifications: jest.fn().mockResolvedValue([]),
+            markAsRead: jest.fn().mockResolvedValue(undefined),
+            deleteNotification: jest.fn().mockResolvedValue(undefined),
+          },
         },
       ],
     }).compile();

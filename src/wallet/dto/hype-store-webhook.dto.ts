@@ -58,13 +58,69 @@ export class UnifiedWebhookDto {
   referralCode?: string;
 
   @ApiProperty({
-    description: 'Order/Product title',
+    description: 'Order/Product title (required for purchase events)',
     example: 'JBL Tune 770NC Active Noise Cancelling Headphones',
+    required: false,
+  })
+  @ValidateIf((o) => o.eventType === WebhookEventType.PURCHASE)
+  @IsString()
+  orderTitle?: string;
+
+  @ApiProperty({
+    description: 'Product SKU/Item Code',
+    example: 'JBL-770NC-BLK',
     required: false,
   })
   @IsOptional()
   @IsString()
-  orderTitle?: string;
+  productSKU?: string;
+
+  @ApiProperty({
+    description: 'Product category',
+    example: 'Electronics',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  productCategory?: string;
+
+  @ApiProperty({
+    description: 'Product brand name',
+    example: 'JBL',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  productBrand?: string;
+
+  @ApiProperty({
+    description: 'Product variant (size, color, etc.)',
+    example: 'Black - Wireless',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  productVariant?: string;
+
+  @ApiProperty({
+    description: 'Product image URL',
+    example: 'https://example.com/products/jbl-770nc.jpg',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  productImageUrl?: string;
+
+  @ApiProperty({
+    description: 'Product quantity',
+    example: 1,
+    default: 1,
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  productQuantity?: number;
 
   @ApiProperty({
     description: 'Order amount in rupees (required for purchase events)',
@@ -75,15 +131,6 @@ export class UnifiedWebhookDto {
   @IsNumber()
   @Min(0)
   orderAmount?: number;
-
-  @ApiProperty({
-    description: 'Cashback type/description (e.g., "Flat 20%", "₹500 off")',
-    example: 'Flat 20%',
-    required: false,
-  })
-  @IsOptional()
-  @IsString()
-  cashbackType?: string;
 
   @ApiProperty({
     description: 'Order currency code',
@@ -221,11 +268,65 @@ export class PurchaseWebhookDto {
   @ApiProperty({
     description: 'Order/Product title',
     example: 'JBL Tune 770NC Active Noise Cancelling Headphones',
+  })
+  @IsString()
+  orderTitle: string;
+
+  @ApiProperty({
+    description: 'Product SKU/Item Code',
+    example: 'JBL-770NC-BLK',
     required: false,
   })
   @IsOptional()
   @IsString()
-  orderTitle?: string;
+  productSKU?: string;
+
+  @ApiProperty({
+    description: 'Product category',
+    example: 'Electronics',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  productCategory?: string;
+
+  @ApiProperty({
+    description: 'Product brand name',
+    example: 'JBL',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  productBrand?: string;
+
+  @ApiProperty({
+    description: 'Product variant (size, color, etc.)',
+    example: 'Black - Wireless',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  productVariant?: string;
+
+  @ApiProperty({
+    description: 'Product image URL',
+    example: 'https://example.com/products/jbl-770nc.jpg',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  productImageUrl?: string;
+
+  @ApiProperty({
+    description: 'Product quantity',
+    example: 1,
+    default: 1,
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  productQuantity?: number;
 
   @ApiProperty({
     description: 'Order amount in rupees',
@@ -234,15 +335,6 @@ export class PurchaseWebhookDto {
   @IsNumber()
   @Min(0)
   orderAmount: number;
-
-  @ApiProperty({
-    description: 'Cashback type/description (e.g., "Flat 20%", "₹500 off")',
-    example: 'Flat 20%',
-    required: false,
-  })
-  @IsOptional()
-  @IsString()
-  cashbackType?: string;
 
   @ApiProperty({
     description: 'Order currency code',

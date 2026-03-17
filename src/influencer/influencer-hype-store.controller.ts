@@ -522,7 +522,15 @@ export class InfluencerHypeStoreController {
   @Get(':storeId')
   @ApiOperation({
     summary: 'Get Hype Store details',
-    description: 'Get detailed information about a specific Hype Store including cashback offers and brand info'
+    description:
+      'Get detailed information about a specific Hype Store including cashback offers and brand info.\n\n' +
+      '**Coupon Codes Explained:**\n' +
+      '- `brandCouponCode`: Brand\'s shared coupon that customers use at checkout (e.g., HMCOL25 for H&M with 25% cashback)\n' +
+      '- `myReferralCode`: Your unique referral code for attribution (e.g., INFL7)\n\n' +
+      '**Webhook Usage:**\n' +
+      'When customers purchase using your referral, the webhook should include:\n' +
+      '- `couponCode`: The brandCouponCode (e.g., "HMCOL25")\n' +
+      '- `referralCode`: Your myReferralCode (e.g., "INFL7")'
   })
   @ApiParam({ name: 'storeId', type: Number, description: 'Store ID' })
   @ApiResponse({
@@ -563,15 +571,24 @@ export class InfluencerHypeStoreController {
                 claimStrategy: { type: 'string', example: 'OPTIMIZED_SPEND' },
               }
             },
+            brandCouponCode: {
+              type: 'string',
+              nullable: true,
+              example: 'HMCOL25',
+              description: 'Brand\'s shared coupon code that customers use at checkout'
+            },
+            myReferralCode: {
+              type: 'string',
+              example: 'INFL123',
+              description: 'Your unique referral code for attribution (format: INFL{your_id})'
+            },
             myCoupon: {
               type: 'object',
               nullable: true,
+              description: 'Legacy field - use myReferralCode instead',
               properties: {
-                id: { type: 'number', example: 1 },
-                couponCode: { type: 'string', example: 'INFL123MYNTRA' },
+                couponCode: { type: 'string', example: 'INFL123' },
                 isActive: { type: 'boolean', example: true },
-                totalUses: { type: 'number', example: 15 },
-                createdAt: { type: 'string', example: '2026-03-07T10:00:00.000Z' },
               }
             },
             myStats: {

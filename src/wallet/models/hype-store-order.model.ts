@@ -91,6 +91,49 @@ export class HypeStoreOrder extends Model<HypeStoreOrder> {
   declare orderTitle: string;
 
   @Column({
+    type: DataType.STRING(255),
+    allowNull: true,
+    comment: 'Product SKU/Item Code',
+  })
+  declare productSKU: string;
+
+  @Column({
+    type: DataType.STRING(255),
+    allowNull: true,
+    comment: 'Product category (e.g., Electronics, Clothing, etc.)',
+  })
+  declare productCategory: string;
+
+  @Column({
+    type: DataType.STRING(255),
+    allowNull: true,
+    comment: 'Product brand name',
+  })
+  declare productBrand: string;
+
+  @Column({
+    type: DataType.STRING(255),
+    allowNull: true,
+    comment: 'Product variant (e.g., size, color, etc.)',
+  })
+  declare productVariant: string;
+
+  @Column({
+    type: DataType.STRING(500),
+    allowNull: true,
+    comment: 'Product image URL',
+  })
+  declare productImageUrl: string;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    defaultValue: 1,
+    comment: 'Product quantity',
+  })
+  declare productQuantity: number;
+
+  @Column({
     type: DataType.DECIMAL(10, 2),
     allowNull: false,
   })

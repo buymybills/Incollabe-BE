@@ -609,7 +609,16 @@ export class HypeStoreController {
   @Get(':storeId')
   @ApiOperation({
     summary: 'Get store details by ID',
-    description: 'Get comprehensive store details including performance metrics, budget, orders, and sales analytics'
+    description:
+      'Get comprehensive store details including performance metrics, budget, orders, and sales analytics.\n\n' +
+      '**Coupon Code Usage:**\n' +
+      '- `brandCouponCode`: Brand-shared coupon code (e.g., SNCOL25) that customers use at checkout\n' +
+      '- Influencers share this coupon code WITH their unique referral code (e.g., INFL123)\n' +
+      '- Example: Customer uses couponCode="SNCOL25" + referralCode="INFL123" for influencer attribution\n\n' +
+      '**Webhook Integration:**\n' +
+      'When sending purchase webhooks, include both:\n' +
+      '- `couponCode`: "SNCOL25" (from this API response)\n' +
+      '- `referralCode`: "INFL123" (influencer who promoted the product)'
   })
   @ApiParam({ name: 'storeId', type: Number, description: 'Store ID' })
   @ApiResponse({
@@ -620,9 +629,13 @@ export class HypeStoreController {
       properties: {
         id: { type: 'number', example: 9 },
         storeName: { type: 'string', example: 'Store 1' },
-        brandCouponCode: { type: 'string', example: 'SNCOL25', description: 'Auto-generated coupon code' },
-        cashbackLimit: { type: 'string', example: '25%', description: 'Cashback percentage from coupon code' },
-        monthlyPurchaseLimit: { type: 'number', example: 5, description: 'Monthly purchase limit per influencer' },
+        brandCouponCode: {
+          type: 'string',
+          example: 'SNCOL25',
+          description: 'Brand-shared coupon code that customers use at checkout. Influencers share this code WITH their referral code (e.g., INFL123) for attribution.'
+        },
+        cashbackLimit: { type: 'string', example: '25%', description: 'Cashback percentage extracted from coupon code (last 2 digits)' },
+        monthlyPurchaseLimit: { type: 'number', example: 5, description: 'Monthly cashback claim limit per influencer' },
         wallet: {
           type: 'object',
           nullable: true,
@@ -667,6 +680,17 @@ export class HypeStoreController {
         },
         cashbackConfig: { type: 'object', description: 'Cashback configuration details' },
         creatorPreferences: { type: 'object', description: 'Creator targeting preferences', nullable: true },
+        webhookCredentials: {
+          type: 'object',
+          nullable: true,
+          description: 'Webhook integration credentials for receiving order events',
+          properties: {
+            apiKey: { type: 'string', example: 'hs_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6', description: 'API key for webhook URL' },
+            webhookUrl: { type: 'string', example: 'https://api.incollabe.com/webhooks/hype-store/hs_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6', description: 'Webhook endpoint URL' },
+            isActive: { type: 'boolean', example: true, description: 'Whether credentials are active' },
+            createdAt: { type: 'string', example: '2026-03-12T08:00:00.000Z', description: 'When credentials were created' },
+          },
+        },
       },
     },
   })

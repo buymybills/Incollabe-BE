@@ -29,6 +29,7 @@ import { Follow } from '../post/models/follow.model';
 import { Post } from '../post/models/post.model';
 import { CampaignQueryService } from './services/campaign-query.service';
 import { NotificationService } from '../shared/notification.service';
+import { InAppNotificationService } from '../shared/in-app-notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
 import { Experience } from '../influencer/models/experience.model';
 import { CreditTransaction } from '../admin/models/credit-transaction.model';
@@ -192,6 +193,15 @@ describe('CampaignService', () => {
         {
           provide: DeviceTokenService,
           useValue: mockDeviceTokenService,
+        },
+        {
+          provide: InAppNotificationService,
+          useValue: {
+            createNotification: jest.fn().mockResolvedValue(undefined),
+            getNotifications: jest.fn().mockResolvedValue([]),
+            markAsRead: jest.fn().mockResolvedValue(undefined),
+            deleteNotification: jest.fn().mockResolvedValue(undefined),
+          },
         },
         {
           provide: AIScoringService,

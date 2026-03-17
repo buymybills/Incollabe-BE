@@ -273,6 +273,15 @@ export class InfluencerHypeStoreService {
     // Format: INFL{influencerId} - works across all stores
     const universalCouponCode = `INFL${influencerId}`;
 
+    // Get brand's shared coupon code for this store
+    const brandCoupon = await this.couponCodeModel.findOne({
+      where: {
+        hypeStoreId: storeId,
+        isBrandShared: true,
+        isActive: true,
+      },
+    });
+
     // Get influencer's stats for this store
     const orders = await this.orderModel.findAll({
       where: {
@@ -308,6 +317,11 @@ export class InfluencerHypeStoreService {
         isActive: store.isActive,
         brand: store.brand,
         cashbackConfig: store.cashbackConfig,
+        // Brand's shared coupon code (what customers use at checkout)
+        brandCouponCode: brandCoupon?.couponCode || null,
+        // Influencer's referral code (for attribution)
+        myReferralCode: universalCouponCode,
+        // Legacy field - kept for backward compatibility
         myCoupon: {
           couponCode: universalCouponCode,
           isActive: true,

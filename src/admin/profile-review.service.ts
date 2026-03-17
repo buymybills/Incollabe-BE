@@ -24,6 +24,8 @@ import { NotificationService } from '../shared/notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
 import { UserType as DeviceUserType } from '../shared/models/device-token.model';
 import { AuditLogService } from './services/audit-log.service';
+import { InAppNotificationService } from '../shared/in-app-notification.service';
+import { NotificationType } from '../shared/models/in-app-notification.model';
 import { AuditActionType } from './models/audit-log.model';
 import { ProfileReviewDto } from './dto/profile-review.dto';
 import { Op } from 'sequelize';
@@ -63,6 +65,7 @@ export class ProfileReviewService {
     private readonly notificationService: NotificationService,
     private readonly deviceTokenService: DeviceTokenService,
     private readonly auditLogService: AuditLogService,
+    private readonly inAppNotificationService: InAppNotificationService,
   ) { }
 
   async createProfileReview(createData: any) {
