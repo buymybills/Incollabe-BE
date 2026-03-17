@@ -996,12 +996,13 @@ export class PostService {
 
     const offset = (page - 1) * limit;
 
-    // Build include options with search filter
+    // Build include options with paranoid: false to include soft-deleted users
     const influencerInclude: any = {
       model: Influencer,
       as: 'followerInfluencer',
       attributes: ['id', 'name', 'username', 'profileImage'],
       required: false,
+      paranoid: false, // Include soft-deleted influencers
     };
 
     const brandInclude: any = {
@@ -1009,6 +1010,7 @@ export class PostService {
       as: 'followerBrand',
       attributes: ['id', 'brandName', 'username', 'profileImage'],
       required: false,
+      paranoid: false, // Include soft-deleted brands
     };
 
     // Add search filter if provided
@@ -1118,7 +1120,7 @@ export class PostService {
 
     const offset = (page - 1) * limit;
 
-    // Build include options with search filter
+    // Build include options
     const influencerInclude: any = {
       model: Influencer,
       as: 'followingInfluencer',
