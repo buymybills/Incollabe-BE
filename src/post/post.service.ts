@@ -1052,41 +1052,30 @@ export class PostService {
       offset,
     });
 
-    console.log('DEBUG: follows.length =', follows.length);
-    console.log('DEBUG: first follow =', JSON.stringify(follows[0]?.toJSON(), null, 2));
-
     const followers = follows.map((follow) => {
-      console.log('DEBUG: Processing follow', {
-        followerType: follow.followerType,
-        hasInfluencer: !!follow.followerInfluencer,
-        hasBrand: !!follow.followerBrand,
-        followerInfluencerId: follow.followerInfluencerId,
-        followerBrandId: follow.followerBrandId,
-      });
+      const followData = follow.toJSON();
 
-      if (follow.followerType === FollowerType.INFLUENCER && follow.followerInfluencer) {
+      if (followData.followerType === FollowerType.INFLUENCER && followData.followerInfluencer) {
         return {
-          id: follow.followerInfluencer.id,
+          id: followData.followerInfluencer.id,
           type: 'influencer' as const,
-          name: follow.followerInfluencer.name,
-          username: follow.followerInfluencer.username,
-          profileImage: follow.followerInfluencer.profileImage || null,
-          followedAt: follow.createdAt,
+          name: followData.followerInfluencer.name,
+          username: followData.followerInfluencer.username,
+          profileImage: followData.followerInfluencer.profileImage || null,
+          followedAt: followData.createdAt,
         };
-      } else if (follow.followerType === FollowerType.BRAND && follow.followerBrand) {
+      } else if (followData.followerType === FollowerType.BRAND && followData.followerBrand) {
         return {
-          id: follow.followerBrand.id,
+          id: followData.followerBrand.id,
           type: 'brand' as const,
-          name: follow.followerBrand.brandName,
-          username: follow.followerBrand.username,
-          profileImage: follow.followerBrand.profileImage || null,
-          followedAt: follow.createdAt,
+          name: followData.followerBrand.brandName,
+          username: followData.followerBrand.username,
+          profileImage: followData.followerBrand.profileImage || null,
+          followedAt: followData.createdAt,
         };
       }
       return null;
     }).filter((follower): follower is NonNullable<typeof follower> => follower !== null);
-
-    console.log('DEBUG: followers.length after mapping =', followers.length);
 
     const totalPages = Math.ceil(total / limit);
 
@@ -1187,41 +1176,30 @@ export class PostService {
       offset,
     });
 
-    console.log('DEBUG FOLLOWING: follows.length =', follows.length);
-    console.log('DEBUG FOLLOWING: first follow =', JSON.stringify(follows[0]?.toJSON(), null, 2));
-
     const following = follows.map((follow) => {
-      console.log('DEBUG FOLLOWING: Processing follow', {
-        followingType: follow.followingType,
-        hasInfluencer: !!follow.followingInfluencer,
-        hasBrand: !!follow.followingBrand,
-        followingInfluencerId: follow.followingInfluencerId,
-        followingBrandId: follow.followingBrandId,
-      });
+      const followData = follow.toJSON();
 
-      if (follow.followingType === FollowingType.INFLUENCER && follow.followingInfluencer) {
+      if (followData.followingType === FollowingType.INFLUENCER && followData.followingInfluencer) {
         return {
-          id: follow.followingInfluencer.id,
+          id: followData.followingInfluencer.id,
           type: 'influencer' as const,
-          name: follow.followingInfluencer.name,
-          username: follow.followingInfluencer.username,
-          profileImage: follow.followingInfluencer.profileImage || null,
-          followedAt: follow.createdAt,
+          name: followData.followingInfluencer.name,
+          username: followData.followingInfluencer.username,
+          profileImage: followData.followingInfluencer.profileImage || null,
+          followedAt: followData.createdAt,
         };
-      } else if (follow.followingType === FollowingType.BRAND && follow.followingBrand) {
+      } else if (followData.followingType === FollowingType.BRAND && followData.followingBrand) {
         return {
-          id: follow.followingBrand.id,
+          id: followData.followingBrand.id,
           type: 'brand' as const,
-          name: follow.followingBrand.brandName,
-          username: follow.followingBrand.username,
-          profileImage: follow.followingBrand.profileImage || null,
-          followedAt: follow.createdAt,
+          name: followData.followingBrand.brandName,
+          username: followData.followingBrand.username,
+          profileImage: followData.followingBrand.profileImage || null,
+          followedAt: followData.createdAt,
         };
       }
       return null;
     }).filter((user): user is NonNullable<typeof user> => user !== null);
-
-    console.log('DEBUG FOLLOWING: following.length after mapping =', following.length);
 
     const totalPages = Math.ceil(total / limit);
 
