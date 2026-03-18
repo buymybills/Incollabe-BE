@@ -321,11 +321,6 @@ export class InfluencerHypeStoreService {
         brandCouponCode: brandCoupon?.couponCode || null,
         // Influencer's referral code (for attribution)
         myReferralCode: universalCouponCode,
-        // Legacy field - kept for backward compatibility
-        myCoupon: {
-          couponCode: universalCouponCode,
-          isActive: true,
-        },
         myStats: {
           totalOrders,
           totalOrderValue,

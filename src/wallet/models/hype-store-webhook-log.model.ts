@@ -13,6 +13,7 @@ import { HypeStoreOrder } from './hype-store-order.model';
 @Table({
   tableName: 'hype_store_webhook_logs',
   timestamps: false,
+  underscored: true,
 })
 export class HypeStoreWebhookLog extends Model<HypeStoreWebhookLog> {
   @Column({
