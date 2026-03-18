@@ -67,6 +67,13 @@ export class Post extends Model {
   })
   declare likesCount: number;
 
+  @AllowNull(false)
+  @Column({
+    type: DataType.INTEGER,
+    defaultValue: 0,
+  })
+  declare sharesCount: number;
+
   @CreatedAt
   @Column(DataType.DATE)
   declare createdAt: Date;

@@ -17,6 +17,7 @@ import { CampaignModule } from './campaign/campaign.module';
 import { RedisModule } from './redis/redis.module';
 import { WalletModule } from './wallet/wallet.module';
 import { HypeStoreModule } from './hype-store/hype-store.module';
+import { CreatorStudioModule } from './shared/creator-studio.module';
 import { LoggingMiddleware } from './shared/middleware/logging.middleware';
 
 @Module({
@@ -46,6 +47,7 @@ import { LoggingMiddleware } from './shared/middleware/logging.middleware';
     CampaignModule,
     WalletModule,
     HypeStoreModule,
+    CreatorStudioModule,
   ],
   controllers: [AppController],
   providers: [AppService],
