@@ -2340,8 +2340,27 @@ export class HypeStoreService {
     });
 
     if (!tier) {
-      // No tier found, return minimum default
-      return { cashbackAmount: 0, tierId: null };
+      // No tier found, fall back to cashback config
+      const cashbackConfig = await this.cashbackConfigModel.findOne({
+        where: { storeId: hypeStoreId },
+      });
+
+      if (!cashbackConfig || !cashbackConfig.cashbackPercentage) {
+        // No config either, return 0
+        return { cashbackAmount: 0, tierId: null };
+      }
+
+      // Calculate using config percentage
+      const percentage = parseFloat(cashbackConfig.cashbackPercentage.toString());
+      let cashbackAmount = (orderAmount * percentage) / 100;
+
+      // Apply reel post limits (default to reel limits, stories can be handled separately if needed)
+      const minCashback = parseFloat(cashbackConfig.reelPostMinCashback?.toString() || '0');
+      const maxCashback = parseFloat(cashbackConfig.reelPostMaxCashback?.toString() || '999999');
+
+      cashbackAmount = Math.max(minCashback, Math.min(maxCashback, cashbackAmount));
+
+      return { cashbackAmount, tierId: null };
     }
 
     let cashbackAmount = 0;
