@@ -1019,7 +1019,7 @@ export class HypeStoreController {
     @Param('orderId') orderId: string,
   ) {
     const brandId = req.user.id;
-    return this.hypeStoreService.getOrderDetails(parseInt(storeId), brandId, orderId);
+    return this.hypeStoreService.getOrderDetails(parseInt(storeId), brandId, parseInt(orderId));
   }
 
   // ==================== Webhook Credentials Endpoints ====================

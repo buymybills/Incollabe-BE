@@ -563,6 +563,37 @@ export class HypeStoreService {
       ? Math.round(((lastMonthSales - previousMonthSales) / previousMonthSales) * 100)
       : 0;
 
+    // Generate monthly breakdown for last 12 months (for graphs)
+    const monthlyData: Array<{
+      month: string;
+      monthLabel: string;
+      orders: number;
+      sales: number;
+    }> = [];
+    const now = new Date();
+
+    for (let i = 11; i >= 0; i--) {
+      const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+
+      const monthOrders = allOrders.filter(
+        order => new Date(order.createdAt) >= monthStart && new Date(order.createdAt) <= monthEnd
+      );
+
+      const monthOrderCount = monthOrders.length;
+      const monthSalesAmount = monthOrders.reduce(
+        (sum, order) => sum + parseFloat(order.orderAmount.toString()),
+        0
+      );
+
+      monthlyData.push({
+        month: monthStart.toISOString().substring(0, 7), // "2026-03" format
+        monthLabel: monthStart.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }), // "Mar 2026"
+        orders: monthOrderCount,
+        sales: monthSalesAmount,
+      });
+    }
+
     // Extract cashback percentage from coupon code (last 2 digits)
     const cashbackPercentage = brandCoupon?.couponCode
       ? parseInt(brandCoupon.couponCode.slice(-2))
@@ -607,10 +638,12 @@ export class HypeStoreService {
       orders: {
         total: totalOrders,
         growthPercentage: ordersGrowth,
+        monthlyData: monthlyData.map(m => ({ month: m.month, monthLabel: m.monthLabel, count: m.orders })),
       },
       sales: {
         total: totalSales,
         growthPercentage: salesGrowth,
+        monthlyData: monthlyData.map(m => ({ month: m.month, monthLabel: m.monthLabel, amount: m.sales })),
       },
       aggregatePerformance: {
         expectedROI: avgExpectedROI,
@@ -1421,7 +1454,7 @@ export class HypeStoreService {
   /**
    * Get order details
    */
-  async getOrderDetails(storeId: number, brandId: number, orderId: string): Promise<any> {
+  async getOrderDetails(storeId: number, brandId: number, orderId: number): Promise<any> {
     const store = await this.hypeStoreModel.findOne({
       where: { id: storeId, brandId },
     });
@@ -1431,7 +1464,7 @@ export class HypeStoreService {
     }
 
     const order = await this.orderModel.findOne({
-      where: { hypeStoreId: storeId, externalOrderId: orderId },
+      where: { id: orderId, hypeStoreId: storeId },
       include: [
         {
           model: this.influencerModel,
