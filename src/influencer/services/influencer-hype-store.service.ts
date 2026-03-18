@@ -19,6 +19,7 @@ import { BrandNiche } from '../../brand/model/brand-niche.model';
 import { SubmitProofDto } from '../dto/hype-store-order.dto';
 import { Niche } from '../../auth/model/niche.model';
 import { Influencer } from '../../auth/model/influencer.model';
+import { InstagramProfileAnalysis } from '../../shared/models/instagram-profile-analysis.model';
 import axios from 'axios';
 
 @Injectable()
@@ -42,6 +43,8 @@ export class InfluencerHypeStoreService {
     private referralCodeModel: typeof HypeStoreReferralCode,
     @InjectModel(Influencer)
     private influencerModel: typeof Influencer,
+    @InjectModel(InstagramProfileAnalysis)
+    private instagramProfileAnalysisModel: typeof InstagramProfileAnalysis,
     private sequelize: Sequelize,
   ) {}
 
@@ -1087,10 +1090,7 @@ export class InfluencerHypeStoreService {
       throw new NotFoundException('Influencer not found');
     }
 
-    // Extract Instagram shortcode from URL
-    const shortcode = this.extractInstagramShortcode(submitProofDto.instagramUrl);
-
-    // Fetch Instagram media details (thumbnail, etc.)
+    // Use cached profile analysis data (same as profile scoring system)
     let thumbnailUrl: string | null = null;
     let viewCount: number | null = null;
     let postedAt: Date | null = null;
@@ -1098,34 +1098,32 @@ export class InfluencerHypeStoreService {
     let estimatedEngagement: number | null = null;
     let expectedRoi: number | null = null;
 
-    try {
-      // Fetch basic media details (doesn't require auth)
-      const mediaDetails = await this.fetchInstagramMediaDetails(submitProofDto.instagramUrl);
-      thumbnailUrl = mediaDetails.thumbnailUrl || null;
+    const profileAnalysis = await this.instagramProfileAnalysisModel.findOne({
+      where: { influencerId },
+      order: [['analyzed_at', 'DESC']],
+    });
 
-      // Fetch insights if possible (requires auth and media must be owned by influencer)
-      if (shortcode && influencer.instagramAccessToken) {
-        const insights = await this.fetchInstagramMediaInsights(influencer, shortcode);
-        viewCount = insights.viewCount || null;
-        postedAt = insights.timestamp ? new Date(insights.timestamp) : null;
-        estimatedReach = insights.reach || null;
+    if (profileAnalysis) {
+      // Use cached average metrics from profile analysis
+      if (profileAnalysis.avgReach) {
+        estimatedReach = profileAnalysis.avgReach;
       }
-    } catch (error) {
-      // Don't fail the submission if Instagram fetch fails
-      console.warn('Failed to fetch Instagram media details:', error.message);
+
+      // Calculate engagement from avg engagement rate and followers
+      const avgEngagementRate = parseFloat(profileAnalysis.avgEngagementRate?.toString() || '0');
+      const totalFollowers = profileAnalysis.totalFollowers || influencer.instagramFollowersCount || 0;
+      if (avgEngagementRate > 0 && totalFollowers > 0) {
+        estimatedEngagement = Math.round((totalFollowers * avgEngagementRate) / 100);
+      }
     }
 
-    // Calculate performance metrics to store with the order
+    // Fallback: estimate from follower count if no cached data
     const followerCount = influencer.instagramFollowersCount || 0;
-
-    // Calculate estimated reach (use Instagram data or estimate from followers)
     if (!estimatedReach && followerCount > 0) {
       estimatedReach = Math.round(followerCount * 0.25); // 25% of followers
     }
-
-    // Calculate estimated engagement (3.5% of followers)
-    if (followerCount > 0) {
-      estimatedEngagement = Math.round(followerCount * 0.035);
+    if (!estimatedEngagement && followerCount > 0) {
+      estimatedEngagement = Math.round(followerCount * 0.035); // 3.5% of followers
     }
 
     // Calculate ROI based on reach
@@ -1159,20 +1157,14 @@ export class InfluencerHypeStoreService {
     }
 
     // Create locked cashback transaction
-    console.log('🔵 [SUBMIT PROOF DEBUG] Starting transaction for locked cashback');
     const transaction: Transaction = await this.sequelize.transaction();
 
     try {
-      console.log('🔵 [SUBMIT PROOF DEBUG] Calculating cashback amounts');
       const cashbackAmount = parseFloat(order.cashbackAmount.toString());
       const previousLockedAmount = parseFloat(wallet.lockedAmount.toString());
       const newLockedAmount = previousLockedAmount + cashbackAmount;
       const returnPeriodEndsAt = order.returnPeriodEndsAt ||
         new Date(Date.now() + parseFloat(order.returnPeriodDays.toString()) * 24 * 60 * 60 * 1000);
-
-      console.log('🔵 [SUBMIT PROOF DEBUG] Creating locked wallet transaction');
-      console.log('🔵 [SUBMIT PROOF DEBUG] Wallet ID:', wallet.id);
-      console.log('🔵 [SUBMIT PROOF DEBUG] Cashback amount:', cashbackAmount);
 
       // Create locked wallet transaction
       const lockedTransaction = await this.walletTransactionModel.create(
@@ -1203,12 +1195,8 @@ export class InfluencerHypeStoreService {
         { transaction },
       );
 
-      console.log('🟢 [SUBMIT PROOF DEBUG] Locked transaction created:', lockedTransaction.id);
-
       // Deduct from brand wallet immediately to reserve cashback
-      console.log('🔵 [SUBMIT PROOF DEBUG] Getting brand wallet');
       const brandId = order.hypeStore?.brand?.id || order.hypeStore?.brandId;
-      console.log('🔵 [SUBMIT PROOF DEBUG] Brand ID:', brandId);
       if (!brandId) {
         throw new NotFoundException('Brand not found for this store');
       }
@@ -1219,10 +1207,8 @@ export class InfluencerHypeStoreService {
       });
 
       if (!brandWallet) {
-        console.log('🔴 [SUBMIT PROOF DEBUG] Brand wallet not found for brand ID:', brandId);
         throw new NotFoundException('Brand wallet not found');
       }
-      console.log('🟢 [SUBMIT PROOF DEBUG] Brand wallet found:', brandWallet.id);
 
       const brandBalance = parseFloat(brandWallet.balance.toString());
       if (brandBalance < cashbackAmount) {
@@ -1283,7 +1269,6 @@ export class InfluencerHypeStoreService {
       // Reload wallet to get updated values
       await wallet.reload();
 
-      console.log('🟢 [SUBMIT PROOF DEBUG] Transaction committed successfully');
       return {
         success: true,
         data: {
@@ -1306,9 +1291,6 @@ export class InfluencerHypeStoreService {
         message: `Proof submitted successfully. Cashback of ₹${cashbackAmount.toFixed(2)} is now locked and will be available for redemption after the return window closes.`,
       };
     } catch (error) {
-      console.log('🔴 [SUBMIT PROOF DEBUG] Error in transaction:');
-      console.log('🔴 [SUBMIT PROOF DEBUG] Error message:', error.message);
-      console.log('🔴 [SUBMIT PROOF DEBUG] Error stack:', error.stack);
       await transaction.rollback();
       throw error;
     }

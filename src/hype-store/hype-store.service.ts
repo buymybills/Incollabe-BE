@@ -1680,35 +1680,27 @@ export class HypeStoreService {
     let responseBody: any = { success: false, message: 'Processing failed' };
     let processedOrderId: number | null = null;
 
-    console.log('🔵 [WEBHOOK DEBUG] Starting processPurchaseWebhook');
-    console.log('🔵 [WEBHOOK DEBUG] Payload:', JSON.stringify(webhookDto, null, 2));
-
     try {
       // 1. Find store by API key
-      console.log('🔵 [WEBHOOK DEBUG] Step 1: Finding store by API key');
       webhookSecret = await this.webhookSecretModel.findOne({
         where: { apiKey, isActive: true },
         include: [{ model: this.hypeStoreModel }],
       });
 
       if (!webhookSecret) {
-        console.log('🔴 [WEBHOOK DEBUG] Store not found for API key');
         responseStatus = 401;
         responseBody = { success: false, message: 'Invalid API key' };
         throw new UnauthorizedException('Invalid API key');
       }
 
       const hypeStore = webhookSecret.hypeStore;
-      console.log('🟢 [WEBHOOK DEBUG] Store found:', hypeStore.id);
 
       // 2. Check for duplicate order (idempotency)
-      console.log('🔵 [WEBHOOK DEBUG] Step 2: Checking for duplicate order');
       const existingOrder = await this.orderModel.findOne({
         where: { externalOrderId: webhookDto.externalOrderId },
       });
 
       if (existingOrder) {
-        console.log('🟡 [WEBHOOK DEBUG] Duplicate order found:', existingOrder.id);
         responseStatus = 200;
         responseBody = {
           success: true,
@@ -1733,14 +1725,12 @@ export class HypeStoreService {
       }
 
       // 4. Find coupon code
-      console.log('🔵 [WEBHOOK DEBUG] Step 3: Finding coupon code:', webhookDto.couponCode);
       const couponCode = await this.couponCodeModel.findOne({
         where: { couponCode: webhookDto.couponCode, isActive: true },
         include: [{ model: this.influencerModel }],
       });
 
       if (!couponCode) {
-        console.log('🔴 [WEBHOOK DEBUG] Coupon not found');
         responseStatus = 400;
         responseBody = { success: false, message: 'Invalid or inactive coupon code' };
         await this.logWebhookRequest({
@@ -1821,20 +1811,14 @@ export class HypeStoreService {
         }
       }
 
-      console.log('🟢 [WEBHOOK DEBUG] Coupon found:', couponCode.id);
-      console.log('🔵 [WEBHOOK DEBUG] Step 4: Attributed influencer ID:', attributedInfluencerId);
-
       // 6. Calculate cashback
-      console.log('🔵 [WEBHOOK DEBUG] Step 5: Calculating cashback');
       const { cashbackAmount, tierId } = await this.calculateCashbackAmount(
         webhookDto.orderAmount,
         attributedInfluencerId,
         hypeStore.id,
       );
-      console.log('🟢 [WEBHOOK DEBUG] Cashback calculated:', cashbackAmount, 'Tier ID:', tierId);
 
       // 7. Create order in transaction
-      console.log('🔵 [WEBHOOK DEBUG] Step 6: Starting database transaction');
       const transaction: Transaction = await this.sequelize.transaction();
 
       try {
@@ -1847,7 +1831,6 @@ export class HypeStoreService {
         // Auto-derive cashback type from coupon code
         const derivedCashbackType = this.deriveCashbackTypeFromCoupon(webhookDto.couponCode);
 
-        console.log('🔵 [WEBHOOK DEBUG] Step 7: Creating order record');
         const order = await this.orderModel.create(
           {
             hypeStoreId: hypeStore.id,
@@ -1886,10 +1869,8 @@ export class HypeStoreService {
         );
 
         processedOrderId = order.id;
-        console.log('🟢 [WEBHOOK DEBUG] Order created successfully:', order.id);
 
         // Update coupon usage count
-        console.log('🔵 [WEBHOOK DEBUG] Step 8: Updating coupon usage count');
         await couponCode.increment('totalUses', { by: 1, transaction });
 
         // Update referral code stats if referral code was used
@@ -1913,11 +1894,19 @@ export class HypeStoreService {
           );
         }
 
+        // Update hype store total orders and revenue
+        await hypeStore.increment(
+          {
+            totalOrders: 1,
+            totalRevenue: webhookDto.orderAmount,
+            totalCashbackGiven: cashbackAmount,
+          },
+          { transaction },
+        );
+
         // Update webhook secret last used timestamp
-        console.log('🔵 [WEBHOOK DEBUG] Step 9: Updating webhook secret timestamp');
         await webhookSecret.update({ lastUsedAt: new Date() }, { transaction });
 
-        console.log('🔵 [WEBHOOK DEBUG] Step 10: Committing transaction');
         await transaction.commit();
 
         responseStatus = 200;
@@ -1943,20 +1932,12 @@ export class HypeStoreService {
           processedOrderId: order.id,
         });
 
-        console.log('🟢 [WEBHOOK DEBUG] Transaction committed successfully');
         return responseBody;
       } catch (error) {
-        console.log('🔴 [WEBHOOK DEBUG] Error in transaction block:');
-        console.log('🔴 [WEBHOOK DEBUG] Error message:', error.message);
-        console.log('🔴 [WEBHOOK DEBUG] Error stack:', error.stack);
-        console.log('🔴 [WEBHOOK DEBUG] Full error:', JSON.stringify(error, null, 2));
         await transaction.rollback();
         throw error;
       }
     } catch (error) {
-      console.log('🔴 [WEBHOOK DEBUG] Error in outer catch block:');
-      console.log('🔴 [WEBHOOK DEBUG] Error message:', error.message);
-      console.log('🔴 [WEBHOOK DEBUG] Error stack:', error.stack);
       responseStatus = responseStatus === 200 ? 500 : responseStatus;
       responseBody = {
         success: false,
