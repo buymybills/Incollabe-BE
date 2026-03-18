@@ -1880,7 +1880,7 @@ export class HypeStoreService {
             // Return period tracking fields
             returnPeriodDays: returnPeriodDays,
             returnPeriodEndsAt: returnPeriodEndsAt,
-            visibleToInfluencer: false, // Hidden until return period ends
+            visibleToInfluencer: true, // Visible immediately so influencer can submit proof
           } as any,
           { transaction },
         );

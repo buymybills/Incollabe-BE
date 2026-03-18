@@ -1159,14 +1159,20 @@ export class InfluencerHypeStoreService {
     }
 
     // Create locked cashback transaction
+    console.log('🔵 [SUBMIT PROOF DEBUG] Starting transaction for locked cashback');
     const transaction: Transaction = await this.sequelize.transaction();
 
     try {
+      console.log('🔵 [SUBMIT PROOF DEBUG] Calculating cashback amounts');
       const cashbackAmount = parseFloat(order.cashbackAmount.toString());
       const previousLockedAmount = parseFloat(wallet.lockedAmount.toString());
       const newLockedAmount = previousLockedAmount + cashbackAmount;
-      const returnPeriodEndsAt = order.returnPeriodEndsAt || 
+      const returnPeriodEndsAt = order.returnPeriodEndsAt ||
         new Date(Date.now() + parseFloat(order.returnPeriodDays.toString()) * 24 * 60 * 60 * 1000);
+
+      console.log('🔵 [SUBMIT PROOF DEBUG] Creating locked wallet transaction');
+      console.log('🔵 [SUBMIT PROOF DEBUG] Wallet ID:', wallet.id);
+      console.log('🔵 [SUBMIT PROOF DEBUG] Cashback amount:', cashbackAmount);
 
       // Create locked wallet transaction
       const lockedTransaction = await this.walletTransactionModel.create(
@@ -1197,8 +1203,12 @@ export class InfluencerHypeStoreService {
         { transaction },
       );
 
+      console.log('🟢 [SUBMIT PROOF DEBUG] Locked transaction created:', lockedTransaction.id);
+
       // Deduct from brand wallet immediately to reserve cashback
+      console.log('🔵 [SUBMIT PROOF DEBUG] Getting brand wallet');
       const brandId = order.hypeStore?.brand?.id || order.hypeStore?.brandId;
+      console.log('🔵 [SUBMIT PROOF DEBUG] Brand ID:', brandId);
       if (!brandId) {
         throw new NotFoundException('Brand not found for this store');
       }
@@ -1209,8 +1219,10 @@ export class InfluencerHypeStoreService {
       });
 
       if (!brandWallet) {
+        console.log('🔴 [SUBMIT PROOF DEBUG] Brand wallet not found for brand ID:', brandId);
         throw new NotFoundException('Brand wallet not found');
       }
+      console.log('🟢 [SUBMIT PROOF DEBUG] Brand wallet found:', brandWallet.id);
 
       const brandBalance = parseFloat(brandWallet.balance.toString());
       if (brandBalance < cashbackAmount) {
@@ -1271,6 +1283,7 @@ export class InfluencerHypeStoreService {
       // Reload wallet to get updated values
       await wallet.reload();
 
+      console.log('🟢 [SUBMIT PROOF DEBUG] Transaction committed successfully');
       return {
         success: true,
         data: {
@@ -1293,6 +1306,9 @@ export class InfluencerHypeStoreService {
         message: `Proof submitted successfully. Cashback of ₹${cashbackAmount.toFixed(2)} is now locked and will be available for redemption after the return window closes.`,
       };
     } catch (error) {
+      console.log('🔴 [SUBMIT PROOF DEBUG] Error in transaction:');
+      console.log('🔴 [SUBMIT PROOF DEBUG] Error message:', error.message);
+      console.log('🔴 [SUBMIT PROOF DEBUG] Error stack:', error.stack);
       await transaction.rollback();
       throw error;
     }
