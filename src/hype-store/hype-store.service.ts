@@ -536,32 +536,44 @@ export class HypeStoreService {
     const totalOrders = allOrders.length;
     const totalSales = allOrders.reduce((sum, order) => sum + parseFloat(order.orderAmount.toString()), 0);
 
-    // Calculate orders and sales from last month for comparison
-    const lastMonthDate = new Date();
-    lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
+    // Calculate orders and sales from last COMPLETE calendar month for comparison
+    const now = new Date();
 
-    const lastMonthOrders = allOrders.filter(order => new Date(order.createdAt) >= lastMonthDate);
+    // Last complete month boundaries (e.g., if today is Mar 18, this is Feb 1 - Feb 28/29)
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+
+    const lastMonthOrders = allOrders.filter(
+      order => {
+        const orderDate = new Date(order.createdAt);
+        return orderDate >= lastMonthStart && orderDate <= lastMonthEnd;
+      }
+    );
     const lastMonthOrdersCount = lastMonthOrders.length;
     const lastMonthSales = lastMonthOrders.reduce((sum, order) => sum + parseFloat(order.orderAmount.toString()), 0);
 
-    // Calculate previous month's data for growth comparison
-    const twoMonthsAgoDate = new Date();
-    twoMonthsAgoDate.setMonth(twoMonthsAgoDate.getMonth() - 2);
+    // Calculate previous month's data for growth comparison (month before last month)
+    // E.g., if today is Mar 18 and last month is Feb, this is Jan 1 - Jan 31
+    const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    const previousMonthEnd = new Date(now.getFullYear(), now.getMonth() - 1, 0, 23, 59, 59, 999);
 
     const previousMonthOrders = allOrders.filter(
-      order => new Date(order.createdAt) >= twoMonthsAgoDate && new Date(order.createdAt) < lastMonthDate
+      order => {
+        const orderDate = new Date(order.createdAt);
+        return orderDate >= previousMonthStart && orderDate <= previousMonthEnd;
+      }
     );
     const previousMonthOrdersCount = previousMonthOrders.length;
     const previousMonthSales = previousMonthOrders.reduce((sum, order) => sum + parseFloat(order.orderAmount.toString()), 0);
 
-    // Calculate growth percentages
+    // Calculate growth percentages (comparing last complete month vs month before that)
     const ordersGrowth = previousMonthOrdersCount > 0
       ? Math.round(((lastMonthOrdersCount - previousMonthOrdersCount) / previousMonthOrdersCount) * 100)
-      : 0;
+      : lastMonthOrdersCount > 0 ? 100 : 0; // If no previous orders but have current, show 100% growth
 
     const salesGrowth = previousMonthSales > 0
       ? Math.round(((lastMonthSales - previousMonthSales) / previousMonthSales) * 100)
-      : 0;
+      : lastMonthSales > 0 ? 100 : 0; // If no previous sales but have current, show 100% growth
 
     // Generate monthly breakdown for last 12 months (for graphs)
     const monthlyData: Array<{
@@ -570,7 +582,6 @@ export class HypeStoreService {
       orders: number;
       sales: number;
     }> = [];
-    const now = new Date();
 
     for (let i = 11; i >= 0; i--) {
       const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
