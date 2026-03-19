@@ -95,17 +95,21 @@ export class CreatorStudioService {
     endDate: Date,
   ): Promise<number> {
     try {
-      const postUserType = userType === CreatorType.INFLUENCER ? UserType.INFLUENCER : UserType.BRAND;
-
-      const viewCount = await Post.count({
-        where: {
-          userId,
-          userType: postUserType,
-          createdAt: {
-            [Op.between]: [startDate, endDate],
-          },
+      const whereClause: any = {
+        createdAt: {
+          [Op.between]: [startDate, endDate],
         },
-      });
+      };
+
+      if (userType === CreatorType.INFLUENCER) {
+        whereClause.influencerId = userId;
+        whereClause.userType = UserType.INFLUENCER;
+      } else {
+        whereClause.brandId = userId;
+        whereClause.userType = UserType.BRAND;
+      }
+
+      const viewCount = await Post.count({ where: whereClause });
 
       // Multiply by average views per post (estimated metric)
       return viewCount * 100;
@@ -120,17 +124,27 @@ export class CreatorStudioService {
    */
   private async getPostsCount(userId: number, userType: CreatorType): Promise<number> {
     try {
+      const whereClause: any = {};
+
+      if (userType === CreatorType.INFLUENCER) {
+        whereClause.influencerId = userId;
+        whereClause.userType = UserType.INFLUENCER;
+      } else {
+        whereClause.brandId = userId;
+        whereClause.userType = UserType.BRAND;
+      }
+
+      // Count actual posts from the database
+      const dbPostCount = await Post.count({ where: whereClause });
+
+      // For influencers, also check Instagram media count and return the higher value
       if (userType === CreatorType.INFLUENCER) {
         const influencer = await this.influencerModel.findByPk(userId);
-        return influencer?.instagramMediaCount || 0;
-      } else {
-        return await Post.count({
-          where: {
-            userId,
-            userType: UserType.BRAND,
-          },
-        });
+        const instagramCount = influencer?.instagramMediaCount || 0;
+        return Math.max(dbPostCount, instagramCount);
       }
+
+      return dbPostCount;
     } catch (error) {
       console.error('Error getting posts count:', error);
       return 0;
@@ -187,6 +201,7 @@ export class CreatorStudioService {
 
   /**
    * Calculate post views for the given time period
+   * Uses actual viewsCount from database (auto-incremented by trigger)
    */
   private async calculatePostViews(
     userId: number,
@@ -195,21 +210,29 @@ export class CreatorStudioService {
     endDate: Date,
   ): Promise<number> {
     try {
-      const postUserType = userType === CreatorType.INFLUENCER ? UserType.INFLUENCER : UserType.BRAND;
-
-      const postCount = await Post.count({
-        where: {
-          userId,
-          userType: postUserType,
-          createdAt: {
-            [Op.between]: [startDate, endDate],
-          },
+      const whereClause: any = {
+        createdAt: {
+          [Op.between]: [startDate, endDate],
         },
+      };
+
+      if (userType === CreatorType.INFLUENCER) {
+        whereClause.influencerId = userId;
+        whereClause.userType = UserType.INFLUENCER;
+      } else {
+        whereClause.brandId = userId;
+        whereClause.userType = UserType.BRAND;
+      }
+
+      // Sum up actual view counts from posts in the time period
+      const result = await Post.findAll({
+        attributes: [[literal('COALESCE(SUM("viewsCount"), 0)'), 'totalViews']],
+        where: whereClause,
+        raw: true,
       });
 
-      const followerCount = await this.getFollowersCount(userId, userType);
-      const avgViewsPerPost = Math.floor(followerCount * 0.3);
-      return postCount * avgViewsPerPost;
+      const data = result[0] as any;
+      return parseInt(data.totalViews) || 0;
     } catch (error) {
       console.error('Error calculating post views:', error);
       return 0;
@@ -227,20 +250,26 @@ export class CreatorStudioService {
     endDate: Date,
   ): Promise<number> {
     try {
-      const postUserType = userType === CreatorType.INFLUENCER ? UserType.INFLUENCER : UserType.BRAND;
+      const whereClause: any = {
+        createdAt: {
+          [Op.between]: [startDate, endDate],
+        },
+      };
+
+      if (userType === CreatorType.INFLUENCER) {
+        whereClause.influencerId = userId;
+        whereClause.userType = UserType.INFLUENCER;
+      } else {
+        whereClause.brandId = userId;
+        whereClause.userType = UserType.BRAND;
+      }
 
       const result = await Post.findAll({
         attributes: [
           [literal('COALESCE(SUM(likes_count), 0)'), 'totalLikes'],
           [literal('COALESCE(SUM(shares_count), 0)'), 'totalShares'],
         ],
-        where: {
-          userId,
-          userType: postUserType,
-          createdAt: {
-            [Op.between]: [startDate, endDate],
-          },
-        },
+        where: whereClause,
         raw: true,
       });
 

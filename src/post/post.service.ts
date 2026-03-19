@@ -8,6 +8,8 @@ import { InjectModel } from '@nestjs/sequelize';
 import { Post, UserType } from './models/post.model';
 import { Like, LikerType } from './models/like.model';
 import { Follow, FollowerType, FollowingType } from './models/follow.model';
+import { Share, SharerType } from './models/share.model';
+import { PostView, ViewerType } from './models/post-view.model';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { CreatePostMultipartDto } from './dto/create-post-multipart.dto';
@@ -35,6 +37,10 @@ export class PostService {
     private readonly likeModel: typeof Like,
     @InjectModel(Follow)
     private readonly followModel: typeof Follow,
+    @InjectModel(Share)
+    private readonly shareModel: typeof Share,
+    @InjectModel(PostView)
+    private readonly postViewModel: typeof PostView,
     @InjectModel(Influencer)
     private readonly influencerModel: typeof Influencer,
     @InjectModel(Brand)
@@ -1206,6 +1212,290 @@ export class PostService {
     return {
       following,
       total,
+      page,
+      limit,
+      totalPages,
+    };
+  }
+
+  /**
+   * Track post view - creates a view record for analytics
+   */
+  async viewPost(
+    postId: number,
+    userType: UserType,
+    userId: number,
+  ): Promise<{ success: boolean; viewsCount: number; alreadyViewed: boolean }> {
+    const post = await this.postModel.findByPk(postId);
+
+    if (!post) {
+      throw new NotFoundException('Post not found');
+    }
+
+    const viewerType =
+      userType === UserType.INFLUENCER ? ViewerType.INFLUENCER : ViewerType.BRAND;
+    const viewerField =
+      userType === UserType.INFLUENCER ? 'viewerInfluencerId' : 'viewerBrandId';
+
+    // Check if user already viewed this post
+    const existingView = await this.postViewModel.findOne({
+      where: {
+        postId,
+        viewerType,
+        [viewerField]: userId,
+      },
+    });
+
+    if (existingView) {
+      // Already viewed, just return current count
+      return {
+        success: true,
+        viewsCount: post.viewsCount,
+        alreadyViewed: true,
+      };
+    }
+
+    // Create new view record
+    const viewData: any = {
+      postId,
+      viewerType,
+    };
+    viewData[viewerField] = userId;
+
+    await this.postViewModel.create(viewData);
+    // Note: viewsCount will be auto-incremented by the database trigger
+
+    await post.reload();
+
+    return {
+      success: true,
+      viewsCount: post.viewsCount,
+      alreadyViewed: false,
+    };
+  }
+
+  /**
+   * Track post share - creates a share record for analytics
+   */
+  async sharePost(
+    postId: number,
+    userType: UserType,
+    userId: number,
+  ): Promise<{ success: boolean; sharesCount: number; alreadyShared: boolean }> {
+    const post = await this.postModel.findByPk(postId);
+
+    if (!post) {
+      throw new NotFoundException('Post not found');
+    }
+
+    const sharerType =
+      userType === UserType.INFLUENCER ? SharerType.INFLUENCER : SharerType.BRAND;
+    const sharerField =
+      userType === UserType.INFLUENCER ? 'sharerInfluencerId' : 'sharerBrandId';
+
+    // Check if user already shared this post
+    const existingShare = await this.shareModel.findOne({
+      where: {
+        postId,
+        sharerType,
+        [sharerField]: userId,
+      },
+    });
+
+    if (existingShare) {
+      // Already shared, just return current count
+      return {
+        success: true,
+        sharesCount: post.sharesCount,
+        alreadyShared: true,
+      };
+    }
+
+    // Create new share record
+    const shareData: any = {
+      postId,
+      sharerType,
+    };
+    shareData[sharerField] = userId;
+
+    await this.shareModel.create(shareData);
+    // Note: sharesCount will be auto-incremented by the database trigger
+
+    await post.reload();
+
+    return {
+      success: true,
+      sharesCount: post.sharesCount,
+      alreadyShared: false,
+    };
+  }
+
+  /**
+   * Get list of users who shared a post
+   */
+  async getPostSharers(
+    postId: number,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<{
+    sharers: Array<{
+      id: number;
+      type: 'influencer' | 'brand';
+      name: string;
+      username: string;
+      profileImage: string | null;
+      sharedAt: Date;
+    }>;
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const post = await this.postModel.findByPk(postId);
+    if (!post) {
+      throw new NotFoundException('Post not found');
+    }
+
+    const offset = (page - 1) * limit;
+
+    const { count, rows: shares } = await this.shareModel.findAndCountAll({
+      where: { postId },
+      include: [
+        {
+          model: Influencer,
+          as: 'sharerInfluencer',
+          attributes: ['id', 'name', 'username', 'profileImage'],
+          required: false,
+        },
+        {
+          model: Brand,
+          as: 'sharerBrand',
+          attributes: ['id', 'brandName', 'username', 'profileImage'],
+          required: false,
+        },
+      ],
+      order: [['sharedAt', 'DESC']],
+      limit,
+      offset,
+      distinct: true,
+    });
+
+    const sharers = shares.map((share) => {
+      const shareData = share.toJSON();
+
+      if (shareData.sharerType === SharerType.INFLUENCER && shareData.sharerInfluencer) {
+        return {
+          id: shareData.sharerInfluencer.id,
+          type: 'influencer' as const,
+          name: shareData.sharerInfluencer.name,
+          username: shareData.sharerInfluencer.username,
+          profileImage: shareData.sharerInfluencer.profileImage || null,
+          sharedAt: shareData.sharedAt,
+        };
+      } else if (shareData.sharerType === SharerType.BRAND && shareData.sharerBrand) {
+        return {
+          id: shareData.sharerBrand.id,
+          type: 'brand' as const,
+          name: shareData.sharerBrand.brandName,
+          username: shareData.sharerBrand.username,
+          profileImage: shareData.sharerBrand.profileImage || null,
+          sharedAt: shareData.sharedAt,
+        };
+      }
+      return null;
+    }).filter((sharer): sharer is NonNullable<typeof sharer> => sharer !== null);
+
+    const totalPages = Math.ceil(count / limit);
+
+    return {
+      sharers,
+      total: count,
+      page,
+      limit,
+      totalPages,
+    };
+  }
+
+  /**
+   * Get list of users who viewed a post
+   */
+  async getPostViewers(
+    postId: number,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<{
+    viewers: Array<{
+      id: number;
+      type: 'influencer' | 'brand';
+      name: string;
+      username: string;
+      profileImage: string | null;
+      viewedAt: Date;
+    }>;
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const post = await this.postModel.findByPk(postId);
+    if (!post) {
+      throw new NotFoundException('Post not found');
+    }
+
+    const offset = (page - 1) * limit;
+
+    const { count, rows: views } = await this.postViewModel.findAndCountAll({
+      where: { postId },
+      include: [
+        {
+          model: Influencer,
+          as: 'viewerInfluencer',
+          attributes: ['id', 'name', 'username', 'profileImage'],
+          required: false,
+        },
+        {
+          model: Brand,
+          as: 'viewerBrand',
+          attributes: ['id', 'brandName', 'username', 'profileImage'],
+          required: false,
+        },
+      ],
+      order: [['viewedAt', 'DESC']],
+      limit,
+      offset,
+      distinct: true,
+    });
+
+    const viewers = views.map((view) => {
+      const viewData = view.toJSON();
+
+      if (viewData.viewerType === ViewerType.INFLUENCER && viewData.viewerInfluencer) {
+        return {
+          id: viewData.viewerInfluencer.id,
+          type: 'influencer' as const,
+          name: viewData.viewerInfluencer.name,
+          username: viewData.viewerInfluencer.username,
+          profileImage: viewData.viewerInfluencer.profileImage || null,
+          viewedAt: viewData.viewedAt,
+        };
+      } else if (viewData.viewerType === ViewerType.BRAND && viewData.viewerBrand) {
+        return {
+          id: viewData.viewerBrand.id,
+          type: 'brand' as const,
+          name: viewData.viewerBrand.brandName,
+          username: viewData.viewerBrand.username,
+          profileImage: viewData.viewerBrand.profileImage || null,
+          viewedAt: viewData.viewedAt,
+        };
+      }
+      return null;
+    }).filter((viewer): viewer is NonNullable<typeof viewer> => viewer !== null);
+
+    const totalPages = Math.ceil(count / limit);
+
+    return {
+      viewers,
+      total: count,
       page,
       limit,
       totalPages,

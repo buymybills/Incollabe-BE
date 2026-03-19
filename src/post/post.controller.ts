@@ -611,4 +611,142 @@ export class PostController {
       user.userType === 'influencer' ? UserType.INFLUENCER : UserType.BRAND;
     return this.postService.getPosts(queryDto, currentUserType, user.id);
   }
+
+  // ==================== Post Engagement Tracking ====================
+
+  @Post(':id/increment-view')
+  @ApiOperation({
+    summary: 'Track post view',
+    description: 'Tracks who viewed a post and increments the view count. Call this when a user views a post.',
+  })
+  @ApiParam({ name: 'id', description: 'Post ID', type: 'number' })
+  @ApiResponse({
+    status: 200,
+    description: 'View tracked successfully',
+    schema: {
+      example: {
+        success: true,
+        viewsCount: 125,
+        alreadyViewed: false,
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Post not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async incrementViewCount(
+    @Param('id', ParseIntPipe) postId: number,
+    @CurrentUser() user: User,
+  ) {
+    const userType =
+      user.userType === 'influencer' ? UserType.INFLUENCER : UserType.BRAND;
+    return await this.postService.viewPost(postId, userType, user.id);
+  }
+
+  @Post(':id/share')
+  @ApiOperation({
+    summary: 'Track post share',
+    description: 'Tracks who shared a post and increments the share count. Call this when a user shares a post.',
+  })
+  @ApiParam({ name: 'id', description: 'Post ID', type: 'number' })
+  @ApiResponse({
+    status: 200,
+    description: 'Share tracked successfully',
+    schema: {
+      example: {
+        success: true,
+        sharesCount: 45,
+        alreadyShared: false,
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Post not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async sharePost(
+    @Param('id', ParseIntPipe) postId: number,
+    @CurrentUser() user: User,
+  ) {
+    const userType =
+      user.userType === 'influencer' ? UserType.INFLUENCER : UserType.BRAND;
+    return await this.postService.sharePost(postId, userType, user.id);
+  }
+
+  @Get(':id/sharers')
+  @ApiOperation({
+    summary: 'Get list of users who shared a post',
+    description: 'Returns a paginated list of users (influencers and brands) who shared the post.',
+  })
+  @ApiParam({ name: 'id', description: 'Post ID', type: 'number' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number (default: 1)', type: 'number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page (default: 20)', type: 'number' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of sharers retrieved successfully',
+    schema: {
+      example: {
+        sharers: [
+          {
+            id: 123,
+            type: 'influencer',
+            name: 'John Doe',
+            username: 'johndoe',
+            profileImage: 'https://...',
+            sharedAt: '2024-01-15T10:30:00Z',
+          },
+        ],
+        total: 45,
+        page: 1,
+        limit: 20,
+        totalPages: 3,
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Post not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getPostSharers(
+    @Param('id', ParseIntPipe) postId: number,
+    @Query('page', ParseIntPipe) page: number = 1,
+    @Query('limit', ParseIntPipe) limit: number = 20,
+  ) {
+    return await this.postService.getPostSharers(postId, page, limit);
+  }
+
+  @Get(':id/viewers')
+  @ApiOperation({
+    summary: 'Get list of users who viewed a post',
+    description: 'Returns a paginated list of users (influencers and brands) who viewed the post.',
+  })
+  @ApiParam({ name: 'id', description: 'Post ID', type: 'number' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number (default: 1)', type: 'number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page (default: 20)', type: 'number' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of viewers retrieved successfully',
+    schema: {
+      example: {
+        viewers: [
+          {
+            id: 456,
+            type: 'brand',
+            name: 'Acme Corp',
+            username: 'acmecorp',
+            profileImage: 'https://...',
+            viewedAt: '2024-01-15T09:15:00Z',
+          },
+        ],
+        total: 125,
+        page: 1,
+        limit: 20,
+        totalPages: 7,
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Post not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getPostViewers(
+    @Param('id', ParseIntPipe) postId: number,
+    @Query('page', ParseIntPipe) page: number = 1,
+    @Query('limit', ParseIntPipe) limit: number = 20,
+  ) {
+    return await this.postService.getPostViewers(postId, page, limit);
+  }
 }

@@ -4,6 +4,8 @@ import { getModelToken } from '@nestjs/sequelize';
 import { Post, UserType } from './models/post.model';
 import { Like, LikerType } from './models/like.model';
 import { Follow, FollowerType, FollowingType } from './models/follow.model';
+import { Share } from './models/share.model';
+import { PostView } from './models/post-view.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { InfluencerNiche } from '../auth/model/influencer-niche.model';
@@ -45,6 +47,16 @@ const mockLikeModel = {
 
 const mockFollowModel = {
   ...mockModel(),
+};
+
+const mockShareModel = {
+  ...mockModel(),
+  findOrCreate: jest.fn(),
+};
+
+const mockPostViewModel = {
+  ...mockModel(),
+  findOrCreate: jest.fn(),
 };
 
 const mockInfluencerModel = {
@@ -114,6 +126,14 @@ describe('PostService', () => {
         {
           provide: getModelToken(Follow),
           useValue: mockFollowModel,
+        },
+        {
+          provide: getModelToken(Share),
+          useValue: mockShareModel,
+        },
+        {
+          provide: getModelToken(PostView),
+          useValue: mockPostViewModel,
         },
         {
           provide: getModelToken(Influencer),
@@ -407,7 +427,7 @@ describe('PostService', () => {
       };
 
       postModel.findByPk.mockResolvedValue(mockPost);
-      influencerModel.findByPk.mockImplementation((id) => {
+      influencerModel.findByPk.mockImplementation((id: number) => {
         if (id === 2) return Promise.resolve(mockPostOwner);
         if (id === 1) return Promise.resolve(mockLiker);
         return Promise.resolve(null);

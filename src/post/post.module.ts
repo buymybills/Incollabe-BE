@@ -5,6 +5,8 @@ import { PostService } from './post.service';
 import { Post } from './models/post.model';
 import { Like } from './models/like.model';
 import { Follow } from './models/follow.model';
+import { Share } from './models/share.model';
+import { PostView } from './models/post-view.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { InfluencerNiche } from '../auth/model/influencer-niche.model';
@@ -18,6 +20,8 @@ import { SharedModule } from '../shared/shared.module';
       Post,
       Like,
       Follow,
+      Share,
+      PostView,
       Influencer,
       Brand,
       InfluencerNiche,
