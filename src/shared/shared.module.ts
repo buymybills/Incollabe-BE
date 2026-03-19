@@ -80,6 +80,12 @@ import { GroupMember } from './models/group-member.model';
 import { InAppNotification } from './models/in-app-notification.model';
 import { InAppNotificationService } from './in-app-notification.service';
 import { InAppNotificationController } from './in-app-notification.controller';
+import { Post } from '../post/models/post.model';
+import { PostView } from '../post/models/post-view.model';
+import { Like } from '../post/models/like.model';
+import { Share } from '../post/models/share.model';
+import { CreatorStudioService } from './creator-studio.service';
+import { CreatorStudioController } from './creator-studio.controller';
 
 @Module({
   imports: [
@@ -119,6 +125,10 @@ import { InAppNotificationController } from './in-app-notification.controller';
       GroupChat,
       GroupMember,
       InAppNotification,
+      Post,
+      PostView,
+      Like,
+      Share,
     ]),
   ],
   controllers: [
@@ -131,6 +141,7 @@ import { InAppNotificationController } from './in-app-notification.controller';
     CampusAmbassadorController,
     ConfigController,
     InAppNotificationController,
+    CreatorStudioController,
   ],
   providers: [
     SmsService,
@@ -169,6 +180,7 @@ import { InAppNotificationController } from './in-app-notification.controller';
     AppVersionService,
     AIScoringService,
     InAppNotificationService,
+    CreatorStudioService,
   ],
   exports: [
     SmsService,
@@ -200,6 +212,7 @@ import { InAppNotificationController } from './in-app-notification.controller';
     AppVersionService,
     AIScoringService,
     InAppNotificationService,
+    CreatorStudioService,
   ],
 })
 export class SharedModule { }

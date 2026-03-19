@@ -1,9 +1,12 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
-import { Op, literal } from 'sequelize';
+import { Op } from 'sequelize';
 import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { Post, UserType } from '../post/models/post.model';
+import { PostView, ViewerType } from '../post/models/post-view.model';
+import { Like, LikerType } from '../post/models/like.model';
+import { Share, SharerType } from '../post/models/share.model';
 import { Follow, FollowingType, FollowerType } from '../post/models/follow.model';
 import { Campaign, CampaignStatus } from '../campaign/models/campaign.model';
 import {
@@ -25,6 +28,12 @@ export class CreatorStudioService {
     private readonly influencerModel: typeof Influencer,
     @InjectModel(Brand)
     private readonly brandModel: typeof Brand,
+    @InjectModel(PostView)
+    private readonly postViewModel: typeof PostView,
+    @InjectModel(Like)
+    private readonly likeModel: typeof Like,
+    @InjectModel(Share)
+    private readonly shareModel: typeof Share,
   ) {}
 
   /**
@@ -87,6 +96,8 @@ export class CreatorStudioService {
 
   /**
    * Calculate profile views for the given time period
+   * NOTE: This is an approximation using post views as a proxy
+   * TODO: Implement actual profile view tracking in the future
    */
   private async calculateProfileViews(
     userId: number,
@@ -95,24 +106,41 @@ export class CreatorStudioService {
     endDate: Date,
   ): Promise<number> {
     try {
-      const whereClause: any = {
-        createdAt: {
-          [Op.between]: [startDate, endDate],
-        },
-      };
-
+      // Build where clause for user's posts
+      const postWhereClause: any = {};
       if (userType === CreatorType.INFLUENCER) {
-        whereClause.influencerId = userId;
-        whereClause.userType = UserType.INFLUENCER;
+        postWhereClause.influencerId = userId;
+        postWhereClause.userType = UserType.INFLUENCER;
       } else {
-        whereClause.brandId = userId;
-        whereClause.userType = UserType.BRAND;
+        postWhereClause.brandId = userId;
+        postWhereClause.userType = UserType.BRAND;
       }
 
-      const viewCount = await Post.count({ where: whereClause });
+      // Get all post IDs for this user
+      const userPosts = await Post.findAll({
+        where: postWhereClause,
+        attributes: ['id'],
+        raw: true,
+      });
 
-      // Multiply by average views per post (estimated metric)
-      return viewCount * 100;
+      if (userPosts.length === 0) {
+        return 0;
+      }
+
+      const postIds = userPosts.map((p: any) => p.id);
+
+      // Count views on these posts that occurred in the timeframe
+      const viewCount = await this.postViewModel.count({
+        where: {
+          postId: { [Op.in]: postIds },
+          viewedAt: {
+            [Op.between]: [startDate, endDate],
+          },
+        },
+      });
+
+      // Multiply by 10 as approximation (people who view posts likely viewed profile)
+      return viewCount * 10;
     } catch (error) {
       console.error('Error calculating profile views:', error);
       return 0;
@@ -201,7 +229,7 @@ export class CreatorStudioService {
 
   /**
    * Calculate post views for the given time period
-   * Uses actual viewsCount from database (auto-incremented by trigger)
+   * Counts actual views from post_views table that occurred in the timeframe
    */
   private async calculatePostViews(
     userId: number,
@@ -210,29 +238,40 @@ export class CreatorStudioService {
     endDate: Date,
   ): Promise<number> {
     try {
-      const whereClause: any = {
-        createdAt: {
-          [Op.between]: [startDate, endDate],
-        },
-      };
-
+      // Build where clause for user's posts
+      const postWhereClause: any = {};
       if (userType === CreatorType.INFLUENCER) {
-        whereClause.influencerId = userId;
-        whereClause.userType = UserType.INFLUENCER;
+        postWhereClause.influencerId = userId;
+        postWhereClause.userType = UserType.INFLUENCER;
       } else {
-        whereClause.brandId = userId;
-        whereClause.userType = UserType.BRAND;
+        postWhereClause.brandId = userId;
+        postWhereClause.userType = UserType.BRAND;
       }
 
-      // Sum up actual view counts from posts in the time period
-      const result = await Post.findAll({
-        attributes: [[literal('COALESCE(SUM("viewsCount"), 0)'), 'totalViews']],
-        where: whereClause,
+      // Get all post IDs for this user
+      const userPosts = await Post.findAll({
+        where: postWhereClause,
+        attributes: ['id'],
         raw: true,
       });
 
-      const data = result[0] as any;
-      return parseInt(data.totalViews) || 0;
+      if (userPosts.length === 0) {
+        return 0;
+      }
+
+      const postIds = userPosts.map((p: any) => p.id);
+
+      // Count views on these posts that occurred in the timeframe
+      const viewCount = await this.postViewModel.count({
+        where: {
+          postId: { [Op.in]: postIds },
+          viewedAt: {
+            [Op.between]: [startDate, endDate],
+          },
+        },
+      });
+
+      return viewCount;
     } catch (error) {
       console.error('Error calculating post views:', error);
       return 0;
@@ -241,7 +280,7 @@ export class CreatorStudioService {
 
   /**
    * Calculate interactions (likes + shares) for the given time period
-   * Interactions = Total Likes + Total Shares from actual database counts
+   * Counts actual likes and shares that occurred in the timeframe
    */
   private async calculateInteractions(
     userId: number,
@@ -250,35 +289,51 @@ export class CreatorStudioService {
     endDate: Date,
   ): Promise<number> {
     try {
-      const whereClause: any = {
-        createdAt: {
-          [Op.between]: [startDate, endDate],
-        },
-      };
-
+      // Build where clause for user's posts
+      const postWhereClause: any = {};
       if (userType === CreatorType.INFLUENCER) {
-        whereClause.influencerId = userId;
-        whereClause.userType = UserType.INFLUENCER;
+        postWhereClause.influencerId = userId;
+        postWhereClause.userType = UserType.INFLUENCER;
       } else {
-        whereClause.brandId = userId;
-        whereClause.userType = UserType.BRAND;
+        postWhereClause.brandId = userId;
+        postWhereClause.userType = UserType.BRAND;
       }
 
-      const result = await Post.findAll({
-        attributes: [
-          [literal('COALESCE(SUM(likes_count), 0)'), 'totalLikes'],
-          [literal('COALESCE(SUM(shares_count), 0)'), 'totalShares'],
-        ],
-        where: whereClause,
+      // Get all post IDs for this user
+      const userPosts = await Post.findAll({
+        where: postWhereClause,
+        attributes: ['id'],
         raw: true,
       });
 
-      const data = result[0] as any;
-      const totalLikes = parseInt(data.totalLikes) || 0;
-      const totalShares = parseInt(data.totalShares) || 0;
+      if (userPosts.length === 0) {
+        return 0;
+      }
+
+      const postIds = userPosts.map((p: any) => p.id);
+
+      // Count likes that occurred in the timeframe
+      const likesCount = await this.likeModel.count({
+        where: {
+          postId: { [Op.in]: postIds },
+          createdAt: {
+            [Op.between]: [startDate, endDate],
+          },
+        },
+      });
+
+      // Count shares that occurred in the timeframe
+      const sharesCount = await this.shareModel.count({
+        where: {
+          postId: { [Op.in]: postIds },
+          createdAt: {
+            [Op.between]: [startDate, endDate],
+          },
+        },
+      });
 
       // Total interactions = likes + shares
-      return totalLikes + totalShares;
+      return likesCount + sharesCount;
     } catch (error) {
       console.error('Error calculating interactions:', error);
       return 0;
