@@ -21,6 +21,7 @@ import { AddMoneyToWalletDto } from './dto/wallet.dto';
 import { UpdateCreatorPreferenceDto } from './dto/creator-preference.dto';
 import { Sequelize } from 'sequelize-typescript';
 import { getStrategyForClaimCount } from './constants/cashback-strategies';
+// import { DEFAULT_CASHBACK_TIERS } from './constants/default-cashback-tiers';
 import { RazorpayService } from '../shared/razorpay.service';
 import { Brand } from '../brand/model/brand.model';
 import { S3Service } from '../shared/s3.service';
@@ -226,18 +227,16 @@ export class HypeStoreService {
       }
 
       // Auto-create brand-shared coupon code
-      // Format: {First 2 letters of brand name}COL{cashback percentage}
-      // Example: SNCOL25 (Snitch with 25% cashback), NICOL30, etc.
+      // Format: {First 2 letters of brand name}COL12
+      // Example: SNCOL12 (Snitch), NICOL12, etc.
+      // Note: Suffix is always "12", actual cashback % is determined by influencer tier
       const brandPrefix = brand.brandName
         .replace(/[^A-Za-z]/g, '') // Remove non-alphabetic characters
         .substring(0, 2)
         .toUpperCase();
 
-      // Use provided cashback percentage or default to 25
-      const cashbackPercentage = createDto.cashbackPercentage || 25;
-
-      // Ensure it's 2 digits (pad with 0 if needed)
-      const percentageSuffix = cashbackPercentage.toString().padStart(2, '0');
+      // Fixed suffix is always "12" (not related to actual cashback percentage)
+      const percentageSuffix = '12';
       const couponCode = `${brandPrefix}COL${percentageSuffix}`;
 
       // Check if coupon code already exists
@@ -248,7 +247,7 @@ export class HypeStoreService {
 
       if (existingCoupon) {
         throw new BadRequestException(
-          `Coupon code ${couponCode} already exists. Please use a different cashback percentage.`,
+          `Coupon code ${couponCode} already exists. This brand already has an active store.`,
         );
       }
 
@@ -268,6 +267,29 @@ export class HypeStoreService {
         } as any,
         { transaction },
       );
+
+      // Auto-create default cashback tiers for the store
+      // Creates 12 tiers: 6 follower ranges × 2 content types (REEL, STORY)
+      // const cashbackTierPromises = DEFAULT_CASHBACK_TIERS.map((tierConfig) => {
+      //   return this.cashbackTierModel.create(
+      //     {
+      //       hypeStoreId: store.id,
+      //       tierName: tierConfig.tierName,
+      //       minFollowers: tierConfig.minFollowers,
+      //       maxFollowers: tierConfig.maxFollowers,
+      //       contentType: tierConfig.contentType,
+      //       cashbackType: tierConfig.cashbackType,
+      //       cashbackValue: tierConfig.cashbackValue,
+      //       minCashbackAmount: tierConfig.minCashbackAmount,
+      //       maxCashbackAmount: tierConfig.maxCashbackAmount,
+      //       priority: tierConfig.priority,
+      //       isActive: true,
+      //     } as any,
+      //     { transaction },
+      //   );
+      // });
+
+      // await Promise.all(cashbackTierPromises);
 
       // Generate and create webhook credentials
       const apiKey = this.generateApiKey(false); // Use live mode by default
@@ -1855,11 +1877,13 @@ export class HypeStoreService {
         }
       }
 
-      // 6. Calculate cashback
+      // 6. Calculate cashback based on content type
+      const contentType = webhookDto.contentType || 'REEL'; // Default to REEL if not provided
       const { cashbackAmount, tierId } = await this.calculateCashbackAmount(
         webhookDto.orderAmount,
         attributedInfluencerId,
         hypeStore.id,
+        contentType,
       );
 
       // 7. Create order in transaction
@@ -1883,6 +1907,7 @@ export class HypeStoreService {
             externalOrderId: webhookDto.externalOrderId,
             referralCode: webhookDto.referralCode || null, // Store referral code if provided
             orderTitle: webhookDto.orderTitle || null, // Store product/order title
+            contentType: contentType, // REEL or STORY - affects cashback calculation
             // Product detail fields
             productSKU: webhookDto.productSKU || null,
             productCategory: webhookDto.productCategory || null,
@@ -2127,6 +2152,9 @@ export class HypeStoreService {
       let cashbackReversed = false;
 
       try {
+        // IMPORTANT: Capture original cashback status BEFORE updating
+        const originalCashbackStatus = order.cashbackStatus;
+
         // Update order status to returned/refunded
         await order.update(
           {
@@ -2146,11 +2174,11 @@ export class HypeStoreService {
           transaction,
         });
 
-        // Handle cashback reversal based on current status
+        // Handle cashback reversal based on ORIGINAL status (before update)
         // Note: CREDITED status should be prevented by validation above, but kept as defensive code
         // TypeScript doesn't know about potential race conditions, so we use type assertion here
         if (
-          (order.cashbackStatus as any) === CashbackStatus.CREDITED &&
+          (originalCashbackStatus as any) === CashbackStatus.CREDITED &&
           order.walletTransactionId
         ) {
           // This should never happen due to validation above
@@ -2198,7 +2226,7 @@ export class HypeStoreService {
             cashbackReversed = true;
           }
         } else if (
-          order.cashbackStatus === CashbackStatus.PROCESSING &&
+          originalCashbackStatus === CashbackStatus.PROCESSING &&
           order.lockedCashbackTransactionId
         ) {
           // Cashback still locked: release lock and remove from influencer locked amount
@@ -2239,6 +2267,13 @@ export class HypeStoreService {
 
             cashbackReversed = true;
           }
+        } else if (originalCashbackStatus === CashbackStatus.PENDING) {
+          // Cashback was still pending (not locked yet) - no wallet transactions to reverse
+          // Order is already marked as CANCELLED, which prevents any future cashback processing
+          this.logger.log(
+            `Return processed for order ${order.id} with PENDING cashback. No wallet transactions to reverse.`,
+          );
+          cashbackReversed = false; // Explicitly set to false for clarity
         }
 
         // Credit the brand wallet back if available
@@ -2330,12 +2365,13 @@ export class HypeStoreService {
 
 
   /**
-   * Calculate cashback amount based on influencer's follower tier
+   * Calculate cashback amount based on influencer's follower tier and content type
    */
   private async calculateCashbackAmount(
     orderAmount: number,
     influencerId: number,
     hypeStoreId: number,
+    contentType: 'REEL' | 'STORY' = 'REEL',
   ): Promise<{ cashbackAmount: number; tierId: number | null }> {
     // Get influencer details to determine follower count
     const influencer = await this.influencerModel.findByPk(influencerId);
@@ -2346,11 +2382,12 @@ export class HypeStoreService {
 
     const followerCount = influencer.instagramFollowersCount || 0;
 
-    // Find applicable cashback tier
+    // Find applicable cashback tier based on follower count AND content type
     const tier = await this.cashbackTierModel.findOne({
       where: {
         hypeStoreId,
         isActive: true,
+        contentType, // Filter by content type (REEL or STORY)
         minFollowers: { [require('sequelize').Op.lte]: followerCount },
         ...(followerCount > 0
           ? {
