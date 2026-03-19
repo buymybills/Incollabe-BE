@@ -14,6 +14,7 @@ import { NotificationService } from '../shared/notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
 import { InAppNotificationService } from '../shared/in-app-notification.service';
 import { S3Service } from '../shared/s3.service';
+import { RazorpayService } from '../shared/razorpay.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { FollowDto, FollowUserType } from './dto/follow.dto';
@@ -103,6 +104,14 @@ const mockS3Service = {
   getFileUrl: jest.fn(),
 };
 
+const mockRazorpayService = {
+  createOrder: jest.fn().mockResolvedValue({
+    success: true,
+    orderId: 'order_mock123',
+  }),
+  verifyPaymentSignature: jest.fn().mockReturnValue(true),
+};
+
 describe('PostService', () => {
   let service: PostService;
   let postModel: any;
@@ -166,6 +175,10 @@ describe('PostService', () => {
         {
           provide: S3Service,
           useValue: mockS3Service,
+        },
+        {
+          provide: RazorpayService,
+          useValue: mockRazorpayService,
         },
       ],
     }).compile();
