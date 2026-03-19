@@ -2375,6 +2375,7 @@ export class InfluencerService {
     return {
       isConnected,
       username: influencer.instagramUsername || null,
+      profilePictureUrl: influencer.instagramProfilePictureUrl || null,
       connectedAt: influencer.instagramConnectedAt
         ? influencer.instagramConnectedAt.toISOString()
         : null,
