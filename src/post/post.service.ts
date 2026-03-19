@@ -26,6 +26,7 @@ import { UserType as DeviceUserType } from '../shared/models/device-token.model'
 import { InAppNotificationService } from '../shared/in-app-notification.service';
 import { NotificationType } from '../shared/models/in-app-notification.model';
 import { S3Service } from '../shared/s3.service';
+import { RazorpayService } from '../shared/razorpay.service';
 import { Op, Sequelize } from 'sequelize';
 
 @Injectable()
@@ -49,6 +50,7 @@ export class PostService {
     private readonly deviceTokenService: DeviceTokenService,
     private readonly inAppNotificationService: InAppNotificationService,
     private readonly s3Service: S3Service,
+    private readonly razorpayService: RazorpayService,
   ) {}
 
   async createPost(
@@ -443,6 +445,7 @@ export class PostService {
         whereCondition.userType = UserType.BRAND;
       }
       orderCondition = [
+        ['isBoosted', 'DESC'], // Boosted posts first
         ['createdAt', 'DESC'],
         ['likesCount', 'DESC'],
       ];
@@ -476,8 +479,9 @@ export class PostService {
         nicheMatchingUserIds.brandIds,
       );
 
-      // Hybrid ordering: Priority level (P1-P6) THEN recency within each priority
+      // Hybrid ordering: Boosted posts first, then Priority level (P1-P6) THEN recency within each priority
       orderCondition = [
+        ['isBoosted', 'DESC'], // Boosted posts first (always on top)
         Sequelize.literal(priorityCase), // Priority level
         ['createdAt', 'DESC'], // Newest first within each priority
         ['likesCount', 'DESC'], // Engagement as tiebreaker
@@ -485,6 +489,7 @@ export class PostService {
     } else {
       // Public feed - no user context
       orderCondition = [
+        ['isBoosted', 'DESC'], // Boosted posts first
         ['createdAt', 'DESC'],
         ['likesCount', 'DESC'],
       ];
@@ -1500,5 +1505,174 @@ export class PostService {
       limit,
       totalPages,
     };
+  }
+
+  /**
+   * Create Razorpay order for boost mode payment
+   * Boost mode costs ₹29 and lasts for 24 hours
+   */
+  async createBoostOrder(
+    postId: number,
+    userId: number,
+    userType: UserType,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    order?: any;
+  }> {
+    // Check if post exists and belongs to the user
+    const post = await this.postModel.findByPk(postId);
+    if (!post) {
+      throw new NotFoundException('Post not found');
+    }
+
+    // Verify ownership
+    if (userType === UserType.INFLUENCER && post.influencerId !== userId) {
+      throw new ForbiddenException('You can only boost your own posts');
+    }
+    if (userType === UserType.BRAND && post.brandId !== userId) {
+      throw new ForbiddenException('You can only boost your own posts');
+    }
+
+    // Check if post is already boosted
+    if (post.isBoosted && post.boostExpiresAt && new Date() < post.boostExpiresAt) {
+      throw new BadRequestException('This post is already boosted');
+    }
+
+    // Boost mode price: ₹29
+    const BOOST_PRICE = 29;
+
+    // Create Razorpay order
+    const receipt = `boost_${postId}_${Date.now()}`;
+    const order = await this.razorpayService.createOrder(
+      BOOST_PRICE,
+      'INR',
+      receipt,
+      {
+        postId: postId.toString(),
+        userId: userId.toString(),
+        userType,
+        purpose: 'POST_BOOST',
+      },
+    );
+
+    if (!order.success) {
+      throw new BadRequestException('Failed to create payment order');
+    }
+
+    return {
+      success: true,
+      message: 'Boost payment order created successfully',
+      order: {
+        id: order.orderId,
+        amount: BOOST_PRICE,
+        currency: 'INR',
+        key: process.env.RAZORPAY_KEY_ID,
+      },
+    };
+  }
+
+  /**
+   * Verify boost payment and activate boost mode
+   */
+  async verifyAndActivateBoost(
+    postId: number,
+    userId: number,
+    userType: UserType,
+    razorpayOrderId: string,
+    razorpayPaymentId: string,
+    razorpaySignature: string,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    post?: Post;
+    boostExpiresAt?: Date;
+  }> {
+    // Verify the post exists and belongs to user
+    const post = await this.postModel.findByPk(postId);
+    if (!post) {
+      throw new NotFoundException('Post not found');
+    }
+
+    // Verify ownership
+    if (userType === UserType.INFLUENCER && post.influencerId !== userId) {
+      throw new ForbiddenException('You can only boost your own posts');
+    }
+    if (userType === UserType.BRAND && post.brandId !== userId) {
+      throw new ForbiddenException('You can only boost your own posts');
+    }
+
+    // Verify Razorpay payment
+    const isValid = this.razorpayService.verifyPaymentSignature(
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature,
+    );
+
+    if (!isValid) {
+      throw new BadRequestException('Invalid payment signature');
+    }
+
+    // Activate boost mode for 24 hours
+    const boostedAt = new Date();
+    const boostExpiresAt = new Date(boostedAt.getTime() + 24 * 60 * 60 * 1000);
+
+    await post.update({
+      isBoosted: true,
+      boostedAt,
+      boostExpiresAt,
+      boostPaymentId: razorpayPaymentId,
+      boostAmount: 29,
+    });
+
+    // Reload post with user details
+    await post.reload({
+      include: [
+        {
+          model: Influencer,
+          attributes: ['id', 'fullName', 'username', 'profileImage'],
+        },
+        {
+          model: Brand,
+          attributes: ['id', 'brandName', 'username', 'profileImage'],
+        },
+      ],
+    });
+
+    return {
+      success: true,
+      message: 'Boost mode activated successfully for 24 hours',
+      post,
+      boostExpiresAt,
+    };
+  }
+
+  /**
+   * Check and expire boosted posts that have exceeded 24 hours
+   * Called by cron job
+   */
+  async expireBoostedPosts(): Promise<void> {
+    const now = new Date();
+
+    // Find all posts that are boosted but expired
+    const expiredPosts = await this.postModel.findAll({
+      where: {
+        isBoosted: true,
+        boostExpiresAt: {
+          [Op.lt]: now,
+        },
+      },
+    });
+
+    // Update all expired posts
+    for (const post of expiredPosts) {
+      await post.update({
+        isBoosted: false,
+      });
+    }
+
+    if (expiredPosts.length > 0) {
+      console.log(`Expired ${expiredPosts.length} boosted posts`);
+    }
   }
 }

@@ -81,6 +81,30 @@ export class Post extends Model {
   })
   declare viewsCount: number;
 
+  // Boost Mode fields
+  @AllowNull(false)
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+  })
+  declare isBoosted: boolean;
+
+  @AllowNull(true)
+  @Column(DataType.DATE)
+  declare boostedAt: Date;
+
+  @AllowNull(true)
+  @Column(DataType.DATE)
+  declare boostExpiresAt: Date;
+
+  @AllowNull(true)
+  @Column(DataType.STRING)
+  declare boostPaymentId: string;
+
+  @AllowNull(true)
+  @Column(DataType.DECIMAL(10, 2))
+  declare boostAmount: number;
+
   @CreatedAt
   @Column(DataType.DATE)
   declare createdAt: Date;

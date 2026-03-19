@@ -31,6 +31,7 @@ import { UpdatePostMultipartDto } from './dto/update-post-multipart.dto';
 import { FollowDto } from './dto/follow.dto';
 import { GetPostsDto, GetPostsQueryDto } from './dto/get-posts.dto';
 import { GetFollowersDto, GetFollowingDto } from './dto/get-followers.dto';
+import { ActivateBoostDto, VerifyBoostPaymentDto, BoostModeResponseDto } from './dto/boost-post.dto';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserType } from './models/post.model';
@@ -748,5 +749,56 @@ export class PostController {
     @Query('limit', ParseIntPipe) limit: number = 20,
   ) {
     return await this.postService.getPostViewers(postId, page, limit);
+  }
+
+  @Post('boost/create-order')
+  @ApiOperation({
+    summary: 'Create Razorpay order for post boost',
+    description: 'Creates a payment order for boosting a post. Boost mode costs ₹29 and lasts for 24 hours. Boosted posts appear at the top of feeds with maximum visibility.'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment order created successfully',
+    type: BoostModeResponseDto,
+  })
+  @ApiResponse({ status: 403, description: 'You can only boost your own posts' })
+  @ApiResponse({ status: 404, description: 'Post not found' })
+  @ApiResponse({ status: 400, description: 'Post is already boosted' })
+  async createBoostOrder(
+    @Body() activateBoostDto: ActivateBoostDto,
+    @CurrentUser() user: User,
+  ): Promise<BoostModeResponseDto> {
+    return await this.postService.createBoostOrder(
+      activateBoostDto.postId,
+      user.id,
+      user.userType as unknown as UserType,
+    );
+  }
+
+  @Post('boost/verify-payment')
+  @ApiOperation({
+    summary: 'Verify payment and activate boost mode',
+    description: 'Verifies the Razorpay payment and activates boost mode for the post for 24 hours. The post will appear at the top of all feeds without any filters.'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Boost mode activated successfully',
+    type: BoostModeResponseDto,
+  })
+  @ApiResponse({ status: 403, description: 'You can only boost your own posts' })
+  @ApiResponse({ status: 404, description: 'Post not found' })
+  @ApiResponse({ status: 400, description: 'Invalid payment signature' })
+  async verifyBoostPayment(
+    @Body() verifyBoostDto: VerifyBoostPaymentDto,
+    @CurrentUser() user: User,
+  ): Promise<BoostModeResponseDto> {
+    return await this.postService.verifyAndActivateBoost(
+      verifyBoostDto.postId,
+      user.id,
+      user.userType as unknown as UserType,
+      verifyBoostDto.razorpayOrderId,
+      verifyBoostDto.razorpayPaymentId,
+      verifyBoostDto.razorpaySignature,
+    );
   }
 }

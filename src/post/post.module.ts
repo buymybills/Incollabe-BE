@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { PostController } from './post.controller';
 import { PostService } from './post.service';
+import { PostBoostExpiryCronService } from './services/post-boost-expiry.cron';
 import { Post } from './models/post.model';
 import { Like } from './models/like.model';
 import { Follow } from './models/follow.model';
@@ -31,7 +32,7 @@ import { SharedModule } from '../shared/shared.module';
     SharedModule,
   ],
   controllers: [PostController],
-  providers: [PostService],
+  providers: [PostService, PostBoostExpiryCronService],
   exports: [PostService],
 })
 export class PostModule {}
