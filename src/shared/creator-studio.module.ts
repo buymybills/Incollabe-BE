@@ -8,6 +8,7 @@ import { Post } from '../post/models/post.model';
 import { PostView } from '../post/models/post-view.model';
 import { Like } from '../post/models/like.model';
 import { Share } from '../post/models/share.model';
+import { CampaignReview } from './models/campaign-review.model';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { Share } from '../post/models/share.model';
       PostView,
       Like,
       Share,
+      CampaignReview,
     ]),
   ],
   controllers: [CreatorStudioController],

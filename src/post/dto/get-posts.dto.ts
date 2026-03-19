@@ -1,7 +1,14 @@
 // get-posts-query.dto.ts
 import { ApiProperty } from '@nestjs/swagger';
-import { IsOptional, IsNumber, Min, IsString } from 'class-validator';
+import { IsOptional, IsNumber, Min, IsString, IsEnum } from 'class-validator';
 import { Transform } from 'class-transformer';
+
+export enum PostsTimeFrame {
+  LAST_7_DAYS = '7_days',
+  LAST_15_DAYS = '15_days',
+  LAST_30_DAYS = '30_days',
+  ALL = 'all',
+}
 
 export class GetPostsQueryDto {
   @ApiProperty({

@@ -9,6 +9,7 @@ import { Like, LikerType } from '../post/models/like.model';
 import { Share, SharerType } from '../post/models/share.model';
 import { Follow, FollowingType, FollowerType } from '../post/models/follow.model';
 import { Campaign, CampaignStatus } from '../campaign/models/campaign.model';
+import { CampaignReview, ReviewerType } from './models/campaign-review.model';
 import {
   CreatorStudioStatsResponseDto,
   ProfileInsightDto,
@@ -74,9 +75,9 @@ export class CreatorStudioService {
     // Profile Insight
     const profileInsight: ProfileInsightDto = {
       profileViews: await this.calculateProfileViews(userId, userType, startDate, now),
-      posts: await this.getPostsCount(userId, userType),
-      followers: await this.getFollowersCount(userId, userType),
-      following: await this.getFollowingCount(userId, userType),
+      posts: await this.getPostsCount(userId, userType, startDate, now),
+      followers: await this.getFollowersCount(userId, userType, startDate, now),
+      following: await this.getFollowingCount(userId, userType, startDate, now),
       rating: await this.calculateRating(userId, userType),
     };
 
@@ -148,11 +149,21 @@ export class CreatorStudioService {
   }
 
   /**
-   * Get total posts count
+   * Get posts count created within the specified time period
+   * Counts actual posts created in the timeframe (not total portfolio)
    */
-  private async getPostsCount(userId: number, userType: CreatorType): Promise<number> {
+  private async getPostsCount(
+    userId: number,
+    userType: CreatorType,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<number> {
     try {
-      const whereClause: any = {};
+      const whereClause: any = {
+        createdAt: {
+          [Op.between]: [startDate, endDate],
+        },
+      };
 
       if (userType === CreatorType.INFLUENCER) {
         whereClause.influencerId = userId;
@@ -162,17 +173,10 @@ export class CreatorStudioService {
         whereClause.userType = UserType.BRAND;
       }
 
-      // Count actual posts from the database
-      const dbPostCount = await Post.count({ where: whereClause });
+      // Count posts created in the timeframe
+      const postsCount = await Post.count({ where: whereClause });
 
-      // For influencers, also check Instagram media count and return the higher value
-      if (userType === CreatorType.INFLUENCER) {
-        const influencer = await this.influencerModel.findByPk(userId);
-        const instagramCount = influencer?.instagramMediaCount || 0;
-        return Math.max(dbPostCount, instagramCount);
-      }
-
-      return dbPostCount;
+      return postsCount;
     } catch (error) {
       console.error('Error getting posts count:', error);
       return 0;
@@ -180,20 +184,36 @@ export class CreatorStudioService {
   }
 
   /**
-   * Get followers count
+   * Get followers count gained within the specified time period
+   * Counts new followers from the application, not Instagram
    */
-  private async getFollowersCount(userId: number, userType: CreatorType): Promise<number> {
+  private async getFollowersCount(
+    userId: number,
+    userType: CreatorType,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<number> {
     try {
       if (userType === CreatorType.INFLUENCER) {
-        // For influencers, use Instagram data
-        const influencer = await this.influencerModel.findByPk(userId);
-        return influencer?.instagramFollowersCount || 0;
+        // Count how many users started following this influencer in the timeframe
+        return await Follow.count({
+          where: {
+            followingInfluencerId: userId,
+            followingType: FollowingType.INFLUENCER,
+            createdAt: {
+              [Op.between]: [startDate, endDate],
+            },
+          },
+        });
       } else {
-        // For brands, count how many users are following them on the platform
+        // Count how many users started following this brand in the timeframe
         return await Follow.count({
           where: {
             followingBrandId: userId,
             followingType: FollowingType.BRAND,
+            createdAt: {
+              [Op.between]: [startDate, endDate],
+            },
           },
         });
       }
@@ -204,20 +224,36 @@ export class CreatorStudioService {
   }
 
   /**
-   * Get following count
+   * Get following count gained within the specified time period
+   * Counts new follows from the application, not Instagram
    */
-  private async getFollowingCount(userId: number, userType: CreatorType): Promise<number> {
+  private async getFollowingCount(
+    userId: number,
+    userType: CreatorType,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<number> {
     try {
       if (userType === CreatorType.INFLUENCER) {
-        // For influencers, use Instagram data
-        const influencer = await this.influencerModel.findByPk(userId);
-        return influencer?.instagramFollowsCount || 0;
+        // Count how many users this influencer started following in the timeframe
+        return await Follow.count({
+          where: {
+            followerInfluencerId: userId,
+            followerType: FollowerType.INFLUENCER,
+            createdAt: {
+              [Op.between]: [startDate, endDate],
+            },
+          },
+        });
       } else {
-        // For brands, count how many users they follow on the platform
+        // Count how many users this brand started following in the timeframe
         return await Follow.count({
           where: {
             followerBrandId: userId,
             followerType: FollowerType.BRAND,
+            createdAt: {
+              [Op.between]: [startDate, endDate],
+            },
           },
         });
       }
@@ -341,51 +377,37 @@ export class CreatorStudioService {
   }
 
   /**
-   * Calculate user rating based on profile completeness and verification
+   * Calculate user rating based on campaign reviews received
+   * Returns average rating from all campaign reviews where user was reviewed
    */
   private async calculateRating(userId: number, userType: CreatorType): Promise<number> {
     try {
-      if (userType === CreatorType.INFLUENCER) {
-        const influencer = await this.influencerModel.findByPk(userId);
-        if (!influencer) return 0;
+      // Determine reviewee type based on user type
+      const revieweeType = userType === CreatorType.INFLUENCER
+        ? ReviewerType.INFLUENCER
+        : ReviewerType.BRAND;
 
-        let rating = 0;
+      // Get all reviews where this user was the reviewee
+      const reviews = await CampaignReview.findAll({
+        where: {
+          revieweeType: revieweeType,
+          revieweeId: userId,
+        },
+        attributes: ['rating'],
+        raw: true,
+      });
 
-        // Base rating from profile completeness
-        if (influencer.isProfileCompleted) rating += 2;
-
-        // Verification bonus
-        if (influencer.isVerified) rating += 1;
-        if (influencer.isWhatsappVerified) rating += 0.5;
-
-        // Social media presence
-        if (influencer.instagramFollowersCount > 1000) rating += 0.5;
-        if (influencer.instagramFollowersCount > 10000) rating += 0.5;
-
-        // Pro account bonus
-        if (influencer.isPro) rating += 0.5;
-
-        return Math.min(rating, 5.0);
-      } else {
-        const brand = await this.brandModel.findByPk(userId);
-        if (!brand) return 0;
-
-        let rating = 0;
-
-        if (brand.isProfileCompleted) rating += 2;
-        if (brand.isVerified) rating += 1.5;
-
-        const followersCount = await this.getFollowersCount(userId, userType);
-        if (followersCount > 100) rating += 0.5;
-        if (followersCount > 1000) rating += 0.5;
-
-        const campaignsCount = await Campaign.count({
-          where: { brandId: userId, status: CampaignStatus.COMPLETED },
-        });
-        if (campaignsCount > 5) rating += 0.5;
-
-        return Math.min(rating, 5.0);
+      // If no reviews, return 0
+      if (reviews.length === 0) {
+        return 0;
       }
+
+      // Calculate average rating
+      const totalRating = reviews.reduce((sum, review: any) => sum + review.rating, 0);
+      const averageRating = totalRating / reviews.length;
+
+      // Round to 1 decimal place
+      return Math.round(averageRating * 10) / 10;
     } catch (error) {
       console.error('Error calculating rating:', error);
       return 0;
