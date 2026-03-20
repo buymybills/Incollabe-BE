@@ -709,7 +709,35 @@ export class CampaignController {
   @Get('ratings')
   @ApiOperation({
     summary: 'Get campaign ratings for user',
-    description: 'Returns all ratings and reviews received by the user (brand or influencer) from completed campaigns, with average rating statistics.',
+    description: `Returns all ratings and reviews received by the user (brand or influencer) from completed campaigns, with average rating statistics.
+
+**Response includes conversationId field:**
+Each rating item includes a \`conversationId\` field that can be used to submit a review for the campaign.
+
+**How to submit a review using conversationId:**
+1. Get the \`conversationId\` from the rating item in the response
+2. Call \`POST /api/chat/campaign-conversations/:conversationId/review\` with the review data
+3. Request body: \`{ "rating": 1-5, "reviewText": "Optional review text" }\`
+
+**Example flow:**
+\`\`\`
+// Step 1: Get ratings
+GET /api/campaign/ratings
+Response: {
+  "ratings": [{
+    "conversationId": 321,
+    "campaignTitle": "Spring Street Style Edit",
+    "hasUserRated": false,
+    ...
+  }]
+}
+
+// Step 2: Submit review using conversationId
+POST /api/chat/campaign-conversations/321/review
+Body: { "rating": 5, "reviewText": "Great collaboration!" }
+\`\`\`
+
+**Note:** The \`hasUserRated\` field indicates if the user has already submitted a review for that campaign. If \`true\`, the review fields (\`userRatingForBrand\`, \`userReviewForBrand\`) will contain the previously submitted review.`,
   })
   @ApiResponse({
     status: 200,
