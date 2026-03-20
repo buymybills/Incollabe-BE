@@ -2319,23 +2319,27 @@ export class PostService {
       ),
     ];
 
-    // Get brand niches
-    const brandNiches = await BrandNiche.findAll({
-      where: { brandId: { [Op.in]: brandViewerIds } },
+    // Get brands with their niches
+    const brands = await this.brandModel.findAll({
+      where: { id: { [Op.in]: brandViewerIds } },
       include: [
         {
           model: Niche,
+          as: 'niches',
+          through: { attributes: [] },
           attributes: ['id', 'name'],
         },
       ],
     });
 
-    // Get influencer niches
-    const influencerNiches = await InfluencerNiche.findAll({
-      where: { influencerId: { [Op.in]: influencerViewerIds } },
+    // Get influencers with their niches
+    const influencers = await this.influencerModel.findAll({
+      where: { id: { [Op.in]: influencerViewerIds } },
       include: [
         {
           model: Niche,
+          as: 'niches',
+          through: { attributes: [] },
           attributes: ['id', 'name'],
         },
       ],
@@ -2343,22 +2347,26 @@ export class PostService {
 
     // Count brand categories
     const brandCategoryCount: Map<string, number> = new Map();
-    brandNiches.forEach((bn: any) => {
-      const nicheName = bn.niche?.name || 'Other';
-      brandCategoryCount.set(
-        nicheName,
-        (brandCategoryCount.get(nicheName) || 0) + 1,
-      );
+    brands.forEach((brand: any) => {
+      brand.niches?.forEach((niche: any) => {
+        const nicheName = niche.name || 'Other';
+        brandCategoryCount.set(
+          nicheName,
+          (brandCategoryCount.get(nicheName) || 0) + 1,
+        );
+      });
     });
 
     // Count influencer categories
     const influencerCategoryCount: Map<string, number> = new Map();
-    influencerNiches.forEach((in_: any) => {
-      const nicheName = in_.niche?.name || 'Other';
-      influencerCategoryCount.set(
-        nicheName,
-        (influencerCategoryCount.get(nicheName) || 0) + 1,
-      );
+    influencers.forEach((influencer: any) => {
+      influencer.niches?.forEach((niche: any) => {
+        const nicheName = niche.name || 'Other';
+        influencerCategoryCount.set(
+          nicheName,
+          (influencerCategoryCount.get(nicheName) || 0) + 1,
+        );
+      });
     });
 
     // Convert to arrays and calculate percentages
