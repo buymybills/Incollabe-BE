@@ -2422,7 +2422,7 @@ export class PostService {
         [Sequelize.fn('COUNT', Sequelize.col('id')), 'viewCount'],
       ],
       group: ['postId'],
-      order: [[Sequelize.literal('viewCount'), 'DESC']],
+      order: [[Sequelize.literal('"viewCount"'), 'DESC']],
       limit,
       raw: true,
     });
@@ -3045,7 +3045,7 @@ export class PostService {
     for (const follower of followers) {
       let niches: any[] = [];
 
-      if (followerType === FollowerType.INFLUENCER) {
+      if (followerType === FollowerType.INFLUENCER && follower.followerInfluencerId) {
         const influencer = await this.influencerModel.findOne({
           where: { id: follower.followerInfluencerId },
           include: [
@@ -3058,7 +3058,7 @@ export class PostService {
         });
 
         niches = influencer?.niches?.map((n) => n.name) || [];
-      } else {
+      } else if (followerType === FollowerType.BRAND && follower.followerBrandId) {
         const brand = await this.brandModel.findOne({
           where: { id: follower.followerBrandId },
           include: [
@@ -3353,7 +3353,7 @@ export class PostService {
         [Sequelize.fn('COUNT', Sequelize.col('id')), 'likeCount'],
       ],
       group: ['postId'],
-      order: [[Sequelize.literal('likeCount'), 'DESC']],
+      order: [[Sequelize.literal('"likeCount"'), 'DESC']],
       limit,
       raw: true,
     });

@@ -706,6 +706,30 @@ export class CampaignController {
     return this.campaignService.getInfluencerTypes();
   }
 
+  @Get('ratings')
+  @ApiOperation({
+    summary: 'Get campaign ratings for user',
+    description: 'Returns all ratings and reviews received by the user (brand or influencer) from completed campaigns, with average rating statistics.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Ratings retrieved successfully',
+    type: UserRatingsStatsDto,
+  })
+  @ApiQuery({ name: 'timeframe', required: false, enum: ['last_30_days', 'last_90_days', 'all_time'], description: 'Timeframe for ratings (default: last_30_days)' })
+  @ApiQuery({ name: 'startDate', required: false, type: String, description: 'Custom start date (YYYY-MM-DD), overrides timeframe' })
+  @ApiQuery({ name: 'endDate', required: false, type: String, description: 'Custom end date (YYYY-MM-DD), overrides timeframe' })
+  async getUserRatings(
+    @Query() ratingsDto: GetRatingsDto,
+    @Req() req: RequestWithUser,
+  ): Promise<UserRatingsStatsDto> {
+    return await this.campaignService.getUserRatings(
+      req.user.id,
+      req.user.userType,
+      ratingsDto,
+    );
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get campaign by ID',
@@ -1860,27 +1884,4 @@ export class CampaignController {
     );
   }
 
-  @Get('ratings')
-  @ApiOperation({
-    summary: 'Get campaign ratings for user',
-    description: 'Returns all ratings and reviews received by the user (brand or influencer) from completed campaigns, with average rating statistics.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Ratings retrieved successfully',
-    type: UserRatingsStatsDto,
-  })
-  @ApiQuery({ name: 'timeframe', required: false, enum: ['last_30_days', 'last_90_days', 'all_time'], description: 'Timeframe for ratings (default: last_30_days)' })
-  @ApiQuery({ name: 'startDate', required: false, type: String, description: 'Custom start date (YYYY-MM-DD), overrides timeframe' })
-  @ApiQuery({ name: 'endDate', required: false, type: String, description: 'Custom end date (YYYY-MM-DD), overrides timeframe' })
-  async getUserRatings(
-    @Query() ratingsDto: GetRatingsDto,
-    @Req() req: RequestWithUser,
-  ): Promise<UserRatingsStatsDto> {
-    return await this.campaignService.getUserRatings(
-      req.user.id,
-      req.user.userType,
-      ratingsDto,
-    );
-  }
 }
