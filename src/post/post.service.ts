@@ -603,6 +603,28 @@ export class PostService {
 
     const totalPages = Math.ceil(count / limit);
 
+    // Automatically track views for all posts in the feed (fire-and-forget)
+    if (currentUserId && currentUserType && posts.length > 0) {
+      const postIds = posts.map((post) => post.id);
+      const viewerType = currentUserType === UserType.INFLUENCER ? 'influencer' : 'brand';
+
+      // Track views for all posts asynchronously without blocking the response
+      Promise.all(
+        postIds.map(postId =>
+          this.postViewService.trackView({
+            postId,
+            viewerId: currentUserId,
+            viewerType,
+          }).catch(error => {
+            // Log error but don't throw - view tracking should not block post retrieval
+            console.error(`Error tracking view for post ${postId}:`, error);
+          })
+        )
+      ).catch(error => {
+        console.error('Error tracking post views:', error);
+      });
+    }
+
     return {
       posts: postsWithLikeStatus,
       total: count,
