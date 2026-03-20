@@ -21,6 +21,7 @@ import {
   TimeframeType,
   FollowerFilterType,
   UserTypeFilter,
+  BreakdownType,
   ProfileViewsResponseDto,
   PostViewsResponseDto,
   InteractionsResponseDto,
@@ -1709,6 +1710,13 @@ export class PostService {
   ): Promise<ProfileViewsResponseDto> {
     const { startDate, endDate } = this.getDateRange(analyticsDto);
 
+    // Map breakdownBy to internal filter flags
+    if (analyticsDto.breakdownBy === BreakdownType.USERTYPE_WISE) {
+      analyticsDto.userType = UserTypeFilter.ALL;
+    } else {
+      analyticsDto.followerType = FollowerFilterType.ALL;
+    }
+
     // Get all posts by this user
     const userPosts = await this.postModel.findAll({
       where: {
@@ -1843,6 +1851,13 @@ export class PostService {
     analyticsDto: GetAnalyticsDto,
   ): Promise<PostViewsResponseDto> {
     const { startDate, endDate } = this.getDateRange(analyticsDto);
+
+    // Map breakdownBy to internal filter flags
+    if (analyticsDto.breakdownBy === BreakdownType.USERTYPE_WISE) {
+      analyticsDto.userType = UserTypeFilter.ALL;
+    } else {
+      analyticsDto.followerType = FollowerFilterType.ALL;
+    }
 
     // Get all posts by this user
     const userPosts = await this.postModel.findAll({
@@ -2566,6 +2581,13 @@ export class PostService {
   ): Promise<InteractionsResponseDto> {
     const { startDate, endDate } = this.getDateRange(analyticsDto);
 
+    // Map breakdownBy to internal filter flags
+    if (analyticsDto.breakdownBy === BreakdownType.USERTYPE_WISE) {
+      analyticsDto.userType = UserTypeFilter.ALL;
+    } else {
+      analyticsDto.followerType = FollowerFilterType.ALL;
+    }
+
     // Get all posts by this user
     const userPosts = await this.postModel.findAll({
       where: {
@@ -2736,6 +2758,13 @@ export class PostService {
     analyticsDto: GetAnalyticsDto,
   ): Promise<FollowersResponseDto> {
     const { startDate, endDate } = this.getDateRange(analyticsDto);
+
+    // Map breakdownBy to internal filter flags
+    if (analyticsDto.breakdownBy === BreakdownType.USERTYPE_WISE) {
+      analyticsDto.userType = UserTypeFilter.ALL;
+    } else {
+      analyticsDto.followerType = FollowerFilterType.ALL;
+    }
 
     // Get all current followers
     const currentFollowers = await this.followModel.findAll({

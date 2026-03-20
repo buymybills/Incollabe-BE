@@ -892,8 +892,7 @@ export class PostController {
     type: FollowersResponseDto,
   })
   @ApiQuery({ name: 'timeframe', required: false, enum: ['7_days', '15_days', '30_days', 'all_time'], description: 'Timeframe for analytics (default: 30_days)' })
-  @ApiQuery({ name: 'followerType', required: false, enum: ['all', 'followers', 'non_followers'], description: 'Filter by follower type (default: all)' })
-  @ApiQuery({ name: 'userType', required: false, enum: ['all', 'brands', 'influencers'], description: 'Filter by user type (default: all)' })
+  @ApiQuery({ name: 'breakdownBy', required: false, enum: ['follower_wise', 'usertype_wise'], description: 'Breakdown type: follower_wise (simple: followers vs non-followers) or usertype_wise (nested: brands/influencers with followers breakdown) (default: follower_wise)' })
   @ApiQuery({ name: 'startDate', required: false, type: String, description: 'Custom start date (YYYY-MM-DD), overrides timeframe' })
   @ApiQuery({ name: 'endDate', required: false, type: String, description: 'Custom end date (YYYY-MM-DD), overrides timeframe' })
   async getFollowersAnalytics(

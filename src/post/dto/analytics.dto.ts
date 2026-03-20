@@ -20,6 +20,11 @@ export enum UserTypeFilter {
   INFLUENCERS = 'influencers',
 }
 
+export enum BreakdownType {
+  FOLLOWER_WISE = 'follower_wise',
+  USERTYPE_WISE = 'usertype_wise',
+}
+
 export class GetAnalyticsDto {
   @ApiPropertyOptional({
     description: 'Timeframe for analytics',
@@ -31,21 +36,16 @@ export class GetAnalyticsDto {
   timeframe?: TimeframeType;
 
   @ApiPropertyOptional({
-    description: 'Filter by follower type',
-    enum: FollowerFilterType,
-    default: FollowerFilterType.ALL,
+    description: 'Breakdown type: follower_wise (simple: followers vs non-followers) or usertype_wise (nested: brands/influencers with followers breakdown)',
+    enum: BreakdownType,
+    default: BreakdownType.FOLLOWER_WISE,
   })
   @IsOptional()
-  @IsEnum(FollowerFilterType)
-  followerType?: FollowerFilterType;
+  @IsEnum(BreakdownType)
+  breakdownBy?: BreakdownType;
 
-  @ApiPropertyOptional({
-    description: 'Filter by user type',
-    enum: UserTypeFilter,
-    default: UserTypeFilter.ALL,
-  })
-  @IsOptional()
-  @IsEnum(UserTypeFilter)
+  // Internal fields (not exposed in API docs)
+  followerType?: FollowerFilterType;
   userType?: UserTypeFilter;
 
   @ApiPropertyOptional({
