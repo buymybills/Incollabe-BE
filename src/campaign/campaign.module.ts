@@ -30,6 +30,7 @@ import { InstagramMediaInsight } from '../shared/models/instagram-media-insight.
 import { InfluencerProfileScore } from '../shared/models/influencer-profile-score.model';
 import { MaxCampaignScoringProcessor } from './queues/max-campaign-scoring.processor';
 import { MaxCampaignScoringQueueService } from './services/max-campaign-scoring-queue.service';
+import { CampaignReview } from '../shared/models/campaign-review.model';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { MaxCampaignScoringQueueService } from './services/max-campaign-scoring-
       InstagramProfileAnalysis,
       InstagramMediaInsight,
       InfluencerProfileScore,
+      CampaignReview,
     ]),
     BullModule.registerQueue({
       name: 'max-campaign-scoring',

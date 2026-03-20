@@ -56,6 +56,8 @@ import { ChatService } from '../shared/chat.service';
 import { ChatGateway } from '../shared/chat.gateway';
 import { InAppNotificationService } from '../shared/in-app-notification.service';
 import { NotificationType } from '../shared/models/in-app-notification.model';
+import { CampaignReview } from '../shared/models/campaign-review.model';
+import { GetRatingsDto, UserRatingsStatsDto, CampaignRatingItemDto, RatingsTimeframeType } from './dto/ratings.dto';
 
 @Injectable()
 export class CampaignService {
@@ -94,6 +96,8 @@ export class CampaignService {
     private readonly influencerProfileScoreModel: typeof InfluencerProfileScore,
     @InjectModel(Niche)
     private readonly nicheModel: typeof Niche,
+    @InjectModel(CampaignReview)
+    private readonly campaignReviewModel: typeof CampaignReview,
     // REMOVED: Models only needed for early selection bonus feature (now disabled)
     // @InjectModel(CreditTransaction)
     // private readonly creditTransactionModel: typeof CreditTransaction,
@@ -4392,5 +4396,172 @@ export class CampaignService {
     console.log(
       `[MAX Campaign Scoring] Successfully queued job for ${influencerIds.length} influencers`,
     );
+  }
+
+  /**
+   * Get ratings statistics and list for a user (brand or influencer)
+   */
+  async getUserRatings(
+    userId: number,
+    userType: 'brand' | 'influencer',
+    ratingsDto: GetRatingsDto,
+  ): Promise<UserRatingsStatsDto> {
+    const { startDate, endDate } = this.getDateRange(ratingsDto);
+
+    // Get all ratings where the user is the reviewee
+    const reviews = await this.campaignReviewModel.findAll({
+      where: {
+        revieweeType: userType,
+        revieweeId: userId,
+        createdAt: {
+          [Op.between]: [startDate, endDate],
+        },
+      },
+      include: [
+        {
+          model: Campaign,
+          as: 'campaign',
+          attributes: ['id', 'title', 'brandId'],
+        },
+        {
+          model: CampaignApplication,
+          as: 'campaignApplication',
+          attributes: ['id', 'influencerId', 'brandId'],
+        },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+
+    // Calculate average rating
+    const averageRating = reviews.length > 0
+      ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
+      : 0;
+
+    // Build detailed ratings list
+    const ratings: CampaignRatingItemDto[] = await Promise.all(
+      reviews.map(async (review) => {
+        // Get campaign details
+        const campaign = await this.campaignModel.findByPk(review.campaignId, {
+          include: [
+            {
+              model: Brand,
+              as: 'brand',
+              attributes: ['id', 'brandName', 'profileImage'],
+              include: [
+                {
+                  model: Niche,
+                  as: 'niches',
+                  through: { attributes: [] },
+                  attributes: ['name'],
+                },
+              ],
+            },
+            {
+              model: CampaignDeliverable,
+              as: 'deliverables',
+              attributes: ['type'],
+            },
+          ],
+        });
+
+        // Get application details for payment status
+        const application = await this.campaignApplicationModel.findByPk(
+          review.campaignApplicationId,
+        );
+
+        // Check if user has rated back (reverse review)
+        const reverseReview = await this.campaignReviewModel.findOne({
+          where: {
+            campaignApplicationId: review.campaignApplicationId,
+            reviewerType: userType,
+            reviewerId: userId,
+          },
+        });
+
+        // Format deliverable types
+        const deliverableFormat =
+          campaign?.deliverables
+            ?.map((d) => this.getDeliverableLabel(d.type))
+            .join(', ') || 'N/A';
+
+        // Get brand niches
+        const brandNiche =
+          campaign?.brand?.niches?.map((n) => n.name).join(' + ') || 'N/A';
+
+        return {
+          id: review.id,
+          campaignId: review.campaignId,
+          campaignTitle: campaign?.name || 'N/A',
+          brandId: campaign?.brandId || 0,
+          brandName: campaign?.brand?.brandName || 'N/A',
+          brandLogo: campaign?.brand?.profileImage || '',
+          brandNiche,
+          deliverableFormat,
+          paymentStatus:
+            application?.status === ApplicationStatus.COMPLETED ? 'Paid' : 'Pending',
+          completedDate: this.formatDate(review.createdAt),
+          ratingReceived: review.rating,
+          reviewFromBrand: review.reviewText || undefined,
+          hasUserRated: !!reverseReview,
+          userRatingForBrand: reverseReview?.rating,
+          userReviewForBrand: reverseReview?.reviewText || undefined,
+        };
+      }),
+    );
+
+    return {
+      averageRating: Math.round(averageRating * 10) / 10,
+      totalCampaigns: reviews.length,
+      timeframe: this.formatTimeframeLabel(startDate, endDate),
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0],
+      ratings,
+    };
+  }
+
+  /**
+   * Get date range based on timeframe or custom dates
+   */
+  private getDateRange(ratingsDto: GetRatingsDto): { startDate: Date; endDate: Date } {
+    const endDate = ratingsDto.endDate
+      ? new Date(ratingsDto.endDate)
+      : new Date();
+
+    let startDate: Date;
+
+    if (ratingsDto.startDate) {
+      startDate = new Date(ratingsDto.startDate);
+    } else {
+      const timeframe = ratingsDto.timeframe || RatingsTimeframeType.LAST_30_DAYS;
+      const daysAgo = timeframe === RatingsTimeframeType.LAST_30_DAYS
+        ? 30
+        : timeframe === RatingsTimeframeType.LAST_90_DAYS
+        ? 90
+        : 36500; // ~100 years for all_time
+
+      startDate = new Date();
+      startDate.setDate(startDate.getDate() - daysAgo);
+    }
+
+    return { startDate, endDate };
+  }
+
+  /**
+   * Format date for display
+   */
+  private formatDate(date: Date): string {
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const d = new Date(date);
+    return `${monthNames[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  }
+
+  /**
+   * Format timeframe label
+   */
+  private formatTimeframeLabel(startDate: Date, endDate: Date): string {
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    return `${monthNames[start.getMonth()]} ${start.getDate()} - ${monthNames[end.getMonth()]} ${end.getDate()}`;
   }
 }

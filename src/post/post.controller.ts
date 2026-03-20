@@ -32,6 +32,7 @@ import { FollowDto } from './dto/follow.dto';
 import { GetPostsDto, GetPostsQueryDto } from './dto/get-posts.dto';
 import { GetFollowersDto, GetFollowingDto } from './dto/get-followers.dto';
 import { ActivateBoostDto, VerifyBoostPaymentDto, BoostModeResponseDto } from './dto/boost-post.dto';
+import { GetAnalyticsDto, ProfileViewsResponseDto, PostViewsResponseDto, InteractionsResponseDto, FollowersResponseDto } from './dto/analytics.dto';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserType } from './models/post.model';
@@ -799,6 +800,110 @@ export class PostController {
       verifyBoostDto.razorpayOrderId,
       verifyBoostDto.razorpayPaymentId,
       verifyBoostDto.razorpaySignature,
+    );
+  }
+
+  @Get('analytics/profile-views')
+  @ApiOperation({
+    summary: 'Get profile views analytics',
+    description: 'Returns analytics for profile views aggregated from all post views. Shows who viewed your profile through your posts, with breakdowns by follower type, user type, and viewing categories.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Profile views analytics retrieved successfully',
+    type: ProfileViewsResponseDto,
+  })
+  @ApiQuery({ name: 'timeframe', required: false, enum: ['7_days', '15_days', '30_days', 'all_time'], description: 'Timeframe for analytics (default: 30_days)' })
+  @ApiQuery({ name: 'followerType', required: false, enum: ['all', 'followers', 'non_followers'], description: 'Filter by follower type (default: all)' })
+  @ApiQuery({ name: 'userType', required: false, enum: ['all', 'brands', 'influencers'], description: 'Filter by user type (default: all)' })
+  @ApiQuery({ name: 'startDate', required: false, type: String, description: 'Custom start date (YYYY-MM-DD), overrides timeframe' })
+  @ApiQuery({ name: 'endDate', required: false, type: String, description: 'Custom end date (YYYY-MM-DD), overrides timeframe' })
+  async getProfileViewsAnalytics(
+    @Query() analyticsDto: GetAnalyticsDto,
+    @CurrentUser() user: User,
+  ): Promise<ProfileViewsResponseDto> {
+    return await this.postService.getProfileViewsAnalytics(
+      user.id,
+      user.userType as unknown as UserType,
+      analyticsDto,
+    );
+  }
+
+  @Get('analytics/post-views')
+  @ApiOperation({
+    summary: 'Get post views analytics',
+    description: 'Returns analytics for individual post views. Shows detailed breakdown of who viewed your posts, with follower/non-follower split, user type breakdown, top performing posts, and viewing category insights.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Post views analytics retrieved successfully',
+    type: PostViewsResponseDto,
+  })
+  @ApiQuery({ name: 'timeframe', required: false, enum: ['7_days', '15_days', '30_days', 'all_time'], description: 'Timeframe for analytics (default: 30_days)' })
+  @ApiQuery({ name: 'followerType', required: false, enum: ['all', 'followers', 'non_followers'], description: 'Filter by follower type (default: all)' })
+  @ApiQuery({ name: 'userType', required: false, enum: ['all', 'brands', 'influencers'], description: 'Filter by user type (default: all)' })
+  @ApiQuery({ name: 'startDate', required: false, type: String, description: 'Custom start date (YYYY-MM-DD), overrides timeframe' })
+  @ApiQuery({ name: 'endDate', required: false, type: String, description: 'Custom end date (YYYY-MM-DD), overrides timeframe' })
+  async getPostViewsAnalytics(
+    @Query() analyticsDto: GetAnalyticsDto,
+    @CurrentUser() user: User,
+  ): Promise<PostViewsResponseDto> {
+    return await this.postService.getPostViewsAnalytics(
+      user.id,
+      user.userType as unknown as UserType,
+      analyticsDto,
+    );
+  }
+
+  @Get('analytics/interactions')
+  @ApiOperation({
+    summary: 'Get interactions analytics',
+    description: 'Returns analytics for post interactions (likes and shares). Shows total interactions with follower/non-follower breakdown, individual metrics for likes and shares with growth indicators, and top performing posts by likes.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Interactions analytics retrieved successfully',
+    type: InteractionsResponseDto,
+  })
+  @ApiQuery({ name: 'timeframe', required: false, enum: ['7_days', '15_days', '30_days', 'all_time'], description: 'Timeframe for analytics (default: 30_days)' })
+  @ApiQuery({ name: 'followerType', required: false, enum: ['all', 'followers', 'non_followers'], description: 'Filter by follower type (default: all)' })
+  @ApiQuery({ name: 'userType', required: false, enum: ['all', 'brands', 'influencers'], description: 'Filter by user type (default: all)' })
+  @ApiQuery({ name: 'startDate', required: false, type: String, description: 'Custom start date (YYYY-MM-DD), overrides timeframe' })
+  @ApiQuery({ name: 'endDate', required: false, type: String, description: 'Custom end date (YYYY-MM-DD), overrides timeframe' })
+  async getInteractionsAnalytics(
+    @Query() analyticsDto: GetAnalyticsDto,
+    @CurrentUser() user: User,
+  ): Promise<InteractionsResponseDto> {
+    return await this.postService.getInteractionsAnalytics(
+      user.id,
+      user.userType as unknown as UserType,
+      analyticsDto,
+    );
+  }
+
+  @Get('analytics/followers')
+  @ApiOperation({
+    summary: 'Get followers analytics',
+    description: 'Returns analytics for follower growth and composition. Shows net followers count with growth vs previous period, breakdown by creators and brands, followers gained/lost statistics, followers trend over time, top performing posts by followers gained, and niche distribution of followers.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Followers analytics retrieved successfully',
+    type: FollowersResponseDto,
+  })
+  @ApiQuery({ name: 'timeframe', required: false, enum: ['7_days', '15_days', '30_days', 'all_time'], description: 'Timeframe for analytics (default: 30_days)' })
+  @ApiQuery({ name: 'followerType', required: false, enum: ['all', 'followers', 'non_followers'], description: 'Filter by follower type (default: all)' })
+  @ApiQuery({ name: 'userType', required: false, enum: ['all', 'brands', 'influencers'], description: 'Filter by user type (default: all)' })
+  @ApiQuery({ name: 'startDate', required: false, type: String, description: 'Custom start date (YYYY-MM-DD), overrides timeframe' })
+  @ApiQuery({ name: 'endDate', required: false, type: String, description: 'Custom end date (YYYY-MM-DD), overrides timeframe' })
+  async getFollowersAnalytics(
+    @Query() analyticsDto: GetAnalyticsDto,
+    @CurrentUser() user: User,
+  ): Promise<FollowersResponseDto> {
+    return await this.postService.getFollowersAnalytics(
+      user.id,
+      user.userType as unknown as UserType,
+      analyticsDto,
     );
   }
 }
