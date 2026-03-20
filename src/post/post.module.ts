@@ -8,6 +8,7 @@ import { Like } from './models/like.model';
 import { Follow } from './models/follow.model';
 import { Share } from './models/share.model';
 import { PostView } from './models/post-view.model';
+import { PostBoostInvoice } from './models/post-boost-invoice.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { InfluencerNiche } from '../auth/model/influencer-niche.model';
@@ -23,6 +24,7 @@ import { SharedModule } from '../shared/shared.module';
       Follow,
       Share,
       PostView,
+      PostBoostInvoice,
       Influencer,
       Brand,
       InfluencerNiche,

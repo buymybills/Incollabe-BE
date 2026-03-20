@@ -10,6 +10,7 @@ import { Like, LikerType } from './models/like.model';
 import { Follow, FollowerType, FollowingType } from './models/follow.model';
 import { Share, SharerType } from './models/share.model';
 import { PostView, ViewerType } from './models/post-view.model';
+import { PostBoostInvoice, InvoiceStatus, PaymentMethod } from './models/post-boost-invoice.model';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { CreatePostMultipartDto } from './dto/create-post-multipart.dto';
@@ -65,6 +66,8 @@ export class PostService {
     private readonly shareModel: typeof Share,
     @InjectModel(PostView)
     private readonly postViewModel: typeof PostView,
+    @InjectModel(PostBoostInvoice)
+    private readonly postBoostInvoiceModel: typeof PostBoostInvoice,
     @InjectModel(Influencer)
     private readonly influencerModel: typeof Influencer,
     @InjectModel(Brand)
@@ -1541,7 +1544,9 @@ export class PostService {
   ): Promise<{
     success: boolean;
     message: string;
-    order?: any;
+    post?: any;
+    invoice?: any;
+    payment?: any;
   }> {
     // Check if post exists and belongs to the user
     const post = await this.postModel.findByPk(postId);
@@ -1562,35 +1567,147 @@ export class PostService {
       throw new BadRequestException('This post is already boosted');
     }
 
-    // Boost mode price: ₹29
-    const BOOST_PRICE = 29;
+    // Auto-delete old pending payment and invoice
+    if (post.boostPaymentStatus === 'pending') {
+      await this.postBoostInvoiceModel.destroy({
+        where: {
+          postId,
+          paymentStatus: InvoiceStatus.PENDING,
+        },
+      });
+
+      // Clear post payment fields
+      await post.update({
+        boostPaymentStatus: undefined,
+        boostOrderId: undefined,
+        boostPaymentId: undefined,
+        boostAmount: undefined,
+      } as any);
+    }
+
+    // Get user details with city information for tax calculation
+    let cityName = '';
+    if (userType === UserType.BRAND) {
+      const brand = await this.brandModel.findByPk(userId, {
+        include: [
+          {
+            model: this.postModel.sequelize?.models?.City,
+            as: 'headquarterCity',
+          },
+        ],
+      });
+      if (!brand) {
+        throw new NotFoundException('Brand not found');
+      }
+      cityName = brand.headquarterCity?.name?.toLowerCase() || '';
+    } else {
+      const influencer = await this.influencerModel.findByPk(userId, {
+        include: [
+          {
+            model: this.postModel.sequelize?.models?.City,
+            as: 'city',
+          },
+        ],
+      });
+      if (!influencer) {
+        throw new NotFoundException('Influencer not found');
+      }
+      cityName = influencer.city?.name?.toLowerCase() || '';
+    }
+
+    // Calculate taxes
+    // Total = 2900 paise (Rs 29)
+    // Base = 24.58 (in paise: 2458)
+    // Tax = 4.42 (in paise: 442)
+    const totalAmount = 2900; // Rs 29 in paise
+    const baseAmount = 2458; // Rs 24.58 in paise
+
+    let cgst = 0;
+    let sgst = 0;
+    let igst = 0;
+    let taxAmount = 0;
+
+    // Check if location is Delhi
+    const isDelhi = cityName === 'delhi' || cityName === 'new delhi';
+
+    if (isDelhi) {
+      // For Delhi: CGST and SGST (total tax = 442 paise = Rs 4.42)
+      cgst = 221; // Rs 2.21
+      sgst = 221; // Rs 2.21 (total: 442 paise)
+      taxAmount = cgst + sgst; // 442
+    } else {
+      // For other locations: IGST
+      igst = 442; // Rs 4.42
+      taxAmount = igst;
+    }
+
+    // Create invoice with tax breakdown
+    const invoice = await this.postBoostInvoiceModel.create({
+      invoiceNumber: null,
+      postId,
+      userType: userType as any,
+      brandId: userType === UserType.BRAND ? userId : null,
+      influencerId: userType === UserType.INFLUENCER ? userId : null,
+      amount: baseAmount,
+      tax: taxAmount,
+      cgst,
+      sgst,
+      igst,
+      totalAmount,
+      paymentStatus: InvoiceStatus.PENDING,
+      paymentMethod: PaymentMethod.RAZORPAY,
+    });
 
     // Create Razorpay order
-    const receipt = `boost_${postId}_${Date.now()}`;
-    const order = await this.razorpayService.createOrder(
-      BOOST_PRICE,
+    const razorpayOrder = await this.razorpayService.createOrder(
+      invoice.totalAmount / 100, // Amount in Rs
       'INR',
-      receipt,
+      `POST_BOOST_${postId}_INV_${invoice.id}`,
       {
-        postId: postId.toString(),
-        userId: userId.toString(),
+        postId,
+        invoiceId: invoice.id,
+        userId,
         userType,
         purpose: 'POST_BOOST',
       },
     );
 
-    if (!order.success) {
+    if (!razorpayOrder.success) {
       throw new BadRequestException('Failed to create payment order');
     }
+
+    // Update invoice with Razorpay order ID
+    await invoice.update({
+      razorpayOrderId: razorpayOrder.orderId,
+    });
+
+    // Update post with order details
+    await post.update({
+      boostPaymentStatus: 'pending',
+      boostOrderId: razorpayOrder.orderId,
+      boostAmount: invoice.totalAmount / 100, // Store in rupees
+    });
 
     return {
       success: true,
       message: 'Boost payment order created successfully',
-      order: {
-        id: order.orderId,
-        amount: BOOST_PRICE,
-        currency: 'INR',
-        key: process.env.RAZORPAY_KEY_ID,
+      post: {
+        id: post.id,
+        currentStatus: {
+          isBoosted: false,
+          paymentStatus: 'pending',
+        },
+      },
+      invoice: {
+        id: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        amount: invoice.totalAmount,
+      },
+      payment: {
+        orderId: razorpayOrder.orderId,
+        amount: razorpayOrder.amount,
+        currency: razorpayOrder.currency,
+        keyId: process.env.RAZORPAY_KEY_ID,
       },
     };
   }
@@ -1610,6 +1727,7 @@ export class PostService {
     message: string;
     post?: Post;
     boostExpiresAt?: Date;
+    invoice?: any;
   }> {
     // Verify the post exists and belongs to user
     const post = await this.postModel.findByPk(postId);
@@ -1636,6 +1754,34 @@ export class PostService {
       throw new BadRequestException('Invalid payment signature');
     }
 
+    // Verify order ID matches
+    if (post.boostOrderId !== razorpayOrderId) {
+      throw new BadRequestException('Order ID mismatch');
+    }
+
+    // Get invoice
+    const invoice = await this.postBoostInvoiceModel.findOne({
+      where: {
+        postId,
+        razorpayOrderId,
+      },
+    });
+
+    if (!invoice) {
+      throw new NotFoundException('Invoice not found for this boost order');
+    }
+
+    // Generate invoice number now that payment is confirmed
+    const invoiceNumber = await this.generateBoostInvoiceNumber();
+
+    // Update invoice
+    await invoice.update({
+      invoiceNumber,
+      paymentStatus: InvoiceStatus.PAID,
+      razorpayPaymentId,
+      paidAt: new Date(),
+    });
+
     // Activate boost mode for 24 hours
     const boostedAt = new Date();
     const boostExpiresAt = new Date(boostedAt.getTime() + 24 * 60 * 60 * 1000);
@@ -1645,7 +1791,8 @@ export class PostService {
       boostedAt,
       boostExpiresAt,
       boostPaymentId: razorpayPaymentId,
-      boostAmount: 29,
+      boostPaymentStatus: 'paid',
+      boostAmount: invoice.totalAmount / 100, // Store in rupees
     });
 
     // Reload post with user details
@@ -1667,7 +1814,47 @@ export class PostService {
       message: 'Boost mode activated successfully for 24 hours',
       post,
       boostExpiresAt,
+      invoice: {
+        id: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        amount: invoice.totalAmount / 100,
+      },
     };
+  }
+
+  /**
+   * Generate unique invoice number for Post Boost
+   * Format: INV-B2602-SEQ
+   * Example: INV-B2602-1 (1st boost invoice in Feb 2026)
+   */
+  private async generateBoostInvoiceNumber(): Promise<string> {
+    const year = String(new Date().getFullYear()).slice(-2);
+    const month = String(new Date().getMonth() + 1).padStart(2, '0');
+    const yearMonth = `${year}${month}`;
+    const currentPrefix = `INV-B${yearMonth}-`;
+
+    // Fetch all invoices with this prefix
+    const invoices = await this.postBoostInvoiceModel.findAll({
+      where: {
+        invoiceNumber: {
+          [Op.like]: `${currentPrefix}%`,
+        },
+      },
+      attributes: ['invoiceNumber'],
+    });
+
+    let nextNumber = 1;
+
+    // Find the highest sequence number
+    for (const inv of invoices) {
+      const parts = inv.invoiceNumber.split('-');
+      const n = parseInt(parts[2], 10);
+      if (!isNaN(n)) {
+        nextNumber = Math.max(nextNumber, n + 1);
+      }
+    }
+
+    return `${currentPrefix}${nextNumber}`;
   }
 
   /**

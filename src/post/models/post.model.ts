@@ -105,6 +105,15 @@ export class Post extends Model {
   @Column(DataType.DECIMAL(10, 2))
   declare boostAmount: number;
 
+  // Boost Payment Tracking fields
+  @AllowNull(true)
+  @Column(DataType.STRING)
+  declare boostOrderId: string;
+
+  @AllowNull(true)
+  @Column(DataType.STRING)
+  declare boostPaymentStatus: string;
+
   @CreatedAt
   @Column(DataType.DATE)
   declare createdAt: Date;
