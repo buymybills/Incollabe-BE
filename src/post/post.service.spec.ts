@@ -16,6 +16,7 @@ import { DeviceTokenService } from '../shared/device-token.service';
 import { InAppNotificationService } from '../shared/in-app-notification.service';
 import { S3Service } from '../shared/s3.service';
 import { RazorpayService } from '../shared/razorpay.service';
+import { PostViewService } from './services/post-view.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { FollowDto, FollowUserType } from './dto/follow.dto';
@@ -117,6 +118,19 @@ const mockRazorpayService = {
   verifyPaymentSignature: jest.fn().mockReturnValue(true),
 };
 
+const mockPostViewService = {
+  trackView: jest.fn().mockResolvedValue({
+    success: true,
+    message: 'View tracked successfully',
+    isNewView: true,
+  }),
+  getPostViewAnalytics: jest.fn(),
+  getPostViewers: jest.fn(),
+  hasUserViewedPost: jest.fn(),
+  getPostViewCount: jest.fn(),
+  getViewedPostsByUser: jest.fn(),
+};
+
 describe('PostService', () => {
   let service: PostService;
   let postModel: any;
@@ -188,6 +202,10 @@ describe('PostService', () => {
         {
           provide: RazorpayService,
           useValue: mockRazorpayService,
+        },
+        {
+          provide: PostViewService,
+          useValue: mockPostViewService,
         },
       ],
     }).compile();

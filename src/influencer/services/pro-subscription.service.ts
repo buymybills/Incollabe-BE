@@ -503,7 +503,7 @@ export class ProSubscriptionService {
             end: toIST(inv.billingPeriodEnd),
           },
           paidAt: toIST(inv.paidAt),
-          invoiceUrl: inv.invoiceUrl,
+          invoiceUrl: inv.invoiceUrl ? this.s3Service.convertToSignedUrl(inv.invoiceUrl, 120) : null,
           paymentMethod: inv.paymentMethod,
           isAutopay,
           paymentType: isAutopay ? 'Autopay' : 'Monthly',
@@ -554,7 +554,7 @@ export class ProSubscriptionService {
           end: toIST(inv.billingPeriodEnd),
         },
         paidAt: toIST(inv.paidAt),
-        invoiceUrl: inv.invoiceUrl,
+        invoiceUrl: inv.invoiceUrl ? this.s3Service.convertToSignedUrl(inv.invoiceUrl, 120) : null,
         paymentMethod: inv.paymentMethod,
         isAutopay: inv.razorpayPaymentId ? inv.razorpayPaymentId.includes('sub_') : false,
         paymentType: inv.razorpayPaymentId && inv.razorpayPaymentId.includes('sub_') ? 'Autopay' : 'Monthly',
@@ -1256,7 +1256,7 @@ export class ProSubscriptionService {
       invoice: {
         id: updatedInvoice.id,
         invoiceNumber: updatedInvoice.invoiceNumber,
-        invoiceUrl: updatedInvoice.invoiceUrl,
+        invoiceUrl: updatedInvoice.invoiceUrl ? this.s3Service.convertToSignedUrl(updatedInvoice.invoiceUrl, 120) : null,
       },
     };
   }
@@ -1294,7 +1294,7 @@ export class ProSubscriptionService {
       },
       paymentStatus: invoice.paymentStatus,
       paidAt: toIST(invoice.paidAt),
-      invoiceUrl: invoice.invoiceUrl,
+      invoiceUrl: invoice.invoiceUrl ? this.s3Service.convertToSignedUrl(invoice.invoiceUrl, 120) : null,
       razorpayPaymentId: invoice.razorpayPaymentId,
       razorpayOrderId: invoice.razorpayOrderId,
     };
