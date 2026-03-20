@@ -43,6 +43,7 @@ import { AIScoringService } from '../shared/services/ai-scoring.service';
 import { MaxCampaignScoringQueueService } from './services/max-campaign-scoring-queue.service';
 import { ChatService } from '../shared/chat.service';
 import { ChatGateway } from '../shared/chat.gateway';
+import { CampaignReview } from '../shared/models/campaign-review.model';
 
 const mockModel = () => ({
   findOne: jest.fn(),
@@ -176,6 +177,10 @@ describe('CampaignService', () => {
         },
         {
           provide: getModelToken(Niche),
+          useValue: mockModel(),
+        },
+        {
+          provide: getModelToken(CampaignReview),
           useValue: mockModel(),
         },
         {
