@@ -31,6 +31,7 @@ import { InfluencerProfileScore } from '../shared/models/influencer-profile-scor
 import { MaxCampaignScoringProcessor } from './queues/max-campaign-scoring.processor';
 import { MaxCampaignScoringQueueService } from './services/max-campaign-scoring-queue.service';
 import { CampaignReview } from '../shared/models/campaign-review.model';
+import { Conversation } from '../shared/models/conversation.model';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { CampaignReview } from '../shared/models/campaign-review.model';
       InstagramMediaInsight,
       InfluencerProfileScore,
       CampaignReview,
+      Conversation,
     ]),
     BullModule.registerQueue({
       name: 'max-campaign-scoring',

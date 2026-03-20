@@ -44,6 +44,7 @@ import { MaxCampaignScoringQueueService } from './services/max-campaign-scoring-
 import { ChatService } from '../shared/chat.service';
 import { ChatGateway } from '../shared/chat.gateway';
 import { CampaignReview } from '../shared/models/campaign-review.model';
+import { Conversation } from '../shared/models/conversation.model';
 
 const mockModel = () => ({
   findOne: jest.fn(),
@@ -181,6 +182,10 @@ describe('CampaignService', () => {
         },
         {
           provide: getModelToken(CampaignReview),
+          useValue: mockModel(),
+        },
+        {
+          provide: getModelToken(Conversation),
           useValue: mockModel(),
         },
         {

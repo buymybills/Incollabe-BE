@@ -57,6 +57,7 @@ import { ChatGateway } from '../shared/chat.gateway';
 import { InAppNotificationService } from '../shared/in-app-notification.service';
 import { NotificationType } from '../shared/models/in-app-notification.model';
 import { CampaignReview } from '../shared/models/campaign-review.model';
+import { Conversation } from '../shared/models/conversation.model';
 import { GetRatingsDto, UserRatingsStatsDto, CampaignRatingItemDto, RatingsTimeframeType } from './dto/ratings.dto';
 
 @Injectable()
@@ -98,6 +99,8 @@ export class CampaignService {
     private readonly nicheModel: typeof Niche,
     @InjectModel(CampaignReview)
     private readonly campaignReviewModel: typeof CampaignReview,
+    @InjectModel(Conversation)
+    private readonly conversationModel: typeof Conversation,
     // REMOVED: Models only needed for early selection bonus feature (now disabled)
     // @InjectModel(CreditTransaction)
     // private readonly creditTransactionModel: typeof CreditTransaction,
@@ -4488,9 +4491,20 @@ export class CampaignService {
         const brandNiche =
           campaign?.brand?.niches?.map((n) => n.name).join(' + ') || 'N/A';
 
+        // Get conversation ID for this campaign application
+        const conversation = await this.conversationModel.findOne({
+          where: {
+            campaignApplicationId: review.campaignApplicationId,
+            conversationType: 'campaign',
+          },
+          attributes: ['id'],
+        });
+
         return {
           id: review.id,
           campaignId: review.campaignId,
+          campaignApplicationId: review.campaignApplicationId,
+          conversationId: conversation?.id || null,
           campaignTitle: campaign?.name || 'N/A',
           brandId: campaign?.brandId || 0,
           brandName: campaign?.brand?.brandName || 'N/A',

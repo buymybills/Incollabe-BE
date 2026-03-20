@@ -41,6 +41,12 @@ export class CampaignRatingItemDto {
   @ApiProperty({ description: 'Campaign ID', example: 456 })
   campaignId: number;
 
+  @ApiProperty({ description: 'Campaign application ID', example: 789 })
+  campaignApplicationId: number;
+
+  @ApiPropertyOptional({ description: 'Conversation ID for submitting review', example: 321 })
+  conversationId: number | null;
+
   @ApiProperty({ description: 'Campaign title', example: 'Spring Street Style Edit' })
   campaignTitle: string;
 
