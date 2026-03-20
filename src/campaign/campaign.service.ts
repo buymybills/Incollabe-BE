@@ -4421,7 +4421,7 @@ export class CampaignService {
         {
           model: Campaign,
           as: 'campaign',
-          attributes: ['id', 'title', 'brandId'],
+          attributes: ['id', 'name', 'brandId'],
         },
         {
           model: CampaignApplication,
