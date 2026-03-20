@@ -6,6 +6,7 @@ export enum StatsTimeFrame {
   LAST_7_DAYS = '7_days',
   LAST_15_DAYS = '15_days',
   LAST_30_DAYS = '30_days',
+  ALL_TIME = 'all_time',
 }
 
 export class CreatorStudioStatsRequestDto {

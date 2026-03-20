@@ -61,16 +61,23 @@ export class CreatorStudioService {
 
     // Calculate date range based on timeFrame
     const now = new Date();
-    const daysMap = {
-      [StatsTimeFrame.LAST_7_DAYS]: 7,
-      [StatsTimeFrame.LAST_15_DAYS]: 15,
-      [StatsTimeFrame.LAST_30_DAYS]: 30,
-    };
-    const days = daysMap[timeFrame];
-    const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    let startDate: Date;
+    let dateRange: string;
 
-    // Format date range
-    const dateRange = `${this.formatDateRange(startDate, now)}`;
+    if (timeFrame === StatsTimeFrame.ALL_TIME) {
+      // For all_time, use a very early date (beginning of time for this system)
+      startDate = new Date('2020-01-01'); // Adjust this to your system's start date
+      dateRange = 'All Time';
+    } else {
+      const daysMap = {
+        [StatsTimeFrame.LAST_7_DAYS]: 7,
+        [StatsTimeFrame.LAST_15_DAYS]: 15,
+        [StatsTimeFrame.LAST_30_DAYS]: 30,
+      };
+      const days = daysMap[timeFrame];
+      startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      dateRange = this.formatDateRange(startDate, now);
+    }
 
     // Profile Insight
     const profileInsight: ProfileInsightDto = {
@@ -149,8 +156,8 @@ export class CreatorStudioService {
   }
 
   /**
-   * Get posts count created within the specified time period
-   * Counts actual posts created in the timeframe (not total portfolio)
+   * Get total posts count for the user
+   * Returns total number of posts (not filtered by timeframe)
    */
   private async getPostsCount(
     userId: number,
@@ -159,11 +166,7 @@ export class CreatorStudioService {
     endDate: Date,
   ): Promise<number> {
     try {
-      const whereClause: any = {
-        createdAt: {
-          [Op.between]: [startDate, endDate],
-        },
-      };
+      const whereClause: any = {};
 
       if (userType === CreatorType.INFLUENCER) {
         whereClause.influencerId = userId;
@@ -173,7 +176,7 @@ export class CreatorStudioService {
         whereClause.userType = UserType.BRAND;
       }
 
-      // Count posts created in the timeframe
+      // Count total posts (not filtered by timeframe)
       const postsCount = await Post.count({ where: whereClause });
 
       return postsCount;
@@ -184,8 +187,8 @@ export class CreatorStudioService {
   }
 
   /**
-   * Get followers count gained within the specified time period
-   * Counts new followers from the application, not Instagram
+   * Get total followers count for the user
+   * Returns total current followers (not filtered by timeframe)
    */
   private async getFollowersCount(
     userId: number,
@@ -195,25 +198,19 @@ export class CreatorStudioService {
   ): Promise<number> {
     try {
       if (userType === CreatorType.INFLUENCER) {
-        // Count how many users started following this influencer in the timeframe
+        // Count total current followers for this influencer
         return await Follow.count({
           where: {
             followingInfluencerId: userId,
             followingType: FollowingType.INFLUENCER,
-            createdAt: {
-              [Op.between]: [startDate, endDate],
-            },
           },
         });
       } else {
-        // Count how many users started following this brand in the timeframe
+        // Count total current followers for this brand
         return await Follow.count({
           where: {
             followingBrandId: userId,
             followingType: FollowingType.BRAND,
-            createdAt: {
-              [Op.between]: [startDate, endDate],
-            },
           },
         });
       }
@@ -224,8 +221,8 @@ export class CreatorStudioService {
   }
 
   /**
-   * Get following count gained within the specified time period
-   * Counts new follows from the application, not Instagram
+   * Get total following count for the user
+   * Returns total current following (not filtered by timeframe)
    */
   private async getFollowingCount(
     userId: number,
@@ -235,25 +232,19 @@ export class CreatorStudioService {
   ): Promise<number> {
     try {
       if (userType === CreatorType.INFLUENCER) {
-        // Count how many users this influencer started following in the timeframe
+        // Count total users this influencer is following
         return await Follow.count({
           where: {
             followerInfluencerId: userId,
             followerType: FollowerType.INFLUENCER,
-            createdAt: {
-              [Op.between]: [startDate, endDate],
-            },
           },
         });
       } else {
-        // Count how many users this brand started following in the timeframe
+        // Count total users this brand is following
         return await Follow.count({
           where: {
             followerBrandId: userId,
             followerType: FollowerType.BRAND,
-            createdAt: {
-              [Op.between]: [startDate, endDate],
-            },
           },
         });
       }
