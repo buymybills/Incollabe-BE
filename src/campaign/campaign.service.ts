@@ -4426,7 +4426,7 @@ export class CampaignService {
         {
           model: CampaignApplication,
           as: 'campaignApplication',
-          attributes: ['id', 'influencerId', 'brandId'],
+          attributes: ['id', 'influencerId'],
         },
       ],
       order: [['createdAt', 'DESC']],
