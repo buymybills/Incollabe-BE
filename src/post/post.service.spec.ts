@@ -6,6 +6,7 @@ import { Like, LikerType } from './models/like.model';
 import { Follow, FollowerType, FollowingType } from './models/follow.model';
 import { Share } from './models/share.model';
 import { PostView } from './models/post-view.model';
+import { PostBoostInvoice } from './models/post-boost-invoice.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { InfluencerNiche } from '../auth/model/influencer-niche.model';
@@ -58,6 +59,10 @@ const mockShareModel = {
 const mockPostViewModel = {
   ...mockModel(),
   findOrCreate: jest.fn(),
+};
+
+const mockPostBoostInvoiceModel = {
+  ...mockModel(),
 };
 
 const mockInfluencerModel = {
@@ -143,6 +148,10 @@ describe('PostService', () => {
         {
           provide: getModelToken(PostView),
           useValue: mockPostViewModel,
+        },
+        {
+          provide: getModelToken(PostBoostInvoice),
+          useValue: mockPostBoostInvoiceModel,
         },
         {
           provide: getModelToken(Influencer),
