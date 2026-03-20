@@ -193,4 +193,154 @@ export class S3Service {
     await this.uploadFile(file, s3Key);
     return this.getFileUrl(s3Key);
   }
+
+  // ============================================================================
+  // Multipart Upload Methods (Instagram-style chunked uploads for large files)
+  // ============================================================================
+
+  /**
+   * Initiate a multipart upload session
+   * @param key - S3 object key (path/filename)
+   * @param mimeType - File MIME type
+   * @returns Upload ID and key
+   */
+  async initiateMultipartUpload(
+    key: string,
+    mimeType: string,
+  ): Promise<{ uploadId: string; key: string }> {
+    const isVideo = mimeType.startsWith('video/') || key.includes('/videos/');
+
+    const params: AWS.S3.CreateMultipartUploadRequest = {
+      Bucket: this.bucketName,
+      Key: key,
+      ContentType: mimeType,
+      // For videos and images, set ContentDisposition to 'inline'
+      ContentDisposition: isVideo || mimeType.startsWith('image/') ? 'inline' : undefined,
+    };
+
+    const result = await this.s3.createMultipartUpload(params).promise();
+
+    if (!result.UploadId) {
+      throw new Error('Failed to initiate multipart upload: No UploadId returned');
+    }
+
+    return {
+      uploadId: result.UploadId,
+      key: result.Key!,
+    };
+  }
+
+  /**
+   * Generate presigned URLs for uploading parts
+   * @param key - S3 object key
+   * @param uploadId - Upload ID from initiate
+   * @param parts - Number of parts to generate URLs for
+   * @param expiresIn - URL expiration time in seconds (default: 3600 = 1 hour)
+   * @returns Array of presigned URLs
+   */
+  async getPresignedUrlsForParts(
+    key: string,
+    uploadId: string,
+    parts: number,
+    expiresIn: number = 3600,
+  ): Promise<Array<{ partNumber: number; url: string }>> {
+    const presignedUrls: Array<{ partNumber: number; url: string }> = [];
+
+    for (let partNumber = 1; partNumber <= parts; partNumber++) {
+      const params = {
+        Bucket: this.bucketName,
+        Key: key,
+        PartNumber: partNumber,
+        UploadId: uploadId,
+        Expires: expiresIn,
+      };
+
+      const url = await this.s3.getSignedUrlPromise('uploadPart', params);
+      presignedUrls.push({ partNumber, url });
+    }
+
+    return presignedUrls;
+  }
+
+  /**
+   * Complete a multipart upload
+   * @param key - S3 object key
+   * @param uploadId - Upload ID from initiate
+   * @param parts - Array of uploaded parts with ETags
+   * @returns Completed upload location
+   */
+  async completeMultipartUpload(
+    key: string,
+    uploadId: string,
+    parts: Array<{ PartNumber: number; ETag: string }>,
+  ): Promise<{ location: string; bucket: string; key: string }> {
+    const params: AWS.S3.CompleteMultipartUploadRequest = {
+      Bucket: this.bucketName,
+      Key: key,
+      UploadId: uploadId,
+      MultipartUpload: {
+        Parts: parts.sort((a, b) => a.PartNumber - b.PartNumber),
+      },
+    };
+
+    const result = await this.s3.completeMultipartUpload(params).promise();
+
+    return {
+      location: result.Location!,
+      bucket: result.Bucket!,
+      key: result.Key!,
+    };
+  }
+
+  /**
+   * Abort a multipart upload (cleanup incomplete upload)
+   * @param key - S3 object key
+   * @param uploadId - Upload ID from initiate
+   */
+  async abortMultipartUpload(key: string, uploadId: string): Promise<void> {
+    const params: AWS.S3.AbortMultipartUploadRequest = {
+      Bucket: this.bucketName,
+      Key: key,
+      UploadId: uploadId,
+    };
+
+    await this.s3.abortMultipartUpload(params).promise();
+  }
+
+  /**
+   * List uploaded parts for a multipart upload (for resume functionality)
+   * @param key - S3 object key
+   * @param uploadId - Upload ID from initiate
+   * @returns Array of uploaded parts with part numbers and ETags
+   */
+  async listUploadedParts(
+    key: string,
+    uploadId: string,
+  ): Promise<Array<{ PartNumber: number; ETag: string; Size: number }>> {
+    const params: AWS.S3.ListPartsRequest = {
+      Bucket: this.bucketName,
+      Key: key,
+      UploadId: uploadId,
+    };
+
+    try {
+      const result = await this.s3.listParts(params).promise();
+
+      if (!result.Parts || result.Parts.length === 0) {
+        return [];
+      }
+
+      return result.Parts.map((part) => ({
+        PartNumber: part.PartNumber!,
+        ETag: part.ETag!,
+        Size: part.Size!,
+      }));
+    } catch (error) {
+      // If upload doesn't exist or was aborted, return empty array
+      if ((error as any).code === 'NoSuchUpload') {
+        return [];
+      }
+      throw error;
+    }
+  }
 }
