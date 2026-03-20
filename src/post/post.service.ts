@@ -1768,19 +1768,33 @@ export class PostService {
       group: ['viewerType', 'viewerInfluencerId', 'viewerBrandId', 'viewedAt'],
     });
 
-    // Calculate follower breakdown
-    const followerBreakdown = await this.calculateFollowerBreakdown(
-      views,
-      userId,
-      userType,
-      analyticsDto.followerType,
-    );
+    // Calculate total views (unique viewers)
+    const uniqueViewers = new Set();
+    views.forEach((view) => {
+      const viewerKey =
+        view.viewerType === ViewerType.INFLUENCER
+          ? `influencer-${view.viewerInfluencerId}`
+          : `brand-${view.viewerBrandId}`;
+      uniqueViewers.add(viewerKey);
+    });
+    const totalViews = uniqueViewers.size;
 
-    // Calculate user type breakdown (brands and influencers with their follower breakdown)
-    const userTypeBreakdown =
-      (!analyticsDto.userType || analyticsDto.userType === UserTypeFilter.ALL)
-        ? await this.calculateUserTypeBreakdown(views, userId, userType)
-        : null;
+    // Calculate breakdown based on breakdownBy parameter
+    let followerBreakdown;
+    let userTypeBreakdown;
+
+    if (analyticsDto.breakdownBy === BreakdownType.USERTYPE_WISE) {
+      // Only calculate user type breakdown
+      userTypeBreakdown = await this.calculateUserTypeBreakdown(views, userId, userType);
+    } else {
+      // Only calculate follower breakdown (default)
+      followerBreakdown = await this.calculateFollowerBreakdown(
+        views,
+        userId,
+        userType,
+        analyticsDto.followerType,
+      );
+    }
 
     // Calculate time series data
     const timeSeriesData = await this.calculateTimeSeriesData(
@@ -1802,40 +1816,42 @@ export class PostService {
       endDate,
     );
     const growthPercentage = this.calculateGrowthPercentage(
-      followerBreakdown.total,
+      totalViews,
       previousPeriodData,
     );
 
+    // Build response based on breakdown type
     const response: ProfileViewsResponseDto = {
       type: 'profile_views',
-      totalViews: followerBreakdown.total,
+      totalViews,
       growthPercentage,
-      followers: {
-        count: followerBreakdown.followers,
-        percentage: this.calculatePercentage(
-          followerBreakdown.followers,
-          followerBreakdown.total,
-        ),
-      },
-      nonFollowers: {
-        count: followerBreakdown.nonFollowers,
-        percentage: this.calculatePercentage(
-          followerBreakdown.nonFollowers,
-          followerBreakdown.total,
-        ),
-      },
       timeSeriesData,
       topBrandCategories: brandCategories,
       topCreatorCategories: creatorCategories,
       timeframe: analyticsDto.timeframe || TimeframeType.THIRTY_DAYS,
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
-    };
+    } as any;
 
-    // Add user type breakdown if calculated
-    if (userTypeBreakdown) {
+    // Add breakdown fields based on breakdown type
+    if (analyticsDto.breakdownBy === BreakdownType.USERTYPE_WISE && userTypeBreakdown) {
       response.brands = userTypeBreakdown.brands;
       response.influencers = userTypeBreakdown.influencers;
+    } else if (followerBreakdown) {
+      response.followers = {
+        count: followerBreakdown.followers,
+        percentage: this.calculatePercentage(
+          followerBreakdown.followers,
+          followerBreakdown.total,
+        ),
+      };
+      response.nonFollowers = {
+        count: followerBreakdown.nonFollowers,
+        percentage: this.calculatePercentage(
+          followerBreakdown.nonFollowers,
+          followerBreakdown.total,
+        ),
+      };
     }
 
     return response;
@@ -1909,19 +1925,25 @@ export class PostService {
       ],
     });
 
-    // Calculate follower breakdown
-    const followerBreakdown = await this.calculateFollowerBreakdown(
-      views,
-      userId,
-      userType,
-      analyticsDto.followerType,
-    );
+    // Calculate total views
+    const totalViews = views.length;
 
-    // Calculate user type breakdown (brands and influencers with their follower breakdown)
-    const userTypeBreakdown =
-      (!analyticsDto.userType || analyticsDto.userType === UserTypeFilter.ALL)
-        ? await this.calculateUserTypeBreakdown(views, userId, userType)
-        : null;
+    // Calculate breakdown based on breakdownBy parameter
+    let followerBreakdown;
+    let userTypeBreakdown;
+
+    if (analyticsDto.breakdownBy === BreakdownType.USERTYPE_WISE) {
+      // Only calculate user type breakdown
+      userTypeBreakdown = await this.calculateUserTypeBreakdown(views, userId, userType);
+    } else {
+      // Only calculate follower breakdown (default)
+      followerBreakdown = await this.calculateFollowerBreakdown(
+        views,
+        userId,
+        userType,
+        analyticsDto.followerType,
+      );
+    }
 
     // Calculate time series data
     const timeSeriesData = await this.calculateTimeSeriesData(
@@ -1946,28 +1968,15 @@ export class PostService {
       endDate,
     );
     const growthPercentage = this.calculateGrowthPercentage(
-      followerBreakdown.total,
+      totalViews,
       previousPeriodData,
     );
 
+    // Build response based on breakdown type
     const response: PostViewsResponseDto = {
       type: 'post_views',
-      totalViews: followerBreakdown.total,
+      totalViews,
       growthPercentage,
-      followers: {
-        count: followerBreakdown.followers,
-        percentage: this.calculatePercentage(
-          followerBreakdown.followers,
-          followerBreakdown.total,
-        ),
-      },
-      nonFollowers: {
-        count: followerBreakdown.nonFollowers,
-        percentage: this.calculatePercentage(
-          followerBreakdown.nonFollowers,
-          followerBreakdown.total,
-        ),
-      },
       timeSeriesData,
       topBrandCategories: brandCategories,
       topCreatorCategories: creatorCategories,
@@ -1975,12 +1984,27 @@ export class PostService {
       timeframe: analyticsDto.timeframe || TimeframeType.THIRTY_DAYS,
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
-    };
+    } as any;
 
-    // Add user type breakdown if calculated
-    if (userTypeBreakdown) {
+    // Add breakdown fields based on breakdown type
+    if (analyticsDto.breakdownBy === BreakdownType.USERTYPE_WISE && userTypeBreakdown) {
       response.brands = userTypeBreakdown.brands;
       response.influencers = userTypeBreakdown.influencers;
+    } else if (followerBreakdown) {
+      response.followers = {
+        count: followerBreakdown.followers,
+        percentage: this.calculatePercentage(
+          followerBreakdown.followers,
+          followerBreakdown.total,
+        ),
+      };
+      response.nonFollowers = {
+        count: followerBreakdown.nonFollowers,
+        percentage: this.calculatePercentage(
+          followerBreakdown.nonFollowers,
+          followerBreakdown.total,
+        ),
+      };
     }
 
     return response;
@@ -2662,22 +2686,26 @@ export class PostService {
       })),
     ];
 
-    const followerBreakdown = await this.calculateInteractionsFollowerBreakdown(
-      interactions,
-      userId,
-      userType,
-      analyticsDto.followerType,
-    );
+    // Calculate breakdown based on breakdownBy parameter
+    let followerBreakdown;
+    let userTypeBreakdown;
 
-    // Calculate user type breakdown (brands and influencers with their follower breakdown)
-    const userTypeBreakdown =
-      (!analyticsDto.userType || analyticsDto.userType === UserTypeFilter.ALL)
-        ? await this.calculateInteractionsUserTypeBreakdown(
-            interactions,
-            userId,
-            userType,
-          )
-        : null;
+    if (analyticsDto.breakdownBy === BreakdownType.USERTYPE_WISE) {
+      // Only calculate user type breakdown
+      userTypeBreakdown = await this.calculateInteractionsUserTypeBreakdown(
+        interactions,
+        userId,
+        userType,
+      );
+    } else {
+      // Only calculate follower breakdown (default)
+      followerBreakdown = await this.calculateInteractionsFollowerBreakdown(
+        interactions,
+        userId,
+        userType,
+        analyticsDto.followerType,
+      );
+    }
 
     // Calculate growth for interactions
     const previousPeriodInteractions = await this.getPreviousPeriodInteractions(
@@ -2712,37 +2740,39 @@ export class PostService {
     // Get top posts by likes
     const topPostsByLikes = await this.getTopPostsByLikes(postIds, startDate, endDate, 3);
 
+    // Build response based on breakdown type
     const response: InteractionsResponseDto = {
       type: 'interactions',
       totalInteractions,
       totalInteractionsFormatted: this.formatNumberIndian(totalInteractions),
       growth,
       growthFormatted: `${growth >= 0 ? '+' : '-'}${growthFormatted} vs last month`,
-      followers: {
-        count: followerBreakdown.followers,
-        percentage: this.calculatePercentage(
-          followerBreakdown.followers,
-          followerBreakdown.total,
-        ),
-      },
-      nonFollowers: {
-        count: followerBreakdown.nonFollowers,
-        percentage: this.calculatePercentage(
-          followerBreakdown.nonFollowers,
-          followerBreakdown.total,
-        ),
-      },
       metrics,
       topPostsByLikes,
       timeframe: analyticsDto.timeframe || TimeframeType.THIRTY_DAYS,
       startDate: this.formatDateShort(startDate),
       endDate: this.formatDateShort(endDate),
-    };
+    } as any;
 
-    // Add user type breakdown if calculated
-    if (userTypeBreakdown) {
+    // Add breakdown fields based on breakdown type
+    if (analyticsDto.breakdownBy === BreakdownType.USERTYPE_WISE && userTypeBreakdown) {
       response.brands = userTypeBreakdown.brands;
       response.influencers = userTypeBreakdown.influencers;
+    } else if (followerBreakdown) {
+      response.followers = {
+        count: followerBreakdown.followers,
+        percentage: this.calculatePercentage(
+          followerBreakdown.followers,
+          followerBreakdown.total,
+        ),
+      };
+      response.nonFollowers = {
+        count: followerBreakdown.nonFollowers,
+        percentage: this.calculatePercentage(
+          followerBreakdown.nonFollowers,
+          followerBreakdown.total,
+        ),
+      };
     }
 
     return response;

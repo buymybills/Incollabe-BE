@@ -5,7 +5,11 @@ import {
   DataType,
   CreatedAt,
   UpdatedAt,
+  BelongsTo,
+  ForeignKey,
 } from 'sequelize-typescript';
+import { Campaign } from '../../campaign/models/campaign.model';
+import { CampaignApplication } from '../../campaign/models/campaign-application.model';
 
 export enum ReviewerType {
   BRAND = 'brand',
@@ -25,6 +29,7 @@ export class CampaignReview extends Model {
   })
   declare id: number;
 
+  @ForeignKey(() => Campaign)
   @Column({
     type: DataType.INTEGER,
     allowNull: false,
@@ -32,6 +37,7 @@ export class CampaignReview extends Model {
   })
   declare campaignId: number;
 
+  @ForeignKey(() => CampaignApplication)
   @Column({
     type: DataType.INTEGER,
     allowNull: false,
@@ -85,4 +91,11 @@ export class CampaignReview extends Model {
 
   @UpdatedAt
   declare updatedAt: Date;
+
+  // Associations
+  @BelongsTo(() => Campaign)
+  declare campaign: Campaign;
+
+  @BelongsTo(() => CampaignApplication)
+  declare campaignApplication: CampaignApplication;
 }
