@@ -51,6 +51,7 @@ import { InAppNotificationService } from '../shared/in-app-notification.service'
 import { NotificationType } from '../shared/models/in-app-notification.model';
 import { S3Service } from '../shared/s3.service';
 import { RazorpayService } from '../shared/razorpay.service';
+import { PostViewService } from './services/post-view.service';
 import { Op, Sequelize } from 'sequelize';
 
 @Injectable()
@@ -77,6 +78,7 @@ export class PostService {
     private readonly inAppNotificationService: InAppNotificationService,
     private readonly s3Service: S3Service,
     private readonly razorpayService: RazorpayService,
+    private readonly postViewService: PostViewService,
   ) {}
 
   async createPost(
@@ -864,6 +866,19 @@ export class PostService {
 
     if (!post) {
       throw new NotFoundException('Post not found');
+    }
+
+    // Automatically track view (fire-and-forget, don't block response)
+    if (currentUserId && currentUserType) {
+      // Track view asynchronously without blocking the response
+      this.postViewService.trackView({
+        postId,
+        viewerId: currentUserId,
+        viewerType: currentUserType === UserType.INFLUENCER ? 'influencer' : 'brand',
+      }).catch(error => {
+        // Log error but don't throw - view tracking should not block post retrieval
+        console.error('Error tracking post view:', error);
+      });
     }
 
     // Add isLikedByCurrentUser field and media array
