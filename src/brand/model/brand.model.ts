@@ -299,6 +299,14 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
   declare instagramMediaCount: number;
 
   @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    field: 'profile_views_count',
+  })
+  declare profileViewsCount: number;
+
+  @Column({
     type: DataType.TEXT,
     allowNull: true,
     field: 'instagram_profile_picture_url',

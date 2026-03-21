@@ -84,6 +84,8 @@ import { Post } from '../post/models/post.model';
 import { PostView } from '../post/models/post-view.model';
 import { Like } from '../post/models/like.model';
 import { Share } from '../post/models/share.model';
+import { ProfileView } from './models/profile-view.model';
+import { ProfileViewService } from './services/profile-view.service';
 import { CreatorStudioService } from './creator-studio.service';
 import { CreatorStudioController } from './creator-studio.controller';
 
@@ -129,6 +131,7 @@ import { CreatorStudioController } from './creator-studio.controller';
       PostView,
       Like,
       Share,
+      ProfileView,
     ]),
   ],
   controllers: [
@@ -180,6 +183,7 @@ import { CreatorStudioController } from './creator-studio.controller';
     AppVersionService,
     AIScoringService,
     InAppNotificationService,
+    ProfileViewService,
     CreatorStudioService,
   ],
   exports: [
@@ -212,6 +216,7 @@ import { CreatorStudioController } from './creator-studio.controller';
     AppVersionService,
     AIScoringService,
     InAppNotificationService,
+    ProfileViewService,
     CreatorStudioService,
   ],
 })

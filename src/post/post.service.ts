@@ -10,6 +10,7 @@ import { Like, LikerType } from './models/like.model';
 import { Follow, FollowerType, FollowingType } from './models/follow.model';
 import { Share, SharerType } from './models/share.model';
 import { PostView, ViewerType } from './models/post-view.model';
+import { ProfileView, ViewedUserType, ViewerType as ProfileViewerType } from '../shared/models/profile-view.model';
 import { PostBoostInvoice, InvoiceStatus, PaymentMethod } from './models/post-boost-invoice.model';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
@@ -67,6 +68,8 @@ export class PostService {
     private readonly shareModel: typeof Share,
     @InjectModel(PostView)
     private readonly postViewModel: typeof PostView,
+    @InjectModel(ProfileView)
+    private readonly profileViewModel: typeof ProfileView,
     @InjectModel(PostBoostInvoice)
     private readonly postBoostInvoiceModel: typeof PostBoostInvoice,
     @InjectModel(Influencer)
@@ -1895,7 +1898,7 @@ export class PostService {
       include: [
         {
           model: Influencer,
-          attributes: ['id', 'fullName', 'username', 'profileImage'],
+          attributes: ['id', 'name', 'username', 'profileImage'],
         },
         {
           model: Brand,
@@ -1983,7 +1986,7 @@ export class PostService {
 
   /**
    * Get profile views analytics
-   * Profile views = unique viewers across all posts by the user
+   * Uses actual profile views from profile_views table (unique viewers)
    */
   async getProfileViewsAnalytics(
     userId: number,
@@ -1999,47 +2002,30 @@ export class PostService {
       analyticsDto.followerType = FollowerFilterType.ALL;
     }
 
-    // Get all posts by this user
-    const userPosts = await this.postModel.findAll({
-      where: {
-        ...(userType === UserType.INFLUENCER
-          ? { influencerId: userId }
-          : { brandId: userId }),
-        isActive: true,
-      },
-      attributes: ['id'],
-    });
-
-    const postIds = userPosts.map((p) => p.id);
-
-    if (postIds.length === 0) {
-      return this.getEmptyAnalyticsResponse(
-        'profile_views',
-        startDate,
-        endDate,
-        analyticsDto.timeframe || TimeframeType.THIRTY_DAYS,
-      );
-    }
-
-    // Get all views for these posts
+    // Build where clause for profile views
     const viewsWhere: any = {
-      postId: { [Op.in]: postIds },
+      viewedUserType: userType === UserType.INFLUENCER
+        ? ViewedUserType.INFLUENCER
+        : ViewedUserType.BRAND,
+      ...(userType === UserType.INFLUENCER
+        ? { viewedInfluencerId: userId }
+        : { viewedBrandId: userId }),
       viewedAt: { [Op.between]: [startDate, endDate] },
     };
 
-    // Apply user type filter
+    // Apply viewer type filter if specified
     if (
       analyticsDto.userType &&
       analyticsDto.userType !== UserTypeFilter.ALL
     ) {
       viewsWhere.viewerType =
         analyticsDto.userType === UserTypeFilter.BRANDS
-          ? ViewerType.BRAND
-          : ViewerType.INFLUENCER;
+          ? ProfileViewerType.BRAND
+          : ProfileViewerType.INFLUENCER;
     }
 
-    // Get unique viewers (profile views)
-    const views = await this.postViewModel.findAll({
+    // Get profile views (already unique by design)
+    const views = await this.profileViewModel.findAll({
       where: viewsWhere,
       attributes: [
         'viewerType',
@@ -2047,92 +2033,114 @@ export class PostService {
         'viewerBrandId',
         'viewedAt',
       ],
-      group: ['viewerType', 'viewerInfluencerId', 'viewerBrandId', 'viewedAt'],
     });
 
-    // Calculate total views (unique viewers)
-    const uniqueViewers = new Set();
-    views.forEach((view) => {
-      const viewerKey =
-        view.viewerType === ViewerType.INFLUENCER
-          ? `influencer-${view.viewerInfluencerId}`
-          : `brand-${view.viewerBrandId}`;
-      uniqueViewers.add(viewerKey);
-    });
-    const totalViews = uniqueViewers.size;
+    // Total views = count of records (each record is a unique viewer)
+    const totalViews = views.length;
 
-    // Calculate breakdown based on breakdownBy parameter
-    let followerBreakdown;
-    let userTypeBreakdown;
+    // Split views by viewer type
+    const brandViews = views.filter(v => v.viewerType === ProfileViewerType.BRAND);
+    const influencerViews = views.filter(v => v.viewerType === ProfileViewerType.INFLUENCER);
 
-    if (analyticsDto.breakdownBy === BreakdownType.USERTYPE_WISE) {
-      // Only calculate user type breakdown
-      userTypeBreakdown = await this.calculateUserTypeBreakdown(views, userId, userType);
-    } else {
-      // Only calculate follower breakdown (default)
-      followerBreakdown = await this.calculateFollowerBreakdown(
-        views,
-        userId,
-        userType,
-        analyticsDto.followerType,
-      );
+    // Calculate follower breakdown
+    let followerCount = 0;
+    let nonFollowerCount = 0;
+    let brandFollowers = 0;
+    let brandNonFollowers = 0;
+    let influencerFollowers = 0;
+    let influencerNonFollowers = 0;
+
+    for (const view of views) {
+      const isFollower = await this.followModel.findOne({
+        where: {
+          followingType: userType === UserType.INFLUENCER ? FollowingType.INFLUENCER : FollowingType.BRAND,
+          ...(userType === UserType.INFLUENCER
+            ? { followingInfluencerId: userId }
+            : { followingBrandId: userId }),
+          followerType: view.viewerType === ProfileViewerType.INFLUENCER
+            ? FollowerType.INFLUENCER
+            : FollowerType.BRAND,
+          ...(view.viewerType === ProfileViewerType.INFLUENCER
+            ? { followerInfluencerId: view.viewerInfluencerId }
+            : { followerBrandId: view.viewerBrandId }),
+        },
+      });
+
+      if (isFollower) {
+        followerCount++;
+        if (view.viewerType === ProfileViewerType.BRAND) {
+          brandFollowers++;
+        } else {
+          influencerFollowers++;
+        }
+      } else {
+        nonFollowerCount++;
+        if (view.viewerType === ProfileViewerType.BRAND) {
+          brandNonFollowers++;
+        } else {
+          influencerNonFollowers++;
+        }
+      }
     }
 
-    // Calculate time series data
-    const timeSeriesData = await this.calculateTimeSeriesData(
-      postIds,
-      startDate,
-      endDate,
-      userId,
-      userType,
-    );
+    // Calculate previous period for growth
+    const periodLength = endDate.getTime() - startDate.getTime();
+    const previousStartDate = new Date(startDate.getTime() - periodLength);
+    const previousViews = await this.profileViewModel.count({
+      where: {
+        viewedUserType: userType === UserType.INFLUENCER
+          ? ViewedUserType.INFLUENCER
+          : ViewedUserType.BRAND,
+        ...(userType === UserType.INFLUENCER
+          ? { viewedInfluencerId: userId }
+          : { viewedBrandId: userId }),
+        viewedAt: { [Op.between]: [previousStartDate, startDate] },
+      },
+    });
 
-    // Calculate category breakdown
-    const { brandCategories, creatorCategories } =
-      await this.calculateCategoryBreakdown(views);
+    const growthPercentage = previousViews > 0
+      ? ((totalViews - previousViews) / previousViews) * 100
+      : totalViews > 0 ? 100 : 0;
 
-    // Calculate growth percentage
-    const previousPeriodData = await this.getPreviousPeriodViews(
-      postIds,
-      startDate,
-      endDate,
-    );
-    const growthPercentage = this.calculateGrowthPercentage(
-      totalViews,
-      previousPeriodData,
-    );
-
-    // Build response based on breakdown type
+    // Build response
     const response: ProfileViewsResponseDto = {
       type: 'profile_views',
       totalViews,
-      growthPercentage,
-      timeSeriesData,
-      topBrandCategories: brandCategories,
-      topCreatorCategories: creatorCategories,
+      growthPercentage: Math.round(growthPercentage),
       timeframe: analyticsDto.timeframe || TimeframeType.THIRTY_DAYS,
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
     } as any;
 
-    // Add breakdown fields based on breakdown type
-    if (analyticsDto.breakdownBy === BreakdownType.USERTYPE_WISE && userTypeBreakdown) {
-      response.brands = userTypeBreakdown.brands;
-      response.influencers = userTypeBreakdown.influencers;
-    } else if (followerBreakdown) {
+    // Add breakdown based on type
+    if (analyticsDto.breakdownBy === BreakdownType.USERTYPE_WISE) {
+      const brandTotal = brandViews.length;
+      const influencerTotal = influencerViews.length;
+
+      response.brands = {
+        total: brandTotal,
+        percentage: this.calculatePercentage(brandTotal, totalViews),
+        followers: brandFollowers,
+        followersPercentage: this.calculatePercentage(brandFollowers, brandTotal),
+        nonFollowers: brandNonFollowers,
+        nonFollowersPercentage: this.calculatePercentage(brandNonFollowers, brandTotal),
+      };
+      response.influencers = {
+        total: influencerTotal,
+        percentage: this.calculatePercentage(influencerTotal, totalViews),
+        followers: influencerFollowers,
+        followersPercentage: this.calculatePercentage(influencerFollowers, influencerTotal),
+        nonFollowers: influencerNonFollowers,
+        nonFollowersPercentage: this.calculatePercentage(influencerNonFollowers, influencerTotal),
+      };
+    } else {
       response.followers = {
-        count: followerBreakdown.followers,
-        percentage: this.calculatePercentage(
-          followerBreakdown.followers,
-          followerBreakdown.total,
-        ),
+        count: followerCount,
+        percentage: this.calculatePercentage(followerCount, totalViews),
       };
       response.nonFollowers = {
-        count: followerBreakdown.nonFollowers,
-        percentage: this.calculatePercentage(
-          followerBreakdown.nonFollowers,
-          followerBreakdown.total,
-        ),
+        count: nonFollowerCount,
+        percentage: this.calculatePercentage(nonFollowerCount, totalViews),
       };
     }
 

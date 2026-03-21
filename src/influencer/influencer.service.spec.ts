@@ -10,6 +10,7 @@ import { InAppNotificationService } from '../shared/in-app-notification.service'
 import { DeviceTokenService } from '../shared/device-token.service';
 import { AppVersionService } from '../shared/services/app-version.service';
 import { AppReviewService } from '../shared/services/app-review.service';
+import { ProfileViewService } from '../shared/services/profile-view.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import { CampaignService } from '../campaign/campaign.service';
 import { MaxCampaignScoringQueueService } from '../campaign/services/max-campaign-scoring-queue.service';
@@ -169,6 +170,12 @@ const mockAppReviewService = {
   trackReviewPrompt: jest.fn(),
   shouldShowReviewPrompt: jest.fn().mockResolvedValue(false),
   markAsReviewed: jest.fn(),
+};
+
+const mockProfileViewService = {
+  trackView: jest.fn().mockResolvedValue({ success: true, isNewView: true }),
+  getProfileViewCount: jest.fn().mockResolvedValue(0),
+  getProfileViewers: jest.fn().mockResolvedValue({ viewers: [], total: 0, page: 1, limit: 20, totalPages: 0 }),
 };
 
 const mockCampaignService = {
@@ -379,6 +386,10 @@ describe('InfluencerService', () => {
         {
           provide: AppReviewService,
           useValue: mockAppReviewService,
+        },
+        {
+          provide: ProfileViewService,
+          useValue: mockProfileViewService,
         },
         {
           provide: CampaignService,

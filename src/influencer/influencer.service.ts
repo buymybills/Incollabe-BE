@@ -17,6 +17,7 @@ import { NotificationType } from '../shared/models/in-app-notification.model';
 import { AppVersionService } from '../shared/services/app-version.service';
 import { AppReviewService } from '../shared/services/app-review.service';
 import { OtpService } from '../shared/services/otp.service';
+import { ProfileViewService } from '../shared/services/profile-view.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto';
 import { RespondInvitationDto } from './dto/respond-invitation.dto';
@@ -150,6 +151,7 @@ export class InfluencerService {
     private readonly brandModel: typeof Brand,
     private readonly chatService: ChatService,
     private readonly inAppNotificationService: InAppNotificationService,
+    private readonly profileViewService: ProfileViewService,
   ) {}
 
   /**
@@ -232,6 +234,19 @@ export class InfluencerService {
         },
       });
       isFollowing = !!followRecord;
+    }
+
+    // Automatically track profile view (fire-and-forget, don't block response)
+    if (currentUserId && currentUserType) {
+      this.profileViewService.trackView({
+        viewedUserId: influencerId,
+        viewedUserType: 'influencer',
+        viewerId: currentUserId,
+        viewerType: currentUserType,
+      }).catch(error => {
+        // Log error but don't throw - profile view tracking should not block profile retrieval
+        console.error('Error tracking influencer profile view:', error);
+      });
     }
 
     // Check and reset weekly credits if needed

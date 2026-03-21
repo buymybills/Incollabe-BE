@@ -22,6 +22,7 @@ import { MasterDataService } from '../shared/services/master-data.service';
 import { ProfileReviewService } from '../admin/profile-review.service';
 import { EncryptionService } from '../shared/services/encryption.service';
 import { AppReviewService } from '../shared/services/app-review.service';
+import { ProfileViewService } from '../shared/services/profile-view.service';
 import {
   ProfileReview,
   ProfileType,
@@ -71,6 +72,7 @@ export class BrandService {
     private readonly profileReviewService: ProfileReviewService,
     private readonly encryptionService: EncryptionService,
     private readonly appReviewService: AppReviewService,
+    private readonly profileViewService: ProfileViewService,
   ) {}
 
   async getBrandProfile(
@@ -133,6 +135,19 @@ export class BrandService {
         },
       });
       isFollowing = !!followRecord;
+    }
+
+    // Automatically track profile view (fire-and-forget, don't block response)
+    if (currentUserId && currentUserType) {
+      this.profileViewService.trackView({
+        viewedUserId: brandId,
+        viewedUserType: 'brand',
+        viewerId: currentUserId,
+        viewerType: currentUserType,
+      }).catch(error => {
+        // Log error but don't throw - profile view tracking should not block profile retrieval
+        console.error('Error tracking brand profile view:', error);
+      });
     }
 
     // Calculate profile completion, platform metrics, verification status, campaigns, and app review

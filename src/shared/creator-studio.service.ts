@@ -104,8 +104,7 @@ export class CreatorStudioService {
 
   /**
    * Calculate profile views for the given time period
-   * NOTE: This is an approximation using post views as a proxy
-   * TODO: Implement actual profile view tracking in the future
+   * Uses actual profile view count from the user model
    */
   private async calculateProfileViews(
     userId: number,
@@ -114,41 +113,19 @@ export class CreatorStudioService {
     endDate: Date,
   ): Promise<number> {
     try {
-      // Build where clause for user's posts
-      const postWhereClause: any = {};
+      // Get the total profile views count from the user model
+      // Note: We return the total count, not filtered by date range, as the count is cumulative
       if (userType === CreatorType.INFLUENCER) {
-        postWhereClause.influencerId = userId;
-        postWhereClause.userType = UserType.INFLUENCER;
+        const influencer = await Influencer.findByPk(userId, {
+          attributes: ['profileViewsCount'],
+        });
+        return influencer?.profileViewsCount || 0;
       } else {
-        postWhereClause.brandId = userId;
-        postWhereClause.userType = UserType.BRAND;
+        const brand = await Brand.findByPk(userId, {
+          attributes: ['profileViewsCount'],
+        });
+        return brand?.profileViewsCount || 0;
       }
-
-      // Get all post IDs for this user
-      const userPosts = await Post.findAll({
-        where: postWhereClause,
-        attributes: ['id'],
-        raw: true,
-      });
-
-      if (userPosts.length === 0) {
-        return 0;
-      }
-
-      const postIds = userPosts.map((p: any) => p.id);
-
-      // Count views on these posts that occurred in the timeframe
-      const viewCount = await this.postViewModel.count({
-        where: {
-          postId: { [Op.in]: postIds },
-          viewedAt: {
-            [Op.between]: [startDate, endDate],
-          },
-        },
-      });
-
-      // Multiply by 10 as approximation (people who view posts likely viewed profile)
-      return viewCount * 10;
     } catch (error) {
       console.error('Error calculating profile views:', error);
       return 0;

@@ -17,6 +17,7 @@ import { InAppNotificationService } from '../shared/in-app-notification.service'
 import { S3Service } from '../shared/s3.service';
 import { RazorpayService } from '../shared/razorpay.service';
 import { PostViewService } from './services/post-view.service';
+import { ProfileView } from '../shared/models/profile-view.model';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { FollowDto, FollowUserType } from './dto/follow.dto';
@@ -60,6 +61,12 @@ const mockShareModel = {
 const mockPostViewModel = {
   ...mockModel(),
   findOrCreate: jest.fn(),
+};
+
+const mockProfileViewModel = {
+  ...mockModel(),
+  findOrCreate: jest.fn(),
+  count: jest.fn(),
 };
 
 const mockPostBoostInvoiceModel = {
@@ -162,6 +169,10 @@ describe('PostService', () => {
         {
           provide: getModelToken(PostView),
           useValue: mockPostViewModel,
+        },
+        {
+          provide: getModelToken(ProfileView),
+          useValue: mockProfileViewModel,
         },
         {
           provide: getModelToken(PostBoostInvoice),
