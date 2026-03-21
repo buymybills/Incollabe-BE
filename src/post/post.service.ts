@@ -3893,7 +3893,13 @@ export class PostService {
     const interactionsFollowerBreakdown = await this.getPostInteractionsFollowerBreakdown(postId);
 
     // Get trend data (daily breakdown for the boost period)
-    const trendData = await this.getBoostTrendData(postId, boostedAt, now);
+    const trendData = await this.getBoostTrendData(
+      postId,
+      boostedAt,
+      now,
+      post.userType,
+      post.userType === UserType.INFLUENCER ? post.influencerId : post.brandId,
+    );
 
     return {
       activated: true,
@@ -3949,12 +3955,12 @@ export class PostService {
         COUNT(CASE WHEN f.id IS NULL THEN 1 END) as non_follower_views
       FROM post_views pv
       LEFT JOIN follows f ON (
-        (pv.viewer_type = 'influencer' AND f.follower_type = 'influencer' AND f.follower_influencer_id = pv.viewer_id) OR
-        (pv.viewer_type = 'brand' AND f.follower_type = 'brand' AND f.follower_brand_id = pv.viewer_id)
+        (pv.viewer_type = 'influencer' AND f.follower_type = 'influencer' AND f.follower_influencer_id = pv.viewer_influencer_id) OR
+        (pv.viewer_type = 'brand' AND f.follower_type = 'brand' AND f.follower_brand_id = pv.viewer_brand_id)
       ) AND (
-        (f.followed_type = :postUserType AND
-         ((f.followed_type = 'influencer' AND f.followed_influencer_id = :postUserId) OR
-          (f.followed_type = 'brand' AND f.followed_brand_id = :postUserId)))
+        (f.following_type = :postUserType AND
+         ((f.following_type = 'influencer' AND f.following_influencer_id = :postUserId) OR
+          (f.following_type = 'brand' AND f.following_brand_id = :postUserId)))
       )
       WHERE pv.post_id = :postId
     `, {
@@ -4014,9 +4020,9 @@ export class PostService {
         (interactions.user_type = 'influencer' AND f.follower_type = 'influencer' AND f.follower_influencer_id = interactions.influencer_id) OR
         (interactions.user_type = 'brand' AND f.follower_type = 'brand' AND f.follower_brand_id = interactions.brand_id)
       ) AND (
-        (f.followed_type = :postUserType AND
-         ((f.followed_type = 'influencer' AND f.followed_influencer_id = :postUserId) OR
-          (f.followed_type = 'brand' AND f.followed_brand_id = :postUserId)))
+        (f.following_type = :postUserType AND
+         ((f.following_type = 'influencer' AND f.following_influencer_id = :postUserId) OR
+          (f.following_type = 'brand' AND f.following_brand_id = :postUserId)))
       )
     `, {
       replacements: {
@@ -4046,7 +4052,13 @@ export class PostService {
   /**
    * Get trend data for views and interactions over the boost period
    */
-  private async getBoostTrendData(postId: number, boostedAt: Date, currentDate: Date) {
+  private async getBoostTrendData(
+    postId: number,
+    boostedAt: Date,
+    currentDate: Date,
+    postUserType: UserType,
+    postUserId: number,
+  ) {
     // Generate daily trend data for the boost period
     const days = Math.min(
       Math.ceil((currentDate.getTime() - boostedAt.getTime()) / (1000 * 60 * 60 * 24)),
@@ -4067,13 +4079,22 @@ export class PostService {
           COUNT(CASE WHEN f.id IS NULL THEN 1 END) as non_follower_views
         FROM post_views pv
         LEFT JOIN follows f ON (
-          (pv.viewer_type = 'influencer' AND f.follower_type = 'influencer' AND f.follower_influencer_id = pv.viewer_id) OR
-          (pv.viewer_type = 'brand' AND f.follower_type = 'brand' AND f.follower_brand_id = pv.viewer_id)
+          (pv.viewer_type = 'influencer' AND f.follower_type = 'influencer' AND f.follower_influencer_id = pv.viewer_influencer_id) OR
+          (pv.viewer_type = 'brand' AND f.follower_type = 'brand' AND f.follower_brand_id = pv.viewer_brand_id)
+        ) AND (
+          (f.following_type = :postUserType AND
+           ((f.following_type = 'influencer' AND f.following_influencer_id = :postUserId) OR
+            (f.following_type = 'brand' AND f.following_brand_id = :postUserId)))
         )
         WHERE pv.post_id = :postId
           AND DATE(pv.viewed_at) = DATE(:date)
       `, {
-        replacements: { postId, date },
+        replacements: {
+          postId,
+          date,
+          postUserType,
+          postUserId,
+        },
         type: QueryTypes.SELECT,
       });
 
