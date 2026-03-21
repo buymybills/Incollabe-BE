@@ -33,6 +33,7 @@ import { SearchInfluencersDto } from './dto/search-influencers.dto';
 import { InviteInfluencersDto } from './dto/invite-influencers.dto';
 import { CampaignStatus } from './models/campaign.model';
 import type { RequestWithUser } from '../types/request.types';
+import { GetRatingsDto, UserRatingsStatsDto } from './dto/ratings.dto';
 
 @ApiTags('Campaign')
 @ApiBearerAuth()
@@ -705,6 +706,58 @@ export class CampaignController {
     return this.campaignService.getInfluencerTypes();
   }
 
+  @Get('ratings')
+  @ApiOperation({
+    summary: 'Get campaign ratings for user',
+    description: `Returns all ratings and reviews received by the user (brand or influencer) from completed campaigns, with average rating statistics.
+
+**Response includes conversationId field:**
+Each rating item includes a \`conversationId\` field that can be used to submit a review for the campaign.
+
+**How to submit a review using conversationId:**
+1. Get the \`conversationId\` from the rating item in the response
+2. Call \`POST /api/chat/campaign-conversations/:conversationId/review\` with the review data
+3. Request body: \`{ "rating": 1-5, "reviewText": "Optional review text" }\`
+
+**Example flow:**
+\`\`\`
+// Step 1: Get ratings
+GET /api/campaign/ratings
+Response: {
+  "ratings": [{
+    "conversationId": 321,
+    "campaignTitle": "Spring Street Style Edit",
+    "hasUserRated": false,
+    ...
+  }]
+}
+
+// Step 2: Submit review using conversationId
+POST /api/chat/campaign-conversations/321/review
+Body: { "rating": 5, "reviewText": "Great collaboration!" }
+\`\`\`
+
+**Note:** The \`hasUserRated\` field indicates if the user has already submitted a review for that campaign. If \`true\`, the review fields (\`userRatingForBrand\`, \`userReviewForBrand\`) will contain the previously submitted review.`,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Ratings retrieved successfully',
+    type: UserRatingsStatsDto,
+  })
+  @ApiQuery({ name: 'timeframe', required: false, enum: ['last_30_days', 'last_90_days', 'all_time'], description: 'Timeframe for ratings (default: last_30_days)' })
+  @ApiQuery({ name: 'startDate', required: false, type: String, description: 'Custom start date (YYYY-MM-DD), overrides timeframe' })
+  @ApiQuery({ name: 'endDate', required: false, type: String, description: 'Custom end date (YYYY-MM-DD), overrides timeframe' })
+  async getUserRatings(
+    @Query() ratingsDto: GetRatingsDto,
+    @Req() req: RequestWithUser,
+  ): Promise<UserRatingsStatsDto> {
+    return await this.campaignService.getUserRatings(
+      req.user.id,
+      req.user.userType,
+      ratingsDto,
+    );
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get campaign by ID',
@@ -1289,6 +1342,103 @@ export class CampaignController {
     return this.campaignService.inviteInfluencers(inviteDto, req.user.id);
   }
 
+  @Get(':campaignId/invitations')
+  @ApiOperation({
+    summary: 'Get campaign invitations sent by brand',
+    description:
+      'View all invitations sent for a specific campaign with their response status (pending, accepted, declined, expired).',
+  })
+  @ApiParam({
+    name: 'campaignId',
+    type: Number,
+    description: 'Campaign ID',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Invitations retrieved successfully',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          invitations: [
+            {
+              id: 1,
+              status: 'accepted',
+              message: 'We love your content! Would love to collaborate.',
+              expiresAt: '2026-03-07T10:00:00.000Z',
+              respondedAt: '2026-02-28T11:30:00.000Z',
+              responseMessage:
+                'Thank you for the opportunity! Excited to collaborate.',
+              createdAt: '2026-02-28T10:00:00.000Z',
+              influencer: {
+                id: 11,
+                name: 'Dhruv Bhatia',
+                username: 'its_db_here',
+                profileImage: 'https://example.com/profile.jpg',
+                instagramFollowersCount: 15000,
+                isVerified: true,
+              },
+            },
+            {
+              id: 2,
+              status: 'pending',
+              message: 'Great profile! Interested in collaboration.',
+              expiresAt: '2026-03-07T10:00:00.000Z',
+              respondedAt: null,
+              responseMessage: null,
+              createdAt: '2026-02-28T10:05:00.000Z',
+              influencer: {
+                id: 18,
+                name: 'Priya Sharma',
+                username: 'priya_fitness',
+                profileImage: 'https://example.com/priya.jpg',
+                instagramFollowersCount: 25000,
+                isVerified: false,
+              },
+            },
+            {
+              id: 3,
+              status: 'declined',
+              message: 'Would love to work together!',
+              expiresAt: '2026-03-07T10:00:00.000Z',
+              respondedAt: '2026-02-28T12:00:00.000Z',
+              responseMessage:
+                'Thank you, but I have to decline at this time.',
+              createdAt: '2026-02-28T10:10:00.000Z',
+              influencer: {
+                id: 25,
+                name: 'Rahul Kumar',
+                username: 'rahul_tech',
+                profileImage: 'https://example.com/rahul.jpg',
+                instagramFollowersCount: 30000,
+                isVerified: true,
+              },
+            },
+          ],
+          summary: {
+            total: 10,
+            pending: 5,
+            accepted: 3,
+            declined: 2,
+            expired: 0,
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Campaign not found or access denied' })
+  async getCampaignInvitations(
+    @Param('campaignId', ParseIntPipe) campaignId: number,
+    @Req() req: RequestWithUser,
+  ) {
+    if (req.user.userType !== 'brand') {
+      throw new ForbiddenException('Only brands can view campaign invitations');
+    }
+
+    return this.campaignService.getCampaignInvitations(campaignId, req.user.id);
+  }
+
   @Get(':campaignId/applications')
   @ApiOperation({
     summary: 'Get campaign applications for brand',
@@ -1768,4 +1918,5 @@ export class CampaignController {
       req.user.id,
     );
   }
+
 }

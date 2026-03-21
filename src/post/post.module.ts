@@ -2,9 +2,15 @@ import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { PostController } from './post.controller';
 import { PostService } from './post.service';
+import { PostBoostExpiryCronService } from './services/post-boost-expiry.cron';
+import { PostViewService } from './services/post-view.service';
 import { Post } from './models/post.model';
 import { Like } from './models/like.model';
 import { Follow } from './models/follow.model';
+import { Share } from './models/share.model';
+import { PostView } from './models/post-view.model';
+import { ProfileView } from '../shared/models/profile-view.model';
+import { PostBoostInvoice } from './models/post-boost-invoice.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { InfluencerNiche } from '../auth/model/influencer-niche.model';
@@ -18,6 +24,10 @@ import { SharedModule } from '../shared/shared.module';
       Post,
       Like,
       Follow,
+      Share,
+      PostView,
+      ProfileView,
+      PostBoostInvoice,
       Influencer,
       Brand,
       InfluencerNiche,
@@ -27,7 +37,7 @@ import { SharedModule } from '../shared/shared.module';
     SharedModule,
   ],
   controllers: [PostController],
-  providers: [PostService],
+  providers: [PostService, PostViewService, PostBoostExpiryCronService],
   exports: [PostService],
 })
 export class PostModule {}

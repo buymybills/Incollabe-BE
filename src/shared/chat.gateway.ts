@@ -13,7 +13,7 @@ import { Logger, UseGuards, UnauthorizedException } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { GroupChatService } from './group-chat.service';
 import { WsAuthGuard } from './guards/ws-auth.guard';
-import { SendMessageDto, MarkAsReadDto, TypingDto } from './dto/chat.dto';
+import { SendMessageDto, MarkAsReadDto, TypingDto, UpdateUploadProgressDto } from './dto/chat.dto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { ParticipantType } from './models/conversation.model';
@@ -21,6 +21,8 @@ import { NotificationService } from './notification.service';
 import { DeviceTokenService } from './device-token.service';
 import { UserType as DeviceUserType } from './models/device-token.model';
 import { ChatDecryptionService } from './services/chat-decryption.service';
+import { InAppNotificationService } from './in-app-notification.service';
+import { NotificationType } from './models/in-app-notification.model';
 
 @WebSocketGateway({
   cors: {
@@ -53,6 +55,7 @@ export class ChatGateway
     private readonly notificationService: NotificationService,
     private readonly deviceTokenService: DeviceTokenService,
     private readonly chatDecryptionService: ChatDecryptionService,
+    private readonly inAppNotificationService: InAppNotificationService,
   ) { }
 
   afterInit(server: Server) {
@@ -621,6 +624,33 @@ export class ChatGateway
         },
       );
 
+      // Create in-app notification for group chat message
+      await this.inAppNotificationService
+        .createNotification({
+          userId: recipientId,
+          userType: recipientType === ParticipantType.INFLUENCER ? 'influencer' : 'brand',
+          title: `${senderName} in ${group.name}`,
+          body: notificationBody,
+          type: NotificationType.NEW_MESSAGE,
+          actionUrl: deepLinkUrl,
+          actionType: 'view_group_chat',
+          relatedEntityType: 'group_chat',
+          relatedEntityId: groupChatId,
+          metadata: {
+            groupChatId,
+            conversationId,
+            messageId: message.id,
+            senderId,
+            senderType,
+            senderName,
+            groupName: group.name,
+            messageType: message.messageType,
+          },
+        } as any)
+        .catch((error: any) => {
+          console.error('Error creating in-app notification for group chat message:', error);
+        });
+
       console.log('✅ Group push notification sent');
     } catch (error) {
       console.error('❌ GROUP PUSH NOTIFICATION ERROR:', error.message);
@@ -860,6 +890,30 @@ export class ChatGateway
     this.logger.debug(
       `Heartbeat from ${userId}:${userType}, latency: ${latency}ms`,
     );
+  }
+
+  /**
+   * Handle upload progress updates for chunked uploads
+   * Client sends progress updates during multipart upload
+   */
+  @SubscribeMessage('upload:progress')
+  handleUploadProgress(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: UpdateUploadProgressDto,
+  ) {
+    const userId = client.data.userId;
+    const userType = client.data.userType;
+
+    this.logger.debug(
+      `Upload progress from ${userId}:${userType} - ${data.progress}% (${data.bytesUploaded}/${data.totalBytes} bytes)`,
+    );
+
+    // Optionally emit back to the client for confirmation
+    client.emit('upload:progress:ack', {
+      uploadId: data.uploadId,
+      progress: data.progress,
+      timestamp: Date.now(),
+    });
   }
 
   /**
@@ -1455,6 +1509,31 @@ export class ChatGateway
           actionUrl: deepLinkUrl,
         },
       );
+
+      // Create in-app notification for direct chat message
+      await this.inAppNotificationService
+        .createNotification({
+          userId: recipientUserId,
+          userType: recipientUserType === ParticipantType.INFLUENCER ? 'influencer' : 'brand',
+          title: senderName,
+          body: notificationBody,
+          type: NotificationType.NEW_MESSAGE,
+          actionUrl: deepLinkUrl,
+          actionType: 'view_chat',
+          relatedEntityType: 'conversation',
+          relatedEntityId: conversationId,
+          metadata: {
+            conversationId,
+            messageId: message.id,
+            senderId: senderUserId,
+            senderType: senderUserType,
+            senderName,
+            messageType: message.messageType,
+          },
+        } as any)
+        .catch((error: any) => {
+          console.error('Error creating in-app notification for chat message:', error);
+        });
 
       console.log('✅ Push notification sent successfully');
       console.log('===================================\n');

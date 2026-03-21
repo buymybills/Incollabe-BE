@@ -9,6 +9,7 @@ import {
   ForeignKey,
   BelongsTo,
   HasMany,
+  HasOne,
   BeforeCreate,
   BeforeUpdate,
   AfterFind,
@@ -20,6 +21,7 @@ import { City } from '../../shared/models/city.model';
 import { CompanyType } from '../../shared/models/company-type.model';
 import { CustomNiche } from '../../auth/model/custom-niche.model';
 import { Campaign } from '../../campaign/models/campaign.model';
+//import { HypeStoreWallet } from '../../hype-store/models/hype-store-wallet.model';
 import { EncryptionService } from '../../shared/services/encryption.service';
 
 export interface BrandCreationAttributes {
@@ -297,6 +299,14 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
   declare instagramMediaCount: number;
 
   @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    field: 'profile_views_count',
+  })
+  declare profileViewsCount: number;
+
+  @Column({
     type: DataType.TEXT,
     allowNull: true,
     field: 'instagram_profile_picture_url',
@@ -413,6 +423,9 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
 
   @HasMany(() => Campaign, 'brandId')
   declare campaigns?: Campaign[];
+
+  // @HasOne(() => HypeStoreWallet, 'brandId')
+  // declare hypeStoreWallet?: HypeStoreWallet;
 
   // Encryption hooks
   @BeforeCreate

@@ -29,6 +29,7 @@ import { Follow } from '../post/models/follow.model';
 import { Post } from '../post/models/post.model';
 import { CampaignQueryService } from './services/campaign-query.service';
 import { NotificationService } from '../shared/notification.service';
+import { InAppNotificationService } from '../shared/in-app-notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
 import { Experience } from '../influencer/models/experience.model';
 import { CreditTransaction } from '../admin/models/credit-transaction.model';
@@ -42,6 +43,8 @@ import { AIScoringService } from '../shared/services/ai-scoring.service';
 import { MaxCampaignScoringQueueService } from './services/max-campaign-scoring-queue.service';
 import { ChatService } from '../shared/chat.service';
 import { ChatGateway } from '../shared/chat.gateway';
+import { CampaignReview } from '../shared/models/campaign-review.model';
+import { Conversation } from '../shared/models/conversation.model';
 
 const mockModel = () => ({
   findOne: jest.fn(),
@@ -178,6 +181,14 @@ describe('CampaignService', () => {
           useValue: mockModel(),
         },
         {
+          provide: getModelToken(CampaignReview),
+          useValue: mockModel(),
+        },
+        {
+          provide: getModelToken(Conversation),
+          useValue: mockModel(),
+        },
+        {
           provide: WhatsAppService,
           useValue: mockWhatsAppService,
         },
@@ -192,6 +203,15 @@ describe('CampaignService', () => {
         {
           provide: DeviceTokenService,
           useValue: mockDeviceTokenService,
+        },
+        {
+          provide: InAppNotificationService,
+          useValue: {
+            createNotification: jest.fn().mockResolvedValue(undefined),
+            getNotifications: jest.fn().mockResolvedValue([]),
+            markAsRead: jest.fn().mockResolvedValue(undefined),
+            deleteNotification: jest.fn().mockResolvedValue(undefined),
+          },
         },
         {
           provide: AIScoringService,

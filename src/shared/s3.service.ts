@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as AWS from 'aws-sdk';
-import * as crypto from 'crypto';
 import * as fs from 'fs';
 import 'multer';
 
@@ -12,6 +11,7 @@ export class S3Service {
   private cloudFrontDomain: string | null;
   private cloudFrontKeyPairId: string | null;
   private cloudFrontPrivateKey: string | null;
+  private cloudFrontSigner: AWS.CloudFront.Signer | null;
 
   constructor(private configService: ConfigService) {
     this.s3 = new AWS.S3({
@@ -35,17 +35,35 @@ export class S3Service {
     } else {
       this.cloudFrontPrivateKey = this.configService.get('CLOUDFRONT_PRIVATE_KEY') || null;
     }
+
+    // Initialize CloudFront signer if credentials are available
+    if (this.cloudFrontKeyPairId && this.cloudFrontPrivateKey) {
+      this.cloudFrontSigner = new AWS.CloudFront.Signer(
+        this.cloudFrontKeyPairId,
+        this.cloudFrontPrivateKey,
+      );
+    } else {
+      this.cloudFrontSigner = null;
+    }
   }
 
   async uploadFile(
     file: Express.Multer.File,
     key: string,
   ): Promise<AWS.S3.ManagedUpload.SendData> {
-    const uploadParams = {
+    // Detect if the file is a video
+    const isVideo = file.mimetype.startsWith('video/') ||
+                    key.includes('/videos/') ||
+                    key.match(/\.(mp4|mov|avi|quicktime|webm|mkv)$/i);
+
+    const uploadParams: AWS.S3.PutObjectRequest = {
       Bucket: this.bucketName,
       Key: key,
       Body: file.buffer,
       ContentType: file.mimetype,
+      // For videos and images, set ContentDisposition to 'inline' so they open in browser
+      // instead of downloading (important for iOS Safari)
+      ContentDisposition: isVideo || file.mimetype.startsWith('image/') ? 'inline' : undefined,
     };
 
     return this.s3.upload(uploadParams).promise();
@@ -75,7 +93,7 @@ export class S3Service {
     if (this.cloudFrontDomain && this.cloudFrontKeyPairId && this.cloudFrontPrivateKey) {
       return this.getCloudFrontSignedUrl(key, expiresIn);
     }
-
+    
     // Fallback to S3 signed URL
     const params = {
       Bucket: this.bucketName,
@@ -88,71 +106,29 @@ export class S3Service {
 
   /**
    * Generate a CloudFront signed URL for temporary access to a file
+   * Uses AWS SDK's built-in CloudFront signer for proper URL generation
    * @param key - S3 object key (path)
    * @param expiresIn - Expiration time in seconds (default: 2 minutes)
    * @returns CloudFront signed URL string
    */
   private getCloudFrontSignedUrl(key: string, expiresIn: number = 120): string {
-    if (!this.cloudFrontPrivateKey || !this.cloudFrontKeyPairId || !this.cloudFrontDomain) {
+    if (!this.cloudFrontSigner || !this.cloudFrontDomain) {
       throw new Error('CloudFront signing attempted without required configuration');
     }
 
     const url = `https://${this.cloudFrontDomain}/${key}`;
-    const expiresAt = Math.floor(Date.now() / 1000) + expiresIn;
 
-    // Create the policy object
-    const policy = {
-      Statement: [
-        {
-          Resource: url,
-          Condition: {
-            DateLessThan: {
-              'AWS:EpochTime': expiresAt,
-            },
-          },
-        },
-      ],
-    };
+    // CloudFront Signer expects expires in seconds (Unix timestamp), not milliseconds
+    const expiresAt = Math.floor((Date.now() + expiresIn * 1000) / 1000);
 
-    // Encode the policy to URL-safe base64
-    const policyString = JSON.stringify(policy);
-    const encodedPolicy = this.toUrlSafeBase64(Buffer.from(policyString));
-
-    // Sign the policy with the private key using SHA256
-    const signature = crypto
-      .createSign('RSA-SHA256')
-      .update(policyString)
-      .sign(
-        {
-          key: this.cloudFrontPrivateKey,
-          format: 'pem',
-        },
-        'base64',
-      );
-
-    // Convert signature to URL-safe base64
-    const encodedSignature = this.toUrlSafeBase64(Buffer.from(signature, 'base64'));
-
-    // Build the signed URL with properly encoded parameters
-    const signedUrl =
-      `${url}?` +
-      `Policy=${encodedPolicy}` +
-      `&Signature=${encodedSignature}` +
-      `&Key-Pair-Id=${this.cloudFrontKeyPairId}`;
+    // Use AWS SDK's CloudFront signer
+    // CloudFront will serve files with their stored Content-Type from S3 metadata
+    const signedUrl = this.cloudFrontSigner.getSignedUrl({
+      url,
+      expires: expiresAt,
+    });
 
     return signedUrl;
-  }
-
-  /**
-   * Convert base64 string to URL-safe base64
-   * Replaces + with -, / with _, and removes = padding
-   */
-  private toUrlSafeBase64(buffer: Buffer): string {
-    return buffer
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=/g, '');
   }
 
   /**
@@ -216,5 +192,155 @@ export class S3Service {
 
     await this.uploadFile(file, s3Key);
     return this.getFileUrl(s3Key);
+  }
+
+  // ============================================================================
+  // Multipart Upload Methods (Instagram-style chunked uploads for large files)
+  // ============================================================================
+
+  /**
+   * Initiate a multipart upload session
+   * @param key - S3 object key (path/filename)
+   * @param mimeType - File MIME type
+   * @returns Upload ID and key
+   */
+  async initiateMultipartUpload(
+    key: string,
+    mimeType: string,
+  ): Promise<{ uploadId: string; key: string }> {
+    const isVideo = mimeType.startsWith('video/') || key.includes('/videos/');
+
+    const params: AWS.S3.CreateMultipartUploadRequest = {
+      Bucket: this.bucketName,
+      Key: key,
+      ContentType: mimeType,
+      // For videos and images, set ContentDisposition to 'inline'
+      ContentDisposition: isVideo || mimeType.startsWith('image/') ? 'inline' : undefined,
+    };
+
+    const result = await this.s3.createMultipartUpload(params).promise();
+
+    if (!result.UploadId) {
+      throw new Error('Failed to initiate multipart upload: No UploadId returned');
+    }
+
+    return {
+      uploadId: result.UploadId,
+      key: result.Key!,
+    };
+  }
+
+  /**
+   * Generate presigned URLs for uploading parts
+   * @param key - S3 object key
+   * @param uploadId - Upload ID from initiate
+   * @param parts - Number of parts to generate URLs for
+   * @param expiresIn - URL expiration time in seconds (default: 3600 = 1 hour)
+   * @returns Array of presigned URLs
+   */
+  async getPresignedUrlsForParts(
+    key: string,
+    uploadId: string,
+    parts: number,
+    expiresIn: number = 3600,
+  ): Promise<Array<{ partNumber: number; url: string }>> {
+    const presignedUrls: Array<{ partNumber: number; url: string }> = [];
+
+    for (let partNumber = 1; partNumber <= parts; partNumber++) {
+      const params = {
+        Bucket: this.bucketName,
+        Key: key,
+        PartNumber: partNumber,
+        UploadId: uploadId,
+        Expires: expiresIn,
+      };
+
+      const url = await this.s3.getSignedUrlPromise('uploadPart', params);
+      presignedUrls.push({ partNumber, url });
+    }
+
+    return presignedUrls;
+  }
+
+  /**
+   * Complete a multipart upload
+   * @param key - S3 object key
+   * @param uploadId - Upload ID from initiate
+   * @param parts - Array of uploaded parts with ETags
+   * @returns Completed upload location
+   */
+  async completeMultipartUpload(
+    key: string,
+    uploadId: string,
+    parts: Array<{ PartNumber: number; ETag: string }>,
+  ): Promise<{ location: string; bucket: string; key: string }> {
+    const params: AWS.S3.CompleteMultipartUploadRequest = {
+      Bucket: this.bucketName,
+      Key: key,
+      UploadId: uploadId,
+      MultipartUpload: {
+        Parts: parts.sort((a, b) => a.PartNumber - b.PartNumber),
+      },
+    };
+
+    const result = await this.s3.completeMultipartUpload(params).promise();
+
+    return {
+      location: result.Location!,
+      bucket: result.Bucket!,
+      key: result.Key!,
+    };
+  }
+
+  /**
+   * Abort a multipart upload (cleanup incomplete upload)
+   * @param key - S3 object key
+   * @param uploadId - Upload ID from initiate
+   */
+  async abortMultipartUpload(key: string, uploadId: string): Promise<void> {
+    const params: AWS.S3.AbortMultipartUploadRequest = {
+      Bucket: this.bucketName,
+      Key: key,
+      UploadId: uploadId,
+    };
+
+    await this.s3.abortMultipartUpload(params).promise();
+  }
+
+  /**
+   * List uploaded parts for a multipart upload (for resume functionality)
+   * @param key - S3 object key
+   * @param uploadId - Upload ID from initiate
+   * @returns Array of uploaded parts with part numbers and ETags
+   */
+  async listUploadedParts(
+    key: string,
+    uploadId: string,
+  ): Promise<Array<{ PartNumber: number; ETag: string; Size: number }>> {
+    const params: AWS.S3.ListPartsRequest = {
+      Bucket: this.bucketName,
+      Key: key,
+      UploadId: uploadId,
+    };
+
+    try {
+      const result = await this.s3.listParts(params).promise();
+
+      if (!result.Parts || result.Parts.length === 0) {
+        return [];
+      }
+
+      return result.Parts.map((part) => ({
+        PartNumber: part.PartNumber!,
+        ETag: part.ETag!,
+        Size: part.Size!,
+      }));
+    } catch (error) {
+      // If upload doesn't exist or was aborted, return empty array
+      if ((error as any).code === 'NoSuchUpload') {
+        return [];
+      }
+      throw error;
+    }
   }
 }

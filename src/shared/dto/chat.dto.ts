@@ -210,3 +210,116 @@ export class TypingDto {
   @IsNotEmpty()
   conversationId: number;
 }
+
+// Multipart Upload DTOs for chunked large file uploads (Instagram-style)
+export class InitiateMultipartUploadDto {
+  @ApiProperty({ description: 'File name', example: 'video.mp4' })
+  @IsString()
+  @IsNotEmpty()
+  fileName: string;
+
+  @ApiProperty({ description: 'File MIME type', example: 'video/mp4' })
+  @IsString()
+  @IsNotEmpty()
+  mimeType: string;
+
+  @ApiProperty({ description: 'File size in bytes', example: 524288000 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  fileSize: number;
+
+  @ApiProperty({ description: 'File type category', enum: ['image', 'video', 'audio', 'document'] })
+  @IsString()
+  @IsNotEmpty()
+  fileType: 'image' | 'video' | 'audio' | 'document';
+}
+
+export class GetPresignedUrlsDto {
+  @ApiProperty({ description: 'Upload ID from initiate response' })
+  @IsString()
+  @IsNotEmpty()
+  uploadId: string;
+
+  @ApiProperty({ description: 'S3 file key from initiate response' })
+  @IsString()
+  @IsNotEmpty()
+  key: string;
+
+  @ApiProperty({ description: 'Number of parts to upload', example: 10, minimum: 1, maximum: 10000 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(10000)
+  parts: number;
+}
+
+export class CompleteMultipartUploadDto {
+  @ApiProperty({ description: 'Upload ID from initiate response' })
+  @IsString()
+  @IsNotEmpty()
+  uploadId: string;
+
+  @ApiProperty({ description: 'S3 file key from initiate response' })
+  @IsString()
+  @IsNotEmpty()
+  key: string;
+
+  @ApiProperty({
+    description: 'Array of uploaded parts with ETags',
+    example: [{ PartNumber: 1, ETag: '"etag-value"' }],
+    type: [Object],
+  })
+  @IsNotEmpty()
+  parts: Array<{ PartNumber: number; ETag: string }>;
+}
+
+export class AbortMultipartUploadDto {
+  @ApiProperty({ description: 'Upload ID from initiate response' })
+  @IsString()
+  @IsNotEmpty()
+  uploadId: string;
+
+  @ApiProperty({ description: 'S3 file key from initiate response' })
+  @IsString()
+  @IsNotEmpty()
+  key: string;
+}
+
+export class UpdateUploadProgressDto {
+  @ApiProperty({ description: 'Upload ID' })
+  @IsString()
+  @IsNotEmpty()
+  uploadId: string;
+
+  @ApiProperty({ description: 'Upload progress percentage (0-100)', minimum: 0, maximum: 100 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  progress: number;
+
+  @ApiProperty({ description: 'Bytes uploaded so far' })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  bytesUploaded: number;
+
+  @ApiProperty({ description: 'Total file size in bytes' })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  totalBytes: number;
+}
+
+export class GetUploadStatusDto {
+  @ApiProperty({ description: 'Upload ID from initiate response' })
+  @IsString()
+  @IsNotEmpty()
+  uploadId: string;
+
+  @ApiProperty({ description: 'S3 file key from initiate response' })
+  @IsString()
+  @IsNotEmpty()
+  key: string;
+}

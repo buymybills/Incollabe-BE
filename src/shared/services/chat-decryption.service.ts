@@ -110,13 +110,13 @@ export class ChatDecryptionService {
   }
 
   /**
-   * Returns true if content is an E2EE JSON payload (new or legacy format).
+   * Returns true if content is an E2EE JSON payload (group, dual-key, or legacy format).
    */
   private isE2eeContent(content: string): boolean {
     try {
       const p = JSON.parse(content);
       return !!(
-        (p.encryptedKeyForRecipient || p.encryptedKey) &&
+        (p.encryptedKeys || p.encryptedKeyForRecipient || p.encryptedKey) &&
         p.iv &&
         p.ciphertext
       );
@@ -133,7 +133,8 @@ export class ChatDecryptionService {
    *   - RSA-OAEP SHA-256 to wrap the AES key (once for recipient, once for sender)
    *
    * Supports:
-   *   - New format: { encryptedKeyForRecipient, encryptedKeyForSender, iv, ciphertext, version }
+   *   - Group format: { encryptedKeys: { "userId:userType": "base64key", ... }, iv, ciphertext, version }
+   *   - Dual-key format: { encryptedKeyForRecipient, encryptedKeyForSender, iv, ciphertext, version }
    *   - Legacy format: { encryptedKey, iv, ciphertext, version }
    *
    * Returns null (rather than throwing) on any failure so notification sending is never blocked.
@@ -147,8 +148,21 @@ export class ChatDecryptionService {
       const parsed = JSON.parse(encryptedContent);
 
       // Pick the key encrypted for the recipient
-      let encryptedKeyBase64: string | undefined =
-        parsed.encryptedKeyForRecipient ?? parsed.encryptedKey;
+      let encryptedKeyBase64: string | undefined;
+
+      // Group chat multi-recipient format
+      if (parsed.encryptedKeys && typeof parsed.encryptedKeys === 'object') {
+        const recipientKey = `${recipientUserId}:${recipientUserType}`;
+        encryptedKeyBase64 = parsed.encryptedKeys[recipientKey];
+      }
+      // Dual-key format (1-to-1 chat)
+      else if (parsed.encryptedKeyForRecipient) {
+        encryptedKeyBase64 = parsed.encryptedKeyForRecipient;
+      }
+      // Legacy format
+      else if (parsed.encryptedKey) {
+        encryptedKeyBase64 = parsed.encryptedKey;
+      }
 
       if (!encryptedKeyBase64 || !parsed.iv || !parsed.ciphertext) {
         return null;

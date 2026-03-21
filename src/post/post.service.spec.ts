@@ -4,13 +4,20 @@ import { getModelToken } from '@nestjs/sequelize';
 import { Post, UserType } from './models/post.model';
 import { Like, LikerType } from './models/like.model';
 import { Follow, FollowerType, FollowingType } from './models/follow.model';
+import { Share } from './models/share.model';
+import { PostView } from './models/post-view.model';
+import { PostBoostInvoice } from './models/post-boost-invoice.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { InfluencerNiche } from '../auth/model/influencer-niche.model';
 import { BrandNiche } from '../brand/model/brand-niche.model';
 import { NotificationService } from '../shared/notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
+import { InAppNotificationService } from '../shared/in-app-notification.service';
 import { S3Service } from '../shared/s3.service';
+import { RazorpayService } from '../shared/razorpay.service';
+import { PostViewService } from './services/post-view.service';
+import { ProfileView } from '../shared/models/profile-view.model';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { FollowDto, FollowUserType } from './dto/follow.dto';
@@ -46,6 +53,26 @@ const mockFollowModel = {
   ...mockModel(),
 };
 
+const mockShareModel = {
+  ...mockModel(),
+  findOrCreate: jest.fn(),
+};
+
+const mockPostViewModel = {
+  ...mockModel(),
+  findOrCreate: jest.fn(),
+};
+
+const mockProfileViewModel = {
+  ...mockModel(),
+  findOrCreate: jest.fn(),
+  count: jest.fn(),
+};
+
+const mockPostBoostInvoiceModel = {
+  ...mockModel(),
+};
+
 const mockInfluencerModel = {
   ...mockModel(),
 };
@@ -76,9 +103,39 @@ const mockDeviceTokenService = {
   getUserDevices: jest.fn(),
 };
 
+const mockInAppNotificationService = {
+  createNotification: jest.fn().mockResolvedValue({ id: 1 }),
+  getNotifications: jest.fn(),
+  markAsRead: jest.fn(),
+  markAllAsRead: jest.fn(),
+  deleteNotification: jest.fn(),
+  getUnreadCount: jest.fn(),
+};
+
 const mockS3Service = {
   uploadFileToS3: jest.fn(),
   getFileUrl: jest.fn(),
+};
+
+const mockRazorpayService = {
+  createOrder: jest.fn().mockResolvedValue({
+    success: true,
+    orderId: 'order_mock123',
+  }),
+  verifyPaymentSignature: jest.fn().mockReturnValue(true),
+};
+
+const mockPostViewService = {
+  trackView: jest.fn().mockResolvedValue({
+    success: true,
+    message: 'View tracked successfully',
+    isNewView: true,
+  }),
+  getPostViewAnalytics: jest.fn(),
+  getPostViewers: jest.fn(),
+  hasUserViewedPost: jest.fn(),
+  getPostViewCount: jest.fn(),
+  getViewedPostsByUser: jest.fn(),
 };
 
 describe('PostService', () => {
@@ -106,6 +163,22 @@ describe('PostService', () => {
           useValue: mockFollowModel,
         },
         {
+          provide: getModelToken(Share),
+          useValue: mockShareModel,
+        },
+        {
+          provide: getModelToken(PostView),
+          useValue: mockPostViewModel,
+        },
+        {
+          provide: getModelToken(ProfileView),
+          useValue: mockProfileViewModel,
+        },
+        {
+          provide: getModelToken(PostBoostInvoice),
+          useValue: mockPostBoostInvoiceModel,
+        },
+        {
           provide: getModelToken(Influencer),
           useValue: mockInfluencerModel,
         },
@@ -130,8 +203,20 @@ describe('PostService', () => {
           useValue: mockDeviceTokenService,
         },
         {
+          provide: InAppNotificationService,
+          useValue: mockInAppNotificationService,
+        },
+        {
           provide: S3Service,
           useValue: mockS3Service,
+        },
+        {
+          provide: RazorpayService,
+          useValue: mockRazorpayService,
+        },
+        {
+          provide: PostViewService,
+          useValue: mockPostViewService,
         },
       ],
     }).compile();
@@ -373,10 +458,31 @@ describe('PostService', () => {
     it('should like a post when not already liked', async () => {
       const mockPost = {
         id: 1,
+        userType: UserType.INFLUENCER,
+        influencerId: 2, // Different user (post owner)
+        content: 'Test post content',
         increment: jest.fn().mockResolvedValue(true),
       };
 
+      const mockPostOwner = {
+        id: 2,
+        name: 'Post Owner',
+        username: 'postowner',
+      };
+
+      const mockLiker = {
+        id: 1,
+        name: 'Liker User',
+        username: 'liker',
+        profileImage: null,
+      };
+
       postModel.findByPk.mockResolvedValue(mockPost);
+      influencerModel.findByPk.mockImplementation((id: number) => {
+        if (id === 2) return Promise.resolve(mockPostOwner);
+        if (id === 1) return Promise.resolve(mockLiker);
+        return Promise.resolve(null);
+      });
       likeModel.findOne.mockResolvedValue(null); // Not already liked
       likeModel.create.mockResolvedValue({ id: 1 });
 
@@ -428,8 +534,23 @@ describe('PostService', () => {
         userId: 2,
       };
 
+      const mockFollowedBrand = {
+        id: 2,
+        brandName: 'Test Brand',
+        username: 'testbrand',
+      };
+
+      const mockFollowerInfluencer = {
+        id: 1,
+        name: 'Follower User',
+        username: 'follower',
+        profileImage: null,
+      };
+
       followModel.findOne.mockResolvedValue(null); // Not already following
       followModel.create.mockResolvedValue({ id: 1 });
+      brandModel.findByPk.mockResolvedValue(mockFollowedBrand);
+      influencerModel.findByPk.mockResolvedValue(mockFollowerInfluencer);
 
       const result = await service.followUser(
         followDto,
@@ -556,6 +677,10 @@ describe('PostService', () => {
           content: 'Influencer post',
           userType: UserType.INFLUENCER,
           influencerId: 1,
+          isBoosted: false,
+          boostedAt: null,
+          boostExpiresAt: null,
+          viewsCount: 0,
         },
       ];
 
@@ -567,7 +692,19 @@ describe('PostService', () => {
       const result = await service.getPosts(getPostsDto);
 
       expect(result.posts).toEqual(
-        mockPosts.map((post) => ({ ...post, media: [] })),
+        mockPosts.map((post) => ({
+          ...post,
+          media: [],
+          boostStatus: expect.objectContaining({
+            isBoosted: false,
+            canBoost: false,
+            viewsCount: 0,
+            viewsFormatted: '0',
+            expiresIn: null,
+            boostedAt: null,
+            boostExpiresAt: null,
+          }),
+        })),
       );
       expect(postModel.findAndCountAll).toHaveBeenCalledWith(
         expect.objectContaining({

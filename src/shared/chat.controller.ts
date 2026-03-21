@@ -40,6 +40,12 @@ import {
   MarkAsReadDto,
   MarkAsReadBodyDto,
   SubmitReviewDto,
+  InitiateMultipartUploadDto,
+  GetPresignedUrlsDto,
+  CompleteMultipartUploadDto,
+  AbortMultipartUploadDto,
+  UpdateUploadProgressDto,
+  GetUploadStatusDto,
 } from './dto/chat.dto';
 import {
   CreateGroupDto,
@@ -91,7 +97,8 @@ export class ChatController {
     'text/plain',
     'text/csv',
   ];
-  private readonly MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB (increased for video/audio)
+  private readonly MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB (for standard uploads)
+  private readonly MAX_CHUNKED_FILE_SIZE = 500 * 1024 * 1024; // 500MB (for chunked multipart uploads)
 
   constructor(
     private readonly chatService: ChatService,
@@ -1683,5 +1690,175 @@ export class ChatController {
       req.user.id,
       req.user.userType,
     );
+  }
+
+  // ============================================================================
+  // Chunked Upload Endpoints (Instagram-style for large files up to 500MB)
+  // ============================================================================
+
+  @Post('upload/multipart/initiate')
+  @ApiOperation({
+    summary: 'Initiate multipart upload for large files',
+    description: 'Start a chunked upload session for files larger than 50MB. Returns upload ID and presigned URLs. Supports files up to 500MB.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Multipart upload initiated successfully',
+    schema: {
+      example: {
+        uploadId: 'xxxx-xxxx-xxxx',
+        key: 'chat/videos/influencer-123-1234567890-abc.mp4',
+        fileUrl: 'https://bucket.s3.region.amazonaws.com/chat/videos/...',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid file type or size',
+  })
+  async initiateMultipartUpload(
+    @Req() req: RequestWithUser,
+    @Body() dto: InitiateMultipartUploadDto,
+  ) {
+    // Validate file size (max 500MB for chunked uploads)
+    if (dto.fileSize > this.MAX_CHUNKED_FILE_SIZE) {
+      throw new BadRequestException(
+        `File size exceeds maximum allowed size of ${this.MAX_CHUNKED_FILE_SIZE / 1024 / 1024}MB`,
+      );
+    }
+
+    // Validate file type
+    const allAllowedTypes = [
+      ...this.ALLOWED_IMAGE_TYPES,
+      ...this.ALLOWED_VIDEO_TYPES,
+      ...this.ALLOWED_AUDIO_TYPES,
+      ...this.ALLOWED_DOCUMENT_TYPES,
+    ];
+
+    if (!allAllowedTypes.includes(dto.mimeType)) {
+      throw new BadRequestException(`File type ${dto.mimeType} is not allowed`);
+    }
+
+    // Generate S3 key
+    const folder = `chat/${dto.fileType}s`;
+    const userType = req.user.userType === 'influencer' ? 'influencer' : 'brand';
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const fileExtension = dto.fileName.split('.').pop();
+    const key = `${folder}/${userType}-${req.user.id}-${uniqueSuffix}.${fileExtension}`;
+
+    // Initiate multipart upload
+    const { uploadId } = await this.s3Service.initiateMultipartUpload(
+      key,
+      dto.mimeType,
+    );
+
+    return {
+      uploadId,
+      key,
+      fileUrl: this.s3Service.getFileUrl(key),
+    };
+  }
+
+  @Post('upload/multipart/presigned-urls')
+  @ApiOperation({
+    summary: 'Get presigned URLs for uploading chunks',
+    description: 'Get presigned URLs for each chunk. Client uploads directly to S3 using these URLs.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Presigned URLs generated successfully',
+    schema: {
+      example: {
+        presignedUrls: [
+          { partNumber: 1, url: 'https://...' },
+          { partNumber: 2, url: 'https://...' },
+        ],
+      },
+    },
+  })
+  async getPresignedUrls(@Body() dto: GetPresignedUrlsDto) {
+    const presignedUrls = await this.s3Service.getPresignedUrlsForParts(
+      dto.key,
+      dto.uploadId,
+      dto.parts,
+    );
+
+    return { presignedUrls };
+  }
+
+  @Post('upload/multipart/complete')
+  @ApiOperation({
+    summary: 'Complete multipart upload',
+    description: 'Finalize the upload by combining all uploaded parts. Returns the final file URL.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Upload completed successfully',
+    schema: {
+      example: {
+        location: 'https://bucket.s3.region.amazonaws.com/chat/videos/...',
+        fileUrl: 'https://bucket.s3.region.amazonaws.com/chat/videos/...',
+      },
+    },
+  })
+  async completeMultipartUpload(@Body() dto: CompleteMultipartUploadDto) {
+    const result = await this.s3Service.completeMultipartUpload(
+      dto.key,
+      dto.uploadId,
+      dto.parts,
+    );
+
+    return {
+      location: result.location,
+      fileUrl: this.s3Service.getFileUrl(result.key),
+    };
+  }
+
+  @Post('upload/multipart/abort')
+  @ApiOperation({
+    summary: 'Abort multipart upload',
+    description: 'Cancel an incomplete upload and cleanup S3 resources.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Upload aborted successfully',
+  })
+  async abortMultipartUpload(@Body() dto: AbortMultipartUploadDto) {
+    await this.s3Service.abortMultipartUpload(dto.key, dto.uploadId);
+    return { message: 'Upload aborted successfully' };
+  }
+
+  @Post('upload/multipart/status')
+  @ApiOperation({
+    summary: 'Check multipart upload status',
+    description: 'Get list of already uploaded parts. Useful for resuming interrupted uploads.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Upload status retrieved successfully',
+    schema: {
+      example: {
+        uploadId: 'xxxx-xxxx-xxxx',
+        key: 'chat/videos/influencer-123-1234567890-abc.mp4',
+        uploadedParts: [
+          { PartNumber: 1, ETag: '"etag1"', Size: 5242880 },
+          { PartNumber: 2, ETag: '"etag2"', Size: 5242880 },
+        ],
+        totalPartsUploaded: 2,
+      },
+    },
+  })
+  async getUploadStatus(@Body() dto: GetUploadStatusDto) {
+    const uploadedParts = await this.s3Service.listUploadedParts(
+      dto.key,
+      dto.uploadId,
+    );
+
+    return {
+      uploadId: dto.uploadId,
+      key: dto.key,
+      uploadedParts,
+      totalPartsUploaded: uploadedParts.length,
+    };
   }
 }

@@ -199,6 +199,10 @@ export class Influencer extends Model {
   @Column({ type: DataType.INTEGER, field: 'instagram_media_count' })
   declare instagramMediaCount: number;
 
+  @AllowNull(false)
+  @Column({ type: DataType.INTEGER, defaultValue: 0, field: 'profile_views_count' })
+  declare profileViewsCount: number;
+
   @AllowNull(true)
   @Column({ type: DataType.TEXT, field: 'instagram_profile_picture_url' })
   declare instagramProfilePictureUrl: string;

@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { ResponseInterceptor } from './middleware/response.interceptor';
 import { useContainer } from 'class-validator';
 import { Request, Response } from 'express';
+import compression from 'compression';
 
 import { GlobalExceptionFilter } from './shared/filters/global-exception.filter';
 import { LoggerService } from './shared/services/logger.service';
@@ -21,12 +22,45 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
-  // Increase payload size limit for file uploads (including multipart/form-data)
-  // Total limit: 2 images (5MB each) + 3 documents (10MB each) = 40MB max
+  // Enable response compression for JSON/text (not for media files)
+  // Reduces API response sizes by 50-90% for chat history, message lists, etc.
+  app.use(
+    compression({
+      // Only compress responses that benefit from compression
+      filter: (req: Request, res: Response) => {
+        const contentType = res.getHeader('content-type') as string;
+
+        // Skip compression for media files (already compressed)
+        if (contentType) {
+          const skipTypes = [
+            'video/', 'image/', 'audio/',     // Media files
+            'application/octet-stream',       // Binary data
+            'application/zip',                // Archives
+            'application/pdf'                 // PDFs
+          ];
+
+          if (skipTypes.some(type => contentType.includes(type))) {
+            return false;
+          }
+        }
+
+        // Compress JSON, HTML, text, JavaScript, CSS
+        return compression.filter(req, res);
+      },
+      // Compression level (0-9, where 6 is default balance of speed/ratio)
+      level: 6,
+      // Only compress responses larger than 1KB
+      threshold: 1024,
+    }),
+  );
+
+  // Increase payload size limit for file uploads
+  // Note: Large files (up to 500MB) use chunked multipart upload directly to S3
+  // These limits are for standard uploads and API payloads
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const express = require('express');
-  app.use(express.json({ limit: '5mb' })); // For JSON payloads
-  app.use(express.urlencoded({ limit: '10mb', extended: true })); // For URL-encoded payloads
+  app.use(express.json({ limit: '10mb' })); // For JSON payloads (increased for chunked upload metadata)
+  app.use(express.urlencoded({ limit: '50mb', extended: true })); // For URL-encoded and standard uploads (50MB max)
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,

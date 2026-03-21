@@ -21,6 +21,7 @@ import { MasterDataService } from '../shared/services/master-data.service';
 import { ProfileReviewService } from '../admin/profile-review.service';
 import { EncryptionService } from '../shared/services/encryption.service';
 import { AppReviewService } from '../shared/services/app-review.service';
+import { ProfileViewService } from '../shared/services/profile-view.service';
 import { ProfileType } from '../admin/models/profile-review.model';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { UpdateBrandProfileDto } from './dto/update-brand-profile.dto';
@@ -84,6 +85,12 @@ const mockAppReviewService = {
   trackReviewPrompt: jest.fn(),
   shouldShowReviewPrompt: jest.fn().mockResolvedValue(false),
   markAsReviewed: jest.fn(),
+};
+
+const mockProfileViewService = {
+  trackView: jest.fn().mockResolvedValue({ success: true, isNewView: true }),
+  getProfileViewCount: jest.fn().mockResolvedValue(0),
+  getProfileViewers: jest.fn().mockResolvedValue({ viewers: [], total: 0, page: 1, limit: 20, totalPages: 0 }),
 };
 
 describe('BrandService', () => {
@@ -191,6 +198,10 @@ describe('BrandService', () => {
         {
           provide: AppReviewService,
           useValue: mockAppReviewService,
+        },
+        {
+          provide: ProfileViewService,
+          useValue: mockProfileViewService,
         },
       ],
     }).compile();

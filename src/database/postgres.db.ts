@@ -30,6 +30,28 @@ import { PushNotification } from '../admin/models/push-notification.model';
 import { InfluencerCredibilityScore } from '../shared/models/influencer-credibility-score.model';
 import { GroupChat } from '../shared/models/group-chat.model';
 import { GroupMember } from '../shared/models/group-member.model';
+import { InAppNotification } from '../shared/models/in-app-notification.model';
+// Old Hype Store models (legacy)
+// import { HypeStoreWallet } from '../hype-store/models/hype-store-wallet.model';
+// import { HypeStoreWalletTransaction } from '../hype-store/models/hype-store-wallet-transaction.model';
+// import { HypeStoreCashbackConfig } from '../hype-store/models/hype-store-cashback-config.model';
+// import { HypeStoreCashbackTransaction } from '../hype-store/models/hype-store-cashback-transaction.model';
+
+// New Hype Store models (coupon-based affiliate system)
+// import { HypeStore } from '../wallet/models/hype-store.model';
+// import { HypeStoreCouponCode } from '../wallet/models/hype-store-coupon-code.model';
+// import { HypeStoreCashbackTier } from '../wallet/models/hype-store-cashback-tier.model';
+// import { HypeStoreOrder } from '../wallet/models/hype-store-order.model';
+// import { HypeStoreCreatorPreference } from '../wallet/models/hype-store-creator-preference.model';
+// import { HypeStoreWebhookLog } from '../wallet/models/hype-store-webhook-log.model';
+// import { HypeStoreWebhookSecret } from '../wallet/models/hype-store-webhook-secret.model';
+// import { HypeStoreReferralCode } from '../wallet/models/hype-store-referral-code.model';
+// import { HypeStoreReferralClick } from '../wallet/models/hype-store-referral-click.model';
+
+// Wallet models
+// import { Wallet } from '../wallet/models/wallet.model';
+// import { WalletTransaction } from '../wallet/models/wallet-transaction.model';
+// import { WalletRechargeLimit } from '../wallet/models/wallet-recharge-limit.model';
 
 @Module({
   imports: [
@@ -125,7 +147,27 @@ import { GroupMember } from '../shared/models/group-member.model';
             PushNotification,
             InfluencerCredibilityScore,
             GroupChat,
-            GroupMember
+            GroupMember,
+            InAppNotification,
+            // Hype Store models
+            // HypeStore,
+            // HypeStoreCouponCode,
+            // HypeStoreCashbackTier,
+            // HypeStoreOrder,
+            // HypeStoreCreatorPreference,
+            // HypeStoreWebhookLog,
+            // HypeStoreWebhookSecret,
+            // HypeStoreReferralCode,
+            // HypeStoreReferralClick,
+            // // Old Hype Store models (legacy)
+            // HypeStoreWallet,
+            // HypeStoreWalletTransaction,
+            // HypeStoreCashbackConfig,
+            // HypeStoreCashbackTransaction,
+            // // Wallet models
+            // Wallet,
+            // WalletTransaction,
+            // WalletRechargeLimit,
           ],
           autoLoadModels: true,
           synchronize: false, // Disabled to prevent index conflicts with existing database

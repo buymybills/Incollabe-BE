@@ -67,6 +67,53 @@ export class Post extends Model {
   })
   declare likesCount: number;
 
+  @AllowNull(false)
+  @Column({
+    type: DataType.INTEGER,
+    defaultValue: 0,
+  })
+  declare sharesCount: number;
+
+  @AllowNull(false)
+  @Column({
+    type: DataType.INTEGER,
+    defaultValue: 0,
+  })
+  declare viewsCount: number;
+
+  // Boost Mode fields
+  @AllowNull(false)
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+  })
+  declare isBoosted: boolean;
+
+  @AllowNull(true)
+  @Column(DataType.DATE)
+  declare boostedAt: Date;
+
+  @AllowNull(true)
+  @Column(DataType.DATE)
+  declare boostExpiresAt: Date;
+
+  @AllowNull(true)
+  @Column(DataType.STRING)
+  declare boostPaymentId: string;
+
+  @AllowNull(true)
+  @Column(DataType.DECIMAL(10, 2))
+  declare boostAmount: number;
+
+  // Boost Payment Tracking fields
+  @AllowNull(true)
+  @Column(DataType.STRING)
+  declare boostOrderId: string;
+
+  @AllowNull(true)
+  @Column(DataType.STRING)
+  declare boostPaymentStatus: string;
+
   @CreatedAt
   @Column(DataType.DATE)
   declare createdAt: Date;

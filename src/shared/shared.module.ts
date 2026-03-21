@@ -74,6 +74,17 @@ import { AIScoringService } from './services/ai-scoring.service';
 import { CampaignReview } from './models/campaign-review.model';
 import { GroupChat } from './models/group-chat.model';
 import { GroupMember } from './models/group-member.model';
+import { InAppNotification } from './models/in-app-notification.model';
+import { InAppNotificationService } from './in-app-notification.service';
+import { InAppNotificationController } from './in-app-notification.controller';
+import { Post } from '../post/models/post.model';
+import { PostView } from '../post/models/post-view.model';
+import { Like } from '../post/models/like.model';
+import { Share } from '../post/models/share.model';
+import { ProfileView } from './models/profile-view.model';
+import { ProfileViewService } from './services/profile-view.service';
+import { CreatorStudioService } from './creator-studio.service';
+import { CreatorStudioController } from './creator-studio.controller';
 
 @Module({
   imports: [
@@ -112,6 +123,12 @@ import { GroupMember } from './models/group-member.model';
       CampaignReview,
       GroupChat,
       GroupMember,
+      InAppNotification,
+      Post,
+      PostView,
+      Like,
+      Share,
+      ProfileView,
     ]),
   ],
   controllers: [
@@ -123,6 +140,8 @@ import { GroupMember } from './models/group-member.model';
     InfluencerProfileScoringController,
     CampusAmbassadorController,
     ConfigController,
+    InAppNotificationController,
+    CreatorStudioController,
   ],
   providers: [
     SmsService,
@@ -157,6 +176,9 @@ import { GroupMember } from './models/group-member.model';
     DeviceTokenService,
     AppVersionService,
     AIScoringService,
+    InAppNotificationService,
+    ProfileViewService,
+    CreatorStudioService,
   ],
   exports: [
     SmsService,
@@ -187,6 +209,9 @@ import { GroupMember } from './models/group-member.model';
     DeviceTokenService,
     AppVersionService,
     AIScoringService,
+    InAppNotificationService,
+    ProfileViewService,
+    CreatorStudioService,
   ],
 })
 export class SharedModule { }

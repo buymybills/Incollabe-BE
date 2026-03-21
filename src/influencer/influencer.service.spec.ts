@@ -6,12 +6,15 @@ import { WhatsAppService } from '../shared/whatsapp.service';
 import { OtpService } from '../shared/services/otp.service';
 import { CustomNicheService } from '../shared/services/custom-niche.service';
 import { NotificationService } from '../shared/notification.service';
+import { InAppNotificationService } from '../shared/in-app-notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
 import { AppVersionService } from '../shared/services/app-version.service';
 import { AppReviewService } from '../shared/services/app-review.service';
+import { ProfileViewService } from '../shared/services/profile-view.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import { CampaignService } from '../campaign/campaign.service';
 import { MaxCampaignScoringQueueService } from '../campaign/services/max-campaign-scoring-queue.service';
+import { ChatService } from '../shared/chat.service';
 import {
   ProfileReview,
   ProfileType,
@@ -169,6 +172,12 @@ const mockAppReviewService = {
   markAsReviewed: jest.fn(),
 };
 
+const mockProfileViewService = {
+  trackView: jest.fn().mockResolvedValue({ success: true, isNewView: true }),
+  getProfileViewCount: jest.fn().mockResolvedValue(0),
+  getProfileViewers: jest.fn().mockResolvedValue({ viewers: [], total: 0, page: 1, limit: 20, totalPages: 0 }),
+};
+
 const mockCampaignService = {
   queueMaxCampaignScoring: jest.fn(),
   queueMaxCampaignScoringForInfluencers: jest.fn(),
@@ -177,6 +186,12 @@ const mockCampaignService = {
 const mockMaxCampaignScoringQueueService = {
   queueCampaignScoring: jest.fn(),
   queueInfluencerScoring: jest.fn(),
+};
+
+const mockChatService = {
+  createCampaignConversation: jest.fn(),
+  getConversations: jest.fn(),
+  sendMessage: jest.fn(),
 };
 
 describe('InfluencerService', () => {
@@ -373,12 +388,37 @@ describe('InfluencerService', () => {
           useValue: mockAppReviewService,
         },
         {
+          provide: ProfileViewService,
+          useValue: mockProfileViewService,
+        },
+        {
           provide: CampaignService,
           useValue: mockCampaignService,
         },
         {
           provide: MaxCampaignScoringQueueService,
           useValue: mockMaxCampaignScoringQueueService,
+        },
+        {
+          provide: 'BRAND_MODEL',
+          useValue: {
+            findByPk: jest.fn(),
+            findOne: jest.fn(),
+            findAll: jest.fn(),
+          },
+        },
+        {
+          provide: ChatService,
+          useValue: mockChatService,
+        },
+        {
+          provide: InAppNotificationService,
+          useValue: {
+            createNotification: jest.fn().mockResolvedValue(undefined),
+            getNotifications: jest.fn().mockResolvedValue([]),
+            markAsRead: jest.fn().mockResolvedValue(undefined),
+            deleteNotification: jest.fn().mockResolvedValue(undefined),
+          },
         },
       ],
     }).compile();

@@ -15,22 +15,23 @@ import { Post } from './post.model';
 import { Influencer } from '../../auth/model/influencer.model';
 import { Brand } from '../../brand/model/brand.model';
 
-export enum LikerType {
+export enum SharerType {
   INFLUENCER = 'influencer',
   BRAND = 'brand',
 }
 
 @Table({
-  tableName: 'likes',
+  tableName: 'shares',
   timestamps: true,
   indexes: [
     {
       unique: true,
-      fields: ['postId', 'likerType', 'likerInfluencerId', 'likerBrandId'],
+      fields: ['postId', 'sharerType', 'sharerInfluencerId', 'sharerBrandId'],
+      name: 'unique_post_sharer',
     },
   ],
 })
-export class Like extends Model {
+export class Share extends Model {
   @PrimaryKey
   @AutoIncrement
   @Column(DataType.INTEGER)
@@ -42,18 +43,22 @@ export class Like extends Model {
   declare postId: number;
 
   @AllowNull(false)
-  @Column(DataType.ENUM(...Object.values(LikerType)))
-  declare likerType: LikerType;
+  @Column(DataType.ENUM(...Object.values(SharerType)))
+  declare sharerType: SharerType;
 
   @AllowNull(true)
   @ForeignKey(() => Influencer)
   @Column(DataType.INTEGER)
-  declare likerInfluencerId: number;
+  declare sharerInfluencerId: number;
 
   @AllowNull(true)
   @ForeignKey(() => Brand)
   @Column(DataType.INTEGER)
-  declare likerBrandId: number;
+  declare sharerBrandId: number;
+
+  @AllowNull(false)
+  @Column({ type: DataType.DATE, defaultValue: DataType.NOW })
+  declare sharedAt: Date;
 
   @CreatedAt
   @Column(DataType.DATE)
@@ -66,21 +71,23 @@ export class Like extends Model {
   @BelongsTo(() => Post)
   declare post: Post;
 
-  @BelongsTo(() => Influencer, 'likerInfluencerId')
-  declare likerInfluencer: Influencer;
+  @BelongsTo(() => Influencer, 'sharerInfluencerId')
+  declare sharerInfluencer: Influencer;
 
-  @BelongsTo(() => Brand, 'likerBrandId')
-  declare likerBrand: Brand;
+  @BelongsTo(() => Brand, 'sharerBrandId')
+  declare sharerBrand: Brand;
 
-  get liker() {
-    return this.likerType === LikerType.INFLUENCER
-      ? this.likerInfluencer
-      : this.likerBrand;
+  // Virtual getter for sharer ID
+  get sharerId(): number {
+    return this.sharerType === SharerType.INFLUENCER
+      ? this.sharerInfluencerId
+      : this.sharerBrandId;
   }
 
-  get likerId() {
-    return this.likerType === LikerType.INFLUENCER
-      ? this.likerInfluencerId
-      : this.likerBrandId;
+  // Virtual getter for sharer
+  get sharer() {
+    return this.sharerType === SharerType.INFLUENCER
+      ? this.sharerInfluencer
+      : this.sharerBrand;
   }
 }

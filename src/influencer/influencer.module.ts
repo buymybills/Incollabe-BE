@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { InfluencerController } from './influencer.controller';
+// import { InfluencerHypeStoreController } from './influencer-hype-store.controller';
 import { InfluencerService } from './influencer.service';
+// import { InfluencerHypeStoreService } from './services/influencer-hype-store.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
@@ -31,12 +33,14 @@ import { InfluencerUpi } from './models/influencer-upi.model';
 import { HomePageHistory } from './models/home-page-history.model';
 import { CampaignModule } from '../campaign/campaign.module';
 import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
+import { BrandNiche } from '../brand/model/brand-niche.model';
 
 @Module({
   imports: [
     SequelizeModule.forFeature([
       Influencer,
       Brand,
+      BrandNiche,
       Niche,
       InfluencerNiche,
       Experience,
@@ -140,6 +144,10 @@ import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-ana
     {
       provide: 'HOME_PAGE_HISTORY_MODEL',
       useValue: HomePageHistory,
+    },
+    {
+      provide: 'BRAND_MODEL',
+      useValue: Brand,
     },
   ],
   exports: [InfluencerService, InfluencerRepository, ProSubscriptionService],

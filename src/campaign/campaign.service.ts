@@ -54,6 +54,11 @@ import { InfluencerProfileScore } from '../shared/models/influencer-profile-scor
 import { MaxCampaignScoringQueueService } from './services/max-campaign-scoring-queue.service';
 import { ChatService } from '../shared/chat.service';
 import { ChatGateway } from '../shared/chat.gateway';
+import { InAppNotificationService } from '../shared/in-app-notification.service';
+import { NotificationType } from '../shared/models/in-app-notification.model';
+import { CampaignReview } from '../shared/models/campaign-review.model';
+import { Conversation } from '../shared/models/conversation.model';
+import { GetRatingsDto, UserRatingsStatsDto, CampaignRatingItemDto, RatingsTimeframeType } from './dto/ratings.dto';
 
 @Injectable()
 export class CampaignService {
@@ -92,6 +97,10 @@ export class CampaignService {
     private readonly influencerProfileScoreModel: typeof InfluencerProfileScore,
     @InjectModel(Niche)
     private readonly nicheModel: typeof Niche,
+    @InjectModel(CampaignReview)
+    private readonly campaignReviewModel: typeof CampaignReview,
+    @InjectModel(Conversation)
+    private readonly conversationModel: typeof Conversation,
     // REMOVED: Models only needed for early selection bonus feature (now disabled)
     // @InjectModel(CreditTransaction)
     // private readonly creditTransactionModel: typeof CreditTransaction,
@@ -105,6 +114,7 @@ export class CampaignService {
     private readonly maxCampaignScoringQueueService: MaxCampaignScoringQueueService,
     private readonly chatService: ChatService,
     private readonly chatGateway: ChatGateway,
+    private readonly inAppNotificationService: InAppNotificationService,
   ) {}
 
   /**
@@ -849,6 +859,30 @@ export class CampaignService {
                   brandName,
                 );
               }
+
+              // Create in-app notification for campaign completion
+              await this.inAppNotificationService
+                .createNotification({
+                  userId: application.influencer.id,
+                  userType: 'influencer',
+                  title: 'Campaign Completed',
+                  body: `Campaign "${campaign.name}" by ${brandName} has been marked as completed`,
+                  type: NotificationType.CAMPAIGN_COMPLETED,
+                  actionUrl: `app://campaigns/${campaignId}`,
+                  actionType: 'view_campaign',
+                  relatedEntityType: 'campaign',
+                  relatedEntityId: campaignId,
+                  metadata: {
+                    campaignId,
+                    campaignName: campaign.name,
+                    brandId: campaign.brandId,
+                    brandName,
+                    status: 'completed',
+                  },
+                } as any)
+                .catch((error: any) => {
+                  console.error(`Error creating in-app notification for campaign completion to influencer ${application.influencer.id}:`, error);
+                });
             } catch (error) {
               console.error(
                 `Failed to send completion notification to influencer ${application.influencer.id}:`,
@@ -1369,6 +1403,29 @@ export class CampaignService {
             brandName,
           );
         }
+
+        // Create in-app notification for campaign invitation
+        await this.inAppNotificationService
+          .createNotification({
+            userId: influencer.id,
+            userType: 'influencer',
+            title: 'Campaign Invitation',
+            body: `${brandName} has invited you to participate in "${campaign.name}"`,
+            type: NotificationType.CAMPAIGN_INVITE,
+            actionUrl: `app://campaigns/${campaign.id}`,
+            actionType: 'view_campaign',
+            relatedEntityType: 'campaign',
+            relatedEntityId: campaign.id,
+            metadata: {
+              campaignId: campaign.id,
+              campaignName: campaign.name,
+              brandId: campaign.brandId,
+              brandName,
+            },
+          } as any)
+          .catch((error: any) => {
+            console.error(`Error creating in-app notification for campaign invite to influencer ${influencer.id}:`, error);
+          });
       } catch (error) {
         console.error(
           `Failed to send push notification to influencer ${influencer.id}:`,
@@ -1382,6 +1439,78 @@ export class CampaignService {
       success: true,
       invitationsSent: newInfluencerIds.length,
       message: `Successfully sent ${newInfluencerIds.length} campaign invitations with WhatsApp and push notifications.`,
+    };
+  }
+
+  /**
+   * Get all invitations sent for a campaign (brand view)
+   */
+  async getCampaignInvitations(
+    campaignId: number,
+    brandId: number,
+  ): Promise<any> {
+    // Verify campaign exists and belongs to the brand
+    const campaign = await this.campaignModel.findOne({
+      where: { id: campaignId, brandId },
+    });
+
+    if (!campaign) {
+      throw new NotFoundException('Campaign not found or access denied');
+    }
+
+    // Fetch all invitations for this campaign
+    const invitations = await this.campaignInvitationModel.findAll({
+      where: { campaignId },
+      include: [
+        {
+          model: Influencer,
+          attributes: [
+            'id',
+            'name',
+            'username',
+            'profileImage',
+            'instagramFollowersCount',
+            'isVerified',
+          ],
+        },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+
+    // Group by status for summary
+    const summary = {
+      total: invitations.length,
+      pending: invitations.filter((inv) => inv.status === InvitationStatus.PENDING)
+        .length,
+      accepted: invitations.filter(
+        (inv) => inv.status === InvitationStatus.ACCEPTED,
+      ).length,
+      declined: invitations.filter(
+        (inv) => inv.status === InvitationStatus.DECLINED,
+      ).length,
+      expired: invitations.filter((inv) => inv.status === InvitationStatus.EXPIRED)
+        .length,
+    };
+
+    return {
+      invitations: invitations.map((inv) => ({
+        id: inv.id,
+        status: inv.status,
+        message: inv.message,
+        expiresAt: inv.expiresAt,
+        respondedAt: inv.respondedAt,
+        responseMessage: inv.responseMessage,
+        createdAt: inv.createdAt,
+        influencer: {
+          id: inv.influencer.id,
+          name: inv.influencer.name,
+          username: inv.influencer.username,
+          profileImage: inv.influencer.profileImage,
+          instagramFollowersCount: inv.influencer.instagramFollowersCount,
+          isVerified: inv.influencer.isVerified,
+        },
+      })),
+      summary,
     };
   }
 
@@ -3495,6 +3624,34 @@ export class CampaignService {
           console.error('Failed to send persistent push notification to influencer:', error);
         });
 
+      // Create in-app notification for campaign selection
+      const selectionBody = updateStatusDto.reviewNotes
+        ? `Congratulations! You've been selected for "${campaign.name}" by ${brandName}. ${updateStatusDto.reviewNotes}`
+        : `Congratulations! You've been selected for "${campaign.name}" by ${brandName}`;
+
+      this.inAppNotificationService
+        .createNotification({
+          userId: influencer.id,
+          userType: 'influencer',
+          title: 'Campaign Selection',
+          body: selectionBody,
+          type: NotificationType.CAMPAIGN_SELECTED,
+          actionUrl: `app://campaigns/${campaign.id}`,
+          actionType: 'view_campaign',
+          relatedEntityType: 'campaign',
+          relatedEntityId: campaign.id,
+          metadata: {
+            campaignId: campaign.id,
+            campaignName: campaign.name,
+            brandId: campaign.brandId,
+            brandName,
+            reviewNotes: updateStatusDto.reviewNotes,
+          },
+        } as any)
+        .catch((error: any) => {
+          console.error('Error creating in-app notification for campaign selection:', error);
+        });
+
       // Auto-create campaign chat conversation and notify via WebSocket
       this.chatService
         .createCampaignConversation(
@@ -3541,7 +3698,7 @@ export class CampaignService {
         );
     }
 
-    // Push notification for UNDER_REVIEW status
+    // Push notifications for UNDER_REVIEW and REJECTED statuses
     if (
       influencer &&
       influencer.id &&
@@ -3563,30 +3720,48 @@ export class CampaignService {
         .catch((error: any) => {
           console.error('Failed to send push notification to influencer:', error);
         });
-    }
 
-    // Push notification for REJECTED status - commented out
-    // if (
-    //   influencer &&
-    //   influencer.id &&
-    //   updateStatusDto.status === ApplicationStatus.REJECTED
-    // ) {
-    //   this.deviceTokenService
-    //     .getAllUserTokens(influencer.id, UserType.INFLUENCER)
-    //     .then((deviceTokens: string[]) => {
-    //       if (deviceTokens.length > 0) {
-    //         return this.notificationService.sendCampaignStatusUpdate(
-    //           deviceTokens,
-    //           campaign.name,
-    //           'rejected',
-    //           brandName,
-    //         );
-    //       }
-    //     })
-    //     .catch((error: any) => {
-    //       console.error('Failed to send push notification to influencer:', error);
-    //     });
-    // }
+      // Create in-app notification for application status update
+      let inAppTitle: string;
+      let inAppBody: string;
+      let inAppType: NotificationType;
+
+      if (updateStatusDto.status === ApplicationStatus.UNDER_REVIEW) {
+        inAppTitle = 'Application Under Review';
+        inAppBody = `Your application for "${campaign.name}" by ${brandName} is being reviewed`;
+        inAppType = NotificationType.CAMPAIGN_STATUS_UPDATE;
+      } else {
+        inAppTitle = 'Application Rejected';
+        inAppBody = updateStatusDto.reviewNotes
+          ? `Your application for "${campaign.name}" by ${brandName} was not selected. ${updateStatusDto.reviewNotes}`
+          : `Your application for "${campaign.name}" by ${brandName} was not selected`;
+        inAppType = NotificationType.APPLICATION_REJECTED;
+      }
+
+      this.inAppNotificationService
+        .createNotification({
+          userId: influencer.id,
+          userType: 'influencer',
+          title: inAppTitle,
+          body: inAppBody,
+          type: inAppType,
+          actionUrl: `app://campaigns/${campaign.id}`,
+          actionType: 'view_campaign',
+          relatedEntityType: 'campaign',
+          relatedEntityId: campaign.id,
+          metadata: {
+            campaignId: campaign.id,
+            campaignName: campaign.name,
+            brandId: campaign.brandId,
+            brandName,
+            status: updateStatusDto.status,
+            reviewNotes: updateStatusDto.reviewNotes,
+          },
+        } as any)
+        .catch((error: any) => {
+          console.error('Error creating in-app notification for application status update:', error);
+        });
+    }
 
     // Return updated application with influencer details
     const updatedApplication = await this.campaignApplicationModel.findOne({
@@ -4217,5 +4392,183 @@ export class CampaignService {
     console.log(
       `[MAX Campaign Scoring] Successfully queued job for ${influencerIds.length} influencers`,
     );
+  }
+
+  /**
+   * Get ratings statistics and list for a user (brand or influencer)
+   */
+  async getUserRatings(
+    userId: number,
+    userType: 'brand' | 'influencer',
+    ratingsDto: GetRatingsDto,
+  ): Promise<UserRatingsStatsDto> {
+    const { startDate, endDate } = this.getDateRange(ratingsDto);
+
+    // Get all ratings where the user is the reviewee
+    const reviews = await this.campaignReviewModel.findAll({
+      where: {
+        revieweeType: userType,
+        revieweeId: userId,
+        createdAt: {
+          [Op.between]: [startDate, endDate],
+        },
+      },
+      include: [
+        {
+          model: Campaign,
+          as: 'campaign',
+          attributes: ['id', 'name', 'brandId'],
+        },
+        {
+          model: CampaignApplication,
+          as: 'campaignApplication',
+          attributes: ['id', 'influencerId'],
+        },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+
+    // Calculate average rating
+    const averageRating = reviews.length > 0
+      ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
+      : 0;
+
+    // Build detailed ratings list
+    const ratings: CampaignRatingItemDto[] = await Promise.all(
+      reviews.map(async (review) => {
+        // Get campaign details
+        const campaign = await this.campaignModel.findByPk(review.campaignId, {
+          include: [
+            {
+              model: Brand,
+              as: 'brand',
+              attributes: ['id', 'brandName', 'profileImage'],
+              include: [
+                {
+                  model: Niche,
+                  as: 'niches',
+                  through: { attributes: [] },
+                  attributes: ['name'],
+                },
+              ],
+            },
+            {
+              model: CampaignDeliverable,
+              as: 'deliverables',
+              attributes: ['type'],
+            },
+          ],
+        });
+
+        // Get application details for payment status
+        const application = await this.campaignApplicationModel.findByPk(
+          review.campaignApplicationId,
+        );
+
+        // Check if user has rated back (reverse review)
+        const reverseReview = await this.campaignReviewModel.findOne({
+          where: {
+            campaignApplicationId: review.campaignApplicationId,
+            reviewerType: userType,
+            reviewerId: userId,
+          },
+        });
+
+        // Format deliverable types
+        const deliverableFormat =
+          campaign?.deliverables
+            ?.map((d) => this.getDeliverableLabel(d.type))
+            .join(', ') || 'N/A';
+
+        // Get brand niches
+        const brandNiche =
+          campaign?.brand?.niches?.map((n) => n.name).join(' + ') || 'N/A';
+
+        // Get conversation ID for this campaign application
+        const conversation = await this.conversationModel.findOne({
+          where: {
+            campaignApplicationId: review.campaignApplicationId,
+            conversationType: 'campaign',
+          },
+          attributes: ['id'],
+        });
+
+        return {
+          id: review.id,
+          campaignId: review.campaignId,
+          campaignApplicationId: review.campaignApplicationId,
+          conversationId: conversation?.id || null,
+          campaignTitle: campaign?.name || 'N/A',
+          brandId: campaign?.brandId || 0,
+          brandName: campaign?.brand?.brandName || 'N/A',
+          brandLogo: campaign?.brand?.profileImage || '',
+          brandNiche,
+          deliverableFormat,
+          paymentStatus:
+            application?.status === ApplicationStatus.COMPLETED ? 'Paid' : 'Pending',
+          completedDate: this.formatDate(review.createdAt),
+          ratingReceived: review.rating,
+          reviewFromBrand: review.reviewText || undefined,
+          hasUserRated: !!reverseReview,
+          userRatingForBrand: reverseReview?.rating,
+          userReviewForBrand: reverseReview?.reviewText || undefined,
+        };
+      }),
+    );
+
+    return {
+      averageRating: Math.round(averageRating * 10) / 10,
+      totalCampaigns: reviews.length,
+      timeframe: this.formatTimeframeLabel(startDate, endDate),
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0],
+      ratings,
+    };
+  }
+
+  /**
+   * Get date range based on timeframe or custom dates
+   */
+  private getDateRange(ratingsDto: GetRatingsDto): { startDate: Date; endDate: Date } {
+    const endDate = ratingsDto.endDate
+      ? new Date(ratingsDto.endDate)
+      : new Date();
+
+    let startDate: Date;
+
+    if (ratingsDto.startDate) {
+      startDate = new Date(ratingsDto.startDate);
+    } else {
+      const timeframe = ratingsDto.timeframe || RatingsTimeframeType.LAST_30_DAYS;
+      const daysAgo = timeframe === RatingsTimeframeType.LAST_30_DAYS
+        ? 30
+        : timeframe === RatingsTimeframeType.LAST_90_DAYS
+        ? 90
+        : 36500; // ~100 years for all_time
+
+      startDate = new Date();
+      startDate.setDate(startDate.getDate() - daysAgo);
+    }
+
+    return { startDate, endDate };
+  }
+
+  /**
+   * Format date for display
+   */
+  private formatDate(date: Date): string {
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const d = new Date(date);
+    return `${monthNames[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  }
+
+  /**
+   * Format timeframe label
+   */
+  private formatTimeframeLabel(startDate: Date, endDate: Date): string {
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    return `${monthNames[start.getMonth()]} ${start.getDate()} - ${monthNames[end.getMonth()]} ${end.getDate()}`;
   }
 }
