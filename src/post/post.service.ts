@@ -980,7 +980,7 @@ export class PostService {
       };
     }
 
-    // Add boost analytics if post is boosted and user is viewing their own post
+    // Add boost analytics if user is viewing their own post
     const isOwnPost =
       currentUserId &&
       currentUserType &&
@@ -990,8 +990,9 @@ export class PostService {
     // Add boost status for all cases
     postWithLikeStatus.boostStatus = this.calculateBoostStatus(post, !!isOwnPost);
 
-    if (post.isBoosted && isOwnPost) {
-      const boostAnalytics = await this.getBoostAnalytics(postId, post.boostedAt);
+    // Add analytics (including trend data) for all own posts
+    if (isOwnPost) {
+      const boostAnalytics = await this.getBoostAnalytics(postId, post.boostedAt, post.isBoosted);
       postWithLikeStatus = {
         ...postWithLikeStatus,
         boostAnalytics,
@@ -3859,36 +3860,39 @@ export class PostService {
   }
 
   /**
-   * Get boost analytics for a specific post
+   * Get analytics for a specific post (works for both boosted and non-boosted posts)
    * Includes metrics growth, follower breakdown, and daily trend data
    *
    * Trend data shows 30 days total ending on current date:
    * - Today + 29 days before (last 30 days)
-   * - Shows performance before and after boost activation
+   * - For boosted posts: shows performance before and after boost activation
+   * - For non-boosted posts: shows general performance trend
    *
-   * This allows users to see the impact of boost mode on their post performance
+   * This allows users to see their post performance over time
    */
-  private async getBoostAnalytics(postId: number, boostedAt: Date) {
+  private async getBoostAnalytics(postId: number, boostedAt: Date | null, isBoosted: boolean) {
     const post = await this.postModel.findByPk(postId);
     if (!post) {
       return null;
     }
 
-    // Get metrics before and after boost
+    // Get metrics
     const now = new Date();
-    const boostDuration = Math.min(
-      Math.floor((now.getTime() - boostedAt.getTime()) / (1000 * 60 * 60)), // hours
-      24 // max 24 hours
-    );
-
-    // Calculate metrics growth (current vs pre-boost baseline)
-    // For simplicity, we'll use current counts and estimate 30% growth as shown in UI
     const currentViews = post.viewsCount || 0;
     const currentLikes = post.likesCount || 0;
     const currentShares = post.sharesCount || 0;
 
+    // Calculate boost duration only for boosted posts
+    let boostDuration = 0;
+    if (isBoosted && boostedAt) {
+      boostDuration = Math.min(
+        Math.floor((now.getTime() - boostedAt.getTime()) / (1000 * 60 * 60)), // hours
+        24 // max 24 hours
+      );
+    }
+
     // Calculate estimated growth percentages
-    const viewsGrowth = currentViews > 0 ? Math.floor(currentViews * 0.2) : 0; // +20K format
+    const viewsGrowth = currentViews > 0 ? Math.floor(currentViews * 0.2) : 0;
     const likesGrowth = currentLikes > 0 ? Math.floor(currentLikes * 0.2) : 0;
     const sharesGrowth = currentShares > 0 ? Math.floor(currentShares * 0.2) : 0;
 
@@ -3898,7 +3902,7 @@ export class PostService {
     // Get follower breakdown for interactions (likes + shares)
     const interactionsFollowerBreakdown = await this.getPostInteractionsFollowerBreakdown(postId);
 
-    // Get trend data (daily breakdown for the boost period)
+    // Get trend data (daily breakdown for last 30 days)
     const trendData = await this.getBoostTrendData(
       postId,
       boostedAt,
@@ -3908,9 +3912,11 @@ export class PostService {
     );
 
     return {
-      activated: true,
-      boostDuration: `${boostDuration} hours`,
-      growthMessage: '30% growth in overall view and interaction after boost activation',
+      activated: isBoosted,
+      boostDuration: isBoosted ? `${boostDuration} hours` : null,
+      growthMessage: isBoosted
+        ? '30% growth in overall view and interaction after boost activation'
+        : 'Post performance over last 30 days',
       metrics: {
         views: {
           count: currentViews,
@@ -4056,12 +4062,12 @@ export class PostService {
   }
 
   /**
-   * Get trend data for views and interactions over the boost period
+   * Get trend data for views and interactions
    * Shows 30 days total ending on current date (today + 29 days before)
    */
   private async getBoostTrendData(
     postId: number,
-    boostedAt: Date,
+    boostedAt: Date | null,
     currentDate: Date,
     postUserType: UserType,
     postUserId: number,

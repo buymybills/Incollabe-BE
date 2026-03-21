@@ -498,13 +498,14 @@ export class PostController {
   @Get(':id')
   @ApiOperation({
     summary: 'Get a specific post by ID',
-    description: 'Returns post details. If the post is boosted and you are the owner, includes boost analytics with:\n\n' +
-      '**Boost Analytics (for boosted posts - owner only):**\n' +
+    description: 'Returns post details. If you are the post owner, includes analytics with:\n\n' +
+      '**Post Analytics (for own posts only):**\n' +
       '- Growth metrics (views, likes, shares)\n' +
       '- Follower vs non-follower breakdown\n' +
       '- Daily trend data showing last 30 days (today + 29 days before)\n' +
-      '- Chart shows performance before and after boost activation\n\n' +
-      'This allows you to compare performance trends and see the impact of boost mode.'
+      '- For boosted posts: shows impact of boost activation\n' +
+      '- For non-boosted posts: shows general performance trends\n\n' +
+      'This allows you to track your post performance over time and see engagement patterns.'
   })
   @ApiResponse({
     status: 200,
