@@ -3955,14 +3955,14 @@ export class PostService {
         COUNT(CASE WHEN f.id IS NULL THEN 1 END) as non_follower_views
       FROM post_views pv
       LEFT JOIN follows f ON (
-        (pv.viewer_type = 'influencer' AND f.follower_type = 'influencer' AND f.follower_influencer_id = pv.viewer_influencer_id) OR
-        (pv.viewer_type = 'brand' AND f.follower_type = 'brand' AND f.follower_brand_id = pv.viewer_brand_id)
+        (pv."viewerType" = 'influencer' AND f."followerType" = 'influencer' AND f."followerInfluencerId" = pv."viewerInfluencerId") OR
+        (pv."viewerType" = 'brand' AND f."followerType" = 'brand' AND f."followerBrandId" = pv."viewerBrandId")
       ) AND (
-        (f.following_type = :postUserType AND
-         ((f.following_type = 'influencer' AND f.following_influencer_id = :postUserId) OR
-          (f.following_type = 'brand' AND f.following_brand_id = :postUserId)))
+        (f."followingType" = :postUserType AND
+         ((f."followingType" = 'influencer' AND f."followingInfluencerId" = :postUserId) OR
+          (f."followingType" = 'brand' AND f."followingBrandId" = :postUserId)))
       )
-      WHERE pv.post_id = :postId
+      WHERE pv."postId" = :postId
     `, {
       replacements: {
         postId,
@@ -4008,21 +4008,21 @@ export class PostService {
         COUNT(CASE WHEN f.id IS NOT NULL THEN 1 END) as follower_interactions,
         COUNT(CASE WHEN f.id IS NULL THEN 1 END) as non_follower_interactions
       FROM (
-        SELECT liker_type as user_type, liker_influencer_id as influencer_id, liker_brand_id as brand_id
+        SELECT "likerType" as user_type, "likerInfluencerId" as influencer_id, "likerBrandId" as brand_id
         FROM likes
-        WHERE post_id = :postId
+        WHERE "postId" = :postId
         UNION ALL
-        SELECT sharer_type as user_type, sharer_influencer_id as influencer_id, sharer_brand_id as brand_id
+        SELECT "sharerType" as user_type, "sharerInfluencerId" as influencer_id, "sharerBrandId" as brand_id
         FROM shares
-        WHERE post_id = :postId
+        WHERE "postId" = :postId
       ) interactions
       LEFT JOIN follows f ON (
-        (interactions.user_type = 'influencer' AND f.follower_type = 'influencer' AND f.follower_influencer_id = interactions.influencer_id) OR
-        (interactions.user_type = 'brand' AND f.follower_type = 'brand' AND f.follower_brand_id = interactions.brand_id)
+        (interactions.user_type = 'influencer' AND f."followerType" = 'influencer' AND f."followerInfluencerId" = interactions.influencer_id) OR
+        (interactions.user_type = 'brand' AND f."followerType" = 'brand' AND f."followerBrandId" = interactions.brand_id)
       ) AND (
-        (f.following_type = :postUserType AND
-         ((f.following_type = 'influencer' AND f.following_influencer_id = :postUserId) OR
-          (f.following_type = 'brand' AND f.following_brand_id = :postUserId)))
+        (f."followingType" = :postUserType AND
+         ((f."followingType" = 'influencer' AND f."followingInfluencerId" = :postUserId) OR
+          (f."followingType" = 'brand' AND f."followingBrandId" = :postUserId)))
       )
     `, {
       replacements: {
@@ -4079,15 +4079,15 @@ export class PostService {
           COUNT(CASE WHEN f.id IS NULL THEN 1 END) as non_follower_views
         FROM post_views pv
         LEFT JOIN follows f ON (
-          (pv.viewer_type = 'influencer' AND f.follower_type = 'influencer' AND f.follower_influencer_id = pv.viewer_influencer_id) OR
-          (pv.viewer_type = 'brand' AND f.follower_type = 'brand' AND f.follower_brand_id = pv.viewer_brand_id)
+          (pv."viewerType" = 'influencer' AND f."followerType" = 'influencer' AND f."followerInfluencerId" = pv."viewerInfluencerId") OR
+          (pv."viewerType" = 'brand' AND f."followerType" = 'brand' AND f."followerBrandId" = pv."viewerBrandId")
         ) AND (
-          (f.following_type = :postUserType AND
-           ((f.following_type = 'influencer' AND f.following_influencer_id = :postUserId) OR
-            (f.following_type = 'brand' AND f.following_brand_id = :postUserId)))
+          (f."followingType" = :postUserType AND
+           ((f."followingType" = 'influencer' AND f."followingInfluencerId" = :postUserId) OR
+            (f."followingType" = 'brand' AND f."followingBrandId" = :postUserId)))
         )
-        WHERE pv.post_id = :postId
-          AND DATE(pv.viewed_at) = DATE(:date)
+        WHERE pv."postId" = :postId
+          AND DATE(pv."viewedAt") = DATE(:date)
       `, {
         replacements: {
           postId,
@@ -4110,20 +4110,24 @@ export class PostService {
           COUNT(CASE WHEN f.id IS NOT NULL THEN 1 END) as follower_interactions,
           COUNT(CASE WHEN f.id IS NULL THEN 1 END) as non_follower_interactions
         FROM (
-          SELECT liker_type as user_type, liker_influencer_id as influencer_id, liker_brand_id as brand_id, created_at
+          SELECT "likerType" as user_type, "likerInfluencerId" as influencer_id, "likerBrandId" as brand_id, "createdAt"
           FROM likes
-          WHERE post_id = :postId AND DATE(created_at) = DATE(:date)
+          WHERE "postId" = :postId AND DATE("createdAt") = DATE(:date)
           UNION ALL
-          SELECT sharer_type as user_type, sharer_influencer_id as influencer_id, sharer_brand_id as brand_id, shared_at as created_at
+          SELECT "sharerType" as user_type, "sharerInfluencerId" as influencer_id, "sharerBrandId" as brand_id, "sharedAt" as "createdAt"
           FROM shares
-          WHERE post_id = :postId AND DATE(shared_at) = DATE(:date)
+          WHERE "postId" = :postId AND DATE("sharedAt") = DATE(:date)
         ) interactions
         LEFT JOIN follows f ON (
-          (interactions.user_type = 'influencer' AND f.follower_type = 'influencer' AND f.follower_influencer_id = interactions.influencer_id) OR
-          (interactions.user_type = 'brand' AND f.follower_type = 'brand' AND f.follower_brand_id = interactions.brand_id)
+          (interactions.user_type = 'influencer' AND f."followerType" = 'influencer' AND f."followerInfluencerId" = interactions.influencer_id) OR
+          (interactions.user_type = 'brand' AND f."followerType" = 'brand' AND f."followerBrandId" = interactions.brand_id)
+        ) AND (
+          (f."followingType" = :postUserType AND
+           ((f."followingType" = 'influencer' AND f."followingInfluencerId" = :postUserId) OR
+            (f."followingType" = 'brand' AND f."followingBrandId" = :postUserId)))
         )
       `, {
-        replacements: { postId, date },
+        replacements: { postId, date, postUserType, postUserId },
         type: QueryTypes.SELECT,
       });
 
