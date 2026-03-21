@@ -100,10 +100,18 @@ export class PostService {
     userId: number,
     files?: Express.Multer.File[],
   ): Promise<Post> {
+    // Initialize mediaUrls array from pre-uploaded URLs (chunked uploads)
+    const mediaUrls: string[] = [];
+
+    // Add pre-uploaded media URLs from DTO (from chunked uploads)
+    if ('mediaUrls' in createPostDto && createPostDto.mediaUrls) {
+      mediaUrls.push(...createPostDto.mediaUrls);
+    }
+
     // Validate that at least content or media is provided
     const hasContent =
       createPostDto.content && createPostDto.content.trim().length > 0;
-    const hasMedia = files && files.length > 0;
+    const hasMedia = (files && files.length > 0) || mediaUrls.length > 0;
 
     if (!hasContent && !hasMedia) {
       throw new BadRequestException(
@@ -124,8 +132,7 @@ export class PostService {
       }
     }
 
-    // Upload files to S3 if provided
-    const mediaUrls: string[] = [];
+    // Upload new files to S3 if provided (standard multipart form-data uploads)
     if (files && files.length > 0) {
       for (const file of files) {
         const folder = file.mimetype.startsWith('video/')
@@ -184,7 +191,13 @@ export class PostService {
       mediaUrls = updatePostDto.existingMediaUrls;
     }
 
-    // Upload new files to S3 if provided
+    // Add pre-uploaded media URLs from DTO (from chunked uploads)
+    // This allows adding new media via chunked upload while keeping existing media
+    if ('mediaUrls' in updatePostDto && updatePostDto.mediaUrls) {
+      mediaUrls.push(...updatePostDto.mediaUrls);
+    }
+
+    // Upload new files to S3 if provided (standard multipart form-data uploads)
     if (files && files.length > 0) {
       for (const file of files) {
         const folder = file.mimetype.startsWith('video/')

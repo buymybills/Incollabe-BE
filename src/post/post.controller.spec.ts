@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PostController } from './post.controller';
 import { PostService } from './post.service';
+import { S3Service } from '../shared/s3.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
@@ -19,6 +20,13 @@ const mockPostService = {
   getPostById: jest.fn(),
 };
 
+const mockS3Service = {
+  uploadFile: jest.fn(),
+  deleteFile: jest.fn(),
+  getFileUrl: jest.fn(),
+  getSignedUrl: jest.fn(),
+};
+
 const mockAuthGuard = {
   canActivate: jest.fn(() => true),
 };
@@ -34,6 +42,10 @@ describe('PostController', () => {
         {
           provide: PostService,
           useValue: mockPostService,
+        },
+        {
+          provide: S3Service,
+          useValue: mockS3Service,
         },
       ],
     })

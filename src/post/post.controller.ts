@@ -33,17 +33,46 @@ import { GetPostsDto, GetPostsQueryDto } from './dto/get-posts.dto';
 import { GetFollowersDto, GetFollowingDto } from './dto/get-followers.dto';
 import { ActivateBoostDto, VerifyBoostPaymentDto, BoostModeResponseDto } from './dto/boost-post.dto';
 import { GetAnalyticsDto, ProfileViewsResponseDto, PostViewsResponseDto, InteractionsResponseDto, FollowersResponseDto } from './dto/analytics.dto';
+import {
+  InitiatePostMultipartUploadDto,
+  GetPostPresignedUrlsDto,
+  CompletePostMultipartUploadDto,
+  AbortPostMultipartUploadDto,
+  GetPostUploadStatusDto,
+} from './dto/chunked-upload.dto';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserType } from './models/post.model';
 import type { User } from '../types/request.types';
+import { S3Service } from '../shared/s3.service';
 
 @ApiTags('Posts')
 @ApiBearerAuth()
 @UseGuards(AuthGuard)
 @Controller('posts')
 export class PostController {
-  constructor(private readonly postService: PostService) {}
+  // File size limits for posts
+  private readonly MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB (for standard uploads)
+  private readonly MAX_CHUNKED_FILE_SIZE = 500 * 1024 * 1024; // 500MB (for chunked multipart uploads)
+
+  // Allowed file types for posts
+  private readonly ALLOWED_IMAGE_TYPES = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+  ];
+  private readonly ALLOWED_VIDEO_TYPES = [
+    'video/mp4',
+    'video/quicktime',
+    'video/x-msvideo',
+    'video/avi',
+  ];
+
+  constructor(
+    private readonly postService: PostService,
+    private readonly s3Service: S3Service,
+  ) {}
 
   @Post()
   @UseInterceptors(
@@ -999,5 +1028,180 @@ export class PostController {
       user.userType as unknown as UserType,
       analyticsDto,
     );
+  }
+
+  // ============================================================================
+  // Chunked Upload Endpoints (Instagram-style for large files up to 500MB)
+  // ============================================================================
+
+  @Post('upload/multipart/initiate')
+  @ApiOperation({
+    summary: 'Initiate multipart upload for large post media files',
+    description:
+      'Start a chunked upload session for post media files larger than 50MB. Returns upload ID and presigned URLs. Supports files up to 500MB. Only images and videos are allowed for posts.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Multipart upload initiated successfully',
+    schema: {
+      example: {
+        uploadId: 'xxxx-xxxx-xxxx',
+        key: 'posts/videos/influencer-123-1234567890-abc.mp4',
+        fileUrl: 'https://bucket.s3.region.amazonaws.com/posts/videos/...',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid file type or size',
+  })
+  async initiateMultipartUpload(
+    @Body() dto: InitiatePostMultipartUploadDto,
+    @CurrentUser() user: User,
+  ) {
+    // Validate file size (max 500MB for chunked uploads)
+    if (dto.fileSize > this.MAX_CHUNKED_FILE_SIZE) {
+      throw new BadRequestException(
+        `File size exceeds maximum allowed size of ${this.MAX_CHUNKED_FILE_SIZE / 1024 / 1024}MB`,
+      );
+    }
+
+    // Validate file type (only images and videos allowed for posts)
+    const allAllowedTypes = [
+      ...this.ALLOWED_IMAGE_TYPES,
+      ...this.ALLOWED_VIDEO_TYPES,
+    ];
+
+    if (!allAllowedTypes.includes(dto.mimeType)) {
+      throw new BadRequestException(
+        `File type ${dto.mimeType} is not allowed. Only images and videos are allowed for posts.`,
+      );
+    }
+
+    // Generate S3 key for posts
+    const folder = `posts/${dto.fileType}s`;
+    const userType =
+      user.userType === 'influencer' ? 'influencer' : 'brand';
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const fileExtension = dto.fileName.split('.').pop();
+    const key = `${folder}/${userType}-${user.id}-${uniqueSuffix}.${fileExtension}`;
+
+    // Initiate multipart upload
+    const { uploadId } = await this.s3Service.initiateMultipartUpload(
+      key,
+      dto.mimeType,
+    );
+
+    return {
+      uploadId,
+      key,
+      fileUrl: this.s3Service.getFileUrl(key),
+    };
+  }
+
+  @Post('upload/multipart/presigned-urls')
+  @ApiOperation({
+    summary: 'Get presigned URLs for uploading post media chunks',
+    description:
+      'Get presigned URLs for each chunk. Client uploads directly to S3 using these URLs.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Presigned URLs generated successfully',
+    schema: {
+      example: {
+        presignedUrls: [
+          { partNumber: 1, url: 'https://...' },
+          { partNumber: 2, url: 'https://...' },
+        ],
+      },
+    },
+  })
+  async getPresignedUrls(@Body() dto: GetPostPresignedUrlsDto) {
+    const presignedUrls = await this.s3Service.getPresignedUrlsForParts(
+      dto.key,
+      dto.uploadId,
+      dto.parts,
+    );
+
+    return { presignedUrls };
+  }
+
+  @Post('upload/multipart/complete')
+  @ApiOperation({
+    summary: 'Complete multipart upload for post media',
+    description:
+      'Finalize the upload by combining all uploaded parts. Returns the final file URL.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Upload completed successfully',
+    schema: {
+      example: {
+        location: 'https://bucket.s3.region.amazonaws.com/posts/videos/...',
+        fileUrl: 'https://bucket.s3.region.amazonaws.com/posts/videos/...',
+      },
+    },
+  })
+  async completeMultipartUpload(@Body() dto: CompletePostMultipartUploadDto) {
+    const result = await this.s3Service.completeMultipartUpload(
+      dto.key,
+      dto.uploadId,
+      dto.parts,
+    );
+
+    return {
+      location: result.location,
+      fileUrl: this.s3Service.getFileUrl(result.key),
+    };
+  }
+
+  @Post('upload/multipart/abort')
+  @ApiOperation({
+    summary: 'Abort multipart upload for post media',
+    description: 'Cancel an incomplete upload and cleanup S3 resources.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Upload aborted successfully',
+  })
+  async abortMultipartUpload(@Body() dto: AbortPostMultipartUploadDto) {
+    await this.s3Service.abortMultipartUpload(dto.key, dto.uploadId);
+    return { message: 'Upload aborted successfully' };
+  }
+
+  @Post('upload/multipart/status')
+  @ApiOperation({
+    summary: 'Check multipart upload status for post media',
+    description:
+      'Get list of already uploaded parts. Useful for resuming interrupted uploads.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Upload status retrieved successfully',
+    schema: {
+      example: {
+        uploadId: 'xxxx-xxxx-xxxx',
+        key: 'posts/videos/influencer-123-1234567890-abc.mp4',
+        uploadedParts: [
+          { PartNumber: 1, ETag: '"etag1"', Size: 5242880 },
+          { PartNumber: 2, ETag: '"etag2"', Size: 5242880 },
+        ],
+        totalPartsUploaded: 2,
+      },
+    },
+  })
+  async getUploadStatus(@Body() dto: GetPostUploadStatusDto) {
+    const uploadedParts = await this.s3Service.listUploadedParts(
+      dto.key,
+      dto.uploadId,
+    );
+
+    return {
+      uploadId: dto.uploadId,
+      key: dto.key,
+      uploadedParts,
+      totalPartsUploaded: uploadedParts.length,
+    };
   }
 }
