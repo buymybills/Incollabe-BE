@@ -23,11 +23,10 @@ export enum ViewerType {
 @Table({
   tableName: 'post_views',
   timestamps: true,
-  underscored: true,
   indexes: [
     {
       unique: true,
-      fields: ['post_id', 'viewer_type', 'viewer_influencer_id', 'viewer_brand_id'],
+      fields: ['postId', 'viewerType', 'viewerInfluencerId', 'viewerBrandId'],
       name: 'unique_post_viewer',
     },
   ],

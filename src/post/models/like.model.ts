@@ -23,11 +23,10 @@ export enum LikerType {
 @Table({
   tableName: 'likes',
   timestamps: true,
-  underscored: true,
   indexes: [
     {
       unique: true,
-      fields: ['post_id', 'liker_type', 'liker_influencer_id', 'liker_brand_id'],
+      fields: ['postId', 'likerType', 'likerInfluencerId', 'likerBrandId'],
     },
   ],
 })
@@ -40,21 +39,21 @@ export class Like extends Model {
   @AllowNull(false)
   @ForeignKey(() => Post)
   @Column(DataType.INTEGER)
-  postId: number;
+  declare postId: number;
 
   @AllowNull(false)
   @Column(DataType.ENUM(...Object.values(LikerType)))
-  likerType: LikerType;
+  declare likerType: LikerType;
 
   @AllowNull(true)
   @ForeignKey(() => Influencer)
   @Column(DataType.INTEGER)
-  likerInfluencerId: number;
+  declare likerInfluencerId: number;
 
   @AllowNull(true)
   @ForeignKey(() => Brand)
   @Column(DataType.INTEGER)
-  likerBrandId: number;
+  declare likerBrandId: number;
 
   @CreatedAt
   @Column(DataType.DATE)
@@ -65,13 +64,13 @@ export class Like extends Model {
   declare updatedAt: Date;
 
   @BelongsTo(() => Post)
-  post: Post;
+  declare post: Post;
 
   @BelongsTo(() => Influencer, 'likerInfluencerId')
-  likerInfluencer: Influencer;
+  declare likerInfluencer: Influencer;
 
   @BelongsTo(() => Brand, 'likerBrandId')
-  likerBrand: Brand;
+  declare likerBrand: Brand;
 
   get liker() {
     return this.likerType === LikerType.INFLUENCER

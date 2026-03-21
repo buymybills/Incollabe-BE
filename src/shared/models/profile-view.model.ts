@@ -27,7 +27,6 @@ export enum ViewerType {
 @Table({
   tableName: 'profile_views',
   timestamps: true,
-  underscored: true,
 })
 export class ProfileView extends Model {
   @PrimaryKey

@@ -28,17 +28,16 @@ export enum FollowingType {
 @Table({
   tableName: 'follows',
   timestamps: true,
-  underscored: true,
   indexes: [
     {
       unique: true,
       fields: [
-        'follower_type',
-        'follower_influencer_id',
-        'follower_brand_id',
-        'following_type',
-        'following_influencer_id',
-        'following_brand_id',
+        'followerType',
+        'followerInfluencerId',
+        'followerBrandId',
+        'followingType',
+        'followingInfluencerId',
+        'followingBrandId',
       ],
     },
   ],
@@ -51,31 +50,31 @@ export class Follow extends Model {
 
   @AllowNull(false)
   @Column(DataType.ENUM(...Object.values(FollowerType)))
-  followerType: FollowerType;
+  declare followerType: FollowerType;
 
   @AllowNull(true)
   @ForeignKey(() => Influencer)
   @Column(DataType.INTEGER)
-  followerInfluencerId: number;
+  declare followerInfluencerId: number;
 
   @AllowNull(true)
   @ForeignKey(() => Brand)
   @Column(DataType.INTEGER)
-  followerBrandId: number;
+  declare followerBrandId: number;
 
   @AllowNull(false)
   @Column(DataType.ENUM(...Object.values(FollowingType)))
-  followingType: FollowingType;
+  declare followingType: FollowingType;
 
   @AllowNull(true)
   @ForeignKey(() => Influencer)
   @Column(DataType.INTEGER)
-  followingInfluencerId: number;
+  declare followingInfluencerId: number;
 
   @AllowNull(true)
   @ForeignKey(() => Brand)
   @Column(DataType.INTEGER)
-  followingBrandId: number;
+  declare followingBrandId: number;
 
   @CreatedAt
   @Column(DataType.DATE)
@@ -86,16 +85,16 @@ export class Follow extends Model {
   declare updatedAt: Date;
 
   @BelongsTo(() => Influencer, 'followerInfluencerId')
-  followerInfluencer: Influencer;
+  declare followerInfluencer: Influencer;
 
   @BelongsTo(() => Brand, 'followerBrandId')
-  followerBrand: Brand;
+  declare followerBrand: Brand;
 
   @BelongsTo(() => Influencer, 'followingInfluencerId')
-  followingInfluencer: Influencer;
+  declare followingInfluencer: Influencer;
 
   @BelongsTo(() => Brand, 'followingBrandId')
-  followingBrand: Brand;
+  declare followingBrand: Brand;
 
   get follower() {
     return this.followerType === FollowerType.INFLUENCER
