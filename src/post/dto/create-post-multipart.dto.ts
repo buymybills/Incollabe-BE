@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, Length } from 'class-validator';
+import { IsString, IsArray, IsOptional, Length } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export class CreatePostMultipartDto {
@@ -28,4 +28,26 @@ export class CreatePostMultipartDto {
   })
   @IsOptional()
   media?: any[];
+
+  @ApiProperty({
+    description:
+      'Pre-uploaded media URL(s) from S3 (for chunked uploads). Can be a single URL string or array of URLs.',
+    required: false,
+    oneOf: [
+      { type: 'string' },
+      { type: 'array', items: { type: 'string' } }
+    ],
+    example: 'https://incollabstaging.s3.ap-south-1.amazonaws.com/posts/videos/influencer-11-1234567890-12345.mp4',
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    // Convert single string to array for consistency
+    if (typeof value === 'string') {
+      return [value];
+    }
+    return value;
+  })
+  @IsArray()
+  @IsString({ each: true })
+  mediaUrls?: string[];
 }
