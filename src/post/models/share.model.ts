@@ -23,10 +23,11 @@ export enum SharerType {
 @Table({
   tableName: 'shares',
   timestamps: true,
+  underscored: true,
   indexes: [
     {
       unique: true,
-      fields: ['postId', 'sharerType', 'sharerInfluencerId', 'sharerBrandId'],
+      fields: ['post_id', 'sharer_type', 'sharer_influencer_id', 'sharer_brand_id'],
       name: 'unique_post_sharer',
     },
   ],

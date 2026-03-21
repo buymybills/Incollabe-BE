@@ -23,10 +23,11 @@ export enum LikerType {
 @Table({
   tableName: 'likes',
   timestamps: true,
+  underscored: true,
   indexes: [
     {
       unique: true,
-      fields: ['postId', 'likerType', 'likerInfluencerId', 'likerBrandId'],
+      fields: ['post_id', 'liker_type', 'liker_influencer_id', 'liker_brand_id'],
     },
   ],
 })

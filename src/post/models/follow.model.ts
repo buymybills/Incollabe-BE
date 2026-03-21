@@ -28,16 +28,17 @@ export enum FollowingType {
 @Table({
   tableName: 'follows',
   timestamps: true,
+  underscored: true,
   indexes: [
     {
       unique: true,
       fields: [
-        'followerType',
-        'followerInfluencerId',
-        'followerBrandId',
-        'followingType',
-        'followingInfluencerId',
-        'followingBrandId',
+        'follower_type',
+        'follower_influencer_id',
+        'follower_brand_id',
+        'following_type',
+        'following_influencer_id',
+        'following_brand_id',
       ],
     },
   ],
