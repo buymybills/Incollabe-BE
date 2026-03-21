@@ -496,8 +496,69 @@ export class PostController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get a specific post by ID' })
-  @ApiResponse({ status: 200, description: 'Post retrieved successfully' })
+  @ApiOperation({
+    summary: 'Get a specific post by ID',
+    description: 'Returns post details. If the post is boosted and you are the owner, includes boost analytics with:\n\n' +
+      '**Boost Analytics (for boosted posts - owner only):**\n' +
+      '- Growth metrics (views, likes, shares)\n' +
+      '- Follower vs non-follower breakdown\n' +
+      '- Daily trend data showing last 30 days (today + 29 days before)\n' +
+      '- Chart shows performance before and after boost activation\n\n' +
+      'This allows you to compare performance trends and see the impact of boost mode.'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Post retrieved successfully',
+    schema: {
+      example: {
+        id: 78,
+        content: 'My post content',
+        isBoosted: true,
+        boostStatus: {
+          isBoosted: true,
+          displayMessage: 'BOOST MODE ACTIVATED',
+          viewsCount: 5,
+          expiresIn: '21 hours remaining'
+        },
+        boostAnalytics: {
+          activated: true,
+          boostDuration: '2 hours',
+          growthMessage: '30% growth in overall view and interaction after boost activation',
+          metrics: {
+            views: { count: 5, growth: 1, growthFormatted: '+1' },
+            likes: { count: 2, growth: 0, growthFormatted: '+0' },
+            shares: { count: 0, growth: 0, growthFormatted: '+0' }
+          },
+          viewsTrend: {
+            followerBreakdown: {
+              followers: { count: 1, percentage: 20 },
+              nonFollowers: { count: 4, percentage: 80 }
+            },
+            trendData: [
+              { date: 'Mar 18', followers: 0, nonFollowers: 1 },
+              { date: 'Mar 19', followers: 0, nonFollowers: 0 },
+              { date: 'Mar 20', followers: 0, nonFollowers: 1 },
+              { date: 'Mar 21', followers: 0, nonFollowers: 3 },
+              { date: 'Mar 22', followers: 1, nonFollowers: 5 }
+            ]
+          },
+          interactionsTrend: {
+            followerBreakdown: {
+              followers: { count: 1, percentage: 50 },
+              nonFollowers: { count: 1, percentage: 50 }
+            },
+            trendData: [
+              { date: 'Mar 18', followers: 0, nonFollowers: 0 },
+              { date: 'Mar 19', followers: 0, nonFollowers: 0 },
+              { date: 'Mar 20', followers: 0, nonFollowers: 0 },
+              { date: 'Mar 21', followers: 0, nonFollowers: 0 },
+              { date: 'Mar 22', followers: 1, nonFollowers: 1 }
+            ]
+          }
+        }
+      }
+    }
+  })
   @ApiResponse({ status: 404, description: 'Post not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getPostById(

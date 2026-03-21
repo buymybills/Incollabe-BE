@@ -3860,7 +3860,13 @@ export class PostService {
 
   /**
    * Get boost analytics for a specific post
-   * Includes metrics growth, follower breakdown, and trend data
+   * Includes metrics growth, follower breakdown, and daily trend data
+   *
+   * Trend data shows 30 days total ending on current date:
+   * - Today + 29 days before (last 30 days)
+   * - Shows performance before and after boost activation
+   *
+   * This allows users to see the impact of boost mode on their post performance
    */
   private async getBoostAnalytics(postId: number, boostedAt: Date) {
     const post = await this.postModel.findByPk(postId);
@@ -4051,6 +4057,7 @@ export class PostService {
 
   /**
    * Get trend data for views and interactions over the boost period
+   * Shows 30 days total ending on current date (today + 29 days before)
    */
   private async getBoostTrendData(
     postId: number,
@@ -4059,18 +4066,16 @@ export class PostService {
     postUserType: UserType,
     postUserId: number,
   ) {
-    // Generate daily trend data for the boost period
-    const days = Math.min(
-      Math.ceil((currentDate.getTime() - boostedAt.getTime()) / (1000 * 60 * 60 * 24)),
-      7 // Max 7 days for the chart
-    );
+    // Show 30 days total: today + 29 days before
+    const totalDays = 30;
 
     const viewsTrend: Array<{ date: string; followers: number; nonFollowers: number }> = [];
     const interactionsTrend: Array<{ date: string; followers: number; nonFollowers: number }> = [];
 
-    for (let i = 0; i < days; i++) {
-      const date = new Date(boostedAt.getTime() + i * 24 * 60 * 60 * 1000);
-      const dayLabel = `Aug ${boostedAt.getDate() + i}`;
+    // Start from 29 days ago, end on today
+    for (let i = totalDays - 1; i >= 0; i--) {
+      const date = new Date(currentDate.getTime() - i * 24 * 60 * 60 * 1000);
+      const dayLabel = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
       // Get views for this day
       const dayViews = await this.sequelize.query(`
