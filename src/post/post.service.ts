@@ -4008,11 +4008,11 @@ export class PostService {
         COUNT(CASE WHEN f.id IS NOT NULL THEN 1 END) as follower_interactions,
         COUNT(CASE WHEN f.id IS NULL THEN 1 END) as non_follower_interactions
       FROM (
-        SELECT "likerType" as user_type, "likerInfluencerId" as influencer_id, "likerBrandId" as brand_id
+        SELECT "likerType"::text as user_type, "likerInfluencerId" as influencer_id, "likerBrandId" as brand_id
         FROM likes
         WHERE "postId" = :postId
         UNION ALL
-        SELECT "sharerType" as user_type, "sharerInfluencerId" as influencer_id, "sharerBrandId" as brand_id
+        SELECT "sharerType"::text as user_type, "sharerInfluencerId" as influencer_id, "sharerBrandId" as brand_id
         FROM shares
         WHERE "postId" = :postId
       ) interactions
@@ -4110,11 +4110,11 @@ export class PostService {
           COUNT(CASE WHEN f.id IS NOT NULL THEN 1 END) as follower_interactions,
           COUNT(CASE WHEN f.id IS NULL THEN 1 END) as non_follower_interactions
         FROM (
-          SELECT "likerType" as user_type, "likerInfluencerId" as influencer_id, "likerBrandId" as brand_id, "createdAt"
+          SELECT "likerType"::text as user_type, "likerInfluencerId" as influencer_id, "likerBrandId" as brand_id, "createdAt"
           FROM likes
           WHERE "postId" = :postId AND DATE("createdAt") = DATE(:date)
           UNION ALL
-          SELECT "sharerType" as user_type, "sharerInfluencerId" as influencer_id, "sharerBrandId" as brand_id, "sharedAt" as "createdAt"
+          SELECT "sharerType"::text as user_type, "sharerInfluencerId" as influencer_id, "sharerBrandId" as brand_id, "sharedAt" as "createdAt"
           FROM shares
           WHERE "postId" = :postId AND DATE("sharedAt") = DATE(:date)
         ) interactions
