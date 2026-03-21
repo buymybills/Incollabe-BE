@@ -27,6 +27,7 @@ export enum ViewerType {
 @Table({
   tableName: 'profile_views',
   timestamps: true,
+  underscored: true,
 })
 export class ProfileView extends Model {
   @PrimaryKey
@@ -65,7 +66,7 @@ export class ProfileView extends Model {
   declare viewerBrandId: number;
 
   @AllowNull(false)
-  @Column({ type: DataType.DATE, defaultValue: DataType.NOW, field: 'viewed_at' })
+  @Column({ type: DataType.DATE, defaultValue: DataType.NOW })
   declare viewedAt: Date;
 
   @CreatedAt
