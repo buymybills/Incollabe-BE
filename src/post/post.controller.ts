@@ -118,7 +118,43 @@ export class PostController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get posts feed' })
+  @ApiOperation({
+    summary: 'Get posts feed',
+    description: 'Get posts feed with optional filters. Filter by boost status, specific user, or view all posts. Boosted posts appear first by default.'
+  })
+  @ApiQuery({
+    name: 'boosted',
+    required: false,
+    type: Boolean,
+    description: 'Filter by boost status: true for boosted posts only, false for non-boosted posts only, undefined/omit for all posts',
+    example: true,
+  })
+  @ApiQuery({
+    name: 'userType',
+    required: false,
+    enum: ['influencer', 'brand'],
+    description: 'Filter by specific user type (use with userId)',
+  })
+  @ApiQuery({
+    name: 'userId',
+    required: false,
+    type: Number,
+    description: 'Filter by specific user ID (use with userType)',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number for pagination (default: 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Number of posts per page (default: 10)',
+    example: 10,
+  })
   @ApiResponse({ status: 200, description: 'Posts retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getPosts(@Query() getPostsDto: GetPostsDto, @CurrentUser() user: User) {

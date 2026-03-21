@@ -666,6 +666,10 @@ describe('PostService', () => {
           content: 'Influencer post',
           userType: UserType.INFLUENCER,
           influencerId: 1,
+          isBoosted: false,
+          boostedAt: null,
+          boostExpiresAt: null,
+          viewsCount: 0,
         },
       ];
 
@@ -677,7 +681,19 @@ describe('PostService', () => {
       const result = await service.getPosts(getPostsDto);
 
       expect(result.posts).toEqual(
-        mockPosts.map((post) => ({ ...post, media: [] })),
+        mockPosts.map((post) => ({
+          ...post,
+          media: [],
+          boostStatus: expect.objectContaining({
+            isBoosted: false,
+            canBoost: false,
+            viewsCount: 0,
+            viewsFormatted: '0',
+            expiresIn: null,
+            boostedAt: null,
+            boostExpiresAt: null,
+          }),
+        })),
       );
       expect(postModel.findAndCountAll).toHaveBeenCalledWith(
         expect.objectContaining({
