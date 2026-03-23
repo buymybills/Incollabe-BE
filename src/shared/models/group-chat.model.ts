@@ -53,7 +53,7 @@ export class GroupChat extends Model<GroupChat> {
 
   @Column({
     type: DataType.INTEGER,
-    defaultValue: 100,
+    defaultValue: 1000,
   })
   declare maxMembers: number;
 
