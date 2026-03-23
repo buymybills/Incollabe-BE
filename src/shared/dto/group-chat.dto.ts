@@ -47,7 +47,7 @@ export class CreateGroupDto {
   isJoinable?: boolean;
 
   @ApiProperty({
-    description: 'Initial members to add to the group (optional, max 99 members plus creator = 100 total)',
+    description: 'Initial members to add to the group (optional, max 999 members plus creator = 1000 total)',
     required: false,
     type: 'array',
     items: {
@@ -60,7 +60,7 @@ export class CreateGroupDto {
   })
   @IsArray()
   @IsOptional()
-  @ArrayMaxSize(99) // Max 99 + creator = 100 total
+  @ArrayMaxSize(999) // Max 999 + creator = 1000 total
   initialMemberIds?: Array<{ memberId: number; memberType: MemberType }>;
 }
 
