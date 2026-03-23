@@ -57,9 +57,9 @@ export class GroupChatService {
 
     // Calculate total members (creator + initial members)
     const totalMembers = 1 + (initialMemberIds?.length || 0);
-    if (totalMembers > 100) {
+    if (totalMembers > 1000) {
       throw new BadRequestException(
-        'Group cannot have more than 100 members including creator',
+        'Group cannot have more than 1000 members including creator',
       );
     }
 
@@ -69,7 +69,7 @@ export class GroupChatService {
       avatarUrl: avatarUrl || null,
       createdById: creatorId,
       createdByType: creatorType,
-      maxMembers: 100,
+      maxMembers: 1000,
       isActive: true,
       isBroadcastOnly: isBroadcastOnly || false,
       isJoinable: isJoinable ?? true,
@@ -578,6 +578,14 @@ export class GroupChatService {
   ) {
     const offset = (page - 1) * limit;
 
+    // For brands, only show groups they created
+    // For influencers, show all groups they're members of
+    const groupChatWhere: any = { isActive: true };
+    if (userType === 'brand') {
+      groupChatWhere.createdById = userId;
+      groupChatWhere.createdByType = 'brand';
+    }
+
     // Find all group memberships for user
     const memberships = await this.groupMemberModel.findAll({
       where: {
@@ -589,7 +597,7 @@ export class GroupChatService {
         {
           model: this.groupChatModel,
           as: 'groupChat',
-          where: { isActive: true },
+          where: groupChatWhere,
           include: [
             {
               model: this.conversationModel,
@@ -638,7 +646,7 @@ export class GroupChatService {
       }),
     );
 
-    // Get total count
+    // Get total count (use same filter as above)
     const total = await this.groupMemberModel.count({
       where: {
         memberId: userId,
@@ -649,7 +657,7 @@ export class GroupChatService {
         {
           model: this.groupChatModel,
           as: 'groupChat',
-          where: { isActive: true },
+          where: groupChatWhere,
         },
       ],
     });
@@ -765,6 +773,8 @@ export class GroupChatService {
 
   /**
    * Get available/joinable groups (shows all community groups to users)
+   * For brands: only show groups they created
+   * For influencers: show all joinable community groups
    */
   async getAvailableGroups(
     userId: number,
@@ -774,12 +784,20 @@ export class GroupChatService {
   ) {
     const offset = (page - 1) * limit;
 
+    // For brands, only show groups they created
+    // For influencers, show all active joinable groups
+    const whereClause: any = {
+      isActive: true,
+      isJoinable: true,
+    };
+    if (userType === 'brand') {
+      whereClause.createdById = userId;
+      whereClause.createdByType = 'brand';
+    }
+
     // Find all active, joinable groups (community groups)
-    const { rows: groups, count: totalCount } = await this.groupChatModel.findAndCountAll({
-      where: {
-        isActive: true,
-        isJoinable: true,
-      },
+    const { rows: groups } = await this.groupChatModel.findAndCountAll({
+      where: whereClause,
       include: [
         {
           model: this.conversationModel,
@@ -826,14 +844,21 @@ export class GroupChatService {
       }),
     );
 
-    // Return ALL groups (including ones user is already in)
-    // The UI can use isMember flag to show different states
+    // For influencers: filter out full groups that they haven't joined yet
+    // For brands: show all their groups (including full ones)
+    let filteredGroups = groupsWithMemberStatus;
+    if (userType === 'influencer') {
+      filteredGroups = groupsWithMemberStatus.filter(
+        (group) => group.isMember || !group.isFull
+      );
+    }
+
     return {
-      groups: groupsWithMemberStatus,
-      total: totalCount,
+      groups: filteredGroups,
+      total: filteredGroups.length, // Use filtered count
       page,
       limit,
-      totalPages: Math.ceil(totalCount / limit),
+      totalPages: Math.ceil(filteredGroups.length / limit),
     };
   }
 
