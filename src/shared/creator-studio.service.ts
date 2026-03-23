@@ -153,7 +153,10 @@ export class CreatorStudioService {
         whereClause.userType = UserType.BRAND;
       }
 
-      // Count total posts (not filtered by timeframe)
+      // Only count active posts
+      whereClause.isActive = true;
+
+      // Count total active posts (not filtered by timeframe)
       const postsCount = await Post.count({ where: whereClause });
 
       return postsCount;
