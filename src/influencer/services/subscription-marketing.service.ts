@@ -8,6 +8,8 @@ import { ProSubscriptionPromotion } from '../models/pro-subscription-promotion.m
 import { CampaignApplication } from '../../campaign/models/campaign-application.model';
 import { DeviceToken, UserType } from '../../shared/models/device-token.model';
 import { NotificationService } from '../../shared/notification.service';
+import { InAppNotificationService } from '../../shared/in-app-notification.service';
+import { NotificationType, NotificationPriority } from '../../shared/models/in-app-notification.model';
 
 @Injectable()
 export class SubscriptionMarketingService {
@@ -25,6 +27,7 @@ export class SubscriptionMarketingService {
     @InjectModel(DeviceToken)
     private deviceTokenModel: typeof DeviceToken,
     private notificationService: NotificationService,
+    private inAppNotificationService: InAppNotificationService,
   ) {}
 
   // ==================== DROP-OFF TRACKING ====================
@@ -122,17 +125,53 @@ export class SubscriptionMarketingService {
     const message = messages[timing];
 
     try {
-      await this.notificationService.sendCustomNotification(
-        influencer.fcmToken,
-        message.title,
-        message.body,
-        {
-          type: 'subscription_reminder',
-          action: 'resume_payment',
-          subscriptionId: subscription.id.toString(),
-          timing,
+      // Get FCM tokens from device_tokens table
+      const deviceTokens = await this.deviceTokenModel.findAll({
+        where: {
+          userId: influencer.id,
+          userType: UserType.INFLUENCER,
         },
-      );
+        attributes: ['fcmToken'],
+      });
+
+      if (deviceTokens.length === 0) {
+        this.logger.debug(`⚠️ No FCM tokens found for influencer ${influencer.id}, skipping push notification`);
+      } else {
+        const fcmTokens = deviceTokens.map(dt => dt.fcmToken);
+
+        // Send push notification
+        await this.notificationService.sendCustomNotification(
+          fcmTokens,
+          message.title,
+          message.body,
+          {
+            type: 'subscription_reminder',
+            action: 'resume_payment',
+            subscriptionId: subscription.id.toString(),
+            timing,
+          },
+        );
+      }
+
+      // Create in-app notification
+      await this.inAppNotificationService.createNotification({
+        userId: influencer.id,
+        userType: 'influencer',
+        title: message.title,
+        body: message.body,
+        type: NotificationType.PRO_SUBSCRIPTION_EXPIRING,
+        actionType: 'resume_payment',
+        actionUrl: `app://subscription/payment?subscriptionId=${subscription.id}`,
+        relatedEntityType: 'subscription',
+        relatedEntityId: subscription.id,
+        priority: NotificationPriority.HIGH,
+        metadata: {
+          subscriptionId: subscription.id,
+          subscriptionAmount: subscription.subscriptionAmount,
+          timing,
+          reminderType: 'payment_drop_off',
+        },
+      } as any);
 
       await subscription.update({ reminderSentAt: new Date() });
       this.logger.log(`📱 Sent ${timing} reminder to influencer ${influencer.id} (subscription: ${subscription.id})`);
@@ -217,6 +256,23 @@ export class SubscriptionMarketingService {
               cta: 'Join MAX',
             },
           );
+
+          // Create in-app notification
+          await this.inAppNotificationService.createNotification({
+            userId: influencer.id,
+            userType: 'influencer',
+            title: message.title,
+            body: message.body,
+            type: NotificationType.SYSTEM_ANNOUNCEMENT,
+            actionType: 'view_subscription',
+            actionUrl: 'app://subscription',
+            priority: NotificationPriority.NORMAL,
+            metadata: {
+              weeklyCredits: influencer.weeklyCredits,
+              campaignApplications,
+              nudgeType: 'daily_subscription_nudge',
+            },
+          } as any);
 
           // Update last nudge timestamp
           await influencer.update({ lastNudgeSentAt: now });
@@ -337,7 +393,29 @@ export class SubscriptionMarketingService {
         this.logger.debug(`📱 Sent flash sale notification to ${sentCount}/${fcmTokens.length} users`);
       }
 
-      this.logger.log(`✅ Flash sale announcement complete: ${sentCount} notifications sent`);
+      // Create in-app notifications for all non-Pro users
+      const inAppNotifications = userIds.map(userId => ({
+        userId,
+        userType: 'influencer' as const,
+        title: message.title,
+        body: message.body,
+        type: NotificationType.SYSTEM_ANNOUNCEMENT,
+        actionType: 'subscribe_now',
+        actionUrl: `app://subscription?promotionId=${promotionId}`, // Deep link to subscription page
+        relatedEntityType: 'promotion',
+        relatedEntityId: promotionId,
+        priority: NotificationPriority.HIGH,
+        metadata: {
+          promotionId: promotionId,
+          originalPrice: originalPrice,
+          discountedPrice: discountedPrice,
+          savings: savings,
+          saleType: 'flash_sale_announcement',
+        },
+      }));
+
+      await this.inAppNotificationService.createBulkNotifications(inAppNotifications);
+      this.logger.log(`✅ Flash sale announcement complete: ${sentCount} push notifications + ${inAppNotifications.length} in-app notifications sent`);
     } catch (error) {
       this.logger.error(`❌ Error announcing flash sale: ${error.message}`, error.stack);
       throw error;
@@ -420,7 +498,29 @@ export class SubscriptionMarketingService {
         },
       );
 
-      this.logger.log(`✅ Flash sale reminder sent to ${fcmTokens.length} users`);
+      // Create in-app notifications for all non-Pro users
+      const inAppNotifications = userIds.map(userId => ({
+        userId,
+        userType: 'influencer' as const,
+        title: message.title,
+        body: message.body,
+        type: NotificationType.SYSTEM_ANNOUNCEMENT,
+        actionType: 'subscribe_now',
+        actionUrl: `app://subscription?promotionId=${promotionId}`,
+        relatedEntityType: 'promotion',
+        relatedEntityId: promotionId,
+        priority: NotificationPriority.HIGH,
+        metadata: {
+          promotionId: promotionId,
+          discountedPrice: discountedPrice,
+          timeRemaining: timeRemaining,
+          spotsLeft: spotsLeft,
+          saleType: 'flash_sale_reminder',
+        },
+      }));
+
+      await this.inAppNotificationService.createBulkNotifications(inAppNotifications);
+      this.logger.log(`✅ Flash sale reminder sent: ${fcmTokens.length} push notifications + ${inAppNotifications.length} in-app notifications`);
     } catch (error) {
       this.logger.error(`❌ Error sending flash sale reminder: ${error.message}`, error.stack);
     }

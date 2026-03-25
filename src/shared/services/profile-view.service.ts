@@ -3,6 +3,11 @@ import { InjectModel } from '@nestjs/sequelize';
 import { ProfileView, ViewedUserType, ViewerType } from '../models/profile-view.model';
 import { Influencer } from '../../auth/model/influencer.model';
 import { Brand } from '../../brand/model/brand.model';
+import { InAppNotificationService } from '../in-app-notification.service';
+import { NotificationService } from '../notification.service';
+import { DeviceTokenService } from '../device-token.service';
+import { NotificationType, NotificationPriority } from '../models/in-app-notification.model';
+import { UserType as DeviceUserType } from '../models/device-token.model';
 
 export interface TrackProfileViewDto {
   viewedUserId: number;
@@ -20,6 +25,9 @@ export class ProfileViewService {
     private readonly influencerModel: typeof Influencer,
     @InjectModel(Brand)
     private readonly brandModel: typeof Brand,
+    private readonly inAppNotificationService: InAppNotificationService,
+    private readonly notificationService: NotificationService,
+    private readonly deviceTokenService: DeviceTokenService,
   ) {}
 
   /**
@@ -128,6 +136,11 @@ export class ProfileViewService {
           });
           viewsCount = brand?.profileViewsCount;
         }
+
+        // Send notifications for new profile view (async, fire-and-forget)
+        this.sendProfileViewNotification(data).catch((error: any) => {
+          console.error('Error sending profile view notification:', error);
+        });
 
         return {
           success: true,
@@ -267,5 +280,89 @@ export class ProfileViewService {
       limit,
       totalPages: Math.ceil(count / limit),
     };
+  }
+
+  /**
+   * Send in-app notification and push notification for profile view
+   */
+  private async sendProfileViewNotification(data: TrackProfileViewDto): Promise<void> {
+    try {
+      // Get viewer details
+      let viewerUser: Influencer | Brand | null = null;
+      if (data.viewerType === 'influencer') {
+        viewerUser = await this.influencerModel.findByPk(data.viewerId, {
+          attributes: ['id', 'name', 'username', 'profileImage'],
+        });
+      } else {
+        viewerUser = await this.brandModel.findByPk(data.viewerId, {
+          attributes: ['id', 'brandName', 'username', 'profileImage'],
+        });
+      }
+
+      if (!viewerUser) {
+        console.error('Viewer user not found for notification');
+        return;
+      }
+
+      const viewerName = data.viewerType === 'influencer'
+        ? (viewerUser as Influencer).name
+        : (viewerUser as Brand).brandName;
+      const viewerUsername = viewerUser.username;
+      const viewerProfileImage = (viewerUser as any).profileImage;
+
+      // Create in-app notification
+      await this.inAppNotificationService.createNotification({
+        userId: data.viewedUserId,
+        userType: data.viewedUserType,
+        title: 'Profile View',
+        body: `${viewerName} viewed your profile`,
+        type: NotificationType.CUSTOM,
+        actionUrl: `app://profile/${data.viewerType}/${data.viewerId}`,
+        actionType: 'view_profile',
+        relatedEntityType: 'user',
+        relatedEntityId: data.viewerId,
+        priority: NotificationPriority.NORMAL,
+        metadata: {
+          viewerUserId: data.viewerId,
+          viewerUserType: data.viewerType,
+          viewerName,
+          viewerUsername,
+          viewerProfileImage,
+        },
+      } as any);
+
+      // Send push notification
+      const viewedDeviceUserType = data.viewedUserType === 'influencer'
+        ? DeviceUserType.INFLUENCER
+        : DeviceUserType.BRAND;
+
+      const deviceTokens = await this.deviceTokenService.getAllUserTokens(
+        data.viewedUserId,
+        viewedDeviceUserType,
+      );
+
+      if (deviceTokens.length > 0) {
+        // Send to all devices in parallel
+        const notificationPromises = deviceTokens.map((token) =>
+          this.notificationService.sendCustomNotification(
+            token,
+            'Profile View',
+            `${viewerName} viewed your profile`,
+            {
+              type: 'profile_view',
+              viewerUserId: data.viewerId.toString(),
+              viewerUserType: data.viewerType,
+              viewerUsername,
+              viewerProfileImage,
+              action: 'view_profile',
+            },
+          ),
+        );
+        await Promise.allSettled(notificationPromises);
+      }
+    } catch (error) {
+      console.error('Error in sendProfileViewNotification:', error);
+      throw error;
+    }
   }
 }
