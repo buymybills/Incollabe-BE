@@ -58,4 +58,12 @@ export class UpdateFcmTokenDto {
   @IsOptional()
   @IsNumber()
   versionCode?: number;
+
+  @ApiPropertyOptional({
+    description: 'Unique identifier for each app installation instance',
+    example: 'inst_1a2b3c4d5e6f7890',
+  })
+  @IsOptional()
+  @IsString()
+  installationId?: string;
 }
