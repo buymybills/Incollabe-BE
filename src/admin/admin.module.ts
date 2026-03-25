@@ -50,6 +50,7 @@ import { ProInvoice } from '../influencer/models/pro-invoice.model';
 import { ProSubscriptionPromotion } from '../influencer/models/pro-subscription-promotion.model';
 import { MaxCampaignInvoice } from '../campaign/models/max-campaign-invoice.model';
 import { InviteOnlyCampaignInvoice } from '../campaign/models/invite-only-campaign-invoice.model';
+import { NudgeMessageTemplate } from '../shared/models/nudge-message-template.model';
 
 import { SharedModule } from '../shared/shared.module';
 import { BrandModule } from '../brand/brand.module';
@@ -93,6 +94,7 @@ import { RolesGuard } from './guards/roles.guard';
       ProSubscriptionPromotion,
       MaxCampaignInvoice,
       InviteOnlyCampaignInvoice,
+      NudgeMessageTemplate,
     ]),
     SharedModule,
     NotificationQueueModule,

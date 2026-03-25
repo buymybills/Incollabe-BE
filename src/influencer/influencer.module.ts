@@ -47,6 +47,7 @@ import { ProSubscriptionPromotion } from './models/pro-subscription-promotion.mo
 import { SubscriptionMarketingService } from './services/subscription-marketing.service';
 import { PostBoostInvoice } from '../post/models/post-boost-invoice.model';
 import { DeviceToken } from '../shared/models/device-token.model';
+import { NudgeMessageTemplate } from '../shared/models/nudge-message-template.model';
 
 @Module({
   imports: [
@@ -87,6 +88,7 @@ import { DeviceToken } from '../shared/models/device-token.model';
       Wallet,
       WalletTransaction,
       DeviceToken,
+      NudgeMessageTemplate,
     ]),
     SharedModule,
     CampaignModule,

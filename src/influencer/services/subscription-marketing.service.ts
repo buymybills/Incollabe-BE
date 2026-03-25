@@ -10,6 +10,7 @@ import { DeviceToken, UserType } from '../../shared/models/device-token.model';
 import { NotificationService } from '../../shared/notification.service';
 import { InAppNotificationService } from '../../shared/in-app-notification.service';
 import { NotificationType, NotificationPriority } from '../../shared/models/in-app-notification.model';
+import { NudgeMessageTemplate, NudgeMessageType } from '../../shared/models/nudge-message-template.model';
 
 @Injectable()
 export class SubscriptionMarketingService {
@@ -26,6 +27,8 @@ export class SubscriptionMarketingService {
     private campaignApplicationModel: typeof CampaignApplication,
     @InjectModel(DeviceToken)
     private deviceTokenModel: typeof DeviceToken,
+    @InjectModel(NudgeMessageTemplate)
+    private nudgeMessageTemplateModel: typeof NudgeMessageTemplate,
     private notificationService: NotificationService,
     private inAppNotificationService: InAppNotificationService,
   ) {}
@@ -83,18 +86,15 @@ export class SubscriptionMarketingService {
 
         // Send reminders based on time elapsed
         const influencer = subscription.influencer;
-        if (!influencer?.fcmToken) {
-          this.logger.debug(`⚠️ No FCM token for influencer ${subscription.influencerId}, skipping notification`);
-          continue;
-        }
 
-        // 6-hour reminder (if no reminder sent yet)
-        if (hoursSinceCreation >= 6 && !subscription.reminderSentAt) {
+        // Send 6-hour reminder (if not sent yet and at least 6 hours have passed)
+        if (hoursSinceCreation >= 6 && hoursSinceCreation < 24 && !subscription.reminder6hSentAt) {
           await this.sendPaymentReminder(subscription, influencer, '6hour');
           reminders6h++;
         }
-        // 1-hour reminder (if no reminder sent yet)
-        else if (hoursSinceCreation >= 1 && !subscription.reminderSentAt) {
+
+        // Send 1-hour reminder (if not sent yet and at least 1 hour has passed)
+        if (hoursSinceCreation >= 1 && hoursSinceCreation < 6 && !subscription.reminder1hSentAt) {
           await this.sendPaymentReminder(subscription, influencer, '1hour');
           reminders1h++;
         }
@@ -173,7 +173,9 @@ export class SubscriptionMarketingService {
         },
       } as any);
 
-      await subscription.update({ reminderSentAt: new Date() });
+      // Update the appropriate reminder timestamp based on timing
+      const updateField = timing === '1hour' ? { reminder1hSentAt: new Date() } : { reminder6hSentAt: new Date() };
+      await subscription.update(updateField);
       this.logger.log(`📱 Sent ${timing} reminder to influencer ${influencer.id} (subscription: ${subscription.id})`);
     } catch (error) {
       this.logger.error(`❌ Failed to send reminder: ${error.message}`);
@@ -184,39 +186,53 @@ export class SubscriptionMarketingService {
 
   /**
    * Cron job: Send daily subscription nudges to non-Pro users
-   * Runs every day at 10:00 AM
+   * Uses smart frequency based on user journey:
+   * - Days 1-3: Grace period (no nudges)
+   * - Days 4-10: Every 2 days
+   * - Days 11-17: Every 3 days
+   * - Days 18-30: Weekly
+   * - After 30 days: Stop (user not interested)
    */
   @Cron('0 10 * * *') // 10:00 AM daily
   async sendDailySubscriptionNudges() {
-    this.logger.log('🔍 Starting daily subscription nudges...');
+    this.logger.log('🔍 Starting smart frequency subscription nudges...');
 
     try {
       const now = new Date();
-      const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
 
-      // Find eligible influencers: non-Pro, verified, active, haven't received nudge in last 24h
-      const eligibleInfluencers = await this.influencerModel.findAll({
+      // Find potential candidates: non-Pro, verified, active, joined >3 days ago
+      const candidates = await this.influencerModel.findAll({
         where: {
           isPro: false,
           isVerified: true,
           isActive: true,
-          [Op.or]: [
-            { lastNudgeSentAt: null }, // Never received nudge
-            { lastNudgeSentAt: { [Op.lt]: twentyFourHoursAgo } }, // Last nudge > 24h ago
-          ],
-          createdAt: { [Op.lt]: thirtyDaysAgo }, // Don't spam new users too early
+          createdAt: { [Op.lt]: threeDaysAgo }, // Joined more than 3 days ago
         },
-        limit: 1000, // Batch limit to avoid overwhelming the system
+        limit: 2000, // Batch limit
       });
 
-      this.logger.log(`📊 Found ${eligibleInfluencers.length} eligible influencer(s) for nudges`);
+      this.logger.log(`📊 Found ${candidates.length} candidate(s) for nudge evaluation`);
 
       let sentCount = 0;
       let skippedCount = 0;
+      let stoppedCount = 0;
 
-      for (const influencer of eligibleInfluencers) {
+      for (const influencer of candidates) {
         try {
+          // Check if user should receive nudge based on smart frequency
+          const shouldSendNudge = this.shouldSendNudge(influencer, now);
+
+          if (!shouldSendNudge.send) {
+            if (shouldSendNudge.reason === 'stopped') {
+              stoppedCount++;
+            } else {
+              skippedCount++;
+            }
+            this.logger.debug(`⏭️ Skip influencer ${influencer.id}: ${shouldSendNudge.reason}`);
+            continue;
+          }
+
           // Get FCM tokens for this influencer
           const deviceTokens = await this.deviceTokenModel.findAll({
             where: {
@@ -239,10 +255,11 @@ export class SubscriptionMarketingService {
             where: { influencerId: influencer.id },
           });
 
-          // Determine message based on behavior
-          const message = this.getPersonalizedNudgeMessage(
+          // Get rotated message from database templates
+          const message = await this.getRotatedNudgeMessage(
             influencer.weeklyCredits,
             campaignApplications,
+            influencer.lastNudgeMessageIndex || 0,
           );
 
           // Send push notification to all user's devices
@@ -271,47 +288,222 @@ export class SubscriptionMarketingService {
               weeklyCredits: influencer.weeklyCredits,
               campaignApplications,
               nudgeType: 'daily_subscription_nudge',
+              messageIndex: message.index,
+              templateId: message.templateId,
             },
           } as any);
 
-          // Update last nudge timestamp
-          await influencer.update({ lastNudgeSentAt: now });
+          // Track template usage (increment timesSent counter)
+          if (message.templateId > 0) {
+            await this.nudgeMessageTemplateModel.increment('timesSent', {
+              by: 1,
+              where: { id: message.templateId },
+            });
+          }
+
+          // Update nudge tracking fields
+          await influencer.update({
+            lastNudgeSentAt: now,
+            firstNudgeSentAt: influencer.firstNudgeSentAt || now, // Set if first nudge
+            nudgeCount: (influencer.nudgeCount || 0) + 1,
+            lastNudgeMessageIndex: message.index,
+          });
 
           sentCount++;
-          this.logger.debug(`📱 Sent nudge to influencer ${influencer.id} (${fcmTokens.length} device(s))`);
+          this.logger.debug(
+            `📱 Sent nudge #${(influencer.nudgeCount || 0) + 1} to influencer ${influencer.id} (${fcmTokens.length} device(s), interval: ${shouldSendNudge.interval} days)`,
+          );
         } catch (error) {
           this.logger.error(`❌ Failed to send nudge to influencer ${influencer.id}: ${error.message}`);
           skippedCount++;
         }
       }
 
-      this.logger.log(`✅ Daily nudges complete: ${sentCount} sent, ${skippedCount} skipped`);
+      this.logger.log(
+        `✅ Smart nudges complete: ${sentCount} sent, ${skippedCount} skipped (too soon), ${stoppedCount} stopped (>30 days)`,
+      );
     } catch (error) {
       this.logger.error(`❌ Error in daily subscription nudges: ${error.message}`, error.stack);
     }
   }
 
-  private getPersonalizedNudgeMessage(weeklyCredits: number, campaignApplications: number): { title: string; body: string } {
-    // Scenario A: User has no weekly credits left
+  /**
+   * Determine if user should receive a nudge based on smart frequency rules
+   */
+  private shouldSendNudge(
+    influencer: Influencer,
+    now: Date,
+  ): { send: boolean; reason?: string; interval?: number } {
+    const accountAge = this.getDaysSince(influencer.createdAt, now);
+
+    // Rule 1: Stop after 30 days (user not interested)
+    if (influencer.firstNudgeSentAt) {
+      const daysSinceFirstNudge = this.getDaysSince(influencer.firstNudgeSentAt, now);
+      if (daysSinceFirstNudge >= 30) {
+        return { send: false, reason: 'stopped' };
+      }
+    }
+
+    // Rule 2: Grace period - don't send to users who joined <3 days ago
+    if (accountAge < 3) {
+      return { send: false, reason: 'grace_period' };
+    }
+
+    // Determine required interval based on days since first nudge
+    let requiredInterval: number;
+    const daysSinceFirstNudge = influencer.firstNudgeSentAt
+      ? this.getDaysSince(influencer.firstNudgeSentAt, now)
+      : 0;
+
+    if (daysSinceFirstNudge < 7 || !influencer.firstNudgeSentAt) {
+      // Days 1-7 of nudge campaign: Every 2 days
+      requiredInterval = 2;
+    } else if (daysSinceFirstNudge < 14) {
+      // Days 8-14: Every 3 days
+      requiredInterval = 3;
+    } else {
+      // Days 15-30: Weekly
+      requiredInterval = 7;
+    }
+
+    // Rule 3: Check if enough time has passed since last nudge
+    if (influencer.lastNudgeSentAt) {
+      const daysSinceLastNudge = this.getDaysSince(influencer.lastNudgeSentAt, now);
+      if (daysSinceLastNudge < requiredInterval) {
+        return {
+          send: false,
+          reason: `too_soon (needs ${requiredInterval} days, only ${daysSinceLastNudge.toFixed(1)} days)`,
+          interval: requiredInterval,
+        };
+      }
+    }
+
+    // All checks passed
+    return { send: true, interval: requiredInterval };
+  }
+
+  /**
+   * Calculate days between two dates
+   */
+  private getDaysSince(pastDate: Date, now: Date): number {
+    const diffMs = now.getTime() - new Date(pastDate).getTime();
+    return diffMs / (1000 * 60 * 60 * 24);
+  }
+
+  /**
+   * Get rotated nudge message from database templates
+   * Priority: Behavior-based messages > Rotated generic messages
+   * Fetches templates from admin-configured database instead of hard-coded messages
+   */
+  private async getRotatedNudgeMessage(
+    weeklyCredits: number,
+    campaignApplications: number,
+    lastMessageIndex: number,
+  ): Promise<{ title: string; body: string; index: number; templateId: number }> {
+    const now = new Date();
+
+    // Priority 1: Try to find behavior-based templates (high priority)
+    // Check "out_of_credits" template first (highest urgency)
     if (weeklyCredits === 0) {
-      return {
-        title: "Out of credits? 😔",
-        body: "Upgrade to MAX for unlimited campaign applications + ₹100 joining bonus! Only ₹199/month",
-      };
+      const template = await this.nudgeMessageTemplateModel.findOne({
+        where: {
+          messageType: NudgeMessageType.OUT_OF_CREDITS,
+          isActive: true,
+          [Op.or]: [
+            { validFrom: null, validUntil: null }, // No date restrictions
+            {
+              validFrom: { [Op.lte]: now },
+              validUntil: { [Op.gte]: now },
+            }, // Within valid date range
+            { validFrom: { [Op.lte]: now }, validUntil: null }, // Started, no end
+            { validFrom: null, validUntil: { [Op.gte]: now } }, // No start, not expired
+          ],
+        },
+        order: [['priority', 'DESC']],
+      });
+
+      if (template && template.matchesUserBehavior(weeklyCredits, campaignApplications)) {
+        return {
+          title: template.title,
+          body: template.body,
+          index: 0, // Reset to 0 for urgent messages
+          templateId: template.id,
+        };
+      }
     }
 
-    // Scenario B: User has applied to many campaigns (active user)
+    // Check "active_user" template
     if (campaignApplications >= 5) {
+      const template = await this.nudgeMessageTemplateModel.findOne({
+        where: {
+          messageType: NudgeMessageType.ACTIVE_USER,
+          isActive: true,
+          [Op.or]: [
+            { validFrom: null, validUntil: null },
+            {
+              validFrom: { [Op.lte]: now },
+              validUntil: { [Op.gte]: now },
+            },
+            { validFrom: { [Op.lte]: now }, validUntil: null },
+            { validFrom: null, validUntil: { [Op.gte]: now } },
+          ],
+        },
+        order: [['priority', 'DESC']],
+      });
+
+      if (template && template.matchesUserBehavior(weeklyCredits, campaignApplications)) {
+        // Optionally customize body with application count
+        const customBody = template.body.includes('{campaignApplications}')
+          ? template.body.replace('{campaignApplications}', campaignApplications.toString())
+          : template.body;
+
+        return {
+          title: template.title,
+          body: customBody,
+          index: 0, // Reset to 0 for behavior-based messages
+          templateId: template.id,
+        };
+      }
+    }
+
+    // Priority 2: Rotation messages (generic templates)
+    const rotationTemplates = await this.nudgeMessageTemplateModel.findAll({
+      where: {
+        messageType: NudgeMessageType.ROTATION,
+        isActive: true,
+        [Op.or]: [
+          { validFrom: null, validUntil: null },
+          {
+            validFrom: { [Op.lte]: now },
+            validUntil: { [Op.gte]: now },
+          },
+          { validFrom: { [Op.lte]: now }, validUntil: null },
+          { validFrom: null, validUntil: { [Op.gte]: now } },
+        ],
+      },
+      order: [['rotationOrder', 'ASC']],
+    });
+
+    if (rotationTemplates.length === 0) {
+      // Fallback: If no templates in DB, use a default message
+      this.logger.warn('⚠️ No rotation templates found in database, using fallback message');
       return {
-        title: "You're active! 🚀",
-        body: `You've applied to ${campaignApplications} campaigns. MAX members get unlimited applications + higher priority. Join for ₹199/month`,
+        title: 'Unlock your potential 💫',
+        body: 'MAX members earn 3x more on average. Get unlimited applications, priority in campaigns & exclusive perks for ₹199/month',
+        index: 0,
+        templateId: 0, // No template ID (fallback)
       };
     }
 
-    // Scenario C: New or less active user
+    // Calculate next template index (rotate)
+    const nextIndex = (lastMessageIndex + 1) % rotationTemplates.length;
+    const template = rotationTemplates[nextIndex];
+
     return {
-      title: "Unlock your potential 💫",
-      body: "MAX members earn 3x more on average. Get unlimited applications, priority in campaigns & exclusive perks for ₹199/month",
+      title: template.title,
+      body: template.body,
+      index: nextIndex,
+      templateId: template.id,
     };
   }
 

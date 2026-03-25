@@ -221,6 +221,20 @@ export class ProSubscription extends Model {
   })
   declare reminderSentAt: Date;
 
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+    field: 'reminder_1h_sent_at',
+  })
+  declare reminder1hSentAt: Date;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+    field: 'reminder_6h_sent_at',
+  })
+  declare reminder6hSentAt: Date;
+
   @ForeignKey(() => ProSubscriptionPromotion)
   @Column({
     type: DataType.INTEGER,

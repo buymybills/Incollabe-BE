@@ -29,6 +29,7 @@ import { RolesGuard } from './guards/roles.guard';
 import { getModelToken } from '@nestjs/sequelize';
 import { Influencer } from '../auth/model/influencer.model';
 import { ProSubscriptionPromotion } from '../influencer/models/pro-subscription-promotion.model';
+import { NudgeMessageTemplate } from '../shared/models/nudge-message-template.model';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { CreateAdminDto } from './dto/create-admin.dto';
 import { ApproveProfileDto, RejectProfileDto } from './dto/profile-review.dto';
@@ -215,6 +216,16 @@ const mockProSubscriptionPromotionRepository = {
   destroy: jest.fn(),
 };
 
+const mockNudgeMessageTemplateRepository = {
+  findAll: jest.fn(),
+  findOne: jest.fn(),
+  findByPk: jest.fn(),
+  create: jest.fn(),
+  update: jest.fn(),
+  destroy: jest.fn(),
+  increment: jest.fn(),
+};
+
 const mockDeviceTokenService = {
   addOrUpdateDeviceToken: jest.fn(),
   getAllUserTokens: jest.fn(),
@@ -354,6 +365,10 @@ describe('AdminController', () => {
         {
           provide: getModelToken(ProSubscriptionPromotion),
           useValue: mockProSubscriptionPromotionRepository,
+        },
+        {
+          provide: getModelToken(NudgeMessageTemplate),
+          useValue: mockNudgeMessageTemplateRepository,
         },
         {
           provide: getModelToken(Influencer),

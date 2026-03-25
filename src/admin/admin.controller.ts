@@ -62,6 +62,7 @@ import { ProfileType } from './models/profile-review.model';
 import { ProSubscriptionService } from '../influencer/services/pro-subscription.service';
 import { SubscriptionMarketingService } from '../influencer/services/subscription-marketing.service';
 import { ProSubscriptionPromotion } from '../influencer/models/pro-subscription-promotion.model';
+import { NudgeMessageTemplate } from '../shared/models/nudge-message-template.model';
 
 // DTOs
 import { AdminLoginDto, AdminLoginResponseDto } from './dto/admin-login.dto';
@@ -150,6 +151,10 @@ import { CreateTicketReplyDto } from '../shared/dto/create-ticket-reply.dto';
 import { GetTicketsResponseDto, GetRepliesResponseDto } from '../shared/dto/support-ticket-response.dto';
 import { CreatePromotionDto, UpdatePromotionDto } from './dto/create-promotion.dto';
 import {
+  CreateNudgeMessageTemplateDto,
+  UpdateNudgeMessageTemplateDto,
+} from './dto/nudge-message-template.dto';
+import {
   GetNewAccountsWithReferralDto,
   NewAccountsWithReferralResponseDto,
   GetAccountReferrersDto,
@@ -221,6 +226,8 @@ export class AdminController {
     private readonly subscriptionMarketingService: SubscriptionMarketingService,
     @InjectModel(ProSubscriptionPromotion)
     private readonly proSubscriptionPromotionModel: typeof ProSubscriptionPromotion,
+    @InjectModel(NudgeMessageTemplate)
+    private readonly nudgeMessageTemplateModel: typeof NudgeMessageTemplate,
   ) {}
 
   @Post('login')
@@ -4913,6 +4920,239 @@ export class AdminController {
     return {
       success: true,
       message: `Flash sale reminder sent to all non-Pro users for "${promotion.name}"`,
+    };
+  }
+
+  // ============================================
+  // NUDGE MESSAGE TEMPLATE MANAGEMENT
+  // ============================================
+
+  @Post('nudge-message-templates')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[ADMIN] Create nudge message template' })
+  @ApiResponse({
+    status: 201,
+    description: 'Nudge message template created successfully',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - Super Admin or Content Moderator only',
+  })
+  async createNudgeMessageTemplate(
+    @Req() req: RequestWithAdmin,
+    @Body() dto: CreateNudgeMessageTemplateDto,
+  ) {
+    const template = await this.nudgeMessageTemplateModel.create({
+      title: dto.title,
+      body: dto.body,
+      messageType: dto.messageType,
+      minCampaignApplications: dto.minCampaignApplications || null,
+      requiresZeroCredits: dto.requiresZeroCredits || false,
+      priority: dto.priority || 0,
+      rotationOrder: dto.rotationOrder || null,
+      validFrom: dto.validFrom || null,
+      validUntil: dto.validUntil || null,
+      internalNotes: dto.internalNotes || null,
+      createdBy: req.admin.id,
+    });
+
+    return {
+      success: true,
+      message: 'Nudge message template created successfully',
+      template,
+    };
+  }
+
+  @Get('nudge-message-templates')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[ADMIN] Get all nudge message templates' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of all nudge message templates with analytics',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getAllNudgeMessageTemplates() {
+    const templates = await this.nudgeMessageTemplateModel.findAll({
+      order: [
+        ['messageType', 'ASC'],
+        ['priority', 'DESC'],
+        ['rotationOrder', 'ASC'],
+      ],
+    });
+
+    // Add conversion rate to each template
+    const enrichedTemplates = templates.map((template) => ({
+      ...template.toJSON(),
+      conversionRate: template.getConversionRate(),
+      isCurrentlyValid: template.isCurrentlyValid(),
+    }));
+
+    return {
+      success: true,
+      count: templates.length,
+      templates: enrichedTemplates,
+    };
+  }
+
+  @Get('nudge-message-templates/:id')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[ADMIN] Get single nudge message template' })
+  @ApiParam({ name: 'id', description: 'Template ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Nudge message template details',
+  })
+  @ApiNotFoundResponse({
+    description: 'Template not found',
+  })
+  async getNudgeMessageTemplate(@Param('id', ParseIntPipe) id: number) {
+    const template = await this.nudgeMessageTemplateModel.findByPk(id);
+
+    if (!template) {
+      throw new NotFoundException('Template not found');
+    }
+
+    return {
+      success: true,
+      template: {
+        ...template.toJSON(),
+        conversionRate: template.getConversionRate(),
+        isCurrentlyValid: template.isCurrentlyValid(),
+      },
+    };
+  }
+
+  @Patch('nudge-message-templates/:id')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[ADMIN] Update nudge message template' })
+  @ApiParam({ name: 'id', description: 'Template ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Template updated successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Template not found',
+  })
+  async updateNudgeMessageTemplate(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateNudgeMessageTemplateDto,
+  ) {
+    const template = await this.nudgeMessageTemplateModel.findByPk(id);
+
+    if (!template) {
+      throw new NotFoundException('Template not found');
+    }
+
+    await template.update(dto);
+
+    return {
+      success: true,
+      message: 'Template updated successfully',
+      template,
+    };
+  }
+
+  @Delete('nudge-message-templates/:id')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[ADMIN] Delete nudge message template' })
+  @ApiParam({ name: 'id', description: 'Template ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Template deleted successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Template not found',
+  })
+  async deleteNudgeMessageTemplate(@Param('id', ParseIntPipe) id: number) {
+    const template = await this.nudgeMessageTemplateModel.findByPk(id);
+
+    if (!template) {
+      throw new NotFoundException('Template not found');
+    }
+
+    await template.destroy();
+
+    return {
+      success: true,
+      message: 'Template deleted successfully',
+    };
+  }
+
+  @Get('nudge-message-templates/analytics/overview')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[ADMIN] Get nudge message analytics overview' })
+  @ApiResponse({
+    status: 200,
+    description: 'Analytics data for all nudge message templates',
+  })
+  async getNudgeMessageAnalytics() {
+    const templates = await this.nudgeMessageTemplateModel.findAll();
+
+    const totalSent = templates.reduce((sum, t) => sum + t.timesSent, 0);
+    const totalConversions = templates.reduce((sum, t) => sum + t.conversionCount, 0);
+    const overallConversionRate = totalSent > 0 ? (totalConversions / totalSent) * 100 : 0;
+
+    // Group by message type
+    const byType: Record<string, any> = {};
+    templates.forEach((template) => {
+      const type = template.messageType;
+      if (!byType[type]) {
+        byType[type] = {
+          count: 0,
+          totalSent: 0,
+          totalConversions: 0,
+          conversionRate: 0,
+        };
+      }
+      byType[type].count++;
+      byType[type].totalSent += template.timesSent;
+      byType[type].totalConversions += template.conversionCount;
+    });
+
+    // Calculate conversion rates
+    Object.keys(byType).forEach((type) => {
+      byType[type].conversionRate =
+        byType[type].totalSent > 0 ? (byType[type].totalConversions / byType[type].totalSent) * 100 : 0;
+    });
+
+    // Top performing templates
+    const topTemplates = templates
+      .filter((t) => t.timesSent > 0)
+      .sort((a, b) => b.getConversionRate() - a.getConversionRate())
+      .slice(0, 5)
+      .map((t) => ({
+        id: t.id,
+        title: t.title,
+        messageType: t.messageType,
+        timesSent: t.timesSent,
+        conversionCount: t.conversionCount,
+        conversionRate: t.getConversionRate(),
+      }));
+
+    return {
+      success: true,
+      overview: {
+        totalTemplates: templates.length,
+        activeTemplates: templates.filter((t) => t.isActive).length,
+        totalSent,
+        totalConversions,
+        overallConversionRate: Math.round(overallConversionRate * 100) / 100,
+      },
+      byType,
+      topPerforming: topTemplates,
     };
   }
 }
