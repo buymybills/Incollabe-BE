@@ -46,6 +46,7 @@ import { BrandNiche } from '../brand/model/brand-niche.model';
 import { ProSubscriptionPromotion } from './models/pro-subscription-promotion.model';
 import { SubscriptionMarketingService } from './services/subscription-marketing.service';
 import { PostBoostInvoice } from '../post/models/post-boost-invoice.model';
+import { DeviceToken } from '../shared/models/device-token.model';
 
 @Module({
   imports: [
@@ -85,6 +86,7 @@ import { PostBoostInvoice } from '../post/models/post-boost-invoice.model';
       HypeStoreReferralClick,
       Wallet,
       WalletTransaction,
+      DeviceToken,
     ]),
     SharedModule,
     CampaignModule,

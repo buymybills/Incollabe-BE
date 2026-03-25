@@ -6,6 +6,7 @@ import { ProSubscription, SubscriptionStatus } from '../models/pro-subscription.
 import { Influencer } from '../../auth/model/influencer.model';
 import { ProSubscriptionPromotion } from '../models/pro-subscription-promotion.model';
 import { CampaignApplication } from '../../campaign/models/campaign-application.model';
+import { DeviceToken, UserType } from '../../shared/models/device-token.model';
 import { NotificationService } from '../../shared/notification.service';
 
 @Injectable()
@@ -21,6 +22,8 @@ export class SubscriptionMarketingService {
     private proSubscriptionPromotionModel: typeof ProSubscriptionPromotion,
     @InjectModel(CampaignApplication)
     private campaignApplicationModel: typeof CampaignApplication,
+    @InjectModel(DeviceToken)
+    private deviceTokenModel: typeof DeviceToken,
     private notificationService: NotificationService,
   ) {}
 
@@ -159,7 +162,6 @@ export class SubscriptionMarketingService {
           isPro: false,
           isVerified: true,
           isActive: true,
-          fcmToken: { [Op.ne]: null }, // Must have FCM token
           [Op.or]: [
             { lastNudgeSentAt: null }, // Never received nudge
             { lastNudgeSentAt: { [Op.lt]: twentyFourHoursAgo } }, // Last nudge > 24h ago
@@ -176,6 +178,23 @@ export class SubscriptionMarketingService {
 
       for (const influencer of eligibleInfluencers) {
         try {
+          // Get FCM tokens for this influencer
+          const deviceTokens = await this.deviceTokenModel.findAll({
+            where: {
+              userId: influencer.id,
+              userType: UserType.INFLUENCER,
+            },
+            attributes: ['fcmToken'],
+          });
+
+          if (deviceTokens.length === 0) {
+            this.logger.debug(`⚠️ No FCM tokens found for influencer ${influencer.id}, skipping`);
+            skippedCount++;
+            continue;
+          }
+
+          const fcmTokens = deviceTokens.map(dt => dt.fcmToken);
+
           // Get user behavior data for personalization
           const campaignApplications = await this.campaignApplicationModel.count({
             where: { influencerId: influencer.id },
@@ -187,9 +206,9 @@ export class SubscriptionMarketingService {
             campaignApplications,
           );
 
-          // Send push notification
+          // Send push notification to all user's devices
           await this.notificationService.sendCustomNotification(
-            influencer.fcmToken,
+            fcmTokens,
             message.title,
             message.body,
             {
@@ -203,7 +222,7 @@ export class SubscriptionMarketingService {
           await influencer.update({ lastNudgeSentAt: now });
 
           sentCount++;
-          this.logger.debug(`📱 Sent nudge to influencer ${influencer.id}`);
+          this.logger.debug(`📱 Sent nudge to influencer ${influencer.id} (${fcmTokens.length} device(s))`);
         } catch (error) {
           this.logger.error(`❌ Failed to send nudge to influencer ${influencer.id}: ${error.message}`);
           skippedCount++;
@@ -254,17 +273,35 @@ export class SubscriptionMarketingService {
         throw new Error(`Promotion ${promotionId} not found`);
       }
 
-      // Find all non-Pro users with FCM tokens
+      // Find all non-Pro users
       const nonProUsers = await this.influencerModel.findAll({
         where: {
           isPro: false,
           isVerified: true,
           isActive: true,
-          fcmToken: { [Op.ne]: null },
         },
+        attributes: ['id'],
       });
 
-      this.logger.log(`📊 Sending flash sale announcement to ${nonProUsers.length} user(s)`);
+      // Get FCM tokens for these users from device_tokens table
+      const userIds = nonProUsers.map(u => u.id);
+      const deviceTokens = await this.deviceTokenModel.findAll({
+        where: {
+          userId: { [Op.in]: userIds },
+          userType: UserType.INFLUENCER,
+        },
+        attributes: ['fcmToken'],
+        group: ['fcmToken'], // Deduplicate tokens
+      });
+
+      const fcmTokens = deviceTokens.map(dt => dt.fcmToken);
+
+      this.logger.log(`📊 Sending flash sale announcement to ${fcmTokens.length} device(s) for ${nonProUsers.length} user(s)`);
+
+      if (fcmTokens.length === 0) {
+        this.logger.warn('⚠️ No FCM tokens found for non-Pro users');
+        return;
+      }
 
       const originalPrice = promotion.originalPrice / 100;
       const discountedPrice = promotion.discountedPrice / 100;
@@ -274,9 +311,6 @@ export class SubscriptionMarketingService {
         title: "⚡ FLASH SALE! ⚡",
         body: `MAX at ₹${discountedPrice} (was ₹${originalPrice}) - Save ₹${savings}! Limited time only! 🔥`,
       };
-
-      // Batch send notifications
-      const fcmTokens = nonProUsers.map(u => u.fcmToken);
 
       // Send in batches of 500 to avoid rate limits
       const batchSize = 500;
@@ -332,10 +366,30 @@ export class SubscriptionMarketingService {
           isPro: false,
           isVerified: true,
           isActive: true,
-          fcmToken: { [Op.ne]: null },
         },
+        attributes: ['id'],
         limit: 1000,
       });
+
+      // Get FCM tokens for these users from device_tokens table
+      const userIds = nonProUsers.map(u => u.id);
+      const deviceTokens = await this.deviceTokenModel.findAll({
+        where: {
+          userId: { [Op.in]: userIds },
+          userType: UserType.INFLUENCER,
+        },
+        attributes: ['fcmToken'],
+        group: ['fcmToken'], // Deduplicate tokens
+      });
+
+      const fcmTokens = deviceTokens.map(dt => dt.fcmToken);
+
+      this.logger.log(`⏰ Sending reminder to ${fcmTokens.length} device(s) for ${nonProUsers.length} user(s)`);
+
+      if (fcmTokens.length === 0) {
+        this.logger.warn('⚠️ No FCM tokens found for non-Pro users');
+        return;
+      }
 
       const discountedPrice = promotion.discountedPrice / 100;
 
@@ -352,8 +406,6 @@ export class SubscriptionMarketingService {
           body: `Don't miss ₹${discountedPrice} MAX offer - limited time only!`,
         };
       }
-
-      const fcmTokens = nonProUsers.map(u => u.fcmToken);
 
       await this.notificationService.sendCustomNotification(
         fcmTokens,
