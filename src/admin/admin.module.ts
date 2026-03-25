@@ -47,6 +47,7 @@ import { InfluencerProfileScore } from '../shared/models/influencer-profile-scor
 import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
 import { ProSubscription } from '../influencer/models/pro-subscription.model';
 import { ProInvoice } from '../influencer/models/pro-invoice.model';
+import { ProSubscriptionPromotion } from '../influencer/models/pro-subscription-promotion.model';
 import { MaxCampaignInvoice } from '../campaign/models/max-campaign-invoice.model';
 import { InviteOnlyCampaignInvoice } from '../campaign/models/invite-only-campaign-invoice.model';
 
@@ -89,6 +90,7 @@ import { RolesGuard } from './guards/roles.guard';
       InstagramProfileAnalysis,
       ProSubscription,
       ProInvoice,
+      ProSubscriptionPromotion,
       MaxCampaignInvoice,
       InviteOnlyCampaignInvoice,
     ]),
