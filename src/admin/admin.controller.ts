@@ -4758,6 +4758,7 @@ export class AdminController {
   @Post('subscription-promotions')
   @UseGuards(AdminAuthGuard, RolesGuard)
   @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
   @ApiOperation({ summary: '[ADMIN] Create flash sale promotion' })
   @ApiResponse({
     status: 201,
