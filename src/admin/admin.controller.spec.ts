@@ -23,10 +23,12 @@ import { DeviceTokenService } from '../shared/device-token.service';
 import { InvoiceExcelExportService } from './services/invoice-excel-export.service';
 import { AdminCreatorScoreService } from './services/admin-creator-score.service';
 import { ProSubscriptionService } from '../influencer/services/pro-subscription.service';
+import { SubscriptionMarketingService } from '../influencer/services/subscription-marketing.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { getModelToken } from '@nestjs/sequelize';
 import { Influencer } from '../auth/model/influencer.model';
+import { ProSubscriptionPromotion } from '../influencer/models/pro-subscription-promotion.model';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { CreateAdminDto } from './dto/create-admin.dto';
 import { ApproveProfileDto, RejectProfileDto } from './dto/profile-review.dto';
@@ -197,6 +199,22 @@ const mockProSubscriptionService = {
   generateInvoicePDF: jest.fn(),
 };
 
+const mockSubscriptionMarketingService = {
+  handlePaymentDropoffReminders: jest.fn(),
+  sendDailySubscriptionNudges: jest.fn(),
+  announceFlashSale: jest.fn(),
+  sendFlashSaleReminder: jest.fn(),
+};
+
+const mockProSubscriptionPromotionRepository = {
+  findAll: jest.fn(),
+  findOne: jest.fn(),
+  findByPk: jest.fn(),
+  create: jest.fn(),
+  update: jest.fn(),
+  destroy: jest.fn(),
+};
+
 const mockDeviceTokenService = {
   addOrUpdateDeviceToken: jest.fn(),
   getAllUserTokens: jest.fn(),
@@ -328,6 +346,14 @@ describe('AdminController', () => {
         {
           provide: ProSubscriptionService,
           useValue: mockProSubscriptionService,
+        },
+        {
+          provide: SubscriptionMarketingService,
+          useValue: mockSubscriptionMarketingService,
+        },
+        {
+          provide: getModelToken(ProSubscriptionPromotion),
+          useValue: mockProSubscriptionPromotionRepository,
         },
         {
           provide: getModelToken(Influencer),

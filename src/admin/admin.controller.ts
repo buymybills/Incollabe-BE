@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Body,
   Param,
@@ -34,6 +35,7 @@ import {
   ApiConsumes,
 } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { InjectModel } from '@nestjs/sequelize';
 import { AdminAuthService } from './admin-auth.service';
 import { ProfileReviewService } from './profile-review.service';
 import { AdminCampaignService } from './services/admin-campaign.service';
@@ -58,6 +60,8 @@ import { Roles } from './decorators/roles.decorator';
 import { AdminRole, AdminStatus } from './models/admin.model';
 import { ProfileType } from './models/profile-review.model';
 import { ProSubscriptionService } from '../influencer/services/pro-subscription.service';
+import { SubscriptionMarketingService } from '../influencer/services/subscription-marketing.service';
+import { ProSubscriptionPromotion } from '../influencer/models/pro-subscription-promotion.model';
 
 // DTOs
 import { AdminLoginDto, AdminLoginResponseDto } from './dto/admin-login.dto';
@@ -144,6 +148,7 @@ import { GetSupportTicketsDto } from '../shared/dto/get-support-tickets.dto';
 import { UpdateSupportTicketDto } from '../shared/dto/update-support-ticket.dto';
 import { CreateTicketReplyDto } from '../shared/dto/create-ticket-reply.dto';
 import { GetTicketsResponseDto, GetRepliesResponseDto } from '../shared/dto/support-ticket-response.dto';
+import { CreatePromotionDto, UpdatePromotionDto } from './dto/create-promotion.dto';
 import {
   GetNewAccountsWithReferralDto,
   NewAccountsWithReferralResponseDto,
@@ -213,6 +218,9 @@ export class AdminController {
     private readonly invoiceExcelExportService: InvoiceExcelExportService,
     private readonly adminCreatorScoreService: AdminCreatorScoreService,
     private readonly proSubscriptionService: ProSubscriptionService,
+    private readonly subscriptionMarketingService: SubscriptionMarketingService,
+    @InjectModel(ProSubscriptionPromotion)
+    private readonly proSubscriptionPromotionModel: typeof ProSubscriptionPromotion,
   ) {}
 
   @Post('login')
@@ -4740,6 +4748,170 @@ export class AdminController {
       adminTokensRemoved: result.adminTokensRemoved,
       removedTokenIds: result.removedTokenIds,
       timestamp: new Date(),
+    };
+  }
+
+  // ============================================
+  // SUBSCRIPTION PROMOTION MANAGEMENT
+  // ============================================
+
+  @Post('subscription-promotions')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiOperation({ summary: '[ADMIN] Create flash sale promotion' })
+  @ApiResponse({
+    status: 201,
+    description: 'Promotion created successfully',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - Super Admin or Content Moderator only',
+  })
+  async createPromotion(
+    @Req() req: RequestWithAdmin,
+    @Body() dto: CreatePromotionDto,
+  ) {
+    // Calculate discount percentage
+    const originalPrice = dto.originalPrice || 19900;
+    const discountPercentage = Math.round(
+      ((originalPrice - dto.discountedPrice) / originalPrice) * 100
+    );
+
+    // Create promotion
+    const promotion = await this.proSubscriptionPromotionModel.create({
+      name: dto.name,
+      description: dto.description,
+      originalPrice: originalPrice,
+      discountedPrice: dto.discountedPrice,
+      discountPercentage: discountPercentage,
+      startDate: dto.startDate,
+      endDate: dto.endDate,
+      maxUses: dto.maxUses,
+      isActive: true,
+      currentUses: 0,
+      createdBy: req.admin.id,
+    });
+
+    // Send announcement if requested (default: true)
+    if (dto.sendAnnouncement !== false) {
+      await this.subscriptionMarketingService.announceFlashSale(promotion.id);
+    }
+
+    return {
+      success: true,
+      promotion,
+      message: `Flash sale "${promotion.name}" created successfully${dto.sendAnnouncement !== false ? ' and announced to all non-Pro users' : ''}`,
+    };
+  }
+
+  @Get('subscription-promotions')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[ADMIN] Get all promotions' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of all promotions',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getAllPromotions() {
+    const promotions = await this.proSubscriptionPromotionModel.findAll({
+      order: [['createdAt', 'DESC']],
+    });
+
+    // Add computed fields to each promotion
+    const enrichedPromotions = promotions.map(promotion => ({
+      ...promotion.toJSON(),
+      isCurrentlyActive: promotion.isCurrentlyActive(),
+      timeRemaining: promotion.getTimeRemaining(),
+      spotsLeft: promotion.getSpotsLeft(),
+    }));
+
+    return {
+      success: true,
+      count: promotions.length,
+      promotions: enrichedPromotions,
+    };
+  }
+
+  @Patch('subscription-promotions/:id')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[ADMIN] Update promotion (activate/deactivate)' })
+  @ApiParam({ name: 'id', description: 'Promotion ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Promotion updated successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Promotion not found',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - Super Admin or Content Moderator only',
+  })
+  async updatePromotion(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdatePromotionDto,
+  ) {
+    const promotion = await this.proSubscriptionPromotionModel.findByPk(id);
+
+    if (!promotion) {
+      throw new NotFoundException('Promotion not found');
+    }
+
+    await promotion.update({ isActive: dto.isActive });
+
+    return {
+      success: true,
+      message: `Promotion ${dto.isActive ? 'activated' : 'deactivated'} successfully`,
+      promotion,
+    };
+  }
+
+  @Post('subscription-promotions/:id/send-reminder')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[ADMIN] Send flash sale reminder notification' })
+  @ApiParam({ name: 'id', description: 'Promotion ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Reminder sent successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Promotion not found',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - Super Admin or Content Moderator only',
+  })
+  async sendFlashSaleReminder(@Param('id', ParseIntPipe) id: number) {
+    // Verify promotion exists
+    const promotion = await this.proSubscriptionPromotionModel.findByPk(id);
+
+    if (!promotion) {
+      throw new NotFoundException('Promotion not found');
+    }
+
+    if (!promotion.isCurrentlyActive()) {
+      throw new BadRequestException('Promotion is not currently active');
+    }
+
+    // Send reminder via marketing service
+    await this.subscriptionMarketingService.sendFlashSaleReminder(id);
+
+    return {
+      success: true,
+      message: `Flash sale reminder sent to all non-Pro users for "${promotion.name}"`,
     };
   }
 }

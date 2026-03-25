@@ -309,6 +309,10 @@ export class Influencer extends Model {
   declare proExpiresAt: Date;
 
   @AllowNull(true)
+  @Column({ type: DataType.DATE, field: 'last_nudge_sent_at' })
+  declare lastNudgeSentAt: Date;
+
+  @AllowNull(true)
   @Column(DataType.DATE)
   declare lastLoginAt: Date;
 

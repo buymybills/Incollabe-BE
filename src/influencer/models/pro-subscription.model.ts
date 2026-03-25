@@ -9,6 +9,7 @@ import {
 } from 'sequelize-typescript';
 import { Influencer } from '../../auth/model/influencer.model';
 import { ProInvoice } from './pro-invoice.model';
+import { ProSubscriptionPromotion } from './pro-subscription-promotion.model';
 import { SubscriptionStatus, PaymentMethod, UpiMandateStatus } from './payment-enums';
 
 // Re-export for backward compatibility
@@ -212,8 +213,28 @@ export class ProSubscription extends Model {
   })
   declare autoChargeFailures: number;
 
+  // Marketing/Drop-off tracking fields
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+    field: 'reminder_sent_at',
+  })
+  declare reminderSentAt: Date;
+
+  @ForeignKey(() => ProSubscriptionPromotion)
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    field: 'promotion_id',
+  })
+  declare promotionId: number;
+
+  // Relationships
   @BelongsTo(() => Influencer)
   declare influencer: Influencer;
+
+  @BelongsTo(() => ProSubscriptionPromotion)
+  declare promotion: ProSubscriptionPromotion;
 
   @HasMany(() => ProInvoice)
   declare invoices: ProInvoice[];

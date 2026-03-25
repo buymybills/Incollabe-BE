@@ -9,7 +9,9 @@ import { City } from '../../shared/models/city.model';
 import { RazorpayService } from '../../shared/razorpay.service';
 import { S3Service } from '../../shared/s3.service';
 import { EncryptionService } from '../../shared/services/encryption.service';
+import { ProSubscriptionPromotion } from '../models/pro-subscription-promotion.model';
 import { Op } from 'sequelize';
+import { Sequelize } from 'sequelize-typescript';
 import { toIST, createDatabaseDate, addDaysForDatabase } from '../../shared/utils/date.utils';
 import PDFDocument from 'pdfkit';
 import * as path from 'path';
@@ -28,6 +30,8 @@ export class ProSubscriptionService {
     private proInvoiceModel: typeof ProInvoice,
     @InjectModel(ProPaymentTransaction)
     private proPaymentTransactionModel: typeof ProPaymentTransaction,
+    @InjectModel(ProSubscriptionPromotion)
+    private proSubscriptionPromotionModel: typeof ProSubscriptionPromotion,
     @InjectModel(Influencer)
     private influencerModel: typeof Influencer,
     @InjectModel(City)
@@ -37,6 +41,30 @@ export class ProSubscriptionService {
     private configService: ConfigService,
     private encryptionService: EncryptionService,
   ) {}
+
+  /**
+   * Get currently active promotion (if any)
+   * Returns the most recent active promotion that is within date range and has available spots
+   */
+  async getActivePromotion(): Promise<ProSubscriptionPromotion | null> {
+    const now = new Date();
+    return await this.proSubscriptionPromotionModel.findOne({
+      where: {
+        isActive: true,
+        startDate: { [Op.lte]: now },
+        endDate: { [Op.gte]: now },
+        [Op.or]: [
+          { maxUses: null },
+          Sequelize.where(
+            Sequelize.col('current_uses'),
+            Op.lt,
+            Sequelize.col('max_uses')
+          ),
+        ],
+      },
+      order: [['startDate', 'DESC']],
+    });
+  }
 
   /**
    * Create a payment order for Pro subscription (supports test mode)
@@ -87,6 +115,17 @@ export class ProSubscriptionService {
       console.log(`📅 Starting new Pro membership from now (ends: ${toIST(endDate)})`);
     }
 
+    // Check for active promotion
+    const activePromotion = await this.getActivePromotion();
+    const subscriptionAmount = activePromotion
+      ? activePromotion.discountedPrice
+      : this.PRO_SUBSCRIPTION_AMOUNT;
+    const promotionId = activePromotion?.id || null;
+
+    if (activePromotion) {
+      console.log(`🎉 Applying promotion: ${activePromotion.name} (₹${activePromotion.discountedPrice / 100} instead of ₹${this.PRO_SUBSCRIPTION_AMOUNT / 100})`);
+    }
+
     const subscription = await this.proSubscriptionModel.create({
       influencerId,
       status: SubscriptionStatus.PAYMENT_PENDING,
@@ -94,10 +133,17 @@ export class ProSubscriptionService {
       currentPeriodStart: startDate,
       currentPeriodEnd: endDate,
       nextBillingDate: endDate,
-      subscriptionAmount: this.PRO_SUBSCRIPTION_AMOUNT,
+      subscriptionAmount,
+      promotionId,
       paymentMethod: PaymentMethod.RAZORPAY,
       autoRenew: false, // Only enable after first payment is successful
     });
+
+    // Increment promotion usage counter
+    if (activePromotion) {
+      await activePromotion.increment('currentUses');
+      console.log(`📊 Promotion usage: ${activePromotion.currentUses + 1}${activePromotion.maxUses ? `/${activePromotion.maxUses}` : ''}`);
+    }
 
     // Get influencer with city information
     const influencerWithCity = await this.influencerModel.findByPk(influencerId, {
@@ -481,10 +527,27 @@ export class ProSubscriptionService {
       subscriptionType: (subscription.autoRenew || subscription.razorpaySubscriptionId) ? 'autopay' : 'monthly',
     } : null;
 
+    // Get active promotion for display
+    const activePromotion = await this.getActivePromotion();
+    const promotionData = activePromotion ? {
+      id: activePromotion.id,
+      name: activePromotion.name,
+      description: activePromotion.description,
+      originalPrice: activePromotion.originalPrice / 100,
+      discountedPrice: activePromotion.discountedPrice / 100,
+      savings: (activePromotion.originalPrice - activePromotion.discountedPrice) / 100,
+      discountPercentage: activePromotion.discountPercentage,
+      startsAt: toIST(activePromotion.startDate),
+      endsAt: toIST(activePromotion.endDate),
+      timeRemaining: activePromotion.getTimeRemaining(),
+      spotsLeft: activePromotion.getSpotsLeft(),
+    } : null;
+
     return {
       hasSubscription,
       isPro,
       subscription: subscriptionData,
+      promotion: promotionData,
       invoices: filteredInvoices.map((inv) => {
         // For autopay detection, check the invoice's subscription (not the latest subscription)
         // 1. Check if invoice's subscription has razorpaySubscriptionId (autopay enabled)

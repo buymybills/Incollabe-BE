@@ -43,6 +43,9 @@ import { HypeStoreReferralClick } from '../wallet/models/hype-store-referral-cli
 import { Wallet } from '../wallet/models/wallet.model';
 import { WalletTransaction } from '../wallet/models/wallet-transaction.model';
 import { BrandNiche } from '../brand/model/brand-niche.model';
+import { ProSubscriptionPromotion } from './models/pro-subscription-promotion.model';
+import { SubscriptionMarketingService } from './services/subscription-marketing.service';
+import { PostBoostInvoice } from '../post/models/post-boost-invoice.model';
 
 @Module({
   imports: [
@@ -67,6 +70,8 @@ import { BrandNiche } from '../brand/model/brand-niche.model';
       ProSubscription,
       ProInvoice,
       ProPaymentTransaction,
+      ProSubscriptionPromotion,
+      PostBoostInvoice,
       CreditTransaction,
       InfluencerReferralUsage,
       InfluencerUpi,
@@ -92,6 +97,7 @@ import { BrandNiche } from '../brand/model/brand-niche.model';
     ProSubscriptionService,
     SubscriptionSchedulerService,
     InstagramMetricsSchedulerService,
+    SubscriptionMarketingService,
     {
       provide: 'PROFILE_REVIEW_MODEL',
       useValue: ProfileReview,
@@ -169,6 +175,6 @@ import { BrandNiche } from '../brand/model/brand-niche.model';
       useValue: Brand,
     },
   ],
-  exports: [InfluencerService, InfluencerRepository, ProSubscriptionService],
+  exports: [InfluencerService, InfluencerRepository, ProSubscriptionService, SubscriptionMarketingService],
 })
 export class InfluencerModule {}

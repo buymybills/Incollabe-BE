@@ -1,0 +1,376 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { InjectModel } from '@nestjs/sequelize';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { Op } from 'sequelize';
+import { ProSubscription, SubscriptionStatus } from '../models/pro-subscription.model';
+import { Influencer } from '../../auth/model/influencer.model';
+import { ProSubscriptionPromotion } from '../models/pro-subscription-promotion.model';
+import { CampaignApplication } from '../../campaign/models/campaign-application.model';
+import { NotificationService } from '../../shared/notification.service';
+
+@Injectable()
+export class SubscriptionMarketingService {
+  private readonly logger = new Logger(SubscriptionMarketingService.name);
+
+  constructor(
+    @InjectModel(ProSubscription)
+    private proSubscriptionModel: typeof ProSubscription,
+    @InjectModel(Influencer)
+    private influencerModel: typeof Influencer,
+    @InjectModel(ProSubscriptionPromotion)
+    private proSubscriptionPromotionModel: typeof ProSubscriptionPromotion,
+    @InjectModel(CampaignApplication)
+    private campaignApplicationModel: typeof CampaignApplication,
+    private notificationService: NotificationService,
+  ) {}
+
+  // ==================== DROP-OFF TRACKING ====================
+
+  /**
+   * Cron job: Check for abandoned payments and send reminders
+   * Runs every hour
+   */
+  @Cron(CronExpression.EVERY_HOUR)
+  async handlePaymentDropoffReminders() {
+    this.logger.log('🔍 Checking for abandoned payment subscriptions...');
+
+    try {
+      const now = new Date();
+      const oneHourAgo = new Date(now.getTime() - 1 * 60 * 60 * 1000);
+      const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+      const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+      // Find payment_pending subscriptions
+      const pendingSubscriptions = await this.proSubscriptionModel.findAll({
+        where: {
+          status: SubscriptionStatus.PAYMENT_PENDING,
+          createdAt: {
+            [Op.lte]: oneHourAgo, // Created at least 1 hour ago
+          },
+        },
+        include: [
+          {
+            model: Influencer,
+            attributes: ['id', 'firstName', 'lastName', 'fcmToken', 'weeklyCredits'],
+          },
+        ],
+      });
+
+      this.logger.log(`📊 Found ${pendingSubscriptions.length} pending subscription(s)`);
+
+      let reminders1h = 0;
+      let reminders6h = 0;
+      let abandoned24h = 0;
+
+      for (const subscription of pendingSubscriptions) {
+        const createdAt = new Date(subscription.createdAt);
+        const timeSinceCreation = now.getTime() - createdAt.getTime();
+        const hoursSinceCreation = timeSinceCreation / (1000 * 60 * 60);
+
+        // Mark as ABANDONED if more than 24 hours
+        if (hoursSinceCreation >= 24) {
+          await subscription.update({ status: SubscriptionStatus.ABANDONED });
+          this.logger.log(`❌ Marked subscription ${subscription.id} as ABANDONED (influencer: ${subscription.influencerId})`);
+          abandoned24h++;
+          continue;
+        }
+
+        // Send reminders based on time elapsed
+        const influencer = subscription.influencer;
+        if (!influencer?.fcmToken) {
+          this.logger.debug(`⚠️ No FCM token for influencer ${subscription.influencerId}, skipping notification`);
+          continue;
+        }
+
+        // 6-hour reminder (if no reminder sent yet)
+        if (hoursSinceCreation >= 6 && !subscription.reminderSentAt) {
+          await this.sendPaymentReminder(subscription, influencer, '6hour');
+          reminders6h++;
+        }
+        // 1-hour reminder (if no reminder sent yet)
+        else if (hoursSinceCreation >= 1 && !subscription.reminderSentAt) {
+          await this.sendPaymentReminder(subscription, influencer, '1hour');
+          reminders1h++;
+        }
+      }
+
+      this.logger.log(`✅ Drop-off tracking complete: ${reminders1h} reminders (1h), ${reminders6h} reminders (6h), ${abandoned24h} abandoned`);
+    } catch (error) {
+      this.logger.error(`❌ Error in payment drop-off tracking: ${error.message}`, error.stack);
+    }
+  }
+
+  private async sendPaymentReminder(
+    subscription: ProSubscription,
+    influencer: Influencer,
+    timing: '1hour' | '6hour',
+  ) {
+    const messages = {
+      '1hour': {
+        title: "You're just one step away! 🎯",
+        body: "Complete your MAX subscription and unlock unlimited campaign applications for just ₹199/month",
+      },
+      '6hour': {
+        title: "Still thinking? 🤔",
+        body: "Your exclusive MAX offer is waiting! Unlock unlimited applications + premium features",
+      },
+    };
+
+    const message = messages[timing];
+
+    try {
+      await this.notificationService.sendCustomNotification(
+        influencer.fcmToken,
+        message.title,
+        message.body,
+        {
+          type: 'subscription_reminder',
+          action: 'resume_payment',
+          subscriptionId: subscription.id.toString(),
+          timing,
+        },
+      );
+
+      await subscription.update({ reminderSentAt: new Date() });
+      this.logger.log(`📱 Sent ${timing} reminder to influencer ${influencer.id} (subscription: ${subscription.id})`);
+    } catch (error) {
+      this.logger.error(`❌ Failed to send reminder: ${error.message}`);
+    }
+  }
+
+  // ==================== DAILY NUDGES ====================
+
+  /**
+   * Cron job: Send daily subscription nudges to non-Pro users
+   * Runs every day at 10:00 AM
+   */
+  @Cron('0 10 * * *') // 10:00 AM daily
+  async sendDailySubscriptionNudges() {
+    this.logger.log('🔍 Starting daily subscription nudges...');
+
+    try {
+      const now = new Date();
+      const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      // Find eligible influencers: non-Pro, verified, active, haven't received nudge in last 24h
+      const eligibleInfluencers = await this.influencerModel.findAll({
+        where: {
+          isPro: false,
+          isVerified: true,
+          isActive: true,
+          fcmToken: { [Op.ne]: null }, // Must have FCM token
+          [Op.or]: [
+            { lastNudgeSentAt: null }, // Never received nudge
+            { lastNudgeSentAt: { [Op.lt]: twentyFourHoursAgo } }, // Last nudge > 24h ago
+          ],
+          createdAt: { [Op.lt]: thirtyDaysAgo }, // Don't spam new users too early
+        },
+        limit: 1000, // Batch limit to avoid overwhelming the system
+      });
+
+      this.logger.log(`📊 Found ${eligibleInfluencers.length} eligible influencer(s) for nudges`);
+
+      let sentCount = 0;
+      let skippedCount = 0;
+
+      for (const influencer of eligibleInfluencers) {
+        try {
+          // Get user behavior data for personalization
+          const campaignApplications = await this.campaignApplicationModel.count({
+            where: { influencerId: influencer.id },
+          });
+
+          // Determine message based on behavior
+          const message = this.getPersonalizedNudgeMessage(
+            influencer.weeklyCredits,
+            campaignApplications,
+          );
+
+          // Send push notification
+          await this.notificationService.sendCustomNotification(
+            influencer.fcmToken,
+            message.title,
+            message.body,
+            {
+              type: 'subscription_marketing',
+              action: 'view_subscription',
+              cta: 'Join MAX',
+            },
+          );
+
+          // Update last nudge timestamp
+          await influencer.update({ lastNudgeSentAt: now });
+
+          sentCount++;
+          this.logger.debug(`📱 Sent nudge to influencer ${influencer.id}`);
+        } catch (error) {
+          this.logger.error(`❌ Failed to send nudge to influencer ${influencer.id}: ${error.message}`);
+          skippedCount++;
+        }
+      }
+
+      this.logger.log(`✅ Daily nudges complete: ${sentCount} sent, ${skippedCount} skipped`);
+    } catch (error) {
+      this.logger.error(`❌ Error in daily subscription nudges: ${error.message}`, error.stack);
+    }
+  }
+
+  private getPersonalizedNudgeMessage(weeklyCredits: number, campaignApplications: number): { title: string; body: string } {
+    // Scenario A: User has no weekly credits left
+    if (weeklyCredits === 0) {
+      return {
+        title: "Out of credits? 😔",
+        body: "Upgrade to MAX for unlimited campaign applications + ₹100 joining bonus! Only ₹199/month",
+      };
+    }
+
+    // Scenario B: User has applied to many campaigns (active user)
+    if (campaignApplications >= 5) {
+      return {
+        title: "You're active! 🚀",
+        body: `You've applied to ${campaignApplications} campaigns. MAX members get unlimited applications + higher priority. Join for ₹199/month`,
+      };
+    }
+
+    // Scenario C: New or less active user
+    return {
+      title: "Unlock your potential 💫",
+      body: "MAX members earn 3x more on average. Get unlimited applications, priority in campaigns & exclusive perks for ₹199/month",
+    };
+  }
+
+  // ==================== FLASH SALE ANNOUNCEMENTS ====================
+
+  /**
+   * Send flash sale announcement to all non-Pro users
+   */
+  async announceFlashSale(promotionId: number): Promise<void> {
+    this.logger.log(`🎉 Announcing flash sale (promotion: ${promotionId})...`);
+
+    try {
+      const promotion = await this.proSubscriptionPromotionModel.findByPk(promotionId);
+      if (!promotion) {
+        throw new Error(`Promotion ${promotionId} not found`);
+      }
+
+      // Find all non-Pro users with FCM tokens
+      const nonProUsers = await this.influencerModel.findAll({
+        where: {
+          isPro: false,
+          isVerified: true,
+          isActive: true,
+          fcmToken: { [Op.ne]: null },
+        },
+      });
+
+      this.logger.log(`📊 Sending flash sale announcement to ${nonProUsers.length} user(s)`);
+
+      const originalPrice = promotion.originalPrice / 100;
+      const discountedPrice = promotion.discountedPrice / 100;
+      const savings = originalPrice - discountedPrice;
+
+      const message = {
+        title: "⚡ FLASH SALE! ⚡",
+        body: `MAX at ₹${discountedPrice} (was ₹${originalPrice}) - Save ₹${savings}! Limited time only! 🔥`,
+      };
+
+      // Batch send notifications
+      const fcmTokens = nonProUsers.map(u => u.fcmToken);
+
+      // Send in batches of 500 to avoid rate limits
+      const batchSize = 500;
+      let sentCount = 0;
+
+      for (let i = 0; i < fcmTokens.length; i += batchSize) {
+        const batch = fcmTokens.slice(i, i + batchSize);
+
+        await this.notificationService.sendCustomNotification(
+          batch,
+          message.title,
+          message.body,
+          {
+            type: 'flash_sale',
+            promotionId: promotionId.toString(),
+            action: 'subscribe_now',
+            originalPrice: originalPrice.toString(),
+            discountedPrice: discountedPrice.toString(),
+            savings: savings.toString(),
+          },
+        );
+
+        sentCount += batch.length;
+        this.logger.debug(`📱 Sent flash sale notification to ${sentCount}/${fcmTokens.length} users`);
+      }
+
+      this.logger.log(`✅ Flash sale announcement complete: ${sentCount} notifications sent`);
+    } catch (error) {
+      this.logger.error(`❌ Error announcing flash sale: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Send flash sale reminder to users who engaged but didn't subscribe
+   * Call this 6 hours after sale starts
+   */
+  async sendFlashSaleReminder(promotionId: number): Promise<void> {
+    this.logger.log(`⏰ Sending flash sale reminder (promotion: ${promotionId})...`);
+
+    try {
+      const promotion = await this.proSubscriptionPromotionModel.findByPk(promotionId);
+      if (!promotion) {
+        throw new Error(`Promotion ${promotionId} not found`);
+      }
+
+      const timeRemaining = promotion.getTimeRemaining();
+      const spotsLeft = promotion.getSpotsLeft();
+
+      // Find non-Pro users who haven't subscribed yet
+      const nonProUsers = await this.influencerModel.findAll({
+        where: {
+          isPro: false,
+          isVerified: true,
+          isActive: true,
+          fcmToken: { [Op.ne]: null },
+        },
+        limit: 1000,
+      });
+
+      const discountedPrice = promotion.discountedPrice / 100;
+
+      let message: { title: string; body: string };
+
+      if (spotsLeft && spotsLeft < 100) {
+        message = {
+          title: "🚨 Last Chance!",
+          body: `Only ${spotsLeft} spots left for ₹${discountedPrice} MAX offer! Ends in ${timeRemaining}`,
+        };
+      } else {
+        message = {
+          title: `⏰ ${timeRemaining} left!`,
+          body: `Don't miss ₹${discountedPrice} MAX offer - limited time only!`,
+        };
+      }
+
+      const fcmTokens = nonProUsers.map(u => u.fcmToken);
+
+      await this.notificationService.sendCustomNotification(
+        fcmTokens,
+        message.title,
+        message.body,
+        {
+          type: 'flash_sale_reminder',
+          promotionId: promotionId.toString(),
+          action: 'subscribe_now',
+          timeRemaining,
+          spotsLeft: spotsLeft?.toString() || 'unlimited',
+        },
+      );
+
+      this.logger.log(`✅ Flash sale reminder sent to ${fcmTokens.length} users`);
+    } catch (error) {
+      this.logger.error(`❌ Error sending flash sale reminder: ${error.message}`, error.stack);
+    }
+  }
+}
