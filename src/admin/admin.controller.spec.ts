@@ -22,6 +22,7 @@ import { AppVersionService } from '../shared/services/app-version.service';
 import { DeviceTokenService } from '../shared/device-token.service';
 import { InvoiceExcelExportService } from './services/invoice-excel-export.service';
 import { AdminCreatorScoreService } from './services/admin-creator-score.service';
+import { NudgeTemplateService } from './services/nudge-template.service';
 import { ProSubscriptionService } from '../influencer/services/pro-subscription.service';
 import { SubscriptionMarketingService } from '../influencer/services/subscription-marketing.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
@@ -207,6 +208,10 @@ const mockSubscriptionMarketingService = {
   sendFlashSaleReminder: jest.fn(),
 };
 
+const mockNudgeTemplateService = {
+  updateTemplateStatus: jest.fn(),
+};
+
 const mockProSubscriptionPromotionRepository = {
   findAll: jest.fn(),
   findOne: jest.fn(),
@@ -361,6 +366,10 @@ describe('AdminController', () => {
         {
           provide: SubscriptionMarketingService,
           useValue: mockSubscriptionMarketingService,
+        },
+        {
+          provide: NudgeTemplateService,
+          useValue: mockNudgeTemplateService,
         },
         {
           provide: getModelToken(ProSubscriptionPromotion),

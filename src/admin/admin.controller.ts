@@ -52,6 +52,7 @@ import { AppVersionService } from '../shared/services/app-version.service';
 import { DeviceTokenService } from '../shared/device-token.service';
 import { InvoiceExcelExportService } from './services/invoice-excel-export.service';
 import { AdminCreatorScoreService } from './services/admin-creator-score.service';
+import { NudgeTemplateService } from './services/nudge-template.service';
 import { GetCreatorScoresDto, GetCreatorScoresDashboardDto } from './dto/get-creator-scores.dto';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import type { RequestWithAdmin } from './guards/admin-auth.guard';
@@ -227,6 +228,7 @@ export class AdminController {
     private readonly adminCreatorScoreService: AdminCreatorScoreService,
     private readonly proSubscriptionService: ProSubscriptionService,
     private readonly subscriptionMarketingService: SubscriptionMarketingService,
+    private readonly nudgeTemplateService: NudgeTemplateService,
     @InjectModel(ProSubscriptionPromotion)
     private readonly proSubscriptionPromotionModel: typeof ProSubscriptionPromotion,
     @InjectModel(NudgeMessageTemplate)
@@ -5275,6 +5277,80 @@ export class AdminController {
     return {
       success: true,
       message: 'Template deleted successfully',
+    };
+  }
+
+  @Patch('nudge-message-templates/:id/status')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: '[ADMIN] Update nudge template status',
+    description:
+      'Activate or deactivate a nudge message template.\n\n' +
+      '**Use Cases:**\n' +
+      '• A/B testing: Activate one variant, deactivate another\n' +
+      '• Performance optimization: Deactivate low-performing templates\n' +
+      '• Emergency control: Quickly deactivate templates if needed\n' +
+      '• Seasonal campaigns: Activate for events, deactivate after',
+  })
+  @ApiParam({ name: 'id', description: 'Template ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        isActive: {
+          type: 'boolean',
+          example: true,
+          description: 'Set to true to activate, false to deactivate',
+        },
+      },
+      required: ['isActive'],
+    },
+    examples: {
+      activate: {
+        summary: 'Activate template',
+        value: { isActive: true },
+      },
+      deactivate: {
+        summary: 'Deactivate template',
+        value: { isActive: false },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Template status updated successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Template not found',
+  })
+  async updateNudgeTemplateStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('isActive') isActive: boolean,
+  ) {
+    const result = await this.nudgeTemplateService.updateTemplateStatus(
+      id,
+      isActive,
+    );
+
+    return {
+      success: true,
+      message: isActive
+        ? 'Template activated successfully'
+        : 'Template deactivated successfully',
+      template: {
+        id: result.template.id,
+        title: result.template.title,
+        body: result.template.body,
+        messageType: result.template.messageType,
+        isActive: result.template.isActive,
+        previousStatus: result.previousStatus,
+        priority: result.template.priority,
+        timesSent: result.template.timesSent,
+        conversionCount: result.template.conversionCount,
+        conversionRate: result.template.getConversionRate(),
+      },
     };
   }
 
