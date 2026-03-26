@@ -81,6 +81,7 @@ export class DeviceToken extends Model {
   @Column({
     type: DataType.STRING(255),
     allowNull: true,
+    field: 'installation_id',
   })
   declare installationId: string | null;
 
