@@ -153,6 +153,9 @@ import { CreatePromotionDto, UpdatePromotionDto } from './dto/create-promotion.d
 import {
   CreateNudgeMessageTemplateDto,
   UpdateNudgeMessageTemplateDto,
+  NudgeMessageTemplateResponseDto,
+  GetNudgeMessageTemplatesDto,
+  NudgeMessageTemplateListResponseDto,
 } from './dto/nudge-message-template.dto';
 import {
   GetNewAccountsWithReferralDto,
@@ -4931,10 +4934,75 @@ export class AdminController {
   @UseGuards(AdminAuthGuard, RolesGuard)
   @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
   @ApiBearerAuth()
-  @ApiOperation({ summary: '[ADMIN] Create nudge message template' })
+  @ApiOperation({
+    summary: '[ADMIN] Create nudge message template',
+    description: 'Create a new nudge message template. Choose message type based on target audience:\n\n' +
+      '• **rotation**: Generic messages shown to all users in rotation\n' +
+      '• **out_of_credits**: Urgent messages when user has 0 credits\n' +
+      '• **active_user**: Behavior-based messages for users with many applications\n' +
+      '• **payment_pending**: Messages for users with pending/failed payments',
+  })
+  @ApiBody({
+    type: CreateNudgeMessageTemplateDto,
+    examples: {
+      rotation: {
+        summary: 'Rotation Message',
+        description: 'Generic promotional message shown in rotation to all users',
+        value: {
+          title: 'Unlock your potential 💫',
+          body: 'MAX members earn 3x more on average. Get unlimited applications for ₹199/month',
+          messageType: 'rotation',
+          priority: 100,
+          rotationOrder: 0,
+          validFrom: '2026-03-25T00:00:00Z',
+          validUntil: '2026-04-25T23:59:59Z',
+          internalNotes: 'Generic message for new users - focus on earnings',
+        },
+      },
+      out_of_credits: {
+        summary: 'Out of Credits (Urgent)',
+        description: 'Urgent message shown when user has exhausted all credits',
+        value: {
+          title: 'You\'re out of credits! 🚨',
+          body: 'Upgrade to MAX and get unlimited campaign applications. Join 10,000+ influencers earning more!',
+          messageType: 'out_of_credits',
+          requiresZeroCredits: true,
+          priority: 200,
+          validFrom: '2026-03-25T00:00:00Z',
+          internalNotes: 'High urgency - shown when credits = 0',
+        },
+      },
+      active_user: {
+        summary: 'Active User (Behavior-based)',
+        description: 'Targeted message for highly engaged users with many applications',
+        value: {
+          title: 'You\'re on fire! 🔥',
+          body: 'You\'ve applied to 10+ campaigns! MAX members like you get 5x better ROI. Upgrade now for ₹199/month',
+          messageType: 'active_user',
+          minCampaignApplications: 10,
+          priority: 150,
+          validFrom: '2026-03-25T00:00:00Z',
+          internalNotes: 'Behavior-based targeting for power users',
+        },
+      },
+      payment_pending: {
+        summary: 'Payment Pending',
+        description: 'Message for users with pending or failed subscription payments',
+        value: {
+          title: 'Complete your payment 💳',
+          body: 'Your subscription payment is pending. Complete it now to continue enjoying MAX benefits!',
+          messageType: 'payment_pending',
+          priority: 180,
+          validFrom: '2026-03-25T00:00:00Z',
+          internalNotes: 'Payment reminder for failed/pending subscriptions',
+        },
+      },
+    },
+  })
   @ApiResponse({
     status: 201,
     description: 'Nudge message template created successfully',
+    type: NudgeMessageTemplateResponseDto,
   })
   @ApiUnauthorizedResponse({
     description: 'Authentication required',
@@ -4970,24 +5038,141 @@ export class AdminController {
   @Get('nudge-message-templates')
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: '[ADMIN] Get all nudge message templates' })
+  @ApiOperation({
+    summary: '[ADMIN] Get all nudge message templates',
+    description: 'Get paginated list of nudge message templates sorted by ID (newest first). Supports filtering by message type and active status.',
+  })
   @ApiResponse({
     status: 200,
-    description: 'List of all nudge message templates with analytics',
+    description: 'List of nudge message templates with pagination metadata',
+    type: NudgeMessageTemplateListResponseDto,
+    schema: {
+      example: {
+        success: true,
+        templates: [
+          {
+            id: 4,
+            title: 'You\'re on fire! 🔥',
+            body: 'You\'ve applied to 10+ campaigns! MAX members like you get 5x better ROI. Upgrade now for ₹199/month',
+            messageType: 'active_user',
+            minCampaignApplications: 10,
+            requiresZeroCredits: false,
+            isActive: true,
+            priority: 150,
+            rotationOrder: null,
+            timesSent: 25,
+            conversionCount: 12,
+            validFrom: '2026-03-25T00:00:00.000Z',
+            validUntil: null,
+            createdBy: 1,
+            internalNotes: 'Behavior-based targeting for power users',
+            createdAt: '2026-03-26T14:00:00.000Z',
+            updatedAt: '2026-03-26T14:00:00.000Z',
+            conversionRate: 48.0,
+            isCurrentlyValid: true,
+          },
+          {
+            id: 3,
+            title: 'Complete your payment 💳',
+            body: 'Your subscription payment is pending. Complete it now to continue enjoying MAX benefits!',
+            messageType: 'payment_pending',
+            minCampaignApplications: null,
+            requiresZeroCredits: false,
+            isActive: true,
+            priority: 180,
+            rotationOrder: null,
+            timesSent: 15,
+            conversionCount: 8,
+            validFrom: '2026-03-25T00:00:00.000Z',
+            validUntil: null,
+            createdBy: 1,
+            internalNotes: 'Payment reminder for failed/pending subscriptions',
+            createdAt: '2026-03-26T12:00:00.000Z',
+            updatedAt: '2026-03-26T12:00:00.000Z',
+            conversionRate: 53.33,
+            isCurrentlyValid: true,
+          },
+          {
+            id: 2,
+            title: 'You\'re out of credits! 🚨',
+            body: 'Upgrade to MAX and get unlimited campaign applications. Join 10,000+ influencers earning more!',
+            messageType: 'out_of_credits',
+            minCampaignApplications: null,
+            requiresZeroCredits: true,
+            isActive: true,
+            priority: 200,
+            rotationOrder: null,
+            timesSent: 120,
+            conversionCount: 45,
+            validFrom: '2026-03-20T00:00:00.000Z',
+            validUntil: null,
+            createdBy: 1,
+            internalNotes: 'High urgency - shown when credits = 0',
+            createdAt: '2026-03-25T10:30:00.000Z',
+            updatedAt: '2026-03-25T10:30:00.000Z',
+            conversionRate: 37.5,
+            isCurrentlyValid: true,
+          },
+          {
+            id: 1,
+            title: 'Unlock your potential 💫',
+            body: 'MAX members earn 3x more on average. Get unlimited applications for ₹199/month',
+            messageType: 'rotation',
+            minCampaignApplications: null,
+            requiresZeroCredits: false,
+            isActive: true,
+            priority: 100,
+            rotationOrder: 0,
+            timesSent: 500,
+            conversionCount: 85,
+            validFrom: '2026-03-15T00:00:00.000Z',
+            validUntil: '2026-04-25T23:59:59.000Z',
+            createdBy: 1,
+            internalNotes: 'Generic message for new users - focus on earnings',
+            createdAt: '2026-03-20T10:30:00.000Z',
+            updatedAt: '2026-03-20T10:30:00.000Z',
+            conversionRate: 17.0,
+            isCurrentlyValid: true,
+          },
+        ],
+        total: 4,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      },
+    },
   })
   @ApiUnauthorizedResponse({
     description: 'Authentication required',
   })
-  async getAllNudgeMessageTemplates() {
-    const templates = await this.nudgeMessageTemplateModel.findAll({
-      order: [
-        ['messageType', 'ASC'],
-        ['priority', 'DESC'],
-        ['rotationOrder', 'ASC'],
-      ],
+  async getAllNudgeMessageTemplates(@Query() dto: GetNudgeMessageTemplatesDto) {
+    const page = dto.page || 1;
+    const limit = dto.limit || 20;
+    const offset = (page - 1) * limit;
+
+    // Build where clause for filters
+    const whereClause: any = {};
+    if (dto.messageType) {
+      whereClause.messageType = dto.messageType;
+    }
+    if (dto.isActive !== undefined) {
+      whereClause.isActive = dto.isActive;
+    }
+
+    // Get total count for pagination
+    const total = await this.nudgeMessageTemplateModel.count({
+      where: whereClause,
     });
 
-    // Add conversion rate to each template
+    // Get paginated templates sorted by id DESC (newest first)
+    const templates = await this.nudgeMessageTemplateModel.findAll({
+      where: whereClause,
+      order: [['id', 'DESC']],
+      limit,
+      offset,
+    });
+
+    // Add conversion rate and validity to each template
     const enrichedTemplates = templates.map((template) => ({
       ...template.toJSON(),
       conversionRate: template.getConversionRate(),
@@ -4996,8 +5181,11 @@ export class AdminController {
 
     return {
       success: true,
-      count: templates.length,
       templates: enrichedTemplates,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
     };
   }
 

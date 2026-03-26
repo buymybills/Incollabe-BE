@@ -4,6 +4,7 @@ export enum NudgeMessageType {
   ROTATION = 'rotation', // Generic rotating messages
   OUT_OF_CREDITS = 'out_of_credits', // Urgent - user has 0 credits
   ACTIVE_USER = 'active_user', // User with many applications
+  PAYMENT_PENDING = 'payment_pending', // Payment pending/failed
 }
 
 @Table({
