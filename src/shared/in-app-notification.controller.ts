@@ -1,7 +1,9 @@
 import {
   Controller,
   Get,
+  Post,
   Put,
+  Body,
   Query,
   Param,
   Req,
@@ -239,6 +241,50 @@ export class InAppNotificationController {
     return {
       markedCount: 1,
       message: '1 notification(s) marked as read',
+    };
+  }
+
+  @Post('fiam/trigger')
+  @ApiOperation({
+    summary: '🧪 TEST: Trigger FIAM nudge event',
+    description:
+      'Test endpoint to trigger a FIAM nudge notification (fire and forget).\n\n' +
+      'Returns FIAM event that frontend should log to Firebase Analytics.\n' +
+      'This will show a popup in the app but NOT save to notification feed.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'FIAM event triggered successfully',
+    schema: {
+      example: {
+        success: true,
+        fiamEvents: [
+          {
+            eventName: 'subscription_out_of_credits',
+            templateId: 3,
+            metadata: {
+              nudgeType: 'out_of_credits',
+            },
+          },
+        ],
+        message: 'Log this event to Firebase Analytics on frontend',
+      },
+    },
+  })
+  async triggerFiamEvent(@Req() req: RequestWithUser) {
+    return {
+      success: true,
+      fiamEvents: [
+        {
+          eventName: 'subscription_out_of_credits',
+          templateId: 3,
+          metadata: {
+            nudgeType: 'out_of_credits',
+            userId: req.user.id,
+          },
+        },
+      ],
+      message: 'Log event "subscription_out_of_credits" to Firebase Analytics',
     };
   }
 }
