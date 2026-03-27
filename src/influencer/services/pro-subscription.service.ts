@@ -1472,7 +1472,7 @@ export class ProSubscriptionService {
         // UPI mandate authenticated but payment delayed (when start_at is in future)
         await subscription.update({
           status: SubscriptionStatus.ACTIVE,
-          upiMandateStatus: 'authenticated',
+          upiMandateStatus: UpiMandateStatus.AUTHENTICATED,
           mandateAuthenticatedAt: createDatabaseDate(),
           autoRenew: true, // Enable auto-renewal after authentication
         });
@@ -1484,7 +1484,7 @@ export class ProSubscriptionService {
         // UPI mandate authenticated and first payment successful
         await subscription.update({
           status: SubscriptionStatus.ACTIVE,
-          upiMandateStatus: 'authenticated',
+          upiMandateStatus: UpiMandateStatus.AUTHENTICATED,
           mandateAuthenticatedAt: createDatabaseDate(),
           autoRenew: true, // Enable auto-renewal after first payment
         });
@@ -1501,7 +1501,7 @@ export class ProSubscriptionService {
               { razorpayPaymentId },
               {
                 subscriptionId: subscription.id,
-                paymentStatus: 'paid',
+                paymentStatus: InvoiceStatus.PAID,
                 billingPeriodStart: subscription.currentPeriodStart,
                 billingPeriodEnd: subscription.currentPeriodEnd,
               },
@@ -1563,8 +1563,8 @@ export class ProSubscriptionService {
             totalAmount: totalAmount,
             billingPeriodStart: subscription.currentPeriodStart,
             billingPeriodEnd: subscription.currentPeriodEnd,
-            paymentStatus: 'paid',
-            paymentMethod: 'razorpay',
+            paymentStatus: InvoiceStatus.PAID,
+            paymentMethod: PaymentMethod.RAZORPAY,
             razorpayPaymentId: activationPaymentId, // Use payment ID from payload
             paidAt: createDatabaseDate(),
           });
@@ -1612,7 +1612,7 @@ export class ProSubscriptionService {
         const orConditions: any[] = [
           {
             subscriptionId: subscription.id,
-            paymentStatus: 'paid',
+            paymentStatus: InvoiceStatus.PAID,
             billingPeriodStart: newPeriodStart,  // Use webhook dates
             billingPeriodEnd: newPeriodEnd,      // Use webhook dates
           },
@@ -1685,8 +1685,8 @@ export class ProSubscriptionService {
             totalAmount: totalAmount,
             billingPeriodStart: newPeriodStart,  // Use webhook dates
             billingPeriodEnd: newPeriodEnd,      // Use webhook dates
-            paymentStatus: 'paid',
-            paymentMethod: 'razorpay',
+            paymentStatus: InvoiceStatus.PAID,
+            paymentMethod: PaymentMethod.RAZORPAY,
             razorpayPaymentId: chargedPaymentId, // Use payment ID from payload
             paidAt: createDatabaseDate(),
           });
@@ -1739,7 +1739,7 @@ export class ProSubscriptionService {
       case 'subscription.paused':
         await subscription.update({
           status: SubscriptionStatus.PAUSED,
-          upiMandateStatus: 'paused',
+          upiMandateStatus: UpiMandateStatus.PAUSED,
         });
         console.log(`⏸️ Subscription ${subscription.id} paused via webhook`);
         break;
@@ -1747,7 +1747,7 @@ export class ProSubscriptionService {
       case 'subscription.resumed':
         await subscription.update({
           status: SubscriptionStatus.ACTIVE,
-          upiMandateStatus: 'authenticated',
+          upiMandateStatus: UpiMandateStatus.AUTHENTICATED,
         });
         console.log(`▶️ Subscription ${subscription.id} resumed via webhook`);
         break;
@@ -1755,7 +1755,7 @@ export class ProSubscriptionService {
       case 'subscription.cancelled':
         await subscription.update({
           status: SubscriptionStatus.CANCELLED,
-          upiMandateStatus: 'cancelled',
+          upiMandateStatus: UpiMandateStatus.CANCELLED,
           autoRenew: false,
           cancelledAt: createDatabaseDate(),
         });
@@ -1770,7 +1770,7 @@ export class ProSubscriptionService {
       case 'subscription.halted':
         // Subscription halted due to payment failures
         await subscription.update({
-          upiMandateStatus: 'paused',
+          upiMandateStatus: UpiMandateStatus.PAUSED,
         });
         console.log(`⚠️ Subscription ${subscription.id} halted due to payment issues`);
         break;
@@ -1910,7 +1910,7 @@ export class ProSubscriptionService {
               billingPeriodStart: paymentDate,
               billingPeriodEnd: periodEnd,
               paymentStatus: InvoiceStatus.PENDING, // Will be marked as PAID by payment.captured handler below
-              paymentMethod: 'razorpay',
+              paymentMethod: PaymentMethod.RAZORPAY,
               razorpayPaymentId: payload.payment?.entity?.id,
             });
 
@@ -2079,7 +2079,7 @@ export class ProSubscriptionService {
           break;
         }
 
-        await invoice.update({ paymentStatus: 'failed' });
+        await invoice.update({ paymentStatus: InvoiceStatus.FAILED });
 
         // Increment failure count for subscription
         const subscription = await this.proSubscriptionModel.findByPk(invoice.subscriptionId);
@@ -3214,7 +3214,7 @@ export class ProSubscriptionService {
     if (
       existingSubscription &&
       existingSubscription.razorpaySubscriptionId &&
-      existingSubscription.upiMandateStatus !== 'cancelled' &&
+      existingSubscription.upiMandateStatus !== UpiMandateStatus.CANCELLED &&
       existingSubscription.autoRenew === true
     ) {
       throw new BadRequestException('You already have an active autopay subscription');
