@@ -3296,7 +3296,7 @@ export class ProSubscriptionService {
       // Update existing subscription (clear old cancellation data if restarting)
       subscription = await existingSubscription.update({
         razorpaySubscriptionId: subscriptionResult.subscriptionId,
-        upiMandateStatus: 'pending',
+        upiMandateStatus: UpiMandateStatus.PENDING,
         mandateCreatedAt: now,
         autoRenew: false, // Will be set to true by webhook when mandate is authenticated
         currentPeriodStart: startDate,
@@ -3316,9 +3316,9 @@ export class ProSubscriptionService {
         currentPeriodEnd: endDate,
         nextBillingDate: endDate,
         subscriptionAmount: this.PRO_SUBSCRIPTION_AMOUNT,
-        paymentMethod: 'razorpay',
+        paymentMethod: PaymentMethod.RAZORPAY,
         razorpaySubscriptionId: subscriptionResult.subscriptionId,
-        upiMandateStatus: 'pending',
+        upiMandateStatus: UpiMandateStatus.PENDING,
         mandateCreatedAt: now,
         autoRenew: false, // Only enable after first payment is successful
       });
