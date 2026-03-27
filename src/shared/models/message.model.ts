@@ -129,6 +129,15 @@ export class Message extends Model<Message> {
   })
   declare encryptionVersion: string;
 
+  // Reply functionality (WhatsApp-style)
+  @ForeignKey(() => Message)
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    field: 'reply_to_message_id',
+  })
+  declare replyToMessageId: number | null;
+
   // Associations
   @BelongsTo(() => Conversation)
   declare conversation: Conversation;
@@ -138,4 +147,7 @@ export class Message extends Model<Message> {
 
   @BelongsTo(() => Brand)
   declare brand: Brand;
+
+  @BelongsTo(() => Message, 'replyToMessageId')
+  declare repliedToMessage: Message;
 }

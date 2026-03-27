@@ -563,6 +563,18 @@ export class ChatController {
           messageType: 'text',
         },
       },
+      replyToMessage: {
+        summary: '↩️ Reply to Message (WhatsApp-style)',
+        description:
+          'Reply to a specific message by including replyToMessageId. Works with all conversation types (personal, campaign, group).',
+        value: {
+          conversationId: 45,
+          content:
+            '{"encryptedKeyForRecipient":"QeGPkee/OBXSmQTHqSUl6acwC1be4HJvwqwdLuCfkfXo...","encryptedKeyForSender":"B8H0sKPJMXxx2pTmjYaD2HD8vbSLbYLOgf4yQsFudUT0...","iv":"oeb3PbPUWVbxZu9g","ciphertext":"MzM7rZE6Zb9LR3Ja8RH/SuO3Ak/53TpYfDMZgyJtRJ4nyi155wCtTazdBBbOoFOuBAjgViD6qhgMB+CZCQsh7n8=","version":"v1"}',
+          messageType: 'text',
+          replyToMessageId: 123,
+        },
+      },
     },
   })
   @ApiResponse({
@@ -589,6 +601,7 @@ export class ChatController {
             attachmentUrl: { type: 'string', example: 'https://incollabstaging.s3.ap-south-1.amazonaws.com/chat/images/photo-12345.jpg', nullable: true },
             attachmentName: { type: 'string', example: 'vacation-photo.jpg', nullable: true },
             mediaType: { type: 'string', example: 'image/jpeg', nullable: true, description: 'MIME type of the media attachment' },
+            replyToMessageId: { type: 'number', example: 100, nullable: true, description: 'ID of the message being replied to' },
             isEncrypted: {
               type: 'boolean',
               example: true,

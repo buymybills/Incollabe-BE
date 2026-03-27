@@ -94,6 +94,16 @@ export class SendMessageDto {
   @IsString()
   @IsOptional()
   mediaType?: string;
+
+  @ApiProperty({
+    description: 'ID of the message being replied to (WhatsApp-style reply)',
+    required: false,
+    example: 123,
+  })
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  replyToMessageId?: number;
 }
 
 export class GetConversationsDto {
