@@ -60,7 +60,7 @@ export class SubscriptionMarketingService {
         include: [
           {
             model: Influencer,
-            attributes: ['id', 'firstName', 'lastName', 'fcmToken', 'weeklyCredits'],
+            attributes: ['id', 'name', 'fcmToken', 'weeklyCredits'],
           },
         ],
       });
