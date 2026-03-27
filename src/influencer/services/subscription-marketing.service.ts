@@ -593,7 +593,7 @@ export class SubscriptionMarketingService {
         body: message.body,
         type: NotificationType.SYSTEM_ANNOUNCEMENT,
         actionType: 'subscribe_now',
-        actionUrl: `app://influencers?userId=${userId}`,
+        actionUrl: `app://max`,
         relatedEntityType: 'promotion',
         relatedEntityId: promotionId,
         priority: NotificationPriority.HIGH,
