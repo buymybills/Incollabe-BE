@@ -10,6 +10,8 @@ import { RazorpayService } from '../../shared/razorpay.service';
 import { S3Service } from '../../shared/s3.service';
 import { EncryptionService } from '../../shared/services/encryption.service';
 import { ProSubscriptionPromotion } from '../models/pro-subscription-promotion.model';
+import { PostBoostInvoice, InvoiceStatus as BoostInvoiceStatus } from '../../post/models/post-boost-invoice.model';
+import { Post } from '../../post/models/post.model';
 import { Op } from 'sequelize';
 import { Sequelize } from 'sequelize-typescript';
 import { toIST, createDatabaseDate, addDaysForDatabase } from '../../shared/utils/date.utils';
@@ -32,6 +34,8 @@ export class ProSubscriptionService {
     private proPaymentTransactionModel: typeof ProPaymentTransaction,
     @InjectModel(ProSubscriptionPromotion)
     private proSubscriptionPromotionModel: typeof ProSubscriptionPromotion,
+    @InjectModel(PostBoostInvoice)
+    private postBoostInvoiceModel: typeof PostBoostInvoice,
     @InjectModel(Influencer)
     private influencerModel: typeof Influencer,
     @InjectModel(City)
@@ -402,6 +406,7 @@ export class ProSubscriptionService {
     if (!subscription) {
       return {
         hasSubscription: false,
+        hasPendingPayment: false,
         isPro: false,
       };
     }
@@ -463,12 +468,16 @@ export class ProSubscriptionService {
       }
     }
 
-    // Don't count subscriptions in failed/inactive states as having a subscription
+    // Track if there's a pending payment that needs to be completed
+    const hasPendingPayment = subscription.status === SubscriptionStatus.PAYMENT_PENDING;
+
+    // Don't count subscriptions in failed/inactive/pending states as having a subscription
     // Also don't count cancelled subscriptions that were never paid
-    // NOTE: payment_pending subscriptions SHOULD show subscription details (so user can resume payment)
+    // NOTE: For payment_pending, we set hasPendingPayment=true and hasSubscription=false for clarity
     const hasSubscription = !(
       subscription.status === SubscriptionStatus.PAYMENT_FAILED ||
       subscription.status === SubscriptionStatus.INACTIVE ||
+      subscription.status === SubscriptionStatus.PAYMENT_PENDING ||
       (subscription.status === SubscriptionStatus.CANCELLED && !hadPaidInvoices)
     );
 
@@ -502,9 +511,11 @@ export class ProSubscriptionService {
       return status.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
     };
 
-    // Don't return subscription details if it's cancelled and never paid
-    // This prevents showing confusing subscription data for abandoned payment attempts
-    const subscriptionData = hasSubscription ? {
+    // Show subscription details if:
+    // 1. User has an active/paid subscription (hasSubscription = true), OR
+    // 2. User has a pending payment (hasPendingPayment = true, so they can resume)
+    // Don't show if cancelled and never paid (abandoned signups)
+    const subscriptionData = (hasSubscription || hasPendingPayment) ? {
       id: subscription.id,
       status: formatStatus(displayStatus),
       isCancelled: subscription.status === SubscriptionStatus.CANCELLED || displayStatus === SubscriptionStatus.EXPIRED,
@@ -545,6 +556,7 @@ export class ProSubscriptionService {
 
     return {
       hasSubscription,
+      hasPendingPayment,
       isPro,
       subscription: subscriptionData,
       promotion: promotionData,
@@ -576,54 +588,93 @@ export class ProSubscriptionService {
   }
 
   /**
-   * Get all invoices for an influencer across ALL subscriptions
+   * Get all invoices for an influencer (Pro subscriptions + Post boosts)
    */
   async getAllInvoices(influencerId: number) {
-    // Fetch ALL invoices for this influencer across all subscriptions
-    const allInvoices = await this.proInvoiceModel.findAll({
+    // Helper function to format status (remove underscores, convert to camelCase)
+    const formatStatus = (status: string): string => {
+      return status.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    };
+
+    // Fetch Pro subscription invoices
+    const proInvoices = await this.proInvoiceModel.findAll({
       where: { influencerId },
-      order: [['createdAt', 'DESC']],
     });
 
-    // Filter out cancelled invoices that were never paid
-    const filteredInvoices = allInvoices.filter((inv) => {
-      // Exclude cancelled invoices only if they were never paid
+    // Filter out cancelled Pro invoices that were never paid
+    const filteredProInvoices = proInvoices.filter((inv) => {
       if (inv.paymentStatus === InvoiceStatus.CANCELLED && !inv.paidAt) {
         return false;
       }
       return true;
     });
 
-    if (!filteredInvoices || filteredInvoices.length === 0) {
-      return {
-        invoices: [],
-        totalInvoices: 0,
-      };
-    }
+    // Fetch Post boost invoices
+    const boostInvoices = await this.postBoostInvoiceModel.findAll({
+      where: {
+        influencerId,
+        paymentStatus: {
+          [Op.ne]: BoostInvoiceStatus.PENDING, // Exclude pending boost invoices
+        },
+      },
+      include: [
+        {
+          model: Post,
+          as: 'post',
+          attributes: ['id', 'content'],
+        },
+      ],
+    });
 
-    // Helper function to format status (remove underscores, convert to camelCase)
-    const formatStatus = (status: string): string => {
-      return status.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-    };
+    // Map Pro subscription invoices
+    const mappedProInvoices = filteredProInvoices.map((inv) => ({
+      id: inv.id,
+      type: 'pro_subscription',
+      invoiceNumber: inv.invoiceNumber,
+      amount: inv.totalAmount / 100, // Convert to Rs
+      status: formatStatus(inv.paymentStatus),
+      billingPeriod: {
+        start: toIST(inv.billingPeriodStart),
+        end: toIST(inv.billingPeriodEnd),
+      },
+      paidAt: toIST(inv.paidAt),
+      invoiceUrl: inv.invoiceUrl ? this.s3Service.convertToSignedUrl(inv.invoiceUrl, 120) : null,
+      paymentMethod: inv.paymentMethod,
+      isAutopay: inv.razorpayPaymentId ? inv.razorpayPaymentId.includes('sub_') : false,
+      paymentType: inv.razorpayPaymentId && inv.razorpayPaymentId.includes('sub_') ? 'Autopay' : 'Monthly',
+      createdAt: toIST(inv.createdAt),
+      _createdAtRaw: inv.createdAt, // For sorting
+    }));
+
+    // Map Post boost invoices
+    const mappedBoostInvoices = boostInvoices.map((inv) => ({
+      id: inv.id,
+      type: 'post_boost',
+      invoiceNumber: inv.invoiceNumber,
+      amount: inv.totalAmount / 100, // Convert to Rs
+      status: formatStatus(inv.paymentStatus),
+      postId: inv.postId,
+      postContent: inv.post?.content ? (inv.post.content.length > 50 ? inv.post.content.substring(0, 50) + '...' : inv.post.content) : null,
+      paidAt: toIST(inv.paidAt),
+      invoiceUrl: inv.invoiceUrl ? this.s3Service.convertToSignedUrl(inv.invoiceUrl, 120) : null,
+      paymentMethod: inv.paymentMethod,
+      createdAt: toIST(inv.createdAt),
+      _createdAtRaw: inv.createdAt, // For sorting
+    }));
+
+    // Merge and sort by date (newest first)
+    const allInvoices = [...mappedProInvoices, ...mappedBoostInvoices].sort((a, b) => {
+      return b._createdAtRaw.getTime() - a._createdAtRaw.getTime();
+    });
+
+    // Remove sorting helper field
+    const cleanedInvoices = allInvoices.map(({ _createdAtRaw, ...invoice }) => invoice);
 
     return {
-      invoices: filteredInvoices.map((inv) => ({
-        id: inv.id,
-        invoiceNumber: inv.invoiceNumber,
-        amount: inv.totalAmount / 100, // Convert to Rs
-        status: formatStatus(inv.paymentStatus),
-        billingPeriod: {
-          start: toIST(inv.billingPeriodStart),
-          end: toIST(inv.billingPeriodEnd),
-        },
-        paidAt: toIST(inv.paidAt),
-        invoiceUrl: inv.invoiceUrl ? this.s3Service.convertToSignedUrl(inv.invoiceUrl, 120) : null,
-        paymentMethod: inv.paymentMethod,
-        isAutopay: inv.razorpayPaymentId ? inv.razorpayPaymentId.includes('sub_') : false,
-        paymentType: inv.razorpayPaymentId && inv.razorpayPaymentId.includes('sub_') ? 'Autopay' : 'Monthly',
-        createdAt: toIST(inv.createdAt),
-      })),
-      totalInvoices: filteredInvoices.length,
+      invoices: cleanedInvoices,
+      totalInvoices: cleanedInvoices.length,
+      proInvoicesCount: mappedProInvoices.length,
+      boostInvoicesCount: mappedBoostInvoices.length,
     };
   }
 

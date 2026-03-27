@@ -1579,13 +1579,14 @@ export class InfluencerController {
 
   @Get('pro/invoices')
   @ApiOperation({
-    summary: '📄 Get all Pro subscription invoices',
+    summary: '📄 Get all invoices (Pro subscription + Post boosts)',
     description:
-      'Get a list of all invoices for Pro subscription payments.\n\n' +
-      '✅ Returns all invoices with payment status\n' +
+      'Get a unified list of all invoices including Pro subscription payments and post boost payments.\n\n' +
+      '✅ Returns all invoice types with payment status\n' +
       '✅ Includes invoice PDF links\n' +
-      '✅ Sorted by date (newest first)\n\n' +
-      '💡 Use this to show billing history to users',
+      '✅ Sorted by date (newest first)\n' +
+      '✅ Type field distinguishes between invoice types\n\n' +
+      '💡 Use this to show complete billing history to users',
   })
   @ApiResponse({
     status: 200,
@@ -1596,7 +1597,21 @@ export class InfluencerController {
         data: {
           invoices: [
             {
+              id: 2,
+              type: 'post_boost',
+              invoiceNumber: 'BOOST-202601-00001',
+              amount: 500,
+              status: 'paid',
+              postId: 123,
+              postContent: 'Check out my latest collaboration with...',
+              paidAt: '2026-01-15T10:30:00+05:30',
+              invoiceUrl: 'https://s3.amazonaws.com/invoices/...',
+              paymentMethod: 'razorpay',
+              createdAt: '2026-01-15T10:30:00+05:30',
+            },
+            {
               id: 1,
+              type: 'pro_subscription',
               invoiceNumber: 'INV-202512-00001',
               amount: 199,
               status: 'paid',
@@ -1606,10 +1621,15 @@ export class InfluencerController {
               },
               paidAt: '2025-12-11T11:35:20.163+05:30',
               invoiceUrl: 'https://s3.amazonaws.com/invoices/...',
+              paymentMethod: 'razorpay',
+              isAutopay: true,
+              paymentType: 'Autopay',
               createdAt: '2025-12-11T11:32:20.163+05:30',
             },
           ],
-          totalInvoices: 1,
+          totalInvoices: 2,
+          proInvoicesCount: 1,
+          boostInvoicesCount: 1,
         },
         message: 'Invoices retrieved successfully',
       },
