@@ -3195,7 +3195,6 @@ export class InfluencerService {
         {
           model: Campaign,
           required: false, // LEFT JOIN to handle deleted campaigns
-          paranoid: false, // Include soft-deleted campaigns
           attributes: [
             'id',
             'name',
@@ -3205,14 +3204,12 @@ export class InfluencerService {
             'brandId',
             'isInviteOnly',
             'isOrganic',
-            'deletedAt',
           ],
           include: [
             {
               model: Brand,
-              required: false,
-              paranoid: false,
-              attributes: ['id', 'brandName', 'profileImage', 'deletedAt'],
+              required: false, // LEFT JOIN to handle deleted brands
+              attributes: ['id', 'brandName', 'profileImage'],
             },
           ],
         },
@@ -3240,19 +3237,16 @@ export class InfluencerService {
             status: inv.campaign.status,
             isInviteOnly: inv.campaign.isInviteOnly,
             isOrganic: inv.campaign.isOrganic,
-            isDeleted: !!inv.campaign.deletedAt,
             brand: inv.campaign.brand
               ? {
                   id: inv.campaign.brand.id,
                   brandName: inv.campaign.brand.brandName,
                   profileImage: inv.campaign.brand.profileImage,
-                  isDeleted: !!inv.campaign.brand.deletedAt,
                 }
               : {
                   id: null,
                   brandName: 'Deleted Brand',
                   profileImage: null,
-                  isDeleted: true,
                 },
           },
         })),
