@@ -580,7 +580,7 @@ export class SubscriptionMarketingService {
             savings: savings.toString(),
           },
           {
-            actionUrl: `app://max?promotionId=${promotionId}`,
+            actionUrl: `app://maxx?promotionId=${promotionId}`,
           },
         );
 
@@ -596,7 +596,7 @@ export class SubscriptionMarketingService {
         body: message.body,
         type: NotificationType.SYSTEM_ANNOUNCEMENT,
         actionType: 'subscribe_now',
-        actionUrl: `app://max?promotionId=${promotionId}`,
+        actionUrl: `app://maxx?promotionId=${promotionId}`,
         relatedEntityType: 'promotion',
         relatedEntityId: promotionId,
         priority: NotificationPriority.HIGH,
