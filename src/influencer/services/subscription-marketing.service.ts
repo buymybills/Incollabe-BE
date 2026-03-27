@@ -579,6 +579,9 @@ export class SubscriptionMarketingService {
             discountedPrice: discountedPrice.toString(),
             savings: savings.toString(),
           },
+          {
+            actionUrl: `app://max?promotionId=${promotionId}`,
+          },
         );
 
         sentCount += batch.length;
@@ -593,7 +596,7 @@ export class SubscriptionMarketingService {
         body: message.body,
         type: NotificationType.SYSTEM_ANNOUNCEMENT,
         actionType: 'subscribe_now',
-        actionUrl: `app://max`,
+        actionUrl: `app://max?promotionId=${promotionId}`,
         relatedEntityType: 'promotion',
         relatedEntityId: promotionId,
         priority: NotificationPriority.HIGH,
