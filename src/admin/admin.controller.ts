@@ -4803,7 +4803,7 @@ export class AdminController {
       discountPercentage: discountPercentage,
       startDate: dto.startDate,
       endDate: dto.endDate,
-      maxUses: dto.maxUses,
+      maxUses: null, // No slot limits - unlimited subscriptions
       isActive: true,
       currentUses: 0,
       createdBy: req.admin.id,

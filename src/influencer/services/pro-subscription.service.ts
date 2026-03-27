@@ -57,14 +57,6 @@ export class ProSubscriptionService {
         isActive: true,
         startDate: { [Op.lte]: now },
         endDate: { [Op.gte]: now },
-        [Op.or]: [
-          { maxUses: null },
-          Sequelize.where(
-            Sequelize.col('current_uses'),
-            Op.lt,
-            Sequelize.col('max_uses')
-          ),
-        ],
       },
       order: [['startDate', 'DESC']],
     });
@@ -551,7 +543,6 @@ export class ProSubscriptionService {
       startsAt: toIST(activePromotion.startDate),
       endsAt: toIST(activePromotion.endDate),
       timeRemaining: activePromotion.getTimeRemaining(),
-      spotsLeft: activePromotion.getSpotsLeft(),
     } : null;
 
     return {
@@ -3294,7 +3285,7 @@ export class ProSubscriptionService {
     let subscription: ProSubscription;
     if (existingSubscription) {
       // Update existing subscription (clear old cancellation data if restarting)
-      subscription = await existingSubscription.update({
+      const updateData = {
         razorpaySubscriptionId: subscriptionResult.subscriptionId,
         upiMandateStatus: UpiMandateStatus.PENDING,
         mandateCreatedAt: now,
@@ -3305,7 +3296,9 @@ export class ProSubscriptionService {
         cancelledAt: null,
         cancelReason: null,
         status: hasActivePro ? SubscriptionStatus.ACTIVE : SubscriptionStatus.PAYMENT_PENDING,
-      });
+      };
+      console.log('🔍 DEBUG - Update data:', JSON.stringify(updateData, null, 2));
+      subscription = await existingSubscription.update(updateData);
     } else {
       // Create new subscription
       subscription = await this.proSubscriptionModel.create({

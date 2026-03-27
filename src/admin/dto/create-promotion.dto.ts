@@ -54,16 +54,6 @@ export class CreatePromotionDto {
   endDate: Date;
 
   @ApiProperty({
-    example: 500,
-    required: false,
-    description: 'Maximum number of subscriptions allowed with this promotion (null = unlimited)'
-  })
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  maxUses?: number;
-
-  @ApiProperty({
     example: true,
     required: false,
     description: 'Whether to send announcement notification immediately',
