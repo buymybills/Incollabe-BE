@@ -3194,6 +3194,8 @@ export class InfluencerService {
       include: [
         {
           model: Campaign,
+          required: false, // LEFT JOIN to handle deleted campaigns
+          paranoid: false, // Include soft-deleted campaigns
           attributes: [
             'id',
             'name',
@@ -3203,11 +3205,14 @@ export class InfluencerService {
             'brandId',
             'isInviteOnly',
             'isOrganic',
+            'deletedAt',
           ],
           include: [
             {
               model: Brand,
-              attributes: ['id', 'brandName', 'profileImage'],
+              required: false,
+              paranoid: false,
+              attributes: ['id', 'brandName', 'profileImage', 'deletedAt'],
             },
           ],
         },
@@ -3215,30 +3220,42 @@ export class InfluencerService {
       order: [['createdAt', 'DESC']],
     });
 
+    // Filter out invitations with missing campaigns and map the rest
     return {
-      invitations: invitations.map((inv) => ({
-        id: inv.id,
-        status: inv.status,
-        message: inv.message,
-        expiresAt: inv.expiresAt,
-        respondedAt: inv.respondedAt,
-        responseMessage: inv.responseMessage,
-        createdAt: inv.createdAt,
-        campaign: {
-          id: inv.campaign.id,
-          name: inv.campaign.name,
-          description: inv.campaign.description,
-          type: inv.campaign.type,
-          status: inv.campaign.status,
-          isInviteOnly: inv.campaign.isInviteOnly,
-          isOrganic: inv.campaign.isOrganic,
-          brand: {
-            id: inv.campaign.brand.id,
-            brandName: inv.campaign.brand.brandName,
-            profileImage: inv.campaign.brand.profileImage,
+      invitations: invitations
+        .filter((inv) => inv.campaign) // Remove invitations with no campaign
+        .map((inv) => ({
+          id: inv.id,
+          status: inv.status,
+          message: inv.message,
+          expiresAt: inv.expiresAt,
+          respondedAt: inv.respondedAt,
+          responseMessage: inv.responseMessage,
+          createdAt: inv.createdAt,
+          campaign: {
+            id: inv.campaign.id,
+            name: inv.campaign.name,
+            description: inv.campaign.description,
+            type: inv.campaign.type,
+            status: inv.campaign.status,
+            isInviteOnly: inv.campaign.isInviteOnly,
+            isOrganic: inv.campaign.isOrganic,
+            isDeleted: !!inv.campaign.deletedAt,
+            brand: inv.campaign.brand
+              ? {
+                  id: inv.campaign.brand.id,
+                  brandName: inv.campaign.brand.brandName,
+                  profileImage: inv.campaign.brand.profileImage,
+                  isDeleted: !!inv.campaign.brand.deletedAt,
+                }
+              : {
+                  id: null,
+                  brandName: 'Deleted Brand',
+                  profileImage: null,
+                  isDeleted: true,
+                },
           },
-        },
-      })),
+        })),
     };
   }
 
