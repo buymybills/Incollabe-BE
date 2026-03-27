@@ -36,6 +36,7 @@ import {
 } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { InjectModel } from '@nestjs/sequelize';
+import { Op } from 'sequelize';
 import { AdminAuthService } from './admin-auth.service';
 import { ProfileReviewService } from './profile-review.service';
 import { AdminCampaignService } from './services/admin-campaign.service';
@@ -157,6 +158,7 @@ import {
   NudgeMessageTemplateResponseDto,
   GetNudgeMessageTemplatesDto,
   NudgeMessageTemplateListResponseDto,
+  GetNudgeAnalyticsDto,
 } from './dto/nudge-message-template.dto';
 import {
   GetNewAccountsWithReferralDto,
@@ -5042,7 +5044,15 @@ export class AdminController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: '[ADMIN] Get all nudge message templates',
-    description: 'Get paginated list of nudge message templates sorted by ID (newest first). Supports filtering by message type and active status.',
+    description: 'Get paginated list of nudge message templates with advanced filtering and sorting.\n\n' +
+      '**Filters:**\n' +
+      '• `messageType` - Filter by type (rotation, out_of_credits, active_user, payment_pending)\n' +
+      '• `isActive` - Filter by active/inactive status\n' +
+      '• `search` - Search in title and body text\n' +
+      '• `isCurrentlyValid` - Filter templates within valid date range\n\n' +
+      '**Sorting:**\n' +
+      '• `orderBy` - Sort by id, priority, timesSent, conversionRate, createdAt\n' +
+      '• `orderDirection` - ASC or DESC',
   })
   @ApiResponse({
     status: 200,
@@ -5161,21 +5171,59 @@ export class AdminController {
       whereClause.isActive = dto.isActive;
     }
 
-    // Get total count for pagination
-    const total = await this.nudgeMessageTemplateModel.count({
+    // Search filter (case-insensitive search in title and body)
+    if (dto.search) {
+      whereClause[Op.or] = [
+        { title: { [Op.iLike]: `%${dto.search}%` } },
+        { body: { [Op.iLike]: `%${dto.search}%` } },
+      ];
+    }
+
+    // Get all templates first (for isCurrentlyValid filter)
+    let templates = await this.nudgeMessageTemplateModel.findAll({
       where: whereClause,
     });
 
-    // Get paginated templates sorted by id DESC (newest first)
-    const templates = await this.nudgeMessageTemplateModel.findAll({
-      where: whereClause,
-      order: [['id', 'DESC']],
-      limit,
-      offset,
+    // Filter by isCurrentlyValid if specified
+    if (dto.isCurrentlyValid !== undefined) {
+      templates = templates.filter(template => template.isCurrentlyValid() === dto.isCurrentlyValid);
+    }
+
+    // Get total count after filters
+    const total = templates.length;
+
+    // Sort templates
+    const orderBy = dto.orderBy || 'id';
+    const orderDirection = dto.orderDirection || 'DESC';
+
+    templates.sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      if (orderBy === 'conversionRate') {
+        aValue = a.getConversionRate();
+        bValue = b.getConversionRate();
+      } else {
+        aValue = a[orderBy];
+        bValue = b[orderBy];
+      }
+
+      // Handle null/undefined values
+      if (aValue === null || aValue === undefined) aValue = 0;
+      if (bValue === null || bValue === undefined) bValue = 0;
+
+      if (orderDirection === 'ASC') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
     });
+
+    // Apply pagination after sorting
+    const paginatedTemplates = templates.slice(offset, offset + limit);
 
     // Add conversion rate and validity to each template
-    const enrichedTemplates = templates.map((template) => ({
+    const enrichedTemplates = paginatedTemplates.map((template) => ({
       ...template.toJSON(),
       conversionRate: template.getConversionRate(),
       isCurrentlyValid: template.isCurrentlyValid(),
@@ -5357,13 +5405,30 @@ export class AdminController {
   @Get('nudge-message-templates/analytics/overview')
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: '[ADMIN] Get nudge message analytics overview' })
+  @ApiOperation({
+    summary: '[ADMIN] Get nudge message analytics overview',
+    description: 'Get analytics data for nudge message templates.\n\n' +
+      '**Filters:**\n' +
+      '• `messageType` - Filter analytics by specific message type\n' +
+      '• `isActive` - Filter by active/inactive templates',
+  })
   @ApiResponse({
     status: 200,
-    description: 'Analytics data for all nudge message templates',
+    description: 'Analytics data for nudge message templates',
   })
-  async getNudgeMessageAnalytics() {
-    const templates = await this.nudgeMessageTemplateModel.findAll();
+  async getNudgeMessageAnalytics(@Query() dto: GetNudgeAnalyticsDto) {
+    // Build where clause for filters
+    const whereClause: any = {};
+    if (dto.messageType) {
+      whereClause.messageType = dto.messageType;
+    }
+    if (dto.isActive !== undefined) {
+      whereClause.isActive = dto.isActive;
+    }
+
+    const templates = await this.nudgeMessageTemplateModel.findAll({
+      where: whereClause,
+    });
 
     const totalSent = templates.reduce((sum, t) => sum + t.timesSent, 0);
     const totalConversions = templates.reduce((sum, t) => sum + t.conversionCount, 0);
@@ -5408,6 +5473,10 @@ export class AdminController {
 
     return {
       success: true,
+      filters: {
+        messageType: dto.messageType || 'all',
+        isActive: dto.isActive !== undefined ? dto.isActive : 'all',
+      },
       overview: {
         totalTemplates: templates.length,
         activeTemplates: templates.filter((t) => t.isActive).length,

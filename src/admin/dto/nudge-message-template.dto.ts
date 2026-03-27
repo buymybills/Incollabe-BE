@@ -3,6 +3,24 @@ import { IsString, IsEnum, IsBoolean, IsInt, IsOptional, Min, IsDate, MaxLength 
 import { Type } from 'class-transformer';
 import { NudgeMessageType } from '../../shared/models/nudge-message-template.model';
 
+export class GetNudgeAnalyticsDto {
+  @ApiPropertyOptional({
+    enum: NudgeMessageType,
+    description: 'Filter analytics by message type',
+  })
+  @IsOptional()
+  @IsEnum(NudgeMessageType)
+  messageType?: NudgeMessageType;
+
+  @ApiPropertyOptional({
+    description: 'Filter by active status',
+  })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  isActive?: boolean;
+}
+
 export class GetNudgeMessageTemplatesDto {
   @ApiPropertyOptional({ default: 1, description: 'Page number' })
   @IsOptional()
@@ -27,6 +45,41 @@ export class GetNudgeMessageTemplatesDto {
   @Type(() => Boolean)
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Search in title and body text',
+    example: 'Pro subscription'
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  search?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter templates within valid date range (based on validFrom/validUntil)',
+  })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  isCurrentlyValid?: boolean;
+
+  @ApiPropertyOptional({
+    enum: ['id', 'priority', 'timesSent', 'conversionRate', 'createdAt'],
+    default: 'id',
+    description: 'Field to sort by'
+  })
+  @IsOptional()
+  @IsString()
+  orderBy?: string = 'id';
+
+  @ApiPropertyOptional({
+    enum: ['ASC', 'DESC'],
+    default: 'DESC',
+    description: 'Sort direction'
+  })
+  @IsOptional()
+  @IsString()
+  orderDirection?: 'ASC' | 'DESC' = 'DESC';
 }
 
 export class CreateNudgeMessageTemplateDto {
