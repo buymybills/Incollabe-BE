@@ -5488,4 +5488,78 @@ export class AdminController {
       topPerforming: topTemplates,
     };
   }
+
+  // ============================================
+  // Notification Testing Endpoints
+  // ============================================
+
+  @Post('trigger-smart-nudges')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: '[ADMIN] Manually trigger smart subscription nudges',
+    description: 'Manually triggers the daily smart nudge system for testing. This will send behavior-based subscription notifications to eligible users.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Smart nudges triggered successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Smart nudges triggered successfully',
+        timestamp: '2026-03-27T10:30:00.000Z',
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - Super Admin or Content Moderator only',
+  })
+  async triggerSmartNudges(@Req() req: RequestWithAdmin) {
+    await this.subscriptionMarketingService.sendDailySubscriptionNudges();
+
+    return {
+      success: true,
+      message: 'Smart nudges triggered successfully',
+      timestamp: new Date(),
+    };
+  }
+
+  @Post('trigger-payment-reminders')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: '[ADMIN] Manually trigger payment drop-off reminders',
+    description: 'Manually triggers the payment abandonment reminder system for testing. This will send reminders to users with pending/failed payments.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment reminders triggered successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Payment drop-off reminders triggered successfully',
+        timestamp: '2026-03-27T10:30:00.000Z',
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - Super Admin or Content Moderator only',
+  })
+  async triggerPaymentReminders(@Req() req: RequestWithAdmin) {
+    await this.subscriptionMarketingService.handlePaymentDropoffReminders();
+
+    return {
+      success: true,
+      message: 'Payment drop-off reminders triggered successfully',
+      timestamp: new Date(),
+    };
+  }
 }
