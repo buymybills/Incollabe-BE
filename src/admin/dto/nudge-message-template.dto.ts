@@ -46,7 +46,11 @@ export class GetNudgeMessageTemplatesDto {
 
   @ApiPropertyOptional({ description: 'Filter by active status' })
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(({ value }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return value;
+  })
   @IsBoolean()
   isActive?: boolean;
 
@@ -70,6 +74,24 @@ export class GetNudgeMessageTemplatesDto {
   })
   @IsBoolean()
   isCurrentlyValid?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Filter templates created after this date',
+    example: '2026-03-01T00:00:00Z',
+  })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  createdFrom?: Date;
+
+  @ApiPropertyOptional({
+    description: 'Filter templates created before this date',
+    example: '2026-03-31T23:59:59Z',
+  })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  createdTo?: Date;
 
   @ApiPropertyOptional({
     enum: ['id', 'priority', 'timesSent', 'conversionRate', 'createdAt'],

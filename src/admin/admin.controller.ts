@@ -5049,7 +5049,9 @@ export class AdminController {
       '• `messageType` - Filter by type (rotation, out_of_credits, active_user, payment_pending)\n' +
       '• `isActive` - Filter by active/inactive status\n' +
       '• `search` - Search in title and body text\n' +
-      '• `isCurrentlyValid` - Filter templates within valid date range\n\n' +
+      '• `isCurrentlyValid` - Filter templates within valid date range\n' +
+      '• `createdFrom` - Filter templates created after this date\n' +
+      '• `createdTo` - Filter templates created before this date\n\n' +
       '**Sorting:**\n' +
       '• `orderBy` - Sort by id, priority, timesSent, conversionRate, createdAt\n' +
       '• `orderDirection` - ASC or DESC',
@@ -5169,6 +5171,17 @@ export class AdminController {
     }
     if (dto.isActive !== undefined) {
       whereClause.isActive = dto.isActive;
+    }
+
+    // Date range filters
+    if (dto.createdFrom || dto.createdTo) {
+      whereClause.createdAt = {};
+      if (dto.createdFrom) {
+        whereClause.createdAt[Op.gte] = dto.createdFrom;
+      }
+      if (dto.createdTo) {
+        whereClause.createdAt[Op.lte] = dto.createdTo;
+      }
     }
 
     // Search filter (case-insensitive search in title and body)
