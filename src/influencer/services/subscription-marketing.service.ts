@@ -272,6 +272,9 @@ export class SubscriptionMarketingService {
               action: 'view_subscription',
               cta: 'Join MAX',
             },
+            {
+              actionUrl: 'app://maxx',
+            },
           );
 
           // Create in-app notification
@@ -282,7 +285,7 @@ export class SubscriptionMarketingService {
             body: message.body,
             type: NotificationType.SYSTEM_ANNOUNCEMENT,
             actionType: 'view_subscription',
-            actionUrl: 'app://subscription',
+            actionUrl: 'app://maxx',
             priority: NotificationPriority.NORMAL,
             metadata: {
               weeklyCredits: influencer.weeklyCredits,
@@ -631,7 +634,6 @@ export class SubscriptionMarketingService {
       }
 
       const timeRemaining = promotion.getTimeRemaining();
-      const spotsLeft = promotion.getSpotsLeft();
 
       // Find non-Pro users who haven't subscribed yet
       const nonProUsers = await this.influencerModel.findAll({
@@ -666,19 +668,10 @@ export class SubscriptionMarketingService {
 
       const discountedPrice = promotion.discountedPrice / 100;
 
-      let message: { title: string; body: string };
-
-      if (spotsLeft && spotsLeft < 100) {
-        message = {
-          title: "🚨 Last Chance!",
-          body: `Only ${spotsLeft} spots left for ₹${discountedPrice} MAX offer! Ends in ${timeRemaining}`,
-        };
-      } else {
-        message = {
-          title: `⏰ ${timeRemaining} left!`,
-          body: `Don't miss ₹${discountedPrice} MAX offer - limited time only!`,
-        };
-      }
+      const message = {
+        title: `⏰ ${timeRemaining} left!`,
+        body: `Don't miss ₹${discountedPrice} MAX offer - limited time only!`,
+      };
 
       await this.notificationService.sendCustomNotification(
         fcmTokens,
@@ -689,7 +682,6 @@ export class SubscriptionMarketingService {
           promotionId: promotionId.toString(),
           action: 'subscribe_now',
           timeRemaining,
-          spotsLeft: spotsLeft?.toString() || 'unlimited',
         },
       );
 
@@ -709,7 +701,6 @@ export class SubscriptionMarketingService {
           promotionId: promotionId,
           discountedPrice: discountedPrice,
           timeRemaining: timeRemaining,
-          spotsLeft: spotsLeft,
           saleType: 'flash_sale_reminder',
         },
       }));
