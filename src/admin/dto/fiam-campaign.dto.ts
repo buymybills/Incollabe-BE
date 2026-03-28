@@ -210,6 +210,133 @@ export class BehaviorFiltersDto implements BehaviorFilters {
 // Main Create DTO
 // ============================================================================
 
+/**
+ * ## FIAM Campaign Creation
+ *
+ * Create campaigns for in-app messaging with two delivery methods:
+ *
+ * ### 1️⃣ EVENT-TRIGGERED CAMPAIGNS (Pull-Based)
+ * Users fetch campaigns via mobile API when they perform trigger events
+ * - Use: `triggerType: "event"`
+ * - Add: `triggerEvents: ["app_open", "screen_view_home", ...]`
+ * - Set dates: `startDate` and `endDate` control active period
+ * - Delivery: Mobile calls `GET /api/fiam/campaigns/eligible?triggerEvent=app_open`
+ * - Example: Show "Unlock MAX" popup when user opens app during March 1-31
+ *
+ * ### 2️⃣ SCHEDULED/BROADCAST CAMPAIGNS (Push-Based)
+ * Admin broadcasts FCM push notifications to all eligible users immediately
+ * - Use: `triggerType: "scheduled"`
+ * - Add: `scheduledAt: "2026-03-28T14:00:00Z"` (NOW for immediate)
+ * - Delivery: Backend sends FCM when `status: "active"` and `scheduledAt <= NOW`
+ * - Broadcast: Admin calls `POST /admin/fiam-campaigns/:id/broadcast` OR auto-broadcast on activation
+ * - Example: Send "Flash Sale" notification to all non-Pro users NOW
+ *
+ * ### 🎯 QUICK EXAMPLES
+ *
+ * #### Example 1: Event-Triggered Campaign (Show on App Open during April)
+ * ```json
+ * {
+ *   "name": "MAX Subscription Promo",
+ *   "uiConfig": {
+ *     "layoutType": "modal",
+ *     "backgroundColor": "#FF5722",
+ *     "textColor": "#FFFFFF",
+ *     "title": "Unlock Premium Features",
+ *     "body": "Get 3x more campaigns with MAX subscription",
+ *     "buttonConfig": {
+ *       "text": "Subscribe Now",
+ *       "actionUrl": "app://maxx",
+ *       "backgroundColor": "#FFFFFF",
+ *       "textColor": "#FF5722"
+ *     }
+ *   },
+ *   "triggerType": "event",
+ *   "triggerEvents": ["app_open", "screen_view_home"],
+ *   "targetUserTypes": ["influencer"],
+ *   "targetBehaviorFilters": { "hasProSubscription": false },
+ *   "startDate": "2026-04-01T00:00:00Z",
+ *   "endDate": "2026-04-30T23:59:59Z",
+ *   "status": "active"
+ * }
+ * ```
+ * ☝️ This campaign activates April 1st. When users open the app during April,
+ * the mobile app calls the fetch eligible API and displays this popup.
+ *
+ * #### Example 2: Immediate Broadcast Campaign (Push Now)
+ * ```json
+ * {
+ *   "name": "Flash Sale: 50% OFF MAX",
+ *   "uiConfig": {
+ *     "layoutType": "modal",
+ *     "backgroundColor": "#FF5722",
+ *     "textColor": "#FFFFFF",
+ *     "title": "🔥 Flash Sale: 50% OFF!",
+ *     "body": "Subscribe to MAX for ₹99/month. Offer ends tonight!",
+ *     "buttonConfig": {
+ *       "text": "Grab Offer",
+ *       "actionUrl": "app://maxx",
+ *       "backgroundColor": "#FFFFFF",
+ *       "textColor": "#FF5722"
+ *     }
+ *   },
+ *   "triggerType": "scheduled",
+ *   "scheduledAt": "2026-03-28T14:00:00Z",
+ *   "targetUserTypes": ["influencer"],
+ *   "targetIsPanIndia": true,
+ *   "targetBehaviorFilters": { "hasProSubscription": false },
+ *   "startDate": "2026-03-28T00:00:00Z",
+ *   "endDate": "2026-03-28T23:59:59Z",
+ *   "status": "active"
+ * }
+ * ```
+ * ☝️ This campaign broadcasts FCM notifications immediately to all eligible users
+ * when status is set to "active" (because scheduledAt is NOW or past).
+ *
+ * #### Example 3: Banner Layout (Clickable Banner)
+ * ```json
+ * {
+ *   "name": "Hype Store Launch",
+ *   "uiConfig": {
+ *     "layoutType": "banner",
+ *     "backgroundColor": "#FF5722",
+ *     "textColor": "#FFFFFF",
+ *     "title": "New: Hype Store Live!",
+ *     "body": "Shop exclusive products",
+ *     "actionUrl": "app://hype-store"
+ *   },
+ *   "triggerType": "scheduled",
+ *   "scheduledAt": "2026-03-28T10:00:00Z",
+ *   "targetUserTypes": ["influencer"],
+ *   "targetIsPanIndia": true,
+ *   "status": "draft"
+ * }
+ * ```
+ * ☝️ Create as draft, then activate later via `PATCH /admin/fiam-campaigns/:id/status`
+ *
+ * ### 📝 FIELD GUIDE
+ *
+ * | Field | Event-Triggered | Broadcast |
+ * |-------|----------------|-----------|
+ * | `triggerType` | `"event"` ✅ | `"scheduled"` ✅ |
+ * | `triggerEvents` | Required ✅ | Not used ❌ |
+ * | `scheduledAt` | Optional | Required ✅ |
+ * | `startDate/endDate` | Controls active period ✅ | Optional |
+ * | `status` | `"active"` or `"draft"` | `"active"` triggers broadcast |
+ *
+ * ### 🎨 LAYOUT TYPES
+ *
+ * - `modal`: Full-screen modal with buttons (use `buttonConfig`)
+ * - `card`: Card layout with buttons (use `buttonConfig`)
+ * - `banner`: Horizontal banner (use `actionUrl` - entire banner is clickable)
+ * - `top_banner`: Top banner (use `actionUrl`)
+ * - `image_only`: Image-only (use `actionUrl`)
+ *
+ * ### ⚡ STATUS BEHAVIOR
+ *
+ * - `status: "draft"` (default): Create but don't activate
+ * - `status: "active"` + `triggerType: "scheduled"` + `scheduledAt <= NOW`: Auto-broadcast immediately ✅
+ * - `status: "active"` + `triggerType: "event"`: Available for mobile fetch API ✅
+ */
 export class CreateFiamCampaignDto {
   @ApiProperty({
     example: 'MAX Subscription Promo',
@@ -416,6 +543,22 @@ export class CreateFiamCampaignDto {
   @IsOptional()
   @IsString()
   internalNotes?: string;
+
+  @ApiPropertyOptional({
+    enum: CampaignStatus,
+    example: CampaignStatus.DRAFT,
+    description: `Campaign status (default: draft)
+
+    - draft: Create but don't activate (default)
+    - active: Create and activate immediately (will auto-broadcast if scheduledAt <= NOW)
+
+    RECOMMENDED: Use 'draft' first, then activate via PATCH /status when ready.
+    SHORTCUT: Use 'active' to create and activate in one call.`,
+    default: CampaignStatus.DRAFT
+  })
+  @IsOptional()
+  @IsEnum(CampaignStatus)
+  status?: CampaignStatus;
 }
 
 // ============================================================================

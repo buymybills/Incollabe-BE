@@ -127,22 +127,23 @@ export class FiamCampaignBroadcastService {
 
     this.logger.log(`${eligibleUserIds.length} ${userType}s are eligible`);
 
-    // Get FCM tokens for eligible users
+    // Get FCM tokens for eligible users (only devices with installationId)
     const deviceTokens = await this.deviceTokenModel.findAll({
       where: {
         userId: { [Op.in]: eligibleUserIds },
         userType: userType === 'influencer' ? UserType.INFLUENCER : UserType.BRAND,
+        installationId: { [Op.ne]: null }, // Only send to devices with installationId
       },
       attributes: ['fcmToken', 'userId', 'installationId'],
     });
 
     if (deviceTokens.length === 0) {
-      this.logger.warn(`No FCM tokens found for eligible ${userType}s`);
+      this.logger.warn(`No FCM tokens found for eligible ${userType}s with installationId`);
       return { sent: 0, eligible: eligibleUserIds.length, errors: 0 };
     }
 
     const fcmTokens = deviceTokens.map((dt) => dt.fcmToken);
-    this.logger.log(`Sending to ${fcmTokens.length} device(s)...`);
+    this.logger.log(`Sending to ${fcmTokens.length} device(s) with installationId...`);
 
     // Send FCM notifications
     let sent = 0;
