@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsEnum, IsBoolean, IsInt, IsOptional, Min, IsDate, MaxLength } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 import { NudgeMessageType } from '../../shared/models/nudge-message-template.model';
 
 export class GetNudgeAnalyticsDto {
@@ -16,7 +16,11 @@ export class GetNudgeAnalyticsDto {
     description: 'Filter by active status',
   })
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(({ value }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return value;
+  })
   @IsBoolean()
   isActive?: boolean;
 }
@@ -59,7 +63,11 @@ export class GetNudgeMessageTemplatesDto {
     description: 'Filter templates within valid date range (based on validFrom/validUntil)',
   })
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(({ value }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return value;
+  })
   @IsBoolean()
   isCurrentlyValid?: boolean;
 
