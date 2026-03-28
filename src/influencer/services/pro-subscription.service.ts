@@ -151,14 +151,12 @@ export class ProSubscriptionService {
       ],
     });
 
-    // Calculate taxes
-    // Total = 19900 paise (Rs 199)
-    // Base = 168.64 (in paise: 16864)
-    // IGST = 30.35 (in paise: 3035)
-    // CGST = 30.35/2 = 15.175 (in paise: 1518)
-    // SGST = 30.35/2 = 15.175 (in paise: 1517)
-    const totalAmount = this.PRO_SUBSCRIPTION_AMOUNT; // 19900 paise
-    const baseAmount = 16864; // Rs 168.64 in paise
+    // Calculate taxes based on actual subscription amount (could be discounted)
+    // Tax rate is 18% (9% CGST + 9% SGST for Delhi, or 18% IGST for other states)
+    // Formula: baseAmount = totalAmount / 1.18, tax = totalAmount - baseAmount
+    const totalAmount = subscriptionAmount; // Use actual subscription amount (with promotion if active)
+    const baseAmount = Math.round(totalAmount / 1.18); // Base amount without tax
+    const totalTaxAmount = totalAmount - baseAmount; // Total tax (18%)
 
     let cgst = 0;
     let sgst = 0;
@@ -170,14 +168,19 @@ export class ProSubscriptionService {
     const isDelhi = cityName === 'delhi' || cityName === 'new delhi';
 
     if (isDelhi) {
-      // For Delhi: CGST and SGST (total tax = 3035 paise = Rs 30.35)
-      cgst = 1518; // Rs 15.18
-      sgst = 1517; // Rs 15.17 (total: 3035 paise)
-      totalTax = cgst + sgst; // 3035
+      // For Delhi: CGST (9%) and SGST (9%)
+      cgst = Math.round(totalTaxAmount / 2); // 9%
+      sgst = totalTaxAmount - cgst; // Remaining to avoid rounding issues
+      totalTax = cgst + sgst;
     } else {
-      // For other locations: IGST
-      igst = 3035; // Rs 30.35
+      // For other locations: IGST (18%)
+      igst = totalTaxAmount;
       totalTax = igst;
+    }
+
+    console.log(`💰 Subscription pricing: Total=₹${totalAmount/100}, Base=₹${baseAmount/100}, Tax=₹${totalTax/100} (${isDelhi ? 'CGST+SGST' : 'IGST'})`);
+    if (activePromotion) {
+      console.log(`🎉 Flash sale applied: ₹${this.PRO_SUBSCRIPTION_AMOUNT/100} → ₹${totalAmount/100}`);
     }
 
     // Create invoice with tax breakdown (invoice number will be generated after payment)
@@ -207,9 +210,9 @@ export class ProSubscriptionService {
       throw new BadRequestException(`Failed to create invoice: ${error.message} - ${JSON.stringify(error.errors || error)}`);
     }
 
-    // Create Razorpay order (total remains 199)
+    // Create Razorpay order with actual subscription amount (includes flash sale discount if active)
     const razorpayOrder = await this.razorpayService.createOrder(
-      totalAmount / 100, // Amount in Rs (199)
+      totalAmount / 100, // Amount in Rs (could be discounted)
       'INR',
       `PRO_SUB_${subscription.id}_INV_${invoice.id}`,
       {
