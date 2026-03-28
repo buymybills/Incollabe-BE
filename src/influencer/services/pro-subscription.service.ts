@@ -473,6 +473,7 @@ export class ProSubscriptionService {
       subscription.status === SubscriptionStatus.PAYMENT_FAILED ||
       subscription.status === SubscriptionStatus.INACTIVE ||
       subscription.status === SubscriptionStatus.PAYMENT_PENDING ||
+      subscription.status === SubscriptionStatus.ABANDONED ||
       (subscription.status === SubscriptionStatus.CANCELLED && !hadPaidInvoices)
     );
 
