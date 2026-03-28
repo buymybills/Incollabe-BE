@@ -193,7 +193,7 @@ export class SubscriptionMarketingService {
    * - Days 18-30: Weekly
    * - After 30 days: Stop (user not interested)
    */
-  @Cron('0 10 * * *') // 10:00 AM daily
+  @Cron('0 10 * * *') // 10:00 AM UTC = 3:30 PM IST daily
   async sendDailySubscriptionNudges() {
     this.logger.log('🔍 Starting smart frequency subscription nudges...');
 
