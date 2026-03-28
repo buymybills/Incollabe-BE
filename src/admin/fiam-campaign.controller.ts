@@ -19,6 +19,7 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiParam,
+  ApiBody,
   ApiUnauthorizedResponse,
   ApiNotFoundResponse,
   ApiBadRequestResponse,
@@ -34,6 +35,7 @@ import {
   FiamCampaignResponseDto,
   FiamCampaignListResponseDto,
   CampaignAnalyticsDto,
+  UpdateCampaignStatusDto,
 } from './dto/fiam-campaign.dto';
 import { CampaignStatus } from '../shared/models/fiam-campaign.model';
 
@@ -186,6 +188,7 @@ export class FiamCampaignController {
     description: 'Activate, pause, complete, or expire a campaign',
   })
   @ApiParam({ name: 'id', description: 'Campaign ID' })
+  @ApiBody({ type: UpdateCampaignStatusDto })
   @ApiResponse({
     status: 200,
     description: 'Campaign status updated successfully',

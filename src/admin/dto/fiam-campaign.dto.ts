@@ -733,3 +733,14 @@ export class FiamCampaignListResponseDto {
   @ApiProperty({ example: 3 })
   totalPages: number;
 }
+
+export class UpdateCampaignStatusDto {
+  @ApiProperty({
+    enum: CampaignStatus,
+    example: CampaignStatus.ACTIVE,
+    description: 'New campaign status'
+  })
+  @IsEnum(CampaignStatus)
+  @IsNotEmpty()
+  status: CampaignStatus;
+}
