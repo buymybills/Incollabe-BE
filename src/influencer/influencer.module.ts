@@ -34,6 +34,11 @@ import { HomePageHistory } from './models/home-page-history.model';
 import { CampaignModule } from '../campaign/campaign.module';
 import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
 import { BrandNiche } from '../brand/model/brand-niche.model';
+import { ProSubscriptionPromotion } from './models/pro-subscription-promotion.model';
+import { SubscriptionMarketingService } from './services/subscription-marketing.service';
+import { PostBoostInvoice } from '../post/models/post-boost-invoice.model';
+import { DeviceToken } from '../shared/models/device-token.model';
+import { NudgeMessageTemplate } from '../shared/models/nudge-message-template.model';
 
 @Module({
   imports: [
@@ -58,6 +63,8 @@ import { BrandNiche } from '../brand/model/brand-niche.model';
       ProSubscription,
       ProInvoice,
       ProPaymentTransaction,
+      ProSubscriptionPromotion,
+      PostBoostInvoice,
       CreditTransaction,
       InfluencerReferralUsage,
       InfluencerUpi,
@@ -150,6 +157,6 @@ import { BrandNiche } from '../brand/model/brand-niche.model';
       useValue: Brand,
     },
   ],
-  exports: [InfluencerService, InfluencerRepository, ProSubscriptionService],
+  exports: [InfluencerService, InfluencerRepository, ProSubscriptionService, SubscriptionMarketingService],
 })
 export class InfluencerModule {}

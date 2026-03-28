@@ -9,7 +9,11 @@ import { City } from '../../shared/models/city.model';
 import { RazorpayService } from '../../shared/razorpay.service';
 import { S3Service } from '../../shared/s3.service';
 import { EncryptionService } from '../../shared/services/encryption.service';
+import { ProSubscriptionPromotion } from '../models/pro-subscription-promotion.model';
+import { PostBoostInvoice, InvoiceStatus as BoostInvoiceStatus } from '../../post/models/post-boost-invoice.model';
+import { Post } from '../../post/models/post.model';
 import { Op } from 'sequelize';
+import { Sequelize } from 'sequelize-typescript';
 import { toIST, createDatabaseDate, addDaysForDatabase } from '../../shared/utils/date.utils';
 import PDFDocument from 'pdfkit';
 import * as path from 'path';
@@ -28,6 +32,10 @@ export class ProSubscriptionService {
     private proInvoiceModel: typeof ProInvoice,
     @InjectModel(ProPaymentTransaction)
     private proPaymentTransactionModel: typeof ProPaymentTransaction,
+    @InjectModel(ProSubscriptionPromotion)
+    private proSubscriptionPromotionModel: typeof ProSubscriptionPromotion,
+    @InjectModel(PostBoostInvoice)
+    private postBoostInvoiceModel: typeof PostBoostInvoice,
     @InjectModel(Influencer)
     private influencerModel: typeof Influencer,
     @InjectModel(City)
@@ -37,6 +45,22 @@ export class ProSubscriptionService {
     private configService: ConfigService,
     private encryptionService: EncryptionService,
   ) {}
+
+  /**
+   * Get currently active promotion (if any)
+   * Returns the most recent active promotion that is within date range and has available spots
+   */
+  async getActivePromotion(): Promise<ProSubscriptionPromotion | null> {
+    const now = new Date();
+    return await this.proSubscriptionPromotionModel.findOne({
+      where: {
+        isActive: true,
+        startDate: { [Op.lte]: now },
+        endDate: { [Op.gte]: now },
+      },
+      order: [['startDate', 'DESC']],
+    });
+  }
 
   /**
    * Create a payment order for Pro subscription (supports test mode)
@@ -87,6 +111,17 @@ export class ProSubscriptionService {
       console.log(`📅 Starting new Pro membership from now (ends: ${toIST(endDate)})`);
     }
 
+    // Check for active promotion
+    const activePromotion = await this.getActivePromotion();
+    const subscriptionAmount = activePromotion
+      ? activePromotion.discountedPrice
+      : this.PRO_SUBSCRIPTION_AMOUNT;
+    const promotionId = activePromotion?.id || null;
+
+    if (activePromotion) {
+      console.log(`🎉 Applying promotion: ${activePromotion.name} (₹${activePromotion.discountedPrice / 100} instead of ₹${this.PRO_SUBSCRIPTION_AMOUNT / 100})`);
+    }
+
     const subscription = await this.proSubscriptionModel.create({
       influencerId,
       status: SubscriptionStatus.PAYMENT_PENDING,
@@ -94,10 +129,17 @@ export class ProSubscriptionService {
       currentPeriodStart: startDate,
       currentPeriodEnd: endDate,
       nextBillingDate: endDate,
-      subscriptionAmount: this.PRO_SUBSCRIPTION_AMOUNT,
+      subscriptionAmount,
+      promotionId,
       paymentMethod: PaymentMethod.RAZORPAY,
       autoRenew: false, // Only enable after first payment is successful
     });
+
+    // Increment promotion usage counter
+    if (activePromotion) {
+      await activePromotion.increment('currentUses');
+      console.log(`📊 Promotion usage: ${activePromotion.currentUses + 1}${activePromotion.maxUses ? `/${activePromotion.maxUses}` : ''}`);
+    }
 
     // Get influencer with city information
     const influencerWithCity = await this.influencerModel.findByPk(influencerId, {
@@ -109,14 +151,12 @@ export class ProSubscriptionService {
       ],
     });
 
-    // Calculate taxes
-    // Total = 19900 paise (Rs 199)
-    // Base = 168.64 (in paise: 16864)
-    // IGST = 30.35 (in paise: 3035)
-    // CGST = 30.35/2 = 15.175 (in paise: 1518)
-    // SGST = 30.35/2 = 15.175 (in paise: 1517)
-    const totalAmount = this.PRO_SUBSCRIPTION_AMOUNT; // 19900 paise
-    const baseAmount = 16864; // Rs 168.64 in paise
+    // Calculate taxes based on actual subscription amount (could be discounted)
+    // Tax rate is 18% (9% CGST + 9% SGST for Delhi, or 18% IGST for other states)
+    // Formula: baseAmount = totalAmount / 1.18, tax = totalAmount - baseAmount
+    const totalAmount = subscriptionAmount; // Use actual subscription amount (with promotion if active)
+    const baseAmount = Math.round(totalAmount / 1.18); // Base amount without tax
+    const totalTaxAmount = totalAmount - baseAmount; // Total tax (18%)
 
     let cgst = 0;
     let sgst = 0;
@@ -128,14 +168,19 @@ export class ProSubscriptionService {
     const isDelhi = cityName === 'delhi' || cityName === 'new delhi';
 
     if (isDelhi) {
-      // For Delhi: CGST and SGST (total tax = 3035 paise = Rs 30.35)
-      cgst = 1518; // Rs 15.18
-      sgst = 1517; // Rs 15.17 (total: 3035 paise)
-      totalTax = cgst + sgst; // 3035
+      // For Delhi: CGST (9%) and SGST (9%)
+      cgst = Math.round(totalTaxAmount / 2); // 9%
+      sgst = totalTaxAmount - cgst; // Remaining to avoid rounding issues
+      totalTax = cgst + sgst;
     } else {
-      // For other locations: IGST
-      igst = 3035; // Rs 30.35
+      // For other locations: IGST (18%)
+      igst = totalTaxAmount;
       totalTax = igst;
+    }
+
+    console.log(`💰 Subscription pricing: Total=₹${totalAmount/100}, Base=₹${baseAmount/100}, Tax=₹${totalTax/100} (${isDelhi ? 'CGST+SGST' : 'IGST'})`);
+    if (activePromotion) {
+      console.log(`🎉 Flash sale applied: ₹${this.PRO_SUBSCRIPTION_AMOUNT/100} → ₹${totalAmount/100}`);
     }
 
     // Create invoice with tax breakdown (invoice number will be generated after payment)
@@ -165,9 +210,9 @@ export class ProSubscriptionService {
       throw new BadRequestException(`Failed to create invoice: ${error.message} - ${JSON.stringify(error.errors || error)}`);
     }
 
-    // Create Razorpay order (total remains 199)
+    // Create Razorpay order with actual subscription amount (includes flash sale discount if active)
     const razorpayOrder = await this.razorpayService.createOrder(
-      totalAmount / 100, // Amount in Rs (199)
+      totalAmount / 100, // Amount in Rs (could be discounted)
       'INR',
       `PRO_SUB_${subscription.id}_INV_${invoice.id}`,
       {
@@ -356,6 +401,7 @@ export class ProSubscriptionService {
     if (!subscription) {
       return {
         hasSubscription: false,
+        hasPendingPayment: false,
         isPro: false,
       };
     }
@@ -417,12 +463,17 @@ export class ProSubscriptionService {
       }
     }
 
-    // Don't count subscriptions in failed/inactive states as having a subscription
+    // Track if there's a pending payment that needs to be completed
+    const hasPendingPayment = subscription.status === SubscriptionStatus.PAYMENT_PENDING;
+
+    // Don't count subscriptions in failed/inactive/pending/abandoned states as having a subscription
     // Also don't count cancelled subscriptions that were never paid
-    // NOTE: payment_pending subscriptions SHOULD show subscription details (so user can resume payment)
+    // NOTE: For payment_pending, we set hasPendingPayment=true and hasSubscription=false for clarity
     const hasSubscription = !(
       subscription.status === SubscriptionStatus.PAYMENT_FAILED ||
       subscription.status === SubscriptionStatus.INACTIVE ||
+      subscription.status === SubscriptionStatus.PAYMENT_PENDING ||
+      subscription.status === SubscriptionStatus.ABANDONED ||
       (subscription.status === SubscriptionStatus.CANCELLED && !hadPaidInvoices)
     );
 
@@ -456,9 +507,11 @@ export class ProSubscriptionService {
       return status.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
     };
 
-    // Don't return subscription details if it's cancelled and never paid
-    // This prevents showing confusing subscription data for abandoned payment attempts
-    const subscriptionData = hasSubscription ? {
+    // Show subscription details if:
+    // 1. User has an active/paid subscription (hasSubscription = true), OR
+    // 2. User has a pending payment (hasPendingPayment = true, so they can resume)
+    // Don't show if cancelled and never paid (abandoned signups)
+    const subscriptionData = (hasSubscription || hasPendingPayment) ? {
       id: subscription.id,
       status: formatStatus(displayStatus),
       isCancelled: subscription.status === SubscriptionStatus.CANCELLED || displayStatus === SubscriptionStatus.EXPIRED,
@@ -481,10 +534,27 @@ export class ProSubscriptionService {
       subscriptionType: (subscription.autoRenew || subscription.razorpaySubscriptionId) ? 'autopay' : 'monthly',
     } : null;
 
+    // Get active promotion for display
+    const activePromotion = await this.getActivePromotion();
+    const promotionData = activePromotion ? {
+      id: activePromotion.id,
+      name: activePromotion.name,
+      description: activePromotion.description,
+      originalPrice: activePromotion.originalPrice / 100,
+      discountedPrice: activePromotion.discountedPrice / 100,
+      savings: (activePromotion.originalPrice - activePromotion.discountedPrice) / 100,
+      discountPercentage: activePromotion.discountPercentage,
+      startsAt: toIST(activePromotion.startDate),
+      endsAt: toIST(activePromotion.endDate),
+      timeRemaining: activePromotion.getTimeRemaining(),
+    } : null;
+
     return {
       hasSubscription,
+      hasPendingPayment,
       isPro,
       subscription: subscriptionData,
+      promotion: promotionData,
       invoices: filteredInvoices.map((inv) => {
         // For autopay detection, check the invoice's subscription (not the latest subscription)
         // 1. Check if invoice's subscription has razorpaySubscriptionId (autopay enabled)
@@ -513,54 +583,93 @@ export class ProSubscriptionService {
   }
 
   /**
-   * Get all invoices for an influencer across ALL subscriptions
+   * Get all invoices for an influencer (Pro subscriptions + Post boosts)
    */
   async getAllInvoices(influencerId: number) {
-    // Fetch ALL invoices for this influencer across all subscriptions
-    const allInvoices = await this.proInvoiceModel.findAll({
+    // Helper function to format status (remove underscores, convert to camelCase)
+    const formatStatus = (status: string): string => {
+      return status.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    };
+
+    // Fetch Pro subscription invoices
+    const proInvoices = await this.proInvoiceModel.findAll({
       where: { influencerId },
-      order: [['createdAt', 'DESC']],
     });
 
-    // Filter out cancelled invoices that were never paid
-    const filteredInvoices = allInvoices.filter((inv) => {
-      // Exclude cancelled invoices only if they were never paid
+    // Filter out cancelled Pro invoices that were never paid
+    const filteredProInvoices = proInvoices.filter((inv) => {
       if (inv.paymentStatus === InvoiceStatus.CANCELLED && !inv.paidAt) {
         return false;
       }
       return true;
     });
 
-    if (!filteredInvoices || filteredInvoices.length === 0) {
-      return {
-        invoices: [],
-        totalInvoices: 0,
-      };
-    }
+    // Fetch Post boost invoices
+    const boostInvoices = await this.postBoostInvoiceModel.findAll({
+      where: {
+        influencerId,
+        paymentStatus: {
+          [Op.ne]: BoostInvoiceStatus.PENDING, // Exclude pending boost invoices
+        },
+      },
+      include: [
+        {
+          model: Post,
+          as: 'post',
+          attributes: ['id', 'content'],
+        },
+      ],
+    });
 
-    // Helper function to format status (remove underscores, convert to camelCase)
-    const formatStatus = (status: string): string => {
-      return status.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-    };
+    // Map Pro subscription invoices
+    const mappedProInvoices = filteredProInvoices.map((inv) => ({
+      id: inv.id,
+      type: 'pro_subscription',
+      invoiceNumber: inv.invoiceNumber,
+      amount: inv.totalAmount / 100, // Convert to Rs
+      status: formatStatus(inv.paymentStatus),
+      billingPeriod: {
+        start: toIST(inv.billingPeriodStart),
+        end: toIST(inv.billingPeriodEnd),
+      },
+      paidAt: toIST(inv.paidAt),
+      invoiceUrl: inv.invoiceUrl ? this.s3Service.convertToSignedUrl(inv.invoiceUrl, 120) : null,
+      paymentMethod: inv.paymentMethod,
+      isAutopay: inv.razorpayPaymentId ? inv.razorpayPaymentId.includes('sub_') : false,
+      paymentType: inv.razorpayPaymentId && inv.razorpayPaymentId.includes('sub_') ? 'Autopay' : 'Monthly',
+      createdAt: toIST(inv.createdAt),
+      _createdAtRaw: inv.createdAt, // For sorting
+    }));
+
+    // Map Post boost invoices
+    const mappedBoostInvoices = boostInvoices.map((inv) => ({
+      id: inv.id,
+      type: 'post_boost',
+      invoiceNumber: inv.invoiceNumber,
+      amount: inv.totalAmount / 100, // Convert to Rs
+      status: formatStatus(inv.paymentStatus),
+      postId: inv.postId,
+      postContent: inv.post?.content ? (inv.post.content.length > 50 ? inv.post.content.substring(0, 50) + '...' : inv.post.content) : null,
+      paidAt: toIST(inv.paidAt),
+      invoiceUrl: inv.invoiceUrl ? this.s3Service.convertToSignedUrl(inv.invoiceUrl, 120) : null,
+      paymentMethod: inv.paymentMethod,
+      createdAt: toIST(inv.createdAt),
+      _createdAtRaw: inv.createdAt, // For sorting
+    }));
+
+    // Merge and sort by date (newest first)
+    const allInvoices = [...mappedProInvoices, ...mappedBoostInvoices].sort((a, b) => {
+      return b._createdAtRaw.getTime() - a._createdAtRaw.getTime();
+    });
+
+    // Remove sorting helper field
+    const cleanedInvoices = allInvoices.map(({ _createdAtRaw, ...invoice }) => invoice);
 
     return {
-      invoices: filteredInvoices.map((inv) => ({
-        id: inv.id,
-        invoiceNumber: inv.invoiceNumber,
-        amount: inv.totalAmount / 100, // Convert to Rs
-        status: formatStatus(inv.paymentStatus),
-        billingPeriod: {
-          start: toIST(inv.billingPeriodStart),
-          end: toIST(inv.billingPeriodEnd),
-        },
-        paidAt: toIST(inv.paidAt),
-        invoiceUrl: inv.invoiceUrl ? this.s3Service.convertToSignedUrl(inv.invoiceUrl, 120) : null,
-        paymentMethod: inv.paymentMethod,
-        isAutopay: inv.razorpayPaymentId ? inv.razorpayPaymentId.includes('sub_') : false,
-        paymentType: inv.razorpayPaymentId && inv.razorpayPaymentId.includes('sub_') ? 'Autopay' : 'Monthly',
-        createdAt: toIST(inv.createdAt),
-      })),
-      totalInvoices: filteredInvoices.length,
+      invoices: cleanedInvoices,
+      totalInvoices: cleanedInvoices.length,
+      proInvoicesCount: mappedProInvoices.length,
+      boostInvoicesCount: mappedBoostInvoices.length,
     };
   }
 
@@ -1364,7 +1473,7 @@ export class ProSubscriptionService {
         // UPI mandate authenticated but payment delayed (when start_at is in future)
         await subscription.update({
           status: SubscriptionStatus.ACTIVE,
-          upiMandateStatus: 'authenticated',
+          upiMandateStatus: UpiMandateStatus.AUTHENTICATED,
           mandateAuthenticatedAt: createDatabaseDate(),
           autoRenew: true, // Enable auto-renewal after authentication
         });
@@ -1376,7 +1485,7 @@ export class ProSubscriptionService {
         // UPI mandate authenticated and first payment successful
         await subscription.update({
           status: SubscriptionStatus.ACTIVE,
-          upiMandateStatus: 'authenticated',
+          upiMandateStatus: UpiMandateStatus.AUTHENTICATED,
           mandateAuthenticatedAt: createDatabaseDate(),
           autoRenew: true, // Enable auto-renewal after first payment
         });
@@ -1393,7 +1502,7 @@ export class ProSubscriptionService {
               { razorpayPaymentId },
               {
                 subscriptionId: subscription.id,
-                paymentStatus: 'paid',
+                paymentStatus: InvoiceStatus.PAID,
                 billingPeriodStart: subscription.currentPeriodStart,
                 billingPeriodEnd: subscription.currentPeriodEnd,
               },
@@ -1455,8 +1564,8 @@ export class ProSubscriptionService {
             totalAmount: totalAmount,
             billingPeriodStart: subscription.currentPeriodStart,
             billingPeriodEnd: subscription.currentPeriodEnd,
-            paymentStatus: 'paid',
-            paymentMethod: 'razorpay',
+            paymentStatus: InvoiceStatus.PAID,
+            paymentMethod: PaymentMethod.RAZORPAY,
             razorpayPaymentId: activationPaymentId, // Use payment ID from payload
             paidAt: createDatabaseDate(),
           });
@@ -1504,7 +1613,7 @@ export class ProSubscriptionService {
         const orConditions: any[] = [
           {
             subscriptionId: subscription.id,
-            paymentStatus: 'paid',
+            paymentStatus: InvoiceStatus.PAID,
             billingPeriodStart: newPeriodStart,  // Use webhook dates
             billingPeriodEnd: newPeriodEnd,      // Use webhook dates
           },
@@ -1577,8 +1686,8 @@ export class ProSubscriptionService {
             totalAmount: totalAmount,
             billingPeriodStart: newPeriodStart,  // Use webhook dates
             billingPeriodEnd: newPeriodEnd,      // Use webhook dates
-            paymentStatus: 'paid',
-            paymentMethod: 'razorpay',
+            paymentStatus: InvoiceStatus.PAID,
+            paymentMethod: PaymentMethod.RAZORPAY,
             razorpayPaymentId: chargedPaymentId, // Use payment ID from payload
             paidAt: createDatabaseDate(),
           });
@@ -1631,7 +1740,7 @@ export class ProSubscriptionService {
       case 'subscription.paused':
         await subscription.update({
           status: SubscriptionStatus.PAUSED,
-          upiMandateStatus: 'paused',
+          upiMandateStatus: UpiMandateStatus.PAUSED,
         });
         console.log(`⏸️ Subscription ${subscription.id} paused via webhook`);
         break;
@@ -1639,7 +1748,7 @@ export class ProSubscriptionService {
       case 'subscription.resumed':
         await subscription.update({
           status: SubscriptionStatus.ACTIVE,
-          upiMandateStatus: 'authenticated',
+          upiMandateStatus: UpiMandateStatus.AUTHENTICATED,
         });
         console.log(`▶️ Subscription ${subscription.id} resumed via webhook`);
         break;
@@ -1647,7 +1756,7 @@ export class ProSubscriptionService {
       case 'subscription.cancelled':
         await subscription.update({
           status: SubscriptionStatus.CANCELLED,
-          upiMandateStatus: 'cancelled',
+          upiMandateStatus: UpiMandateStatus.CANCELLED,
           autoRenew: false,
           cancelledAt: createDatabaseDate(),
         });
@@ -1662,7 +1771,7 @@ export class ProSubscriptionService {
       case 'subscription.halted':
         // Subscription halted due to payment failures
         await subscription.update({
-          upiMandateStatus: 'paused',
+          upiMandateStatus: UpiMandateStatus.PAUSED,
         });
         console.log(`⚠️ Subscription ${subscription.id} halted due to payment issues`);
         break;
@@ -1802,7 +1911,7 @@ export class ProSubscriptionService {
               billingPeriodStart: paymentDate,
               billingPeriodEnd: periodEnd,
               paymentStatus: InvoiceStatus.PENDING, // Will be marked as PAID by payment.captured handler below
-              paymentMethod: 'razorpay',
+              paymentMethod: PaymentMethod.RAZORPAY,
               razorpayPaymentId: payload.payment?.entity?.id,
             });
 
@@ -1971,7 +2080,7 @@ export class ProSubscriptionService {
           break;
         }
 
-        await invoice.update({ paymentStatus: 'failed' });
+        await invoice.update({ paymentStatus: InvoiceStatus.FAILED });
 
         // Increment failure count for subscription
         const subscription = await this.proSubscriptionModel.findByPk(invoice.subscriptionId);
@@ -3106,7 +3215,7 @@ export class ProSubscriptionService {
     if (
       existingSubscription &&
       existingSubscription.razorpaySubscriptionId &&
-      existingSubscription.upiMandateStatus !== 'cancelled' &&
+      existingSubscription.upiMandateStatus !== UpiMandateStatus.CANCELLED &&
       existingSubscription.autoRenew === true
     ) {
       throw new BadRequestException('You already have an active autopay subscription');
@@ -3186,9 +3295,9 @@ export class ProSubscriptionService {
     let subscription: ProSubscription;
     if (existingSubscription) {
       // Update existing subscription (clear old cancellation data if restarting)
-      subscription = await existingSubscription.update({
+      const updateData = {
         razorpaySubscriptionId: subscriptionResult.subscriptionId,
-        upiMandateStatus: 'pending',
+        upiMandateStatus: UpiMandateStatus.PENDING,
         mandateCreatedAt: now,
         autoRenew: false, // Will be set to true by webhook when mandate is authenticated
         currentPeriodStart: startDate,
@@ -3197,7 +3306,9 @@ export class ProSubscriptionService {
         cancelledAt: null,
         cancelReason: null,
         status: hasActivePro ? SubscriptionStatus.ACTIVE : SubscriptionStatus.PAYMENT_PENDING,
-      });
+      };
+      console.log('🔍 DEBUG - Update data:', JSON.stringify(updateData, null, 2));
+      subscription = await existingSubscription.update(updateData);
     } else {
       // Create new subscription
       subscription = await this.proSubscriptionModel.create({
@@ -3208,9 +3319,9 @@ export class ProSubscriptionService {
         currentPeriodEnd: endDate,
         nextBillingDate: endDate,
         subscriptionAmount: this.PRO_SUBSCRIPTION_AMOUNT,
-        paymentMethod: 'razorpay',
+        paymentMethod: PaymentMethod.RAZORPAY,
         razorpaySubscriptionId: subscriptionResult.subscriptionId,
-        upiMandateStatus: 'pending',
+        upiMandateStatus: UpiMandateStatus.PENDING,
         mandateCreatedAt: now,
         autoRenew: false, // Only enable after first payment is successful
       });

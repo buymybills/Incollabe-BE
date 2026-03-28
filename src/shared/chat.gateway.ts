@@ -345,8 +345,12 @@ export class ChatGateway
 
       // Save message using existing chat service
       console.log('💾 Saving message to database...');
-      const message = await this.chatService.sendMessage(userId, userType, dto);
-      console.log('✅ Message saved:', message.id);
+      const savedMessage = await this.chatService.sendMessage(userId, userType, dto);
+      console.log('✅ Message saved:', savedMessage.id);
+
+      // Fetch the full message with reply details
+      const message = await this.fetchMessageWithReplyDetails(savedMessage.id);
+      console.log('✅ Message fetched with reply details');
 
       // Get the actual conversationId from the message (in case it was auto-created)
       const conversationId = message.conversationId;
@@ -1600,5 +1604,168 @@ export class ChatGateway
     this.server.to(roomName).emit('campaign:review:requested', {
       conversationId,
     });
+  }
+
+  /**
+   * Helper: Fetch message with reply details for WebSocket broadcast
+   * Includes repliedToMessage relation and formats it properly
+   */
+  private async fetchMessageWithReplyDetails(messageId: number): Promise<any> {
+    const Message = this.chatService['messageModel'];
+    const Influencer = this.chatService['influencerModel'];
+    const Brand = this.chatService['brandModel'];
+    const { SenderType } = require('./models/message.model');
+    const { convertToSignedUrl } = this.chatService['s3Service'];
+
+    const msg = await Message.findByPk(messageId, {
+      include: [
+        {
+          model: Influencer,
+          attributes: ['id', 'username', 'name', 'profileImage'],
+          required: false,
+        },
+        {
+          model: Brand,
+          attributes: ['id', 'username', 'brandName', 'profileImage'],
+          required: false,
+        },
+        {
+          model: Message,
+          as: 'repliedToMessage',
+          attributes: ['id', 'content', 'messageType', 'senderType', 'attachmentUrl', 'attachmentName', 'mediaType', 'createdAt', 'influencerId', 'brandId'],
+          required: false,
+          include: [
+            {
+              model: Influencer,
+              attributes: ['id', 'username', 'name', 'profileImage'],
+              required: false,
+            },
+            {
+              model: Brand,
+              attributes: ['id', 'username', 'brandName', 'profileImage'],
+              required: false,
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!msg) {
+      throw new Error('Message not found');
+    }
+
+    // Format sender
+    let sender: any;
+    if (msg.senderType === SenderType.INFLUENCER) {
+      if (msg.influencer) {
+        const influencerData = msg.influencer.toJSON();
+        sender = {
+          id: influencerData.id,
+          username: influencerData.username,
+          name: influencerData.name,
+          profileImage: influencerData.profileImage,
+          accountStatus: 'active',
+        };
+      } else {
+        sender = {
+          id: msg.influencerId,
+          username: 'Deleted User',
+          name: 'Deleted User',
+          profileImage: null,
+          accountStatus: 'hard_deleted',
+        };
+      }
+    } else {
+      if (msg.brand) {
+        const brandData = msg.brand.toJSON();
+        sender = {
+          id: brandData.id,
+          username: brandData.username,
+          brandName: brandData.brandName,
+          profileImage: brandData.profileImage,
+          accountStatus: 'active',
+        };
+      } else {
+        sender = {
+          id: msg.brandId,
+          username: 'Deleted User',
+          brandName: 'Deleted User',
+          profileImage: null,
+          accountStatus: 'hard_deleted',
+        };
+      }
+    }
+
+    // Format replied message if present
+    let repliedMessage: any = null;
+    if (msg.repliedToMessage) {
+      const repliedMsg = msg.repliedToMessage;
+      let repliedSender: any;
+
+      if (repliedMsg.senderType === SenderType.INFLUENCER) {
+        if (repliedMsg.influencer) {
+          const influencerData = repliedMsg.influencer.toJSON();
+          repliedSender = {
+            id: influencerData.id,
+            username: influencerData.username,
+            name: influencerData.name,
+            profileImage: influencerData.profileImage,
+          };
+        } else {
+          repliedSender = {
+            id: repliedMsg.influencerId,
+            username: 'Deleted User',
+            name: 'Deleted User',
+            profileImage: null,
+          };
+        }
+      } else {
+        if (repliedMsg.brand) {
+          const brandData = repliedMsg.brand.toJSON();
+          repliedSender = {
+            id: brandData.id,
+            username: brandData.username,
+            brandName: brandData.brandName,
+            profileImage: brandData.profileImage,
+          };
+        } else {
+          repliedSender = {
+            id: repliedMsg.brandId,
+            username: 'Deleted User',
+            brandName: 'Deleted User',
+            profileImage: null,
+          };
+        }
+      }
+
+      repliedMessage = {
+        id: repliedMsg.id,
+        content: repliedMsg.content,
+        messageType: repliedMsg.messageType,
+        senderType: repliedMsg.senderType,
+        sender: repliedSender,
+        attachmentUrl: convertToSignedUrl(repliedMsg.attachmentUrl, 120),
+        attachmentName: repliedMsg.attachmentName,
+        mediaType: repliedMsg.mediaType,
+        createdAt: repliedMsg.createdAt,
+      };
+    }
+
+    return {
+      id: msg.id,
+      conversationId: msg.conversationId,
+      sender,
+      senderType: msg.senderType,
+      messageType: msg.messageType,
+      content: msg.content,
+      attachmentUrl: convertToSignedUrl(msg.attachmentUrl, 120),
+      attachmentName: msg.attachmentName,
+      mediaType: msg.mediaType,
+      replyToMessageId: msg.replyToMessageId,
+      repliedMessage,
+      isRead: msg.isRead,
+      readAt: msg.readAt,
+      createdAt: msg.createdAt,
+    };
   }
 }

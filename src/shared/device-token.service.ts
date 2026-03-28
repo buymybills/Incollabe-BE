@@ -12,6 +12,7 @@ interface AddDeviceTokenParams {
   deviceOs?: 'ios' | 'android';
   appVersion?: string;
   versionCode?: number;
+  installationId?: string;
 }
 
 @Injectable()
@@ -30,7 +31,7 @@ export class DeviceTokenService {
    * - Add the new device token
    */
   async addOrUpdateDeviceToken(params: AddDeviceTokenParams): Promise<DeviceToken> {
-    const { userId, userType, fcmToken, deviceId, deviceName, deviceOs, appVersion, versionCode } = params;
+    const { userId, userType, fcmToken, deviceId, deviceName, deviceOs, appVersion, versionCode, installationId } = params;
 
     // If deviceId is provided, use upsert pattern to prevent duplicates
     if (deviceId) {
@@ -51,6 +52,7 @@ export class DeviceTokenService {
           deviceOs: deviceOs || existingDevice.deviceOs,
           appVersion: appVersion || existingDevice.appVersion,
           versionCode: versionCode || existingDevice.versionCode,
+          installationId: installationId || existingDevice.installationId,
           lastUsedAt: new Date(),
         });
 
@@ -85,6 +87,7 @@ export class DeviceTokenService {
         deviceOs,
         appVersion,
         versionCode,
+        installationId,
         lastUsedAt: new Date(),
       });
 
@@ -105,6 +108,7 @@ export class DeviceTokenService {
         deviceOs: deviceOs || existingToken.deviceOs,
         appVersion: appVersion || existingToken.appVersion,
         versionCode: versionCode || existingToken.versionCode,
+        installationId: installationId || existingToken.installationId,
         lastUsedAt: new Date(),
       });
 
@@ -121,6 +125,7 @@ export class DeviceTokenService {
       deviceOs,
       appVersion,
       versionCode,
+      installationId,
       lastUsedAt: new Date(),
     });
 

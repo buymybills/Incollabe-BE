@@ -4,6 +4,7 @@ import { BullModule } from '@nestjs/bull';
 
 import { AdminController } from './admin.controller';
 import { PushNotificationController } from './push-notification.controller';
+// import { FiamCampaignController } from './fiam-campaign.controller';
 import { AdminAuthService } from './admin-auth.service';
 import { ProfileReviewService } from './profile-review.service';
 import { AdminCampaignService } from './services/admin-campaign.service';
@@ -19,6 +20,9 @@ import { MaxSubscriptionBrandService } from './services/max-subscription-brand.s
 import { MaxSubscriptionInvoiceService } from './services/max-subscription-invoice.service';
 import { InvoiceExcelExportService } from './services/invoice-excel-export.service';
 import { AdminCreatorScoreService } from './services/admin-creator-score.service';
+import { NudgeTemplateService } from './services/nudge-template.service';
+// import { FiamCampaignService } from './services/fiam-campaign.service';
+// import { FiamCampaignBroadcastService } from './services/fiam-campaign-broadcast.service';
 import { NotificationQueueModule } from './queues/notification.queue.module';
 
 import { Admin } from './models/admin.model';
@@ -47,8 +51,13 @@ import { InfluencerProfileScore } from '../shared/models/influencer-profile-scor
 import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
 import { ProSubscription } from '../influencer/models/pro-subscription.model';
 import { ProInvoice } from '../influencer/models/pro-invoice.model';
+import { ProSubscriptionPromotion } from '../influencer/models/pro-subscription-promotion.model';
 import { MaxCampaignInvoice } from '../campaign/models/max-campaign-invoice.model';
 import { InviteOnlyCampaignInvoice } from '../campaign/models/invite-only-campaign-invoice.model';
+import { NudgeMessageTemplate } from '../shared/models/nudge-message-template.model';
+// import { FiamCampaign } from '../shared/models/fiam-campaign.model';
+// import { FiamCampaignEvent } from '../shared/models/fiam-campaign-event.model';
+import { DeviceToken } from '../shared/models/device-token.model';
 
 import { SharedModule } from '../shared/shared.module';
 import { BrandModule } from '../brand/brand.module';
@@ -89,8 +98,13 @@ import { RolesGuard } from './guards/roles.guard';
       InstagramProfileAnalysis,
       ProSubscription,
       ProInvoice,
+      ProSubscriptionPromotion,
       MaxCampaignInvoice,
       InviteOnlyCampaignInvoice,
+      NudgeMessageTemplate,
+      // FiamCampaign,
+      // FiamCampaignEvent,
+      DeviceToken,
     ]),
     SharedModule,
     NotificationQueueModule,
@@ -100,7 +114,9 @@ import { RolesGuard } from './guards/roles.guard';
     forwardRef(() => AuthModule),
     forwardRef(() => CampaignModule),
   ],
-  controllers: [AdminController, PushNotificationController],
+  controllers: [AdminController, PushNotificationController
+    // FiamCampaignController
+  ],
   providers: [
     AdminAuthService,
     ProfileReviewService,
@@ -117,6 +133,9 @@ import { RolesGuard } from './guards/roles.guard';
     MaxSubscriptionInvoiceService,
     InvoiceExcelExportService,
     AdminCreatorScoreService,
+    NudgeTemplateService,
+    // FiamCampaignService,
+    // FiamCampaignBroadcastService,
     AdminAuthGuard,
     RolesGuard,
   ],

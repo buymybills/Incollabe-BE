@@ -731,6 +731,7 @@ export class ChatService {
       attachmentUrl,
       attachmentName,
       mediaType,
+      replyToMessageId,
     } = dto;
 
     const userParticipantType = userType as ParticipantType;
@@ -821,6 +822,20 @@ export class ChatService {
       throw new BadRequestException('Message must have content or attachment');
     }
 
+    // Validate replyToMessageId if provided
+    if (replyToMessageId) {
+      const repliedMessage = await this.messageModel.findByPk(replyToMessageId);
+      if (!repliedMessage) {
+        throw new NotFoundException('Replied message not found');
+      }
+      // Ensure the replied message belongs to the same conversation
+      if (repliedMessage.conversationId !== actualConversationId) {
+        throw new BadRequestException(
+          'Replied message does not belong to this conversation',
+        );
+      }
+    }
+
     // Auto-detect if message is encrypted
     let isEncrypted = false;
     let encryptionVersion = 'v1';
@@ -881,6 +896,7 @@ export class ChatService {
       attachmentUrl: isEncrypted ? null : attachmentUrl || null,
       attachmentName: isEncrypted ? null : attachmentName || null,
       mediaType: isEncrypted ? null : mediaType || null,
+      replyToMessageId: replyToMessageId || null,
       isRead: false,
       isEncrypted,
       encryptionVersion,
@@ -1001,6 +1017,24 @@ export class ChatService {
             required: false,
             paranoid: false, // Include soft-deleted brands
           },
+          {
+            model: this.messageModel,
+            as: 'repliedToMessage',
+            attributes: ['id', 'content', 'messageType', 'senderType', 'attachmentUrl', 'attachmentName', 'mediaType', 'createdAt', 'influencerId', 'brandId'],
+            required: false,
+            include: [
+              {
+                model: Influencer,
+                attributes: ['id', 'username', 'name', 'profileImage'],
+                required: false,
+              },
+              {
+                model: Brand,
+                attributes: ['id', 'username', 'brandName', 'profileImage'],
+                required: false,
+              },
+            ],
+          },
         ],
         order: [['createdAt', 'DESC']],
         limit,
@@ -1054,6 +1088,61 @@ export class ChatService {
         }
       }
 
+      // Format replied message if present
+      let repliedMessage: any = null;
+      if (msg.repliedToMessage) {
+        const repliedMsg = msg.repliedToMessage;
+        let repliedSender: any;
+
+        if (repliedMsg.senderType === SenderType.INFLUENCER) {
+          if (repliedMsg.influencer) {
+            const influencerData = repliedMsg.influencer.toJSON();
+            repliedSender = {
+              id: influencerData.id,
+              username: influencerData.username,
+              name: influencerData.name,
+              profileImage: influencerData.profileImage,
+            };
+          } else {
+            repliedSender = {
+              id: repliedMsg.influencerId,
+              username: 'Deleted User',
+              name: 'Deleted User',
+              profileImage: null,
+            };
+          }
+        } else {
+          if (repliedMsg.brand) {
+            const brandData = repliedMsg.brand.toJSON();
+            repliedSender = {
+              id: brandData.id,
+              username: brandData.username,
+              brandName: brandData.brandName,
+              profileImage: brandData.profileImage,
+            };
+          } else {
+            repliedSender = {
+              id: repliedMsg.brandId,
+              username: 'Deleted User',
+              brandName: 'Deleted User',
+              profileImage: null,
+            };
+          }
+        }
+
+        repliedMessage = {
+          id: repliedMsg.id,
+          content: repliedMsg.content,
+          messageType: repliedMsg.messageType,
+          senderType: repliedMsg.senderType,
+          sender: repliedSender,
+          attachmentUrl: this.s3Service.convertToSignedUrl(repliedMsg.attachmentUrl, 120),
+          attachmentName: repliedMsg.attachmentName,
+          mediaType: repliedMsg.mediaType,
+          createdAt: repliedMsg.createdAt,
+        };
+      }
+
       return {
         id: msg.id,
         sender,
@@ -1063,6 +1152,8 @@ export class ChatService {
         attachmentUrl: this.s3Service.convertToSignedUrl(msg.attachmentUrl, 120), // 2 minutes expiry
         attachmentName: msg.attachmentName,
         mediaType: msg.mediaType,
+        replyToMessageId: msg.replyToMessageId,
+        repliedMessage,
         isRead: msg.isRead,
         readAt: msg.readAt,
         createdAt: msg.createdAt,

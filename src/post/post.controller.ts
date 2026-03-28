@@ -106,7 +106,10 @@ export class PostController {
   @ApiOperation({
     summary: 'Create a new post',
     description:
-      'Create a new post with text content and optional media files (up to 10 files, max 50MB each). Only verified influencers can create posts.',
+      'Create a new post with text content and optional media. Supports two upload methods:\n\n' +
+      '1. **Direct Upload**: Upload files directly via `media` field (up to 10 files, max 50MB each)\n' +
+      '2. **Chunked Upload**: Upload large files (>50MB, up to 500MB) to S3 first using multipart upload endpoints, then provide S3 URLs via `mediaUrls` field\n\n' +
+      'Only verified influencers can create posts.',
   })
   @ApiResponse({ status: 201, description: 'Post created successfully' })
   @ApiResponse({ status: 400, description: 'Bad request' })

@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Body,
   Param,
@@ -34,6 +35,8 @@ import {
   ApiConsumes,
 } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { InjectModel } from '@nestjs/sequelize';
+import { Op } from 'sequelize';
 import { AdminAuthService } from './admin-auth.service';
 import { ProfileReviewService } from './profile-review.service';
 import { AdminCampaignService } from './services/admin-campaign.service';
@@ -49,6 +52,7 @@ import { S3Service } from '../shared/s3.service';
 import { AppVersionService } from '../shared/services/app-version.service';
 import { InvoiceExcelExportService } from './services/invoice-excel-export.service';
 import { AdminCreatorScoreService } from './services/admin-creator-score.service';
+import { NudgeTemplateService } from './services/nudge-template.service';
 import { GetCreatorScoresDto, GetCreatorScoresDashboardDto } from './dto/get-creator-scores.dto';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import type { RequestWithAdmin } from './guards/admin-auth.guard';
@@ -57,6 +61,9 @@ import { Roles } from './decorators/roles.decorator';
 import { AdminRole, AdminStatus } from './models/admin.model';
 import { ProfileType } from './models/profile-review.model';
 import { ProSubscriptionService } from '../influencer/services/pro-subscription.service';
+import { SubscriptionMarketingService } from '../influencer/services/subscription-marketing.service';
+import { ProSubscriptionPromotion } from '../influencer/models/pro-subscription-promotion.model';
+import { NudgeMessageTemplate } from '../shared/models/nudge-message-template.model';
 
 // DTOs
 import { AdminLoginDto, AdminLoginResponseDto } from './dto/admin-login.dto';
@@ -138,6 +145,15 @@ import { GetSupportTicketsDto } from '../shared/dto/get-support-tickets.dto';
 import { UpdateSupportTicketDto } from '../shared/dto/update-support-ticket.dto';
 import { CreateTicketReplyDto } from '../shared/dto/create-ticket-reply.dto';
 import { GetTicketsResponseDto, GetRepliesResponseDto } from '../shared/dto/support-ticket-response.dto';
+import { CreatePromotionDto, UpdatePromotionDto } from './dto/create-promotion.dto';
+import {
+  CreateNudgeMessageTemplateDto,
+  UpdateNudgeMessageTemplateDto,
+  NudgeMessageTemplateResponseDto,
+  GetNudgeMessageTemplatesDto,
+  NudgeMessageTemplateListResponseDto,
+  GetNudgeAnalyticsDto,
+} from './dto/nudge-message-template.dto';
 import {
   GetNewAccountsWithReferralDto,
   NewAccountsWithReferralResponseDto,
@@ -207,6 +223,12 @@ export class AdminController {
     private readonly invoiceExcelExportService: InvoiceExcelExportService,
     private readonly adminCreatorScoreService: AdminCreatorScoreService,
     private readonly proSubscriptionService: ProSubscriptionService,
+    private readonly subscriptionMarketingService: SubscriptionMarketingService,
+    private readonly nudgeTemplateService: NudgeTemplateService,
+    @InjectModel(ProSubscriptionPromotion)
+    private readonly proSubscriptionPromotionModel: typeof ProSubscriptionPromotion,
+    @InjectModel(NudgeMessageTemplate)
+    private readonly nudgeMessageTemplateModel: typeof NudgeMessageTemplate,
   ) {}
 
   @Post('login')
@@ -4658,6 +4680,926 @@ export class AdminController {
         proActivatedAt: now,
         proExpiresAt: periodEnd,
       },
+    };
+  }
+
+  // ============================================
+  // DEVICE TOKEN CLEANUP
+  // ============================================
+
+  // @Get('device-tokens/statistics')
+  // @UseGuards(AdminAuthGuard, RolesGuard)
+  // @Roles(AdminRole.SUPER_ADMIN)
+  // @ApiBearerAuth()
+  // @ApiOperation({
+  //   summary: '[SUPER ADMIN ONLY] Get device token statistics',
+  //   description: 'Get statistics about active device tokens, including total counts by user type and inactive token counts.',
+  // })
+  // @ApiResponse({
+  //   status: HttpStatus.OK,
+  //   description: 'Device token statistics retrieved successfully',
+  //   type: TokenStatisticsDto,
+  // })
+  // @ApiUnauthorizedResponse({
+  //   description: 'Authentication required',
+  // })
+  // @ApiForbiddenResponse({
+  //   description: 'Insufficient permissions - Super Admin only',
+  // })
+  // async getDeviceTokenStatistics(): Promise<TokenStatisticsDto> {
+  //   const stats = await this.deviceTokenService.getTokenStatistics();
+  //   const { tokens } = await this.deviceTokenService.findOrphanedTokens();
+
+  //   return {
+  //     ...stats,
+  //     orphanedTokens: tokens.length,
+  //     timestamp: new Date(),
+  //   };
+  // }
+
+  // @Get('device-tokens/orphaned/preview')
+  // @UseGuards(AdminAuthGuard, RolesGuard)
+  // @Roles(AdminRole.SUPER_ADMIN)
+  // @ApiBearerAuth()
+  // @ApiOperation({
+  //   summary: '[SUPER ADMIN ONLY] Preview orphaned device tokens',
+  //   description: 'Preview FCM tokens belonging to deleted accounts without removing them. Use this to see what will be deleted before executing cleanup.',
+  // })
+  // @ApiResponse({
+  //   status: HttpStatus.OK,
+  //   description: 'Orphaned tokens preview retrieved successfully',
+  //   type: CleanupPreviewResponseDto,
+  // })
+  // @ApiUnauthorizedResponse({
+  //   description: 'Authentication required',
+  // })
+  // @ApiForbiddenResponse({
+  //   description: 'Insufficient permissions - Super Admin only',
+  // })
+  // async previewOrphanedTokens(): Promise<CleanupPreviewResponseDto> {
+  //   const result = await this.deviceTokenService.findOrphanedTokens();
+
+  //   return {
+  //     totalOrphanedTokens: result.totalOrphaned,
+  //     deletedInfluencerTokens: result.deletedInfluencerTokens,
+  //     deletedBrandTokens: result.deletedBrandTokens,
+  //     deletedAdminTokens: result.deletedAdminTokens,
+  //     orphanedTokens: result.tokens.map((token) => ({
+  //       id: token.id,
+  //       userId: token.userId,
+  //       userType: token.userType,
+  //       fcmToken: token.fcmToken.substring(0, 50) + '...', // Truncate for security
+  //       deviceName: token.deviceName,
+  //       deviceOs: token.deviceOs,
+  //       lastUsedAt: token.lastUsedAt,
+  //       createdAt: token.createdAt,
+  //     })),
+  //     timestamp: new Date(),
+  //   };
+  // }
+
+  // @Delete('device-tokens/orphaned')
+  // @UseGuards(AdminAuthGuard, RolesGuard)
+  // @Roles(AdminRole.SUPER_ADMIN)
+  // @ApiBearerAuth()
+  // @ApiOperation({
+  //   summary: '[SUPER ADMIN ONLY] Remove orphaned device tokens',
+  //   description: 'Permanently remove FCM tokens belonging to deleted accounts. This prevents sending notifications to deleted users and cleans up the database. CAUTION: This action cannot be undone.',
+  // })
+  // @ApiResponse({
+  //   status: HttpStatus.OK,
+  //   description: 'Orphaned tokens removed successfully',
+  //   type: CleanupExecuteResponseDto,
+  // })
+  // @ApiUnauthorizedResponse({
+  //   description: 'Authentication required',
+  // })
+  // @ApiForbiddenResponse({
+  //   description: 'Insufficient permissions - Super Admin only',
+  // })
+  // async removeOrphanedTokens(): Promise<CleanupExecuteResponseDto> {
+  //   const result = await this.deviceTokenService.removeOrphanedTokens();
+
+  //   return {
+  //     success: true,
+  //     message: `Successfully removed ${result.totalRemoved} orphaned FCM tokens`,
+  //     totalRemoved: result.totalRemoved,
+  //     influencerTokensRemoved: result.influencerTokensRemoved,
+  //     brandTokensRemoved: result.brandTokensRemoved,
+  //     adminTokensRemoved: result.adminTokensRemoved,
+  //     removedTokenIds: result.removedTokenIds,
+  //     timestamp: new Date(),
+  //   };
+  // }
+
+  // ============================================
+  // SUBSCRIPTION PROMOTION MANAGEMENT
+  // ============================================
+
+  @Post('subscription-promotions')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[ADMIN] Create flash sale promotion' })
+  @ApiResponse({
+    status: 201,
+    description: 'Promotion created successfully',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - Super Admin or Content Moderator only',
+  })
+  async createPromotion(
+    @Req() req: RequestWithAdmin,
+    @Body() dto: CreatePromotionDto,
+  ) {
+    // Calculate discount percentage
+    const originalPrice = dto.originalPrice || 19900;
+    const discountPercentage = Math.round(
+      ((originalPrice - dto.discountedPrice) / originalPrice) * 100
+    );
+
+    // Create promotion
+    const promotion = await this.proSubscriptionPromotionModel.create({
+      name: dto.name,
+      description: dto.description,
+      originalPrice: originalPrice,
+      discountedPrice: dto.discountedPrice,
+      discountPercentage: discountPercentage,
+      startDate: dto.startDate,
+      endDate: dto.endDate,
+      maxUses: null, // No slot limits - unlimited subscriptions
+      isActive: true,
+      currentUses: 0,
+      createdBy: req.admin.id,
+    });
+
+    // Send announcement if requested (default: true)
+    if (dto.sendAnnouncement !== false) {
+      await this.subscriptionMarketingService.announceFlashSale(promotion.id);
+    }
+
+    return {
+      success: true,
+      promotion,
+      message: `Flash sale "${promotion.name}" created successfully${dto.sendAnnouncement !== false ? ' and announced to all non-Pro users' : ''}`,
+    };
+  }
+
+  @Get('subscription-promotions')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[ADMIN] Get all promotions' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of all promotions',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getAllPromotions() {
+    const promotions = await this.proSubscriptionPromotionModel.findAll({
+      order: [['createdAt', 'DESC']],
+    });
+
+    // Add computed fields to each promotion
+    const enrichedPromotions = promotions.map(promotion => ({
+      ...promotion.toJSON(),
+      isCurrentlyActive: promotion.isCurrentlyActive(),
+      timeRemaining: promotion.getTimeRemaining(),
+      spotsLeft: promotion.getSpotsLeft(),
+    }));
+
+    return {
+      success: true,
+      count: promotions.length,
+      promotions: enrichedPromotions,
+    };
+  }
+
+  @Patch('subscription-promotions/:id')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[ADMIN] Update promotion (activate/deactivate)' })
+  @ApiParam({ name: 'id', description: 'Promotion ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Promotion updated successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Promotion not found',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - Super Admin or Content Moderator only',
+  })
+  async updatePromotion(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdatePromotionDto,
+  ) {
+    const promotion = await this.proSubscriptionPromotionModel.findByPk(id);
+
+    if (!promotion) {
+      throw new NotFoundException('Promotion not found');
+    }
+
+    await promotion.update({ isActive: dto.isActive });
+
+    return {
+      success: true,
+      message: `Promotion ${dto.isActive ? 'activated' : 'deactivated'} successfully`,
+      promotion,
+    };
+  }
+
+  @Post('subscription-promotions/:id/send-reminder')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[ADMIN] Send flash sale reminder notification' })
+  @ApiParam({ name: 'id', description: 'Promotion ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Reminder sent successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Promotion not found',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - Super Admin or Content Moderator only',
+  })
+  async sendFlashSaleReminder(@Param('id', ParseIntPipe) id: number) {
+    // Verify promotion exists
+    const promotion = await this.proSubscriptionPromotionModel.findByPk(id);
+
+    if (!promotion) {
+      throw new NotFoundException('Promotion not found');
+    }
+
+    if (!promotion.isCurrentlyActive()) {
+      throw new BadRequestException('Promotion is not currently active');
+    }
+
+    // Send reminder via marketing service
+    await this.subscriptionMarketingService.sendFlashSaleReminder(id);
+
+    return {
+      success: true,
+      message: `Flash sale reminder sent to all non-Pro users for "${promotion.name}"`,
+    };
+  }
+
+  // ============================================
+  // NUDGE MESSAGE TEMPLATE MANAGEMENT
+  // ============================================
+
+  @Post('nudge-message-templates')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: '[ADMIN] Create nudge message template',
+    description: 'Create a new nudge message template. Choose message type based on target audience:\n\n' +
+      '• **rotation**: Generic messages shown to all users in rotation\n' +
+      '• **out_of_credits**: Urgent messages when user has 0 credits\n' +
+      '• **active_user**: Behavior-based messages for users with many applications\n' +
+      '• **payment_pending**: Messages for users with pending/failed payments',
+  })
+  @ApiBody({
+    type: CreateNudgeMessageTemplateDto,
+    examples: {
+      rotation: {
+        summary: 'Rotation Message',
+        description: 'Generic promotional message shown in rotation to all users',
+        value: {
+          title: 'Unlock your potential 💫',
+          body: 'MAX members earn 3x more on average. Get unlimited applications for ₹199/month',
+          messageType: 'rotation',
+          priority: 100,
+          rotationOrder: 0,
+          validFrom: '2026-03-25T00:00:00Z',
+          validUntil: '2026-04-25T23:59:59Z',
+          internalNotes: 'Generic message for new users - focus on earnings',
+        },
+      },
+      out_of_credits: {
+        summary: 'Out of Credits (Urgent)',
+        description: 'Urgent message shown when user has exhausted all credits',
+        value: {
+          title: 'You\'re out of credits! 🚨',
+          body: 'Upgrade to MAX and get unlimited campaign applications. Join 10,000+ influencers earning more!',
+          messageType: 'out_of_credits',
+          requiresZeroCredits: true,
+          priority: 200,
+          validFrom: '2026-03-25T00:00:00Z',
+          internalNotes: 'High urgency - shown when credits = 0',
+        },
+      },
+      active_user: {
+        summary: 'Active User (Behavior-based)',
+        description: 'Targeted message for highly engaged users with many applications',
+        value: {
+          title: 'You\'re on fire! 🔥',
+          body: 'You\'ve applied to 10+ campaigns! MAX members like you get 5x better ROI. Upgrade now for ₹199/month',
+          messageType: 'active_user',
+          minCampaignApplications: 10,
+          priority: 150,
+          validFrom: '2026-03-25T00:00:00Z',
+          internalNotes: 'Behavior-based targeting for power users',
+        },
+      },
+      payment_pending: {
+        summary: 'Payment Pending',
+        description: 'Message for users with pending or failed subscription payments',
+        value: {
+          title: 'Complete your payment 💳',
+          body: 'Your subscription payment is pending. Complete it now to continue enjoying MAX benefits!',
+          messageType: 'payment_pending',
+          priority: 180,
+          validFrom: '2026-03-25T00:00:00Z',
+          internalNotes: 'Payment reminder for failed/pending subscriptions',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Nudge message template created successfully',
+    type: NudgeMessageTemplateResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - Super Admin or Content Moderator only',
+  })
+  async createNudgeMessageTemplate(
+    @Req() req: RequestWithAdmin,
+    @Body() dto: CreateNudgeMessageTemplateDto,
+  ) {
+    const template = await this.nudgeMessageTemplateModel.create({
+      title: dto.title,
+      body: dto.body,
+      messageType: dto.messageType,
+      minCampaignApplications: dto.minCampaignApplications || null,
+      requiresZeroCredits: dto.requiresZeroCredits || false,
+      priority: dto.priority || 0,
+      rotationOrder: dto.rotationOrder || null,
+      validFrom: dto.validFrom || null,
+      validUntil: dto.validUntil || null,
+      internalNotes: dto.internalNotes || null,
+      createdBy: req.admin.id,
+    });
+
+    return {
+      success: true,
+      message: 'Nudge message template created successfully',
+      template,
+    };
+  }
+
+  @Get('nudge-message-templates')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: '[ADMIN] Get all nudge message templates',
+    description: 'Get paginated list of nudge message templates with advanced filtering and sorting.\n\n' +
+      '**Filters:**\n' +
+      '• `messageType` - Filter by type (rotation, out_of_credits, active_user, payment_pending)\n' +
+      '• `isActive` - Filter by active/inactive status\n' +
+      '• `search` - Search in title and body text\n' +
+      '• `isCurrentlyValid` - Filter templates within valid date range\n' +
+      '• `createdFrom` - Filter templates created after this date\n' +
+      '• `createdTo` - Filter templates created before this date\n\n' +
+      '**Sorting:**\n' +
+      '• `orderBy` - Sort by id, priority, timesSent, conversionRate, createdAt\n' +
+      '• `orderDirection` - ASC or DESC',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of nudge message templates with pagination metadata',
+    type: NudgeMessageTemplateListResponseDto,
+    schema: {
+      example: {
+        success: true,
+        templates: [
+          {
+            id: 4,
+            title: 'You\'re on fire! 🔥',
+            body: 'You\'ve applied to 10+ campaigns! MAX members like you get 5x better ROI. Upgrade now for ₹199/month',
+            messageType: 'active_user',
+            minCampaignApplications: 10,
+            requiresZeroCredits: false,
+            isActive: true,
+            priority: 150,
+            rotationOrder: null,
+            timesSent: 25,
+            conversionCount: 12,
+            validFrom: '2026-03-25T00:00:00.000Z',
+            validUntil: null,
+            createdBy: 1,
+            internalNotes: 'Behavior-based targeting for power users',
+            createdAt: '2026-03-26T14:00:00.000Z',
+            updatedAt: '2026-03-26T14:00:00.000Z',
+            conversionRate: 48.0,
+            isCurrentlyValid: true,
+          },
+          {
+            id: 3,
+            title: 'Complete your payment 💳',
+            body: 'Your subscription payment is pending. Complete it now to continue enjoying MAX benefits!',
+            messageType: 'payment_pending',
+            minCampaignApplications: null,
+            requiresZeroCredits: false,
+            isActive: true,
+            priority: 180,
+            rotationOrder: null,
+            timesSent: 15,
+            conversionCount: 8,
+            validFrom: '2026-03-25T00:00:00.000Z',
+            validUntil: null,
+            createdBy: 1,
+            internalNotes: 'Payment reminder for failed/pending subscriptions',
+            createdAt: '2026-03-26T12:00:00.000Z',
+            updatedAt: '2026-03-26T12:00:00.000Z',
+            conversionRate: 53.33,
+            isCurrentlyValid: true,
+          },
+          {
+            id: 2,
+            title: 'You\'re out of credits! 🚨',
+            body: 'Upgrade to MAX and get unlimited campaign applications. Join 10,000+ influencers earning more!',
+            messageType: 'out_of_credits',
+            minCampaignApplications: null,
+            requiresZeroCredits: true,
+            isActive: true,
+            priority: 200,
+            rotationOrder: null,
+            timesSent: 120,
+            conversionCount: 45,
+            validFrom: '2026-03-20T00:00:00.000Z',
+            validUntil: null,
+            createdBy: 1,
+            internalNotes: 'High urgency - shown when credits = 0',
+            createdAt: '2026-03-25T10:30:00.000Z',
+            updatedAt: '2026-03-25T10:30:00.000Z',
+            conversionRate: 37.5,
+            isCurrentlyValid: true,
+          },
+          {
+            id: 1,
+            title: 'Unlock your potential 💫',
+            body: 'MAX members earn 3x more on average. Get unlimited applications for ₹199/month',
+            messageType: 'rotation',
+            minCampaignApplications: null,
+            requiresZeroCredits: false,
+            isActive: true,
+            priority: 100,
+            rotationOrder: 0,
+            timesSent: 500,
+            conversionCount: 85,
+            validFrom: '2026-03-15T00:00:00.000Z',
+            validUntil: '2026-04-25T23:59:59.000Z',
+            createdBy: 1,
+            internalNotes: 'Generic message for new users - focus on earnings',
+            createdAt: '2026-03-20T10:30:00.000Z',
+            updatedAt: '2026-03-20T10:30:00.000Z',
+            conversionRate: 17.0,
+            isCurrentlyValid: true,
+          },
+        ],
+        total: 4,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getAllNudgeMessageTemplates(@Query() dto: GetNudgeMessageTemplatesDto) {
+    const page = dto.page || 1;
+    const limit = dto.limit || 20;
+    const offset = (page - 1) * limit;
+
+    // Build where clause for filters
+    const whereClause: any = {};
+    if (dto.messageType) {
+      whereClause.messageType = dto.messageType;
+    }
+    if (dto.isActive !== undefined) {
+      whereClause.isActive = dto.isActive;
+    }
+
+    // Date range filters
+    if (dto.createdFrom || dto.createdTo) {
+      whereClause.createdAt = {};
+      if (dto.createdFrom) {
+        whereClause.createdAt[Op.gte] = dto.createdFrom;
+      }
+      if (dto.createdTo) {
+        whereClause.createdAt[Op.lte] = dto.createdTo;
+      }
+    }
+
+    // Search filter (case-insensitive search in title and body)
+    if (dto.search) {
+      whereClause[Op.or] = [
+        { title: { [Op.iLike]: `%${dto.search}%` } },
+        { body: { [Op.iLike]: `%${dto.search}%` } },
+      ];
+    }
+
+    // Get all templates first (for isCurrentlyValid filter)
+    let templates = await this.nudgeMessageTemplateModel.findAll({
+      where: whereClause,
+    });
+
+    // Filter by isCurrentlyValid if specified
+    if (dto.isCurrentlyValid !== undefined) {
+      templates = templates.filter(template => template.isCurrentlyValid() === dto.isCurrentlyValid);
+    }
+
+    // Get total count after filters
+    const total = templates.length;
+
+    // Sort templates
+    const orderBy = dto.orderBy || 'id';
+    const orderDirection = dto.orderDirection || 'DESC';
+
+    templates.sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      if (orderBy === 'conversionRate') {
+        aValue = a.getConversionRate();
+        bValue = b.getConversionRate();
+      } else {
+        aValue = a[orderBy];
+        bValue = b[orderBy];
+      }
+
+      // Handle null/undefined values
+      if (aValue === null || aValue === undefined) aValue = 0;
+      if (bValue === null || bValue === undefined) bValue = 0;
+
+      if (orderDirection === 'ASC') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+
+    // Apply pagination after sorting
+    const paginatedTemplates = templates.slice(offset, offset + limit);
+
+    // Add conversion rate and validity to each template
+    const enrichedTemplates = paginatedTemplates.map((template) => ({
+      ...template.toJSON(),
+      conversionRate: template.getConversionRate(),
+      isCurrentlyValid: template.isCurrentlyValid(),
+    }));
+
+    return {
+      success: true,
+      templates: enrichedTemplates,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  @Get('nudge-message-templates/:id')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[ADMIN] Get single nudge message template' })
+  @ApiParam({ name: 'id', description: 'Template ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Nudge message template details',
+  })
+  @ApiNotFoundResponse({
+    description: 'Template not found',
+  })
+  async getNudgeMessageTemplate(@Param('id', ParseIntPipe) id: number) {
+    const template = await this.nudgeMessageTemplateModel.findByPk(id);
+
+    if (!template) {
+      throw new NotFoundException('Template not found');
+    }
+
+    return {
+      success: true,
+      template: {
+        ...template.toJSON(),
+        conversionRate: template.getConversionRate(),
+        isCurrentlyValid: template.isCurrentlyValid(),
+      },
+    };
+  }
+
+  @Patch('nudge-message-templates/:id')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[ADMIN] Update nudge message template' })
+  @ApiParam({ name: 'id', description: 'Template ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Template updated successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Template not found',
+  })
+  async updateNudgeMessageTemplate(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateNudgeMessageTemplateDto,
+  ) {
+    const template = await this.nudgeMessageTemplateModel.findByPk(id);
+
+    if (!template) {
+      throw new NotFoundException('Template not found');
+    }
+
+    await template.update(dto);
+
+    return {
+      success: true,
+      message: 'Template updated successfully',
+      template,
+    };
+  }
+
+  @Delete('nudge-message-templates/:id')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[ADMIN] Delete nudge message template' })
+  @ApiParam({ name: 'id', description: 'Template ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Template deleted successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Template not found',
+  })
+  async deleteNudgeMessageTemplate(@Param('id', ParseIntPipe) id: number) {
+    const template = await this.nudgeMessageTemplateModel.findByPk(id);
+
+    if (!template) {
+      throw new NotFoundException('Template not found');
+    }
+
+    await template.destroy();
+
+    return {
+      success: true,
+      message: 'Template deleted successfully',
+    };
+  }
+
+  @Patch('nudge-message-templates/:id/status')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: '[ADMIN] Update nudge template status',
+    description:
+      'Activate or deactivate a nudge message template.\n\n' +
+      '**Use Cases:**\n' +
+      '• A/B testing: Activate one variant, deactivate another\n' +
+      '• Performance optimization: Deactivate low-performing templates\n' +
+      '• Emergency control: Quickly deactivate templates if needed\n' +
+      '• Seasonal campaigns: Activate for events, deactivate after',
+  })
+  @ApiParam({ name: 'id', description: 'Template ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        isActive: {
+          type: 'boolean',
+          example: true,
+          description: 'Set to true to activate, false to deactivate',
+        },
+      },
+      required: ['isActive'],
+    },
+    examples: {
+      activate: {
+        summary: 'Activate template',
+        value: { isActive: true },
+      },
+      deactivate: {
+        summary: 'Deactivate template',
+        value: { isActive: false },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Template status updated successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Template not found',
+  })
+  async updateNudgeTemplateStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('isActive') isActive: boolean,
+  ) {
+    const result = await this.nudgeTemplateService.updateTemplateStatus(
+      id,
+      isActive,
+    );
+
+    return {
+      success: true,
+      message: isActive
+        ? 'Template activated successfully'
+        : 'Template deactivated successfully',
+      template: {
+        id: result.template.id,
+        title: result.template.title,
+        body: result.template.body,
+        messageType: result.template.messageType,
+        isActive: result.template.isActive,
+        previousStatus: result.previousStatus,
+        priority: result.template.priority,
+        timesSent: result.template.timesSent,
+        conversionCount: result.template.conversionCount,
+        conversionRate: result.template.getConversionRate(),
+      },
+    };
+  }
+
+  @Get('nudge-message-templates/analytics/overview')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: '[ADMIN] Get nudge message analytics overview',
+    description: 'Get analytics data for nudge message templates.\n\n' +
+      '**Filters:**\n' +
+      '• `messageType` - Filter analytics by specific message type\n' +
+      '• `isActive` - Filter by active/inactive templates',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Analytics data for nudge message templates',
+  })
+  async getNudgeMessageAnalytics(@Query() dto: GetNudgeAnalyticsDto) {
+    // Build where clause for filters
+    const whereClause: any = {};
+    if (dto.messageType) {
+      whereClause.messageType = dto.messageType;
+    }
+    if (dto.isActive !== undefined) {
+      whereClause.isActive = dto.isActive;
+    }
+
+    const templates = await this.nudgeMessageTemplateModel.findAll({
+      where: whereClause,
+    });
+
+    const totalSent = templates.reduce((sum, t) => sum + t.timesSent, 0);
+    const totalConversions = templates.reduce((sum, t) => sum + t.conversionCount, 0);
+    const overallConversionRate = totalSent > 0 ? (totalConversions / totalSent) * 100 : 0;
+
+    // Group by message type
+    const byType: Record<string, any> = {};
+    templates.forEach((template) => {
+      const type = template.messageType;
+      if (!byType[type]) {
+        byType[type] = {
+          count: 0,
+          totalSent: 0,
+          totalConversions: 0,
+          conversionRate: 0,
+        };
+      }
+      byType[type].count++;
+      byType[type].totalSent += template.timesSent;
+      byType[type].totalConversions += template.conversionCount;
+    });
+
+    // Calculate conversion rates
+    Object.keys(byType).forEach((type) => {
+      byType[type].conversionRate =
+        byType[type].totalSent > 0 ? (byType[type].totalConversions / byType[type].totalSent) * 100 : 0;
+    });
+
+    // Top performing templates
+    const topTemplates = templates
+      .filter((t) => t.timesSent > 0)
+      .sort((a, b) => b.getConversionRate() - a.getConversionRate())
+      .slice(0, 5)
+      .map((t) => ({
+        id: t.id,
+        title: t.title,
+        messageType: t.messageType,
+        timesSent: t.timesSent,
+        conversionCount: t.conversionCount,
+        conversionRate: t.getConversionRate(),
+      }));
+
+    return {
+      success: true,
+      filters: {
+        messageType: dto.messageType || 'all',
+        isActive: dto.isActive !== undefined ? dto.isActive : 'all',
+      },
+      overview: {
+        totalTemplates: templates.length,
+        activeTemplates: templates.filter((t) => t.isActive).length,
+        totalSent,
+        totalConversions,
+        overallConversionRate: Math.round(overallConversionRate * 100) / 100,
+      },
+      byType,
+      topPerforming: topTemplates,
+    };
+  }
+
+  // ============================================
+  // Notification Testing Endpoints
+  // ============================================
+
+  @Post('trigger-smart-nudges')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: '[ADMIN] Manually trigger smart subscription nudges',
+    description: 'Manually triggers the daily smart nudge system for testing. This will send behavior-based subscription notifications to eligible users.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Smart nudges triggered successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Smart nudges triggered successfully',
+        timestamp: '2026-03-27T10:30:00.000Z',
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - Super Admin or Content Moderator only',
+  })
+  async triggerSmartNudges(@Req() req: RequestWithAdmin) {
+    await this.subscriptionMarketingService.sendDailySubscriptionNudges();
+
+    return {
+      success: true,
+      message: 'Smart nudges triggered successfully',
+      timestamp: new Date(),
+    };
+  }
+
+  @Post('trigger-payment-reminders')
+  @UseGuards(AdminAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: '[ADMIN] Manually trigger payment drop-off reminders',
+    description: 'Manually triggers the payment abandonment reminder system for testing. This will send reminders to users with pending/failed payments.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment reminders triggered successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Payment drop-off reminders triggered successfully',
+        timestamp: '2026-03-27T10:30:00.000Z',
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  @ApiForbiddenResponse({
+    description: 'Insufficient permissions - Super Admin or Content Moderator only',
+  })
+  async triggerPaymentReminders(@Req() req: RequestWithAdmin) {
+    await this.subscriptionMarketingService.handlePaymentDropoffReminders();
+
+    return {
+      success: true,
+      message: 'Payment drop-off reminders triggered successfully',
+      timestamp: new Date(),
     };
   }
 }

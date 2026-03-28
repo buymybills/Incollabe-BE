@@ -1227,6 +1227,7 @@ export class AuthController {
       updateFcmTokenDto.deviceOs,
       updateFcmTokenDto.appVersion,
       updateFcmTokenDto.versionCode,
+      updateFcmTokenDto.installationId,
     );
   }
 
