@@ -70,6 +70,8 @@ import { NudgeMessageTemplate } from '../shared/models/nudge-message-template.mo
       InfluencerUpi,
       InstagramProfileAnalysis,
       HomePageHistory,
+      DeviceToken,
+      NudgeMessageTemplate,
     ]),
     SharedModule,
     CampaignModule,
@@ -80,6 +82,7 @@ import { NudgeMessageTemplate } from '../shared/models/nudge-message-template.mo
     InfluencerRepository,
     ProSubscriptionService,
     SubscriptionSchedulerService,
+    SubscriptionMarketingService,
     {
       provide: 'PROFILE_REVIEW_MODEL',
       useValue: ProfileReview,
