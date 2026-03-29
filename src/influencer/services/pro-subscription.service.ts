@@ -3294,8 +3294,11 @@ export class ProSubscriptionService {
 
     let subscription: ProSubscription;
     if (existingSubscription) {
-      // Update existing subscription (clear old cancellation data if restarting)
-      const updateData = {
+      // Update existing subscription
+      // If subscription was CANCELLED, preserve that status until payment is confirmed via webhook
+      const wasCancelled = existingSubscription.status === SubscriptionStatus.CANCELLED;
+
+      const updateData: any = {
         razorpaySubscriptionId: subscriptionResult.subscriptionId,
         upiMandateStatus: UpiMandateStatus.PENDING,
         mandateCreatedAt: now,
@@ -3303,10 +3306,19 @@ export class ProSubscriptionService {
         currentPeriodStart: startDate,
         currentPeriodEnd: endDate,
         nextBillingDate: endDate,
-        cancelledAt: null,
-        cancelReason: null,
-        status: hasActivePro ? SubscriptionStatus.ACTIVE : SubscriptionStatus.PAYMENT_PENDING,
       };
+
+      // Only clear cancellation data if subscription wasn't cancelled
+      // If it was cancelled, preserve the cancellation status until payment is confirmed
+      if (!wasCancelled) {
+        updateData.cancelledAt = null;
+        updateData.cancelReason = null;
+        updateData.status = hasActivePro ? SubscriptionStatus.ACTIVE : SubscriptionStatus.PAYMENT_PENDING;
+      } else {
+        // Keep cancelled status - webhook will update to ACTIVE when autopay is confirmed
+        updateData.status = SubscriptionStatus.CANCELLED;
+      }
+
       console.log('🔍 DEBUG - Update data:', JSON.stringify(updateData, null, 2));
       subscription = await existingSubscription.update(updateData);
     } else {
