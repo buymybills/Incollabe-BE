@@ -111,18 +111,8 @@ export class SubscriptionMarketingService {
     influencer: Influencer,
     timing: '1hour' | '6hour',
   ) {
-    const messages = {
-      '1hour': {
-        title: "You're just one step away! 🎯",
-        body: "Complete your MAX subscription and unlock unlimited campaign applications for just ₹199/month",
-      },
-      '6hour': {
-        title: "Still thinking? 🤔",
-        body: "Your exclusive MAX offer is waiting! Unlock unlimited applications + premium features",
-      },
-    };
-
-    const message = messages[timing];
+    // Fetch message from database templates
+    const message = await this.getPaymentReminderMessage(timing);
 
     try {
       // Get FCM tokens from device_tokens table
@@ -170,6 +160,7 @@ export class SubscriptionMarketingService {
           subscriptionAmount: subscription.subscriptionAmount,
           timing,
           reminderType: 'payment_drop_off',
+          templateId: message.templateId,
         },
       } as any);
 
@@ -193,7 +184,7 @@ export class SubscriptionMarketingService {
    * - Days 18-30: Weekly
    * - After 30 days: Stop (user not interested)
    */
-  @Cron('0 10 * * *') // 10:00 AM daily
+  @Cron('0 10 * * *') // 10:00 AM UTC = 3:30 PM IST daily
   async sendDailySubscriptionNudges() {
     this.logger.log('🔍 Starting smart frequency subscription nudges...');
 
@@ -507,6 +498,71 @@ export class SubscriptionMarketingService {
       body: template.body,
       index: nextIndex,
       templateId: template.id,
+    };
+  }
+
+  /**
+   * Get payment reminder message from database templates
+   * Fetches from admin-configured database instead of hard-coded messages
+   */
+  private async getPaymentReminderMessage(
+    timing: '1hour' | '6hour',
+  ): Promise<{ title: string; body: string; templateId: number }> {
+    const now = new Date();
+    const messageType = timing === '1hour'
+      ? NudgeMessageType.PAYMENT_PENDING_1H
+      : NudgeMessageType.PAYMENT_PENDING_6H;
+
+    // Fetch template from database
+    const template = await this.nudgeMessageTemplateModel.findOne({
+      where: {
+        messageType,
+        isActive: true,
+        [Op.or]: [
+          { validFrom: null, validUntil: null }, // No date restrictions
+          {
+            validFrom: { [Op.lte]: now },
+            validUntil: { [Op.gte]: now },
+          }, // Within valid date range
+          { validFrom: { [Op.lte]: now }, validUntil: null }, // Started, no end
+          { validFrom: null, validUntil: { [Op.gte]: now } }, // No start, not expired
+        ],
+      },
+      order: [['priority', 'DESC']],
+    });
+
+    if (template) {
+      // Track template usage
+      await this.nudgeMessageTemplateModel.increment('timesSent', {
+        by: 1,
+        where: { id: template.id },
+      });
+
+      return {
+        title: template.title,
+        body: template.body,
+        templateId: template.id,
+      };
+    }
+
+    // Fallback: If no template in DB, use default messages
+    this.logger.warn(`⚠️ No ${timing} payment reminder template found in database, using fallback message`);
+
+    const fallbackMessages = {
+      '1hour': {
+        title: "You're just one step away! 🎯",
+        body: "Complete your MAX subscription and unlock unlimited campaign applications for just ₹199/month",
+      },
+      '6hour': {
+        title: "Still thinking? 🤔",
+        body: "Your exclusive MAX offer is waiting! Unlock unlimited applications + premium features",
+      },
+    };
+
+    return {
+      title: fallbackMessages[timing].title,
+      body: fallbackMessages[timing].body,
+      templateId: 0, // No template ID (fallback)
     };
   }
 

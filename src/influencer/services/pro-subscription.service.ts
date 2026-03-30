@@ -392,11 +392,48 @@ export class ProSubscriptionService {
    * Get subscription details for an influencer
    */
   async getSubscriptionDetails(influencerId: number) {
-    // Get the latest subscription
-    const subscription = await this.proSubscriptionModel.findOne({
+    // Get subscriptions that could be providing Pro access
+    // Prioritize: ACTIVE > CANCELLED/PAUSED > EXPIRED > PAYMENT_PENDING > PAYMENT_FAILED
+    // Within each status group, prefer the one with the furthest currentPeriodEnd
+    const allSubscriptions = await this.proSubscriptionModel.findAll({
       where: { influencerId },
       order: [['createdAt', 'DESC']],
     });
+
+    if (!allSubscriptions || allSubscriptions.length === 0) {
+      return {
+        hasSubscription: false,
+        hasPendingPayment: false,
+        isPro: false,
+      };
+    }
+
+    // Prioritize subscriptions by status
+    const statusPriority = {
+      [SubscriptionStatus.ACTIVE]: 1,
+      [SubscriptionStatus.PAUSED]: 2,
+      [SubscriptionStatus.CANCELLED]: 3,
+      [SubscriptionStatus.EXPIRED]: 4,
+      [SubscriptionStatus.PAYMENT_PENDING]: 5,
+      [SubscriptionStatus.ABANDONED]: 6,
+      [SubscriptionStatus.PAYMENT_FAILED]: 7,
+      [SubscriptionStatus.INACTIVE]: 8,
+    };
+
+    // Sort subscriptions: first by status priority, then by currentPeriodEnd DESC
+    const sortedSubscriptions = allSubscriptions.sort((a, b) => {
+      const priorityA = statusPriority[a.status] || 99;
+      const priorityB = statusPriority[b.status] || 99;
+
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB; // Lower number = higher priority
+      }
+
+      // Same status: prefer the one with later expiry date
+      return b.currentPeriodEnd.getTime() - a.currentPeriodEnd.getTime();
+    });
+
+    const subscription = sortedSubscriptions[0];
 
     if (!subscription) {
       return {
@@ -448,6 +485,10 @@ export class ProSubscriptionService {
     } else if (subscription.status === SubscriptionStatus.CANCELLED) {
       // Only give Pro access if subscription was actually paid AND current period hasn't ended
       isPro = hadPaidInvoices && subscription.currentPeriodEnd > now;
+    } else if (subscription.status === SubscriptionStatus.EXPIRED) {
+      // Give Pro access if subscription was paid AND current period hasn't actually ended yet
+      // This handles cases where subscription was marked EXPIRED prematurely (e.g., autopay failure)
+      isPro = hadPaidInvoices && subscription.currentPeriodEnd > now;
     } else if (subscription.status === SubscriptionStatus.PAUSED) {
       // If pause period has ended, give Pro access
       if (subscription.resumeDate && subscription.resumeDate <= now) {
@@ -469,12 +510,14 @@ export class ProSubscriptionService {
     // Don't count subscriptions in failed/inactive/pending states as having a subscription
     // Also don't count cancelled subscriptions that were never paid
     // NOTE: For payment_pending, we set hasPendingPayment=true and hasSubscription=false for clarity
+    // For EXPIRED subscriptions, only count as having subscription if currentPeriodEnd hasn't passed yet
     const hasSubscription = !(
       subscription.status === SubscriptionStatus.PAYMENT_FAILED ||
       subscription.status === SubscriptionStatus.INACTIVE ||
       subscription.status === SubscriptionStatus.PAYMENT_PENDING ||
       subscription.status === SubscriptionStatus.ABANDONED ||
-      (subscription.status === SubscriptionStatus.CANCELLED && !hadPaidInvoices)
+      (subscription.status === SubscriptionStatus.CANCELLED && !hadPaidInvoices) ||
+      (subscription.status === SubscriptionStatus.EXPIRED && subscription.currentPeriodEnd <= now)
     );
 
     // Calculate display status dynamically based on current time
