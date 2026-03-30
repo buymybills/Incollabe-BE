@@ -127,23 +127,22 @@ export class FiamCampaignBroadcastService {
 
     this.logger.log(`${eligibleUserIds.length} ${userType}s are eligible`);
 
-    // Get FCM tokens for eligible users (only devices with installationId)
+    // Get FCM tokens for eligible users
     const deviceTokens = await this.deviceTokenModel.findAll({
       where: {
         userId: { [Op.in]: eligibleUserIds },
         userType: userType === 'influencer' ? UserType.INFLUENCER : UserType.BRAND,
-        installationId: { [Op.ne]: null }, // Only send to devices with installationId
       },
-      attributes: ['fcmToken', 'userId', 'installationId'],
+      attributes: ['fcmToken', 'userId'],
     });
 
     if (deviceTokens.length === 0) {
-      this.logger.warn(`No FCM tokens found for eligible ${userType}s with installationId`);
+      this.logger.warn(`No FCM tokens found for eligible ${userType}s`);
       return { sent: 0, eligible: eligibleUserIds.length, errors: 0 };
     }
 
     const fcmTokens = deviceTokens.map((dt) => dt.fcmToken);
-    this.logger.log(`Sending to ${fcmTokens.length} device(s) with installationId...`);
+    this.logger.log(`Sending to ${fcmTokens.length} device(s)...`);
 
     // Send FCM notifications
     let sent = 0;
@@ -341,17 +340,35 @@ export class FiamCampaignBroadcastService {
   ): Promise<void> {
     const { uiConfig } = campaign;
 
+    // Detect media type from URL extension
+    const mediaUrl = uiConfig.imageUrl || '';
+    let mediaType = '';
+
+    if (mediaUrl) {
+      const lowerUrl = mediaUrl.toLowerCase();
+      if (lowerUrl.match(/\.(jpg|jpeg|png|webp)$/)) {
+        mediaType = 'image';
+      } else if (lowerUrl.match(/\.(gif)$/)) {
+        mediaType = 'gif';
+      } else if (lowerUrl.match(/\.(mp4|mov|avi|webm)$/)) {
+        mediaType = 'video';
+      } else {
+        mediaType = 'image'; // Default to image
+      }
+    }
+
     // Create data-only payload with campaign configuration
     // The mobile app will use this to render the custom FIAM popup
     const fiamData = {
       type: 'in_app_message',
       campaignId: campaign.id.toString(),
       layoutType: uiConfig.layoutType,
-      backgroundColor: uiConfig.backgroundColor,
+      backgroundColor: '#FFFFFF', // Always white background
       textColor: uiConfig.textColor,
       title: uiConfig.title,
       body: uiConfig.body,
-      imageUrl: uiConfig.imageUrl || '',
+      mediaUrl: mediaUrl, // Renamed from imageUrl to support all media types
+      mediaType: mediaType, // image, video, or gif
       actionUrl: uiConfig.actionUrl || '', // For banner/image_only layouts
       buttonText: uiConfig.buttonConfig?.text || '',
       buttonActionUrl: uiConfig.buttonConfig?.actionUrl || '',

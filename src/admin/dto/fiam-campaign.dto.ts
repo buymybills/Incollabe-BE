@@ -86,7 +86,16 @@ export class UIConfigDto implements UIConfig {
 
   @ApiPropertyOptional({
     example: 'https://example.com/image.jpg',
-    description: 'Image URL for the campaign'
+    description: `Media URL for the campaign (image, video, or GIF).
+
+**Option 1 - Upload file:**
+Use POST /admin/fiam-campaigns/upload-media to upload a file and get the URL.
+
+**Option 2 - Paste URL:**
+Directly paste any public URL (supports images, videos, GIFs).
+
+**Auto-detection:**
+Backend detects media type from file extension (.jpg → image, .mp4 → video, .gif → gif)`
   })
   @IsOptional()
   @IsString()
@@ -211,131 +220,336 @@ export class BehaviorFiltersDto implements BehaviorFilters {
 // ============================================================================
 
 /**
- * ## FIAM Campaign Creation
+ * ## FIAM Campaign Creation - Choose Your Delivery Method
  *
- * Create campaigns for in-app messaging with two delivery methods:
+ * ### 🚀 DELIVERY METHOD 1: BROADCAST (Push-Based - Recommended)
+ * **Use when:** You want to send notifications immediately to all users
+ * **How it works:** Backend sends FCM push → Users receive popup
+ * **Required:** `triggerType: "scheduled"` + Call `/broadcast` endpoint
  *
- * ### 1️⃣ EVENT-TRIGGERED CAMPAIGNS (Pull-Based)
- * Users fetch campaigns via mobile API when they perform trigger events
- * - Use: `triggerType: "event"`
- * - Add: `triggerEvents: ["app_open", "screen_view_home", ...]`
- * - Set dates: `startDate` and `endDate` control active period
- * - Delivery: Mobile calls `GET /api/fiam/campaigns/eligible?triggerEvent=app_open`
- * - Example: Show "Unlock MAX" popup when user opens app during March 1-31
+ * ### 📲 DELIVERY METHOD 2: EVENT-TRIGGERED (Pull-Based)
+ * **Use when:** You want popups to appear when users perform specific actions
+ * **How it works:** User opens app → Mobile fetches eligible campaigns → Shows popup
+ * **Required:** `triggerType: "event"` + `triggerEvents: ["app_open"]`
+ * **Note:** Cannot use `/broadcast` endpoint - mobile app handles display
  *
- * ### 2️⃣ SCHEDULED/BROADCAST CAMPAIGNS (Push-Based)
- * Admin broadcasts FCM push notifications to all eligible users immediately
- * - Use: `triggerType: "scheduled"`
- * - Add: `scheduledAt: "2026-03-28T14:00:00Z"` (NOW for immediate)
- * - Delivery: Backend sends FCM when `status: "active"` and `scheduledAt <= NOW`
- * - Broadcast: Admin calls `POST /admin/fiam-campaigns/:id/broadcast` OR auto-broadcast on activation
- * - Example: Send "Flash Sale" notification to all non-Pro users NOW
+ * ---
  *
- * ### 🎯 QUICK EXAMPLES
+ * ## 📋 BROADCAST EXAMPLES (Most Common)
  *
- * #### Example 1: Event-Triggered Campaign (Show on App Open during April)
+ * ### 📱 Simple Broadcast - Send Now to All Users
+ *
  * ```json
  * {
- *   "name": "MAX Subscription Promo",
+ *   "name": "Flash Sale Announcement",
  *   "uiConfig": {
- *     "layoutType": "modal",
- *     "backgroundColor": "#FF5722",
- *     "textColor": "#FFFFFF",
- *     "title": "Unlock Premium Features",
- *     "body": "Get 3x more campaigns with MAX subscription",
+ *     "layoutType": "card",
+ *     "backgroundColor": "#FFFFFF",
+ *     "textColor": "#000000",
+ *     "title": "🔥 Flash Sale - 50% OFF!",
+ *     "body": "Limited time offer on MAX subscription. Subscribe now!",
+ *     "imageUrl": "https://yourdomain.com/images/flash-sale.jpg",
  *     "buttonConfig": {
- *       "text": "Subscribe Now",
+ *       "text": "Get Offer",
  *       "actionUrl": "app://maxx",
- *       "backgroundColor": "#FFFFFF",
- *       "textColor": "#FF5722"
- *     }
- *   },
- *   "triggerType": "event",
- *   "triggerEvents": ["app_open", "screen_view_home"],
- *   "targetUserTypes": ["influencer"],
- *   "targetBehaviorFilters": { "hasProSubscription": false },
- *   "startDate": "2026-04-01T00:00:00Z",
- *   "endDate": "2026-04-30T23:59:59Z",
- *   "status": "active"
- * }
- * ```
- * ☝️ This campaign activates April 1st. When users open the app during April,
- * the mobile app calls the fetch eligible API and displays this popup.
- *
- * #### Example 2: Immediate Broadcast Campaign (Push Now)
- * ```json
- * {
- *   "name": "Flash Sale: 50% OFF MAX",
- *   "uiConfig": {
- *     "layoutType": "modal",
- *     "backgroundColor": "#FF5722",
- *     "textColor": "#FFFFFF",
- *     "title": "🔥 Flash Sale: 50% OFF!",
- *     "body": "Subscribe to MAX for ₹99/month. Offer ends tonight!",
- *     "buttonConfig": {
- *       "text": "Grab Offer",
- *       "actionUrl": "app://maxx",
- *       "backgroundColor": "#FFFFFF",
- *       "textColor": "#FF5722"
+ *       "backgroundColor": "#FF5722",
+ *       "textColor": "#FFFFFF"
  *     }
  *   },
  *   "triggerType": "scheduled",
- *   "scheduledAt": "2026-03-28T14:00:00Z",
+ *   "scheduledAt": "2026-03-30T10:00:00Z",
  *   "targetUserTypes": ["influencer"],
- *   "targetIsPanIndia": true,
- *   "targetBehaviorFilters": { "hasProSubscription": false },
- *   "startDate": "2026-03-28T00:00:00Z",
- *   "endDate": "2026-03-28T23:59:59Z",
- *   "status": "active"
+ *   "targetIsPanIndia": true
  * }
  * ```
- * ☝️ This campaign broadcasts FCM notifications immediately to all eligible users
- * when status is set to "active" (because scheduledAt is NOW or past).
+ * ☝️ **DEFAULT BEHAVIOR**: Creates as 'active' and broadcasts immediately to all influencers in India.
+ * After creation, call `POST /admin/fiam-campaigns/:id/broadcast` to send.
  *
- * #### Example 3: Banner Layout (Clickable Banner)
+ * ---
+ *
+ * ### 🎬 VIDEO CAMPAIGN (Auto-detected media type)
+ *
+ * ```json
+ * {
+ *   "name": "MAX Feature Tutorial",
+ *   "uiConfig": {
+ *     "layoutType": "card",
+ *     "backgroundColor": "#FFFFFF",
+ *     "textColor": "#000000",
+ *     "title": "New Feature: Boost Your Posts!",
+ *     "body": "Watch how to boost your posts and get 10x more reach",
+ *     "imageUrl": "https://yourdomain.com/videos/tutorial.mp4",
+ *     "buttonConfig": {
+ *       "text": "Try Now",
+ *       "actionUrl": "app://post-boost",
+ *       "backgroundColor": "#4CAF50",
+ *       "textColor": "#FFFFFF"
+ *     }
+ *   },
+ *   "triggerType": "scheduled",
+ *   "scheduledAt": "2026-03-30T10:00:00Z",
+ *   "targetUserTypes": ["influencer"],
+ *   "targetIsPanIndia": true
+ * }
+ * ```
+ * ☝️ Backend auto-detects `.mp4` extension and sets `mediaType: "video"` in the FCM payload.
+ * Supported video formats: `.mp4`, `.mov`, `.avi`, `.webm`
+ *
+ * ---
+ *
+ * ### 🎉 GIF CAMPAIGN (Animated content)
+ *
+ * ```json
+ * {
+ *   "name": "Celebration Campaign",
+ *   "uiConfig": {
+ *     "layoutType": "card",
+ *     "backgroundColor": "#FFFFFF",
+ *     "textColor": "#000000",
+ *     "title": "🎉 You've Reached 10K Followers!",
+ *     "body": "Celebrate your milestone with exclusive rewards",
+ *     "imageUrl": "https://yourdomain.com/animations/celebration.gif",
+ *     "buttonConfig": {
+ *       "text": "Claim Reward",
+ *       "actionUrl": "app://rewards",
+ *       "backgroundColor": "#FFD700",
+ *       "textColor": "#000000"
+ *     }
+ *   },
+ *   "triggerType": "scheduled",
+ *   "scheduledAt": "2026-03-30T10:00:00Z",
+ *   "targetUserTypes": ["influencer"],
+ *   "targetBehaviorFilters": {
+ *     "minFollowerCount": 10000
+ *   }
+ * }
+ * ```
+ * ☝️ Backend auto-detects `.gif` extension and sets `mediaType: "gif"`.
+ *
+ * ---
+ *
+ * ### 🎯 TARGETED CAMPAIGN (Non-Pro users in specific cities)
+ *
+ * ```json
+ * {
+ *   "name": "Mumbai/Delhi MAX Promo",
+ *   "uiConfig": {
+ *     "layoutType": "card",
+ *     "backgroundColor": "#FFFFFF",
+ *     "textColor": "#000000",
+ *     "title": "Exclusive Offer for You!",
+ *     "body": "Get MAX subscription at 30% discount",
+ *     "imageUrl": "https://yourdomain.com/images/promo.png",
+ *     "buttonConfig": {
+ *       "text": "Subscribe Now",
+ *       "actionUrl": "app://maxx",
+ *       "backgroundColor": "#FF5722",
+ *       "textColor": "#FFFFFF"
+ *     }
+ *   },
+ *   "triggerType": "scheduled",
+ *   "scheduledAt": "2026-03-30T10:00:00Z",
+ *   "targetUserTypes": ["influencer"],
+ *   "targetLocations": ["Mumbai", "Delhi"],
+ *   "targetBehaviorFilters": {
+ *     "hasProSubscription": false
+ *   }
+ * }
+ * ```
+ * ☝️ Only sends to influencers in Mumbai/Delhi who don't have MAX subscription.
+ *
+ * ---
+ *
+ * ### 🔄 BANNER WITH TWO BUTTONS
+ *
  * ```json
  * {
  *   "name": "Hype Store Launch",
  *   "uiConfig": {
- *     "layoutType": "banner",
- *     "backgroundColor": "#FF5722",
- *     "textColor": "#FFFFFF",
- *     "title": "New: Hype Store Live!",
- *     "body": "Shop exclusive products",
- *     "actionUrl": "app://hype-store"
+ *     "layoutType": "card",
+ *     "backgroundColor": "#FFFFFF",
+ *     "textColor": "#000000",
+ *     "title": "New: Hype Store is Live!",
+ *     "body": "Shop exclusive products and earn cashback",
+ *     "imageUrl": "https://yourdomain.com/images/hype-store.jpg",
+ *     "buttonConfig": {
+ *       "text": "Shop Now",
+ *       "actionUrl": "app://hype-store",
+ *       "backgroundColor": "#4CAF50",
+ *       "textColor": "#FFFFFF"
+ *     },
+ *     "secondaryButtonConfig": {
+ *       "text": "Learn More",
+ *       "actionUrl": "app://hype-store/info",
+ *       "backgroundColor": "transparent",
+ *       "textColor": "#4CAF50"
+ *     }
  *   },
  *   "triggerType": "scheduled",
- *   "scheduledAt": "2026-03-28T10:00:00Z",
+ *   "scheduledAt": "2026-03-30T10:00:00Z",
+ *   "targetUserTypes": ["influencer"],
+ *   "targetIsPanIndia": true
+ * }
+ * ```
+ * ☝️ Shows two buttons: primary (Shop Now) and secondary (Learn More).
+ *
+ * ---
+ *
+ * ### 📅 SCHEDULED FOR LATER (Create as Draft)
+ *
+ * ```json
+ * {
+ *   "name": "Weekend Flash Sale",
+ *   "uiConfig": {
+ *     "layoutType": "card",
+ *     "backgroundColor": "#FFFFFF",
+ *     "textColor": "#000000",
+ *     "title": "Weekend Special - Coming Soon!",
+ *     "body": "Get ready for massive discounts this Saturday",
+ *     "imageUrl": "https://yourdomain.com/images/weekend-sale.jpg",
+ *     "buttonConfig": {
+ *       "text": "Remind Me",
+ *       "actionUrl": "app://reminders",
+ *       "backgroundColor": "#FF9800",
+ *       "textColor": "#FFFFFF"
+ *     }
+ *   },
+ *   "triggerType": "scheduled",
+ *   "scheduledAt": "2026-04-05T00:00:00Z",
  *   "targetUserTypes": ["influencer"],
  *   "targetIsPanIndia": true,
  *   "status": "draft"
  * }
  * ```
- * ☝️ Create as draft, then activate later via `PATCH /admin/fiam-campaigns/:id/status`
+ * ☝️ **DRAFT MODE**: Creates campaign but doesn't activate. Activate later via `PATCH /admin/fiam-campaigns/:id/status`.
  *
- * ### 📝 FIELD GUIDE
+ * ---
  *
- * | Field | Event-Triggered | Broadcast |
- * |-------|----------------|-----------|
- * | `triggerType` | `"event"` ✅ | `"scheduled"` ✅ |
- * | `triggerEvents` | Required ✅ | Not used ❌ |
- * | `scheduledAt` | Optional | Required ✅ |
- * | `startDate/endDate` | Controls active period ✅ | Optional |
- * | `status` | `"active"` or `"draft"` | `"active"` triggers broadcast |
+ * ### 🎨 SUPPORTED MEDIA TYPES
  *
- * ### 🎨 LAYOUT TYPES
+ * - **Images**: `.jpg`, `.jpeg`, `.png`, `.webp` → `mediaType: "image"`
+ * - **Videos**: `.mp4`, `.mov`, `.avi`, `.webm` → `mediaType: "video"`
+ * - **GIFs**: `.gif` → `mediaType: "gif"`
  *
- * - `modal`: Full-screen modal with buttons (use `buttonConfig`)
- * - `card`: Card layout with buttons (use `buttonConfig`)
- * - `banner`: Horizontal banner (use `actionUrl` - entire banner is clickable)
- * - `top_banner`: Top banner (use `actionUrl`)
- * - `image_only`: Image-only (use `actionUrl`)
+ * Backend auto-detects media type from `imageUrl` extension and includes both `mediaUrl` and `mediaType` in FCM payload.
  *
- * ### ⚡ STATUS BEHAVIOR
+ * ---
  *
- * - `status: "draft"` (default): Create but don't activate
- * - `status: "active"` + `triggerType: "scheduled"` + `scheduledAt <= NOW`: Auto-broadcast immediately ✅
- * - `status: "active"` + `triggerType: "event"`: Available for mobile fetch API ✅
+ * ### 📊 PAYLOAD SENT TO MOBILE APP
+ *
+ * When you broadcast, the mobile app receives a data-only FCM message:
+ * ```json
+ * {
+ *   "type": "in_app_message",
+ *   "campaignId": "5",
+ *   "layoutType": "card",
+ *   "backgroundColor": "#FFFFFF",
+ *   "textColor": "#000000",
+ *   "title": "Your Title",
+ *   "body": "Your message",
+ *   "mediaUrl": "https://yourdomain.com/media.mp4",
+ *   "mediaType": "video",
+ *   "buttonText": "Get Offer",
+ *   "buttonActionUrl": "app://maxx",
+ *   "buttonBackgroundColor": "#FF5722",
+ *   "buttonTextColor": "#FFFFFF",
+ *   "secondaryButtonText": "",
+ *   "secondaryButtonActionUrl": ""
+ * }
+ * ```
+ *
+ * ---
+ *
+ * ## 📲 EVENT-TRIGGERED EXAMPLES (Pull-Based)
+ *
+ * ### Event: Show on App Open
+ *
+ * ```json
+ * {
+ *   "name": "Welcome Back Popup",
+ *   "uiConfig": {
+ *     "layoutType": "card",
+ *     "backgroundColor": "#FFFFFF",
+ *     "textColor": "#000000",
+ *     "title": "Welcome Back!",
+ *     "body": "Check out new campaigns waiting for you",
+ *     "imageUrl": "https://yourdomain.com/welcome.jpg",
+ *     "buttonConfig": {
+ *       "text": "View Campaigns",
+ *       "actionUrl": "app://campaigns",
+ *       "backgroundColor": "#4CAF50",
+ *       "textColor": "#FFFFFF"
+ *     }
+ *   },
+ *   "triggerType": "event",
+ *   "triggerEvents": ["app_open"],
+ *   "targetUserTypes": ["influencer"],
+ *   "targetIsPanIndia": true,
+ *   "startDate": "2026-04-01T00:00:00Z",
+ *   "endDate": "2026-04-30T23:59:59Z"
+ * }
+ * ```
+ * ☝️ **Event-triggered:** Shows popup when user opens app between April 1-30. Mobile app fetches via GET /api/fiam/campaigns/eligible?triggerEvent=app_open
+ *
+ * **⚠️ CANNOT use `/broadcast` endpoint** - Mobile app handles display when event occurs.
+ *
+ * ---
+ *
+ * ### Event: Show on Specific Screen View
+ *
+ * ```json
+ * {
+ *   "name": "Hype Store Promo on Home Screen",
+ *   "uiConfig": {
+ *     "layoutType": "card",
+ *     "backgroundColor": "#FFFFFF",
+ *     "textColor": "#000000",
+ *     "title": "New: Hype Store is Live!",
+ *     "body": "Shop exclusive products and earn cashback",
+ *     "imageUrl": "https://yourdomain.com/hype-store.jpg",
+ *     "buttonConfig": {
+ *       "text": "Shop Now",
+ *       "actionUrl": "app://hype-store",
+ *       "backgroundColor": "#FF5722",
+ *       "textColor": "#FFFFFF"
+ *     }
+ *   },
+ *   "triggerType": "event",
+ *   "triggerEvents": ["screen_view_home"],
+ *   "targetUserTypes": ["influencer"],
+ *   "targetIsPanIndia": true,
+ *   "frequencyConfig": {
+ *     "maxImpressionsPerUser": 3,
+ *     "maxImpressionsPerDay": 1,
+ *     "cooldownHours": 24
+ *   },
+ *   "startDate": "2026-03-30T00:00:00Z",
+ *   "endDate": "2026-12-31T23:59:59Z"
+ * }
+ * ```
+ * ☝️ Shows popup when user views home screen. Frequency limits prevent spam (max 1/day, 3 total, 24h cooldown after dismiss).
+ *
+ * ---
+ *
+ * ### ⚡ QUICK TIPS
+ *
+ * 1. **Delivery Method:**
+ *    - `triggerType: "scheduled"` → Use `/broadcast` endpoint to push FCM notifications ✅ RECOMMENDED
+ *    - `triggerType: "event"` → Mobile app fetches and displays (no broadcast endpoint)
+ *
+ * 2. **Default Status**: Campaigns are created as `active` by default. Use `status: "draft"` only if you want to prepare without activating.
+ *
+ * 3. **Broadcast Campaigns**: After creating with `triggerType: "scheduled"`, call `POST /admin/fiam-campaigns/:id/broadcast` to send to all eligible users.
+ *
+ * 4. **Event Campaigns**: After creating with `triggerType: "event"`, mobile app automatically fetches when users trigger the event (app_open, screen_view_home, etc).
+ *
+ * 5. **Background Color**: Always sent as `#FFFFFF` (white) to mobile app, regardless of what you set in uiConfig.
+ *
+ * 6. **Targeting**: Use `targetIsPanIndia: true` for all India, or specify `targetLocations: ["Mumbai", "Delhi"]` for specific cities.
+ *
+ * 7. **Media Auto-detection**: Just provide the URL in `imageUrl` - backend detects if it's image/video/gif from file extension.
+ *
+ * 8. **Upload Media**: Use `POST /admin/fiam-campaigns/upload-media` to upload files, or paste external URLs directly.
  */
 export class CreateFiamCampaignDto {
   @ApiProperty({
@@ -381,8 +595,19 @@ export class CreateFiamCampaignDto {
 
   @ApiProperty({
     enum: TriggerType,
-    example: TriggerType.EVENT,
-    description: 'How the campaign is triggered'
+    example: TriggerType.SCHEDULED,
+    description: `Campaign delivery method:
+
+**"scheduled"** (RECOMMENDED) - Broadcast via FCM push notifications
+  → Use POST /admin/fiam-campaigns/:id/broadcast to send immediately
+  → Backend pushes FCM data messages to all eligible users
+  → Users receive popup notification
+
+**"event"** - Pull-based, mobile app fetches when events occur
+  → Mobile calls GET /api/fiam/campaigns/eligible?triggerEvent=app_open
+  → Shows popup when user triggers event (app_open, screen_view_home, etc)
+  → Cannot use /broadcast endpoint
+  → Requires: triggerEvents field`
   })
   @IsEnum(TriggerType)
   triggerType: TriggerType;
@@ -400,7 +625,12 @@ export class CreateFiamCampaignDto {
 
   @ApiPropertyOptional({
     example: '2026-04-01T00:00:00Z',
-    description: 'Scheduled time for broadcast (for scheduled campaigns)'
+    description: `When to broadcast the campaign (REQUIRED for triggerType: "scheduled")
+
+**For immediate broadcast:** Set to current time or past time
+**For future broadcast:** Set to future time (campaign will wait until then)
+
+**Not used** for triggerType: "event" (event-triggered campaigns)`
   })
   @IsOptional()
   @IsDateString()
@@ -546,15 +776,15 @@ export class CreateFiamCampaignDto {
 
   @ApiPropertyOptional({
     enum: CampaignStatus,
-    example: CampaignStatus.DRAFT,
-    description: `Campaign status (default: draft)
+    example: CampaignStatus.ACTIVE,
+    description: `Campaign status (default: active)
 
-    - draft: Create but don't activate (default)
-    - active: Create and activate immediately (will auto-broadcast if scheduledAt <= NOW)
+    - active: Create and activate immediately (default) - will auto-broadcast if scheduledAt <= NOW
+    - draft: Create but don't activate - use this to prepare campaigns for later activation
 
-    RECOMMENDED: Use 'draft' first, then activate via PATCH /status when ready.
-    SHORTCUT: Use 'active' to create and activate in one call.`,
-    default: CampaignStatus.DRAFT
+    DEFAULT BEHAVIOR: Campaigns are created as 'active' and will broadcast immediately if scheduledAt <= NOW.
+    Use 'draft' only if you want to prepare a campaign without broadcasting it yet.`,
+    default: CampaignStatus.ACTIVE
   })
   @IsOptional()
   @IsEnum(CampaignStatus)

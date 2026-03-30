@@ -54,7 +54,7 @@ export class FiamCampaignService {
         name: dto.name,
         internalName: dto.internalName || null,
         description: dto.description || null,
-        status: CampaignStatus.DRAFT, // Always start as draft
+        status: dto.status || CampaignStatus.ACTIVE, // Default to active, can be overridden with draft
         priority: dto.priority || 0,
         uiConfig: dto.uiConfig as any,
         triggerType: dto.triggerType,
