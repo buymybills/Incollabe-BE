@@ -344,7 +344,7 @@ export class FiamCampaignBroadcastService {
     // Create data-only payload with campaign configuration
     // The mobile app will use this to render the custom FIAM popup
     const fiamData = {
-      type: 'inapp_message',
+      type: 'in_app_message',
       campaignId: campaign.id.toString(),
       layoutType: uiConfig.layoutType,
       backgroundColor: uiConfig.backgroundColor,
