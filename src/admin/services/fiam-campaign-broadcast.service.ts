@@ -332,7 +332,8 @@ export class FiamCampaignBroadcastService {
   }
 
   /**
-   * Send FCM notification with campaign data
+   * Send FCM data-only message with campaign data
+   * This sends ONLY data payload (no notification field) so the app can display custom popup
    */
   private async sendFcmNotification(
     campaign: FiamCampaign,
@@ -340,8 +341,9 @@ export class FiamCampaignBroadcastService {
   ): Promise<void> {
     const { uiConfig } = campaign;
 
-    // Create notification payload with campaign data
-    const notificationData = {
+    // Create data-only payload with campaign configuration
+    // The mobile app will use this to render the custom FIAM popup
+    const fiamData = {
       type: 'fiam_campaign',
       campaignId: campaign.id.toString(),
       layoutType: uiConfig.layoutType,
@@ -359,16 +361,14 @@ export class FiamCampaignBroadcastService {
       secondaryButtonActionUrl: uiConfig.secondaryButtonConfig?.actionUrl || '',
     };
 
-    // Send notification
-    await this.notificationService.sendCustomNotification(
+    // Send data-only message (no notification field)
+    // This ensures the app handles it in the background and shows custom popup
+    await this.notificationService.sendDataOnlyMessage(
       fcmTokens,
-      uiConfig.title,
-      uiConfig.body,
-      notificationData,
+      fiamData,
       {
-        // Additional options
-        imageUrl: uiConfig.imageUrl,
-        actionUrl: uiConfig.actionUrl || uiConfig.buttonConfig?.actionUrl,
+        priority: 'high', // High priority to ensure delivery
+        ttlSeconds: 86400, // 24 hours TTL
       },
     );
   }

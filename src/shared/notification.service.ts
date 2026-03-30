@@ -377,4 +377,27 @@ export class NotificationService {
       options,
     );
   }
+
+  /**
+   * Send data-only message (no notification field) for custom in-app handling
+   * Use this for FIAM campaigns where the app needs to display custom popups
+   */
+  async sendDataOnlyMessage(
+    fcmToken: string | string[],
+    data: Record<string, any>,
+    options?: {
+      priority?: 'high' | 'normal';
+      ttlSeconds?: number;
+      collapseKey?: string;
+    },
+  ) {
+    return await this.firebaseService.sendDataOnlyMessage(
+      fcmToken,
+      {
+        ...data,
+        timestamp: Date.now().toString(),
+      },
+      options,
+    );
+  }
 }

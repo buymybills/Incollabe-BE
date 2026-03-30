@@ -295,6 +295,78 @@ export class FirebaseService implements OnModuleInit {
     }
   }
 
+  /**
+   * Send data-only message (no notification field) for custom in-app handling
+   * Use this for FIAM campaigns where the app needs to display custom popups
+   */
+  async sendDataOnlyMessage(
+    tokens: string | string[],
+    data: { [key: string]: any },
+    options?: {
+      priority?: 'high' | 'normal';
+      ttlSeconds?: number;
+      collapseKey?: string;
+    },
+  ): Promise<admin.messaging.BatchResponse | string> {
+    // Firebase requires all data values to be strings
+    const stringifiedData: { [key: string]: string } = {};
+
+    // Convert all values to strings
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== null && value !== undefined) {
+        stringifiedData[key] = typeof value === 'string' ? value : String(value);
+      }
+    }
+
+    // Build Android-specific configuration
+    const androidConfig: admin.messaging.AndroidConfig = {
+      priority: options?.priority || 'high',
+      ttl: options?.ttlSeconds ? options.ttlSeconds * 1000 : undefined,
+      collapseKey: options?.collapseKey,
+      // Data messages should wake the app even in doze mode
+      data: {
+        ...stringifiedData,
+      },
+    };
+
+    // Build iOS-specific configuration for content-available (silent push)
+    const apnsConfig: admin.messaging.ApnsConfig = {
+      headers: {
+        'apns-priority': options?.priority === 'high' ? '10' : '5',
+        'apns-push-type': 'background',
+      },
+      payload: {
+        aps: {
+          'content-available': 1, // Silent push for background processing
+        },
+      },
+    };
+
+    // Create the message with ONLY data payload (no notification field)
+    const message: admin.messaging.MulticastMessage = {
+      data: stringifiedData,
+      android: androidConfig,
+      apns: apnsConfig,
+      tokens: Array.isArray(tokens) ? tokens : [tokens],
+    };
+
+    console.log('📦 Sending Data-Only FCM Message:');
+    console.log('   Data:', stringifiedData);
+    console.log('   Priority:', options?.priority || 'high');
+    console.log('   Tokens:', Array.isArray(tokens) ? tokens.length : 1);
+
+    if (Array.isArray(tokens)) {
+      return this.getMessaging().sendEachForMulticast(message);
+    } else {
+      const singleMessage: admin.messaging.Message = {
+        ...message,
+        token: tokens,
+      };
+      delete (singleMessage as any).tokens;
+      return this.getMessaging().send(singleMessage);
+    }
+  }
+
   async sendNotificationToTopic(
     topic: string,
     title: string,
