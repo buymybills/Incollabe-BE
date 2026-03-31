@@ -4971,7 +4971,8 @@ export class AdminController {
       '• **rotation**: Generic messages shown to all users in rotation\n' +
       '• **out_of_credits**: Urgent messages when user has 0 credits\n' +
       '• **active_user**: Behavior-based messages for users with many applications\n' +
-      '• **payment_pending**: Messages for users with pending/failed payments',
+      '• **payment_pending_1h**: Sent 1 hour after payment is pending\n' +
+      '• **payment_pending_6h**: Sent 6 hours after payment is pending',
   })
   @ApiBody({
     type: CreateNudgeMessageTemplateDto,
@@ -5016,16 +5017,28 @@ export class AdminController {
           internalNotes: 'Behavior-based targeting for power users',
         },
       },
-      payment_pending: {
-        summary: 'Payment Pending',
-        description: 'Message for users with pending or failed subscription payments',
+      payment_pending_1h: {
+        summary: '1-Hour Payment Reminder',
+        description: 'Sent 1 hour after payment is pending - urgent call to action',
         value: {
-          title: 'Complete your payment 💳',
-          body: 'Your subscription payment is pending. Complete it now to continue enjoying MAX benefits!',
-          messageType: 'payment_pending',
-          priority: 180,
+          title: 'You\'re just one step away! 🎯',
+          body: 'Complete your MAX subscription and unlock unlimited campaign applications for just ₹199/month',
+          messageType: 'payment_pending_1h',
+          priority: 100,
           validFrom: '2026-03-25T00:00:00Z',
-          internalNotes: 'Payment reminder for failed/pending subscriptions',
+          internalNotes: '1-hour payment drop-off reminder',
+        },
+      },
+      payment_pending_6h: {
+        summary: '6-Hour Payment Reminder',
+        description: 'Sent 6 hours after payment is pending - follow-up with benefits',
+        value: {
+          title: 'Still thinking? 🤔',
+          body: 'Your exclusive MAX offer is waiting! Unlock unlimited applications + premium features',
+          messageType: 'payment_pending_6h',
+          priority: 100,
+          validFrom: '2026-03-25T00:00:00Z',
+          internalNotes: '6-hour payment drop-off reminder',
         },
       },
     },
@@ -5073,7 +5086,8 @@ export class AdminController {
     summary: '[ADMIN] Get all nudge message templates',
     description: 'Get paginated list of nudge message templates with advanced filtering and sorting.\n\n' +
       '**Filters:**\n' +
-      '• `messageType` - Filter by type (rotation, out_of_credits, active_user, payment_pending)\n' +
+      '• `messageType` - Filter by type (rotation, out_of_credits, active_user, payment_pending_1h, payment_pending_6h)\n' +
+      '  - Use `payment_pending` to get ALL payment reminder types (1h + 6h)\n' +
       '• `isActive` - Filter by active/inactive status\n' +
       '• `search` - Search in title and body text\n' +
       '• `isCurrentlyValid` - Filter templates within valid date range\n' +
@@ -5194,7 +5208,12 @@ export class AdminController {
     // Build where clause for filters
     const whereClause: any = {};
     if (dto.messageType) {
-      whereClause.messageType = dto.messageType;
+      // Support parent category filtering: 'payment_pending' matches all subtypes (1h, 6h)
+      if (dto.messageType === 'payment_pending') {
+        whereClause.messageType = { [Op.like]: 'payment_pending%' }; // Matches payment_pending, payment_pending_1h, payment_pending_6h, etc.
+      } else {
+        whereClause.messageType = dto.messageType;
+      }
     }
     if (dto.isActive !== undefined) {
       whereClause.isActive = dto.isActive;
@@ -5460,7 +5479,12 @@ export class AdminController {
     // Build where clause for filters
     const whereClause: any = {};
     if (dto.messageType) {
-      whereClause.messageType = dto.messageType;
+      // Support parent category filtering: 'payment_pending' matches all subtypes (1h, 6h)
+      if (dto.messageType === 'payment_pending') {
+        whereClause.messageType = { [Op.like]: 'payment_pending%' }; // Matches payment_pending, payment_pending_1h, payment_pending_6h, etc.
+      } else {
+        whereClause.messageType = dto.messageType;
+      }
     }
     if (dto.isActive !== undefined) {
       whereClause.isActive = dto.isActive;

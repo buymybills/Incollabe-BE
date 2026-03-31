@@ -23,6 +23,7 @@ import { UserType as DeviceUserType } from './models/device-token.model';
 import { ChatDecryptionService } from './services/chat-decryption.service';
 import { InAppNotificationService } from './in-app-notification.service';
 import { NotificationType } from './models/in-app-notification.model';
+import { Op } from 'sequelize';
 
 @WebSocketGateway({
   cors: {
@@ -452,7 +453,7 @@ export class ChatGateway
       const members = await this.groupChatService['groupMemberModel'].findAll({
         where: {
           groupChatId,
-          leftAt: { [this.chatService['Op'].is]: null } as any,
+          leftAt: { [Op.is]: null } as any,
         },
       });
 
@@ -683,7 +684,7 @@ export class ChatGateway
       const members = await this.groupChatService['groupMemberModel'].findAll({
         where: {
           groupChatId,
-          leftAt: { [this.chatService['Op'].is]: null } as any,
+          leftAt: { [Op.is]: null } as any,
         },
       });
 

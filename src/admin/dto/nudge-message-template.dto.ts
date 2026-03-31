@@ -127,9 +127,13 @@ export class CreateNudgeMessageTemplateDto {
         value: 'You\'re on fire! 🔥',
         description: 'Example for active_user type',
       },
-      payment_pending: {
-        value: 'Complete your payment 💳',
-        description: 'Example for payment_pending type',
+      payment_pending_1h: {
+        value: "You're just one step away! 🎯",
+        description: 'Example for 1-hour payment reminder',
+      },
+      payment_pending_6h: {
+        value: 'Still thinking? 🤔',
+        description: 'Example for 6-hour payment reminder',
       },
     },
     description: 'Notification title (max 255 characters)',
@@ -152,9 +156,13 @@ export class CreateNudgeMessageTemplateDto {
         value: 'You\'ve applied to 10+ campaigns! MAX members like you get 5x better ROI. Upgrade now for ₹199/month',
         description: 'Targeted message for highly active users',
       },
-      payment_pending: {
-        value: 'Your subscription payment is pending. Complete it now to continue enjoying MAX benefits!',
-        description: 'Message for users with pending payments',
+      payment_pending_1h: {
+        value: 'Complete your MAX subscription and unlock unlimited campaign applications for just ₹199/month',
+        description: 'Sent 1 hour after payment is pending - urgent call to action',
+      },
+      payment_pending_6h: {
+        value: 'Your exclusive MAX offer is waiting! Unlock unlimited applications + premium features',
+        description: 'Sent 6 hours after payment is pending - reminder with benefits',
       },
     },
     description: 'Notification body text',
@@ -177,9 +185,13 @@ export class CreateNudgeMessageTemplateDto {
         value: 'active_user',
         description: 'Behavior-based messages for users with many applications',
       },
-      payment_pending: {
-        value: 'payment_pending',
-        description: 'Messages for users with pending/failed payments',
+      payment_pending_1h: {
+        value: 'payment_pending_1h',
+        description: 'Sent 1 hour after payment is pending - urgent reminder',
+      },
+      payment_pending_6h: {
+        value: 'payment_pending_6h',
+        description: 'Sent 6 hours after payment is pending - follow-up reminder',
       },
     },
     description: 'Message type determines when and to whom this message is shown',

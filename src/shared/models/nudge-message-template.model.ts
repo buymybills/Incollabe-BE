@@ -4,7 +4,9 @@ export enum NudgeMessageType {
   ROTATION = 'rotation', // Generic rotating messages
   OUT_OF_CREDITS = 'out_of_credits', // Urgent - user has 0 credits
   ACTIVE_USER = 'active_user', // User with many applications
-  PAYMENT_PENDING = 'payment_pending', // Payment pending/failed
+  PAYMENT_PENDING = 'payment_pending', // Payment pending/failed (legacy)
+  PAYMENT_PENDING_1H = 'payment_pending_1h', // 1-hour payment reminder
+  PAYMENT_PENDING_6H = 'payment_pending_6h', // 6-hour payment reminder
 }
 
 @Table({
