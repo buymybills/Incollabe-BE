@@ -66,7 +66,7 @@ import { UserType as CustomNicheUserType } from '../auth/model/custom-niche.mode
 import { CreditTransaction } from 'src/admin/models/credit-transaction.model';
 import { InfluencerReferralUsage } from 'src/auth/model/influencer-referral-usage.model';
 import { InfluencerUpi } from './models/influencer-upi.model';
-import { ProSubscription, SubscriptionStatus } from './models/pro-subscription.model';
+import { ProSubscriptionService } from './services/pro-subscription.service';
 import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
 // import { HomePageHistory, HomePageActionType } from './models/home-page-history.model';
 // import { TrackHomePageActivityDto } from './dto/track-home-page-activity.dto';
@@ -138,8 +138,6 @@ export class InfluencerService {
     private readonly influencerReferralUsageModel: typeof InfluencerReferralUsage,
     @Inject('INFLUENCER_UPI_MODEL')
     private readonly influencerUpiModel: typeof InfluencerUpi,
-    @Inject('PRO_SUBSCRIPTION_MODEL')
-    private readonly proSubscriptionModel: typeof ProSubscription,
     @Inject('INSTAGRAM_PROFILE_ANALYSIS_MODEL')
     private readonly instagramProfileAnalysisModel: typeof InstagramProfileAnalysis,
     // @Inject('HOME_PAGE_HISTORY_MODEL')
@@ -147,6 +145,7 @@ export class InfluencerService {
     private readonly maxCampaignScoringQueueService: MaxCampaignScoringQueueService,
     @Inject('BRAND_MODEL')
     private readonly brandModel: typeof Brand,
+    private readonly proSubscriptionService: ProSubscriptionService,
     private readonly chatService: ChatService,
     private readonly inAppNotificationService: InAppNotificationService,
     private readonly profileViewService: ProfileViewService,
@@ -479,44 +478,10 @@ export class InfluencerService {
       nextResetDate.setDate(1);
       nextResetDate.setHours(0, 0, 0, 0);
 
-      // Calculate isPro dynamically based on actual subscription status
-      const now = new Date();
-      let isPro = false;
-
-      // Query the actual subscription to check its status
-      const subscription = await this.proSubscriptionModel.findOne({
-        where: { influencerId },
-        order: [['createdAt', 'DESC']],
-      });
-
-      if (subscription) {
-        // User has Pro access if:
-        // 1. Subscription is ACTIVE, OR
-        // 2. Subscription is CANCELLED but current period hasn't ended yet, OR
-        // 3. Subscription is PAUSED:
-        //    - Before currentPeriodEnd: isPro = true (paid period, pause hasn't started)
-        //    - After resumeDate: isPro = true (pause ended)
-        //    - Between currentPeriodEnd and resumeDate: isPro = false (pause active)
-
-        if (subscription.status === SubscriptionStatus.ACTIVE) {
-          isPro = true;
-        } else if (subscription.status === SubscriptionStatus.CANCELLED) {
-          isPro = subscription.currentPeriodEnd > now;
-        } else if (subscription.status === SubscriptionStatus.PAUSED) {
-          // If pause period has ended, give Pro access
-          if (subscription.resumeDate && subscription.resumeDate <= now) {
-            isPro = true;
-          }
-          // If still in paid period (pause hasn't started yet), give Pro access
-          else if (subscription.currentPeriodEnd > now) {
-            isPro = true;
-          }
-          // Otherwise, we're in the pause period - no Pro access
-          else {
-            isPro = false;
-          }
-        }
-      }
+      // Reuse the subscription service logic so profile and subscription APIs
+      // derive Pro access from the same subscription selection rules.
+      const { isPro } =
+        await this.proSubscriptionService.getSubscriptionDetails(influencerId);
 
       // Log version check details for debugging
       if (deviceToken || appVersionInfo) {
