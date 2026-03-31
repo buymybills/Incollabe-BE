@@ -14,6 +14,7 @@ import { ProfileViewService } from '../shared/services/profile-view.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import { CampaignService } from '../campaign/campaign.service';
 import { MaxCampaignScoringQueueService } from '../campaign/services/max-campaign-scoring-queue.service';
+import { ProSubscriptionService } from './services/pro-subscription.service';
 import { ChatService } from '../shared/chat.service';
 import {
   ProfileReview,
@@ -186,6 +187,14 @@ const mockCampaignService = {
 const mockMaxCampaignScoringQueueService = {
   queueCampaignScoring: jest.fn(),
   queueInfluencerScoring: jest.fn(),
+};
+
+const mockProSubscriptionService = {
+  getSubscriptionDetails: jest.fn().mockResolvedValue({
+    hasSubscription: false,
+    hasPendingPayment: false,
+    isPro: false,
+  }),
 };
 
 const mockChatService = {
@@ -406,6 +415,10 @@ describe('InfluencerService', () => {
             findOne: jest.fn(),
             findAll: jest.fn(),
           },
+        },
+        {
+          provide: ProSubscriptionService,
+          useValue: mockProSubscriptionService,
         },
         {
           provide: ChatService,
