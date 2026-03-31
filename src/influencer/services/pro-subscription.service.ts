@@ -489,6 +489,10 @@ export class ProSubscriptionService {
       // Give Pro access if subscription was paid AND current period hasn't actually ended yet
       // This handles cases where subscription was marked EXPIRED prematurely (e.g., autopay failure)
       isPro = hadPaidInvoices && subscription.currentPeriodEnd > now;
+    } else if (subscription.status === SubscriptionStatus.PAYMENT_FAILED) {
+      // Give Pro access if subscription had paid invoices AND current period hasn't ended yet
+      // User keeps Pro access until period ends, even if renewal payment failed
+      isPro = hadPaidInvoices && subscription.currentPeriodEnd > now;
     } else if (subscription.status === SubscriptionStatus.PAUSED) {
       // If pause period has ended, give Pro access
       if (subscription.resumeDate && subscription.resumeDate <= now) {
