@@ -19,6 +19,7 @@ import { WalletModule } from './wallet/wallet.module';
 import { HypeStoreModule } from './hype-store/hype-store.module';
 import { CreatorStudioModule } from './shared/creator-studio.module';
 import { LoggingMiddleware } from './shared/middleware/logging.middleware';
+import { ApiLoggerMiddleware } from './middleware/api-logger.middleware';
 
 @Module({
   imports: [
@@ -54,6 +55,8 @@ import { LoggingMiddleware } from './shared/middleware/logging.middleware';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(LoggingMiddleware).forRoutes('*'); // Apply to all routes
+    consumer
+      .apply(LoggingMiddleware, ApiLoggerMiddleware)
+      .forRoutes('*'); // Apply to all routes
   }
 }

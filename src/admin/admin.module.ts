@@ -5,6 +5,7 @@ import { BullModule } from '@nestjs/bull';
 import { AdminController } from './admin.controller';
 import { PushNotificationController } from './push-notification.controller';
 import { FiamCampaignController } from './fiam-campaign.controller';
+import { ApiActivityLogsController } from './controllers/api-activity-logs.controller';
 import { AdminAuthService } from './admin-auth.service';
 import { ProfileReviewService } from './profile-review.service';
 import { AdminCampaignService } from './services/admin-campaign.service';
@@ -58,6 +59,7 @@ import { NudgeMessageTemplate } from '../shared/models/nudge-message-template.mo
 import { FiamCampaign } from '../shared/models/fiam-campaign.model';
 import { FiamCampaignEvent } from '../shared/models/fiam-campaign-event.model';
 import { DeviceToken } from '../shared/models/device-token.model';
+import { ApiActivityLog } from '../shared/models/api-activity-log.model';
 
 import { SharedModule } from '../shared/shared.module';
 import { BrandModule } from '../brand/brand.module';
@@ -105,6 +107,7 @@ import { RolesGuard } from './guards/roles.guard';
       FiamCampaign,
       FiamCampaignEvent,
       DeviceToken,
+      ApiActivityLog,
     ]),
     SharedModule,
     NotificationQueueModule,
@@ -114,7 +117,12 @@ import { RolesGuard } from './guards/roles.guard';
     forwardRef(() => AuthModule),
     forwardRef(() => CampaignModule),
   ],
-  controllers: [AdminController, PushNotificationController, FiamCampaignController],
+  controllers: [
+    AdminController,
+    PushNotificationController,
+    FiamCampaignController,
+    ApiActivityLogsController,
+  ],
   providers: [
     AdminAuthService,
     ProfileReviewService,
