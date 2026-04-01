@@ -381,6 +381,9 @@ export class NotificationService {
   /**
    * Send data-only message (no notification field) for custom in-app handling
    * Use this for FIAM campaigns where the app needs to display custom popups
+   *
+   * NOTE: On iOS, data-only messages are NOT reliably delivered when app is killed.
+   * Use sendFiamMessage() instead for guaranteed iOS delivery.
    */
   async sendDataOnlyMessage(
     fcmToken: string | string[],
@@ -393,6 +396,41 @@ export class NotificationService {
   ) {
     return await this.firebaseService.sendDataOnlyMessage(
       fcmToken,
+      {
+        ...data,
+        timestamp: Date.now().toString(),
+      },
+      options,
+    );
+  }
+
+  /**
+   * Send FIAM message with notification + data (RECOMMENDED for iOS compatibility)
+   *
+   * Works reliably on BOTH iOS and Android by sending a visible notification
+   * with campaign data. The app intercepts it to show custom FIAM popup.
+   *
+   * @param fcmToken FCM token(s)
+   * @param title Notification title
+   * @param body Notification body
+   * @param data Campaign data for FIAM rendering
+   * @param options Additional options
+   */
+  async sendFiamMessage(
+    fcmToken: string | string[],
+    title: string,
+    body: string,
+    data: Record<string, any>,
+    options?: {
+      priority?: 'high' | 'normal';
+      imageUrl?: string;
+      sound?: boolean;
+    },
+  ) {
+    return await this.firebaseService.sendFiamMessage(
+      fcmToken,
+      title,
+      body,
       {
         ...data,
         timestamp: Date.now().toString(),

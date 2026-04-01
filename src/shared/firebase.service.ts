@@ -329,20 +329,35 @@ export class FirebaseService implements OnModuleInit {
       },
     };
 
-    // Build iOS-specific configuration for content-available (silent push)
+    // Build iOS-specific configuration for data-only messages
+    // NOTE: iOS has different behavior than Android for data-only (silent) pushes:
+    //
+    // LIMITATION: iOS silent pushes (content-available: 1) are NOT guaranteed delivery:
+    // - Only delivered if app is in foreground OR background (NOT if terminated/killed)
+    // - Throttled by iOS to preserve battery
+    // - Requires "Background Modes: Remote notifications" capability in iOS app
+    //
+    // ALTERNATIVE SOLUTION (if this doesn't work reliably):
+    // Send a notification + data hybrid by adding a notification field to the message.
+    // The iOS app can intercept it with UNNotificationServiceExtension and show custom FIAM.
     const apnsConfig: admin.messaging.ApnsConfig = {
       headers: {
         'apns-priority': options?.priority === 'high' ? '10' : '5',
-        'apns-push-type': 'background',
+        'apns-push-type': 'background', // Silent push - may not work if app is killed
       },
       payload: {
         aps: {
-          'content-available': 1, // Silent push for background processing
+          'content-available': 1, // Background processing flag
+          // NOTE: No alert, sound, or badge = completely silent
+          // iOS will only deliver this if:
+          // 1. App is in foreground, OR
+          // 2. App is in background AND system decides to wake it (throttled)
         },
       },
     };
 
-    // Create the message with ONLY data payload (no notification field)
+    // Create the message with notification + data for iOS compatibility
+    // Android will only process data, iOS will intercept the notification
     const message: admin.messaging.MulticastMessage = {
       data: stringifiedData,
       android: androidConfig,
@@ -353,6 +368,103 @@ export class FirebaseService implements OnModuleInit {
     console.log('📦 Sending Data-Only FCM Message:');
     console.log('   Data:', stringifiedData);
     console.log('   Priority:', options?.priority || 'high');
+    console.log('   Tokens:', Array.isArray(tokens) ? tokens.length : 1);
+
+    if (Array.isArray(tokens)) {
+      return this.getMessaging().sendEachForMulticast(message);
+    } else {
+      const singleMessage: admin.messaging.Message = {
+        ...message,
+        token: tokens,
+      };
+      delete (singleMessage as any).tokens;
+      return this.getMessaging().send(singleMessage);
+    }
+  }
+
+  /**
+   * Send FIAM message with notification + data (works reliably on BOTH iOS and Android)
+   *
+   * This is the RECOMMENDED method for FIAM campaigns as it guarantees delivery on iOS.
+   *
+   * How it works:
+   * - Android: Receives in FirebaseMessagingService, can show custom popup
+   * - iOS: Shows system notification, app shows custom FIAM when user taps
+   *
+   * @param tokens FCM token(s)
+   * @param title Notification title (shown in iOS notification center)
+   * @param body Notification body (shown in iOS notification center)
+   * @param data Campaign data for custom FIAM rendering
+   * @param options Additional options
+   */
+  async sendFiamMessage(
+    tokens: string | string[],
+    title: string,
+    body: string,
+    data: { [key: string]: any },
+    options?: {
+      priority?: 'high' | 'normal';
+      imageUrl?: string;
+      sound?: boolean;
+    },
+  ): Promise<admin.messaging.BatchResponse | string> {
+    // Firebase requires all data values to be strings
+    const stringifiedData: { [key: string]: string } = {};
+
+    // Convert all values to strings
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== null && value !== undefined) {
+        stringifiedData[key] = typeof value === 'string' ? value : String(value);
+      }
+    }
+
+    // Build Android-specific configuration
+    const androidConfig: admin.messaging.AndroidConfig = {
+      priority: options?.priority || 'high',
+      notification: {
+        imageUrl: options?.imageUrl,
+        channelId: 'fiam_campaigns', // Android notification channel
+        sound: options?.sound !== false ? 'default' : undefined,
+      },
+    };
+
+    // Build iOS-specific configuration
+    const apnsConfig: admin.messaging.ApnsConfig = {
+      headers: {
+        'apns-priority': options?.priority === 'high' ? '10' : '5',
+        'apns-push-type': 'alert', // Visible notification for guaranteed delivery
+      },
+      payload: {
+        aps: {
+          alert: {
+            title,
+            body,
+          },
+          'mutable-content': 1, // Allow NotificationServiceExtension to customize
+          sound: options?.sound !== false ? 'default' : undefined,
+        },
+      },
+      fcmOptions: {
+        imageUrl: options?.imageUrl,
+      },
+    };
+
+    // Create message with notification + data
+    const message: admin.messaging.MulticastMessage = {
+      notification: {
+        title,
+        body,
+      },
+      data: stringifiedData,
+      android: androidConfig,
+      apns: apnsConfig,
+      tokens: Array.isArray(tokens) ? tokens : [tokens],
+    };
+
+    console.log('📦 Sending FIAM Message (Notification + Data):');
+    console.log('   Title:', title);
+    console.log('   Body:', body);
+    console.log('   Data:', stringifiedData);
     console.log('   Tokens:', Array.isArray(tokens) ? tokens.length : 1);
 
     if (Array.isArray(tokens)) {

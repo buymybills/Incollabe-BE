@@ -378,14 +378,19 @@ export class FiamCampaignBroadcastService {
       secondaryButtonActionUrl: uiConfig.secondaryButtonConfig?.actionUrl || '',
     };
 
-    // Send data-only message (no notification field)
-    // This ensures the app handles it in the background and shows custom popup
-    await this.notificationService.sendDataOnlyMessage(
+    // Send FIAM message with notification + data for iOS compatibility
+    // iOS requires a notification payload for guaranteed delivery when app is terminated
+    // Android can handle it in FirebaseMessagingService and show custom popup
+    // iOS will show system notification, then custom popup when user taps
+    await this.notificationService.sendFiamMessage(
       fcmTokens,
+      uiConfig.title, // Use campaign title for notification
+      uiConfig.body,  // Use campaign body for notification
       fiamData,
       {
         priority: 'high', // High priority to ensure delivery
-        ttlSeconds: 86400, // 24 hours TTL
+        imageUrl: mediaUrl || undefined, // Include media in notification
+        sound: false, // No sound for FIAM campaigns
       },
     );
   }
