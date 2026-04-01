@@ -54,7 +54,7 @@ import { ApiActivityLog } from './shared/models/api-activity-log.model';
     CreatorStudioModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, ApiLoggerMiddleware],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
