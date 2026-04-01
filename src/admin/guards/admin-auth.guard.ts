@@ -8,6 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 import { AdminAuthService } from '../admin-auth.service';
 import { AdminRole } from '../models/admin.model';
+import { RedisService } from '../../redis/redis.service';
 
 export interface RequestWithAdmin extends Request {
   admin: {
@@ -24,6 +25,7 @@ export class AdminAuthGuard implements CanActivate {
   constructor(
     private readonly jwtService: JwtService,
     private readonly adminAuthService: AdminAuthService,
+    private readonly redisService: RedisService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -40,6 +42,16 @@ export class AdminAuthGuard implements CanActivate {
       // Verify this is an admin token
       if (payload.type !== 'admin') {
         throw new UnauthorizedException('Invalid token type');
+      }
+
+      // Check if token has been blacklisted (after logout-all or logout)
+      if (payload.jti) {
+        const blacklistKey = `blacklist:${payload.jti}`;
+        const isBlacklisted = await this.redisService.getClient().get(blacklistKey);
+
+        if (isBlacklisted) {
+          throw new UnauthorizedException('Token has been revoked');
+        }
       }
 
       // Verify admin still exists and is active

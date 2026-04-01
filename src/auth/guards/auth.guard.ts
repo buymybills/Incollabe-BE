@@ -13,6 +13,7 @@ import { InjectModel } from '@nestjs/sequelize';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { Influencer } from '../model/influencer.model';
 import { Brand } from '../../brand/model/brand.model';
+import { RedisService } from '../../redis/redis.service';
 
 interface JwtPayload {
   id: number;
@@ -48,6 +49,7 @@ export class AuthGuard implements CanActivate {
     private readonly influencerModel: typeof Influencer,
     @InjectModel(Brand)
     private readonly brandModel: typeof Brand,
+    private readonly redisService: RedisService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -71,6 +73,16 @@ export class AuthGuard implements CanActivate {
       const payload = this.jwtService.verify<JwtPayload>(token, {
         secret: this.configService.get<string>('JWT_SECRET'),
       });
+
+      // Check if token has been blacklisted (after logout-all or logout)
+      if (payload.jti) {
+        const blacklistKey = `blacklist:${payload.jti}`;
+        const isBlacklisted = await this.redisService.getClient().get(blacklistKey);
+
+        if (isBlacklisted) {
+          throw new UnauthorizedException('Token has been revoked');
+        }
+      }
 
       // Check if the account exists and is active
       if (payload.userType === 'influencer') {
