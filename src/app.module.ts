@@ -1,6 +1,7 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { SequelizeModule } from '@nestjs/sequelize';
 import { BullModule } from '@nestjs/bull';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -20,6 +21,7 @@ import { HypeStoreModule } from './hype-store/hype-store.module';
 import { CreatorStudioModule } from './shared/creator-studio.module';
 import { LoggingMiddleware } from './shared/middleware/logging.middleware';
 import { ApiLoggerMiddleware } from './middleware/api-logger.middleware';
+import { ApiActivityLog } from './shared/models/api-activity-log.model';
 
 @Module({
   imports: [
@@ -37,6 +39,7 @@ import { ApiLoggerMiddleware } from './middleware/api-logger.middleware';
     }),
     DatabaseModule,
     RedisModule,
+    SequelizeModule.forFeature([ApiActivityLog]), // For ApiLoggerMiddleware
     SharedModule,
     FirebaseModule,
     JwtAuthModule, // Global JWT module
