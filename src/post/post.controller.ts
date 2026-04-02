@@ -191,7 +191,9 @@ export class PostController {
   @ApiResponse({ status: 200, description: 'Posts retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getPosts(@Query() getPostsDto: GetPostsDto, @CurrentUser() user: User) {
-    throw new InternalServerErrorException('Get posts failed');
+    if (process.env.FORCE_POSTS_API_500 === 'true') {
+      throw new InternalServerErrorException('Get posts failed');
+    }
 
     const userType =
       user.userType === 'influencer' ? UserType.INFLUENCER : UserType.BRAND;
