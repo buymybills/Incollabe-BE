@@ -12,6 +12,7 @@ import {
   UseInterceptors,
   UploadedFiles,
   BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -190,6 +191,8 @@ export class PostController {
   @ApiResponse({ status: 200, description: 'Posts retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getPosts(@Query() getPostsDto: GetPostsDto, @CurrentUser() user: User) {
+    throw new InternalServerErrorException('Get posts failed');
+
     const userType =
       user.userType === 'influencer' ? UserType.INFLUENCER : UserType.BRAND;
     return this.postService.getPosts(getPostsDto, userType, user.id);
