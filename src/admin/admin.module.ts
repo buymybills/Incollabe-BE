@@ -6,6 +6,7 @@ import { AdminController } from './admin.controller';
 import { PushNotificationController } from './push-notification.controller';
 import { FiamCampaignController } from './fiam-campaign.controller';
 import { ApiActivityLogsController } from './controllers/api-activity-logs.controller';
+import { HypeStoreAdminController } from './hype-store-admin.controller';
 import { AdminAuthService } from './admin-auth.service';
 import { ProfileReviewService } from './profile-review.service';
 import { AdminCampaignService } from './services/admin-campaign.service';
@@ -24,6 +25,7 @@ import { AdminCreatorScoreService } from './services/admin-creator-score.service
 import { NudgeTemplateService } from './services/nudge-template.service';
 import { FiamCampaignService } from './services/fiam-campaign.service';
 import { FiamCampaignBroadcastService } from './services/fiam-campaign-broadcast.service';
+import { HypeStoreAdminService } from './services/hype-store-admin.service';
 import { NotificationQueueModule } from './queues/notification.queue.module';
 
 import { Admin } from './models/admin.model';
@@ -60,6 +62,10 @@ import { FiamCampaign } from '../shared/models/fiam-campaign.model';
 import { FiamCampaignEvent } from '../shared/models/fiam-campaign-event.model';
 import { DeviceToken } from '../shared/models/device-token.model';
 import { ApiActivityLog } from '../shared/models/api-activity-log.model';
+import { HypeStore } from '../wallet/models/hype-store.model';
+import { HypeStoreOrder } from '../wallet/models/hype-store-order.model';
+import { Wallet } from '../wallet/models/wallet.model';
+import { BrandNiche } from '../brand/model/brand-niche.model';
 
 import { SharedModule } from '../shared/shared.module';
 import { BrandModule } from '../brand/brand.module';
@@ -108,6 +114,10 @@ import { RolesGuard } from './guards/roles.guard';
       FiamCampaignEvent,
       DeviceToken,
       ApiActivityLog,
+      HypeStore,
+      HypeStoreOrder,
+      Wallet,
+      BrandNiche,
     ]),
     SharedModule,
     NotificationQueueModule,
@@ -122,6 +132,7 @@ import { RolesGuard } from './guards/roles.guard';
     PushNotificationController,
     FiamCampaignController,
     ApiActivityLogsController,
+    HypeStoreAdminController,
   ],
   providers: [
     AdminAuthService,
@@ -142,6 +153,7 @@ import { RolesGuard } from './guards/roles.guard';
     NudgeTemplateService,
     FiamCampaignService,
     FiamCampaignBroadcastService,
+    HypeStoreAdminService,
     AdminAuthGuard,
     RolesGuard,
   ],

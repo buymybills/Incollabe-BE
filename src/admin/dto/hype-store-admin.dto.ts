@@ -1,0 +1,212 @@
+import { IsDateString, IsOptional, IsNumber, Min } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+
+/**
+ * Date range filter for admin analytics
+ */
+export class DateRangeFilterDto {
+  @ApiPropertyOptional({
+    description: 'Start date for filtering (ISO format)',
+    example: '2025-09-01T00:00:00Z',
+  })
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @ApiPropertyOptional({
+    description: 'End date for filtering (ISO format)',
+    example: '2025-10-31T23:59:59Z',
+  })
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
+}
+
+/**
+ * Pagination query parameters
+ */
+export class PaginationDto {
+  @ApiPropertyOptional({
+    description: 'Page number (1-indexed)',
+    example: 1,
+    default: 1,
+    type: Number,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  page?: number = 1;
+
+  @ApiPropertyOptional({
+    description: 'Number of items per page',
+    example: 20,
+    default: 20,
+    type: Number,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  limit?: number = 20;
+}
+
+/**
+ * Dashboard metrics response
+ */
+export class DashboardMetricsDto {
+  @ApiProperty({ example: 3200, description: 'Total active brands on Hype Store' })
+  totalActiveBrands: number;
+
+  @ApiProperty({ example: 36, description: 'Percentage change vs last period' })
+  totalActiveBrandsChange: number;
+
+  @ApiProperty({ example: 3200, description: 'Total active stores on Hype Store' })
+  totalActiveStores: number;
+
+  @ApiProperty({ example: -2.9, description: 'Percentage change vs last period' })
+  totalActiveStoresChange: number;
+
+  @ApiProperty({ example: 17000, description: 'Total sales quantity (number of orders)' })
+  totalSalesQuantity: number;
+
+  @ApiProperty({ example: -2.9, description: 'Percentage change vs last period' })
+  totalSalesQuantityChange: number;
+
+  @ApiProperty({ example: 200000, description: 'Total sales amount in rupees' })
+  totalSalesAmount: number;
+
+  @ApiProperty({ example: -2.9, description: 'Percentage change vs last period' })
+  totalSalesAmountChange: number;
+
+  @ApiProperty({ example: 12000, description: 'Total cashback given (quantity)' })
+  totalCashbackGivenQty: number;
+
+  @ApiProperty({ example: -2.9, description: 'Percentage change vs last period' })
+  totalCashbackGivenQtyChange: number;
+
+  @ApiProperty({ example: 20000, description: 'Total cashback given (amount in rupees)' })
+  totalCashbackGivenAmount: number;
+
+  @ApiProperty({ example: -2.9, description: 'Percentage change vs last period' })
+  totalCashbackGivenAmountChange: number;
+
+  @ApiProperty({ example: 120000, description: 'Current amount in all wallets' })
+  currentAmountInWallet: number;
+
+  @ApiProperty({ example: -2.9, description: 'Percentage change vs last period' })
+  currentAmountInWalletChange: number;
+
+  @ApiProperty({ example: 200000, description: 'Lifetime amount credited to wallets' })
+  lifetimeAmountInWallet: number;
+
+  @ApiProperty({ example: -2.9, description: 'Percentage change vs last period' })
+  lifetimeAmountInWalletChange: number;
+}
+
+/**
+ * Brand with stores info
+ */
+export class BrandWithStoresDto {
+  @ApiProperty({ example: 1, description: 'Brand ID' })
+  id: number;
+
+  @ApiProperty({ example: 'Myntra', description: 'Brand name' })
+  brandName: string;
+
+  @ApiProperty({ example: 'https://cdn.example.com/myntra-logo.png', description: 'Brand logo URL' })
+  logoUrl: string;
+
+  @ApiProperty({ example: 'Fashion | Accessories | Lifestyle', description: 'Brand categories' })
+  category: string;
+
+  @ApiProperty({ example: 1, description: 'Number of active stores' })
+  activeStoreCount: number;
+
+  @ApiProperty({ example: '2026-01-28T00:00:00Z', description: 'Brand creation date' })
+  createdAt: string;
+
+  @ApiProperty({ example: 50000, description: 'Total revenue generated' })
+  totalRevenue: number;
+
+  @ApiProperty({ example: 250, description: 'Total orders count' })
+  totalOrders: number;
+}
+
+/**
+ * Brand summary for store listing
+ */
+export class BrandSummaryDto {
+  @ApiProperty({ example: 1, description: 'Brand ID' })
+  id: number;
+
+  @ApiProperty({ example: 'Myntra', description: 'Brand name' })
+  name: string;
+}
+
+/**
+ * Store details for a brand
+ */
+export class BrandStoreDto {
+  @ApiProperty({ example: 10, description: 'Store ID' })
+  id: number;
+
+  @ApiProperty({ example: 'Myntra Store', description: 'Store name' })
+  storeName: string;
+
+  @ApiPropertyOptional({ example: 'myntra-store', description: 'Store slug' })
+  storeSlug?: string | null;
+
+  @ApiProperty({ example: true, description: 'Whether the store is active' })
+  isActive: boolean;
+
+  @ApiProperty({ example: true, description: 'Whether the store is verified' })
+  isVerified: boolean;
+
+  @ApiProperty({ example: 250, description: 'Total orders processed by this store' })
+  totalOrders: number;
+
+  @ApiProperty({ example: 50000, description: 'Total revenue generated by this store' })
+  totalRevenue: number;
+
+  @ApiProperty({ example: 2000, description: 'Total cashback given by this store' })
+  totalCashbackGiven: number;
+
+  @ApiProperty({ example: '2026-01-28T00:00:00Z', description: 'Store creation date' })
+  createdAt: string;
+
+  @ApiProperty({ example: '2026-02-10T00:00:00Z', description: 'Store update date' })
+  updatedAt: string;
+}
+
+/**
+ * Brand stores response
+ */
+export class BrandStoresResponseDto {
+  @ApiProperty({ type: BrandSummaryDto })
+  brand: BrandSummaryDto;
+
+  @ApiProperty({ type: [BrandStoreDto] })
+  stores: BrandStoreDto[];
+}
+
+/**
+ * Brands list response with pagination
+ */
+export class BrandsListResponseDto {
+  @ApiProperty({ type: [BrandWithStoresDto] })
+  data: BrandWithStoresDto[];
+
+  @ApiProperty({ example: 100, description: 'Total number of brands' })
+  total: number;
+
+  @ApiProperty({ example: 1, description: 'Current page' })
+  page: number;
+
+  @ApiProperty({ example: 20, description: 'Items per page' })
+  limit: number;
+
+  @ApiProperty({ example: 5, description: 'Total pages' })
+  totalPages: number;
+}
