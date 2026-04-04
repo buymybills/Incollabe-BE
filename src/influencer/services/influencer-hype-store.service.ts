@@ -1231,7 +1231,11 @@ export class InfluencerHypeStoreService {
     }
 
     // Create locked cashback transaction
-    const transaction: Transaction = await this.sequelize.transaction();
+    const transaction: Transaction = await this.sequelize.transaction({
+      logging: (sql) => {
+        this.logger.log(`[submitProof order=${orderId}] SQL: ${sql}`);
+      },
+    });
 
     try {
       const txLog = (step: string, details: Record<string, any> = {}) => {
