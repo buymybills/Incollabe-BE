@@ -1992,7 +1992,12 @@ export class HypeStoreService {
       // 1. Find store by API key
       webhookSecret = await this.webhookSecretModel.findOne({
         where: { apiKey, isActive: true },
-        include: [{ model: this.hypeStoreModel }],
+        include: [
+          {
+            model: this.hypeStoreModel,
+            required: true, // Ensure the association is loaded
+          },
+        ],
       });
 
       if (!webhookSecret) {
@@ -2002,6 +2007,12 @@ export class HypeStoreService {
       }
 
       const hypeStore = webhookSecret.hypeStore;
+
+      if (!hypeStore) {
+        responseStatus = 500;
+        responseBody = { success: false, message: 'Store association not loaded' };
+        throw new Error('HypeStore association not loaded for webhook secret');
+      }
 
       // 2. Check for duplicate order (idempotency)
       const existingOrder = await this.orderModel.findOne({
@@ -2249,10 +2260,11 @@ export class HypeStoreService {
         throw error;
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Internal server error';
       responseStatus = responseStatus === 200 ? 500 : responseStatus;
       responseBody = {
         success: false,
-        message: error.message || 'Internal server error',
+        message: errorMessage,
       };
 
       // Log failed webhook
@@ -2267,7 +2279,7 @@ export class HypeStoreService {
           status: responseStatus,
           responseBody,
           isValid: false,
-          errorMessage: error.message,
+          errorMessage: errorMessage,
           processedOrderId,
         });
       }
@@ -2299,7 +2311,12 @@ export class HypeStoreService {
       // 1. Find store by API key
       webhookSecret = await this.webhookSecretModel.findOne({
         where: { apiKey, isActive: true },
-        include: [{ model: this.hypeStoreModel }],
+        include: [
+          {
+            model: this.hypeStoreModel,
+            required: true, // Ensure the association is loaded
+          },
+        ],
       });
 
       if (!webhookSecret) {
@@ -2309,6 +2326,12 @@ export class HypeStoreService {
       }
 
       const hypeStore = webhookSecret.hypeStore;
+
+      if (!hypeStore) {
+        responseStatus = 500;
+        responseBody = { success: false, message: 'Store association not loaded' };
+        throw new Error('HypeStore association not loaded for webhook secret');
+      }
 
       // 2. Find existing order
       const order = await this.orderModel.findOne({
@@ -2589,10 +2612,11 @@ export class HypeStoreService {
         throw error;
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Internal server error';
       responseStatus = responseStatus === 200 ? 500 : responseStatus;
       responseBody = {
         success: false,
-        message: error.message || 'Internal server error',
+        message: errorMessage,
       };
 
       // Log failed webhook
@@ -2607,7 +2631,7 @@ export class HypeStoreService {
           status: responseStatus,
           responseBody,
           isValid: false,
-          errorMessage: error.message,
+          errorMessage: errorMessage,
           processedOrderId,
         });
       }
@@ -2750,7 +2774,7 @@ export class HypeStoreService {
 
       await transaction.commit();
     } catch (error) {
-      await transaction.rollback();
+      await transaction.rollback(); 
       throw error;
     }
   }
