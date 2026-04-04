@@ -10,7 +10,6 @@ import {
 import { HypeStore } from './hype-store.model';
 import { HypeStoreCouponCode } from './hype-store-coupon-code.model';
 import { Influencer } from '../../auth/model/influencer.model';
-import { CashbackTier } from '../../hype-store/models/cashback-tier.model';
 import { WalletTransaction } from './wallet-transaction.model';
 
 export enum OrderStatus {
@@ -211,7 +210,6 @@ export class HypeStoreOrder extends Model<HypeStoreOrder> {
   })
   declare cashbackStatus: CashbackStatus;
 
-  @ForeignKey(() => CashbackTier)
   @Column({
     type: DataType.INTEGER,
     allowNull: true,
@@ -406,8 +404,7 @@ export class HypeStoreOrder extends Model<HypeStoreOrder> {
   @BelongsTo(() => Influencer)
   declare influencer: Influencer;
 
-  @BelongsTo(() => CashbackTier)
-  declare cashbackTier: CashbackTier;
+  // Cashback tier is stored as a raw foreign key only.
 
   @BelongsTo(() => WalletTransaction)
   declare walletTransaction: WalletTransaction;
