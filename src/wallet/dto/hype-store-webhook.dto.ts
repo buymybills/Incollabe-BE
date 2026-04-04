@@ -407,6 +407,17 @@ export class PurchaseWebhookDto {
   @IsNumber()
   @Min(1)
   returnPeriodDays?: number;
+
+  @ApiProperty({
+    description: 'Content type for cashback calculation - story or post/reel (defaults to post_reel if not provided)',
+    enum: ['story', 'post_reel'],
+    example: 'post_reel',
+    default: 'post_reel',
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(['story', 'post_reel'])
+  contentType?: 'story' | 'post_reel';
 }
 
 /**

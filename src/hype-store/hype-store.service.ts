@@ -35,6 +35,7 @@ import { PurchaseWebhookDto, ReturnWebhookDto } from '../wallet/dto/hype-store-w
 import { Influencer } from '../auth/model/influencer.model';
 import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
 import { InfluencerProfileScoringService } from '../shared/services/influencer-profile-scoring.service';
+import { CashbackTierService } from './services/cashback-tier.service';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -72,6 +73,7 @@ export class HypeStoreService {
     @InjectModel(InstagramProfileAnalysis)
     private instagramProfileAnalysisModel: typeof InstagramProfileAnalysis,
     private influencerProfileScoringService: InfluencerProfileScoringService,
+    private cashbackTierService: CashbackTierService,
     private sequelize: Sequelize,
     private razorpayService: RazorpayService,
     private s3Service: S3Service,
@@ -1235,11 +1237,27 @@ export class HypeStoreService {
     brandId: number,
     limit: number = 50,
     offset: number = 0,
-  ): Promise<{ transactions: WalletTransaction[]; total: number }> {
+  ): Promise<{
+    transactions: Array<{
+      id: number;
+      transactionNumber: string;
+      type: string;
+      amount: number;
+      balance: number;
+      status: string;
+      date: string;
+      paymentOrderId?: string;
+      paymentTransactionId?: string;
+      description?: string;
+      failedReason?: string;
+    }>;
+    total: number;
+  }> {
     const wallet = await this.walletModel.findOne({
       where: {
         userId: brandId,
-        userType: UserType.BRAND
+        userType: UserType.BRAND,
+        isActive: true,
       },
     });
 
@@ -1254,8 +1272,23 @@ export class HypeStoreService {
       order: [['createdAt', 'DESC']],
     });
 
+    // Format transactions for response
+    const formattedTransactions = rows.map((transaction) => ({
+      id: transaction.id,
+      transactionNumber: `#${String(transaction.id).padStart(2, '0')}`,
+      type: this.formatTransactionType(transaction.transactionType),
+      amount: parseFloat(transaction.amount?.toString() || '0'),
+      balance: parseFloat(transaction.balanceAfter?.toString() || '0'),
+      status: this.formatTransactionStatus(transaction.status),
+      date: transaction.createdAt?.toISOString(),
+      paymentOrderId: transaction.paymentOrderId,
+      paymentTransactionId: transaction.paymentTransactionId,
+      description: transaction.description,
+      failedReason: transaction.failedReason,
+    }));
+
     return {
-      transactions: rows,
+      transactions: formattedTransactions,
       total: count,
     };
   }
@@ -1454,14 +1487,31 @@ export class HypeStoreService {
   }
 
   /**
-   * Get all orders for a store
+   * Get all orders for a store with customer details and store statistics
    */
   async getStoreOrders(
     storeId: number,
     brandId: number,
     limit: number = 50,
     offset: number = 0,
-  ): Promise<{ orders: HypeStoreOrder[]; total: number }> {
+  ): Promise<{
+    orders: Array<{
+      id: number;
+      customerName: string;
+      orderId: string;
+      couponUsed: string;
+      orderValue: number;
+      cashbackAmount: number;
+      orderDate: string;
+      cashbackStatus: string;
+    }>;
+    total: number;
+    storeInfo: {
+      totalOrders: number;
+      totalSales: number;
+      currentWalletAmount: number;
+    };
+  }> {
     const store = await this.hypeStoreModel.findOne({
       where: { id: storeId, brandId },
     });
@@ -1470,16 +1520,209 @@ export class HypeStoreService {
       throw new NotFoundException('Hype Store not found');
     }
 
+    // Get orders with customer and coupon details
     const { count, rows } = await this.orderModel.findAndCountAll({
       where: { hypeStoreId: storeId },
+      include: [
+        {
+          model: this.influencerModel,
+          as: 'influencer',
+          attributes: ['id', 'name', 'username'],
+        },
+        {
+          model: this.couponCodeModel,
+          as: 'couponCode',
+          attributes: ['id', 'couponCode'],
+        },
+      ],
       limit,
       offset,
       order: [['createdAt', 'DESC']],
     });
 
+    // Calculate store statistics
+    const storeStats = await this.orderModel.findOne({
+      attributes: [
+        [this.sequelize.fn('COUNT', this.sequelize.col('id')), 'totalOrders'],
+        [this.sequelize.fn('SUM', this.sequelize.col('order_amount')), 'totalSales'],
+      ],
+      where: { hypeStoreId: storeId },
+      raw: true,
+    });
+
+    // Get brand wallet amount
+    const brandWallet = await this.walletModel.findOne({
+      where: {
+        userId: brandId,
+        userType: UserType.BRAND,
+        isActive: true,
+      },
+    });
+
+    // Format orders for response
+    const formattedOrders = rows.map((order: any) => ({
+      id: order.id,
+      customerName: order.influencer?.name || order.influencer?.username || 'Unknown',
+      orderId: order.externalOrderId || `ORD-${order.id}`,
+      couponUsed: order.couponCode?.couponCode || 'N/A',
+      orderValue: parseFloat(order.orderAmount?.toString() || '0'),
+      cashbackAmount: parseFloat(order.cashbackAmount?.toString() || '0'),
+      orderDate: order.orderDate?.toISOString() || order.createdAt?.toISOString(),
+      cashbackStatus: order.cashbackStatus || 'pending',
+    }));
+
     return {
-      orders: rows,
+      orders: formattedOrders,
       total: count,
+      storeInfo: {
+        totalOrders: parseInt((storeStats as any)?.totalOrders || '0'),
+        totalSales: parseFloat((storeStats as any)?.totalSales || '0'),
+        currentWalletAmount: parseFloat(brandWallet?.balance?.toString() || '0'),
+      },
+    };
+  }
+
+  /**
+   * Get store detail performance metrics and configuration
+   */
+  async getStoreDetailPerformance(storeId: number, brandId: number): Promise<any> {
+    const store = await this.hypeStoreModel.findOne({
+      where: { id: storeId, brandId },
+    });
+
+    if (!store) {
+      throw new NotFoundException('Hype Store not found');
+    }
+
+    // Get cashback configuration
+    const cashbackConfig = await this.cashbackConfigModel.findOne({
+      where: { storeId },
+    });
+
+    // Prepare cashback ranges from config
+    const cashbackForReelPost = {
+      maximum: cashbackConfig?.reelPostMaxCashback
+        ? parseFloat(cashbackConfig.reelPostMaxCashback.toString())
+        : 0,
+      minimum: cashbackConfig?.reelPostMinCashback
+        ? parseFloat(cashbackConfig.reelPostMinCashback.toString())
+        : 0,
+    };
+
+    const cashbackForStory = {
+      maximum: cashbackConfig?.storyMaxCashback
+        ? parseFloat(cashbackConfig.storyMaxCashback.toString())
+        : 0,
+      minimum: cashbackConfig?.storyMinCashback
+        ? parseFloat(cashbackConfig.storyMinCashback.toString())
+        : 0,
+    };
+
+    // Get orders with proof submitted to calculate average performance
+    const { Op } = require('sequelize');
+    const ordersWithProof = await this.orderModel.findAll({
+      where: {
+        hypeStoreId: storeId,
+        instagramProofUrl: { [Op.ne]: null },
+      },
+      attributes: ['expectedRoi', 'estimatedEngagement', 'estimatedReach'],
+      limit: 100, // Get last 100 orders for average
+      order: [['createdAt', 'DESC']],
+    });
+
+    // Calculate average performance metrics
+    let avgROI = 0;
+    let avgEngagement = 0;
+    let avgReach = 0;
+    let roiRating = 'Good';
+    let engagementRating = 'Good';
+    let reachRating = 'Good';
+
+    if (ordersWithProof.length > 0) {
+      const validROIs = ordersWithProof
+        .filter((o) => o.expectedRoi)
+        .map((o) => parseFloat(o.expectedRoi.toString()));
+      const validEngagements = ordersWithProof
+        .filter((o) => o.estimatedEngagement)
+        .map((o) => parseInt(o.estimatedEngagement.toString()));
+      const validReaches = ordersWithProof
+        .filter((o) => o.estimatedReach)
+        .map((o) => parseInt(o.estimatedReach.toString()));
+
+      if (validROIs.length > 0) {
+        avgROI = validROIs.reduce((a, b) => a + b, 0) / validROIs.length;
+        roiRating = avgROI >= 1.5 ? 'Elite' : avgROI >= 1.2 ? 'Good' : 'Average';
+      }
+      if (validEngagements.length > 0) {
+        avgEngagement = validEngagements.reduce((a, b) => a + b, 0) / validEngagements.length;
+        engagementRating = avgEngagement >= 10000 ? 'Elite' : avgEngagement >= 5000 ? 'Good' : 'Average';
+      }
+      if (validReaches.length > 0) {
+        avgReach = validReaches.reduce((a, b) => a + b, 0) / validReaches.length;
+        reachRating = avgReach >= 200000 ? 'Elite' : avgReach >= 100000 ? 'Good' : 'Average';
+      }
+    }
+
+    // Get total orders and sales
+    const storeStats = await this.orderModel.findOne({
+      attributes: [
+        [this.sequelize.fn('COUNT', this.sequelize.col('id')), 'totalOrders'],
+        [this.sequelize.fn('SUM', this.sequelize.col('order_amount')), 'totalSales'],
+        [
+          this.sequelize.fn('SUM', this.sequelize.col('cashback_amount')),
+          'totalCashbackUsed',
+        ],
+      ],
+      where: {
+        hypeStoreId: storeId,
+        cashbackStatus: CashbackStatus.CREDITED,
+      },
+      raw: true,
+    });
+
+    // Get brand wallet
+    const brandWallet = await this.walletModel.findOne({
+      where: {
+        userId: brandId,
+        userType: UserType.BRAND,
+        isActive: true,
+      },
+    });
+
+    return {
+      storeInfo: {
+        id: store.id,
+        storeName: store.storeName,
+        isActive: store.isActive,
+      },
+      performanceMetrics: {
+        expectedROI: {
+          value: avgROI,
+          formatted: `${avgROI.toFixed(1)}x`,
+          rating: roiRating,
+        },
+        estimatedEngagement: {
+          value: Math.round(avgEngagement),
+          formatted: avgEngagement >= 1000 ? `${(avgEngagement / 1000).toFixed(1)}K` : `${Math.round(avgEngagement)}`,
+          rating: engagementRating,
+        },
+        estimatedReach: {
+          value: Math.round(avgReach),
+          formatted: avgReach >= 1000 ? `${(avgReach / 1000).toFixed(0)}K` : `${Math.round(avgReach)}`,
+          rating: reachRating,
+        },
+      },
+      cashbackConfig: {
+        claimCountPerCreator: cashbackConfig?.monthlyClaimCount || 3,
+        reelPost: cashbackForReelPost,
+        story: cashbackForStory,
+      },
+      walletStats: {
+        currentAmount: parseFloat(brandWallet?.balance?.toString() || '0'),
+        totalCashbackUsed: parseFloat((storeStats as any)?.totalCashbackUsed || '0'),
+        totalOrders: parseInt((storeStats as any)?.totalOrders || '0'),
+        totalSales: parseFloat((storeStats as any)?.totalSales || '0'),
+      },
     };
   }
 
@@ -1877,11 +2120,12 @@ export class HypeStoreService {
       }
 
       // 6. Calculate cashback
-      // const contentType = webhookDto.contentType || 'REEL'; // Default to REEL if not provided
+      const contentType = webhookDto.contentType || 'post_reel'; // Default to post_reel if not provided
       const { cashbackAmount, tierId } = await this.calculateCashbackAmount(
         webhookDto.orderAmount,
         attributedInfluencerId,
         hypeStore.id,
+        contentType,
       );
 
       // 7. Create order in transaction
@@ -1905,7 +2149,7 @@ export class HypeStoreService {
             externalOrderId: webhookDto.externalOrderId,
             referralCode: webhookDto.referralCode || null, // Store referral code if provided
             orderTitle: webhookDto.orderTitle || null, // Store product/order title
-            // contentType: contentType, // REEL or STORY - affects cashback calculation
+            contentType: contentType, // story or post_reel - affects cashback calculation
             // Product detail fields
             productSKU: webhookDto.productSKU || null,
             productCategory: webhookDto.productCategory || null,
@@ -2380,43 +2624,29 @@ export class HypeStoreService {
     orderAmount: number,
     influencerId: number,
     hypeStoreId: number,
+    contentType: 'story' | 'post_reel',
   ): Promise<{ cashbackAmount: number; tierId: number | null }> {
-    // Get influencer details to determine follower count
-    const influencer = await this.influencerModel.findByPk(influencerId);
+    // Use new follower-based cashback tier system
+    const result = await this.cashbackTierService.calculateCashback(
+      influencerId,
+      orderAmount,
+      contentType as any, // ContentType enum from cashback-tier.model
+    );
 
-    if (!influencer) {
-      throw new NotFoundException('Influencer not found');
-    }
+    // If no tier found, fall back to store-specific cashback config
+    if (!result.tierFound) {
+      this.logger.warn(
+        `No follower-based tier found for influencer ${influencerId} (${result.followerCount} followers, ${contentType}). Checking store config...`,
+      );
 
-    const followerCount = influencer.instagramFollowersCount || 0;
-
-    // Find applicable cashback tier based on follower count
-    const tier = await this.cashbackTierModel.findOne({
-      where: {
-        hypeStoreId,
-        isActive: true,
-        // contentType, // Filter by content type (REEL or STORY)
-        minFollowers: { [require('sequelize').Op.lte]: followerCount },
-        ...(followerCount > 0
-          ? {
-              [require('sequelize').Op.or]: [
-                { maxFollowers: { [require('sequelize').Op.gte]: followerCount } },
-                { maxFollowers: null },
-              ],
-            }
-          : {}),
-      },
-      order: [['priority', 'DESC']],
-    });
-
-    if (!tier) {
-      // No tier found, fall back to cashback config
       const cashbackConfig = await this.cashbackConfigModel.findOne({
         where: { storeId: hypeStoreId },
       });
 
       if (!cashbackConfig || !cashbackConfig.cashbackPercentage) {
-        // No config either, return 0
+        this.logger.warn(
+          `No cashback config found for store ${hypeStoreId}. Returning 0 cashback.`,
+        );
         return { cashbackAmount: 0, tierId: null };
       }
 
@@ -2433,23 +2663,11 @@ export class HypeStoreService {
       return { cashbackAmount, tierId: null };
     }
 
-    let cashbackAmount = 0;
-
-    // Calculate based on tier type
-    if (tier.cashbackType === CashbackType.PERCENTAGE) {
-      cashbackAmount = (orderAmount * parseFloat(tier.cashbackValue.toString())) / 100;
-    } else {
-      // Fixed amount
-      cashbackAmount = parseFloat(tier.cashbackValue.toString());
-    }
-
-    // Apply min/max limits
-    const minCashback = parseFloat(tier.minCashbackAmount.toString());
-    const maxCashback = parseFloat(tier.maxCashbackAmount.toString());
-
-    cashbackAmount = Math.max(minCashback, Math.min(maxCashback, cashbackAmount));
-
-    return { cashbackAmount, tierId: tier.id };
+    // Return cashback calculated by the new tier system
+    return {
+      cashbackAmount: result.cashbackAmount,
+      tierId: result.tierId || null,
+    };
   }
 
   /**
@@ -2535,6 +2753,31 @@ export class HypeStoreService {
       await transaction.rollback();
       throw error;
     }
+  }
+
+  /**
+   * Format transaction type to display name
+   */
+  private formatTransactionType(type: TransactionType): string {
+    const typeMap = {
+      [TransactionType.RECHARGE]: 'Wallet recharge',
+      [TransactionType.DEBIT]: 'Payment',
+      [TransactionType.CASHBACK]: 'Cashback received',
+      [TransactionType.REDEMPTION]: 'Withdrawal',
+      [TransactionType.REFUND]: 'Refund',
+      [TransactionType.ADJUSTMENT]: 'Adjustment',
+    };
+    return typeMap[type] || type;
+  }
+
+  /**
+   * Format transaction status
+   */
+  private formatTransactionStatus(status: TransactionStatus): 'successful' | 'failed' | 'pending' | 'processing' {
+    if (status === TransactionStatus.COMPLETED) return 'successful';
+    if (status === TransactionStatus.FAILED || status === TransactionStatus.CANCELLED) return 'failed';
+    if (status === TransactionStatus.PROCESSING) return 'processing';
+    return 'pending';
   }
 
   /**

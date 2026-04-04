@@ -22,6 +22,9 @@ import {
   DashboardMetricsDto,
   BrandsListResponseDto,
   BrandStoresResponseDto,
+  StoreDetailDto,
+  OrdersListResponseDto,
+  WalletTransactionsListResponseDto,
 } from './dto/hype-store-admin.dto';
 
 @ApiTags('Admin - Hype Store')
@@ -183,5 +186,185 @@ export class HypeStoreAdminController {
   @ApiResponse({ status: 401, description: 'Unauthorized - Admin access required' })
   async getBrandStores(@Param('brandId', ParseIntPipe) brandId: number) {
     return this.hypeStoreAdminService.getBrandStores(brandId);
+  }
+
+  @Get('stores/:storeId')
+  @ApiOperation({
+    summary: 'Get detailed information for a specific store',
+    description:
+      'Returns store details with performance metrics, cashback configuration, and wallet metrics',
+  })
+  @ApiParam({ name: 'storeId', type: Number, example: 1, description: 'Store ID' })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    type: String,
+    description: 'Start date for metrics calculation (ISO format). Defaults to 30 days ago',
+    example: '2025-09-01T00:00:00Z',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    description: 'End date for metrics calculation (ISO format). Defaults to now',
+    example: '2025-10-31T23:59:59Z',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Store details retrieved successfully',
+    type: StoreDetailDto,
+    schema: {
+      example: {
+        id: 1,
+        storeName: 'Myntra Store',
+        storeSlug: 'myntra-store',
+        isActive: true,
+        isVerified: true,
+        performance: {
+          expectedRoi: 1.4,
+          estimatedEngagement: 13100,
+          estimatedReach: 210000,
+          performanceTier: 'Elite',
+        },
+        cashbackConfig: {
+          reelPostMinCashback: 200,
+          reelPostMaxCashback: 4000,
+          storyMinCashback: 200,
+          storyMaxCashback: 4000,
+          monthlyClaimCount: 3,
+          claimStrategy: 'OPTIMIZED_SPEND',
+        },
+        walletMetrics: {
+          currentWalletAmount: 110000,
+          currentWalletAmountChange: 36,
+          totalCashbackUsed: 110000,
+          totalCashbackUsedChange: 36,
+          totalOrders: 400,
+          totalOrdersChange: 36,
+          totalSales: 4260000,
+          totalSalesChange: 36,
+        },
+        createdAt: '2026-01-28T00:00:00Z',
+        updatedAt: '2026-03-15T10:00:00Z',
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Store not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Admin access required' })
+  async getStoreDetail(
+    @Param('storeId', ParseIntPipe) storeId: number,
+    @Query() dateRange: DateRangeFilterDto,
+  ): Promise<StoreDetailDto> {
+    return this.hypeStoreAdminService.getStoreDetail(storeId, dateRange);
+  }
+
+  @Get('stores/:storeId/orders')
+  @ApiOperation({
+    summary: 'Get orders for a specific store',
+    description: 'Returns paginated list of orders with customer details and cashback information',
+  })
+  @ApiParam({ name: 'storeId', type: Number, example: 1, description: 'Store ID' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (1-indexed)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page',
+    example: 20,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Orders list retrieved successfully',
+    type: OrdersListResponseDto,
+    schema: {
+      example: {
+        orders: [
+          {
+            id: 123,
+            customerName: 'Sneha Shah',
+            externalOrderId: 'ORD-2026-12345',
+            couponCode: 'MYNTRA-000123-A3F2B1',
+            orderValue: 10000,
+            cashbackAmount: 1000,
+            orderDate: '2025-10-02T00:00:00Z',
+            cashbackStatus: 'CREDITED',
+            orderStatus: 'DELIVERED',
+          },
+        ],
+        total: 180,
+        page: 1,
+        limit: 20,
+        totalPages: 9,
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Store not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Admin access required' })
+  async getStoreOrders(
+    @Param('storeId', ParseIntPipe) storeId: number,
+    @Query() pagination: PaginationDto,
+  ): Promise<OrdersListResponseDto> {
+    return this.hypeStoreAdminService.getStoreOrders(storeId, pagination);
+  }
+
+  @Get('brands/:brandId/transactions')
+  @ApiOperation({
+    summary: 'Get wallet transaction history for a brand',
+    description: 'Returns paginated list of wallet transactions (recharges, debits, etc.)',
+  })
+  @ApiParam({ name: 'brandId', type: Number, example: 1, description: 'Brand ID' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (1-indexed)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page',
+    example: 20,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Wallet transactions retrieved successfully',
+    type: WalletTransactionsListResponseDto,
+    schema: {
+      example: {
+        transactions: [
+          {
+            id: 12,
+            transactionType: 'ADD_MONEY',
+            description: 'Wallet recharge',
+            amount: 36000,
+            balanceAfter: 136000,
+            status: 'SUCCESS',
+            paymentMethod: 'UPI',
+            paymentReferenceId: 'pay_123456789',
+            createdAt: '2026-03-22T01:54:00Z',
+          },
+        ],
+        total: 50,
+        page: 1,
+        limit: 20,
+        totalPages: 3,
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Brand wallet not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Admin access required' })
+  async getWalletTransactions(
+    @Param('brandId', ParseIntPipe) brandId: number,
+    @Query() pagination: PaginationDto,
+  ): Promise<WalletTransactionsListResponseDto> {
+    return this.hypeStoreAdminService.getWalletTransactions(brandId, pagination);
   }
 }

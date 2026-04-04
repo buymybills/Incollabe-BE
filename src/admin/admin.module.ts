@@ -65,6 +65,10 @@ import { ApiActivityLog } from '../shared/models/api-activity-log.model';
 import { HypeStore } from '../wallet/models/hype-store.model';
 import { HypeStoreOrder } from '../wallet/models/hype-store-order.model';
 import { Wallet } from '../wallet/models/wallet.model';
+import { HypeStoreCashbackConfig } from '../hype-store/models/hype-store-cashback-config.model';
+import { HypeStoreCouponCode } from '../wallet/models/hype-store-coupon-code.model';
+import { HypeStoreWallet } from '../hype-store/models/hype-store-wallet.model';
+import { HypeStoreWalletTransaction } from '../hype-store/models/hype-store-wallet-transaction.model';
 import { BrandNiche } from '../brand/model/brand-niche.model';
 
 import { SharedModule } from '../shared/shared.module';
@@ -117,6 +121,10 @@ import { RolesGuard } from './guards/roles.guard';
       HypeStore,
       HypeStoreOrder,
       Wallet,
+      HypeStoreCashbackConfig,
+      HypeStoreCouponCode,
+      HypeStoreWallet,
+      HypeStoreWalletTransaction,
       BrandNiche,
     ]),
     SharedModule,

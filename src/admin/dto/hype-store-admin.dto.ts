@@ -210,3 +210,211 @@ export class BrandsListResponseDto {
   @ApiProperty({ example: 5, description: 'Total pages' })
   totalPages: number;
 }
+
+/**
+ * Performance metrics for a store
+ */
+export class PerformanceMetricsDto {
+  @ApiProperty({ example: 1.4, description: 'Expected ROI multiplier' })
+  expectedRoi: number;
+
+  @ApiProperty({ example: 13100, description: 'Estimated engagement count' })
+  estimatedEngagement: number;
+
+  @ApiProperty({ example: 210000, description: 'Estimated reach count' })
+  estimatedReach: number;
+
+  @ApiProperty({ example: 'Elite', description: 'Performance tier (Elite, Premium, Standard)' })
+  performanceTier: string;
+}
+
+/**
+ * Cashback configuration for a store
+ */
+export class CashbackConfigDto {
+  @ApiProperty({ example: 200, description: 'Minimum cashback for Reel/Post' })
+  reelPostMinCashback: number;
+
+  @ApiProperty({ example: 4000, description: 'Maximum cashback for Reel/Post' })
+  reelPostMaxCashback: number;
+
+  @ApiProperty({ example: 200, description: 'Minimum cashback for Story' })
+  storyMinCashback: number;
+
+  @ApiProperty({ example: 4000, description: 'Maximum cashback for Story' })
+  storyMaxCashback: number;
+
+  @ApiProperty({ example: 3, description: 'Monthly cashback claim count per creator' })
+  monthlyClaimCount: number;
+
+  @ApiProperty({ example: 'OPTIMIZED_SPEND', description: 'Cashback claim strategy' })
+  claimStrategy: string;
+}
+
+/**
+ * Wallet metrics for a store
+ */
+export class WalletMetricsDto {
+  @ApiProperty({ example: 110000, description: 'Current wallet amount' })
+  currentWalletAmount: number;
+
+  @ApiProperty({ example: 36, description: 'Percentage change vs last period' })
+  currentWalletAmountChange: number;
+
+  @ApiProperty({ example: 110000, description: 'Total cashback amount used' })
+  totalCashbackUsed: number;
+
+  @ApiProperty({ example: 36, description: 'Percentage change vs last period' })
+  totalCashbackUsedChange: number;
+
+  @ApiProperty({ example: 400, description: 'Total orders count' })
+  totalOrders: number;
+
+  @ApiProperty({ example: 36, description: 'Percentage change vs last period' })
+  totalOrdersChange: number;
+
+  @ApiProperty({ example: 4260000, description: 'Total sales amount' })
+  totalSales: number;
+
+  @ApiProperty({ example: 36, description: 'Percentage change vs last period' })
+  totalSalesChange: number;
+}
+
+/**
+ * Store detail response
+ */
+export class StoreDetailDto {
+  @ApiProperty({ example: 1, description: 'Store ID' })
+  id: number;
+
+  @ApiProperty({ example: 'Myntra Store', description: 'Store name' })
+  storeName: string;
+
+  @ApiProperty({ example: 'myntra-store', description: 'Store slug' })
+  storeSlug: string;
+
+  @ApiProperty({ example: true, description: 'Whether the store is active' })
+  isActive: boolean;
+
+  @ApiProperty({ example: true, description: 'Whether the store is verified' })
+  isVerified: boolean;
+
+  @ApiProperty({ type: PerformanceMetricsDto })
+  performance: PerformanceMetricsDto;
+
+  @ApiProperty({ type: CashbackConfigDto })
+  cashbackConfig: CashbackConfigDto;
+
+  @ApiProperty({ type: WalletMetricsDto })
+  walletMetrics: WalletMetricsDto;
+
+  @ApiProperty({ example: '2026-01-28T00:00:00Z', description: 'Store creation date' })
+  createdAt: string;
+
+  @ApiProperty({ example: '2026-03-15T10:00:00Z', description: 'Store update date' })
+  updatedAt: string;
+}
+
+/**
+ * Order listing item
+ */
+export class OrderListItemDto {
+  @ApiProperty({ example: 123, description: 'Order ID' })
+  id: number;
+
+  @ApiProperty({ example: 'Sneha Shah', description: 'Customer name' })
+  customerName: string;
+
+  @ApiProperty({ example: 'ORD-2026-12345', description: 'External order ID' })
+  externalOrderId: string;
+
+  @ApiProperty({ example: 'MYNTRA-000123-A3F2B1', description: 'Coupon code used' })
+  couponCode: string;
+
+  @ApiProperty({ example: 10000, description: 'Order value in rupees' })
+  orderValue: number;
+
+  @ApiProperty({ example: 1000, description: 'Cashback amount in rupees' })
+  cashbackAmount: number;
+
+  @ApiProperty({ example: '2025-10-02T00:00:00Z', description: 'Order date' })
+  orderDate: string;
+
+  @ApiProperty({ example: 'CREDITED', description: 'Cashback status' })
+  cashbackStatus: string;
+
+  @ApiProperty({ example: 'DELIVERED', description: 'Order status' })
+  orderStatus: string;
+}
+
+/**
+ * Orders list response with pagination
+ */
+export class OrdersListResponseDto {
+  @ApiProperty({ type: [OrderListItemDto] })
+  orders: OrderListItemDto[];
+
+  @ApiProperty({ example: 180, description: 'Total number of orders' })
+  total: number;
+
+  @ApiProperty({ example: 1, description: 'Current page' })
+  page: number;
+
+  @ApiProperty({ example: 20, description: 'Items per page' })
+  limit: number;
+
+  @ApiProperty({ example: 9, description: 'Total pages' })
+  totalPages: number;
+}
+
+/**
+ * Wallet transaction item
+ */
+export class WalletTransactionItemDto {
+  @ApiProperty({ example: 12, description: 'Transaction ID' })
+  id: number;
+
+  @ApiProperty({ example: 'ADD_MONEY', description: 'Transaction type' })
+  transactionType: string;
+
+  @ApiProperty({ example: 'Wallet recharge', description: 'Transaction description' })
+  description: string;
+
+  @ApiProperty({ example: 36000, description: 'Transaction amount' })
+  amount: number;
+
+  @ApiProperty({ example: 136000, description: 'Balance after transaction' })
+  balanceAfter: number;
+
+  @ApiProperty({ example: 'SUCCESS', description: 'Transaction status (SUCCESS/FAILED)' })
+  status: string;
+
+  @ApiProperty({ example: 'UPI', description: 'Payment method' })
+  paymentMethod: string;
+
+  @ApiProperty({ example: 'pay_123456789', description: 'Payment reference ID' })
+  paymentReferenceId: string;
+
+  @ApiProperty({ example: '2026-03-22T01:54:00Z', description: 'Transaction date' })
+  createdAt: string;
+}
+
+/**
+ * Wallet transactions list response with pagination
+ */
+export class WalletTransactionsListResponseDto {
+  @ApiProperty({ type: [WalletTransactionItemDto] })
+  transactions: WalletTransactionItemDto[];
+
+  @ApiProperty({ example: 50, description: 'Total number of transactions' })
+  total: number;
+
+  @ApiProperty({ example: 1, description: 'Current page' })
+  page: number;
+
+  @ApiProperty({ example: 20, description: 'Items per page' })
+  limit: number;
+
+  @ApiProperty({ example: 3, description: 'Total pages' })
+  totalPages: number;
+}

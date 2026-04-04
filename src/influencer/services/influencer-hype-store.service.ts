@@ -20,6 +20,7 @@ import { SubmitProofDto } from '../dto/hype-store-order.dto';
 import { Niche } from '../../auth/model/niche.model';
 import { Influencer } from '../../auth/model/influencer.model';
 import { InstagramProfileAnalysis } from '../../shared/models/instagram-profile-analysis.model';
+import { InstagramService } from '../../shared/services/instagram.service';
 import axios from 'axios';
 
 @Injectable()
@@ -45,6 +46,7 @@ export class InfluencerHypeStoreService {
     private influencerModel: typeof Influencer,
     @InjectModel(InstagramProfileAnalysis)
     private instagramProfileAnalysisModel: typeof InstagramProfileAnalysis,
+    private instagramService: InstagramService,
     private sequelize: Sequelize,
   ) {}
 
@@ -1045,6 +1047,14 @@ export class InfluencerHypeStoreService {
     orderId: number,
     submitProofDto: SubmitProofDto,
   ) {
+    // Validate that either mediaId or instagramUrl is provided (not both)
+    if (!submitProofDto.mediaId && !submitProofDto.instagramUrl) {
+      throw new BadRequestException('Either mediaId or instagramUrl must be provided');
+    }
+    if (submitProofDto.mediaId && submitProofDto.instagramUrl) {
+      throw new BadRequestException('Provide either mediaId OR instagramUrl, not both');
+    }
+
     // Get order with associations
     const order = await this.orderModel.findOne({
       where: { id: orderId },
@@ -1090,10 +1100,50 @@ export class InfluencerHypeStoreService {
       throw new NotFoundException('Influencer not found');
     }
 
+    // If mediaId is provided, fetch full media details from Instagram
+    let instagramUrl = submitProofDto.instagramUrl;
+    let mediaTimestamp: Date | null = null;
+    let mediaUrl: string | null = null;
+    let mediaThumbnail: string | null = null;
+
+    if (submitProofDto.mediaId) {
+      try {
+        if (!influencer.instagramAccessToken) {
+          throw new BadRequestException('Instagram account not connected. Cannot fetch media details.');
+        }
+
+        // Fetch media details from Instagram API
+        const fields = 'id,permalink,timestamp,media_url,thumbnail_url';
+        const response = await axios.get(
+          `https://graph.instagram.com/v24.0/${submitProofDto.mediaId}`,
+          {
+            params: {
+              fields,
+              access_token: influencer.instagramAccessToken,
+            },
+          }
+        );
+
+        const mediaData = response.data;
+        instagramUrl = mediaData.permalink; // Use Instagram permalink as the proof URL
+        mediaTimestamp = mediaData.timestamp ? new Date(mediaData.timestamp) : null;
+        mediaUrl = mediaData.media_url;
+        mediaThumbnail = mediaData.thumbnail_url || mediaData.media_url;
+
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          const errorMsg = error.response?.data?.error?.message || 'Failed to fetch Instagram media details';
+          throw new BadRequestException(`Instagram API error: ${errorMsg}`);
+        }
+        throw new BadRequestException('Failed to fetch Instagram media details');
+      }
+    }
+
     // Use cached profile analysis data (same as profile scoring system)
-    let thumbnailUrl: string | null = null;
+    // If mediaId was provided and we fetched details, use those; otherwise use null
+    let thumbnailUrl: string | null = mediaThumbnail;
     let viewCount: number | null = null;
-    let postedAt: Date | null = null;
+    let postedAt: Date | null = mediaTimestamp;
     let estimatedReach: number | null = null;
     let estimatedEngagement: number | null = null;
     let expectedRoi: number | null = null;
@@ -1241,7 +1291,7 @@ export class InfluencerHypeStoreService {
       // Update order with proof details, performance metrics, and references
       await order.update(
         {
-          instagramProofUrl: submitProofDto.instagramUrl,
+          instagramProofUrl: instagramUrl, // Use fetched permalink from mediaId or manually provided URL
           proofContentType: submitProofDto.contentType,
           proofSubmittedAt: new Date(),
           proofThumbnailUrl: thumbnailUrl,
@@ -1256,6 +1306,8 @@ export class InfluencerHypeStoreService {
           metadata: {
             ...(order.metadata || {}),
             brandDebitTransactionId: brandDebitTx.id,
+            mediaId: submitProofDto.mediaId || null, // Store mediaId if provided for reference
+            mediaUrl: mediaUrl || null, // Store actual media URL for backup
           },
           notes: submitProofDto.notes
             ? `${order.notes ? order.notes + '\n' : ''}Proof submitted: ${submitProofDto.notes}`

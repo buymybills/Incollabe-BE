@@ -195,6 +195,16 @@ export class HypeStoreOrder extends Model<HypeStoreOrder> {
 
   @Index
   @Column({
+    type: DataType.STRING(20),
+    allowNull: false,
+    defaultValue: 'post_reel',
+    field: 'content_type',
+    comment: 'Content type for cashback calculation: story or post_reel',
+  })
+  declare contentType: 'story' | 'post_reel';
+
+  @Index
+  @Column({
     type: DataType.STRING(50),
     allowNull: false,
     defaultValue: CashbackStatus.PENDING,

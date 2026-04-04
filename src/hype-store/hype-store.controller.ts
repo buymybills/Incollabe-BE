@@ -10,6 +10,7 @@ import {
   Request,
   HttpCode,
   HttpStatus,
+  HttpException,
   UseInterceptors,
   UploadedFile,
   Headers,
@@ -28,6 +29,13 @@ import { CASHBACK_CLAIM_STRATEGIES } from './constants/cashback-strategies';
 import { CreateWalletRechargeOrderDto, VerifyWalletPaymentDto } from './dto/wallet.dto';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { PurchaseWebhookDto, ReturnWebhookDto, WebhookResponseDto } from '../wallet/dto/hype-store-webhook.dto';
+import { InstagramService } from '../shared/services/instagram.service';
+import {
+  StoreOrdersResponseDto,
+  StoreDetailPerformanceResponseDto,
+  PaginationQueryDto,
+  WalletTransactionsResponseDto,
+} from './dto/brand-store-analytics.dto';
 
 @ApiTags('Hype Store')
 @Controller('brand/hype-store')
@@ -37,6 +45,7 @@ export class HypeStoreController {
   constructor(
     private readonly hypeStoreService: HypeStoreService,
     private readonly configService: ConfigService,
+    private readonly instagramService: InstagramService,
   ) {}
 
   @Get('cashback-strategies')
@@ -357,60 +366,43 @@ export class HypeStoreController {
   @Get('wallet/transactions')
   @ApiOperation({
     summary: 'Get wallet transaction history',
-    description: 'Get paginated wallet transaction history for the brand'
+    description: 'Get paginated wallet transaction history for the brand with formatted display data'
   })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Number of records (default: 50)' })
   @ApiQuery({ name: 'offset', required: false, type: Number, description: 'Offset for pagination (default: 0)' })
   @ApiResponse({
     status: 200,
     description: 'Transactions retrieved successfully',
+    type: WalletTransactionsResponseDto,
     schema: {
-      type: 'object',
-      properties: {
-        transactions: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'number', example: 1 },
-              walletId: { type: 'number', example: 1 },
-              transactionType: {
-                type: 'string',
-                example: 'recharge',
-                enum: ['recharge', 'debit', 'cashback', 'redemption', 'refund', 'adjustment'],
-                description: 'recharge: Brand adds money | debit: Brand pays influencer | cashback: Influencer receives cashback | redemption: Influencer withdraws | refund: Money returned | adjustment: Admin adjustment'
-              },
-              amount: { type: 'number', example: 10000.00, description: 'Transaction amount in Rs' },
-              balanceBefore: { type: 'number', example: 15000.00, description: 'Wallet balance before transaction' },
-              balanceAfter: { type: 'number', example: 25000.00, description: 'Wallet balance after transaction' },
-              status: {
-                type: 'string',
-                example: 'completed',
-                enum: ['pending', 'processing', 'completed', 'failed', 'cancelled']
-              },
-              paymentGateway: { type: 'string', example: 'razorpay', nullable: true },
-              paymentOrderId: { type: 'string', example: 'order_NXt7aB3kEFG9H2', nullable: true },
-              paymentTransactionId: { type: 'string', example: 'pay_NXt7aB3kEFG9H2', nullable: true },
-              paymentReferenceId: { type: 'string', nullable: true },
-              upiId: { type: 'string', nullable: true, description: 'UPI ID for redemptions' },
-              relatedUserId: { type: 'number', nullable: true, description: 'Recipient influencer ID for debits' },
-              relatedUserType: { type: 'string', nullable: true, example: 'influencer' },
-              campaignId: { type: 'number', nullable: true },
-              hypeStoreId: { type: 'number', nullable: true },
-              description: { type: 'string', example: 'Wallet recharge via Razorpay' },
-              notes: { type: 'string', nullable: true },
-              metadata: { type: 'object', nullable: true, description: 'Additional data (e.g., razorpay response)' },
-              processedBy: { type: 'number', nullable: true, description: 'Admin who processed (for redemptions)' },
-              processedAt: { type: 'string', nullable: true },
-              failedReason: { type: 'string', nullable: true },
-              createdAt: { type: 'string', example: '2026-03-07T10:00:00.000Z' },
-              updatedAt: { type: 'string', example: '2026-03-07T10:00:00.000Z' }
-            }
-          }
-        },
-        total: { type: 'number', example: 15, description: 'Total number of transactions' }
-      }
-    }
+      example: {
+        transactions: [
+          {
+            id: 12,
+            transactionNumber: '#12',
+            type: 'Wallet recharge',
+            amount: 36000,
+            balance: 136000,
+            status: 'successful',
+            date: '2026-03-22T01:54:00.000Z',
+            paymentOrderId: 'order_123456',
+            paymentTransactionId: 'pay_789012',
+            description: 'Wallet recharged via Razorpay',
+          },
+          {
+            id: 11,
+            transactionNumber: '#11',
+            type: 'Wallet recharge',
+            amount: 36000,
+            balance: 136000,
+            status: 'failed',
+            date: '2026-03-22T01:54:00.000Z',
+            failedReason: 'Payment gateway error',
+          },
+        ],
+        total: 50,
+      },
+    },
   })
   @ApiResponse({ status: 404, description: 'Wallet not found for this brand' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -418,7 +410,7 @@ export class HypeStoreController {
     @Request() req: any,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
-  ) {
+  ): Promise<WalletTransactionsResponseDto> {
     const brandId = req.user.id;
     return this.hypeStoreService.getWalletTransactions(
       brandId,
@@ -820,8 +812,8 @@ export class HypeStoreController {
 
   @Get(':storeId/orders')
   @ApiOperation({
-    summary: 'Get all orders for store',
-    description: 'Get paginated list of all orders for the store'
+    summary: 'Get all orders for store with customer details and store statistics',
+    description: 'Get paginated list of all orders with customer information, coupon details, and store-level statistics'
   })
   @ApiParam({ name: 'storeId', type: Number, description: 'Store ID' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Number of records (default: 50)' })
@@ -829,45 +821,27 @@ export class HypeStoreController {
   @ApiResponse({
     status: 200,
     description: 'Orders retrieved successfully',
+    type: StoreOrdersResponseDto,
     schema: {
-      type: 'object',
-      properties: {
-        orders: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'number', example: 123 },
-              externalOrderId: { type: 'string', example: 'ORD-2026-0001' },
-              hypeStoreId: { type: 'number', example: 9 },
-              influencerId: { type: 'number', example: 45 },
-              couponCode: { type: 'string', example: 'BRAND123' },
-              orderAmount: { type: 'number', example: 1500 },
-              cashbackAmount: { type: 'number', example: 250 },
-              orderStatus: { type: 'string', example: 'COMPLETED' },
-              cashbackStatus: { type: 'string', example: 'SENT' },
-              createdAt: { type: 'string', example: '2026-03-11T10:00:00.000Z' },
-            },
-          },
-        },
-        total: { type: 'number', example: 120 },
-      },
       example: {
         orders: [
           {
             id: 123,
-            externalOrderId: 'ORD-2026-0001',
-            hypeStoreId: 9,
-            influencerId: 45,
-            couponCode: 'BRAND123',
-            orderAmount: 1500,
-            cashbackAmount: 250,
-            orderStatus: 'COMPLETED',
-            cashbackStatus: 'SENT',
-            createdAt: '2026-03-11T10:00:00.000Z',
+            customerName: 'John Doe',
+            orderId: 'ORD123456',
+            couponUsed: 'SAVE20',
+            orderValue: 2500.00,
+            cashbackAmount: 500.00,
+            orderDate: '2026-03-15T10:00:00.000Z',
+            cashbackStatus: 'credited',
           },
         ],
-        total: 120,
+        total: 400,
+        storeInfo: {
+          totalOrders: 400,
+          totalSales: 4260000,
+          currentWalletAmount: 110000,
+        },
       },
     },
   })
@@ -878,13 +852,80 @@ export class HypeStoreController {
     @Param('storeId') storeId: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
-  ) {
+  ): Promise<StoreOrdersResponseDto> {
     const brandId = req.user.id;
     return this.hypeStoreService.getStoreOrders(
       parseInt(storeId),
       brandId,
       limit ? parseInt(limit) : 50,
       offset ? parseInt(offset) : 0,
+    );
+  }
+
+  @Get(':storeId/performance')
+  @ApiOperation({
+    summary: 'Get store detail performance metrics and configuration',
+    description: 'Get comprehensive store performance analytics including ROI, engagement, reach metrics, cashback configuration, and wallet statistics'
+  })
+  @ApiParam({ name: 'storeId', type: Number, description: 'Store ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Store performance details retrieved successfully',
+    type: StoreDetailPerformanceResponseDto,
+    schema: {
+      example: {
+        storeInfo: {
+          id: 1,
+          storeName: 'Myntra Fashion Store',
+          isActive: true,
+        },
+        performanceMetrics: {
+          expectedROI: {
+            value: 1.4,
+            formatted: '1.4x',
+            rating: 'Elite',
+          },
+          estimatedEngagement: {
+            value: 13100,
+            formatted: '13.1K',
+            rating: 'Elite',
+          },
+          estimatedReach: {
+            value: 210000,
+            formatted: '210K',
+            rating: 'Elite',
+          },
+        },
+        cashbackConfig: {
+          claimCountPerCreator: 3,
+          reelPost: {
+            maximum: 4000,
+            minimum: 200,
+          },
+          story: {
+            maximum: 4000,
+            minimum: 200,
+          },
+        },
+        walletStats: {
+          currentAmount: 110000,
+          totalCashbackUsed: 110000,
+          totalOrders: 400,
+          totalSales: 4260000,
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Store not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getStoreDetailPerformance(
+    @Request() req: any,
+    @Param('storeId') storeId: string,
+  ): Promise<StoreDetailPerformanceResponseDto> {
+    const brandId = req.user.id;
+    return this.hypeStoreService.getStoreDetailPerformance(
+      parseInt(storeId),
+      brandId,
     );
   }
 
@@ -1224,5 +1265,125 @@ export class HypeStoreController {
   async deactivateBrandSharedCoupon(@Request() req: any, @Param('storeId') storeId: string) {
     const brandId = req.user.id;
     return this.hypeStoreService.deactivateBrandSharedCoupon(parseInt(storeId), brandId);
+  }
+
+  @Get(':storeId/orders/:orderId/available-media')
+  @ApiOperation({
+    summary: 'Get available Instagram stories/reels for proof submission',
+    description: 'Fetches Instagram stories and reels posted within the order date range that can be used as proof of promotion. This allows influencers to select from their recent content instead of manually entering URLs.',
+  })
+  @ApiParam({ name: 'storeId', type: Number, description: 'Store ID' })
+  @ApiParam({ name: 'orderId', type: Number, description: 'Order ID' })
+  @ApiQuery({
+    name: 'contentType',
+    required: false,
+    enum: ['story', 'post_reel'],
+    description: 'Filter by content type (story or post_reel). If not specified, returns both.',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Maximum number of media items to fetch (default: 50)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Available media fetched successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        order: {
+          type: 'object',
+          properties: {
+            id: { type: 'number', example: 123 },
+            externalOrderId: { type: 'string', example: 'ORD-2026-12345' },
+            orderDate: { type: 'string', example: '2026-03-15T10:00:00Z' },
+            contentType: { type: 'string', example: 'post_reel', description: 'Expected content type for this order' },
+          },
+        },
+        dateRange: {
+          type: 'object',
+          properties: {
+            fromDate: { type: 'string', example: '2026-03-15T00:00:00Z' },
+            toDate: { type: 'string', example: '2026-04-01T23:59:59Z' },
+          },
+        },
+        media: {
+          type: 'object',
+          properties: {
+            data: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', example: '18012345678901234' },
+                  caption: { type: 'string', example: 'Check out this amazing product! #ad' },
+                  mediaType: { type: 'string', example: 'VIDEO', description: 'IMAGE, VIDEO, or CAROUSEL_ALBUM' },
+                  mediaProductType: { type: 'string', example: 'REELS', description: 'FEED, REELS, or STORY' },
+                  contentType: { type: 'string', example: 'post_reel', description: 'Our classification: story or post_reel' },
+                  mediaUrl: { type: 'string', example: 'https://scontent.cdninstagram.com/...' },
+                  thumbnailUrl: { type: 'string', example: 'https://scontent.cdninstagram.com/...' },
+                  permalink: { type: 'string', example: 'https://www.instagram.com/reel/ABC123xyz/' },
+                  timestamp: { type: 'string', example: '2026-03-20T14:30:00+0000' },
+                  formattedDate: { type: 'string', example: 'Mar 20, 2026, 02:30 PM' },
+                },
+              },
+            },
+            total: { type: 'number', example: 5 },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  @ApiResponse({ status: 400, description: 'Instagram not connected or invalid parameters' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getAvailableMediaForOrder(
+    @Request() req: any,
+    @Param('storeId') storeId: string,
+    @Param('orderId') orderId: string,
+    @Query('contentType') contentType?: 'story' | 'post_reel',
+    @Query('limit') limit?: string,
+  ) {
+    const brandId = req.user.id;
+
+    // Get order details to determine date range and influencer
+    const order = await this.hypeStoreService.getOrderDetails(
+      parseInt(storeId),
+      brandId,
+      parseInt(orderId),
+    );
+
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Date range: from order date to current date
+    const fromDate = new Date(order.orderDate);
+    const toDate = new Date();
+
+    // Fetch media from Instagram
+    const media = await this.instagramService.getInstagramMediaByDateRange(
+      order.influencer.id,
+      'influencer',
+      fromDate,
+      toDate,
+      contentType || order.contentType, // Use query param or order's content type
+      limit ? parseInt(limit) : 50,
+    );
+
+    return {
+      order: {
+        id: order.id,
+        externalOrderId: order.externalOrderId,
+        orderDate: order.orderDate,
+        contentType: order.contentType,
+      },
+      dateRange: {
+        fromDate: fromDate.toISOString(),
+        toDate: toDate.toISOString(),
+      },
+      media,
+    };
   }
 }

@@ -21,6 +21,8 @@ import { HypeStoreWebhookSecret } from '../wallet/models/hype-store-webhook-secr
 import { HypeStoreReferralCode } from '../wallet/models/hype-store-referral-code.model';
 import { HypeStoreReferralClick } from '../wallet/models/hype-store-referral-click.model';
 import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
+import { CashbackTier } from './models/cashback-tier.model';
+import { CashbackTierService } from './services/cashback-tier.service';
 import { SharedModule } from '../shared/shared.module';
 
 @Module({
@@ -43,11 +45,12 @@ import { SharedModule } from '../shared/shared.module';
       HypeStoreReferralCode,
       HypeStoreReferralClick,
       InstagramProfileAnalysis,
+      CashbackTier,
     ]),
     SharedModule,
   ],
   controllers: [HypeStoreController, HypeStoreWebhookController],
-  providers: [HypeStoreService, OrderVisibilitySchedulerService],
-  exports: [HypeStoreService],
+  providers: [HypeStoreService, OrderVisibilitySchedulerService, CashbackTierService],
+  exports: [HypeStoreService, CashbackTierService],
 })
 export class HypeStoreModule {}

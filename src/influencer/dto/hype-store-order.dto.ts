@@ -1,15 +1,28 @@
-import { IsString, IsUrl, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsString, IsUrl, IsNotEmpty, IsOptional, ValidateIf } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class SubmitProofDto {
   @ApiProperty({
-    description: 'URL of the Instagram Reel or Post promoting the product',
+    description: 'Instagram media ID from the available media list. Use this OR instagramUrl (not both).',
+    example: '18012345678901234',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  @ValidateIf(o => !o.instagramUrl) // Only validate if instagramUrl is not provided
+  @IsNotEmpty({ message: 'Either mediaId or instagramUrl is required' })
+  mediaId?: string;
+
+  @ApiProperty({
+    description: 'URL of the Instagram Reel or Post promoting the product. Use this OR mediaId (not both).',
     example: 'https://www.instagram.com/reel/ABC123xyz/',
-    required: true,
+    required: false,
   })
   @IsUrl({}, { message: 'Invalid Instagram URL format' })
-  @IsNotEmpty({ message: 'Instagram post/reel URL is required' })
-  instagramUrl: string;
+  @IsOptional()
+  @ValidateIf(o => !o.mediaId) // Only validate if mediaId is not provided
+  @IsNotEmpty({ message: 'Either mediaId or instagramUrl is required' })
+  instagramUrl?: string;
 
   @ApiProperty({
     description: 'Type of content posted',

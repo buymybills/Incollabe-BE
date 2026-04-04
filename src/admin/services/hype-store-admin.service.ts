@@ -7,6 +7,10 @@ import { HypeStoreOrder } from '../../wallet/models/hype-store-order.model';
 import { Wallet, UserType } from '../../wallet/models/wallet.model';
 import { Brand } from '../../brand/model/brand.model';
 import { Niche } from '../../auth/model/niche.model';
+import { HypeStoreCashbackConfig } from '../../hype-store/models/hype-store-cashback-config.model';
+import { HypeStoreCouponCode } from '../../wallet/models/hype-store-coupon-code.model';
+import { HypeStoreWallet } from '../../hype-store/models/hype-store-wallet.model';
+import { HypeStoreWalletTransaction } from '../../hype-store/models/hype-store-wallet-transaction.model';
 import {
   DateRangeFilterDto,
   PaginationDto,
@@ -14,6 +18,14 @@ import {
   BrandsListResponseDto,
   BrandWithStoresDto,
   BrandStoresResponseDto,
+  StoreDetailDto,
+  PerformanceMetricsDto,
+  CashbackConfigDto,
+  WalletMetricsDto,
+  OrdersListResponseDto,
+  OrderListItemDto,
+  WalletTransactionsListResponseDto,
+  WalletTransactionItemDto,
 } from '../dto/hype-store-admin.dto';
 
 @Injectable()
@@ -27,6 +39,14 @@ export class HypeStoreAdminService {
     private walletModel: typeof Wallet,
     @InjectModel(Brand)
     private brandModel: typeof Brand,
+    @InjectModel(HypeStoreCashbackConfig)
+    private cashbackConfigModel: typeof HypeStoreCashbackConfig,
+    @InjectModel(HypeStoreCouponCode)
+    private couponCodeModel: typeof HypeStoreCouponCode,
+    @InjectModel(HypeStoreWallet)
+    private hypeStoreWalletModel: typeof HypeStoreWallet,
+    @InjectModel(HypeStoreWalletTransaction)
+    private walletTransactionModel: typeof HypeStoreWalletTransaction,
     private sequelize: Sequelize,
   ) {}
 
@@ -307,6 +327,298 @@ export class HypeStoreAdminService {
         createdAt: store.createdAt?.toISOString?.() || store.createdAt,
         updatedAt: store.updatedAt?.toISOString?.() || store.updatedAt,
       })),
+    };
+  }
+
+  /**
+   * Get detailed information for a specific store
+   */
+  async getStoreDetail(storeId: number, dateRange: DateRangeFilterDto): Promise<StoreDetailDto> {
+    const store = await this.hypeStoreModel.findByPk(storeId, {
+      include: [
+        {
+          model: this.cashbackConfigModel,
+          as: 'cashbackConfig',
+        },
+        {
+          model: Brand,
+          as: 'brand',
+          attributes: ['id', 'brandName'],
+        },
+      ],
+    });
+
+    if (!store) {
+      throw new NotFoundException('Store not found');
+    }
+
+    // Default date range: last 30 days
+    const endDate = dateRange.endDate ? new Date(dateRange.endDate) : new Date();
+    const startDate = dateRange.startDate
+      ? new Date(dateRange.startDate)
+      : new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    // Calculate previous period
+    const periodDuration = endDate.getTime() - startDate.getTime();
+    const prevStartDate = new Date(startDate.getTime() - periodDuration);
+    const prevEndDate = new Date(startDate.getTime() - 1);
+
+    // Get performance metrics (average from all orders with ROI data)
+    const performanceStats = await this.orderModel.findOne({
+      attributes: [
+        [this.sequelize.fn('AVG', this.sequelize.col('expected_roi')), 'avgRoi'],
+        [this.sequelize.fn('AVG', this.sequelize.col('estimated_engagement')), 'avgEngagement'],
+        [this.sequelize.fn('AVG', this.sequelize.col('estimated_reach')), 'avgReach'],
+      ],
+      where: this.sequelize.and(
+        { hypeStoreId: storeId },
+        this.sequelize.literal('expected_roi IS NOT NULL'),
+      ),
+      raw: true,
+    });
+
+    const avgRoi = parseFloat((performanceStats as any)?.avgRoi || '1.0');
+    const avgEngagement = parseInt((performanceStats as any)?.avgEngagement || '0');
+    const avgReach = parseInt((performanceStats as any)?.avgReach || '0');
+
+    // Determine performance tier based on ROI
+    let performanceTier = 'Standard';
+    if (avgRoi >= 2.0) {
+      performanceTier = 'Elite';
+    } else if (avgRoi >= 1.5) {
+      performanceTier = 'Premium';
+    }
+
+    // Get wallet metrics for current and previous period
+    const currentWalletMetrics = await this.calculateWalletMetrics(storeId, startDate, endDate);
+    const previousWalletMetrics = await this.calculateWalletMetrics(
+      storeId,
+      prevStartDate,
+      prevEndDate,
+    );
+
+    const calculateChange = (current: number, previous: number): number => {
+      if (previous === 0) return current > 0 ? 100 : 0;
+      return parseFloat((((current - previous) / previous) * 100).toFixed(1));
+    };
+
+    // Get brand wallet for current balance
+    const brandWallet = await this.hypeStoreWalletModel.findOne({
+      where: {
+        brandId: (store as any).brandId,
+      },
+    });
+
+    const performance: PerformanceMetricsDto = {
+      expectedRoi: parseFloat(avgRoi.toFixed(1)),
+      estimatedEngagement: avgEngagement,
+      estimatedReach: avgReach,
+      performanceTier,
+    };
+
+    const cashbackConfig: CashbackConfigDto = {
+      reelPostMinCashback: parseFloat(
+        ((store as any).cashbackConfig?.reelPostMinCashback?.toString() || '200'),
+      ),
+      reelPostMaxCashback: parseFloat(
+        ((store as any).cashbackConfig?.reelPostMaxCashback?.toString() || '4000'),
+      ),
+      storyMinCashback: parseFloat(
+        ((store as any).cashbackConfig?.storyMinCashback?.toString() || '200'),
+      ),
+      storyMaxCashback: parseFloat(
+        ((store as any).cashbackConfig?.storyMaxCashback?.toString() || '4000'),
+      ),
+      monthlyClaimCount: (store as any).cashbackConfig?.monthlyClaimCount || 3,
+      claimStrategy: (store as any).cashbackConfig?.claimStrategy || 'OPTIMIZED_SPEND',
+    };
+
+    const walletMetrics: WalletMetricsDto = {
+      currentWalletAmount: parseFloat(brandWallet?.balance?.toString() || '0'),
+      currentWalletAmountChange: calculateChange(
+        parseFloat(brandWallet?.balance?.toString() || '0'),
+        previousWalletMetrics.currentBalance,
+      ),
+      totalCashbackUsed: currentWalletMetrics.totalCashbackUsed,
+      totalCashbackUsedChange: calculateChange(
+        currentWalletMetrics.totalCashbackUsed,
+        previousWalletMetrics.totalCashbackUsed,
+      ),
+      totalOrders: currentWalletMetrics.totalOrders,
+      totalOrdersChange: calculateChange(
+        currentWalletMetrics.totalOrders,
+        previousWalletMetrics.totalOrders,
+      ),
+      totalSales: currentWalletMetrics.totalSales,
+      totalSalesChange: calculateChange(
+        currentWalletMetrics.totalSales,
+        previousWalletMetrics.totalSales,
+      ),
+    };
+
+    return {
+      id: store.id,
+      storeName: store.storeName,
+      storeSlug: store.storeSlug || '',
+      isActive: store.isActive,
+      isVerified: store.isVerified,
+      performance,
+      cashbackConfig,
+      walletMetrics,
+      createdAt: store.createdAt.toISOString(),
+      updatedAt: store.updatedAt.toISOString(),
+    };
+  }
+
+  /**
+   * Calculate wallet metrics for a specific date range
+   */
+  private async calculateWalletMetrics(
+    storeId: number,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<{
+    currentBalance: number;
+    totalCashbackUsed: number;
+    totalOrders: number;
+    totalSales: number;
+  }> {
+    // Get orders for this store in the date range
+    const ordersStats = await this.orderModel.findOne({
+      attributes: [
+        [this.sequelize.fn('COUNT', this.sequelize.col('id')), 'totalOrders'],
+        [this.sequelize.fn('SUM', this.sequelize.col('order_amount')), 'totalSales'],
+        [this.sequelize.fn('SUM', this.sequelize.col('cashback_amount')), 'totalCashback'],
+      ],
+      where: {
+        hypeStoreId: storeId,
+        orderDate: {
+          [Op.between]: [startDate, endDate],
+        },
+      },
+      raw: true,
+    });
+
+    // Get wallet balance at end of period
+    const store = await this.hypeStoreModel.findByPk(storeId);
+    const brandWallet = await this.hypeStoreWalletModel.findOne({
+      where: {
+        brandId: (store as any)?.brandId,
+      },
+    });
+
+    return {
+      currentBalance: parseFloat(brandWallet?.balance?.toString() || '0'),
+      totalCashbackUsed: parseFloat((ordersStats as any)?.totalCashback || '0'),
+      totalOrders: parseInt((ordersStats as any)?.totalOrders || '0'),
+      totalSales: parseFloat((ordersStats as any)?.totalSales || '0'),
+    };
+  }
+
+  /**
+   * Get paginated list of orders for a specific store
+   */
+  async getStoreOrders(
+    storeId: number,
+    pagination: PaginationDto,
+  ): Promise<OrdersListResponseDto> {
+    const page = pagination.page || 1;
+    const limit = pagination.limit || 20;
+    const offset = (page - 1) * limit;
+
+    // Verify store exists
+    const store = await this.hypeStoreModel.findByPk(storeId);
+    if (!store) {
+      throw new NotFoundException('Store not found');
+    }
+
+    const { rows: orders, count: total } = await this.orderModel.findAndCountAll({
+      where: {
+        hypeStoreId: storeId,
+      },
+      include: [
+        {
+          model: this.couponCodeModel,
+          as: 'couponCode',
+          attributes: ['couponCode'],
+        },
+      ],
+      order: [['orderDate', 'DESC']],
+      limit,
+      offset,
+    });
+
+    const ordersList: OrderListItemDto[] = orders.map((order) => ({
+      id: order.id,
+      customerName: order.customerName || 'N/A',
+      externalOrderId: order.externalOrderId,
+      couponCode: (order as any).couponCode?.couponCode || 'N/A',
+      orderValue: parseFloat(order.orderAmount.toString()),
+      cashbackAmount: parseFloat(order.cashbackAmount.toString()),
+      orderDate: order.orderDate.toISOString(),
+      cashbackStatus: order.cashbackStatus,
+      orderStatus: order.orderStatus,
+    }));
+
+    return {
+      orders: ordersList,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  /**
+   * Get wallet transaction history for a brand
+   */
+  async getWalletTransactions(
+    brandId: number,
+    pagination: PaginationDto,
+  ): Promise<WalletTransactionsListResponseDto> {
+    const page = pagination.page || 1;
+    const limit = pagination.limit || 20;
+    const offset = (page - 1) * limit;
+
+    // Get brand wallet
+    const wallet = await this.hypeStoreWalletModel.findOne({
+      where: {
+        brandId,
+      },
+    });
+
+    if (!wallet) {
+      throw new NotFoundException('Wallet not found for this brand');
+    }
+
+    const { rows: transactions, count: total } =
+      await this.walletTransactionModel.findAndCountAll({
+        where: {
+          walletId: wallet.id,
+        },
+        order: [['createdAt', 'DESC']],
+        limit,
+        offset,
+      });
+
+    const transactionsList: WalletTransactionItemDto[] = transactions.map((txn) => ({
+      id: txn.id,
+      transactionType: txn.transactionType,
+      description: txn.description || 'Wallet transaction',
+      amount: parseFloat(txn.amount.toString()),
+      balanceAfter: parseFloat(txn.newBalance.toString()),
+      status: txn.paymentReferenceId ? 'SUCCESS' : 'SUCCESS', // Simplification - all recorded transactions are successful
+      paymentMethod: txn.paymentMethod || 'N/A',
+      paymentReferenceId: txn.paymentReferenceId || 'N/A',
+      createdAt: txn.createdAt.toISOString(),
+    }));
+
+    return {
+      transactions: transactionsList,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
     };
   }
 }
