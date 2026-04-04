@@ -1062,10 +1062,12 @@ export class InfluencerHypeStoreService {
         {
           model: this.hypeStoreModel,
           as: 'hypeStore',
+          required: true, // Ensure the association is loaded
           include: [
             {
               model: this.brandModel,
               as: 'brand',
+              required: true, // Ensure brand is loaded
               attributes: ['id', 'brandName'],
             },
           ],
@@ -1075,6 +1077,15 @@ export class InfluencerHypeStoreService {
 
     if (!order) {
       throw new NotFoundException('Order not found');
+    }
+
+    // Ensure associations are loaded
+    if (!order.hypeStore) {
+      throw new Error('HypeStore association not loaded for order');
+    }
+
+    if (!order.hypeStore.brand) {
+      throw new Error('Brand association not loaded for hype store');
     }
 
     // Verify order belongs to this influencer
@@ -1851,10 +1862,11 @@ export class InfluencerHypeStoreService {
         },
       };
     } catch (error) {
-      console.error(`Failed to refresh metrics for order ${orderId}:`, error.message);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`Failed to refresh metrics for order ${orderId}:`, errorMessage);
       return {
         success: false,
-        message: `Failed to refresh metrics: ${error.message}`,
+        message: `Failed to refresh metrics: ${errorMessage}`,
       };
     }
   }
@@ -1925,12 +1937,13 @@ export class InfluencerHypeStoreService {
         // Add small delay to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 500));
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         results.failedUpdates++;
         results.errors.push({
           orderId: order.id,
-          error: error.message,
+          error: errorMessage,
         });
-        console.error(`❌ Failed to refresh order ${order.id}:`, error.message);
+        console.error(`❌ Failed to refresh order ${order.id}:`, errorMessage);
       }
     }
 
