@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ForbiddenException,
@@ -25,6 +26,8 @@ import axios from 'axios';
 
 @Injectable()
 export class InfluencerHypeStoreService {
+  private readonly logger = new Logger(InfluencerHypeStoreService.name);
+
   constructor(
     @InjectModel(HypeStore)
     private hypeStoreModel: typeof HypeStore,
@@ -1119,12 +1122,16 @@ export class InfluencerHypeStoreService {
 
     if (submitProofDto.mediaId) {
       try {
+        this.logger.log(`[submitProof order=${orderId}] Fetching Instagram media details for mediaId=${submitProofDto.mediaId}`);
+
         if (!influencer.instagramAccessToken) {
           throw new BadRequestException('Instagram account not connected. Cannot fetch media details.');
         }
 
         // Fetch media details from Instagram API
         const fields = 'id,permalink,timestamp,media_url,thumbnail_url';
+        this.logger.log(`[submitProof order=${orderId}] Calling Instagram API with fields=${fields}`);
+
         const response = await axios.get(
           `https://graph.instagram.com/v24.0/${submitProofDto.mediaId}`,
           {
@@ -1132,18 +1139,24 @@ export class InfluencerHypeStoreService {
               fields,
               access_token: influencer.instagramAccessToken,
             },
+            timeout: 10000, // 10 second timeout
           }
         );
 
         const mediaData = response.data;
+        this.logger.log(`[submitProof order=${orderId}] Instagram API response received: ${JSON.stringify(mediaData)}`);
+
         instagramUrl = mediaData.permalink; // Use Instagram permalink as the proof URL
         mediaTimestamp = mediaData.timestamp ? new Date(mediaData.timestamp) : null;
         mediaUrl = mediaData.media_url;
         mediaThumbnail = mediaData.thumbnail_url || mediaData.media_url;
 
       } catch (error) {
+        this.logger.error(`[submitProof order=${orderId}] Instagram API call failed:`, error);
         if (axios.isAxiosError(error)) {
-          const errorMsg = error.response?.data?.error?.message || 'Failed to fetch Instagram media details';
+          const errorMsg = error.response?.data?.error?.message || error.message || 'Failed to fetch Instagram media details';
+          const errorDetail = error.response?.data ? JSON.stringify(error.response.data) : '';
+          this.logger.error(`[submitProof order=${orderId}] Instagram API error details: ${errorDetail}`);
           throw new BadRequestException(`Instagram API error: ${errorMsg}`);
         }
         throw new BadRequestException('Failed to fetch Instagram media details');
@@ -1221,13 +1234,34 @@ export class InfluencerHypeStoreService {
     const transaction: Transaction = await this.sequelize.transaction();
 
     try {
+      const txLog = (step: string, details: Record<string, any> = {}) => {
+        this.logger.log(
+          `[submitProof order=${orderId} influencer=${influencerId}] ${step} ${JSON.stringify(details)}`,
+        );
+      };
+
       const cashbackAmount = parseFloat(order.cashbackAmount.toString());
       const previousLockedAmount = parseFloat(wallet.lockedAmount.toString());
       const newLockedAmount = previousLockedAmount + cashbackAmount;
       const returnPeriodEndsAt = order.returnPeriodEndsAt ||
         new Date(Date.now() + parseFloat(order.returnPeriodDays.toString()) * 24 * 60 * 60 * 1000);
 
+      txLog('transaction started', {
+        cashbackAmount,
+        previousLockedAmount,
+        newLockedAmount,
+        returnPeriodEndsAt: returnPeriodEndsAt.toISOString(),
+        orderStatus: order.orderStatus,
+        cashbackStatus: order.cashbackStatus,
+        contentType: order.contentType,
+      });
+
       // Create locked wallet transaction
+      txLog('creating locked cashback transaction', {
+        walletId: wallet.id,
+        hypeStoreId: order.hypeStoreId,
+        hypeStoreOrderId: order.id,
+      });
       const lockedTransaction = await this.walletTransactionModel.create(
         {
           walletId: wallet.id,
@@ -1245,8 +1279,16 @@ export class InfluencerHypeStoreService {
         } as any,
         { transaction },
       );
+      txLog('locked cashback transaction created', {
+        lockedTransactionId: lockedTransaction.id,
+      });
 
       // Update wallet with locked amount
+      txLog('updating influencer wallet', {
+        walletId: wallet.id,
+        lockedAmountBefore: previousLockedAmount,
+        lockedAmountAfter: newLockedAmount,
+      });
       await wallet.update(
         {
           lockedAmount: newLockedAmount,
@@ -1255,6 +1297,9 @@ export class InfluencerHypeStoreService {
         },
         { transaction },
       );
+      txLog('influencer wallet updated', {
+        walletId: wallet.id,
+      });
 
       // Deduct from brand wallet immediately to reserve cashback
       const brandId = order.hypeStore?.brand?.id || order.hypeStore?.brandId;
@@ -1276,6 +1321,18 @@ export class InfluencerHypeStoreService {
         throw new BadRequestException('Insufficient brand wallet balance to reserve cashback');
       }
 
+      txLog('brand wallet loaded', {
+        brandId,
+        brandWalletId: brandWallet.id,
+        brandBalance,
+      });
+
+      txLog('creating brand debit transaction', {
+        walletId: brandWallet.id,
+        hypeStoreId: order.hypeStoreId,
+        hypeStoreOrderId: order.id,
+        debitAmount: cashbackAmount,
+      });
       const brandDebitTx = await this.walletTransactionModel.create(
         {
           walletId: brandWallet.id,
@@ -1290,7 +1347,15 @@ export class InfluencerHypeStoreService {
         } as any,
         { transaction },
       );
+      txLog('brand debit transaction created', {
+        brandDebitTransactionId: brandDebitTx.id,
+      });
 
+      txLog('updating brand wallet', {
+        brandWalletId: brandWallet.id,
+        balanceBefore: brandBalance,
+        balanceAfter: brandBalance - cashbackAmount,
+      });
       await brandWallet.update(
         {
           balance: brandBalance - cashbackAmount,
@@ -1298,8 +1363,17 @@ export class InfluencerHypeStoreService {
         },
         { transaction },
       );
+      txLog('brand wallet updated', {
+        brandWalletId: brandWallet.id,
+      });
 
       // Update order with proof details, performance metrics, and references
+      txLog('updating order', {
+        orderId: order.id,
+        lockedCashbackTransactionId: lockedTransaction.id,
+        brandDebitTransactionId: brandDebitTx.id,
+        proofContentType: submitProofDto.contentType,
+      });
       await order.update(
         {
           instagramProofUrl: instagramUrl, // Use fetched permalink from mediaId or manually provided URL
@@ -1326,8 +1400,14 @@ export class InfluencerHypeStoreService {
         } as any,
         { transaction },
       );
+      txLog('order updated successfully', {
+        orderId: order.id,
+      });
 
       await transaction.commit();
+      this.logger.log(
+        `[submitProof order=${orderId} influencer=${influencerId}] transaction committed successfully`,
+      );
 
       // Reload wallet to get updated values
       await wallet.reload();
@@ -1354,6 +1434,20 @@ export class InfluencerHypeStoreService {
         message: `Proof submitted successfully. Cashback of ₹${cashbackAmount.toFixed(2)} is now locked and will be available for redemption after the return window closes.`,
       };
     } catch (error) {
+      const err = error as Error & {
+        original?: { message?: string; stack?: string };
+        parent?: { message?: string; detail?: string; stack?: string };
+      };
+      this.logger.error(
+        `[submitProof order=${orderId} influencer=${influencerId}] transaction failed: ${err.message}`,
+        err.stack,
+      );
+      if (err.original?.message || err.parent?.message) {
+        this.logger.error(
+          `[submitProof order=${orderId} influencer=${influencerId}] original db error: ${err.original?.message || err.parent?.message}`,
+          err.original?.stack || err.parent?.stack,
+        );
+      }
       await transaction.rollback();
       throw error;
     }
