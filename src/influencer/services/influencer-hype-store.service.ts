@@ -1262,26 +1262,36 @@ export class InfluencerHypeStoreService {
         hypeStoreId: order.hypeStoreId,
         hypeStoreOrderId: order.id,
       });
-      const lockedTransaction = await this.walletTransactionModel.create(
-        {
-          walletId: wallet.id,
-          transactionType: TransactionType.CASHBACK,
-          amount: cashbackAmount,
-          balanceBefore: parseFloat(wallet.balance.toString()),
-          balanceAfter: parseFloat(wallet.balance.toString()), // Balance doesn't change, only locked amount
-          status: TransactionStatus.COMPLETED,
-          isLocked: true,
-          lockExpiresAt: returnPeriodEndsAt,
-          description: `Locked cashback for order ${order.externalOrderId} until return window closes`,
-          hypeStoreId: order.hypeStoreId,
-          hypeStoreOrderId: order.id,
-          notes: `Cashback locked during return window. Will be unlocked on ${returnPeriodEndsAt.toISOString()}`,
-        } as any,
-        { transaction },
-      );
-      txLog('locked cashback transaction created', {
-        lockedTransactionId: lockedTransaction.id,
-      });
+      let lockedTransaction;
+      try {
+        lockedTransaction = await this.walletTransactionModel.create(
+          {
+            walletId: wallet.id,
+            transactionType: TransactionType.CASHBACK,
+            amount: cashbackAmount,
+            balanceBefore: parseFloat(wallet.balance.toString()),
+            balanceAfter: parseFloat(wallet.balance.toString()), // Balance doesn't change, only locked amount
+            status: TransactionStatus.COMPLETED,
+            isLocked: true,
+            lockExpiresAt: returnPeriodEndsAt,
+            description: `Locked cashback for order ${order.externalOrderId} until return window closes`,
+            hypeStoreId: order.hypeStoreId,
+            hypeStoreOrderId: order.id,
+            notes: `Cashback locked during return window. Will be unlocked on ${returnPeriodEndsAt.toISOString()}`,
+          } as any,
+          { transaction },
+        );
+        txLog('locked cashback transaction created', {
+          lockedTransactionId: lockedTransaction.id,
+        });
+      } catch (createError) {
+        const err = createError as Error;
+        this.logger.error(
+          `[submitProof order=${orderId}] LOCKED TRANSACTION CREATE FAILED: ${err.message}`,
+          err.stack,
+        );
+        throw createError;
+      }
 
       // Update wallet with locked amount
       txLog('updating influencer wallet', {
@@ -1289,17 +1299,26 @@ export class InfluencerHypeStoreService {
         lockedAmountBefore: previousLockedAmount,
         lockedAmountAfter: newLockedAmount,
       });
-      await wallet.update(
-        {
-          lockedAmount: newLockedAmount,
-          totalCashbackReceived:
-            parseFloat(wallet.totalCashbackReceived.toString()) + cashbackAmount,
-        },
-        { transaction },
-      );
-      txLog('influencer wallet updated', {
-        walletId: wallet.id,
-      });
+      try {
+        await wallet.update(
+          {
+            lockedAmount: newLockedAmount,
+            totalCashbackReceived:
+              parseFloat(wallet.totalCashbackReceived.toString()) + cashbackAmount,
+          },
+          { transaction },
+        );
+        txLog('influencer wallet updated', {
+          walletId: wallet.id,
+        });
+      } catch (walletUpdateError) {
+        const err = walletUpdateError as Error;
+        this.logger.error(
+          `[submitProof order=${orderId}] INFLUENCER WALLET UPDATE FAILED: ${err.message}`,
+          err.stack,
+        );
+        throw walletUpdateError;
+      }
 
       // Deduct from brand wallet immediately to reserve cashback
       const brandId = order.hypeStore?.brand?.id || order.hypeStore?.brandId;
@@ -1333,39 +1352,58 @@ export class InfluencerHypeStoreService {
         hypeStoreOrderId: order.id,
         debitAmount: cashbackAmount,
       });
-      const brandDebitTx = await this.walletTransactionModel.create(
-        {
-          walletId: brandWallet.id,
-          transactionType: TransactionType.DEBIT,
-          amount: cashbackAmount,
-          balanceBefore: brandBalance,
-          balanceAfter: brandBalance - cashbackAmount,
-          status: TransactionStatus.COMPLETED,
-          description: `Cashback reserved for order ${order.externalOrderId}`,
-          hypeStoreId: order.hypeStoreId,
-          hypeStoreOrderId: order.id,
-        } as any,
-        { transaction },
-      );
-      txLog('brand debit transaction created', {
-        brandDebitTransactionId: brandDebitTx.id,
-      });
+      let brandDebitTx;
+      try {
+        brandDebitTx = await this.walletTransactionModel.create(
+          {
+            walletId: brandWallet.id,
+            transactionType: TransactionType.DEBIT,
+            amount: cashbackAmount,
+            balanceBefore: brandBalance,
+            balanceAfter: brandBalance - cashbackAmount,
+            status: TransactionStatus.COMPLETED,
+            description: `Cashback reserved for order ${order.externalOrderId}`,
+            hypeStoreId: order.hypeStoreId,
+            hypeStoreOrderId: order.id,
+          } as any,
+          { transaction },
+        );
+        txLog('brand debit transaction created', {
+          brandDebitTransactionId: brandDebitTx.id,
+        });
+      } catch (brandDebitError) {
+        const err = brandDebitError as Error;
+        this.logger.error(
+          `[submitProof order=${orderId}] BRAND DEBIT TRANSACTION CREATE FAILED: ${err.message}`,
+          err.stack,
+        );
+        throw brandDebitError;
+      }
 
       txLog('updating brand wallet', {
         brandWalletId: brandWallet.id,
         balanceBefore: brandBalance,
         balanceAfter: brandBalance - cashbackAmount,
       });
-      await brandWallet.update(
-        {
-          balance: brandBalance - cashbackAmount,
-          totalDebited: parseFloat(brandWallet.totalDebited.toString()) + cashbackAmount,
-        },
-        { transaction },
-      );
-      txLog('brand wallet updated', {
-        brandWalletId: brandWallet.id,
-      });
+      try {
+        await brandWallet.update(
+          {
+            balance: brandBalance - cashbackAmount,
+            totalDebited: parseFloat(brandWallet.totalDebited.toString()) + cashbackAmount,
+          },
+          { transaction },
+        );
+        txLog('brand wallet updated', {
+          brandWalletId: brandWallet.id,
+        });
+      } catch (brandWalletUpdateError) {
+        const err = brandWalletUpdateError as Error;
+        this.logger.error(
+          `[submitProof order=${orderId}] BRAND WALLET UPDATE FAILED: ${err.message}`,
+          err.stack,
+        );
+        throw brandWalletUpdateError;
+      }
 
       // Update order with proof details, performance metrics, and references
       const orderUpdateData = {
@@ -1398,6 +1436,9 @@ export class InfluencerHypeStoreService {
 
       try {
         await order.update(orderUpdateData as any, { transaction });
+        txLog('order updated successfully', {
+          orderId: order.id,
+        });
       } catch (updateError) {
         const err = updateError as Error;
         this.logger.error(
@@ -1406,36 +1447,6 @@ export class InfluencerHypeStoreService {
         );
         throw updateError;
       }
-
-      await order.update(
-        {
-          instagramProofUrl: instagramUrl, // Use fetched permalink from mediaId or manually provided URL
-          proofContentType: submitProofDto.contentType,
-          proofSubmittedAt: new Date(),
-          proofThumbnailUrl: thumbnailUrl,
-          proofViewCount: viewCount,
-          proofPostedAt: postedAt,
-          // Store calculated performance metrics
-          expectedRoi: expectedRoi,
-          estimatedEngagement: estimatedEngagement,
-          estimatedReach: estimatedReach,
-          cashbackStatus: CashbackStatus.PROCESSING,
-          lockedCashbackTransactionId: lockedTransaction.id,
-          metadata: {
-            ...(order.metadata || {}),
-            brandDebitTransactionId: brandDebitTx.id,
-            mediaId: submitProofDto.mediaId || null, // Store mediaId if provided for reference
-            mediaUrl: mediaUrl || null, // Store actual media URL for backup
-          },
-          notes: submitProofDto.notes
-            ? `${order.notes ? order.notes + '\n' : ''}Proof submitted: ${submitProofDto.notes}`
-            : order.notes,
-        } as any,
-        { transaction },
-      );
-      txLog('order updated successfully', {
-        orderId: order.id,
-      });
 
       await transaction.commit();
       this.logger.log(
