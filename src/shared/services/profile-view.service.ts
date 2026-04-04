@@ -317,7 +317,7 @@ export class ProfileViewService {
         title: 'Profile View',
         body: `${viewerName} viewed your profile`,
         type: NotificationType.CUSTOM,
-        actionUrl: `app://profile/${data.viewerType}/${data.viewerId}`,
+        actionUrl: `app://${data.viewerType}s/${data.viewerId}`,
         actionType: 'view_profile',
         relatedEntityType: 'user',
         relatedEntityId: data.viewerId,

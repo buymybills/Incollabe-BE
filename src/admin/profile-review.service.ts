@@ -443,7 +443,7 @@ export class ProfileReviewService {
             title: 'Profile Verified!',
             body: `Congratulations ${influencer.name}! Your profile has been verified and you can now apply for campaigns.`,
             type: NotificationType.PROFILE_VERIFIED,
-            actionUrl: 'app://profile',
+            actionUrl: 'app://influencers/me',
             actionType: 'view_profile',
             relatedEntityType: 'profile',
             relatedEntityId: influencer.id,

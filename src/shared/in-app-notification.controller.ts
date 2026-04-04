@@ -131,7 +131,7 @@ export class InAppNotificationController {
             title: 'New Follower',
             body: 'John Doe started following you',
             type: 'new_follower',
-            actionUrl: 'app://profile/influencer/42',
+            actionUrl: 'app://influencers/42',
             actionType: 'view_profile',
             imageUrl: null,
             relatedEntityType: 'follow',
