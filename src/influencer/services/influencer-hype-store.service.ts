@@ -1368,12 +1368,45 @@ export class InfluencerHypeStoreService {
       });
 
       // Update order with proof details, performance metrics, and references
+      const orderUpdateData = {
+        instagramProofUrl: instagramUrl,
+        proofContentType: submitProofDto.contentType,
+        proofSubmittedAt: new Date(),
+        proofThumbnailUrl: thumbnailUrl,
+        proofViewCount: viewCount,
+        proofPostedAt: postedAt,
+        expectedRoi: expectedRoi,
+        estimatedEngagement: estimatedEngagement,
+        estimatedReach: estimatedReach,
+        cashbackStatus: CashbackStatus.PROCESSING,
+        lockedCashbackTransactionId: lockedTransaction.id,
+        metadata: {
+          ...(order.metadata || {}),
+          brandDebitTransactionId: brandDebitTx.id,
+          mediaId: submitProofDto.mediaId || null,
+          mediaUrl: mediaUrl || null,
+        },
+        notes: submitProofDto.notes
+          ? `${order.notes ? order.notes + '\n' : ''}Proof submitted: ${submitProofDto.notes}`
+          : order.notes,
+      };
+
       txLog('updating order', {
         orderId: order.id,
-        lockedCashbackTransactionId: lockedTransaction.id,
-        brandDebitTransactionId: brandDebitTx.id,
-        proofContentType: submitProofDto.contentType,
+        updateData: orderUpdateData,
       });
+
+      try {
+        await order.update(orderUpdateData as any, { transaction });
+      } catch (updateError) {
+        const err = updateError as Error;
+        this.logger.error(
+          `[submitProof order=${orderId}] ORDER UPDATE FAILED: ${err.message}`,
+          err.stack,
+        );
+        throw updateError;
+      }
+
       await order.update(
         {
           instagramProofUrl: instagramUrl, // Use fetched permalink from mediaId or manually provided URL
