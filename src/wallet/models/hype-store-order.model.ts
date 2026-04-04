@@ -305,7 +305,7 @@ export class HypeStoreOrder extends Model<HypeStoreOrder> {
   declare proofViewCount: number;
 
   @Column({
-    type: DataType.STRING(500),
+    type: DataType.TEXT,
     allowNull: true,
     comment: 'Thumbnail URL for the Instagram proof content',
   })
