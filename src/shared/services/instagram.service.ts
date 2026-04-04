@@ -738,6 +738,137 @@ export class InstagramService {
   }
 
   /**
+   * Get Instagram stories or reels posted within a specific date range
+   * Useful for proof submission - influencers can select from their recent content
+   * @param userId - The user's ID (brand or influencer)
+   * @param userType - Type of user ('brand' or 'influencer')
+   * @param fromDate - Start date for filtering media (inclusive)
+   * @param toDate - End date for filtering media (inclusive, defaults to now)
+   * @param contentType - Filter by 'story' or 'post_reel' (defaults to both)
+   * @param limit - Maximum number of posts to fetch (default: 50)
+   * @returns Filtered list of stories/reels with metadata
+   */
+  async getInstagramMediaByDateRange(
+    userId: number,
+    userType: UserType,
+    fromDate: Date,
+    toDate: Date = new Date(),
+    contentType?: 'story' | 'post_reel',
+    limit: number = 50,
+  ): Promise<{
+    data: Array<{
+      id: string;
+      caption: string;
+      mediaType: string; // IMAGE, VIDEO, CAROUSEL_ALBUM
+      mediaProductType: string; // FEED, REELS, STORY
+      contentType: 'story' | 'post_reel'; // Our classification
+      mediaUrl: string;
+      thumbnailUrl: string;
+      permalink: string;
+      timestamp: string;
+      formattedDate: string;
+    }>;
+    total: number;
+  }> {
+    // Get user
+    let user: Influencer | Brand | null;
+    if (userType === 'influencer') {
+      user = await this.influencerModel.findByPk(userId);
+      if (!user) {
+        throw new NotFoundException(`Influencer with ID ${userId} not found`);
+      }
+    } else {
+      user = await this.brandModel.findByPk(userId);
+      if (!user) {
+        throw new NotFoundException(`Brand with ID ${userId} not found`);
+      }
+    }
+
+    if (!user.instagramAccessToken || !user.instagramUserId) {
+      throw new BadRequestException('No Instagram account connected');
+    }
+
+    try {
+      // Fetch media from Instagram
+      const fields = 'id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp';
+      const response = await axios.get(
+        `https://graph.instagram.com/${user.instagramUserId}/media`,
+        {
+          params: {
+            fields,
+            limit, // Fetch more to account for filtering
+            access_token: user.instagramAccessToken,
+          },
+        }
+      );
+
+      const allMedia = response.data.data || [];
+
+      // Filter by date range and content type
+      const fromTimestamp = fromDate.getTime();
+      const toTimestamp = toDate.getTime();
+
+      const filteredMedia = allMedia
+        .map((media: any) => {
+          const timestamp = new Date(media.timestamp);
+          const timestampMs = timestamp.getTime();
+
+          // Determine our content type classification
+          let ourContentType: 'story' | 'post_reel';
+          if (media.media_product_type === 'STORY') {
+            ourContentType = 'story';
+          } else if (media.media_product_type === 'REELS') {
+            ourContentType = 'post_reel';
+          } else {
+            // FEED or other types are classified as post_reel
+            ourContentType = 'post_reel';
+          }
+
+          return {
+            id: media.id,
+            caption: media.caption || '',
+            mediaType: media.media_type,
+            mediaProductType: media.media_product_type || 'FEED',
+            contentType: ourContentType,
+            mediaUrl: media.media_url || '',
+            thumbnailUrl: media.thumbnail_url || media.media_url || '',
+            permalink: media.permalink || '',
+            timestamp: media.timestamp,
+            timestampMs,
+            formattedDate: timestamp.toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+          };
+        })
+        .filter((media: any) => {
+          // Filter by date range
+          const inDateRange = media.timestampMs >= fromTimestamp && media.timestampMs <= toTimestamp;
+          if (!inDateRange) return false;
+
+          // Filter by content type if specified
+          if (contentType && media.contentType !== contentType) return false;
+
+          return true;
+        })
+        .sort((a: any, b: any) => b.timestampMs - a.timestampMs); // Most recent first
+
+      // Remove timestampMs from final output (was only used for filtering)
+      const cleanedMedia = filteredMedia.map(({ timestampMs, ...media }: any) => media);
+
+      return {
+        data: cleanedMedia,
+        total: cleanedMedia.length,
+      };
+    } catch (error) {
+      this.handleInstagramError(error, 'Failed to fetch Instagram media by date range');
+    }
+  }
+
+  /**
    * Get insights for a specific Instagram post
    * @param userId - The user's ID (brand or influencer)
    * @param userType - Type of user ('brand' or 'influencer')
