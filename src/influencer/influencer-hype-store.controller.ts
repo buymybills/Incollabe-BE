@@ -832,7 +832,7 @@ export class InfluencerHypeStoreController {
     return this.hypeStoreService.claimMinimumCashback(influencerId, parseInt(orderId));
   }
 
-  @Get(':storeId(\\d+)/referral-code')
+  @Get(':storeId/referral-code')
   @ApiOperation({
     summary: 'Get or create referral code for a store',
     description: 'Get the influencer\'s unique referral code for a specific store. Used for brand-shared coupon tracking.',
@@ -874,7 +874,7 @@ export class InfluencerHypeStoreController {
     return this.hypeStoreService.getOrCreateReferralCode(influencerId, parseInt(storeId));
   }
 
-  @Get(':storeId(\\d+)/brand-coupon')
+  @Get(':storeId/brand-coupon')
   @ApiOperation({
     summary: 'Get brand-shared coupon with tracking link',
     description:
