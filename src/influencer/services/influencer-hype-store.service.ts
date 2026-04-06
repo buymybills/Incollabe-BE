@@ -1230,187 +1230,14 @@ export class InfluencerHypeStoreService {
       } as any);
     }
 
-    // Create locked cashback transaction
-    const transaction: Transaction = await this.sequelize.transaction({
-      logging: (sql) => {
-        this.logger.log(`[submitProof order=${orderId}] SQL: ${sql}`);
-      },
-    });
-
+    // Save proof details for admin review - NO wallet transactions yet
     try {
-      const txLog = (step: string, details: Record<string, any> = {}) => {
-        this.logger.log(
-          `[submitProof order=${orderId} influencer=${influencerId}] ${step} ${JSON.stringify(details)}`,
-        );
-      };
+      this.logger.log(
+        `[submitProof order=${orderId} influencer=${influencerId}] Saving proof for admin review`,
+      );
 
-      const cashbackAmount = parseFloat(order.cashbackAmount.toString());
-      const previousLockedAmount = parseFloat(wallet.lockedAmount.toString());
-      const newLockedAmount = previousLockedAmount + cashbackAmount;
-      const returnPeriodEndsAt = order.returnPeriodEndsAt ||
-        new Date(Date.now() + parseFloat(order.returnPeriodDays.toString()) * 24 * 60 * 60 * 1000);
-
-      txLog('transaction started', {
-        cashbackAmount,
-        previousLockedAmount,
-        newLockedAmount,
-        returnPeriodEndsAt: returnPeriodEndsAt.toISOString(),
-        orderStatus: order.orderStatus,
-        cashbackStatus: order.cashbackStatus,
-        contentType: order.contentType,
-      });
-
-      // Create locked wallet transaction
-      txLog('creating locked cashback transaction', {
-        walletId: wallet.id,
-        hypeStoreId: order.hypeStoreId,
-        hypeStoreOrderId: order.id,
-      });
-      let lockedTransaction;
-      try {
-        lockedTransaction = await this.walletTransactionModel.create(
-          {
-            walletId: wallet.id,
-            transactionType: TransactionType.CASHBACK,
-            amount: cashbackAmount,
-            balanceBefore: parseFloat(wallet.balance.toString()),
-            balanceAfter: parseFloat(wallet.balance.toString()), // Balance doesn't change, only locked amount
-            status: TransactionStatus.COMPLETED,
-            isLocked: true,
-            lockExpiresAt: returnPeriodEndsAt,
-            description: `Locked cashback for order ${order.externalOrderId} until return window closes`,
-            hypeStoreId: order.hypeStoreId,
-            hypeStoreOrderId: order.id,
-            notes: `Cashback locked during return window. Will be unlocked on ${returnPeriodEndsAt.toISOString()}`,
-          } as any,
-          { transaction },
-        );
-        txLog('locked cashback transaction created', {
-          lockedTransactionId: lockedTransaction.id,
-        });
-      } catch (createError) {
-        const err = createError as Error;
-        this.logger.error(
-          `[submitProof order=${orderId}] LOCKED TRANSACTION CREATE FAILED: ${err.message}`,
-          err.stack,
-        );
-        throw createError;
-      }
-
-      // Update wallet with locked amount
-      txLog('updating influencer wallet', {
-        walletId: wallet.id,
-        lockedAmountBefore: previousLockedAmount,
-        lockedAmountAfter: newLockedAmount,
-      });
-      try {
-        await wallet.update(
-          {
-            lockedAmount: newLockedAmount,
-            totalCashbackReceived:
-              parseFloat(wallet.totalCashbackReceived.toString()) + cashbackAmount,
-          },
-          { transaction },
-        );
-        txLog('influencer wallet updated', {
-          walletId: wallet.id,
-        });
-      } catch (walletUpdateError) {
-        const err = walletUpdateError as Error;
-        this.logger.error(
-          `[submitProof order=${orderId}] INFLUENCER WALLET UPDATE FAILED: ${err.message}`,
-          err.stack,
-        );
-        throw walletUpdateError;
-      }
-
-      // Deduct from brand wallet immediately to reserve cashback
-      const brandId = order.hypeStore?.brand?.id || order.hypeStore?.brandId;
-      if (!brandId) {
-        throw new NotFoundException('Brand not found for this store');
-      }
-
-      const brandWallet = await this.walletModel.findOne({
-        where: { userId: brandId, userType: UserType.BRAND },
-        transaction,
-      });
-
-      if (!brandWallet) {
-        throw new NotFoundException('Brand wallet not found');
-      }
-
-      const brandBalance = parseFloat(brandWallet.balance.toString());
-      if (brandBalance < cashbackAmount) {
-        throw new BadRequestException('Insufficient brand wallet balance to reserve cashback');
-      }
-
-      txLog('brand wallet loaded', {
-        brandId,
-        brandWalletId: brandWallet.id,
-        brandBalance,
-      });
-
-      txLog('creating brand debit transaction', {
-        walletId: brandWallet.id,
-        hypeStoreId: order.hypeStoreId,
-        hypeStoreOrderId: order.id,
-        debitAmount: cashbackAmount,
-      });
-      let brandDebitTx;
-      try {
-        brandDebitTx = await this.walletTransactionModel.create(
-          {
-            walletId: brandWallet.id,
-            transactionType: TransactionType.DEBIT,
-            amount: cashbackAmount,
-            balanceBefore: brandBalance,
-            balanceAfter: brandBalance - cashbackAmount,
-            status: TransactionStatus.COMPLETED,
-            description: `Cashback reserved for order ${order.externalOrderId}`,
-            hypeStoreId: order.hypeStoreId,
-            hypeStoreOrderId: order.id,
-          } as any,
-          { transaction },
-        );
-        txLog('brand debit transaction created', {
-          brandDebitTransactionId: brandDebitTx.id,
-        });
-      } catch (brandDebitError) {
-        const err = brandDebitError as Error;
-        this.logger.error(
-          `[submitProof order=${orderId}] BRAND DEBIT TRANSACTION CREATE FAILED: ${err.message}`,
-          err.stack,
-        );
-        throw brandDebitError;
-      }
-
-      txLog('updating brand wallet', {
-        brandWalletId: brandWallet.id,
-        balanceBefore: brandBalance,
-        balanceAfter: brandBalance - cashbackAmount,
-      });
-      try {
-        await brandWallet.update(
-          {
-            balance: brandBalance - cashbackAmount,
-            totalDebited: parseFloat(brandWallet.totalDebited.toString()) + cashbackAmount,
-          },
-          { transaction },
-        );
-        txLog('brand wallet updated', {
-          brandWalletId: brandWallet.id,
-        });
-      } catch (brandWalletUpdateError) {
-        const err = brandWalletUpdateError as Error;
-        this.logger.error(
-          `[submitProof order=${orderId}] BRAND WALLET UPDATE FAILED: ${err.message}`,
-          err.stack,
-        );
-        throw brandWalletUpdateError;
-      }
-
-      // Update order with proof details, performance metrics, and references
-      const orderUpdateData = {
+      // Update order with proof details for admin review
+      await order.update({
         instagramProofUrl: instagramUrl,
         proofContentType: submitProofDto.contentType,
         proofSubmittedAt: new Date(),
@@ -1420,45 +1247,20 @@ export class InfluencerHypeStoreService {
         expectedRoi: expectedRoi,
         estimatedEngagement: estimatedEngagement,
         estimatedReach: estimatedReach,
-        cashbackStatus: CashbackStatus.PROCESSING,
-        lockedCashbackTransactionId: lockedTransaction.id,
+        proofApprovalStatus: 'pending_review', // Admin needs to approve
         metadata: {
           ...(order.metadata || {}),
-          brandDebitTransactionId: brandDebitTx.id,
           mediaId: submitProofDto.mediaId || null,
           mediaUrl: mediaUrl || null,
         },
         notes: submitProofDto.notes
           ? `${order.notes ? order.notes + '\n' : ''}Proof submitted: ${submitProofDto.notes}`
           : order.notes,
-      };
+      } as any);
 
-      txLog('updating order', {
-        orderId: order.id,
-        updateData: orderUpdateData,
-      });
-
-      try {
-        await order.update(orderUpdateData as any, { transaction });
-        txLog('order updated successfully', {
-          orderId: order.id,
-        });
-      } catch (updateError) {
-        const err = updateError as Error;
-        this.logger.error(
-          `[submitProof order=${orderId}] ORDER UPDATE FAILED: ${err.message}`,
-          err.stack,
-        );
-        throw updateError;
-      }
-
-      await transaction.commit();
       this.logger.log(
-        `[submitProof order=${orderId} influencer=${influencerId}] transaction committed successfully`,
+        `[submitProof order=${orderId} influencer=${influencerId}] Proof saved successfully, pending admin review`,
       );
-
-      // Reload wallet to get updated values
-      await wallet.reload();
 
       return {
         success: true,
@@ -1468,6 +1270,7 @@ export class InfluencerHypeStoreService {
           orderAmount: parseFloat(order.orderAmount.toString()),
           cashbackAmount: parseFloat(order.cashbackAmount.toString()),
           cashbackStatus: order.cashbackStatus,
+          proofApprovalStatus: 'pending_review',
           instagramProofUrl: order.instagramProofUrl,
           proofContentType: order.proofContentType,
           proofSubmittedAt: order.proofSubmittedAt,
@@ -1479,26 +1282,259 @@ export class InfluencerHypeStoreService {
               }
             : null,
         },
-        message: `Proof submitted successfully. Cashback of ₹${cashbackAmount.toFixed(2)} is now locked and will be available for redemption after the return window closes.`,
+        message: `Proof submitted successfully and is pending admin review. Once approved, cashback of ₹${parseFloat(order.cashbackAmount.toString()).toFixed(2)} will be locked in your wallet.`,
       };
     } catch (error) {
-      const err = error as Error & {
-        original?: { message?: string; stack?: string };
-        parent?: { message?: string; detail?: string; stack?: string };
-      };
+      const err = error as Error;
       this.logger.error(
-        `[submitProof order=${orderId} influencer=${influencerId}] transaction failed: ${err.message}`,
+        `[submitProof order=${orderId} influencer=${influencerId}] failed: ${err.message}`,
         err.stack,
       );
-      if (err.original?.message || err.parent?.message) {
-        this.logger.error(
-          `[submitProof order=${orderId} influencer=${influencerId}] original db error: ${err.original?.message || err.parent?.message}`,
-          err.original?.stack || err.parent?.stack,
-        );
-      }
-      await transaction.rollback();
       throw error;
     }
+  }
+
+  /**
+   * Admin approves submitted proof and locks cashback
+   * This creates wallet transactions and locks the cashback
+   */
+  async approveProof(
+    orderId: number,
+    adminId: number,
+  ): Promise<{ success: boolean; message: string; data: any }> {
+    // Get order with all associations
+    const order = await this.orderModel.findOne({
+      where: { id: orderId },
+      include: [
+        {
+          model: this.hypeStoreModel,
+          as: 'hypeStore',
+          required: true,
+          include: [
+            {
+              model: this.brandModel,
+              as: 'brand',
+              required: true,
+              attributes: ['id', 'brandName'],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    // Validate proof is submitted and pending review
+    if (!order.instagramProofUrl) {
+      throw new BadRequestException('No proof has been submitted for this order');
+    }
+
+    if (order.proofApprovalStatus !== 'pending_review') {
+      throw new BadRequestException(
+        `Proof is already ${order.proofApprovalStatus}. Only pending proofs can be approved.`,
+      );
+    }
+
+    // Check brand wallet has sufficient balance
+    const brandId = order.hypeStore?.brand?.id || order.hypeStore?.brandId;
+    if (!brandId) {
+      throw new NotFoundException('Brand not found for this store');
+    }
+
+    const brandWallet = await this.walletModel.findOne({
+      where: { userId: brandId, userType: UserType.BRAND },
+    });
+
+    if (!brandWallet) {
+      throw new NotFoundException('Brand wallet not found');
+    }
+
+    const cashbackAmount = parseFloat(order.cashbackAmount.toString());
+    const brandBalance = parseFloat(brandWallet.balance.toString());
+
+    if (brandBalance < cashbackAmount) {
+      throw new BadRequestException(
+        `Insufficient brand wallet balance. Required: ₹${cashbackAmount}, Available: ₹${brandBalance}`,
+      );
+    }
+
+    // Get influencer wallet
+    const wallet = await this.walletModel.findOne({
+      where: {
+        userId: order.influencerId,
+        userType: UserType.INFLUENCER,
+      },
+    });
+
+    if (!wallet) {
+      throw new NotFoundException('Influencer wallet not found');
+    }
+
+    // Create wallet transactions in a database transaction
+    const transaction: Transaction = await this.sequelize.transaction();
+
+    try {
+      this.logger.log(
+        `[approveProof order=${orderId} admin=${adminId}] Starting approval process`,
+      );
+
+      const previousLockedAmount = parseFloat(wallet.lockedAmount.toString());
+      const newLockedAmount = previousLockedAmount + cashbackAmount;
+      const returnPeriodEndsAt =
+        order.returnPeriodEndsAt ||
+        new Date(
+          Date.now() +
+            parseFloat(order.returnPeriodDays.toString()) * 24 * 60 * 60 * 1000,
+        );
+
+      // 1. Create locked cashback transaction for influencer
+      const lockedTransaction = await this.walletTransactionModel.create(
+        {
+          walletId: wallet.id,
+          transactionType: TransactionType.CASHBACK,
+          amount: cashbackAmount,
+          balanceBefore: parseFloat(wallet.balance.toString()),
+          balanceAfter: parseFloat(wallet.balance.toString()),
+          status: TransactionStatus.COMPLETED,
+          isLocked: true,
+          lockExpiresAt: returnPeriodEndsAt,
+          description: `Locked cashback for order ${order.externalOrderId} (Admin approved)`,
+          hypeStoreId: order.hypeStoreId,
+          hypeStoreOrderId: order.id,
+          notes: `Cashback locked during return window. Will be unlocked on ${returnPeriodEndsAt.toISOString()}`,
+        } as any,
+        { transaction },
+      );
+
+      // 2. Update influencer wallet with locked amount
+      await wallet.update(
+        {
+          lockedAmount: newLockedAmount,
+          totalCashbackReceived:
+            parseFloat(wallet.totalCashbackReceived.toString()) +
+            cashbackAmount,
+        },
+        { transaction },
+      );
+
+      // 3. Create debit transaction for brand
+      const brandDebitTx = await this.walletTransactionModel.create(
+        {
+          walletId: brandWallet.id,
+          transactionType: TransactionType.DEBIT,
+          amount: cashbackAmount,
+          balanceBefore: brandBalance,
+          balanceAfter: brandBalance - cashbackAmount,
+          status: TransactionStatus.COMPLETED,
+          description: `Cashback reserved for order ${order.externalOrderId} (Admin approved)`,
+          hypeStoreId: order.hypeStoreId,
+          hypeStoreOrderId: order.id,
+        } as any,
+        { transaction },
+      );
+
+      // 4. Update brand wallet
+      await brandWallet.update(
+        {
+          balance: brandBalance - cashbackAmount,
+          totalDebited:
+            parseFloat(brandWallet.totalDebited.toString()) + cashbackAmount,
+        },
+        { transaction },
+      );
+
+      // 5. Update order with approval details
+      await order.update(
+        {
+          proofApprovalStatus: 'approved',
+          proofApprovedBy: adminId,
+          proofApprovedAt: new Date(),
+          cashbackStatus: CashbackStatus.PROCESSING,
+          lockedCashbackTransactionId: lockedTransaction.id,
+          metadata: {
+            ...(order.metadata || {}),
+            brandDebitTransactionId: brandDebitTx.id,
+          },
+        } as any,
+        { transaction },
+      );
+
+      await transaction.commit();
+
+      this.logger.log(
+        `[approveProof order=${orderId} admin=${adminId}] Proof approved successfully. Cashback locked.`,
+      );
+
+      return {
+        success: true,
+        message: `Proof approved successfully. Cashback of ₹${cashbackAmount.toFixed(2)} has been locked and will be available after the return window closes.`,
+        data: {
+          orderId: order.id,
+          externalOrderId: order.externalOrderId,
+          cashbackAmount,
+          proofApprovalStatus: 'approved',
+          cashbackStatus: CashbackStatus.PROCESSING,
+          returnPeriodEndsAt,
+        },
+      };
+    } catch (error) {
+      await transaction.rollback();
+      const err = error as Error;
+      this.logger.error(
+        `[approveProof order=${orderId} admin=${adminId}] Failed: ${err.message}`,
+        err.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Admin rejects submitted proof
+   */
+  async rejectProof(
+    orderId: number,
+    adminId: number,
+    rejectionReason: string,
+  ): Promise<{ success: boolean; message: string; data: any }> {
+    const order = await this.orderModel.findByPk(orderId);
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    if (!order.instagramProofUrl) {
+      throw new BadRequestException('No proof has been submitted for this order');
+    }
+
+    if (order.proofApprovalStatus !== 'pending_review') {
+      throw new BadRequestException(
+        `Proof is already ${order.proofApprovalStatus}. Only pending proofs can be rejected.`,
+      );
+    }
+
+    await order.update({
+      proofApprovalStatus: 'rejected',
+      proofApprovedBy: adminId,
+      proofApprovedAt: new Date(),
+      proofRejectionReason: rejectionReason,
+    } as any);
+
+    this.logger.log(
+      `[rejectProof order=${orderId} admin=${adminId}] Proof rejected. Reason: ${rejectionReason}`,
+    );
+
+    return {
+      success: true,
+      message: 'Proof rejected successfully. Influencer can resubmit.',
+      data: {
+        orderId: order.id,
+        externalOrderId: order.externalOrderId,
+        proofApprovalStatus: 'rejected',
+        rejectionReason,
+      },
+    };
   }
 
   /**

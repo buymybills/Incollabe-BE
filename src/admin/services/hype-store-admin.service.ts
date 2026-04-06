@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Op } from 'sequelize';
 import { Sequelize } from 'sequelize-typescript';
@@ -11,6 +11,7 @@ import { HypeStoreCashbackConfig } from '../../hype-store/models/hype-store-cash
 import { HypeStoreCouponCode } from '../../wallet/models/hype-store-coupon-code.model';
 import { HypeStoreWallet } from '../../hype-store/models/hype-store-wallet.model';
 import { HypeStoreWalletTransaction } from '../../hype-store/models/hype-store-wallet-transaction.model';
+import { InfluencerHypeStoreService } from '../../influencer/services/influencer-hype-store.service';
 import {
   DateRangeFilterDto,
   PaginationDto,
@@ -48,6 +49,8 @@ export class HypeStoreAdminService {
     @InjectModel(HypeStoreWalletTransaction)
     private walletTransactionModel: typeof HypeStoreWalletTransaction,
     private sequelize: Sequelize,
+    @Inject(forwardRef(() => InfluencerHypeStoreService))
+    private influencerHypeStoreService: InfluencerHypeStoreService,
   ) {}
 
   /**
@@ -620,5 +623,108 @@ export class HypeStoreAdminService {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  /**
+   * Get list of proofs for admin review
+   */
+  async getProofsList(filters: any) {
+    const { page = 1, limit = 20, status, storeId } = filters;
+    const offset = (page - 1) * limit;
+
+    const whereClause: any = {
+      instagramProofUrl: { [Op.ne]: null }, // Only orders with submitted proofs
+    };
+
+    if (status) {
+      whereClause.proofApprovalStatus = status;
+    }
+
+    if (storeId) {
+      whereClause.hypeStoreId = storeId;
+    }
+
+    const { rows: orders, count: total } = await this.orderModel.findAndCountAll({
+      where: whereClause,
+      include: [
+        {
+          model: this.hypeStoreModel,
+          as: 'hypeStore',
+          include: [
+            {
+              model: this.brandModel,
+              as: 'brand',
+              attributes: ['id', 'brandName'],
+            },
+          ],
+        },
+        {
+          model: require('../../auth/model/influencer.model').Influencer,
+          as: 'influencer',
+          attributes: ['id', 'instagramUsername', 'instagramFollowersCount'],
+        },
+      ],
+      order: [['proofSubmittedAt', 'DESC']],
+      limit,
+      offset,
+    });
+
+    return {
+      data: orders.map((order) => ({
+        id: order.id,
+        externalOrderId: order.externalOrderId,
+        influencer: order.influencer
+          ? {
+              id: order.influencer.id,
+              username: order.influencer.instagramUsername,
+              followersCount: order.influencer.instagramFollowersCount,
+            }
+          : null,
+        store: order.hypeStore
+          ? {
+              id: order.hypeStore.id,
+              storeName: order.hypeStore.storeName,
+              brandName: order.hypeStore.brand?.brandName,
+            }
+          : null,
+        orderAmount: parseFloat(order.orderAmount.toString()),
+        cashbackAmount: parseFloat(order.cashbackAmount.toString()),
+        cashbackTier: order.cashbackTierId
+          ? {
+              id: order.cashbackTierId,
+            }
+          : null,
+        proof: {
+          instagramUrl: order.instagramProofUrl,
+          thumbnailUrl: order.proofThumbnailUrl,
+          contentType: order.proofContentType,
+          viewCount: order.proofViewCount,
+          submittedAt: order.proofSubmittedAt,
+          postedAt: order.proofPostedAt,
+        },
+        proofApprovalStatus: order.proofApprovalStatus,
+        orderDate: order.orderDate,
+      })),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  /**
+   * Approve proof - delegates to InfluencerHypeStoreService
+   */
+  async approveProof(orderId: number, adminId: number) {
+    // Delegate to the service that has the logic
+    return this.influencerHypeStoreService.approveProof(orderId, adminId);
+  }
+
+  /**
+   * Reject proof - delegates to InfluencerHypeStoreService
+   */
+  async rejectProof(orderId: number, adminId: number, rejectionReason: string) {
+    // Delegate to the service that has the logic
+    return this.influencerHypeStoreService.rejectProof(orderId, adminId, rejectionReason);
   }
 }

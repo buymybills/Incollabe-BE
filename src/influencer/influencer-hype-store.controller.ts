@@ -14,6 +14,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery, 
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { InfluencerHypeStoreService } from './services/influencer-hype-store.service';
 import { InstagramMetricsSchedulerService } from './services/instagram-metrics-scheduler.service';
+import { InstagramService } from '../shared/services/instagram.service';
 import {
   SubmitProofDto,
   ClaimMinimumCashbackDto,
@@ -29,6 +30,7 @@ export class InfluencerHypeStoreController {
   constructor(
     private readonly hypeStoreService: InfluencerHypeStoreService,
     private readonly instagramMetricsScheduler: InstagramMetricsSchedulerService,
+    private readonly instagramService: InstagramService,
   ) {}
 
   @Get()
@@ -920,5 +922,86 @@ export class InfluencerHypeStoreController {
   ) {
     // Note: The refreshMetricsForOrder method will handle order validation
     return this.instagramMetricsScheduler.refreshMetricsForOrder(parseInt(orderId));
+  }
+
+  @Get('available-media')
+  @ApiOperation({
+    summary: 'Get recent Instagram posts/reels for proof submission',
+    description:
+      'Fetches recent Instagram posts and reels from the last 30 days that can be used as proof for orders. ' +
+      'Returns media with thumbnails, permalinks, and timestamps for easy selection.',
+  })
+  @ApiQuery({
+    name: 'contentType',
+    required: false,
+    enum: ['story', 'post_reel'],
+    description: 'Filter by content type (story or post_reel)',
+  })
+  @ApiQuery({
+    name: 'days',
+    required: false,
+    type: Number,
+    description: 'Number of days to look back (default: 30)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Available Instagram media retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', example: '18160690258432745' },
+              caption: { type: 'string', example: 'Check out this amazing product! #brand' },
+              mediaType: { type: 'string', example: 'VIDEO' },
+              mediaProductType: { type: 'string', example: 'REELS' },
+              contentType: { type: 'string', example: 'post_reel' },
+              mediaUrl: { type: 'string', example: 'https://scontent-...' },
+              thumbnailUrl: { type: 'string', example: 'https://scontent-...' },
+              permalink: { type: 'string', example: 'https://www.instagram.com/reel/DWtbiPkgthI/' },
+              timestamp: { type: 'string', example: '2026-04-04T12:32:16.000Z' },
+              formattedDate: { type: 'string', example: 'Apr 4, 2026, 12:32 PM' },
+            },
+          },
+        },
+        total: { type: 'number', example: 15 },
+        message: { type: 'string', example: 'Found 15 posts/reels from the last 30 days' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'No Instagram account connected' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getAvailableMedia(
+    @Request() req: any,
+    @Query('contentType') contentType?: 'story' | 'post_reel',
+    @Query('days') days?: string,
+  ) {
+    const influencerId = req.user.id;
+    const daysBack = days ? parseInt(days) : 30;
+
+    // Calculate date range (last X days)
+    const toDate = new Date();
+    const fromDate = new Date();
+    fromDate.setDate(fromDate.getDate() - daysBack);
+
+    const result = await this.instagramService.getInstagramMediaByDateRange(
+      influencerId,
+      'influencer',
+      fromDate,
+      toDate,
+      contentType,
+      50, // Limit to 50 items
+    );
+
+    return {
+      success: true,
+      data: result.data,
+      total: result.total,
+      message: `Found ${result.total} ${contentType || 'posts/reels'} from the last ${daysBack} days`,
+    };
   }
 }

@@ -1,10 +1,13 @@
 import {
   Controller,
   Get,
+  Post,
+  Body,
   Query,
   UseGuards,
   Param,
   ParseIntPipe,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -26,6 +29,12 @@ import {
   OrdersListResponseDto,
   WalletTransactionsListResponseDto,
 } from './dto/hype-store-admin.dto';
+import {
+  ListPendingProofsDto,
+  ApproveProofDto,
+  RejectProofDto,
+  ProofApprovalResponseDto,
+} from './dto/hype-store-proof-approval.dto';
 
 @ApiTags('Admin - Hype Store')
 @Controller('admin/hype-store')
@@ -366,5 +375,160 @@ export class HypeStoreAdminController {
     @Query() pagination: PaginationDto,
   ): Promise<WalletTransactionsListResponseDto> {
     return this.hypeStoreAdminService.getWalletTransactions(brandId, pagination);
+  }
+
+  @Get('proofs')
+  @ApiOperation({
+    summary: 'Get list of submitted proofs for review',
+    description: 'Returns paginated list of orders with submitted Instagram proofs, filterable by approval status',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (1-indexed)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page',
+    example: 20,
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['pending_review', 'approved', 'rejected'],
+    description: 'Filter by approval status',
+    example: 'pending_review',
+  })
+  @ApiQuery({
+    name: 'storeId',
+    required: false,
+    type: Number,
+    description: 'Filter by store ID',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Proofs list retrieved successfully',
+    schema: {
+      example: {
+        data: [
+          {
+            id: 360,
+            externalOrderId: 'ORD-1775304111881',
+            influencer: {
+              id: 7,
+              username: 'rishab_100_',
+              followersCount: 6,
+            },
+            store: {
+              id: 22,
+              storeName: 'Store 1',
+              brandName: 'my brand',
+            },
+            orderAmount: 3598,
+            cashbackAmount: 899.5,
+            cashbackTier: {
+              id: 2,
+              followerRange: '1-499',
+              percentage: 25,
+            },
+            proof: {
+              instagramUrl: 'https://www.instagram.com/reel/DWtbiPkgthI/',
+              thumbnailUrl: 'https://scontent-...',
+              contentType: 'reel',
+              viewCount: null,
+              submittedAt: '2026-04-04T16:05:02.893Z',
+              postedAt: '2026-04-04T12:32:16.000Z',
+            },
+            proofApprovalStatus: 'pending_review',
+            orderDate: '2026-04-04T12:01:52.208Z',
+          },
+        ],
+        total: 15,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Admin access required' })
+  async getProofs(@Query() filters: ListPendingProofsDto) {
+    return this.hypeStoreAdminService.getProofsList(filters);
+  }
+
+  @Post('proofs/:orderId/approve')
+  @ApiOperation({
+    summary: 'Approve submitted proof and lock cashback',
+    description: 'Approves Instagram proof, creates wallet transactions, and locks cashback for the order',
+  })
+  @ApiParam({ name: 'orderId', type: Number, example: 360, description: 'Order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Proof approved successfully',
+    type: ProofApprovalResponseDto,
+    schema: {
+      example: {
+        success: true,
+        message: 'Proof approved successfully. Cashback of ₹899.50 has been locked and will be available after the return window closes.',
+        data: {
+          orderId: 360,
+          externalOrderId: 'ORD-1775304111881',
+          cashbackAmount: 899.5,
+          proofApprovalStatus: 'approved',
+          cashbackStatus: 'processing',
+          returnPeriodEndsAt: '2026-05-04T12:01:51.882Z',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - proof already processed or missing' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Admin access required' })
+  async approveProof(
+    @Param('orderId', ParseIntPipe) orderId: number,
+    @Body() body: ApproveProofDto,
+    @Req() req: any,
+  ): Promise<ProofApprovalResponseDto> {
+    const adminId = req.user?.id || 1; // Get from JWT token
+    return this.hypeStoreAdminService.approveProof(orderId, adminId);
+  }
+
+  @Post('proofs/:orderId/reject')
+  @ApiOperation({
+    summary: 'Reject submitted proof',
+    description: 'Rejects Instagram proof with a reason. Influencer can resubmit after rejection.',
+  })
+  @ApiParam({ name: 'orderId', type: Number, example: 360, description: 'Order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Proof rejected successfully',
+    type: ProofApprovalResponseDto,
+    schema: {
+      example: {
+        success: true,
+        message: 'Proof rejected successfully. Influencer can resubmit.',
+        data: {
+          orderId: 360,
+          externalOrderId: 'ORD-1775304111881',
+          proofApprovalStatus: 'rejected',
+          rejectionReason: 'Poor quality image, product not clearly visible',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - proof already processed or missing' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Admin access required' })
+  async rejectProof(
+    @Param('orderId', ParseIntPipe) orderId: number,
+    @Body() body: RejectProofDto,
+    @Req() req: any,
+  ): Promise<ProofApprovalResponseDto> {
+    const adminId = req.user?.id || 1; // Get from JWT token
+    return this.hypeStoreAdminService.rejectProof(orderId, adminId, body.rejectionReason);
   }
 }

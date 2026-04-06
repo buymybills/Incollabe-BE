@@ -302,6 +302,7 @@ export class HypeStoreOrder extends Model<HypeStoreOrder> {
     allowNull: true,
     comment: 'View count on the Instagram proof (reel/story)',
   })
+
   declare proofViewCount: number;
 
   @Column({
@@ -310,6 +311,36 @@ export class HypeStoreOrder extends Model<HypeStoreOrder> {
     comment: 'Thumbnail URL for the Instagram proof content',
   })
   declare proofThumbnailUrl: string;
+
+  @Index
+  @Column({
+    type: DataType.STRING(50),
+    allowNull: false,
+    defaultValue: 'pending_review',
+    comment: 'Admin approval status for submitted proof: pending_review, approved, rejected',
+  })
+  declare proofApprovalStatus: 'pending_review' | 'approved' | 'rejected';
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    comment: 'Admin user ID who approved/rejected the proof',
+  })
+  declare proofApprovedBy: number;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+    comment: 'Timestamp when proof was approved/rejected by admin',
+  })
+  declare proofApprovedAt: Date;
+
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+    comment: 'Reason provided by admin if proof was rejected',
+  })
+  declare proofRejectionReason: string;
 
   @Column({
     type: DataType.BOOLEAN,

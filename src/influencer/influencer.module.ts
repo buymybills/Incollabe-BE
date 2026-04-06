@@ -179,6 +179,6 @@ import { NudgeMessageTemplate } from '../shared/models/nudge-message-template.mo
       useValue: Brand,
     },
   ],
-  exports: [InfluencerService, InfluencerRepository, ProSubscriptionService, SubscriptionMarketingService],
+  exports: [InfluencerService, InfluencerRepository, ProSubscriptionService, SubscriptionMarketingService, InfluencerHypeStoreService],
 })
 export class InfluencerModule {}
