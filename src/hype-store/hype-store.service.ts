@@ -229,15 +229,15 @@ export class HypeStoreService {
       }
 
       // Auto-create brand-shared coupon code
-      // Format: {First 2 letters of brand name}COL{cashback percentage}
-      // Example: SNCOL40 (Snitch 40%), NICOL25 (Nike 25%), etc.
+      // Format: {First 2 letters of brand name}COL12
+      // Example: SNCOL12 (Snitch), NICOL12 (Nike), etc.
       const brandPrefix = brand.brandName
         .replace(/[^A-Za-z]/g, '') // Remove non-alphabetic characters
         .substring(0, 2)
         .toUpperCase();
 
-      // Use cashbackPercentage from DTO, or default to 20%
-      const percentageSuffix = createDto.cashbackPercentage || 20;
+      // Fixed suffix of 12 for all brand coupon codes
+      const percentageSuffix = 12;
       const couponCode = `${brandPrefix}COL${percentageSuffix}`;
 
       // Check if coupon code already exists
@@ -829,8 +829,8 @@ export class HypeStoreService {
     }
 
     // Auto-generate coupon code if not provided
-    // Format: {First 2 letters of brand name}COL{sequential number}
-    // Example: SNCOL12
+    // Format: {First 2 letters of brand name}COL12 (fixed suffix)
+    // Example: SNCOL12, NICOL12, etc.
     if (!couponCode) {
       const brand = store.brand;
       if (!brand || !brand.brandName) {
@@ -843,35 +843,18 @@ export class HypeStoreService {
         .substring(0, 2)
         .toUpperCase();
 
-      // Find the next sequential number by counting existing brand coupons
-      const existingBrandCoupons = await this.couponCodeModel.count({
-        where: {
-          couponCode: { [require('sequelize').Op.like]: `${brandPrefix}COL%` },
-        },
+      // Fixed suffix of 12 for all brand coupon codes
+      couponCode = `${brandPrefix}COL12`;
+
+      // Check if this coupon code already exists
+      const existing = await this.couponCodeModel.findOne({
+        where: { couponCode },
       });
 
-      const sequentialNumber = existingBrandCoupons + 1;
-      couponCode = `${brandPrefix}COL${sequentialNumber}`;
-
-      // Ensure uniqueness
-      let attempts = 0;
-      while (attempts < 50) {
-        const existing = await this.couponCodeModel.findOne({
-          where: { couponCode },
-        });
-
-        if (!existing) {
-          break;
-        }
-
-        // Increment number if collision
-        const nextNumber = existingBrandCoupons + attempts + 2;
-        couponCode = `${brandPrefix}COL${nextNumber}`;
-        attempts++;
-      }
-
-      if (attempts >= 50) {
-        throw new BadRequestException('Failed to generate unique coupon code');
+      if (existing) {
+        throw new BadRequestException(
+          `Coupon code ${couponCode} already exists for this brand. Please provide a custom coupon code.`,
+        );
       }
     } else {
       // Validate provided coupon code is unique

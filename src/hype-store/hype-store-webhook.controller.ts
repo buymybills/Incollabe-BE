@@ -31,7 +31,7 @@ export class HypeStoreWebhookController {
       '**Required Fields for Purchase:**\n' +
       '- `eventType`: Must be "purchase" or "return"\n' +
       '- `externalOrderId`: Your unique order ID\n' +
-      '- `couponCode`: The coupon code used (e.g., SNCOL25, SNITCHCOLLABKAROO)\n' +
+      '- `couponCode`: The coupon code used (e.g., SNCOL12, SNITCHCOLLABKAROO)\n' +
       '- `referralCode`: Influencer referral code for attribution (e.g., INFL123)\n' +
       '- `orderTitle`: Product/order name\n' +
       '- `orderAmount`: Order amount in rupees\n' +
@@ -48,7 +48,7 @@ export class HypeStoreWebhookController {
       'Duplicate purchase requests with the same externalOrderId will be safely ignored and return the original order details.\n\n' +
       '**Cashback:**\n' +
       '- Purchase: Cashback is automatically calculated based on influencer tier\n' +
-      '- Cashback Type: Auto-derived from coupon code (e.g., SNCOL25 → "Flat 25%")\n' +
+      '- Cashback Type: Auto-derived from coupon code (e.g., SNCOL12 → "Flat 12%")\n' +
       '- Return: If cashback was credited, it will be automatically reversed',
   })
   @ApiParam({
@@ -66,7 +66,7 @@ export class HypeStoreWebhookController {
         value: {
           eventType: 'purchase',
           externalOrderId: 'ORD-2026-12345',
-          couponCode: 'SNCOL25',
+          couponCode: 'SNCOL12',
           referralCode: 'INFL123',
           orderTitle: 'Men\'s Cotton Shirt - Blue',
           orderAmount: 3500.0,
@@ -79,7 +79,7 @@ export class HypeStoreWebhookController {
         value: {
           eventType: 'purchase',
           externalOrderId: 'ORD-2026-12346',
-          couponCode: 'SNCOL25',
+          couponCode: 'SNCOL12',
           referralCode: 'INFL123',
           orderTitle: 'Men\'s Premium Cotton Shirt - Blue Denim',
           productSKU: 'SHIRT-BLU-L-2026',
@@ -127,7 +127,7 @@ export class HypeStoreWebhookController {
         value: {
           eventType: 'purchase',
           externalOrderId: 'ORD-2026-12348',
-          couponCode: 'SNCOL30',
+          couponCode: 'SNCOL12',
           referralCode: 'INFL789',
           orderTitle: 'Winter Combo - Jacket + Jeans',
           productCategory: 'Combo',

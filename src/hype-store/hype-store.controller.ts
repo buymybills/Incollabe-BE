@@ -136,11 +136,11 @@ export class HypeStoreController {
         },
         cashbackPercentage: {
           type: 'number',
-          description: 'Cashback percentage for coupon code suffix (optional: 1-99, default: 25). This becomes the last 2 digits of the auto-generated coupon code. Example: 25 generates SNCOL25',
+          description: 'DEPRECATED: Coupon codes now always use fixed suffix "12". Auto-generated coupon codes will be in format: {BrandPrefix}COL12 (e.g., SNCOL12, NICOL12). This parameter is ignored.',
           minimum: 1,
           maximum: 99,
-          example: 25,
-          default: 25
+          example: 12,
+          default: 12
         }
       }
     },
@@ -156,7 +156,7 @@ export class HypeStoreController {
       },
       customCashbackConfig: {
         summary: 'Custom Cashback Configuration',
-        description: 'Store setup with custom cashback range and custom coupon percentage. Coupon will be auto-generated as XXCOL30 (30% cashback). Upload banner image as file (not shown in example).',
+        description: 'Store setup with custom cashback range. Coupon will be auto-generated as XXCOL12 (fixed suffix). Upload banner image as file (not shown in example).',
         value: {
           reelPostMinCashback: 200,
           reelPostMaxCashback: 15000,
@@ -604,12 +604,12 @@ export class HypeStoreController {
     description:
       'Get comprehensive store details including performance metrics, budget, orders, and sales analytics.\n\n' +
       '**Coupon Code Usage:**\n' +
-      '- `brandCouponCode`: Brand-shared coupon code (e.g., SNCOL25) that customers use at checkout\n' +
+      '- `brandCouponCode`: Brand-shared coupon code (e.g., SNCOL12) that customers use at checkout\n' +
       '- Influencers share this coupon code WITH their unique referral code (e.g., INFL123)\n' +
-      '- Example: Customer uses couponCode="SNCOL25" + referralCode="INFL123" for influencer attribution\n\n' +
+      '- Example: Customer uses couponCode="SNCOL12" + referralCode="INFL123" for influencer attribution\n\n' +
       '**Webhook Integration:**\n' +
       'When sending purchase webhooks, include both:\n' +
-      '- `couponCode`: "SNCOL25" (from this API response)\n' +
+      '- `couponCode`: "SNCOL12" (from this API response)\n' +
       '- `referralCode`: "INFL123" (influencer who promoted the product)'
   })
   @ApiParam({ name: 'storeId', type: Number, description: 'Store ID' })
@@ -623,10 +623,10 @@ export class HypeStoreController {
         storeName: { type: 'string', example: 'Store 1' },
         brandCouponCode: {
           type: 'string',
-          example: 'SNCOL25',
+          example: 'SNCOL12',
           description: 'Brand-shared coupon code that customers use at checkout. Influencers share this code WITH their referral code (e.g., INFL123) for attribution.'
         },
-        cashbackLimit: { type: 'string', example: '25%', description: 'Cashback percentage extracted from coupon code (last 2 digits)' },
+        cashbackLimit: { type: 'string', example: '12%', description: 'Cashback percentage extracted from coupon code (last 2 digits - always 12)' },
         monthlyPurchaseLimit: { type: 'number', example: 5, description: 'Monthly cashback claim limit per influencer' },
         wallet: {
           type: 'object',
