@@ -85,6 +85,12 @@ import { ProfileView } from './models/profile-view.model';
 import { ProfileViewService } from './services/profile-view.service';
 import { CreatorStudioService } from './creator-studio.service';
 import { CreatorStudioController } from './creator-studio.controller';
+import { FiamCampaign } from './models/fiam-campaign.model';
+import { FiamCampaignEvent } from './models/fiam-campaign-event.model';
+import { FiamEventService } from './services/fiam-event.service';
+import { FiamTriggerService } from './services/fiam-trigger.service';
+import { FiamCampaignMobileService } from './services/fiam-campaign-mobile.service';
+import { FiamCampaignMobileController } from './fiam-campaign-mobile.controller';
 
 @Module({
   imports: [
@@ -129,6 +135,8 @@ import { CreatorStudioController } from './creator-studio.controller';
       Like,
       Share,
       ProfileView,
+      FiamCampaign,
+      FiamCampaignEvent,
     ]),
   ],
   controllers: [
@@ -142,6 +150,7 @@ import { CreatorStudioController } from './creator-studio.controller';
     ConfigController,
     InAppNotificationController,
     CreatorStudioController,
+    FiamCampaignMobileController,
   ],
   providers: [
     SmsService,
@@ -179,6 +188,9 @@ import { CreatorStudioController } from './creator-studio.controller';
     InAppNotificationService,
     ProfileViewService,
     CreatorStudioService,
+    FiamEventService,
+    FiamTriggerService,
+    FiamCampaignMobileService,
   ],
   exports: [
     SmsService,
@@ -212,6 +224,9 @@ import { CreatorStudioController } from './creator-studio.controller';
     InAppNotificationService,
     ProfileViewService,
     CreatorStudioService,
+    FiamEventService,
+    FiamTriggerService,
+    FiamCampaignMobileService,
   ],
 })
 export class SharedModule { }
