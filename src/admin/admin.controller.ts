@@ -1453,6 +1453,18 @@ export class AdminController {
     );
   }
 
+  @Post('dashboard/top-influencers/refresh-cache')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Manually trigger top influencer score cache rebuild',
+    description: 'Forces an immediate recalculation of all top influencer scores. The daily cron does this automatically at 2 AM.',
+  })
+  async refreshTopInfluencerScoreCache() {
+    const result = await this.influencerScoringService.refreshTopInfluencerScoreCache();
+    return { success: true, ...result };
+  }
+
   @Put('influencer/:influencerId/top-status')
   @UseGuards(AdminAuthGuard, RolesGuard)
   @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
