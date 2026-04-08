@@ -2026,29 +2026,21 @@ export class InstagramService {
         .sort((a: any, b: any) => b.count - a.count)
         .slice(0, 10);
 
-      // Check if all demographic data is empty (indicates Facebook Page not connected)
+      // Check if all demographic data is empty
+      // NOTE: If API call succeeded (no error thrown), Facebook Page IS connected
+      // Empty data just means account has no/few followers yet
       const isAllDataEmpty = ageGender.length === 0 && cities.length === 0 && countries.length === 0;
 
       if (isAllDataEmpty) {
-        console.log(`⚠️  Empty demographics data for ${userType} ${userId} - Facebook Page likely not connected`);
+        console.log(`⚠️  Empty demographics data for ${userType} ${userId} - likely no followers yet, but Facebook Page is connected`);
         return {
           ageGender: [],
           cities: [],
           countries: [],
           totalFollowers: user.instagramFollowersCount || 0,
           dataAvailable: false,
-          facebookPageConnected: false,
-          error: {
-            code: 'FACEBOOK_PAGE_REQUIRED',
-            message: 'Audience demographics require Instagram Business Account connected to a Facebook Page',
-            details: 'Instagram API does not provide follower demographics without Facebook Page integration.',
-            instructions: [
-              '1. Ensure your Instagram account is a Business account (not Creator or Personal)',
-              '2. Create or connect a Facebook Page to your Instagram Business account',
-              '3. In Instagram Settings → Account → Linked Accounts → Facebook, link your Facebook Page',
-            ],
-            alternative: 'Without Facebook Page connection, demographics data will not be available via Instagram API.',
-          },
+          facebookPageConnected: true, // API succeeded = Facebook Page is connected
+          message: 'Facebook Page connected but no demographic data available yet. Demographics will appear once you have followers.',
         };
       }
 

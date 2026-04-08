@@ -352,8 +352,17 @@ export class InfluencerProfileScoringService {
     const geoRelevance = await this.calculateGeoRelevance(influencer);
     const onlinePresence = await this.calculateOnlinePresence(influencer);
 
-    // Check if Facebook page is connected based on demographic data availability
-    const facebookPageConnected = !!(demographicsSnapshot.details?.ageBreakdown?.length > 0);
+    // Check if Facebook page is connected by attempting to fetch demographics from API
+    let facebookPageConnected = false;
+    try {
+      if (influencer.instagramAccessToken && influencer.instagramUserId) {
+        const demographicsResponse = await this.instagramService.getAudienceDemographics(influencer.id, 'influencer');
+        facebookPageConnected = demographicsResponse.facebookPageConnected || false;
+      }
+    } catch (error) {
+      // If API call fails, fall back to checking if we have any historical demographic data
+      facebookPageConnected = !!(demographicsSnapshot.details?.ageBreakdown?.length > 0);
+    }
 
     // Weighted average: 65% + 20% + 15% = 100%
     const score =
