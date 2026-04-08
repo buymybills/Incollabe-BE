@@ -1082,7 +1082,7 @@ export class InfluencerController {
       '1. Campaign Selection Ratio: ((Selected / Applied) * 5) = max 5 points\n' +
       '2. Content Engagement Ratio: ((Posts with engagement / Total posts) * 2) = max 2 points\n' +
       '3. Brand Direct Contact: ((Direct contacts / Verified brands) * 1) = max 1 point\n' +
-      '4. Max User Yes: 0.5 points (accepted any collaboration)\n' +
+      '4. Pro Subscription (Max User): 0.5 points (if isPro = true)\n' +
       '5. Followers Score: ((Followers / 1000) * 0.5) = max 0.5 points (capped)\n' +
       '6. Experience: 0-1 point based on campaigns completed\n' +
       'Sorted by overall score (4-5 decimal accuracy). Total score range: 0-10 points.',

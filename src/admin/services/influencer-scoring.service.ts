@@ -70,9 +70,9 @@ export class InfluencerScoringService {
    * 1. Campaign selection ratio: ((Selected / Applied) * 5) = max 5 points
    * 2. Content engagement ratio: ((Posts with engagement / Total posts) * 2) = max 2 points
    * 3. Brand direct contact ratio: ((Brand direct contacts / Total verified brands) * 1) = max 1 point
-   * 4. Max user yes: 0.5 points
+   * 4. Pro subscription (Max User): 0.5 points if isPro = true
    * 5. Followers metric: ((Followers / 1000) * 0.5) = max 0.5 points (capped at 0.5)
-   * 6. Experience: 0 to 1 point based on years/campaigns completed
+   * 6. Experience: 0 to 1 point based on number of completed campaigns
    */
   async getTopInfluencersNewScoring(
     limit: number = 20,
@@ -383,19 +383,17 @@ export class InfluencerScoringService {
 
   /**
    * 4. Max User Yes Score (0-0.5 points)
-   * Fixed 0.5 points if influencer accepted at least one max user/VIP collaboration
+   * Fixed 0.5 points if influencer has a pro subscription (isPro = true)
    */
   private async calculateMaxUserYesScore(
     influencerId: number,
   ): Promise<number> {
-    // Looking for 'max' or 'vip' campaigns that were selected
-    // This requires checking if influencer has done any special/premium collaborations
-    // For now, checking if they have at least one SELECTED or COMPLETED experience
-    const maxUserExperience = await this.experienceModel.findOne({
-      where: { influencerId },
+    // Check if influencer has pro subscription
+    const influencer = await this.influencerModel.findByPk(influencerId, {
+      attributes: ['isPro'],
     });
 
-    return maxUserExperience ? 0.5 : 0;
+    return influencer?.isPro ? 0.5 : 0;
   }
 
   /**

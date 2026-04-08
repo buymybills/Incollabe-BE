@@ -1400,7 +1400,7 @@ export class AdminController {
       '1. Campaign Selection Ratio: ((Campaigns selected / Campaigns applied) * 5) = max 5 points\n' +
       '2. Content Engagement Ratio: ((Posts with engagement / Total posts) * 2) = max 2 points\n' +
       '3. Brand Direct Contact: ((Brand direct contacts / Total verified brands) * 1) = max 1 point\n' +
-      '4. Max User Yes: 0.5 points (if they accepted any collaboration)\n' +
+      '4. Pro Subscription (Max User): 0.5 points (if influencer has isPro = true)\n' +
       '5. Followers Score: ((Followers / 1000) * 0.5) = max 0.5 points (capped at 0.5)\n' +
       '6. Experience Score: 0-1 point based on number of campaigns completed\n' +
       'Total Score: 0-10 points with 4-5 decimal accuracy. Results sorted by score descending, with followers count as tiebreaker.',
