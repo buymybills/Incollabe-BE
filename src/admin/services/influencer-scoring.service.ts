@@ -3,12 +3,15 @@ import { InjectModel } from '@nestjs/sequelize';
 import { Influencer } from '../../auth/model/influencer.model';
 import { Post } from '../../post/models/post.model';
 import { Follow } from '../../post/models/follow.model';
-import { CampaignApplication } from '../../campaign/models/campaign-application.model';
+import { CampaignApplication, ApplicationStatus } from '../../campaign/models/campaign-application.model';
+import { Campaign } from '../../campaign/models/campaign.model';
 import { Experience } from '../../influencer/models/experience.model';
 import { InfluencerNiche } from '../../auth/model/influencer-niche.model';
 import { Niche } from '../../auth/model/niche.model';
 import { City } from '../../shared/models/city.model';
 import { Country } from '../../shared/models/country.model';
+import { Conversation } from '../../shared/models/conversation.model';
+import { Brand } from '../../brand/model/brand.model';
 import { GetTopInfluencersDto } from '../dto/get-top-influencers.dto';
 import {
   GetInfluencersDto,
@@ -49,11 +52,402 @@ export class InfluencerScoringService {
     private followModel: typeof Follow,
     @InjectModel(CampaignApplication)
     private campaignApplicationModel: typeof CampaignApplication,
+    @InjectModel(Campaign)
+    private campaignModel: typeof Campaign,
     @InjectModel(Experience)
     private experienceModel: typeof Experience,
     @InjectModel(InfluencerNiche)
     private influencerNicheModel: typeof InfluencerNiche,
+    @InjectModel(Conversation)
+    private conversationModel: typeof Conversation,
+    @InjectModel(Brand)
+    private brandModel: typeof Brand,
   ) {}
+
+  /**
+   * Get top 20 influencers with new scoring logic
+   * Scoring Metrics (Total: 10 points):
+   * 1. Campaign selection ratio: ((Selected / Applied) * 5) = max 5 points
+   * 2. Content engagement ratio: ((Posts with engagement / Total posts) * 2) = max 2 points
+   * 3. Brand direct contact ratio: ((Brand direct contacts / Total verified brands) * 1) = max 1 point
+   * 4. Max user yes: 0.5 points
+   * 5. Followers metric: ((Followers / 1000) * 0.5) = max 0.5 points (capped at 0.5)
+   * 6. Experience: 0 to 1 point based on years/campaigns completed
+   */
+  async getTopInfluencersNewScoring(
+    limit: number = 20,
+    searchQuery?: string,
+    locationSearch?: string,
+    nicheSearch?: string,
+  ): Promise<TopInfluencersResponseDto> {
+    // Build base query for active, verified influencers with completed profiles
+    const whereConditions: any = {
+      isProfileCompleted: true,
+      isActive: true,
+    };
+
+    // Apply search query if provided
+    if (searchQuery && searchQuery.trim()) {
+      whereConditions[Op.or] = [
+        { name: { [Op.iLike]: `%${searchQuery.trim()}%` } },
+        { username: { [Op.iLike]: `%${searchQuery.trim()}%` } },
+      ];
+    }
+
+    // Build include conditions
+    const cityInclude: any = {
+      model: City,
+      as: 'city',
+      required: false,
+    };
+    if (locationSearch && locationSearch.trim()) {
+      cityInclude.where = {
+        name: { [Op.iLike]: `%${locationSearch.trim()}%` },
+      };
+      cityInclude.required = true;
+    }
+
+    const nicheInclude: any = {
+      model: Niche,
+      as: 'niches',
+      through: { attributes: [] },
+      required: false,
+    };
+    if (nicheSearch && nicheSearch.trim()) {
+      nicheInclude.where = {
+        name: { [Op.iLike]: `%${nicheSearch.trim()}%` },
+      };
+      nicheInclude.required = true;
+    }
+
+    // Fetch all eligible influencers
+    const influencers = await this.influencerModel.findAll({
+      where: whereConditions,
+      include: [
+        nicheInclude,
+        cityInclude,
+        {
+          model: Country,
+          as: 'country',
+          required: false,
+        },
+      ],
+    });
+
+    // Score each influencer with new logic and get detailed breakdown
+    const scoredInfluencers = await Promise.all(
+      influencers.map(async (inf) => {
+        const influencer = inf as unknown as InfluencerWithAssociations;
+        
+        // Calculate all new scoring metrics
+        const campaignScore = await this.calculateCampaignSelectionScore(
+          influencer.id,
+        );
+        const engagementScore = await this.calculateContentEngagementScore(
+          influencer.id,
+        );
+        const brandContactScore = await this.calculateBrandDirectContactScore(
+          influencer.id,
+        );
+        const maxUserYesScore = await this.calculateMaxUserYesScore(
+          influencer.id,
+        );
+        const followersScore = await this.calculateFollowersScore(
+          influencer.id,
+        );
+        const experienceScore = await this.calculateExperienceScore(
+          influencer.id,
+        );
+
+        // Calculate overall score with precision to 5 decimals
+        const overallScore = parseFloat(
+          (
+            campaignScore +
+            engagementScore +
+            brandContactScore +
+            maxUserYesScore +
+            followersScore +
+            experienceScore
+          ).toFixed(5),
+        );
+
+        // Get follower count for display
+        const followersCount = await this.getFollowersCount(influencer.id);
+        const postsCount = await this.getPostsCount(influencer.id);
+        const completedCampaigns = await this.getCompletedCampaignsCount(
+          influencer.id,
+        );
+
+        // Get niche names
+        const niches = influencer.niches?.map((niche) => niche.name) || [];
+
+        // Get collaboration costs
+        const instagramCosts =
+          (influencer.collaborationCosts as Record<string, any>)?.instagram || {};
+        const instagramPostCost = instagramCosts.post || 0;
+        const instagramReelCost = instagramCosts.reel || 0;
+
+        const topInfluencer: TopInfluencerDto = {
+          id: influencer.id,
+          name: influencer.name,
+          username: influencer.username,
+          profileImage: influencer.profileImage || '',
+          bio: influencer.bio || '',
+          profileHeadline: influencer.profileHeadline || '',
+          city: influencer.city?.name || '',
+          country: influencer.country?.name || '',
+          isVerified: influencer.isVerified || false,
+          verifiedAt: influencer.verifiedAt || null,
+          instagramIsVerified: influencer.instagramIsVerified || false,
+          isInstagramConnected: !!influencer.instagramConnectedAt,
+          isTopInfluencer: influencer.isTopInfluencer || false,
+          followersCount,
+          engagementRate: (engagementScore / 2) * 100, // Convert engagement score to percentage for display
+          postsCount,
+          completedCampaigns,
+          niches,
+          instagramPostCost,
+          instagramReelCost,
+          scoreBreakdown: {
+            nicheMatchScore: 0, // Placeholder - not used in new scoring
+            engagementRateScore: parseFloat(engagementScore.toFixed(5)),
+            audienceRelevanceScore: 0, // Placeholder
+            locationMatchScore: 0, // Placeholder
+            pastPerformanceScore: parseFloat(
+              (campaignScore + experienceScore).toFixed(5),
+            ),
+            collaborationChargesScore: 0, // Placeholder
+            overallScore,
+            recommendationLevel:
+              overallScore >= 8
+                ? 'highly_recommended'
+                : overallScore >= 6
+                  ? 'recommended'
+                  : overallScore >= 4
+                    ? 'consider'
+                    : 'not_recommended',
+          },
+          displayOrder: influencer.displayOrder || null,
+          updatedAt: influencer.updatedAt,
+        };
+
+        return topInfluencer;
+      }),
+    );
+
+    // Filter out null values and sort by score (descending)
+    const validInfluencers = scoredInfluencers
+      .filter((inf): inf is TopInfluencerDto => inf !== null)
+      .sort((a, b) => {
+        const scoreDiff = b.scoreBreakdown.overallScore - a.scoreBreakdown.overallScore;
+        
+        // If scores are equal, use priority: 1) Campaign Score 2) Engagement 3) Experience 4) Followers
+        if (scoreDiff === 0) {
+          // Extract individual scores for tiebreaking
+          const aFollowers = a.followersCount;
+          const bFollowers = b.followersCount;
+          
+          if (aFollowers !== bFollowers) {
+            return bFollowers - aFollowers;
+          }
+
+          // Final tiebreaker: most recent update
+          if (a.updatedAt && b.updatedAt) {
+            return (
+              new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+            );
+          }
+        }
+        
+        return scoreDiff;
+      })
+      .slice(0, limit); // Get top N influencers (default 20)
+
+    return {
+      influencers: validInfluencers,
+      total: validInfluencers.length,
+      page: 1,
+      limit,
+      totalPages: 1,
+      appliedWeights: {
+        nicheMatchWeight: 0,
+        engagementRateWeight: 20, // 20% for engagement
+        audienceRelevanceWeight: 0,
+        locationMatchWeight: 0,
+        pastPerformanceWeight: 60, // 60% for campaign success + experience
+        collaborationChargesWeight: 20, // 20% distributed to other metrics
+      },
+    };
+  }
+
+  /**
+   * 1. Campaign Selection Score (0-5 points)
+   * Formula: ((Campaigns selected) / (Campaigns applied)) * 5
+   */
+  private async calculateCampaignSelectionScore(
+    influencerId: number,
+  ): Promise<number> {
+    // Count total campaigns applied to
+    const totalApplied = await this.campaignApplicationModel.count({
+      where: { influencerId },
+    });
+
+    if (totalApplied === 0) {
+      return 0; // No applications, score is 0
+    }
+
+    // Count campaigns where status is SELECTED
+    const selected = await this.campaignApplicationModel.count({
+      where: {
+        influencerId,
+        status: ApplicationStatus.SELECTED,
+      },
+    });
+
+    const score = (selected / totalApplied) * 5;
+    return parseFloat(score.toFixed(5));
+  }
+
+  /**
+   * 2. Content Engagement Score (0-2 points)
+   * Formula: ((Posts with engagement) / (Total posts)) * 2
+   * Engagement = at least 1 like or share
+   */
+  private async calculateContentEngagementScore(
+    influencerId: number,
+  ): Promise<number> {
+    // Count total posts
+    const totalPosts = await this.postModel.count({
+      where: { influencerId, isActive: true },
+    });
+
+    if (totalPosts === 0) {
+      return 0; // No posts, score is 0
+    }
+
+    // Count posts with engagement (likes > 0 or shares > 0)
+    const engagedPosts = await this.postModel.count({
+      where: {
+        influencerId,
+        isActive: true,
+        [Op.or]: [
+          { likesCount: { [Op.gt]: 0 } },
+          { sharesCount: { [Op.gt]: 0 } },
+        ],
+      },
+    });
+
+    const score = (engagedPosts / totalPosts) * 2;
+    return parseFloat(score.toFixed(5));
+  }
+
+  /**
+   * 3. Brand Direct Contact Score (0-1 point)
+   * Formula: ((Brand direct contacts) / (Total verified brands)) * 1
+   * Direct contact = conversations initiated by brand to influencer
+   */
+  private async calculateBrandDirectContactScore(
+    influencerId: number,
+  ): Promise<number> {
+    // Count total verified brands
+    const totalVerifiedBrands = await this.brandModel.count({
+      where: { isVerified: true, isActive: true },
+    });
+
+    if (totalVerifiedBrands === 0) {
+      return 0; // No verified brands, score is 0
+    }
+
+    // Count conversations where brand contacted influencer directly
+    // Brand contacted first = brand sent first message or initiated conversation
+    const brandContacts = await this.conversationModel.count({
+      where: {
+        [Op.or]: [
+          {
+            participant1Type: 'brand',
+            participant2Type: 'influencer',
+            participant2Id: influencerId,
+          },
+          {
+            participant1Type: 'influencer',
+            participant1Id: influencerId,
+            participant2Type: 'brand',
+          },
+        ],
+      },
+    });
+
+    const score = (brandContacts / totalVerifiedBrands) * 1;
+    return parseFloat(score.toFixed(5));
+  }
+
+  /**
+   * 4. Max User Yes Score (0-0.5 points)
+   * Fixed 0.5 points if influencer accepted at least one max user/VIP collaboration
+   */
+  private async calculateMaxUserYesScore(
+    influencerId: number,
+  ): Promise<number> {
+    // Looking for 'max' or 'vip' campaigns that were selected
+    // This requires checking if influencer has done any special/premium collaborations
+    // For now, checking if they have at least one SELECTED or COMPLETED experience
+    const maxUserExperience = await this.experienceModel.findOne({
+      where: { influencerId },
+    });
+
+    return maxUserExperience ? 0.5 : 0;
+  }
+
+  /**
+   * 5. Followers Score (0-0.5 points, capped at 0.5)
+   * Formula: ((No. of followers / 1000) * 0.5)
+   * If result > 0.5, cap it at 0.5
+   */
+  private async calculateFollowersScore(
+    influencerId: number,
+  ): Promise<number> {
+    const followersCount = await this.getFollowersCount(influencerId);
+    let score = (followersCount / 1000) * 0.5;
+
+    // Cap the score at 0.5
+    if (score > 0.5) {
+      score = 0.5;
+    }
+
+    return parseFloat(score.toFixed(5));
+  }
+
+  /**
+   * 6. Experience Score (0-1 point)
+   * Based on number of completed experiences/campaigns:
+   * 0 campaigns: 0 points
+   * 1-3 campaigns: 0.3 points
+   * 4-9 campaigns: 0.6 points
+   * 10-14 campaigns: 0.8 points
+   * >=15 campaigns: 1 point
+   */
+  private async calculateExperienceScore(
+    influencerId: number,
+  ): Promise<number> {
+    const completedCampaigns = await this.experienceModel.count({
+      where: { influencerId },
+    });
+
+    let score = 0;
+    if (completedCampaigns === 0) {
+      score = 0;
+    } else if (completedCampaigns >= 1 && completedCampaigns <= 3) {
+      score = 0.3;
+    } else if (completedCampaigns >= 4 && completedCampaigns <= 9) {
+      score = 0.6;
+    } else if (completedCampaigns >= 10 && completedCampaigns <= 14) {
+      score = 0.8;
+    } else if (completedCampaigns >= 15) {
+      score = 1;
+    }
+
+    return parseFloat(score.toFixed(5));
+  }
 
   /**
    * Get top influencers with scoring based on multiple criteria

@@ -1390,6 +1390,69 @@ export class AdminController {
     return await this.influencerScoringService.getInfluencers(requestDto);
   }
 
+  @Get('dashboard/top-influencers-new-scoring')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get top 20 influencers with new scoring logic',
+    description:
+      'Get top 20 influencers based on new scoring metrics:\n' +
+      '1. Campaign Selection Ratio: ((Campaigns selected / Campaigns applied) * 5) = max 5 points\n' +
+      '2. Content Engagement Ratio: ((Posts with engagement / Total posts) * 2) = max 2 points\n' +
+      '3. Brand Direct Contact: ((Brand direct contacts / Total verified brands) * 1) = max 1 point\n' +
+      '4. Max User Yes: 0.5 points (if they accepted any collaboration)\n' +
+      '5. Followers Score: ((Followers / 1000) * 0.5) = max 0.5 points (capped at 0.5)\n' +
+      '6. Experience Score: 0-1 point based on number of campaigns completed\n' +
+      'Total Score: 0-10 points with 4-5 decimal accuracy. Results sorted by score descending, with followers count as tiebreaker.',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by influencer name or username',
+  })
+  @ApiQuery({
+    name: 'location',
+    required: false,
+    type: String,
+    description: 'Filter by city/location name',
+  })
+  @ApiQuery({
+    name: 'niche',
+    required: false,
+    type: String,
+    description: 'Filter by niche name',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Maximum number of influencers to return (default: 20)',
+    example: 20,
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Top influencers retrieved successfully with new scoring',
+    type: TopInfluencersResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getTopInfluencersNewScoring(
+    @Query('search') search?: string,
+    @Query('location') location?: string,
+    @Query('niche') niche?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const parsedLimit = limit ? parseInt(limit, 10) : 20;
+    return await this.influencerScoringService.getTopInfluencersNewScoring(
+      parsedLimit,
+      search,
+      location,
+      niche,
+    );
+  }
+
   @Put('influencer/:influencerId/top-status')
   @UseGuards(AdminAuthGuard, RolesGuard)
   @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)

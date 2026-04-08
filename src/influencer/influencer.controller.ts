@@ -1076,35 +1076,89 @@ export class InfluencerController {
   @Get('top-influencers')
   @Public()
   @ApiOperation({
-    summary: 'Get top influencers',
+    summary: 'Get top 20 influencers with new scoring logic',
     description:
-      'Fetch list of top influencers curated by admin (public endpoint)',
+      'Fetch top 20 influencers ranked by new scoring metrics:\n' +
+      '1. Campaign Selection Ratio: ((Selected / Applied) * 5) = max 5 points\n' +
+      '2. Content Engagement Ratio: ((Posts with engagement / Total posts) * 2) = max 2 points\n' +
+      '3. Brand Direct Contact: ((Direct contacts / Verified brands) * 1) = max 1 point\n' +
+      '4. Max User Yes: 0.5 points (accepted any collaboration)\n' +
+      '5. Followers Score: ((Followers / 1000) * 0.5) = max 0.5 points (capped)\n' +
+      '6. Experience: 0-1 point based on campaigns completed\n' +
+      'Sorted by overall score (4-5 decimal accuracy). Total score range: 0-10 points.',
   })
   @ApiQuery({
-    name: 'page',
+    name: 'search',
     required: false,
-    type: Number,
-    example: 1,
-    description: 'Page number for pagination',
+    type: String,
+    description: 'Search by influencer name or username',
+    example: 'john',
+  })
+  @ApiQuery({
+    name: 'location',
+    required: false,
+    type: String,
+    description: 'Filter by city/location name',
+    example: 'Mumbai',
+  })
+  @ApiQuery({
+    name: 'niche',
+    required: false,
+    type: String,
+    description: 'Filter by niche name',
+    example: 'Fashion',
   })
   @ApiQuery({
     name: 'limit',
     required: false,
     type: Number,
-    example: 10,
-    description: 'Number of items per page',
+    description: 'Maximum number of influencers to return (default: 20)',
+    example: 20,
   })
   @ApiResponse({
     status: 200,
-    description: 'Top influencers fetched successfully',
+    description: 'Top influencers fetched successfully with new scoring',
+    schema: {
+      example: {
+        influencers: [
+          {
+            id: 1,
+            name: 'Influencer Name',
+            username: 'influencer_handle',
+            profileImage: 'image_url',
+            city: 'Mumbai',
+            country: 'India',
+            followersCount: 50000,
+            postsCount: 150,
+            completedCampaigns: 5,
+            scoreBreakdown: {
+              engagementRateScore: 1.8,
+              pastPerformanceScore: 4.5,
+              overallScore: 8.35,
+              recommendationLevel: 'highly_recommended',
+            },
+          },
+        ],
+        total: 20,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      },
+    },
   })
   async getTopInfluencers(
-    @Query('page') page?: string,
+    @Query('search') search?: string,
+    @Query('location') location?: string,
+    @Query('niche') niche?: string,
     @Query('limit') limit?: string,
   ) {
-    const parsedPage = page ? parseInt(page, 10) : 1;
-    const parsedLimit = limit ? parseInt(limit, 10) : 10;
-    return this.influencerService.getTopInfluencers(parsedPage, parsedLimit);
+    const parsedLimit = limit ? parseInt(limit, 10) : 20;
+    return this.influencerService.getTopInfluencersWithNewScoring(
+      parsedLimit,
+      search,
+      location,
+      niche,
+    );
   }
 
   // Support Ticket endpoints

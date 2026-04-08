@@ -48,6 +48,7 @@ import { SubscriptionMarketingService } from './services/subscription-marketing.
 import { PostBoostInvoice } from '../post/models/post-boost-invoice.model';
 import { DeviceToken } from '../shared/models/device-token.model';
 import { NudgeMessageTemplate } from '../shared/models/nudge-message-template.model';
+import { AdminModule } from '../admin/admin.module';
 
 @Module({
   imports: [
@@ -92,6 +93,7 @@ import { NudgeMessageTemplate } from '../shared/models/nudge-message-template.mo
     ]),
     SharedModule,
     CampaignModule,
+    AdminModule,
   ],
   controllers: [InfluencerController, InfluencerHypeStoreController],
   providers: [
