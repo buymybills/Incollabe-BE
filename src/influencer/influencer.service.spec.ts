@@ -15,6 +15,7 @@ import { InfluencerRepository } from './repositories/influencer.repository';
 import { CampaignService } from '../campaign/campaign.service';
 import { MaxCampaignScoringQueueService } from '../campaign/services/max-campaign-scoring-queue.service';
 import { ProSubscriptionService } from './services/pro-subscription.service';
+import { InfluencerScoringService } from '../admin/services/influencer-scoring.service';
 import { ChatService } from '../shared/chat.service';
 import {
   ProfileReview,
@@ -431,6 +432,12 @@ describe('InfluencerService', () => {
             getNotifications: jest.fn().mockResolvedValue([]),
             markAsRead: jest.fn().mockResolvedValue(undefined),
             deleteNotification: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: InfluencerScoringService,
+          useValue: {
+            getTopInfluencersNewScoring: jest.fn().mockResolvedValue([]),
           },
         },
       ],
