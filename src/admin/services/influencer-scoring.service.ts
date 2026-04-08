@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Influencer } from '../../auth/model/influencer.model';
 import { Post } from '../../post/models/post.model';
@@ -12,6 +12,7 @@ import { City } from '../../shared/models/city.model';
 import { Country } from '../../shared/models/country.model';
 import { Conversation } from '../../shared/models/conversation.model';
 import { Brand } from '../../brand/model/brand.model';
+import { TopInfluencerScoreCache } from '../models/top-influencer-score-cache.model';
 import { GetTopInfluencersDto } from '../dto/get-top-influencers.dto';
 import {
   GetInfluencersDto,
@@ -43,6 +44,8 @@ type InfluencerWithAssociations = Influencer & {
 
 @Injectable()
 export class InfluencerScoringService {
+  private readonly logger = new Logger(InfluencerScoringService.name);
+
   constructor(
     @InjectModel(Influencer)
     private influencerModel: typeof Influencer,
@@ -62,6 +65,8 @@ export class InfluencerScoringService {
     private conversationModel: typeof Conversation,
     @InjectModel(Brand)
     private brandModel: typeof Brand,
+    @InjectModel(TopInfluencerScoreCache)
+    private topInfluencerScoreCacheModel: typeof TopInfluencerScoreCache,
   ) {}
 
   /**
@@ -80,13 +85,12 @@ export class InfluencerScoringService {
     locationSearch?: string,
     nicheSearch?: string,
   ): Promise<TopInfluencersResponseDto> {
-    // Build base query for active, verified influencers with completed profiles
+    // Build base query for active influencers with completed profiles
     const whereConditions: any = {
       isProfileCompleted: true,
       isActive: true,
     };
 
-    // Apply search query if provided
     if (searchQuery && searchQuery.trim()) {
       whereConditions[Op.or] = [
         { name: { [Op.iLike]: `%${searchQuery.trim()}%` } },
@@ -94,16 +98,9 @@ export class InfluencerScoringService {
       ];
     }
 
-    // Build include conditions
-    const cityInclude: any = {
-      model: City,
-      as: 'city',
-      required: false,
-    };
+    const cityInclude: any = { model: City, as: 'city', required: false };
     if (locationSearch && locationSearch.trim()) {
-      cityInclude.where = {
-        name: { [Op.iLike]: `%${locationSearch.trim()}%` },
-      };
+      cityInclude.where = { name: { [Op.iLike]: `%${locationSearch.trim()}%` } };
       cityInclude.required = true;
     }
 
@@ -114,78 +111,89 @@ export class InfluencerScoringService {
       required: false,
     };
     if (nicheSearch && nicheSearch.trim()) {
-      nicheInclude.where = {
-        name: { [Op.iLike]: `%${nicheSearch.trim()}%` },
-      };
+      nicheInclude.where = { name: { [Op.iLike]: `%${nicheSearch.trim()}%` } };
       nicheInclude.required = true;
     }
 
-    // Fetch all eligible influencers
     const influencers = await this.influencerModel.findAll({
       where: whereConditions,
       include: [
         nicheInclude,
         cityInclude,
-        {
-          model: Country,
-          as: 'country',
-          required: false,
-        },
+        { model: Country, as: 'country', required: false },
       ],
     });
 
-    // Score each influencer with new logic and get detailed breakdown
+    // Fetch pre-computed scores for all matched influencers in one query
+    const influencerIds = influencers.map((inf) => inf.id);
+    const cachedScores = influencerIds.length > 0
+      ? await this.topInfluencerScoreCacheModel.findAll({
+          where: { influencerId: influencerIds },
+          attributes: ['influencerId', 'overallScore', 'scoreBreakdown', 'calculatedAt'],
+        })
+      : [];
+
+    const cacheMap = new Map(cachedScores.map((c) => [c.influencerId, c]));
+
+    if (cacheMap.size === 0) {
+      this.logger.warn(
+        'Top influencer score cache is empty — falling back to live computation. Run the daily cron to populate the cache.',
+      );
+    }
+
+    // Score each influencer: use cache if available, else compute live
     const scoredInfluencers = await Promise.all(
       influencers.map(async (inf) => {
         const influencer = inf as unknown as InfluencerWithAssociations;
-        
-        // Calculate all new scoring metrics
-        const campaignScore = await this.calculateCampaignSelectionScore(
-          influencer.id,
-        );
-        const engagementScore = await this.calculateContentEngagementScore(
-          influencer.id,
-        );
-        const brandContactScore = await this.calculateBrandDirectContactScore(
-          influencer.id,
-        );
-        const maxUserYesScore = await this.calculateMaxUserYesScore(
-          influencer.id,
-        );
-        const followersScore = await this.calculateFollowersScore(
-          influencer.id,
-        );
-        const experienceScore = await this.calculateExperienceScore(
-          influencer.id,
-        );
 
-        // Calculate overall score with precision to 5 decimals
-        const overallScore = parseFloat(
-          (
-            campaignScore +
-            engagementScore +
-            brandContactScore +
-            maxUserYesScore +
-            followersScore +
-            experienceScore
-          ).toFixed(5),
-        );
+        let overallScore: number;
+        let scoreBreakdown: Record<string, any>;
+        let scoreSource: 'cache' | 'live';
+        let scoreCachedAt: Date | null;
 
-        // Get follower count for display
-        const followersCount = await this.getFollowersCount(influencer.id);
-        const postsCount = await this.getPostsCount(influencer.id);
-        const completedCampaigns = await this.getCompletedCampaignsCount(
-          influencer.id,
-        );
+        const cached = cacheMap.get(influencer.id);
+        if (cached) {
+          overallScore = Number(cached.overallScore);
+          scoreBreakdown = cached.scoreBreakdown || {};
+          scoreSource = 'cache';
+          scoreCachedAt = cached.calculatedAt;
+        } else {
+          // Live computation (fallback — only runs when cache is missing)
+          const [
+            campaignScore,
+            engagementScore,
+            brandContactScore,
+            maxUserYesScore,
+            followersScore,
+            experienceScore,
+          ] = await Promise.all([
+            this.calculateCampaignSelectionScore(influencer.id),
+            this.calculateContentEngagementScore(influencer.id),
+            this.calculateBrandDirectContactScore(influencer.id),
+            this.calculateMaxUserYesScore(influencer.id),
+            this.calculateFollowersScore(influencer.id),
+            this.calculateExperienceScore(influencer.id),
+          ]);
 
-        // Get niche names
+          overallScore = parseFloat(
+            (campaignScore + engagementScore + brandContactScore + maxUserYesScore + followersScore + experienceScore).toFixed(5),
+          );
+          scoreBreakdown = {
+            engagementRateScore: parseFloat(engagementScore.toFixed(5)),
+            pastPerformanceScore: parseFloat((campaignScore + experienceScore).toFixed(5)),
+          };
+          scoreSource = 'live';
+          scoreCachedAt = null;
+        }
+
+        const [followersCount, postsCount, completedCampaigns] = await Promise.all([
+          this.getFollowersCount(influencer.id),
+          this.getPostsCount(influencer.id),
+          this.getCompletedCampaignsCount(influencer.id),
+        ]);
+
         const niches = influencer.niches?.map((niche) => niche.name) || [];
-
-        // Get collaboration costs
-        const instagramCosts =
-          (influencer.collaborationCosts as Record<string, any>)?.instagram || {};
-        const instagramPostCost = instagramCosts.post || 0;
-        const instagramReelCost = instagramCosts.reel || 0;
+        const instagramCosts = (influencer.collaborationCosts as Record<string, any>)?.instagram || {};
 
         const topInfluencer: TopInfluencerDto = {
           id: influencer.id,
@@ -202,21 +210,19 @@ export class InfluencerScoringService {
           isInstagramConnected: !!influencer.instagramConnectedAt,
           isTopInfluencer: influencer.isTopInfluencer || false,
           followersCount,
-          engagementRate: (engagementScore / 2) * 100, // Convert engagement score to percentage for display
+          engagementRate: ((scoreBreakdown.engagementRateScore ?? 0) / 2) * 100,
           postsCount,
           completedCampaigns,
           niches,
-          instagramPostCost,
-          instagramReelCost,
+          instagramPostCost: instagramCosts.post || 0,
+          instagramReelCost: instagramCosts.reel || 0,
           scoreBreakdown: {
-            nicheMatchScore: 0, // Placeholder - not used in new scoring
-            engagementRateScore: parseFloat(engagementScore.toFixed(5)),
-            audienceRelevanceScore: 0, // Placeholder
-            locationMatchScore: 0, // Placeholder
-            pastPerformanceScore: parseFloat(
-              (campaignScore + experienceScore).toFixed(5),
-            ),
-            collaborationChargesScore: 0, // Placeholder
+            nicheMatchScore: 0,
+            engagementRateScore: scoreBreakdown.engagementRateScore ?? 0,
+            audienceRelevanceScore: 0,
+            locationMatchScore: 0,
+            pastPerformanceScore: scoreBreakdown.pastPerformanceScore ?? 0,
+            collaborationChargesScore: 0,
             overallScore,
             recommendationLevel:
               overallScore >= 8
@@ -229,39 +235,37 @@ export class InfluencerScoringService {
           },
           displayOrder: influencer.displayOrder || null,
           updatedAt: influencer.updatedAt,
+          scoreSource,
+          scoreCachedAt,
         };
 
         return topInfluencer;
       }),
     );
 
-    // Filter out null values and sort by score (descending)
     const validInfluencers = scoredInfluencers
       .filter((inf): inf is TopInfluencerDto => inf !== null)
       .sort((a, b) => {
         const scoreDiff = b.scoreBreakdown.overallScore - a.scoreBreakdown.overallScore;
-        
-        // If scores are equal, use priority: 1) Campaign Score 2) Engagement 3) Experience 4) Followers
         if (scoreDiff === 0) {
-          // Extract individual scores for tiebreaking
-          const aFollowers = a.followersCount;
-          const bFollowers = b.followersCount;
-          
-          if (aFollowers !== bFollowers) {
-            return bFollowers - aFollowers;
+          if (a.followersCount !== b.followersCount) {
+            return b.followersCount - a.followersCount;
           }
-
-          // Final tiebreaker: most recent update
           if (a.updatedAt && b.updatedAt) {
-            return (
-              new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-            );
+            return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
           }
         }
-        
         return scoreDiff;
       })
-      .slice(0, limit); // Get top N influencers (default 20)
+      .slice(0, limit);
+
+    const cachedCount = validInfluencers.filter((i) => i.scoreSource === 'cache').length;
+    const lastCacheRefresh = cachedScores.length > 0
+      ? cachedScores.reduce((latest, c) =>
+          c.calculatedAt > latest ? c.calculatedAt : latest,
+          cachedScores[0].calculatedAt,
+        )
+      : null;
 
     return {
       influencers: validInfluencers,
@@ -271,13 +275,80 @@ export class InfluencerScoringService {
       totalPages: 1,
       appliedWeights: {
         nicheMatchWeight: 0,
-        engagementRateWeight: 20, // 20% for engagement
+        engagementRateWeight: 20,
         audienceRelevanceWeight: 0,
         locationMatchWeight: 0,
-        pastPerformanceWeight: 60, // 60% for campaign success + experience
-        collaborationChargesWeight: 20, // 20% distributed to other metrics
+        pastPerformanceWeight: 60,
+        collaborationChargesWeight: 20,
+      },
+      cacheInfo: {
+        cachedCount,
+        liveCount: validInfluencers.length - cachedCount,
+        lastCacheRefresh,
       },
     };
+  }
+
+  /**
+   * Compute and persist scores for all eligible influencers into the cache table.
+   * Called by the daily cron job.
+   */
+  async refreshTopInfluencerScoreCache(): Promise<{ updated: number; errors: number }> {
+    const influencers = await this.influencerModel.findAll({
+      where: { isProfileCompleted: true, isActive: true },
+      attributes: ['id'],
+    });
+
+    let updated = 0;
+    let errors = 0;
+
+    for (const inf of influencers) {
+      try {
+        const [
+          campaignScore,
+          engagementScore,
+          brandContactScore,
+          maxUserYesScore,
+          followersScore,
+          experienceScore,
+        ] = await Promise.all([
+          this.calculateCampaignSelectionScore(inf.id),
+          this.calculateContentEngagementScore(inf.id),
+          this.calculateBrandDirectContactScore(inf.id),
+          this.calculateMaxUserYesScore(inf.id),
+          this.calculateFollowersScore(inf.id),
+          this.calculateExperienceScore(inf.id),
+        ]);
+
+        const overallScore = parseFloat(
+          (campaignScore + engagementScore + brandContactScore + maxUserYesScore + followersScore + experienceScore).toFixed(5),
+        );
+
+        const scoreBreakdown = {
+          engagementRateScore: parseFloat(engagementScore.toFixed(5)),
+          pastPerformanceScore: parseFloat((campaignScore + experienceScore).toFixed(5)),
+          campaignScore: parseFloat(campaignScore.toFixed(5)),
+          brandContactScore: parseFloat(brandContactScore.toFixed(5)),
+          maxUserYesScore: parseFloat(maxUserYesScore.toFixed(5)),
+          followersScore: parseFloat(followersScore.toFixed(5)),
+          experienceScore: parseFloat(experienceScore.toFixed(5)),
+        };
+
+        await this.topInfluencerScoreCacheModel.upsert({
+          influencerId: inf.id,
+          overallScore,
+          scoreBreakdown,
+          calculatedAt: new Date(),
+        });
+
+        updated++;
+      } catch (error) {
+        this.logger.warn(`Failed to cache score for influencer ${inf.id}: ${error.message}`);
+        errors++;
+      }
+    }
+
+    return { updated, errors };
   }
 
   /**
@@ -612,8 +683,10 @@ export class InfluencerScoringService {
           instagramPostCost,
           instagramReelCost,
           scoreBreakdown,
-          displayOrder: influencer.displayOrder || null, // Include displayOrder for sorting
-          updatedAt: influencer.updatedAt, // Include timestamp for tiebreaker
+          displayOrder: influencer.displayOrder || null,
+          updatedAt: influencer.updatedAt,
+          scoreSource: 'live' as const,
+          scoreCachedAt: null,
         };
 
         return topInfluencer;
@@ -668,6 +741,7 @@ export class InfluencerScoringService {
       limit,
       totalPages,
       appliedWeights: weights,
+      cacheInfo: { cachedCount: 0, liveCount: paginatedInfluencers.length, lastCacheRefresh: null },
     };
   }
 
@@ -897,7 +971,9 @@ export class InfluencerScoringService {
           instagramPostCost,
           instagramReelCost,
           scoreBreakdown,
-          searchPriority, // Add search priority for sorting
+          searchPriority,
+          scoreSource: 'live' as const,
+          scoreCachedAt: null,
         };
 
       return topInfluencer;
@@ -981,6 +1057,7 @@ export class InfluencerScoringService {
         pastPerformanceWeight: 0,
         collaborationChargesWeight: 0,
       },
+      cacheInfo: { cachedCount: 0, liveCount: paginatedInfluencers.length, lastCacheRefresh: null },
     };
   }
 

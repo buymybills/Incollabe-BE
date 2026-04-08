@@ -26,6 +26,7 @@ import { NudgeTemplateService } from './services/nudge-template.service';
 import { FiamCampaignService } from './services/fiam-campaign.service';
 import { FiamCampaignBroadcastService } from './services/fiam-campaign-broadcast.service';
 import { HypeStoreAdminService } from './services/hype-store-admin.service';
+import { TopInfluencerCacheCronService } from './services/top-influencer-cache.cron';
 import { NotificationQueueModule } from './queues/notification.queue.module';
 
 import { Admin } from './models/admin.model';
@@ -71,6 +72,7 @@ import { HypeStoreWallet } from '../hype-store/models/hype-store-wallet.model';
 import { HypeStoreWalletTransaction } from '../hype-store/models/hype-store-wallet-transaction.model';
 import { BrandNiche } from '../brand/model/brand-niche.model';
 import { Conversation } from '../shared/models/conversation.model';
+import { TopInfluencerScoreCache } from './models/top-influencer-score-cache.model';
 
 import { SharedModule } from '../shared/shared.module';
 import { BrandModule } from '../brand/brand.module';
@@ -131,6 +133,7 @@ import { PermissionsGuard } from './guards/permissions.guard';
       HypeStoreWalletTransaction,
       BrandNiche,
       Conversation,
+      TopInfluencerScoreCache,
     ]),
     SharedModule,
     NotificationQueueModule,
@@ -168,6 +171,7 @@ import { PermissionsGuard } from './guards/permissions.guard';
     FiamCampaignService,
     FiamCampaignBroadcastService,
     HypeStoreAdminService,
+    TopInfluencerCacheCronService,
     AdminManagementService,
     AdminAuthGuard,
     RolesGuard,
