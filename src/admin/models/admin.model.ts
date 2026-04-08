@@ -14,6 +14,7 @@ import {
 
 export enum AdminRole {
   SUPER_ADMIN = 'super_admin',
+  ADMIN = 'admin',
   PROFILE_REVIEWER = 'profile_reviewer',
   CONTENT_MODERATOR = 'content_moderator',
 }
@@ -22,6 +23,28 @@ export enum AdminStatus {
   ACTIVE = 'active',
   INACTIVE = 'inactive',
   SUSPENDED = 'suspended',
+}
+
+export enum AdminTab {
+  DASHBOARD = 'dashboard',
+  INFLUENCERS = 'influencers',
+  BRANDS = 'brands',
+  CAMPAIGNS = 'campaigns',
+  POSTS = 'posts',
+  HYPE_STORE = 'hype_store',
+  WALLET = 'wallet',
+  PUSH_NOTIFICATIONS = 'push_notifications',
+  FIAM_CAMPAIGNS = 'fiam_campaigns',
+  PROFILE_REVIEWS = 'profile_reviews',
+  ANALYTICS = 'analytics',
+  SETTINGS = 'settings',
+  ADMIN_MANAGEMENT = 'admin_management',
+}
+
+export enum TabAccessLevel {
+  NONE = 'none',
+  VIEW = 'view',
+  EDIT = 'edit',
 }
 
 @Table({
@@ -56,10 +79,10 @@ export class Admin extends Model {
 
   @AllowNull(false)
   @Column({
-    type: DataType.ENUM(...Object.values(AdminRole)),
+    type: DataType.STRING(50),
     defaultValue: AdminRole.PROFILE_REVIEWER,
   })
-  declare role: AdminRole;
+  declare role: string;
 
   @AllowNull(false)
   @Column({
@@ -69,8 +92,18 @@ export class Admin extends Model {
   declare status: AdminStatus;
 
   @AllowNull(true)
-  @Column(DataType.JSON)
-  declare permissions: string[];
+  @Column({
+    type: DataType.JSONB,
+    field: 'tab_permissions',
+  })
+  declare tabPermissions: Record<string, TabAccessLevel> | null;
+
+  @AllowNull(true)
+  @Column({
+    type: DataType.INTEGER,
+    field: 'created_by',
+  })
+  declare createdBy: number | null;
 
   @AllowNull(true)
   @Column(DataType.DATE)

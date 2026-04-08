@@ -79,8 +79,11 @@ import { PostModule } from '../post/post.module';
 import { AuthModule } from '../auth/auth.module';
 import { CampaignModule } from '../campaign/campaign.module';
 
+import { AdminManagementController } from './controllers/admin-management.controller';
+import { AdminManagementService } from './services/admin-management.service';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
+import { PermissionsGuard } from './guards/permissions.guard';
 
 @Module({
   imports: [
@@ -143,6 +146,7 @@ import { RolesGuard } from './guards/roles.guard';
     FiamCampaignController,
     ApiActivityLogsController,
     HypeStoreAdminController,
+    AdminManagementController,
   ],
   providers: [
     AdminAuthService,
@@ -164,8 +168,10 @@ import { RolesGuard } from './guards/roles.guard';
     FiamCampaignService,
     FiamCampaignBroadcastService,
     HypeStoreAdminService,
+    AdminManagementService,
     AdminAuthGuard,
     RolesGuard,
+    PermissionsGuard,
   ],
   exports: [AdminAuthService, ProfileReviewService, AuditLogService, InfluencerScoringService],
 })

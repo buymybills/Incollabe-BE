@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { S3Service } from '../shared/s3.service';
 import { EmailService } from '../shared/email.service';
@@ -152,6 +153,7 @@ export class InfluencerService {
     private readonly chatService: ChatService,
     private readonly inAppNotificationService: InAppNotificationService,
     private readonly profileViewService: ProfileViewService,
+    @Inject(forwardRef(() => InfluencerScoringService))
     private readonly influencerScoringService: InfluencerScoringService,
   ) {}
 

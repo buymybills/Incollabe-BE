@@ -17,6 +17,7 @@ export interface RequestWithAdmin extends Request {
     role: AdminRole;
     type: string;
     jti?: string; // JWT ID for session management
+    tabPermissions?: Record<string, string> | null;
   };
 }
 
@@ -63,6 +64,7 @@ export class AdminAuthGuard implements CanActivate {
         role: payload.role,
         type: payload.type,
         jti: payload.jti, // Include JWT ID for session management
+        tabPermissions: (admin as any).tabPermissions ?? null,
       };
 
       return true;
