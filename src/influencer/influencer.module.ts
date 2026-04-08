@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { InfluencerController } from './influencer.controller';
 import { InfluencerHypeStoreController } from './influencer-hype-store.controller';
@@ -93,7 +93,7 @@ import { AdminModule } from '../admin/admin.module';
     ]),
     SharedModule,
     CampaignModule,
-    AdminModule,
+    forwardRef(() => AdminModule),
   ],
   controllers: [InfluencerController, InfluencerHypeStoreController],
   providers: [
