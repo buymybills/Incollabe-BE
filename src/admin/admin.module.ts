@@ -70,6 +70,7 @@ import { HypeStoreCouponCode } from '../wallet/models/hype-store-coupon-code.mod
 import { HypeStoreWallet } from '../hype-store/models/hype-store-wallet.model';
 import { HypeStoreWalletTransaction } from '../hype-store/models/hype-store-wallet-transaction.model';
 import { BrandNiche } from '../brand/model/brand-niche.model';
+import { Conversation } from '../shared/models/conversation.model';
 
 import { SharedModule } from '../shared/shared.module';
 import { BrandModule } from '../brand/brand.module';
@@ -126,6 +127,7 @@ import { RolesGuard } from './guards/roles.guard';
       HypeStoreWallet,
       HypeStoreWalletTransaction,
       BrandNiche,
+      Conversation,
     ]),
     SharedModule,
     NotificationQueueModule,
