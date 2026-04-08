@@ -379,7 +379,7 @@ export class InfluencerProfileScoringService {
       return {
         score: 0,
         maxScore: 100,
-        facebookPageConnected: false,
+        facebookPageConnected,
         message: 'Basic audience data available. Connect your Instagram to a Facebook Page to unlock detailed demographics (age, gender, location) for better audience targeting.',
         onlinePresence,
       } as any;

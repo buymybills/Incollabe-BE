@@ -2096,8 +2096,7 @@ export class InstagramService {
           errorMessage.includes('Unsupported get request') ||
           errorMessage.includes('requires a Facebook Page') ||
           errorMessage.includes('Instagram Business Account') ||
-          errorMessage.includes('permission') ||
-          error.response?.status === 400;
+          errorMessage.includes('permission');
 
         if (isFacebookPageRequired) {
           // Return structured response with helpful error message
@@ -2121,6 +2120,18 @@ export class InstagramService {
             },
           };
         }
+
+        // Any other API error (e.g. insufficient data, no followers yet) — Facebook Page IS connected,
+        // but data is not available yet. Do not return facebookPageConnected: false.
+        return {
+          ageGender: [],
+          cities: [],
+          countries: [],
+          totalFollowers: user.instagramFollowersCount || 0,
+          dataAvailable: false,
+          facebookPageConnected: true,
+          message: 'Facebook Page connected but demographic data is not yet available (e.g. insufficient followers).',
+        };
       }
       throw error;
     }
