@@ -109,7 +109,9 @@ export class AdminPostItemDto {
   @ApiPropertyOptional() location: string;
   @ApiProperty({ type: [String] }) categories: string[];
   @ApiProperty() likesCount: number;
-  @ApiProperty() engagement: number;
+  @ApiProperty() sharesCount: number;
+  @ApiProperty() viewsCount: number;
+  @ApiProperty({ description: 'Total engagement = likes + shares + views' }) engagement: number;
   @ApiProperty() createdAt: Date;
   @ApiProperty() isActive: boolean;
 
