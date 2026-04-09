@@ -164,16 +164,16 @@ export class InfluencerScoringService {
             engagementScore,
             brandContactScore,
             maxUserYesScore,
-            followersScore,
             experienceScore,
           ] = await Promise.all([
             this.calculateCampaignSelectionScore(influencer.id),
             this.calculateContentEngagementScore(influencer.id),
             this.calculateBrandDirectContactScore(influencer.id),
             this.calculateMaxUserYesScore(influencer.id),
-            this.calculateFollowersScore(influencer.id),
             this.calculateExperienceScore(influencer.id),
           ]);
+
+          const followersScore = this.calculateFollowersScore(influencer.instagramFollowersCount ?? 0);
 
           overallScore = parseFloat(
             (campaignScore + engagementScore + brandContactScore + maxUserYesScore + followersScore + experienceScore).toFixed(5),
@@ -296,7 +296,7 @@ export class InfluencerScoringService {
   async refreshTopInfluencerScoreCache(): Promise<{ updated: number; errors: number }> {
     const influencers = await this.influencerModel.findAll({
       where: { isProfileCompleted: true, isActive: true },
-      attributes: ['id'],
+      attributes: ['id', 'instagramFollowersCount'],
     });
 
     let updated = 0;
@@ -309,16 +309,16 @@ export class InfluencerScoringService {
           engagementScore,
           brandContactScore,
           maxUserYesScore,
-          followersScore,
           experienceScore,
         ] = await Promise.all([
           this.calculateCampaignSelectionScore(inf.id),
           this.calculateContentEngagementScore(inf.id),
           this.calculateBrandDirectContactScore(inf.id),
           this.calculateMaxUserYesScore(inf.id),
-          this.calculateFollowersScore(inf.id),
           this.calculateExperienceScore(inf.id),
         ]);
+
+        const followersScore = this.calculateFollowersScore(inf.instagramFollowersCount ?? 0);
 
         const overallScore = parseFloat(
           (campaignScore + engagementScore + brandContactScore + maxUserYesScore + followersScore + experienceScore).toFixed(5),
@@ -415,7 +415,11 @@ export class InfluencerScoringService {
   /**
    * 3. Brand Direct Contact Score (0-1 point)
    * Formula: ((Brand direct contacts) / (Total verified brands)) * 1
-   * Direct contact = conversations initiated by brand to influencer
+   * Direct contact = personal (non-campaign) conversations between a brand and this influencer.
+   * Note: participants are always normalised alphabetically ('brand' < 'influencer'),
+   * so brand is always participant1 in every brand-influencer conversation.
+   * Campaign-type conversations are excluded because they are created as part of the
+   * campaign workflow, not as voluntary brand outreach.
    */
   private async calculateBrandDirectContactScore(
     influencerId: number,
@@ -429,22 +433,15 @@ export class InfluencerScoringService {
       return 0; // No verified brands, score is 0
     }
 
-    // Count conversations where brand contacted influencer directly
-    // Brand contacted first = brand sent first message or initiated conversation
+    // Count personal conversations between a brand and this influencer.
+    // 'personal' type excludes campaign chats that are automatically created
+    // as part of the campaign selection flow and do not represent direct brand outreach.
     const brandContacts = await this.conversationModel.count({
       where: {
-        [Op.or]: [
-          {
-            participant1Type: 'brand',
-            participant2Type: 'influencer',
-            participant2Id: influencerId,
-          },
-          {
-            participant1Type: 'influencer',
-            participant1Id: influencerId,
-            participant2Type: 'brand',
-          },
-        ],
+        participant1Type: 'brand',
+        participant2Type: 'influencer',
+        participant2Id: influencerId,
+        conversationType: 'personal',
       },
     });
 
@@ -469,20 +466,12 @@ export class InfluencerScoringService {
 
   /**
    * 5. Followers Score (0-0.5 points, capped at 0.5)
-   * Formula: ((No. of followers / 1000) * 0.5)
-   * If result > 0.5, cap it at 0.5
+   * Formula: ((instagramFollowersCount / 1000) * 0.5), capped at 0.5
+   * Uses the Instagram followers count synced from the Instagram API,
+   * NOT the in-app platform follow table.
    */
-  private async calculateFollowersScore(
-    influencerId: number,
-  ): Promise<number> {
-    const followersCount = await this.getFollowersCount(influencerId);
-    let score = (followersCount / 1000) * 0.5;
-
-    // Cap the score at 0.5
-    if (score > 0.5) {
-      score = 0.5;
-    }
-
+  private calculateFollowersScore(instagramFollowersCount: number): number {
+    const score = Math.min((instagramFollowersCount / 1000) * 0.5, 0.5);
     return parseFloat(score.toFixed(5));
   }
 
