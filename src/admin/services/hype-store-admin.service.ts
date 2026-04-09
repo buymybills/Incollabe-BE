@@ -408,7 +408,8 @@ export class HypeStoreAdminService {
     // Get brand wallet for current balance
     const brandWallet = await this.hypeStoreWalletModel.findOne({
       where: {
-        brandId: (store as any).brandId,
+        userId: (store as any).brandId,
+        userType: 'brand',
       },
     });
 
@@ -506,7 +507,8 @@ export class HypeStoreAdminService {
     const store = await this.hypeStoreModel.findByPk(storeId);
     const brandWallet = await this.hypeStoreWalletModel.findOne({
       where: {
-        brandId: (store as any)?.brandId,
+        userId: (store as any)?.brandId,
+        userType: 'brand',
       },
     });
 
@@ -586,7 +588,8 @@ export class HypeStoreAdminService {
     // Get brand wallet
     const wallet = await this.hypeStoreWalletModel.findOne({
       where: {
-        brandId,
+        userId: brandId,
+        userType: 'brand',
       },
     });
 

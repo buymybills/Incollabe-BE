@@ -5,15 +5,13 @@ import {
   DataType,
   PrimaryKey,
   AutoIncrement,
-  ForeignKey,
-  BelongsTo,
   HasMany,
 } from 'sequelize-typescript';
-import { Brand } from '../../brand/model/brand.model';
 import { HypeStoreWalletTransaction } from './hype-store-wallet-transaction.model';
 
 export interface HypeStoreWalletCreationAttributes {
-  brandId: number;
+  userId: number;
+  userType: string;
   balance?: number;
   totalAdded?: number;
   totalSpent?: number;
@@ -33,14 +31,19 @@ export class HypeStoreWallet extends Model<
   @Column(DataType.INTEGER)
   declare id: number;
 
-  @ForeignKey(() => Brand)
   @Column({
     type: DataType.INTEGER,
     allowNull: false,
-    unique: true,
-    field: 'brand_id',
+    field: 'user_id',
   })
-  declare brandId: number;
+  declare userId: number;
+
+  @Column({
+    type: DataType.STRING(20),
+    allowNull: false,
+    field: 'user_type',
+  })
+  declare userType: string;
 
   @Column({
     type: DataType.DECIMAL(15, 2),
@@ -76,9 +79,6 @@ export class HypeStoreWallet extends Model<
   declare updatedAt: Date;
 
   // Associations
-  @BelongsTo(() => Brand)
-  declare brand: Brand;
-
   @HasMany(() => HypeStoreWalletTransaction)
   declare transactions: HypeStoreWalletTransaction[];
 }

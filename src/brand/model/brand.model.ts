@@ -428,7 +428,7 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
   @HasMany(() => HypeStore, 'brandId')
   declare hypeStores?: HypeStore[];
 
-  @HasOne(() => HypeStoreWallet, 'brandId')
+  @HasOne(() => HypeStoreWallet, 'userId')
   declare hypeStoreWallet?: HypeStoreWallet;
 
   // Encryption hooks
