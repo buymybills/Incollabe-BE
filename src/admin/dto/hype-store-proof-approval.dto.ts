@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, IsEnum, IsInt, Min } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsInt, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ApproveProofDto {
@@ -10,11 +10,11 @@ export class RejectProofDto {
   @ApiProperty({
     description: 'Reason for rejecting the proof',
     example: 'Poor quality image, product not clearly visible',
-    required: true,
+    required: false,
   })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'Rejection reason is required' })
-  rejectionReason!: string;
+  rejectionReason?: string;
 }
 
 export class ListPendingProofsDto {

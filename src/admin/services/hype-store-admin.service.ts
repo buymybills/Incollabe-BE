@@ -732,7 +732,7 @@ export class HypeStoreAdminService {
   /**
    * Reject proof - delegates to InfluencerHypeStoreService
    */
-  async rejectProof(orderId: number, adminId: number, rejectionReason: string) {
+  async rejectProof(orderId: number, adminId: number, rejectionReason?: string) {
     // Delegate to the service that has the logic
     return this.influencerHypeStoreService.rejectProof(orderId, adminId, rejectionReason);
   }

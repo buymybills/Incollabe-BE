@@ -1496,7 +1496,7 @@ export class InfluencerHypeStoreService {
   async rejectProof(
     orderId: number,
     adminId: number,
-    rejectionReason: string,
+    rejectionReason?: string,
   ): Promise<{ success: boolean; message: string; data: any }> {
     const order = await this.orderModel.findByPk(orderId);
 
