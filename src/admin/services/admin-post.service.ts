@@ -199,6 +199,9 @@ export class AdminPostService {
         engagement: post.likesCount || 0,
         createdAt: post.createdAt,
         isActive: post.isActive,
+        isBoosted: post.isBoosted || false,
+        boostedFrom: post.boostedAt || null,
+        boostedTill: post.boostExpiresAt || null,
       };
     });
 

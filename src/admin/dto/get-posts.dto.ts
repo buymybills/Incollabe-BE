@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsEnum, IsNumber, IsString, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { UserType } from '../../post/models/post.model';
@@ -87,4 +87,46 @@ export class GetPostsDto {
   @IsNumber()
   @Min(1)
   limit?: number = 20;
+}
+
+export class AdminPostMediaDto {
+  @ApiProperty({ example: 'https://...' })
+  mediaUrl: string;
+
+  @ApiProperty({ enum: ['image', 'video'] })
+  mediaType: 'image' | 'video';
+}
+
+export class AdminPostItemDto {
+  @ApiProperty() id: number;
+  @ApiPropertyOptional() content: string;
+  @ApiProperty({ type: [AdminPostMediaDto] }) media: AdminPostMediaDto[];
+  @ApiProperty({ enum: ['influencer', 'brand'] }) userType: string;
+  @ApiProperty() userId: number;
+  @ApiPropertyOptional() userName: string;
+  @ApiPropertyOptional() username: string;
+  @ApiPropertyOptional() userImage: string;
+  @ApiPropertyOptional() location: string;
+  @ApiProperty({ type: [String] }) categories: string[];
+  @ApiProperty() likesCount: number;
+  @ApiProperty() engagement: number;
+  @ApiProperty() createdAt: Date;
+  @ApiProperty() isActive: boolean;
+
+  @ApiProperty({ description: 'Whether the post is currently boosted' })
+  isBoosted: boolean;
+
+  @ApiPropertyOptional({ description: 'Date when the boost started', nullable: true })
+  boostedFrom: Date | null;
+
+  @ApiPropertyOptional({ description: 'Date when the boost expires or expired', nullable: true })
+  boostedTill: Date | null;
+}
+
+export class AdminPostsResponseDto {
+  @ApiProperty({ type: [AdminPostItemDto] }) posts: AdminPostItemDto[];
+  @ApiProperty() total: number;
+  @ApiProperty() page: number;
+  @ApiProperty() limit: number;
+  @ApiProperty() totalPages: number;
 }

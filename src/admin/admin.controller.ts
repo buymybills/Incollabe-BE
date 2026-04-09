@@ -95,7 +95,7 @@ import { GetTopInfluencersDto } from './dto/get-top-influencers.dto';
 import { GetInfluencersDto } from './dto/get-influencers.dto';
 import { GetBrandsDto } from './dto/get-brands.dto';
 import { GetCampaignsDto } from './dto/get-campaigns.dto';
-import { GetPostsDto } from './dto/get-posts.dto';
+import { GetPostsDto, AdminPostsResponseDto } from './dto/get-posts.dto';
 import { TopInfluencersResponseDto } from './dto/top-influencer-response.dto';
 import { GetCampaignApplicationsDto } from '../campaign/dto/get-campaign-applications.dto';
 import {
@@ -1292,6 +1292,7 @@ export class AdminController {
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Posts retrieved successfully with filters applied',
+    type: AdminPostsResponseDto,
   })
   @ApiUnauthorizedResponse({
     description: 'Authentication required',
