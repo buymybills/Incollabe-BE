@@ -1557,6 +1557,7 @@ export class CampaignService {
       maxAge,
       platforms,
       experience,
+      isPro,
       sortBy = 'application_new_old',
       page = 1,
       limit = 10,
@@ -1634,6 +1635,11 @@ export class CampaignService {
 
     if (cityIds.length > 0) {
       influencerFilter.cityId = { [Op.in]: cityIds };
+    }
+
+    // isPro filter
+    if (isPro !== undefined) {
+      influencerFilter.isPro = isPro;
     }
 
     // Platform filter - support multiple platforms
