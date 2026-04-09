@@ -632,7 +632,7 @@ export class HypeStoreAdminService {
    * Get list of proofs for admin review
    */
   async getProofsList(filters: any) {
-    const { page = 1, limit = 20, status, storeId } = filters;
+    const { page = 1, limit = 20, status, storeId, influencerId } = filters;
     const offset = (page - 1) * limit;
 
     const whereClause: any = {
@@ -645,6 +645,10 @@ export class HypeStoreAdminService {
 
     if (storeId) {
       whereClause.hypeStoreId = storeId;
+    }
+
+    if (influencerId) {
+      whereClause.influencerId = influencerId;
     }
 
     const { rows: orders, count: total } = await this.orderModel.findAndCountAll({
@@ -676,6 +680,7 @@ export class HypeStoreAdminService {
       data: orders.map((order) => ({
         id: order.id,
         externalOrderId: order.externalOrderId,
+        influencerId: order.influencerId,
         influencer: order.influencer
           ? {
               id: order.influencer.id,
