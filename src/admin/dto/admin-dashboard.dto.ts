@@ -572,6 +572,12 @@ export class PostMetricsDto {
 
   @ApiProperty({ description: 'Percentage change vs last period' })
   avgSharesPerPostChange: number;
+
+  @ApiProperty({ description: 'Total number of currently boosted posts' })
+  totalBoostedPosts: number;
+
+  @ApiProperty({ description: 'Boosted posts as a percentage of total posts' })
+  boostedPostsPercentage: number;
 }
 
 export class PostCategoryDto {
@@ -599,6 +605,36 @@ export class ContentPostedVsEngagementDataPointDto {
 
   @ApiProperty({ description: 'Total engagement on this date' })
   engagementCount: number;
+
+  @ApiProperty({ description: 'Number of boosted posts on this date' })
+  boostedPostsCount: number;
+}
+
+export class BoostedPostInfluencerDto {
+  @ApiProperty() id: number;
+  @ApiProperty() name: string;
+  @ApiProperty() username: string;
+  @ApiProperty() profileImage: string;
+}
+
+export class BoostedPostWindowDto {
+  @ApiProperty({ description: 'Post ID' })
+  postId: number;
+
+  @ApiProperty({ description: 'Post content/caption' })
+  content: string;
+
+  @ApiProperty({ description: 'Influencer who created the post', nullable: true })
+  influencer: BoostedPostInfluencerDto | null;
+
+  @ApiProperty({ description: 'Whether the boost is still active' })
+  isBoosted: boolean;
+
+  @ApiProperty({ description: 'Date when the boost started' })
+  boostedFrom: Date;
+
+  @ApiProperty({ description: 'Date when the boost expires or expired' })
+  boostedTill: Date;
 }
 
 export class ContentPostedVsEngagementDto {
@@ -636,6 +672,12 @@ export class PostDashboardResponseDto {
     type: [PostCategoryDto],
   })
   contentCategoryDistribution: PostCategoryDto[];
+
+  @ApiProperty({
+    description: 'Posts boosted within the period, showing boost from/till window',
+    type: [BoostedPostWindowDto],
+  })
+  recentBoostedPosts: BoostedPostWindowDto[];
 }
 
 // Time frame dropdown options DTOs
