@@ -322,6 +322,9 @@ export class OrderListItemDto {
   @ApiProperty({ example: 123, description: 'Order ID' })
   id: number;
 
+  @ApiProperty({ example: 42, description: 'Influencer ID who used the coupon', nullable: true })
+  influencerId: number | null;
+
   @ApiProperty({ example: 'Sneha Shah', description: 'Customer name' })
   customerName: string;
 

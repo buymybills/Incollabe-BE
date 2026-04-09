@@ -555,6 +555,7 @@ export class HypeStoreAdminService {
 
     const ordersList: OrderListItemDto[] = orders.map((order) => ({
       id: order.id,
+      influencerId: order.influencerId || null,
       customerName: order.customerName || 'N/A',
       externalOrderId: order.externalOrderId,
       couponCode: (order as any).couponCode?.couponCode || 'N/A',
