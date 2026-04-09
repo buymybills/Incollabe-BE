@@ -2091,12 +2091,18 @@ export class InstagramService {
         const errorMessage = error.response?.data?.error?.message || '';
         console.error('Demographics API error:', error.response?.data);
 
-        // Check if error is due to missing Facebook Page integration or account type
+        // Check if error is due to missing Facebook Page integration or account type.
+        // Only treat as "Facebook not connected" when the error specifically indicates
+        // a missing Facebook Page — NOT for generic permission/scope/token errors.
+        const errorCode = error.response?.data?.error?.code;
         const isFacebookPageRequired =
           errorMessage.includes('Unsupported get request') ||
           errorMessage.includes('requires a Facebook Page') ||
           errorMessage.includes('Instagram Business Account') ||
-          errorMessage.includes('permission');
+          // Error code 10 with a message about application permissions is the canonical
+          // "Facebook Page not linked" error. Generic 'permission' string matching is
+          // intentionally excluded because it fires on expired tokens and missing scopes too.
+          (errorCode === 10 && errorMessage.toLowerCase().includes('does not have permission'));
 
         if (isFacebookPageRequired) {
           // Return structured response with helpful error message
@@ -3586,8 +3592,15 @@ export class InstagramService {
       };
     } catch (error) {
       console.error('❌ Demographics fetch error:', error.response?.data || error.message);
-      const isFacebookError = error.response?.data?.error?.message?.toLowerCase().includes('instagram') ||
-                             error.response?.data?.error?.message?.toLowerCase().includes('permission');
+      const demoErrMsg: string = error.response?.data?.error?.message || '';
+      const demoErrCode: number = error.response?.data?.error?.code;
+      // Only treat as "Facebook not connected" when the error specifically indicates
+      // a missing Facebook Page link — not for generic permission/token/scope errors.
+      const isFacebookError =
+        demoErrMsg.includes('Unsupported get request') ||
+        demoErrMsg.includes('requires a Facebook Page') ||
+        demoErrMsg.includes('Instagram Business Account') ||
+        (demoErrCode === 10 && demoErrMsg.toLowerCase().includes('does not have permission'));
       demographicsData = {
         status: 'unavailable',
         reason: isFacebookError ? 'facebook_not_connected' : 'api_error',
@@ -3620,8 +3633,13 @@ export class InstagramService {
       };
     } catch (error) {
       console.error('❌ Geographic data fetch error:', error.response?.data || error.message);
-      const isFacebookError = error.response?.data?.error?.message?.toLowerCase().includes('instagram') ||
-                             error.response?.data?.error?.message?.toLowerCase().includes('permission');
+      const geoErrMsg: string = error.response?.data?.error?.message || '';
+      const geoErrCode: number = error.response?.data?.error?.code;
+      const isFacebookError =
+        geoErrMsg.includes('Unsupported get request') ||
+        geoErrMsg.includes('requires a Facebook Page') ||
+        geoErrMsg.includes('Instagram Business Account') ||
+        (geoErrCode === 10 && geoErrMsg.toLowerCase().includes('does not have permission'));
       geographicData = {
         status: 'unavailable',
         reason: isFacebookError ? 'facebook_not_connected' : 'api_error',
