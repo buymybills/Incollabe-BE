@@ -164,16 +164,16 @@ export class InfluencerScoringService {
             engagementScore,
             brandContactScore,
             maxUserYesScore,
+            followersScore,
             experienceScore,
           ] = await Promise.all([
             this.calculateCampaignSelectionScore(influencer.id),
             this.calculateContentEngagementScore(influencer.id),
             this.calculateBrandDirectContactScore(influencer.id),
             this.calculateMaxUserYesScore(influencer.id),
+            this.calculateFollowersScore(influencer.id),
             this.calculateExperienceScore(influencer.id),
           ]);
-
-          const followersScore = this.calculateFollowersScore(influencer.instagramFollowersCount ?? 0);
 
           overallScore = parseFloat(
             (campaignScore + engagementScore + brandContactScore + maxUserYesScore + followersScore + experienceScore).toFixed(5),
@@ -246,16 +246,31 @@ export class InfluencerScoringService {
     const validInfluencers = scoredInfluencers
       .filter((inf): inf is TopInfluencerDto => inf !== null)
       .sort((a, b) => {
-        const scoreDiff = b.scoreBreakdown.overallScore - a.scoreBreakdown.overallScore;
-        if (scoreDiff === 0) {
-          if (a.followersCount !== b.followersCount) {
-            return b.followersCount - a.followersCount;
-          }
-          if (a.updatedAt && b.updatedAt) {
-            return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-          }
+        const aOrder = a.displayOrder ?? null;
+        const bOrder = b.displayOrder ?? null;
+
+        // Both have displayOrder → sort ASC
+        if (aOrder !== null && bOrder !== null) {
+          const orderDiff = aOrder - bOrder;
+          if (orderDiff !== 0) return orderDiff;
+          // Same displayOrder → higher score wins
+          return b.scoreBreakdown.overallScore - a.scoreBreakdown.overallScore;
         }
-        return scoreDiff;
+
+        // Only a has displayOrder → a comes first
+        if (aOrder !== null) return -1;
+
+        // Only b has displayOrder → b comes first
+        if (bOrder !== null) return 1;
+
+        // Neither has displayOrder → sort by score DESC, then followers, then updatedAt
+        const scoreDiff = b.scoreBreakdown.overallScore - a.scoreBreakdown.overallScore;
+        if (scoreDiff !== 0) return scoreDiff;
+        if (a.followersCount !== b.followersCount) return b.followersCount - a.followersCount;
+        if (a.updatedAt && b.updatedAt) {
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        }
+        return 0;
       })
       .slice(0, limit);
 
@@ -296,7 +311,7 @@ export class InfluencerScoringService {
   async refreshTopInfluencerScoreCache(): Promise<{ updated: number; errors: number }> {
     const influencers = await this.influencerModel.findAll({
       where: { isProfileCompleted: true, isActive: true },
-      attributes: ['id', 'instagramFollowersCount'],
+      attributes: ['id'],
     });
 
     let updated = 0;
@@ -309,16 +324,16 @@ export class InfluencerScoringService {
           engagementScore,
           brandContactScore,
           maxUserYesScore,
+          followersScore,
           experienceScore,
         ] = await Promise.all([
           this.calculateCampaignSelectionScore(inf.id),
           this.calculateContentEngagementScore(inf.id),
           this.calculateBrandDirectContactScore(inf.id),
           this.calculateMaxUserYesScore(inf.id),
+          this.calculateFollowersScore(inf.id),
           this.calculateExperienceScore(inf.id),
         ]);
-
-        const followersScore = this.calculateFollowersScore(inf.instagramFollowersCount ?? 0);
 
         const overallScore = parseFloat(
           (campaignScore + engagementScore + brandContactScore + maxUserYesScore + followersScore + experienceScore).toFixed(5),
@@ -466,12 +481,12 @@ export class InfluencerScoringService {
 
   /**
    * 5. Followers Score (0-0.5 points, capped at 0.5)
-   * Formula: ((instagramFollowersCount / 1000) * 0.5), capped at 0.5
-   * Uses the Instagram followers count synced from the Instagram API,
-   * NOT the in-app platform follow table.
+   * Formula: ((platform followers / 1000) * 0.5), capped at 0.5
+   * Uses the in-app platform follow count (users following this influencer on the platform).
    */
-  private calculateFollowersScore(instagramFollowersCount: number): number {
-    const score = Math.min((instagramFollowersCount / 1000) * 0.5, 0.5);
+  private async calculateFollowersScore(influencerId: number): Promise<number> {
+    const followersCount = await this.getFollowersCount(influencerId);
+    const score = Math.min((followersCount / 1000) * 0.5, 0.5);
     return parseFloat(score.toFixed(5));
   }
 
