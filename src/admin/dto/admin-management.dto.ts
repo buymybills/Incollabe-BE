@@ -9,6 +9,7 @@ import {
   IsNumber,
   Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { AdminStatus, TabAccessLevel } from '../models/admin.model';
 
 export class CreateAdminDto {
@@ -123,12 +124,14 @@ export class ChangePasswordDto {
 export class GetAdminsQueryDto {
   @ApiPropertyOptional({ example: 1, minimum: 1 })
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(1)
   page?: number = 1;
 
   @ApiPropertyOptional({ example: 20, minimum: 1 })
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(1)
   limit?: number = 20;
