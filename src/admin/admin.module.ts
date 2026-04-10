@@ -83,6 +83,9 @@ import { CampaignModule } from '../campaign/campaign.module';
 
 import { AdminManagementController } from './controllers/admin-management.controller';
 import { AdminManagementService } from './services/admin-management.service';
+import { AdminRoleController } from './controllers/admin-role.controller';
+import { AdminRoleService } from './services/admin-role.service';
+import { AdminRoleDefinition } from './models/admin-role-definition.model';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { PermissionsGuard } from './guards/permissions.guard';
@@ -134,6 +137,7 @@ import { PermissionsGuard } from './guards/permissions.guard';
       BrandNiche,
       Conversation,
       TopInfluencerScoreCache,
+      AdminRoleDefinition,
     ]),
     SharedModule,
     NotificationQueueModule,
@@ -150,6 +154,7 @@ import { PermissionsGuard } from './guards/permissions.guard';
     ApiActivityLogsController,
     HypeStoreAdminController,
     AdminManagementController,
+    AdminRoleController,
   ],
   providers: [
     AdminAuthService,
@@ -173,6 +178,7 @@ import { PermissionsGuard } from './guards/permissions.guard';
     HypeStoreAdminService,
     TopInfluencerCacheCronService,
     AdminManagementService,
+    AdminRoleService,
     AdminAuthGuard,
     RolesGuard,
     PermissionsGuard,

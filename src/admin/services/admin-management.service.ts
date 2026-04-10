@@ -7,10 +7,10 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Admin, AdminRole, AdminStatus, AdminTab, TabAccessLevel } from '../models/admin.model';
+import { AdminRoleDefinition } from '../models/admin-role-definition.model';
 import * as bcrypt from 'bcrypt';
 import {
   getEffectiveTabPermissions,
-  PERMISSION_TEMPLATES,
   DEFAULT_TAB_PERMISSIONS,
 } from '../constants/tab-permissions.constant';
 import { Op } from 'sequelize';
@@ -20,6 +20,8 @@ export class AdminManagementService {
   constructor(
     @InjectModel(Admin)
     private adminModel: typeof Admin,
+    @InjectModel(AdminRoleDefinition)
+    private roleModel: typeof AdminRoleDefinition,
   ) {}
 
   /**
@@ -33,7 +35,6 @@ export class AdminManagementService {
       password: string;
       role: string;
       tabPermissions?: Record<string, TabAccessLevel> | null;
-      status?: AdminStatus;
       profileImage?: string;
     },
   ) {
@@ -41,6 +42,12 @@ export class AdminManagementService {
     const creator = await this.adminModel.findByPk(creatorId);
     if (!creator || (creator.role !== AdminRole.SUPER_ADMIN && creator.role !== AdminRole.ADMIN)) {
       throw new ForbiddenException('Only superadmins or admins can create admin accounts');
+    }
+
+    // Validate role exists in admin_roles table
+    const roleDefinition = await this.roleModel.findOne({ where: { name: createData.role } });
+    if (!roleDefinition) {
+      throw new BadRequestException(`Role "${createData.role}" does not exist. Use GET /admin/management/roles to see available roles.`);
     }
 
     // Check if email already exists
@@ -78,14 +85,14 @@ export class AdminManagementService {
     // Hash password
     const hashedPassword = await bcrypt.hash(createData.password, 10);
 
-    // Create admin
+    // Create admin — status always starts as active
     const newAdmin = await this.adminModel.create({
       name: createData.name,
       email: createData.email.toLowerCase(),
       password: hashedPassword,
       role: createData.role,
       tabPermissions: createData.tabPermissions || null,
-      status: createData.status || AdminStatus.ACTIVE,
+      status: AdminStatus.ACTIVE,
       profileImage: createData.profileImage || null,
       createdBy: creatorId,
       twoFactorEnabled: false,
@@ -346,18 +353,61 @@ export class AdminManagementService {
   }
 
   /**
-   * Get permission templates for quick role setup
+   * Assign custom tab permissions to an admin (separate from role assignment)
    */
-  async getPermissionTemplates() {
-    const templates = Object.entries(PERMISSION_TEMPLATES).map(([name, permissions]) => ({
-      name,
-      label: name.charAt(0).toUpperCase() + name.slice(1),
-      tabPermissions: permissions,
-    }));
+  async assignPermissions(
+    updaterId: number,
+    adminId: number,
+    tabPermissions: Record<string, TabAccessLevel> | null,
+  ) {
+    const updater = await this.adminModel.findByPk(updaterId);
+    if (!updater || (updater.role !== AdminRole.SUPER_ADMIN && updater.role !== AdminRole.ADMIN)) {
+      throw new ForbiddenException('Only superadmins or admins can assign permissions');
+    }
+
+    const admin = await this.adminModel.findByPk(adminId, {
+      attributes: { exclude: ['password', 'resetPasswordToken', 'resetPasswordExpires'] },
+    });
+    if (!admin) {
+      throw new NotFoundException('Admin not found');
+    }
+
+    // Only superadmin can modify superadmin
+    if (admin.role === AdminRole.SUPER_ADMIN && updater.role !== AdminRole.SUPER_ADMIN) {
+      throw new ForbiddenException('Only superadmin can modify superadmin account');
+    }
+
+    if (tabPermissions) {
+      this.validateTabPermissions(tabPermissions);
+    }
+
+    await admin.update({ tabPermissions });
 
     return {
       success: true,
-      data: templates,
+      data: {
+        ...admin.toJSON(),
+        effectiveTabPermissions: getEffectiveTabPermissions(admin.role, admin.tabPermissions),
+      },
+      message: tabPermissions ? 'Custom permissions assigned successfully' : 'Permissions reset to role defaults',
+    };
+  }
+
+  /**
+   * Get permission templates — now backed by admin_roles table (dynamic)
+   */
+  async getPermissionTemplates() {
+    const roles = await this.roleModel.findAll({
+      order: [['is_system_role', 'DESC'], ['name', 'ASC']],
+    });
+
+    return {
+      success: true,
+      data: roles.map((r) => ({
+        name: r.name,
+        label: r.label,
+        tabPermissions: r.tabPermissions,
+      })),
     };
   }
 

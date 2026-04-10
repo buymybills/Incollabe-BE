@@ -30,6 +30,7 @@ import {
   UpdateAdminDto,
   ChangePasswordDto,
   GetAdminsQueryDto,
+  AssignPermissionsDto,
 } from '../dto/admin-management.dto';
 
 @ApiTags('Admin Management')
@@ -45,7 +46,7 @@ export class AdminManagementController {
   @ApiOperation({
     summary: 'Create new admin account (Superadmin or Admin)',
     description:
-      'Create a new admin account with custom role name and tab permissions. Superadmin and Admin roles can create accounts. Only 1 superadmin allowed in system.',
+      'Create a new admin account. Role must exist in admin_roles table (use GET /admin/management/roles). Status is always set to active on creation. Only 1 superadmin allowed in system.',
   })
   @ApiResponse({
     status: 201,
@@ -366,6 +367,36 @@ export class AdminManagementController {
   })
   async getAvailableTabs() {
     return this.adminManagementService.getAvailableTabs();
+  }
+
+  @Put('admins/:id/permissions')
+  @AdminOrSuperAdmin()
+  @ApiOperation({
+    summary: 'Assign custom tab permissions to an admin',
+    description:
+      'Override an admin\'s tab permissions independently of their role. Pass null to reset to role defaults. Not needed for "admin" role (already has full edit access).',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Admin ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Permissions assigned successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: { type: 'object' },
+        message: { type: 'string', example: 'Custom permissions assigned successfully' },
+      },
+    },
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'Admin not found' })
+  async assignPermissions(
+    @Request() req: any,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AssignPermissionsDto,
+  ) {
+    return this.adminManagementService.assignPermissions(req.admin.id, id, dto.tabPermissions);
   }
 
   @Get('permission-templates')

@@ -48,15 +48,23 @@ export class CreateAdminDto {
   @IsObject()
   tabPermissions?: Record<string, TabAccessLevel>;
 
-  @ApiPropertyOptional({ enum: AdminStatus, example: AdminStatus.ACTIVE })
-  @IsOptional()
-  @IsEnum(AdminStatus)
-  status?: AdminStatus;
-
   @ApiPropertyOptional({ example: 'https://example.com/profile.jpg' })
   @IsOptional()
   @IsString()
   profileImage?: string;
+}
+
+export class AssignPermissionsDto {
+  @ApiProperty({
+    type: 'object',
+    additionalProperties: { type: 'string', enum: ['none', 'view', 'edit'] },
+    description: 'Custom tab permissions. Pass null to reset to role defaults.',
+    example: { dashboard: 'view', influencers: 'edit', campaigns: 'view' },
+    nullable: true,
+  })
+  @IsOptional()
+  @IsObject()
+  tabPermissions!: Record<string, TabAccessLevel> | null;
 }
 
 export class UpdateAdminDto {
