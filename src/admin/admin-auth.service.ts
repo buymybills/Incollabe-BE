@@ -736,6 +736,7 @@ export class AdminAuthService {
         'email',
         'role',
         'status',
+        'tabPermissions',
         'profileImage',
         'lastLoginAt',
         'createdAt',

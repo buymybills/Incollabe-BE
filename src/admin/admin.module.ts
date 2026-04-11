@@ -5,6 +5,8 @@ import { BullModule } from '@nestjs/bull';
 import { AdminController } from './admin.controller';
 import { PushNotificationController } from './push-notification.controller';
 import { FiamCampaignController } from './fiam-campaign.controller';
+import { ApiActivityLogsController } from './controllers/api-activity-logs.controller';
+//import { HypeStoreAdminController } from './hype-store-admin.controller';
 import { AdminAuthService } from './admin-auth.service';
 import { ProfileReviewService } from './profile-review.service';
 import { AdminCampaignService } from './services/admin-campaign.service';
@@ -23,6 +25,8 @@ import { AdminCreatorScoreService } from './services/admin-creator-score.service
 import { NudgeTemplateService } from './services/nudge-template.service';
 import { FiamCampaignService } from './services/fiam-campaign.service';
 import { FiamCampaignBroadcastService } from './services/fiam-campaign-broadcast.service';
+//import { HypeStoreAdminService } from './services/hype-store-admin.service';
+import { TopInfluencerCacheCronService } from './services/top-influencer-cache.cron';
 import { NotificationQueueModule } from './queues/notification.queue.module';
 
 import { Admin } from './models/admin.model';
@@ -58,6 +62,17 @@ import { NudgeMessageTemplate } from '../shared/models/nudge-message-template.mo
 import { FiamCampaign } from '../shared/models/fiam-campaign.model';
 import { FiamCampaignEvent } from '../shared/models/fiam-campaign-event.model';
 import { DeviceToken } from '../shared/models/device-token.model';
+import { ApiActivityLog } from '../shared/models/api-activity-log.model';
+//import { HypeStore } from '../wallet/models/hype-store.model';
+//import { HypeStoreOrder } from '../wallet/models/hype-store-order.model';
+//import { Wallet } from '../wallet/models/wallet.model';
+// import { HypeStoreCashbackConfig } from '../hype-store/models/hype-store-cashback-config.model';
+// import { HypeStoreCouponCode } from '../wallet/models/hype-store-coupon-code.model';
+// import { HypeStoreWallet } from '../hype-store/models/hype-store-wallet.model';
+// import { HypeStoreWalletTransaction } from '../hype-store/models/hype-store-wallet-transaction.model';
+import { BrandNiche } from '../brand/model/brand-niche.model';
+import { Conversation } from '../shared/models/conversation.model';
+import { TopInfluencerScoreCache } from './models/top-influencer-score-cache.model';
 
 import { SharedModule } from '../shared/shared.module';
 import { BrandModule } from '../brand/brand.module';
@@ -66,8 +81,14 @@ import { PostModule } from '../post/post.module';
 import { AuthModule } from '../auth/auth.module';
 import { CampaignModule } from '../campaign/campaign.module';
 
+import { AdminManagementController } from './controllers/admin-management.controller';
+import { AdminManagementService } from './services/admin-management.service';
+import { AdminRoleController } from './controllers/admin-role.controller';
+import { AdminRoleService } from './services/admin-role.service';
+import { AdminRoleDefinition } from './models/admin-role-definition.model';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
+import { PermissionsGuard } from './guards/permissions.guard';
 
 @Module({
   imports: [
@@ -105,6 +126,18 @@ import { RolesGuard } from './guards/roles.guard';
       FiamCampaign,
       FiamCampaignEvent,
       DeviceToken,
+      ApiActivityLog,
+      // HypeStore,
+      // HypeStoreOrder,
+      // Wallet,
+      // HypeStoreCashbackConfig,
+      // HypeStoreCouponCode,
+      // HypeStoreWallet,
+      // HypeStoreWalletTransaction,
+      BrandNiche,
+      Conversation,
+      TopInfluencerScoreCache,
+      AdminRoleDefinition,
     ]),
     SharedModule,
     NotificationQueueModule,
@@ -118,6 +151,10 @@ import { RolesGuard } from './guards/roles.guard';
     AdminController,
     PushNotificationController,
     FiamCampaignController,
+    ApiActivityLogsController,
+    //HypeStoreAdminController,
+    AdminManagementController,
+    AdminRoleController,
   ],
   providers: [
     AdminAuthService,
@@ -138,9 +175,14 @@ import { RolesGuard } from './guards/roles.guard';
     NudgeTemplateService,
     FiamCampaignService,
     FiamCampaignBroadcastService,
+    // HypeStoreAdminService,
+    TopInfluencerCacheCronService,
+    AdminManagementService,
+    AdminRoleService,
     AdminAuthGuard,
     RolesGuard,
+    PermissionsGuard,
   ],
-  exports: [AdminAuthService, ProfileReviewService, AuditLogService],
+  exports: [AdminAuthService, ProfileReviewService, AuditLogService, InfluencerScoringService],
 })
 export class AdminModule {}

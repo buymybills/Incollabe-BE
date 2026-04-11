@@ -8,6 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 import { AdminAuthService } from '../admin-auth.service';
 import { AdminRole } from '../models/admin.model';
+import { RedisService } from '../../redis/redis.service';
 
 export interface RequestWithAdmin extends Request {
   admin: {
@@ -16,6 +17,7 @@ export interface RequestWithAdmin extends Request {
     role: AdminRole;
     type: string;
     jti?: string; // JWT ID for session management
+    tabPermissions?: Record<string, string> | null;
   };
 }
 
@@ -24,6 +26,7 @@ export class AdminAuthGuard implements CanActivate {
   constructor(
     private readonly jwtService: JwtService,
     private readonly adminAuthService: AdminAuthService,
+    private readonly redisService: RedisService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -42,6 +45,16 @@ export class AdminAuthGuard implements CanActivate {
         throw new UnauthorizedException('Invalid token type');
       }
 
+      // Check if token has been blacklisted (after logout-all or logout)
+      if (payload.jti) {
+        const blacklistKey = `blacklist:${payload.jti}`;
+        const isBlacklisted = await this.redisService.getClient().get(blacklistKey);
+
+        if (isBlacklisted) {
+          throw new UnauthorizedException('Token has been revoked');
+        }
+      }
+
       // Verify admin still exists and is active
       const admin = await this.adminAuthService.getAdminProfile(payload.sub);
 
@@ -51,6 +64,7 @@ export class AdminAuthGuard implements CanActivate {
         role: payload.role,
         type: payload.type,
         jti: payload.jti, // Include JWT ID for session management
+        tabPermissions: (admin as any).tabPermissions ?? null,
       };
 
       return true;

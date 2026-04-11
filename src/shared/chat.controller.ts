@@ -30,7 +30,7 @@ import { ChatService } from './chat.service';
 import { GroupChatService } from './group-chat.service';
 import { ChatGateway } from './chat.gateway';
 import { S3Service } from './s3.service';
-import { AuthGuard } from '../auth/guards/auth.guard';
+import { HybridAuthGuard } from '../auth/guards/hybrid-auth.guard';
 import type { RequestWithUser } from '../types/request.types';
 import {
   CreateConversationDto,
@@ -60,7 +60,7 @@ import {
 @ApiTags('Chat')
 @ApiBearerAuth()
 @Controller()
-@UseGuards(AuthGuard)
+@UseGuards(HybridAuthGuard)
 export class ChatController {
   // Allowed file types and sizes
   private readonly ALLOWED_IMAGE_TYPES = [

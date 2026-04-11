@@ -21,6 +21,8 @@ import { Campaign } from '../campaign/models/campaign.model';
 import { EmailService } from '../shared/email.service';
 import { WhatsAppService } from '../shared/whatsapp.service';
 import { NotificationService } from '../shared/notification.service';
+import { InAppNotificationService } from '../shared/in-app-notification.service';
+import { NotificationType } from '../shared/models/in-app-notification.model';
 import { DeviceTokenService } from '../shared/device-token.service';
 import { UserType as DeviceUserType } from '../shared/models/device-token.model';
 import { AuditLogService } from './services/audit-log.service';
@@ -61,6 +63,7 @@ export class ProfileReviewService {
     private readonly emailService: EmailService,
     private readonly whatsAppService: WhatsAppService,
     private readonly notificationService: NotificationService,
+    private readonly inAppNotificationService: InAppNotificationService,
     private readonly deviceTokenService: DeviceTokenService,
     private readonly auditLogService: AuditLogService,
   ) { }
@@ -431,6 +434,26 @@ export class ProfileReviewService {
             { type: 'profile_verified' },
           ).catch(err => console.error('Failed to send profile verified notification:', err));
         }
+
+        // Create in-app notification for profile verified
+        this.notificationService
+          .createNotification({
+            userId: influencer.id,
+            userType: 'influencer',
+            title: 'Profile Verified!',
+            body: `Congratulations ${influencer.name}! Your profile has been verified and you can now apply for campaigns.`,
+            type: NotificationType.PROFILE_VERIFIED,
+            actionUrl: 'app://influencers/me',
+            actionType: 'view_profile',
+            relatedEntityType: 'profile',
+            relatedEntityId: influencer.id,
+            metadata: {
+              profileType: 'influencer',
+            },
+          } as any)
+          .catch((error: any) => {
+            console.error('Error creating in-app notification for profile verified:', error);
+          });
 
         // Award referral credit if this influencer was referred by someone
         // Wrap in try-catch to prevent profile approval failure if referral fails

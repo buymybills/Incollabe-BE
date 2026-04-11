@@ -196,9 +196,14 @@ export class AdminPostService {
         location: city || null,
         categories: niches,
         likesCount: post.likesCount || 0,
-        engagement: post.likesCount || 0,
+        sharesCount: post.sharesCount || 0,
+        viewsCount: post.viewsCount || 0,
+        engagement: (post.likesCount || 0) + (post.sharesCount || 0) + (post.viewsCount || 0),
         createdAt: post.createdAt,
         isActive: post.isActive,
+        isBoosted: post.isBoosted || false,
+        boostedFrom: post.boostedAt || null,
+        boostedTill: post.boostExpiresAt || null,
       };
     });
 

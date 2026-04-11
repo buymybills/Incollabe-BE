@@ -139,15 +139,19 @@ export class GetCampaignApplicationsDto {
   @IsString()
   experience?: string;
 
-  // @ApiPropertyOptional({
-  //   description: 'Enable AI-based matchability scoring',
-  //   example: false,
-  //   type: Boolean,
-  // })
-  // @IsOptional()
-  // @Transform(({ value }) => value === 'true' || value === true)
-  // @IsBoolean()
-  // scoreWithAI?: boolean = false;
+  @ApiPropertyOptional({
+    description: 'Filter by Pro subscription status. true = Pro influencers only, false = non-Pro only',
+    example: true,
+    type: Boolean,
+  })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return value;
+  })
+  isPro?: boolean;
 
   @IsOptional()
   @IsString()

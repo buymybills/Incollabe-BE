@@ -25,7 +25,7 @@ import { SupportTicket } from '../shared/models/support-ticket.model';
 import { SupportTicketReply } from '../shared/models/support-ticket-reply.model';
 import { Conversation } from '../shared/models/conversation.model';
 import { Message } from '../shared/models/message.model';
-import { InfluencerReferralUsage } from 'src/auth/model/influencer-referral-usage.model';
+import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
 import { PushNotification } from '../admin/models/push-notification.model';
 import { InfluencerCredibilityScore } from '../shared/models/influencer-credibility-score.model';
 import { GroupChat } from '../shared/models/group-chat.model';

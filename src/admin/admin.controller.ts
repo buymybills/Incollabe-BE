@@ -94,7 +94,7 @@ import { GetTopInfluencersDto } from './dto/get-top-influencers.dto';
 import { GetInfluencersDto } from './dto/get-influencers.dto';
 import { GetBrandsDto } from './dto/get-brands.dto';
 import { GetCampaignsDto } from './dto/get-campaigns.dto';
-import { GetPostsDto } from './dto/get-posts.dto';
+import { GetPostsDto, AdminPostsResponseDto } from './dto/get-posts.dto';
 import { TopInfluencersResponseDto } from './dto/top-influencer-response.dto';
 import { GetCampaignApplicationsDto } from '../campaign/dto/get-campaign-applications.dto';
 import {
@@ -1286,6 +1286,7 @@ export class AdminController {
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Posts retrieved successfully with filters applied',
+    type: AdminPostsResponseDto,
   })
   @ApiUnauthorizedResponse({
     description: 'Authentication required',
@@ -1382,6 +1383,81 @@ export class AdminController {
   })
   async getInfluencers(@Query() requestDto: GetInfluencersDto) {
     return await this.influencerScoringService.getInfluencers(requestDto);
+  }
+
+  @Get('dashboard/top-influencers-new-scoring')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get top 20 influencers with new scoring logic',
+    description:
+      'Get top 20 influencers based on new scoring metrics:\n' +
+      '1. Campaign Selection Ratio: ((Campaigns selected / Campaigns applied) * 5) = max 5 points\n' +
+      '2. Content Engagement Ratio: ((Posts with engagement / Total posts) * 2) = max 2 points\n' +
+      '3. Brand Direct Contact: ((Brand direct contacts / Total verified brands) * 1) = max 1 point\n' +
+      '4. Pro Subscription (Max User): 0.5 points (if influencer has isPro = true)\n' +
+      '5. Followers Score: ((Followers / 1000) * 0.5) = max 0.5 points (capped at 0.5)\n' +
+      '6. Experience Score: 0-1 point based on number of campaigns completed\n' +
+      'Total Score: 0-10 points with 4-5 decimal accuracy. Results sorted by score descending, with followers count as tiebreaker.',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by influencer name or username',
+  })
+  @ApiQuery({
+    name: 'location',
+    required: false,
+    type: String,
+    description: 'Filter by city/location name',
+  })
+  @ApiQuery({
+    name: 'niche',
+    required: false,
+    type: String,
+    description: 'Filter by niche name',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Maximum number of influencers to return (default: 20)',
+    example: 20,
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Top influencers retrieved successfully with new scoring',
+    type: TopInfluencersResponseDto,
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Authentication required',
+  })
+  async getTopInfluencersNewScoring(
+    @Query('search') search?: string,
+    @Query('location') location?: string,
+    @Query('niche') niche?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const parsedLimit = limit ? parseInt(limit, 10) : 20;
+    return await this.influencerScoringService.getTopInfluencersNewScoring(
+      parsedLimit,
+      search,
+      location,
+      niche,
+    );
+  }
+
+  @Post('dashboard/top-influencers/refresh-cache')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Manually trigger top influencer score cache rebuild',
+    description: 'Forces an immediate recalculation of all top influencer scores. The daily cron does this automatically at 2 AM.',
+  })
+  async refreshTopInfluencerScoreCache() {
+    const result = await this.influencerScoringService.refreshTopInfluencerScoreCache();
+    return { success: true, ...result };
   }
 
   @Put('influencer/:influencerId/top-status')

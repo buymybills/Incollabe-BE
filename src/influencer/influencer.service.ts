@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { S3Service } from '../shared/s3.service';
 import { EmailService } from '../shared/email.service';
@@ -68,6 +69,7 @@ import { InfluencerReferralUsage } from 'src/auth/model/influencer-referral-usag
 import { InfluencerUpi } from './models/influencer-upi.model';
 import { ProSubscriptionService } from './services/pro-subscription.service';
 import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
+import { InfluencerScoringService } from '../admin/services/influencer-scoring.service';
 // import { HomePageHistory, HomePageActionType } from './models/home-page-history.model';
 // import { TrackHomePageActivityDto } from './dto/track-home-page-activity.dto';
 
@@ -149,6 +151,8 @@ export class InfluencerService {
     private readonly chatService: ChatService,
     private readonly inAppNotificationService: InAppNotificationService,
     private readonly profileViewService: ProfileViewService,
+    @Inject(forwardRef(() => InfluencerScoringService))
+    private readonly influencerScoringService: InfluencerScoringService,
   ) {}
 
   /**
@@ -2519,6 +2523,31 @@ export class InfluencerService {
       limit,
       totalPages: Math.ceil(influencersWithMetrics.length / limit),
     };
+  }
+
+  /**
+   * Get top influencers with new scoring logic
+   * Uses the new scoring metrics:
+   * 1. Campaign selection ratio (max 5 points)
+   * 2. Content engagement ratio (max 2 points)
+   * 3. Brand direct contact ratio (max 1 point)
+   * 4. Max user yes (0.5 points)
+   * 5. Followers score (max 0.5 points, capped)
+   * 6. Experience (0-1 point)
+   * Total: 0-10 points with 4-5 decimal accuracy
+   */
+  async getTopInfluencersWithNewScoring(
+    limit: number = 20,
+    searchQuery?: string,
+    locationSearch?: string,
+    nicheSearch?: string,
+  ) {
+    return await this.influencerScoringService.getTopInfluencersNewScoring(
+      limit,
+      searchQuery,
+      locationSearch,
+      nicheSearch,
+    );
   }
 
   async getReferralRewards(influencerId: number, page: number = 1, limit: number = 10) {

@@ -29,6 +29,7 @@ import { CredibilityScoreCronService } from './services/credibility-score.cron';
 import { InfluencerCredibilityScoringService } from './services/influencer-credibility-scoring.service';
 import { InfluencerProfileScoringService } from './services/influencer-profile-scoring.service';
 import { GeminiAIService } from './services/gemini-ai.service';
+// import { AIBatchProcessorService } from './services/ai-batch-processor.service';
 import { AppReviewController } from './controllers/app-review.controller';
 import { AppReviewService } from './services/app-review.service';
 import { InfluencerProfileScoringController } from './controllers/influencer-profile-scoring.controller';
@@ -91,6 +92,8 @@ import { FiamEventService } from './services/fiam-event.service';
 import { FiamTriggerService } from './services/fiam-trigger.service';
 import { FiamCampaignMobileService } from './services/fiam-campaign-mobile.service';
 import { FiamCampaignMobileController } from './fiam-campaign-mobile.controller';
+import { ApiActivityLog } from './models/api-activity-log.model';
+import { ApiLoggerMiddleware } from '../middleware/api-logger.middleware';
 
 @Module({
   imports: [
@@ -137,6 +140,7 @@ import { FiamCampaignMobileController } from './fiam-campaign-mobile.controller'
       ProfileView,
       FiamCampaign,
       FiamCampaignEvent,
+      ApiActivityLog,
     ]),
   ],
   controllers: [
@@ -180,6 +184,7 @@ import { FiamCampaignMobileController } from './fiam-campaign-mobile.controller'
     InfluencerCredibilityScoringService,
     InfluencerProfileScoringService,
     GeminiAIService,
+    // AIBatchProcessorService,
     AppReviewService,
     CampusAmbassadorService,
     DeviceTokenService,
@@ -191,6 +196,7 @@ import { FiamCampaignMobileController } from './fiam-campaign-mobile.controller'
     FiamEventService,
     FiamTriggerService,
     FiamCampaignMobileService,
+    ApiLoggerMiddleware,
   ],
   exports: [
     SmsService,
@@ -216,6 +222,7 @@ import { FiamCampaignMobileController } from './fiam-campaign-mobile.controller'
     InfluencerCredibilityScoringService,
     InfluencerProfileScoringService,
     GeminiAIService,
+    // AIBatchProcessorService,
     AppReviewService,
     CampusAmbassadorService,
     DeviceTokenService,
@@ -227,6 +234,7 @@ import { FiamCampaignMobileController } from './fiam-campaign-mobile.controller'
     FiamEventService,
     FiamTriggerService,
     FiamCampaignMobileService,
+    ApiLoggerMiddleware,
   ],
 })
 export class SharedModule { }

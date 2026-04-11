@@ -1828,12 +1828,19 @@ export class DashboardStatsService {
       metricsEnd,
     );
 
+    // Get boosted posts with their boost window
+    const recentBoostedPosts = await this.getBoostedPostsWithWindow(
+      metricsStart,
+      metricsEnd,
+    );
+
     return {
       postMetrics,
       totalCityPresence,
       citiesWithMostPosts,
       contentPostedVsEngagement,
       contentCategoryDistribution,
+      recentBoostedPosts,
     };
   }
 
@@ -1942,6 +1949,20 @@ export class DashboardStatsService {
     const avgSharesPerPost = 0;
     const avgSharesPerPostChange = 0;
 
+    // Boosted posts — posts currently active and boosted within the current period
+    const totalBoostedPosts = await this.postModel.count({
+      where: {
+        isActive: true,
+        isBoosted: true,
+        createdAt: { [Op.between]: [currentStart, currentEnd] },
+      },
+    });
+
+    const boostedPostsPercentage =
+      currentPosts > 0
+        ? parseFloat(((totalBoostedPosts / currentPosts) * 100).toFixed(2))
+        : 0;
+
     return {
       totalPosts: currentPosts,
       totalPostsChange,
@@ -1957,6 +1978,8 @@ export class DashboardStatsService {
       totalShares,
       avgSharesPerPost,
       avgSharesPerPostChange,
+      totalBoostedPosts,
+      boostedPostsPercentage,
     };
   }
 
@@ -2147,7 +2170,7 @@ export class DashboardStatsService {
    */
   private async getPostTimeSeriesData(startDate: Date, endDate: Date) {
     const posts = await this.postModel.findAll({
-      attributes: ['createdAt', 'likesCount'],
+      attributes: ['createdAt', 'likesCount', 'isBoosted'],
       where: {
         isActive: true,
         createdAt: { [Op.between]: [startDate, endDate] },
@@ -2157,16 +2180,17 @@ export class DashboardStatsService {
 
     // Group by date
     const dataByDate: {
-      [key: string]: { postsCount: number; engagementCount: number };
+      [key: string]: { postsCount: number; engagementCount: number; boostedPostsCount: number };
     } = {};
 
     posts.forEach((post) => {
       const date = post.createdAt.toISOString().split('T')[0];
       if (!dataByDate[date]) {
-        dataByDate[date] = { postsCount: 0, engagementCount: 0 };
+        dataByDate[date] = { postsCount: 0, engagementCount: 0, boostedPostsCount: 0 };
       }
       dataByDate[date].postsCount++;
       dataByDate[date].engagementCount += post.likesCount || 0;
+      if (post.isBoosted) dataByDate[date].boostedPostsCount++;
     });
 
     // Fill in missing dates with zero values
@@ -2174,6 +2198,7 @@ export class DashboardStatsService {
       date: string;
       postsCount: number;
       engagementCount: number;
+      boostedPostsCount: number;
     }> = [];
     const currentDate = new Date(startDate);
     while (currentDate <= endDate) {
@@ -2182,11 +2207,51 @@ export class DashboardStatsService {
         date: dateStr,
         postsCount: dataByDate[dateStr]?.postsCount || 0,
         engagementCount: dataByDate[dateStr]?.engagementCount || 0,
+        boostedPostsCount: dataByDate[dateStr]?.boostedPostsCount || 0,
       });
       currentDate.setDate(currentDate.getDate() + 1);
     }
 
     return result;
+  }
+
+  /**
+   * Get posts that were boosted within the period, with their boost window
+   */
+  private async getBoostedPostsWithWindow(startDate: Date, endDate: Date) {
+    const posts = await this.postModel.findAll({
+      attributes: ['id', 'content', 'boostedAt', 'boostExpiresAt', 'isBoosted'],
+      where: {
+        isActive: true,
+        boostedAt: { [Op.between]: [startDate, endDate] },
+      },
+      include: [
+        {
+          model: Influencer,
+          as: 'influencer',
+          attributes: ['id', 'name', 'username', 'profileImage'],
+          required: false,
+        },
+      ],
+      order: [['boostedAt', 'DESC']],
+      limit: 20,
+    });
+
+    return posts.map((post) => ({
+      postId: post.id,
+      content: post.content || '',
+      influencer: post.influencer
+        ? {
+            id: post.influencer.id,
+            name: post.influencer.name,
+            username: post.influencer.username,
+            profileImage: post.influencer.profileImage,
+          }
+        : null,
+      isBoosted: post.isBoosted,
+      boostedFrom: post.boostedAt,
+      boostedTill: post.boostExpiresAt,
+    }));
   }
 
   /**

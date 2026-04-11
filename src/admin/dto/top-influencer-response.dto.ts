@@ -187,6 +187,20 @@ export class TopInfluencerDto {
     type: InfluencerScoreBreakdown,
   })
   scoreBreakdown: InfluencerScoreBreakdown;
+
+  @ApiProperty({
+    description: 'Whether score was read from daily cache or computed live on this request',
+    example: 'cache',
+    enum: ['cache', 'live'],
+  })
+  scoreSource: 'cache' | 'live';
+
+  @ApiProperty({
+    description: 'When the cached score was last calculated (null if live)',
+    example: '2026-04-08T02:00:00Z',
+    nullable: true,
+  })
+  scoreCachedAt: Date | null;
 }
 
 export class TopInfluencersResponseDto {
@@ -229,5 +243,19 @@ export class TopInfluencersResponseDto {
     locationMatchWeight: number;
     pastPerformanceWeight: number;
     collaborationChargesWeight: number;
+  };
+
+  @ApiProperty({
+    description: 'Cache metadata — useful for verifying the caching behaviour',
+    example: {
+      cachedCount: 18,
+      liveCount: 2,
+      lastCacheRefresh: '2026-04-08T02:00:00Z',
+    },
+  })
+  cacheInfo: {
+    cachedCount: number;
+    liveCount: number;
+    lastCacheRefresh: Date | null;
   };
 }
