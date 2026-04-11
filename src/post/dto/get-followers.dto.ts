@@ -1,32 +1,33 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsInt, Min, IsString } from 'class-validator';
+import { IsOptional, IsInt, Min, IsString, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class GetFollowersDto {
-  @ApiPropertyOptional({
-    description: 'Search by name or username',
-    example: 'john',
-  })
+  @ApiPropertyOptional({ description: 'View followers of this user ID (defaults to logged-in user)', example: 324 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  userId?: number;
+
+  @ApiPropertyOptional({ description: 'User type of the target user', enum: ['influencer', 'brand'], example: 'influencer' })
+  @IsOptional()
+  @IsString()
+  @IsIn(['influencer', 'brand'])
+  userType?: 'influencer' | 'brand';
+
+  @ApiPropertyOptional({ description: 'Search by name or username', example: 'john' })
   @IsOptional()
   @IsString()
   search?: string;
 
-  @ApiPropertyOptional({
-    description: 'Page number',
-    example: 1,
-    default: 1,
-  })
+  @ApiPropertyOptional({ description: 'Page number', example: 1, default: 1 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   page?: number = 1;
 
-  @ApiPropertyOptional({
-    description: 'Number of items per page',
-    example: 20,
-    default: 20,
-  })
+  @ApiPropertyOptional({ description: 'Number of items per page', example: 20, default: 20 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -35,30 +36,31 @@ export class GetFollowersDto {
 }
 
 export class GetFollowingDto {
-  @ApiPropertyOptional({
-    description: 'Search by name or username',
-    example: 'jane',
-  })
+  @ApiPropertyOptional({ description: 'View following list of this user ID (defaults to logged-in user)', example: 324 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  userId?: number;
+
+  @ApiPropertyOptional({ description: 'User type of the target user', enum: ['influencer', 'brand'], example: 'influencer' })
+  @IsOptional()
+  @IsString()
+  @IsIn(['influencer', 'brand'])
+  userType?: 'influencer' | 'brand';
+
+  @ApiPropertyOptional({ description: 'Search by name or username', example: 'jane' })
   @IsOptional()
   @IsString()
   search?: string;
 
-  @ApiPropertyOptional({
-    description: 'Page number',
-    example: 1,
-    default: 1,
-  })
+  @ApiPropertyOptional({ description: 'Page number', example: 1, default: 1 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   page?: number = 1;
 
-  @ApiPropertyOptional({
-    description: 'Number of items per page',
-    example: 20,
-    default: 20,
-  })
+  @ApiPropertyOptional({ description: 'Number of items per page', example: 20, default: 20 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
