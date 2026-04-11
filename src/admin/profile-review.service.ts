@@ -436,7 +436,7 @@ export class ProfileReviewService {
         }
 
         // Create in-app notification for profile verified
-        this.notificationService
+        this.inAppNotificationService
           .createNotification({
             userId: influencer.id,
             userType: 'influencer',
