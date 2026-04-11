@@ -9,6 +9,7 @@ import { FollowDto, FollowUserType } from './dto/follow.dto';
 import { GetPostsDto } from './dto/get-posts.dto';
 import { UserType } from './models/post.model';
 import { User } from '../types/request.types';
+import { ParticipantType } from '../shared/models/conversation.model';
 
 const mockPostService = {
   createPost: jest.fn(),
@@ -76,7 +77,7 @@ describe('PostController', () => {
       const mockUser: User = {
         id: 1,
         email: 'test@influencer.com',
-        userType: 'influencer',
+        userType: ParticipantType.INFLUENCER,
         profileCompleted: true,
       };
 
@@ -113,7 +114,7 @@ describe('PostController', () => {
       const mockUser: User = {
         id: 2,
         email: 'test@brand.com',
-        userType: 'brand',
+        userType: ParticipantType.BRAND,
         profileCompleted: true,
       };
 
@@ -152,7 +153,7 @@ describe('PostController', () => {
       const mockUser: User = {
         id: 1,
         email: 'test@influencer.com',
-        userType: 'influencer',
+        userType: ParticipantType.INFLUENCER,
         profileCompleted: true,
       };
 
@@ -199,7 +200,7 @@ describe('PostController', () => {
       const mockUser: User = {
         id: 1,
         email: 'test@influencer.com',
-        userType: 'influencer',
+        userType: ParticipantType.INFLUENCER,
         profileCompleted: true,
       };
 
@@ -225,7 +226,7 @@ describe('PostController', () => {
       const mockUser: User = {
         id: 1,
         email: 'test@influencer.com',
-        userType: 'influencer',
+        userType: ParticipantType.INFLUENCER,
         profileCompleted: true,
       };
 
@@ -263,7 +264,7 @@ describe('PostController', () => {
       const mockUser: User = {
         id: 1,
         email: 'test@influencer.com',
-        userType: 'influencer',
+        userType: ParticipantType.INFLUENCER,
         profileCompleted: true,
       };
 
@@ -285,7 +286,7 @@ describe('PostController', () => {
       const mockUser: User = {
         id: 1,
         email: 'test@influencer.com',
-        userType: 'influencer',
+        userType: ParticipantType.INFLUENCER,
         profileCompleted: true,
       };
 
@@ -307,7 +308,7 @@ describe('PostController', () => {
       const mockUser: User = {
         id: 1,
         email: 'test@influencer.com',
-        userType: 'influencer',
+        userType: ParticipantType.INFLUENCER,
         profileCompleted: true,
       };
 
@@ -336,7 +337,7 @@ describe('PostController', () => {
       const mockUser: User = {
         id: 1,
         email: 'test@influencer.com',
-        userType: 'influencer',
+        userType: ParticipantType.INFLUENCER,
         profileCompleted: true,
       };
 
@@ -363,7 +364,7 @@ describe('PostController', () => {
       const mockUser: User = {
         id: 1,
         email: 'test@influencer.com',
-        userType: 'influencer',
+        userType: ParticipantType.INFLUENCER,
         profileCompleted: true,
       };
 
@@ -392,7 +393,7 @@ describe('PostController', () => {
       const mockUser: User = {
         id: 2,
         email: 'test@brand.com',
-        userType: 'brand',
+        userType: ParticipantType.BRAND,
         profileCompleted: true,
       };
 
@@ -425,7 +426,7 @@ describe('PostController', () => {
       expect(postService.getPosts).toHaveBeenCalledWith(
         {
           ...getPostsDto,
-          userType: 'influencer',
+          userType: ParticipantType.INFLUENCER,
           userId: 1,
         },
         UserType.BRAND,
@@ -443,7 +444,7 @@ describe('PostController', () => {
       const mockUser: User = {
         id: 1,
         email: 'test@influencer.com',
-        userType: 'influencer',
+        userType: ParticipantType.INFLUENCER,
         profileCompleted: true,
       };
 
@@ -467,7 +468,7 @@ describe('PostController', () => {
       const mockUser: User = {
         id: 1,
         email: 'test@brand.com',
-        userType: 'brand',
+        userType: ParticipantType.BRAND,
         profileCompleted: true,
       };
 
@@ -494,7 +495,7 @@ describe('PostController', () => {
       const mockUser: User = {
         id: 1,
         email: 'test@influencer.com',
-        userType: 'influencer',
+        userType: ParticipantType.INFLUENCER,
         profileCompleted: true,
       };
 
@@ -518,7 +519,7 @@ describe('PostController', () => {
       const mockUser: User = {
         id: 3,
         email: 'test@influencer.com',
-        userType: 'influencer',
+        userType: ParticipantType.INFLUENCER,
         profileCompleted: true,
       };
 
@@ -535,7 +536,7 @@ describe('PostController', () => {
       expect(postService.getPosts).toHaveBeenCalledWith(
         {
           ...getPostsDto,
-          userType: 'brand',
+          userType: ParticipantType.BRAND,
           userId: 456,
         },
         UserType.INFLUENCER,
@@ -553,7 +554,7 @@ describe('PostController', () => {
       const mockUser: User = {
         id: 1,
         email: 'test@influencer.com',
-        userType: 'influencer',
+        userType: ParticipantType.INFLUENCER,
         profileCompleted: true,
       };
 
@@ -573,7 +574,7 @@ describe('PostController', () => {
       const mockUser: User = {
         id: 1,
         email: 'test@influencer.com',
-        userType: 'influencer',
+        userType: ParticipantType.INFLUENCER,
         profileCompleted: true,
       };
 
@@ -589,7 +590,7 @@ describe('PostController', () => {
       const mockUser: User = {
         id: 1,
         email: 'test@influencer.com',
-        userType: 'influencer',
+        userType: ParticipantType.INFLUENCER,
         profileCompleted: true,
       };
 
@@ -605,7 +606,7 @@ describe('PostController', () => {
       const mockUser: User = {
         id: 1,
         email: 'test@influencer.com',
-        userType: 'influencer',
+        userType: ParticipantType.INFLUENCER,
         profileCompleted: true,
       };
 
@@ -626,7 +627,7 @@ describe('PostController', () => {
       const mockUser: User = {
         id: 1,
         email: 'test@influencer.com',
-        userType: 'influencer',
+        userType: ParticipantType.INFLUENCER,
         profileCompleted: true,
       };
 
@@ -647,7 +648,7 @@ describe('PostController', () => {
       const mockUser: User = {
         id: 1,
         email: 'test@influencer.com',
-        userType: 'influencer',
+        userType: ParticipantType.INFLUENCER,
         profileCompleted: true,
       };
 
@@ -663,7 +664,7 @@ describe('PostController', () => {
       const mockUser: User = {
         id: 1,
         email: 'test@influencer.com',
-        userType: 'influencer',
+        userType: ParticipantType.INFLUENCER,
         profileCompleted: true,
       };
 
