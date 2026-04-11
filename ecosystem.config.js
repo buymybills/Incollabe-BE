@@ -12,7 +12,7 @@ module.exports = {
     // Auto-restart configuration
     autorestart: true,
     watch: false,  // Set to true in development if you want auto-reload
-    max_memory_restart: '1500M',  // NestJS baseline is ~700-800MB; give headroom for traffic
+    max_memory_restart: '2G',  // NestJS baseline is ~700-800MB; give headroom for traffic spikes
 
     // Logging
     error_file: './logs/pm2/error.log',

@@ -86,8 +86,33 @@ export class InfluencerScoringService {
     locationSearch?: string,
     nicheSearch?: string,
   ): Promise<TopInfluencersResponseDto> {
-    // Build base query for active influencers with completed profiles
+    // Step 1: Read top entries from cache table (already sorted by score, DB-level limit).
+    // Never load all 9K influencers — only fetch what we need to display.
+    const cachedScores = await this.topInfluencerScoreCacheModel.findAll({
+      attributes: ['influencerId', 'overallScore', 'scoreBreakdown', 'calculatedAt'],
+      order: [['overallScore', 'DESC']],
+      limit: limit * 10, // Fetch extra to allow for search/location filtering below
+    });
+
+    if (cachedScores.length === 0) {
+      this.logger.warn('Top influencer score cache is empty — run refresh-cache to populate.');
+      return {
+        influencers: [],
+        total: 0,
+        page: 1,
+        limit,
+        totalPages: 0,
+        appliedWeights: { nicheMatchWeight: 0, engagementRateWeight: 20, audienceRelevanceWeight: 0, locationMatchWeight: 0, pastPerformanceWeight: 60, collaborationChargesWeight: 20 },
+        cacheInfo: { cachedCount: 0, liveCount: 0, lastCacheRefresh: null },
+      };
+    }
+
+    const cacheMap = new Map(cachedScores.map((c) => [c.influencerId, c]));
+    const cachedInfluencerIds = cachedScores.map((c) => c.influencerId);
+
+    // Step 2: Fetch only the cached influencers' profiles (small set, not all 9K)
     const whereConditions: any = {
+      id: { [Op.in]: cachedInfluencerIds },
       isProfileCompleted: true,
       isActive: true,
     };
@@ -118,156 +143,78 @@ export class InfluencerScoringService {
 
     const influencers = await this.influencerModel.findAll({
       where: whereConditions,
-      include: [
-        nicheInclude,
-        cityInclude,
-        { model: Country, as: 'country', required: false },
-      ],
+      include: [nicheInclude, cityInclude, { model: Country, as: 'country', required: false }],
     });
 
-    // Fetch pre-computed scores for all matched influencers in one query
-    const influencerIds = influencers.map((inf) => inf.id);
-    const cachedScores = influencerIds.length > 0
-      ? await this.topInfluencerScoreCacheModel.findAll({
-          where: { influencerId: influencerIds },
-          attributes: ['influencerId', 'overallScore', 'scoreBreakdown', 'calculatedAt'],
-        })
-      : [];
+    // Step 3: Map profiles + scores — no live computation, cache only
+    const scoredInfluencers = influencers.map((inf) => {
+      const influencer = inf as unknown as InfluencerWithAssociations;
+      const cached = cacheMap.get(influencer.id);
+      if (!cached) return null;
 
-    const cacheMap = new Map(cachedScores.map((c) => [c.influencerId, c]));
+      const overallScore = Number(cached.overallScore);
+      const scoreBreakdown = cached.scoreBreakdown || {};
+      const instagramCosts = (influencer.collaborationCosts as Record<string, any>)?.instagram || {};
+      const niches = influencer.niches?.map((niche) => niche.name) || [];
 
-    if (cacheMap.size === 0) {
-      this.logger.warn(
-        'Top influencer score cache is empty — falling back to live computation. Run the daily cron to populate the cache.',
-      );
-    }
+      const topInfluencer: TopInfluencerDto = {
+        id: influencer.id,
+        name: influencer.name,
+        username: influencer.username,
+        profileImage: influencer.profileImage || '',
+        bio: influencer.bio || '',
+        profileHeadline: influencer.profileHeadline || '',
+        city: influencer.city?.name || '',
+        country: influencer.country?.name || '',
+        isVerified: influencer.isVerified || false,
+        verifiedAt: influencer.verifiedAt || null,
+        instagramIsVerified: influencer.instagramIsVerified || false,
+        isInstagramConnected: !!influencer.instagramConnectedAt,
+        isTopInfluencer: influencer.isTopInfluencer || false,
+        followersCount: 0,
+        engagementRate: ((scoreBreakdown.engagementRateScore ?? 0) / 2) * 100,
+        postsCount: 0,
+        completedCampaigns: 0,
+        niches,
+        instagramPostCost: instagramCosts.post || 0,
+        instagramReelCost: instagramCosts.reel || 0,
+        scoreBreakdown: {
+          nicheMatchScore: 0,
+          engagementRateScore: scoreBreakdown.engagementRateScore ?? 0,
+          audienceRelevanceScore: 0,
+          locationMatchScore: 0,
+          pastPerformanceScore: scoreBreakdown.pastPerformanceScore ?? 0,
+          collaborationChargesScore: 0,
+          overallScore,
+          recommendationLevel:
+            overallScore >= 8 ? 'highly_recommended'
+            : overallScore >= 6 ? 'recommended'
+            : overallScore >= 4 ? 'consider'
+            : 'not_recommended',
+        },
+        displayOrder: influencer.displayOrder || null,
+        updatedAt: influencer.updatedAt,
+        scoreSource: 'cache' as const,
+        scoreCachedAt: cached.calculatedAt,
+      };
 
-    // Score each influencer: use cache if available, else compute live
-    const scoredInfluencers = await Promise.all(
-      influencers.map(async (inf) => {
-        const influencer = inf as unknown as InfluencerWithAssociations;
-
-        let overallScore: number;
-        let scoreBreakdown: Record<string, any>;
-        let scoreSource: 'cache' | 'live';
-        let scoreCachedAt: Date | null;
-
-        const cached = cacheMap.get(influencer.id);
-        if (cached) {
-          overallScore = Number(cached.overallScore);
-          scoreBreakdown = cached.scoreBreakdown || {};
-          scoreSource = 'cache';
-          scoreCachedAt = cached.calculatedAt;
-        } else {
-          // Live computation (fallback — only runs when cache is missing)
-          const [
-            campaignScore,
-            engagementScore,
-            brandContactScore,
-            maxUserYesScore,
-            followersScore,
-            experienceScore,
-          ] = await Promise.all([
-            this.calculateCampaignSelectionScore(influencer.id),
-            this.calculateContentEngagementScore(influencer.id),
-            this.calculateBrandDirectContactScore(influencer.id),
-            this.calculateMaxUserYesScore(influencer.id),
-            this.calculateFollowersScore(influencer.id),
-            this.calculateExperienceScore(influencer.id),
-          ]);
-
-          overallScore = parseFloat(
-            (campaignScore + engagementScore + brandContactScore + maxUserYesScore + followersScore + experienceScore).toFixed(5),
-          );
-          scoreBreakdown = {
-            engagementRateScore: parseFloat(engagementScore.toFixed(5)),
-            pastPerformanceScore: parseFloat((campaignScore + experienceScore).toFixed(5)),
-          };
-          scoreSource = 'live';
-          scoreCachedAt = null;
-        }
-
-        const [followersCount, postsCount, completedCampaigns] = await Promise.all([
-          this.getFollowersCount(influencer.id),
-          this.getPostsCount(influencer.id),
-          this.getCompletedCampaignsCount(influencer.id),
-        ]);
-
-        const niches = influencer.niches?.map((niche) => niche.name) || [];
-        const instagramCosts = (influencer.collaborationCosts as Record<string, any>)?.instagram || {};
-
-        const topInfluencer: TopInfluencerDto = {
-          id: influencer.id,
-          name: influencer.name,
-          username: influencer.username,
-          profileImage: influencer.profileImage || '',
-          bio: influencer.bio || '',
-          profileHeadline: influencer.profileHeadline || '',
-          city: influencer.city?.name || '',
-          country: influencer.country?.name || '',
-          isVerified: influencer.isVerified || false,
-          verifiedAt: influencer.verifiedAt || null,
-          instagramIsVerified: influencer.instagramIsVerified || false,
-          isInstagramConnected: !!influencer.instagramConnectedAt,
-          isTopInfluencer: influencer.isTopInfluencer || false,
-          followersCount,
-          engagementRate: ((scoreBreakdown.engagementRateScore ?? 0) / 2) * 100,
-          postsCount,
-          completedCampaigns,
-          niches,
-          instagramPostCost: instagramCosts.post || 0,
-          instagramReelCost: instagramCosts.reel || 0,
-          scoreBreakdown: {
-            nicheMatchScore: 0,
-            engagementRateScore: scoreBreakdown.engagementRateScore ?? 0,
-            audienceRelevanceScore: 0,
-            locationMatchScore: 0,
-            pastPerformanceScore: scoreBreakdown.pastPerformanceScore ?? 0,
-            collaborationChargesScore: 0,
-            overallScore,
-            recommendationLevel:
-              overallScore >= 8
-                ? 'highly_recommended'
-                : overallScore >= 6
-                  ? 'recommended'
-                  : overallScore >= 4
-                    ? 'consider'
-                    : 'not_recommended',
-          },
-          displayOrder: influencer.displayOrder || null,
-          updatedAt: influencer.updatedAt,
-          scoreSource,
-          scoreCachedAt,
-        };
-
-        return topInfluencer;
-      }),
-    );
+      return topInfluencer;
+    });
 
     const validInfluencers = scoredInfluencers
       .filter((inf): inf is TopInfluencerDto => inf !== null)
       .sort((a, b) => {
         const aOrder = a.displayOrder ?? null;
         const bOrder = b.displayOrder ?? null;
-
-        // Both have displayOrder → sort ASC
         if (aOrder !== null && bOrder !== null) {
           const orderDiff = aOrder - bOrder;
           if (orderDiff !== 0) return orderDiff;
-          // Same displayOrder → higher score wins
           return b.scoreBreakdown.overallScore - a.scoreBreakdown.overallScore;
         }
-
-        // Only a has displayOrder → a comes first
         if (aOrder !== null) return -1;
-
-        // Only b has displayOrder → b comes first
         if (bOrder !== null) return 1;
-
-        // Neither has displayOrder → sort by score DESC, then followers, then updatedAt
         const scoreDiff = b.scoreBreakdown.overallScore - a.scoreBreakdown.overallScore;
         if (scoreDiff !== 0) return scoreDiff;
-        if (a.followersCount !== b.followersCount) return b.followersCount - a.followersCount;
         if (a.updatedAt && b.updatedAt) {
           return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
         }
@@ -275,7 +222,6 @@ export class InfluencerScoringService {
       })
       .slice(0, limit);
 
-    const cachedCount = validInfluencers.filter((i) => i.scoreSource === 'cache').length;
     const lastCacheRefresh = cachedScores.length > 0
       ? cachedScores.reduce((latest, c) =>
           c.calculatedAt > latest ? c.calculatedAt : latest,
@@ -298,8 +244,8 @@ export class InfluencerScoringService {
         collaborationChargesWeight: 20,
       },
       cacheInfo: {
-        cachedCount,
-        liveCount: validInfluencers.length - cachedCount,
+        cachedCount: validInfluencers.length,
+        liveCount: 0,
         lastCacheRefresh,
       },
     };
