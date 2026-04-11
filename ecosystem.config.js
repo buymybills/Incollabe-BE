@@ -3,14 +3,16 @@ module.exports = {
     name: 'incollab-api',
     script: './dist/main.js',
 
-    // Clustering configuration - utilize all CPU cores
-    instances: 'max',  // or specific number like 2, 4, etc.
+    // Clustering configuration - 2 instances to balance load vs memory
+    // 'max' uses all CPU cores but each NestJS instance needs ~800MB baseline,
+    // so too many instances exhausts RAM and triggers constant restarts.
+    instances: 2,
     exec_mode: 'cluster',
 
     // Auto-restart configuration
     autorestart: true,
     watch: false,  // Set to true in development if you want auto-reload
-    max_memory_restart: '1G',  // Restart if memory exceeds 1GB
+    max_memory_restart: '1500M',  // NestJS baseline is ~700-800MB; give headroom for traffic
 
     // Logging
     error_file: './logs/pm2/error.log',

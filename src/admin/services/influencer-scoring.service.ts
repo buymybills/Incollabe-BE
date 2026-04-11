@@ -45,6 +45,7 @@ type InfluencerWithAssociations = Influencer & {
 @Injectable()
 export class InfluencerScoringService {
   private readonly logger = new Logger(InfluencerScoringService.name);
+  private isCacheRefreshRunning = false;
 
   constructor(
     @InjectModel(Influencer)
@@ -309,6 +310,12 @@ export class InfluencerScoringService {
    * Called by the daily cron job.
    */
   async refreshTopInfluencerScoreCache(): Promise<{ updated: number; errors: number }> {
+    if (this.isCacheRefreshRunning) {
+      this.logger.warn('Cache refresh already in progress, skipping duplicate invocation');
+      return { updated: 0, errors: 0 };
+    }
+    this.isCacheRefreshRunning = true;
+
     let updated = 0;
     let errors = 0;
     // Process in small pages so we never hold all influencer records in memory at once.
@@ -381,6 +388,7 @@ export class InfluencerScoringService {
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
 
+    this.isCacheRefreshRunning = false;
     return { updated, errors };
   }
 
