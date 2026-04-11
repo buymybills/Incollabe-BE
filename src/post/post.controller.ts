@@ -350,11 +350,14 @@ export class PostController {
     @Query() dto: GetFollowersDto,
     @CurrentUser() user: User,
   ) {
-    const userType =
-      user.userType === 'influencer' ? UserType.INFLUENCER : UserType.BRAND;
+    // If userId is provided, view that user's followers; otherwise use the logged-in user
+    const targetId = dto.userId ?? user.id;
+    const targetUserType = dto.userId
+      ? (dto.userType === 'brand' ? UserType.BRAND : UserType.INFLUENCER)
+      : (user.userType === 'influencer' ? UserType.INFLUENCER : UserType.BRAND);
     return this.postService.getFollowers(
-      userType,
-      user.id,
+      targetUserType,
+      targetId,
       dto.page,
       dto.limit,
       dto.search,
@@ -516,11 +519,14 @@ export class PostController {
     @Query() dto: GetFollowingDto,
     @CurrentUser() user: User,
   ) {
-    const userType =
-      user.userType === 'influencer' ? UserType.INFLUENCER : UserType.BRAND;
+    // If userId is provided, view that user's following; otherwise use the logged-in user
+    const targetId = dto.userId ?? user.id;
+    const targetUserType = dto.userId
+      ? (dto.userType === 'brand' ? UserType.BRAND : UserType.INFLUENCER)
+      : (user.userType === 'influencer' ? UserType.INFLUENCER : UserType.BRAND);
     return this.postService.getFollowing(
-      userType,
-      user.id,
+      targetUserType,
+      targetId,
       dto.page,
       dto.limit,
       dto.search,
