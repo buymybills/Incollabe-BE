@@ -1144,97 +1144,93 @@ export class PostService {
         : 'followingBrandId';
 
     const offset = (page - 1) * limit;
+    const searchPattern = search ? `%${search}%` : null;
 
-    // Build include options with paranoid: false to include soft-deleted users
-    const influencerInclude: any = {
-      model: Influencer,
-      as: 'followerInfluencer',
-      attributes: ['id', 'name', 'username', 'profileImage'],
-      required: false,
-      paranoid: false, // Include soft-deleted influencers
-    };
+    // Step 1: fetch all follow records (raw — no includes)
+    const allFollows = await this.followModel.findAll({
+      where: { followingType, [followingField]: currentUserId },
+      attributes: ['id', 'followerType', 'followerInfluencerId', 'followerBrandId', 'createdAt'],
+      order: [['createdAt', 'DESC']],
+      raw: true,
+    }) as any[];
 
-    const brandInclude: any = {
-      model: Brand,
-      as: 'followerBrand',
-      attributes: ['id', 'brandName', 'username', 'profileImage'],
-      required: false,
-      paranoid: false, // Include soft-deleted brands
-    };
+    // Step 2: separate IDs by type
+    const influencerIds = allFollows
+      .filter((f) => f.followerType === FollowerType.INFLUENCER && f.followerInfluencerId)
+      .map((f) => f.followerInfluencerId);
 
-    // Add search filter if provided
-    if (search) {
-      const searchPattern = `%${search}%`;
-      influencerInclude.where = {
-        [Op.or]: [
-          { name: { [Op.iLike]: searchPattern } },
-          { username: { [Op.iLike]: searchPattern } },
-        ],
-      };
-      brandInclude.where = {
-        [Op.or]: [
-          { brandName: { [Op.iLike]: searchPattern } },
-          { username: { [Op.iLike]: searchPattern } },
-        ],
-      };
+    const brandIds = allFollows
+      .filter((f) => f.followerType === FollowerType.BRAND && f.followerBrandId)
+      .map((f) => f.followerBrandId);
+
+    // Step 3: batch-load user records; paranoid:false so soft-deleted still appear
+    const influencerWhere: any = { id: influencerIds.length ? influencerIds : [-1] };
+    if (searchPattern) {
+      influencerWhere[Op.or] = [
+        { name: { [Op.iLike]: searchPattern } },
+        { username: { [Op.iLike]: searchPattern } },
+      ];
     }
 
-    // Get total count with search filter
-    const total = await this.followModel.count({
-      where: {
-        followingType,
-        [followingField]: currentUserId,
-      },
-      include: [influencerInclude, brandInclude],
-      distinct: true,
-    });
+    const brandWhere: any = { id: brandIds.length ? brandIds : [-1] };
+    if (searchPattern) {
+      brandWhere[Op.or] = [
+        { brandName: { [Op.iLike]: searchPattern } },
+        { username: { [Op.iLike]: searchPattern } },
+      ];
+    }
 
-    // Get followers with pagination and search
-    const follows = await this.followModel.findAll({
-      where: {
-        followingType,
-        [followingField]: currentUserId,
-      },
-      include: [influencerInclude, brandInclude],
-      order: [['createdAt', 'DESC']],
-      limit,
-      offset,
-    });
+    const [influencers, brands] = await Promise.all([
+      Influencer.findAll({
+        where: influencerWhere,
+        attributes: ['id', 'name', 'username', 'profileImage'],
+        paranoid: false,
+        raw: true,
+      }),
+      Brand.findAll({
+        where: brandWhere,
+        attributes: ['id', 'brandName', 'username', 'profileImage'],
+        paranoid: false,
+        raw: true,
+      }),
+    ]) as [any[], any[]];
 
-    const followers = follows.map((follow) => {
-      const followData = follow.toJSON();
+    const influencerMap = new Map<number, any>(influencers.map((i) => [i.id, i]));
+    const brandMap = new Map<number, any>(brands.map((b) => [b.id, b]));
 
-      if (followData.followerType === FollowerType.INFLUENCER && followData.followerInfluencer) {
+    // Step 4: build response list (search filter is already applied via map lookups)
+    const allMapped = allFollows.map((f) => {
+      if (f.followerType === FollowerType.INFLUENCER) {
+        const inf = influencerMap.get(f.followerInfluencerId);
+        if (!inf) return null;
         return {
-          id: followData.followerInfluencer.id,
+          id: inf.id as number,
           type: 'influencer' as const,
-          name: followData.followerInfluencer.name,
-          username: followData.followerInfluencer.username,
-          profileImage: followData.followerInfluencer.profileImage || null,
-          followedAt: followData.createdAt,
+          name: inf.name as string,
+          username: inf.username as string,
+          profileImage: (inf.profileImage as string) || null,
+          followedAt: f.createdAt as Date,
         };
-      } else if (followData.followerType === FollowerType.BRAND && followData.followerBrand) {
+      } else if (f.followerType === FollowerType.BRAND) {
+        const br = brandMap.get(f.followerBrandId);
+        if (!br) return null;
         return {
-          id: followData.followerBrand.id,
+          id: br.id as number,
           type: 'brand' as const,
-          name: followData.followerBrand.brandName,
-          username: followData.followerBrand.username,
-          profileImage: followData.followerBrand.profileImage || null,
-          followedAt: followData.createdAt,
+          name: br.brandName as string,
+          username: br.username as string,
+          profileImage: (br.profileImage as string) || null,
+          followedAt: f.createdAt as Date,
         };
       }
       return null;
-    }).filter((follower): follower is NonNullable<typeof follower> => follower !== null);
+    }).filter((item): item is NonNullable<typeof item> => item !== null);
 
+    const total = allMapped.length;
+    const followers = allMapped.slice(offset, offset + limit);
     const totalPages = Math.ceil(total / limit);
 
-    return {
-      followers,
-      total,
-      page,
-      limit,
-      totalPages,
-    };
+    return { followers, total, page, limit, totalPages };
   }
 
   /**
@@ -1270,95 +1266,93 @@ export class PostService {
         : 'followerBrandId';
 
     const offset = (page - 1) * limit;
+    const searchPattern = search ? `%${search}%` : null;
 
-    // Build include options
-    const influencerInclude: any = {
-      model: Influencer,
-      as: 'followingInfluencer',
-      attributes: ['id', 'name', 'username', 'profileImage'],
-      required: false,
-    };
+    // Step 1: fetch all follow records (raw — no includes)
+    const allFollows = await this.followModel.findAll({
+      where: { followerType, [followerField]: currentUserId },
+      attributes: ['id', 'followingType', 'followingInfluencerId', 'followingBrandId', 'createdAt'],
+      order: [['createdAt', 'DESC']],
+      raw: true,
+    }) as any[];
 
-    const brandInclude: any = {
-      model: Brand,
-      as: 'followingBrand',
-      attributes: ['id', 'brandName', 'username', 'profileImage'],
-      required: false,
-    };
+    // Step 2: separate IDs by type
+    const influencerIds = allFollows
+      .filter((f) => f.followingType === FollowingType.INFLUENCER && f.followingInfluencerId)
+      .map((f) => f.followingInfluencerId);
 
-    // Add search filter if provided
-    if (search) {
-      const searchPattern = `%${search}%`;
-      influencerInclude.where = {
-        [Op.or]: [
-          { name: { [Op.iLike]: searchPattern } },
-          { username: { [Op.iLike]: searchPattern } },
-        ],
-      };
-      brandInclude.where = {
-        [Op.or]: [
-          { brandName: { [Op.iLike]: searchPattern } },
-          { username: { [Op.iLike]: searchPattern } },
-        ],
-      };
+    const brandIds = allFollows
+      .filter((f) => f.followingType === FollowingType.BRAND && f.followingBrandId)
+      .map((f) => f.followingBrandId);
+
+    // Step 3: batch-load user records; paranoid:false so soft-deleted still appear
+    const influencerWhere: any = { id: influencerIds.length ? influencerIds : [-1] };
+    if (searchPattern) {
+      influencerWhere[Op.or] = [
+        { name: { [Op.iLike]: searchPattern } },
+        { username: { [Op.iLike]: searchPattern } },
+      ];
     }
 
-    // Get total count with search filter
-    const total = await this.followModel.count({
-      where: {
-        followerType,
-        [followerField]: currentUserId,
-      },
-      include: [influencerInclude, brandInclude],
-      distinct: true,
-    });
+    const brandWhere: any = { id: brandIds.length ? brandIds : [-1] };
+    if (searchPattern) {
+      brandWhere[Op.or] = [
+        { brandName: { [Op.iLike]: searchPattern } },
+        { username: { [Op.iLike]: searchPattern } },
+      ];
+    }
 
-    // Get following with pagination and search
-    const follows = await this.followModel.findAll({
-      where: {
-        followerType,
-        [followerField]: currentUserId,
-      },
-      include: [influencerInclude, brandInclude],
-      order: [['createdAt', 'DESC']],
-      limit,
-      offset,
-    });
+    const [influencers, brands] = await Promise.all([
+      Influencer.findAll({
+        where: influencerWhere,
+        attributes: ['id', 'name', 'username', 'profileImage'],
+        paranoid: false,
+        raw: true,
+      }),
+      Brand.findAll({
+        where: brandWhere,
+        attributes: ['id', 'brandName', 'username', 'profileImage'],
+        paranoid: false,
+        raw: true,
+      }),
+    ]) as [any[], any[]];
 
-    const following = follows.map((follow) => {
-      const followData = follow.toJSON();
+    const influencerMap = new Map<number, any>(influencers.map((i) => [i.id, i]));
+    const brandMap = new Map<number, any>(brands.map((b) => [b.id, b]));
 
-      if (followData.followingType === FollowingType.INFLUENCER && followData.followingInfluencer) {
+    // Step 4: build response list (search filter is already applied via map lookups)
+    const allMapped = allFollows.map((f) => {
+      if (f.followingType === FollowingType.INFLUENCER) {
+        const inf = influencerMap.get(f.followingInfluencerId);
+        if (!inf) return null;
         return {
-          id: followData.followingInfluencer.id,
+          id: inf.id as number,
           type: 'influencer' as const,
-          name: followData.followingInfluencer.name,
-          username: followData.followingInfluencer.username,
-          profileImage: followData.followingInfluencer.profileImage || null,
-          followedAt: followData.createdAt,
+          name: inf.name as string,
+          username: inf.username as string,
+          profileImage: (inf.profileImage as string) || null,
+          followedAt: f.createdAt as Date,
         };
-      } else if (followData.followingType === FollowingType.BRAND && followData.followingBrand) {
+      } else if (f.followingType === FollowingType.BRAND) {
+        const br = brandMap.get(f.followingBrandId);
+        if (!br) return null;
         return {
-          id: followData.followingBrand.id,
+          id: br.id as number,
           type: 'brand' as const,
-          name: followData.followingBrand.brandName,
-          username: followData.followingBrand.username,
-          profileImage: followData.followingBrand.profileImage || null,
-          followedAt: followData.createdAt,
+          name: br.brandName as string,
+          username: br.username as string,
+          profileImage: (br.profileImage as string) || null,
+          followedAt: f.createdAt as Date,
         };
       }
       return null;
-    }).filter((user): user is NonNullable<typeof user> => user !== null);
+    }).filter((item): item is NonNullable<typeof item> => item !== null);
 
+    const total = allMapped.length;
+    const following = allMapped.slice(offset, offset + limit);
     const totalPages = Math.ceil(total / limit);
 
-    return {
-      following,
-      total,
-      page,
-      limit,
-      totalPages,
-    };
+    return { following, total, page, limit, totalPages };
   }
 
   /**
