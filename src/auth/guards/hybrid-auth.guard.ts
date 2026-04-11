@@ -38,13 +38,13 @@ interface RequestWithUser extends Request {
  * Hybrid Authentication Guard
  *
  * Supports two authentication methods:
- * 1. JWT Token (for brands and internal influencers) - validates against local database
- * 2. API Key + Headers (for external influencers) - bypasses database validation
+ * 1. JWT Token (for internal brands and influencers) - validates against local database
+ * 2. API Key + Headers (for external apps) - bypasses database validation
  *
  * Usage:
- * - Brands: Always use JWT (they exist in local database)
+ * - Internal Brands: Use JWT (they exist in local database)
  * - Internal Influencers: Use JWT (they exist in local database)
- * - External Influencers: Use API Key (they don't exist in local database)
+ * - External Apps: Use API Key (for both influencers and brands from external systems)
  */
 @Injectable()
 export class HybridAuthGuard implements CanActivate {
@@ -71,19 +71,19 @@ export class HybridAuthGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<RequestWithUser>();
 
-    // Check for API Key first (for external influencers)
+    // Check for API Key first (for external apps)
     const apiKey = request.headers['x-api-key'] as string;
 
     if (apiKey) {
       return this.validateApiKey(request, apiKey);
     }
 
-    // Otherwise, use JWT (for brands and internal influencers)
+    // Otherwise, use JWT (for internal brands and influencers)
     return this.validateJwt(request);
   }
 
   /**
-   * Validate API Key authentication (for external influencers only)
+   * Validate API Key authentication (for external apps - supports both influencers and brands)
    */
   private async validateApiKey(
     request: RequestWithUser,
@@ -110,11 +110,10 @@ export class HybridAuthGuard implements CanActivate {
       );
     }
 
-    // Only allow external influencers via API key
-    // Brands MUST use JWT (they exist in local database)
-    if (userType !== 'influencer') {
+    // Allow both influencers and brands via API key (for external apps)
+    if (userType !== 'influencer' && userType !== 'brand') {
       throw new UnauthorizedException(
-        'API key authentication only allowed for influencers. Brands must use JWT.',
+        'API key authentication only allowed for influencers and brands.',
       );
     }
 
@@ -133,7 +132,7 @@ export class HybridAuthGuard implements CanActivate {
   }
 
   /**
-   * Validate JWT authentication (for brands and internal influencers)
+   * Validate JWT authentication (for internal brands and influencers)
    */
   private async validateJwt(request: RequestWithUser): Promise<boolean> {
     const token = this.extractTokenFromHeader(request);

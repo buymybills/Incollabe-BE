@@ -16,6 +16,7 @@ import { Admin } from './models/admin.model';
 import { EmailService } from '../shared/email.service';
 import { WhatsAppService } from '../shared/whatsapp.service';
 import { NotificationService } from '../shared/notification.service';
+import { InAppNotificationService } from '../shared/in-app-notification.service';
 import { DeviceTokenService } from '../shared/device-token.service';
 import { AuditLogService } from './services/audit-log.service';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
@@ -169,6 +170,12 @@ describe('ProfileReviewService', () => {
           useValue: {
             sendCustomNotification: jest.fn().mockResolvedValue(undefined),
             sendCampaignStatusUpdate: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: InAppNotificationService,
+          useValue: {
+            createNotification: jest.fn().mockResolvedValue(undefined),
           },
         },
         {
