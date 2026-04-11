@@ -316,50 +316,62 @@ export class InfluencerScoringService {
 
     let updated = 0;
     let errors = 0;
+    const BATCH_SIZE = 20;
 
-    for (const inf of influencers) {
-      try {
-        const [
-          campaignScore,
-          engagementScore,
-          brandContactScore,
-          maxUserYesScore,
-          followersScore,
-          experienceScore,
-        ] = await Promise.all([
-          this.calculateCampaignSelectionScore(inf.id),
-          this.calculateContentEngagementScore(inf.id),
-          this.calculateBrandDirectContactScore(inf.id),
-          this.calculateMaxUserYesScore(inf.id),
-          this.calculateFollowersScore(inf.id),
-          this.calculateExperienceScore(inf.id),
-        ]);
+    for (let i = 0; i < influencers.length; i += BATCH_SIZE) {
+      const batch = influencers.slice(i, i + BATCH_SIZE);
 
-        const overallScore = parseFloat(
-          (campaignScore + engagementScore + brandContactScore + maxUserYesScore + followersScore + experienceScore).toFixed(5),
-        );
+      await Promise.all(
+        batch.map(async (inf) => {
+          try {
+            const [
+              campaignScore,
+              engagementScore,
+              brandContactScore,
+              maxUserYesScore,
+              followersScore,
+              experienceScore,
+            ] = await Promise.all([
+              this.calculateCampaignSelectionScore(inf.id),
+              this.calculateContentEngagementScore(inf.id),
+              this.calculateBrandDirectContactScore(inf.id),
+              this.calculateMaxUserYesScore(inf.id),
+              this.calculateFollowersScore(inf.id),
+              this.calculateExperienceScore(inf.id),
+            ]);
 
-        const scoreBreakdown = {
-          engagementRateScore: parseFloat(engagementScore.toFixed(5)),
-          pastPerformanceScore: parseFloat((campaignScore + experienceScore).toFixed(5)),
-          campaignScore: parseFloat(campaignScore.toFixed(5)),
-          brandContactScore: parseFloat(brandContactScore.toFixed(5)),
-          maxUserYesScore: parseFloat(maxUserYesScore.toFixed(5)),
-          followersScore: parseFloat(followersScore.toFixed(5)),
-          experienceScore: parseFloat(experienceScore.toFixed(5)),
-        };
+            const overallScore = parseFloat(
+              (campaignScore + engagementScore + brandContactScore + maxUserYesScore + followersScore + experienceScore).toFixed(5),
+            );
 
-        await this.topInfluencerScoreCacheModel.upsert({
-          influencerId: inf.id,
-          overallScore,
-          scoreBreakdown,
-          calculatedAt: new Date(),
-        });
+            const scoreBreakdown = {
+              engagementRateScore: parseFloat(engagementScore.toFixed(5)),
+              pastPerformanceScore: parseFloat((campaignScore + experienceScore).toFixed(5)),
+              campaignScore: parseFloat(campaignScore.toFixed(5)),
+              brandContactScore: parseFloat(brandContactScore.toFixed(5)),
+              maxUserYesScore: parseFloat(maxUserYesScore.toFixed(5)),
+              followersScore: parseFloat(followersScore.toFixed(5)),
+              experienceScore: parseFloat(experienceScore.toFixed(5)),
+            };
 
-        updated++;
-      } catch (error) {
-        this.logger.warn(`Failed to cache score for influencer ${inf.id}: ${error.message}`);
-        errors++;
+            await this.topInfluencerScoreCacheModel.upsert({
+              influencerId: inf.id,
+              overallScore,
+              scoreBreakdown,
+              calculatedAt: new Date(),
+            });
+
+            updated++;
+          } catch (error) {
+            this.logger.warn(`Failed to cache score for influencer ${inf.id}: ${error.message}`);
+            errors++;
+          }
+        }),
+      );
+
+      // Small pause between batches to avoid overwhelming the DB connection pool
+      if (i + BATCH_SIZE < influencers.length) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
     }
 

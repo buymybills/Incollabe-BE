@@ -1456,8 +1456,11 @@ export class AdminController {
     description: 'Forces an immediate recalculation of all top influencer scores. The daily cron does this automatically at 2 AM.',
   })
   async refreshTopInfluencerScoreCache() {
-    const result = await this.influencerScoringService.refreshTopInfluencerScoreCache();
-    return { success: true, ...result };
+    // Fire-and-forget: processing all influencers can take minutes, don't hold the HTTP connection
+    this.influencerScoringService.refreshTopInfluencerScoreCache().catch((err) => {
+      console.error('refreshTopInfluencerScoreCache background error:', err?.message);
+    });
+    return { success: true, message: 'Cache refresh started in background' };
   }
 
   @Put('influencer/:influencerId/top-status')
