@@ -309,20 +309,26 @@ export class InfluencerScoringService {
    * Called by the daily cron job.
    */
   async refreshTopInfluencerScoreCache(): Promise<{ updated: number; errors: number }> {
-    const influencers = await this.influencerModel.findAll({
-      where: { isProfileCompleted: true, isActive: true },
-      attributes: ['id'],
-    });
-
     let updated = 0;
     let errors = 0;
-    const BATCH_SIZE = 20;
+    // Process in small pages so we never hold all influencer records in memory at once.
+    // batch * 6 concurrent queries must stay well within pool max (30).
+    const PAGE_SIZE = 4;
+    let offset = 0;
 
-    for (let i = 0; i < influencers.length; i += BATCH_SIZE) {
-      const batch = influencers.slice(i, i + BATCH_SIZE);
+    while (true) {
+      const page = await this.influencerModel.findAll({
+        where: { isProfileCompleted: true, isActive: true },
+        attributes: ['id'],
+        limit: PAGE_SIZE,
+        offset,
+        order: [['id', 'ASC']],
+      });
+
+      if (page.length === 0) break;
 
       await Promise.all(
-        batch.map(async (inf) => {
+        page.map(async (inf) => {
           try {
             const [
               campaignScore,
@@ -363,16 +369,16 @@ export class InfluencerScoringService {
 
             updated++;
           } catch (error) {
-            this.logger.warn(`Failed to cache score for influencer ${inf.id}: ${error.message}`);
+            this.logger.warn(`Failed to cache score for influencer ${inf.id}: ${(error as Error).message}`);
             errors++;
           }
         }),
       );
 
-      // Small pause between batches to avoid overwhelming the DB connection pool
-      if (i + BATCH_SIZE < influencers.length) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
+      offset += PAGE_SIZE;
+
+      // Pause between pages: lets GC run and avoids sustained DB pressure
+      await new Promise((resolve) => setTimeout(resolve, 200));
     }
 
     return { updated, errors };
