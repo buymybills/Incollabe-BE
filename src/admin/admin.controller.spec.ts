@@ -31,7 +31,7 @@ import { Influencer } from '../auth/model/influencer.model';
 import { ProSubscriptionPromotion } from '../influencer/models/pro-subscription-promotion.model';
 import { NudgeMessageTemplate } from '../shared/models/nudge-message-template.model';
 import { AdminLoginDto } from './dto/admin-login.dto';
-import { CreateAdminDto } from './dto/create-admin.dto';
+import { LegacyCreateAdminDto as CreateAdminDto } from './dto/create-admin.dto';
 import { ApproveProfileDto, RejectProfileDto } from './dto/profile-review.dto';
 import { CampaignFilter, CampaignSortBy } from './dto/get-campaigns.dto';
 import { DashboardTimeFrame } from './dto/admin-dashboard.dto';

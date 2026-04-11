@@ -67,7 +67,7 @@ import { NudgeMessageTemplate } from '../shared/models/nudge-message-template.mo
 
 // DTOs
 import { AdminLoginDto, AdminLoginResponseDto } from './dto/admin-login.dto';
-import { CreateAdminDto, CreateAdminResponseDto } from './dto/create-admin.dto';
+import { LegacyCreateAdminDto as CreateAdminDto, CreateAdminResponseDto } from './dto/create-admin.dto';
 import {
   ApproveProfileDto,
   RejectProfileDto,
@@ -120,7 +120,7 @@ import {
   AdminRefreshTokenResponseDto,
 } from './dto/refresh-token.dto';
 import {
-  ChangePasswordDto,
+  AdminSettingsChangePasswordDto as ChangePasswordDto,
   ChangePasswordResponseDto,
   Enable2FADto,
   Disable2FADto,

@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsString, MinLength, IsEnum } from 'class-validator';
 import { AdminRole, AdminStatus } from '../models/admin.model';
 
-export class CreateAdminDto {
+export class LegacyCreateAdminDto {
   @ApiProperty({
     description: 'Admin full name',
     example: 'John Doe',

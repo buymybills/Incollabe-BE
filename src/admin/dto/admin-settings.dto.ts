@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsString, MinLength, IsBoolean, IsOptional } from 'class-validator';
 
 // Change Password DTOs
-export class ChangePasswordDto {
+export class AdminSettingsChangePasswordDto {
   @ApiProperty({
     description: 'Current password',
     example: 'OldPassword123!',
