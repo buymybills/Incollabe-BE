@@ -37,36 +37,36 @@ export class ProfileView extends Model {
 
   // Profile being viewed
   @AllowNull(false)
-  @Column(DataType.ENUM(...Object.values(ViewedUserType)))
+  @Column({ type: DataType.ENUM(...Object.values(ViewedUserType)), field: 'viewed_user_type' })
   declare viewedUserType: ViewedUserType;
 
   @AllowNull(true)
   @ForeignKey(() => Influencer)
-  @Column(DataType.INTEGER)
+  @Column({ type: DataType.INTEGER, field: 'viewed_influencer_id' })
   declare viewedInfluencerId: number;
 
   @AllowNull(true)
   @ForeignKey(() => Brand)
-  @Column(DataType.INTEGER)
+  @Column({ type: DataType.INTEGER, field: 'viewed_brand_id' })
   declare viewedBrandId: number;
 
   // Viewer details (who is viewing)
   @AllowNull(false)
-  @Column(DataType.ENUM(...Object.values(ViewerType)))
+  @Column({ type: DataType.ENUM(...Object.values(ViewerType)), field: 'viewer_type' })
   declare viewerType: ViewerType;
 
   @AllowNull(true)
   @ForeignKey(() => Influencer)
-  @Column(DataType.INTEGER)
+  @Column({ type: DataType.INTEGER, field: 'viewer_influencer_id' })
   declare viewerInfluencerId: number;
 
   @AllowNull(true)
   @ForeignKey(() => Brand)
-  @Column(DataType.INTEGER)
+  @Column({ type: DataType.INTEGER, field: 'viewer_brand_id' })
   declare viewerBrandId: number;
 
   @AllowNull(false)
-  @Column({ type: DataType.DATE, defaultValue: DataType.NOW })
+  @Column({ type: DataType.DATE, defaultValue: DataType.NOW, field: 'viewed_at' })
   declare viewedAt: Date;
 
   @CreatedAt
