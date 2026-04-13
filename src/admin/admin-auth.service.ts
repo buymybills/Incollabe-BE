@@ -11,6 +11,7 @@ import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { Admin, AdminStatus, AdminRole } from './models/admin.model';
+import { AdminRoleDefinition } from './models/admin-role-definition.model';
 import { getEffectiveTabPermissions } from './constants/tab-permissions.constant';
 import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
@@ -227,6 +228,8 @@ export class AdminAuthService {
     private readonly followModel: typeof Follow,
     @InjectModel(ProfileReview)
     private readonly profileReviewModel: typeof ProfileReview,
+    @InjectModel(AdminRoleDefinition)
+    private readonly adminRoleDefinitionModel: typeof AdminRoleDefinition,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly redisService: RedisService,
@@ -749,9 +752,22 @@ export class AdminAuthService {
     }
 
     const adminData = admin.toJSON();
+
+    // If admin has no custom tabPermissions, fall back to the role definition's permissions
+    let resolvedTabPermissions = adminData.tabPermissions;
+    if (!resolvedTabPermissions || Object.keys(resolvedTabPermissions).length === 0) {
+      const roleDef = await this.adminRoleDefinitionModel.findOne({
+        where: { name: adminData.role },
+        attributes: ['tabPermissions'],
+      });
+      if (roleDef && roleDef.tabPermissions && Object.keys(roleDef.tabPermissions).length > 0) {
+        resolvedTabPermissions = roleDef.tabPermissions;
+      }
+    }
+
     return {
       ...adminData,
-      tabPermissions: getEffectiveTabPermissions(adminData.role, adminData.tabPermissions),
+      tabPermissions: getEffectiveTabPermissions(adminData.role, resolvedTabPermissions),
       userType: 'admin' as const,
     };
   }
