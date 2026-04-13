@@ -15,6 +15,7 @@ import { CampaignApplication } from '../campaign/models/campaign-application.mod
 import { CampaignDeliverable } from '../campaign/models/campaign-deliverable.model';
 import { CampaignCity } from '../campaign/models/campaign-city.model';
 import { ProfileReview } from './models/profile-review.model';
+import { AdminRoleDefinition } from './models/admin-role-definition.model';
 import { Post } from '../post/models/post.model';
 import { Follow } from '../post/models/follow.model';
 import { RedisService } from '../redis/redis.service';
@@ -162,6 +163,10 @@ describe('AdminAuthService', () => {
         {
           provide: getModelToken(ProfileReview),
           useValue: mockProfileReviewModel,
+        },
+        {
+          provide: getModelToken(AdminRoleDefinition),
+          useValue: { findOne: jest.fn().mockResolvedValue(null) },
         },
         {
           provide: JwtService,
