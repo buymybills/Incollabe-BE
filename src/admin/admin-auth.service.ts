@@ -11,6 +11,7 @@ import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { Admin, AdminStatus, AdminRole } from './models/admin.model';
+import { getEffectiveTabPermissions } from './constants/tab-permissions.constant';
 import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { Niche } from '../auth/model/niche.model';
@@ -747,8 +748,10 @@ export class AdminAuthService {
       throw new UnauthorizedException('Admin not found');
     }
 
+    const adminData = admin.toJSON();
     return {
-      ...admin.toJSON(),
+      ...adminData,
+      tabPermissions: getEffectiveTabPermissions(adminData.role, adminData.tabPermissions),
       userType: 'admin' as const,
     };
   }
