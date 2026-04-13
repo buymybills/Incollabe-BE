@@ -58,8 +58,10 @@ import { GetCreatorScoresDto, GetCreatorScoresDashboardDto } from './dto/get-cre
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import type { RequestWithAdmin } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
+import { PermissionsGuard } from './guards/permissions.guard';
 import { Roles } from './decorators/roles.decorator';
-import { AdminRole, AdminStatus } from './models/admin.model';
+import { RequireTabAccess } from './decorators/permissions.decorator';
+import { AdminRole, AdminStatus, AdminTab, TabAccessLevel } from './models/admin.model';
 import { ProfileType } from './models/profile-review.model';
 import { ProSubscriptionService } from '../influencer/services/pro-subscription.service';
 import { SubscriptionMarketingService } from '../influencer/services/subscription-marketing.service';
@@ -1352,7 +1354,8 @@ export class AdminController {
   }
 
   @Get('dashboard/top-influencers')
-  @UseGuards(AdminAuthGuard)
+  @UseGuards(AdminAuthGuard, PermissionsGuard)
+  @RequireTabAccess(AdminTab.INFLUENCERS, TabAccessLevel.VIEW)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get top influencers with comprehensive scoring and search',
@@ -1372,7 +1375,8 @@ export class AdminController {
   }
 
   @Get('influencers')
-  @UseGuards(AdminAuthGuard)
+  @UseGuards(AdminAuthGuard, PermissionsGuard)
+  @RequireTabAccess(AdminTab.INFLUENCERS, TabAccessLevel.VIEW)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get influencers with profile filters, search, and sorting',
@@ -1392,7 +1396,8 @@ export class AdminController {
   }
 
   @Get('dashboard/top-influencers-new-scoring')
-  @UseGuards(AdminAuthGuard)
+  @UseGuards(AdminAuthGuard, PermissionsGuard)
+  @RequireTabAccess(AdminTab.INFLUENCERS, TabAccessLevel.VIEW)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get top 20 influencers with new scoring logic',
@@ -1455,7 +1460,8 @@ export class AdminController {
   }
 
   @Post('dashboard/top-influencers/refresh-cache')
-  @UseGuards(AdminAuthGuard)
+  @UseGuards(AdminAuthGuard, PermissionsGuard)
+  @RequireTabAccess(AdminTab.INFLUENCERS, TabAccessLevel.EDIT)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Manually trigger top influencer score cache rebuild',
@@ -1467,7 +1473,8 @@ export class AdminController {
   }
 
   @Put('influencer/:influencerId/top-status')
-  @UseGuards(AdminAuthGuard, RolesGuard)
+  @UseGuards(AdminAuthGuard, PermissionsGuard, RolesGuard)
+  @RequireTabAccess(AdminTab.INFLUENCERS, TabAccessLevel.EDIT)
   @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
   @ApiBearerAuth()
   @ApiOperation({
@@ -1509,7 +1516,8 @@ export class AdminController {
   }
 
   @Put('influencer/:influencerId/display-order')
-  @UseGuards(AdminAuthGuard, RolesGuard)
+  @UseGuards(AdminAuthGuard, PermissionsGuard, RolesGuard)
+  @RequireTabAccess(AdminTab.INFLUENCERS, TabAccessLevel.EDIT)
   @Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_MODERATOR)
   @ApiBearerAuth()
   @ApiOperation({
@@ -1703,7 +1711,8 @@ export class AdminController {
   }
 
   @Get('influencer/profile/:id')
-  @UseGuards(AdminAuthGuard)
+  @UseGuards(AdminAuthGuard, PermissionsGuard)
+  @RequireTabAccess(AdminTab.INFLUENCERS, TabAccessLevel.VIEW)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get influencer public profile (as seen by users)',
@@ -1955,7 +1964,8 @@ export class AdminController {
   }
 
   @Get('dashboard/influencers')
-  @UseGuards(AdminAuthGuard)
+  @UseGuards(AdminAuthGuard, PermissionsGuard)
+  @RequireTabAccess(AdminTab.INFLUENCERS, TabAccessLevel.VIEW)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get influencer dashboard statistics',
@@ -3767,7 +3777,8 @@ export class AdminController {
   }
 
   @Get('creator-scores')
-  @UseGuards(AdminAuthGuard)
+  @UseGuards(AdminAuthGuard, PermissionsGuard)
+  @RequireTabAccess(AdminTab.INFLUENCERS, TabAccessLevel.VIEW)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'List creator scores',
@@ -3857,7 +3868,8 @@ export class AdminController {
   }
 
   @Get('creator-scores/:influencerId')
-  @UseGuards(AdminAuthGuard)
+  @UseGuards(AdminAuthGuard, PermissionsGuard)
+  @RequireTabAccess(AdminTab.INFLUENCERS, TabAccessLevel.VIEW)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get single creator score',
