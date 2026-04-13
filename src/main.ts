@@ -188,7 +188,16 @@ async function bootstrap() {
     res.send(swaggerHtml);
   });
 
-  app.useGlobalInterceptors(new ResponseInterceptor());
+  // Rewrite S3 URLs → CloudFront in every API response for CDN cost savings
+  const s3Bucket = configService.get<string>('AWS_S3_BUCKET_NAME');
+  const awsRegion = configService.get<string>('AWS_REGION');
+  const cloudFrontDomain = configService.get<string>('CLOUDFRONT_DOMAIN');
+  const s3Prefix = s3Bucket && awsRegion
+    ? `https://${s3Bucket}.s3.${awsRegion}.amazonaws.com/`
+    : undefined;
+  const cfPrefix = cloudFrontDomain ? `https://${cloudFrontDomain}/` : undefined;
+
+  app.useGlobalInterceptors(new ResponseInterceptor(s3Prefix, cfPrefix));
   app.useGlobalFilters(new GlobalExceptionFilter(loggerService));
 
   const port = configService.get('PORT') || 3002;

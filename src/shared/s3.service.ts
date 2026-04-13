@@ -79,6 +79,10 @@ export class S3Service {
   }
 
   getFileUrl(key: string): string {
+    // Serve via CloudFront CDN when configured — reduces S3 data transfer costs
+    if (this.cloudFrontDomain) {
+      return `https://${this.cloudFrontDomain}/${key}`;
+    }
     return `https://${this.bucketName}.s3.${this.configService.get('AWS_REGION')}.amazonaws.com/${key}`;
   }
 
@@ -138,12 +142,18 @@ export class S3Service {
    */
   extractKeyFromUrl(url: string): string | null {
     try {
-      // Handle both formats:
+      // Handle all formats:
       // https://bucket.s3.region.amazonaws.com/key
       // https://s3.region.amazonaws.com/bucket/key
+      // https://xxxxx.cloudfront.net/key  (with or without query params)
       const urlObj = new URL(url);
       const hostname = urlObj.hostname;
       const pathname = urlObj.pathname;
+
+      // CloudFront format: domain.cloudfront.net/key
+      if (this.cloudFrontDomain && hostname === this.cloudFrontDomain) {
+        return pathname.startsWith('/') ? pathname.substring(1) : pathname;
+      }
 
       // Format: bucket.s3.region.amazonaws.com/key
       if (hostname.startsWith(this.bucketName)) {
