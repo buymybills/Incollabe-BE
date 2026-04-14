@@ -6,8 +6,11 @@ import {
   Ip,
   HttpCode,
   HttpStatus,
+  Logger,
+  Req,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody } from '@nestjs/swagger';
+import type { Request } from 'express';
 import { HypeStoreService } from './hype-store.service';
 import { UnifiedWebhookDto, WebhookResponseDto, WebhookEventType } from '../wallet/dto/hype-store-webhook.dto';
 
@@ -18,6 +21,8 @@ import { UnifiedWebhookDto, WebhookResponseDto, WebhookEventType } from '../wall
 @ApiTags('Hype Store Webhooks (Public)')
 @Controller('webhooks/hype-store')
 export class HypeStoreWebhookController {
+  private readonly logger = new Logger(HypeStoreWebhookController.name);
+
   constructor(private readonly hypeStoreService: HypeStoreService) {}
 
   @Post(':apiKey')
@@ -242,7 +247,21 @@ export class HypeStoreWebhookController {
     @Param('apiKey') apiKey: string,
     @Body() webhookDto: UnifiedWebhookDto,
     @Ip() ipAddress: string,
+    @Req() req: Request,
   ) {
-    return this.hypeStoreService.processWebhook(apiKey, webhookDto, ipAddress);
+    this.logger.log('========== HYPE STORE WEBHOOK RECEIVED ==========');
+    this.logger.log(`API Key: ${apiKey}`);
+    this.logger.log(`IP Address: ${ipAddress}`);
+    this.logger.log(`Headers: ${JSON.stringify(req.headers, null, 2)}`);
+    this.logger.log(`Body: ${JSON.stringify(webhookDto, null, 2)}`);
+    this.logger.log('=================================================');
+
+    const result = await this.hypeStoreService.processWebhook(apiKey, webhookDto, ipAddress);
+
+    this.logger.log('========== HYPE STORE WEBHOOK RESPONSE ==========');
+    this.logger.log(`Response: ${JSON.stringify(result, null, 2)}`);
+    this.logger.log('=================================================');
+
+    return result;
   }
 }
