@@ -6,6 +6,10 @@ export class CreateHypeStoreDto {
   // No validation needed here
 
   @IsOptional()
+  @IsUrl()
+  storeLink?: string;
+
+  @IsOptional()
   @IsBoolean()
   isActive?: boolean;
 

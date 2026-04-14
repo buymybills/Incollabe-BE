@@ -101,6 +101,11 @@ export class HypeStoreController {
           format: 'binary',
           description: 'Banner image file for the store (optional - auto-populated from brand profile if not provided). Max 5MB. Supported formats: JPG, PNG, WEBP',
         },
+        storeLink: {
+          type: 'string',
+          description: 'Store website URL (optional - saved to brand profile)',
+          example: 'https://www.mybrand.com',
+        },
         reelPostMinCashback: {
           type: 'number',
           description: 'Minimum cashback for reel/post in Rs (optional - default: 100)',

@@ -43,10 +43,11 @@ export class ResponseInterceptor<T> implements NestInterceptor<T, any> {
   intercept(_context: ExecutionContext, next: CallHandler<T>): Observable<any> {
     return next.handle().pipe(
       map((data) => {
+        const plain = JSON.parse(JSON.stringify(data));
         const rewritten =
           this.s3Prefix && this.cfPrefix
-            ? rewriteUrls(data, this.s3Prefix, this.cfPrefix)
-            : data;
+            ? rewriteUrls(plain, this.s3Prefix, this.cfPrefix)
+            : plain;
         return {
           success: true,
           data: rewritten,

@@ -133,6 +133,11 @@ export class HypeStoreService {
         throw new NotFoundException('Brand not found');
       }
 
+      // Update brand websiteUrl if provided
+      if (createDto.storeLink) {
+        await brand.update({ websiteUrl: createDto.storeLink }, { transaction });
+      }
+
       // Upload banner image to S3 if provided
       let bannerImageUrl: string | undefined = undefined;
       if (bannerImage) {
