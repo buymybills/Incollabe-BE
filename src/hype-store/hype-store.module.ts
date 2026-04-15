@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { HypeStoreController } from './hype-store.controller';
 import { HypeStoreWebhookController } from './hype-store-webhook.controller';
@@ -23,7 +23,9 @@ import { HypeStoreReferralClick } from '../wallet/models/hype-store-referral-cli
 import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
 import { CashbackTier } from './models/cashback-tier.model';
 import { CashbackTierService } from './services/cashback-tier.service';
+import { ShopifyWebhookNormalizerService } from './services/shopify-webhook-normalizer.service';
 import { SharedModule } from '../shared/shared.module';
+import { WebhookLoggerMiddleware } from './webhook-logger.middleware';
 
 @Module({
   imports: [
@@ -50,7 +52,13 @@ import { SharedModule } from '../shared/shared.module';
     SharedModule,
   ],
   controllers: [HypeStoreController, HypeStoreWebhookController],
-  providers: [HypeStoreService, OrderVisibilitySchedulerService, CashbackTierService],
+  providers: [HypeStoreService, OrderVisibilitySchedulerService, CashbackTierService, ShopifyWebhookNormalizerService],
   exports: [HypeStoreService, CashbackTierService],
 })
-export class HypeStoreModule {}
+export class HypeStoreModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(WebhookLoggerMiddleware)
+      .forRoutes({ path: 'webhooks/hype-store/*', method: RequestMethod.POST });
+  }
+}

@@ -8,11 +8,14 @@ import {
   HttpStatus,
   Logger,
   Req,
+  Headers,
+  BadRequestException,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody, ApiHeader } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { HypeStoreService } from './hype-store.service';
 import { UnifiedWebhookDto, WebhookResponseDto, WebhookEventType } from '../wallet/dto/hype-store-webhook.dto';
+import { ShopifyWebhookNormalizerService } from './services/shopify-webhook-normalizer.service';
 
 /**
  * Public webhook controller for receiving order events from brand systems
@@ -23,7 +26,10 @@ import { UnifiedWebhookDto, WebhookResponseDto, WebhookEventType } from '../wall
 export class HypeStoreWebhookController {
   private readonly logger = new Logger(HypeStoreWebhookController.name);
 
-  constructor(private readonly hypeStoreService: HypeStoreService) {}
+  constructor(
+    private readonly hypeStoreService: HypeStoreService,
+    private readonly shopifyNormalizer: ShopifyWebhookNormalizerService,
+  ) {}
 
   @Post(':apiKey')
   @HttpCode(HttpStatus.OK)
@@ -261,6 +267,85 @@ export class HypeStoreWebhookController {
     this.logger.log('========== HYPE STORE WEBHOOK RESPONSE ==========');
     this.logger.log(`Response: ${JSON.stringify(result, null, 2)}`);
     this.logger.log('=================================================');
+
+    return result;
+  }
+
+  /**
+   * Shopify webhook endpoint
+   * Brands configure this URL in Shopify Admin → Settings → Notifications → Webhooks
+   * URL format: POST /webhooks/hype-store/:apiKey/shopify
+   *
+   * Required Shopify topics to subscribe to:
+   *   - orders/paid        → triggers purchase cashback
+   *   - refunds/create     → triggers cashback reversal
+   *   - orders/cancelled   → triggers cashback reversal
+   *
+   * For referral attribution, brands must capture the influencer ref param
+   * from the landing URL and store it in checkout note_attributes:
+   *   [{ name: "referral_code", value: "INFL123" }]
+   */
+  @Post(':apiKey/shopify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Receive Shopify order webhook (Public endpoint)',
+    description:
+      'Handles raw Shopify webhook payloads. Brands register this URL in Shopify Admin → Settings → Notifications → Webhooks.\n\n' +
+      '**Supported Topics:**\n' +
+      '- `orders/paid` → Purchase event, triggers cashback\n' +
+      '- `orders/fulfilled` → Purchase event (idempotent)\n' +
+      '- `refunds/create` → Return event, reverses cashback\n' +
+      '- `orders/cancelled` → Return event, reverses cashback\n\n' +
+      '**Referral Attribution:**\n' +
+      'Since Shopify has no native referral field, brands must capture the influencer ref param ' +
+      'from the landing URL and pass it as a checkout note_attribute:\n' +
+      '`note_attributes: [{ name: "referral_code", value: "INFL123" }]`',
+  })
+  @ApiParam({
+    name: 'apiKey',
+    description: 'Brand store API key (obtained from store creation response)',
+    example: 'hs_live_a1b2c3d4e5f6g7h8i9j0',
+  })
+  @ApiHeader({
+    name: 'x-shopify-topic',
+    description: 'Shopify webhook topic (set automatically by Shopify)',
+    example: 'orders/paid',
+    required: true,
+  })
+  @ApiResponse({ status: 200, description: 'Webhook processed successfully', type: WebhookResponseDto })
+  @ApiResponse({ status: 400, description: 'Missing or unsupported Shopify topic' })
+  async receiveShopifyWebhook(
+    @Param('apiKey') apiKey: string,
+    @Body() rawPayload: any,
+    @Headers('x-shopify-topic') topic: string,
+    @Ip() ipAddress: string,
+    @Req() req: Request,
+  ) {
+    this.logger.log('========== SHOPIFY WEBHOOK RECEIVED ==========');
+    this.logger.log(`API Key: ${apiKey}`);
+    this.logger.log(`Topic: ${topic}`);
+    this.logger.log(`IP: ${ipAddress}`);
+    this.logger.log(`Raw Payload: ${JSON.stringify(rawPayload, null, 2)}`);
+    this.logger.log('==============================================');
+
+    if (!topic) {
+      throw new BadRequestException('Missing x-shopify-topic header');
+    }
+
+    const normalized = this.shopifyNormalizer.normalize(rawPayload, topic);
+
+    if (!normalized) {
+      this.logger.warn(`Shopify topic "${topic}" is not handled — returning 200 to prevent Shopify retries`);
+      return { success: true, message: `Topic "${topic}" acknowledged but not processed` };
+    }
+
+    this.logger.log(`Normalized payload: ${JSON.stringify(normalized, null, 2)}`);
+
+    const result = await this.hypeStoreService.processWebhook(apiKey, normalized, ipAddress);
+
+    this.logger.log('========== SHOPIFY WEBHOOK RESPONSE ==========');
+    this.logger.log(`Response: ${JSON.stringify(result, null, 2)}`);
+    this.logger.log('==============================================');
 
     return result;
   }
