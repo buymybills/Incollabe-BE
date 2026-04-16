@@ -62,12 +62,16 @@ export class ShopifyWebhookNormalizerService {
   private normalizePurchase(order: any): UnifiedWebhookDto {
     const lineItem = order.line_items?.[0];
     const couponCode = order.discount_codes?.[0]?.code ?? undefined;
-    const referralCode =
+    const rawReferralCode =
       this.extractNoteAttribute(order.note_attributes, 'referralCode') ??
       this.extractNoteAttribute(order.note_attributes, 'referral_code') ??
       this.extractFromLandingSite(order.landing_site, 'referralCode') ??
       this.extractFromLandingSite(order.landing_site, 'referral_code') ??
+      this.extractFromLandingSite(order.landing_site, 'ref') ??        // Shopify also sends landing_site_ref as "ref" param
+      order.landing_site_ref ??                                         // Shopify populates this directly from ?ref= param
       undefined;
+    // Sanitize: brand frontends sometimes pass "INFL7?referralCode=INFL7" instead of just "INFL7"
+    const referralCode = rawReferralCode ? this.sanitizeReferralCode(rawReferralCode) : undefined;
     const customerName = this.buildCustomerName(order.customer) ?? undefined;
 
     return {
@@ -127,6 +131,15 @@ export class ShopifyWebhookNormalizerService {
         cancelReason: order.cancel_reason,
       },
     };
+  }
+
+  /**
+   * Sanitizes referral codes that may have been polluted with URL query params.
+   * e.g. "INFL7?referralCode=INFL7" → "INFL7"
+   *      "INFL7&returnUrl=..." → "INFL7"
+   */
+  private sanitizeReferralCode(value: string): string {
+    return value.split(/[?&]/)[0].trim();
   }
 
   private extractNoteAttribute(noteAttributes: any[], key: string): string | null {

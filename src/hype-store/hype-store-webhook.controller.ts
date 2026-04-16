@@ -16,6 +16,7 @@ import type { Request } from 'express';
 import { HypeStoreService } from './hype-store.service';
 import { UnifiedWebhookDto, WebhookResponseDto, WebhookEventType } from '../wallet/dto/hype-store-webhook.dto';
 import { ShopifyWebhookNormalizerService } from './services/shopify-webhook-normalizer.service';
+import { WooCommerceWebhookNormalizerService } from './services/woocommerce-webhook-normalizer.service';
 
 /**
  * Public webhook controller for receiving order events from brand systems
@@ -29,6 +30,7 @@ export class HypeStoreWebhookController {
   constructor(
     private readonly hypeStoreService: HypeStoreService,
     private readonly shopifyNormalizer: ShopifyWebhookNormalizerService,
+    private readonly wooCommerceNormalizer: WooCommerceWebhookNormalizerService,
   ) {}
 
   @Post(':apiKey')
@@ -346,6 +348,109 @@ export class HypeStoreWebhookController {
     this.logger.log('========== SHOPIFY WEBHOOK RESPONSE ==========');
     this.logger.log(`Response: ${JSON.stringify(result, null, 2)}`);
     this.logger.log('==============================================');
+
+    return result;
+  }
+
+  /**
+   * WooCommerce webhook endpoint
+   * Brands configure this URL in WooCommerce → Settings → Advanced → Webhooks
+   * URL format: POST /webhooks/hype-store/:apiKey/woocommerce
+   *
+   * Required WooCommerce topics to subscribe to:
+   *   - Order updated  → handles processing, completed, refunded, cancelled statuses
+   *
+   * For referral attribution, brands must capture the influencer ref param
+   * from the landing URL and store it as order meta with key "referral_code".
+   *
+   * Signature verification uses x-wc-webhook-signature (HMAC-SHA256, Base64).
+   */
+  @Post(':apiKey/woocommerce')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Receive WooCommerce order webhook (Public endpoint)',
+    description:
+      'Handles raw WooCommerce webhook payloads. Brands register this URL in WooCommerce → Settings → Advanced → Webhooks.\n\n' +
+      '**Supported Order Statuses:**\n' +
+      '- `processing` → Purchase event, triggers cashback\n' +
+      '- `completed` → Purchase event (idempotent)\n' +
+      '- `refunded` → Return event, reverses cashback\n' +
+      '- `cancelled` → Return event, reverses cashback\n\n' +
+      '**Referral Attribution:**\n' +
+      'Capture the influencer ref param from the landing URL and store it as order meta:\n' +
+      '`meta_data: [{ key: "referral_code", value: "INFL123" }]`\n\n' +
+      '**Signature Verification:**\n' +
+      'WooCommerce signs the payload with HMAC-SHA256 using the webhook secret. ' +
+      'The signature is sent in x-wc-webhook-signature header (Base64 encoded).',
+  })
+  @ApiParam({
+    name: 'apiKey',
+    description: 'Brand store API key (obtained from store creation response)',
+    example: 'hs_live_a1b2c3d4e5f6g7h8i9j0',
+  })
+  @ApiHeader({
+    name: 'x-wc-webhook-topic',
+    description: 'WooCommerce webhook topic (set automatically by WooCommerce)',
+    example: 'order.updated',
+    required: true,
+  })
+  @ApiHeader({
+    name: 'x-wc-webhook-signature',
+    description: 'HMAC-SHA256 signature of the raw body, Base64 encoded (set automatically by WooCommerce)',
+    required: false,
+  })
+  @ApiResponse({ status: 200, description: 'Webhook processed successfully', type: WebhookResponseDto })
+  @ApiResponse({ status: 400, description: 'Missing topic or invalid signature' })
+  async receiveWooCommerceWebhook(
+    @Param('apiKey') apiKey: string,
+    @Body() rawPayload: any,
+    @Headers('x-wc-webhook-topic') topic: string,
+    @Headers('x-wc-webhook-signature') signature: string,
+    @Ip() ipAddress: string,
+    @Req() req: Request,
+  ) {
+    this.logger.log('========== WOOCOMMERCE WEBHOOK RECEIVED ==========');
+    this.logger.log(`API Key: ${apiKey}`);
+    this.logger.log(`Topic: ${topic}`);
+    this.logger.log(`IP: ${ipAddress}`);
+    this.logger.log(`Raw Payload: ${JSON.stringify(rawPayload, null, 2)}`);
+    this.logger.log('==================================================');
+
+    if (!topic) {
+      throw new BadRequestException('Missing x-wc-webhook-topic header');
+    }
+
+    // Verify HMAC signature if provided
+    // WooCommerce always sends this; skip only in dev/testing without a secret
+    if (signature) {
+      const webhookSecret = await this.hypeStoreService.getWebhookSecret(apiKey);
+      if (webhookSecret) {
+        const rawBody: Buffer = (req as any).rawBody;
+        if (rawBody) {
+          const isValid = this.wooCommerceNormalizer.verifySignature(rawBody, signature, webhookSecret);
+          if (!isValid) {
+            this.logger.warn(`WooCommerce HMAC signature mismatch for apiKey: ${apiKey}`);
+            throw new BadRequestException('Invalid webhook signature');
+          }
+          this.logger.log('WooCommerce signature verified successfully');
+        }
+      }
+    }
+
+    const normalized = this.wooCommerceNormalizer.normalize(rawPayload, topic);
+
+    if (!normalized) {
+      this.logger.warn(`WooCommerce topic "${topic}" with status "${rawPayload?.status}" is not handled — returning 200`);
+      return { success: true, message: `Topic "${topic}" with status "${rawPayload?.status}" acknowledged but not processed` };
+    }
+
+    this.logger.log(`Normalized payload: ${JSON.stringify(normalized, null, 2)}`);
+
+    const result = await this.hypeStoreService.processWebhook(apiKey, normalized, ipAddress);
+
+    this.logger.log('========== WOOCOMMERCE WEBHOOK RESPONSE ==========');
+    this.logger.log(`Response: ${JSON.stringify(result, null, 2)}`);
+    this.logger.log('==================================================');
 
     return result;
   }

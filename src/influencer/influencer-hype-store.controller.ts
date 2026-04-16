@@ -900,7 +900,7 @@ export class InfluencerHypeStoreController {
             referralCode: { type: 'string', example: 'INFL15' },
             trackingLink: {
               type: 'string',
-              example: 'https://snitch.com?ref=INFL15&coupon=SNITCHCOLLABKAROO',
+              example: 'https://snitch.com?referralCode=INFL15&coupon=SNITCHCOLLABKAROO',
             },
             hypeStoreId: { type: 'number', example: 1 },
             storeName: { type: 'string', example: 'Snitch Store' },

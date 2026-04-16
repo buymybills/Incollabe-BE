@@ -99,6 +99,18 @@ export class HypeStoreService {
   }
 
   /**
+   * Returns the plain-text webhook secret for a given API key.
+   * Used by platform-specific normalizers (e.g. WooCommerce) for HMAC verification.
+   */
+  async getWebhookSecret(apiKey: string): Promise<string | null> {
+    const record = await this.webhookSecretModel.findOne({
+      where: { apiKey, isActive: true },
+      attributes: ['webhookSecret'],
+    });
+    return record?.webhookSecret ?? null;
+  }
+
+  /**
    * Auto-derive cashback type from coupon code
    * Examples:
    *  - SNCOL25 → "Flat 25%"
@@ -2032,6 +2044,24 @@ export class HypeStoreService {
       }
 
       // 4. Find coupon code
+      if (!webhookDto.couponCode) {
+        responseStatus = 400;
+        responseBody = { success: false, message: 'Coupon code is required for purchase events' };
+        await this.logWebhookRequest({
+          hypeStoreId: hypeStore.id,
+          method: 'POST',
+          path: '/webhooks/purchase',
+          headers: {},
+          body: webhookDto,
+          ipAddress,
+          status: responseStatus,
+          responseBody,
+          isValid: false,
+          errorMessage: 'Missing coupon code in webhook payload',
+        });
+        throw new BadRequestException('Coupon code is required for purchase events');
+      }
+
       const couponCode = await this.couponCodeModel.findOne({
         where: { couponCode: webhookDto.couponCode, isActive: true },
         include: [{ model: this.influencerModel }],
@@ -2322,12 +2352,24 @@ export class HypeStoreService {
       }
 
       // 2. Find existing order
-      const order = await this.orderModel.findOne({
+      // Primary lookup by externalOrderId (works for unified webhooks and Shopify order cancellations)
+      let order = await this.orderModel.findOne({
         where: {
           hypeStoreId: hypeStore.id,
           externalOrderId: webhookDto.externalOrderId,
         },
       });
+
+      // Fallback for Shopify refunds: Shopify sends refund.order_id (numeric e.g. 450789469)
+      // but the purchase was stored with order.name (e.g. "#1001"). Match via metadata.shopifyOrderId.
+      if (!order && webhookDto.metadata?.shopifyOrderId) {
+        order = await this.orderModel.findOne({
+          where: {
+            hypeStoreId: hypeStore.id,
+            metadata: { shopifyOrderId: webhookDto.metadata.shopifyOrderId },
+          },
+        });
+      }
 
       if (!order) {
         responseStatus = 404;

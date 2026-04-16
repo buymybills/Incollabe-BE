@@ -1835,7 +1835,7 @@ export class InfluencerHypeStoreService {
       data: {
         couponCode: brandCoupon.couponCode,
         referralCode: referralResult.data.referralCode,
-        trackingLink: `${store?.brand?.websiteUrl || ''}?ref=${referralResult.data.referralCode}&coupon=${brandCoupon.couponCode}`,
+        trackingLink: `${store?.brand?.websiteUrl || ''}?referralCode=${referralResult.data.referralCode}&coupon=${brandCoupon.couponCode}`,
         hypeStoreId: store?.id,
         storeName: store?.storeName,
         brandName: store?.brand?.brandName || '',
