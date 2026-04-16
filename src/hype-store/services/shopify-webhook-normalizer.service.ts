@@ -62,7 +62,12 @@ export class ShopifyWebhookNormalizerService {
   private normalizePurchase(order: any): UnifiedWebhookDto {
     const lineItem = order.line_items?.[0];
     const couponCode = order.discount_codes?.[0]?.code ?? undefined;
-    const referralCode = this.extractNoteAttribute(order.note_attributes, 'referral_code') ?? undefined;
+    const referralCode =
+      this.extractNoteAttribute(order.note_attributes, 'referralCode') ??
+      this.extractNoteAttribute(order.note_attributes, 'referral_code') ??
+      this.extractFromLandingSite(order.landing_site, 'referralCode') ??
+      this.extractFromLandingSite(order.landing_site, 'referral_code') ??
+      undefined;
     const customerName = this.buildCustomerName(order.customer) ?? undefined;
 
     return {
@@ -127,6 +132,16 @@ export class ShopifyWebhookNormalizerService {
   private extractNoteAttribute(noteAttributes: any[], key: string): string | null {
     if (!Array.isArray(noteAttributes)) return null;
     return noteAttributes.find((attr) => attr.name === key)?.value ?? null;
+  }
+
+  private extractFromLandingSite(landingSite: string | null, param: string): string | null {
+    if (!landingSite) return null;
+    try {
+      const url = new URL(landingSite, 'https://placeholder.com');
+      return url.searchParams.get(param);
+    } catch {
+      return null;
+    }
   }
 
   private buildCustomerName(customer: any): string | null {
