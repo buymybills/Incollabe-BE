@@ -111,9 +111,9 @@ export class HybridAuthGuard implements CanActivate {
     }
 
     // Allow both influencers and brands via API key (for external apps)
-    if (userType !== 'influencer' && userType !== 'brand') {
+    if (userType !== 'influencer' && userType !== 'brand' && userType !== 'admin') {
       throw new UnauthorizedException(
-        'API key authentication only allowed for influencers and brands.',
+        'API key authentication only allowed for influencers, brands, and admins.',
       );
     }
 
