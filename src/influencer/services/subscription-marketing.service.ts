@@ -140,6 +140,9 @@ export class SubscriptionMarketingService {
             subscriptionId: subscription.id.toString(),
             timing,
           },
+          {
+            actionUrl: 'app://maxx',
+          },
         );
       }
 
