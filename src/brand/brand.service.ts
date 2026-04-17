@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Op } from 'sequelize';
@@ -23,6 +24,7 @@ import { ProfileReviewService } from '../admin/profile-review.service';
 import { EncryptionService } from '../shared/services/encryption.service';
 import { AppReviewService } from '../shared/services/app-review.service';
 import { ProfileViewService } from '../shared/services/profile-view.service';
+import { BlockService } from '../shared/services/block.service';
 import {
   ProfileReview,
   ProfileType,
@@ -73,6 +75,7 @@ export class BrandService {
     private readonly encryptionService: EncryptionService,
     private readonly appReviewService: AppReviewService,
     private readonly profileViewService: ProfileViewService,
+    private readonly blockService: BlockService,
   ) {}
 
   async getBrandProfile(
@@ -114,6 +117,20 @@ export class BrandService {
 
     if (!brand) {
       throw new NotFoundException('Brand not found');
+    }
+
+    // If a viewer is requesting this profile, check if the brand owner has blocked them
+    const isViewingOwnProfile = currentUserType === 'brand' && currentUserId === brandId;
+    if (currentUserId && currentUserType && !isViewingOwnProfile) {
+      const isBlockedByOwner = await this.blockService.isBlockedBy(
+        currentUserId,
+        currentUserType,
+        brandId,
+        'brand',
+      );
+      if (isBlockedByOwner) {
+        throw new ForbiddenException('You do not have permission to view this profile');
+      }
     }
 
     // Check if current user follows this brand

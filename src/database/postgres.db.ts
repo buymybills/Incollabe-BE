@@ -52,6 +52,7 @@ import { HypeStoreReferralClick } from '../wallet/models/hype-store-referral-cli
 import { Wallet } from '../wallet/models/wallet.model';
 import { WalletTransaction } from '../wallet/models/wallet-transaction.model';
 import { WalletRechargeLimit } from '../wallet/models/wallet-recharge-limit.model';
+import { BlockedUser } from '../shared/models/blocked-user.model';
 
 @Module({
   imports: [
@@ -168,6 +169,8 @@ import { WalletRechargeLimit } from '../wallet/models/wallet-recharge-limit.mode
             Wallet,
             WalletTransaction,
             WalletRechargeLimit,
+            // Block feature
+            BlockedUser,
           ],
           autoLoadModels: true,
           synchronize: false, // Disabled to prevent index conflicts with existing database

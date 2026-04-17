@@ -97,6 +97,9 @@ import { FiamCampaignMobileService } from './services/fiam-campaign-mobile.servi
 import { FiamCampaignMobileController } from './fiam-campaign-mobile.controller';
 import { ApiActivityLog } from './models/api-activity-log.model';
 import { ApiLoggerMiddleware } from '../middleware/api-logger.middleware';
+import { BlockedUser } from './models/blocked-user.model';
+import { BlockService } from './services/block.service';
+import { BlockController } from './controllers/block.controller';
 
 @Module({
   imports: [
@@ -144,6 +147,7 @@ import { ApiLoggerMiddleware } from '../middleware/api-logger.middleware';
       FiamCampaign,
       FiamCampaignEvent,
       ApiActivityLog,
+      BlockedUser,
     ]),
   ],
   controllers: [
@@ -158,6 +162,7 @@ import { ApiLoggerMiddleware } from '../middleware/api-logger.middleware';
     InAppNotificationController,
     CreatorStudioController,
     FiamCampaignMobileController,
+    BlockController,
   ],
   providers: [
     SmsService,
@@ -203,6 +208,7 @@ import { ApiLoggerMiddleware } from '../middleware/api-logger.middleware';
     FiamTriggerService,
     FiamCampaignMobileService,
     ApiLoggerMiddleware,
+    BlockService,
   ],
   exports: [
     SmsService,
@@ -241,6 +247,7 @@ import { ApiLoggerMiddleware } from '../middleware/api-logger.middleware';
     FiamTriggerService,
     FiamCampaignMobileService,
     ApiLoggerMiddleware,
+    BlockService,
   ],
 })
 export class SharedModule { }
