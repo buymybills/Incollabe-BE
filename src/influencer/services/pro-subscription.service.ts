@@ -505,7 +505,12 @@ export class ProSubscriptionService {
     }
 
     // Track if there's a pending payment that needs to be completed
-    const hasPendingPayment = subscription.status === SubscriptionStatus.PAYMENT_PENDING;
+    // Check ALL subscriptions, not just the highest-priority one — an older CANCELLED subscription
+    // could have higher priority than a newer PAYMENT_PENDING one, masking hasPendingPayment.
+    const pendingSubscription = allSubscriptions.find(
+      (s) => s.status === SubscriptionStatus.PAYMENT_PENDING,
+    );
+    const hasPendingPayment = !!pendingSubscription;
 
     // Don't count subscriptions in failed/inactive/pending states as having a subscription
     // Also don't count cancelled subscriptions that were never paid
@@ -554,27 +559,33 @@ export class ProSubscriptionService {
     // 1. User has an active/paid subscription (hasSubscription = true), OR
     // 2. User has a pending payment (hasPendingPayment = true, so they can resume)
     // Don't show if cancelled and never paid (abandoned signups)
+    // When hasPendingPayment is true, use the pendingSubscription (not the highest-priority one
+    // which could be an older CANCELLED subscription masking the PAYMENT_PENDING one).
+    const displaySubscription = (hasPendingPayment && pendingSubscription) ? pendingSubscription : subscription;
+    const displayStatusForPending = hasPendingPayment && pendingSubscription
+      ? SubscriptionStatus.PAYMENT_PENDING
+      : displayStatus;
     const subscriptionData = (hasSubscription || hasPendingPayment) ? {
-      id: subscription.id,
-      status: formatStatus(displayStatus),
-      isCancelled: subscription.status === SubscriptionStatus.CANCELLED || displayStatus === SubscriptionStatus.EXPIRED,
-      isPaused: subscription.isPaused,  // True if pause is scheduled OR active
-      pausedAt: subscription.pausedAt ? toIST(subscription.pausedAt) : null,
-      pauseStartDate: subscription.pauseStartDate
-        ? toIST(subscription.pauseStartDate)
-        : (subscription.isPaused ? toIST(subscription.currentPeriodEnd) : null),  // Fallback for old data
-      pauseEndDate: subscription.resumeDate ? toIST(subscription.resumeDate) : null,
-      pauseDurationDays: subscription.pauseDurationDays,
-      startDate: toIST(subscription.startDate),
-      currentPeriodStart: toIST(subscription.currentPeriodStart),
-      currentPeriodEnd: toIST(subscription.currentPeriodEnd),
-      nextBillingDate: toIST(subscription.nextBillingDate),
-      amount: subscription.subscriptionAmount / 100, // Convert to Rs
-      autoRenew: subscription.autoRenew,
-      paymentMethod: subscription.paymentMethod,
+      id: displaySubscription.id,
+      status: formatStatus(displayStatusForPending),
+      isCancelled: displaySubscription.status === SubscriptionStatus.CANCELLED || displayStatusForPending === SubscriptionStatus.EXPIRED,
+      isPaused: displaySubscription.isPaused,  // True if pause is scheduled OR active
+      pausedAt: displaySubscription.pausedAt ? toIST(displaySubscription.pausedAt) : null,
+      pauseStartDate: displaySubscription.pauseStartDate
+        ? toIST(displaySubscription.pauseStartDate)
+        : (displaySubscription.isPaused ? toIST(displaySubscription.currentPeriodEnd) : null),  // Fallback for old data
+      pauseEndDate: displaySubscription.resumeDate ? toIST(displaySubscription.resumeDate) : null,
+      pauseDurationDays: displaySubscription.pauseDurationDays,
+      startDate: toIST(displaySubscription.startDate),
+      currentPeriodStart: toIST(displaySubscription.currentPeriodStart),
+      currentPeriodEnd: toIST(displaySubscription.currentPeriodEnd),
+      nextBillingDate: toIST(displaySubscription.nextBillingDate),
+      amount: displaySubscription.subscriptionAmount / 100, // Convert to Rs
+      autoRenew: displaySubscription.autoRenew,
+      paymentMethod: displaySubscription.paymentMethod,
       // Autopay can be true if autoRenew is enabled OR razorpaySubscriptionId exists
-      isAutopay: subscription.autoRenew || !!subscription.razorpaySubscriptionId,
-      subscriptionType: (subscription.autoRenew || subscription.razorpaySubscriptionId) ? 'autopay' : 'monthly',
+      isAutopay: displaySubscription.autoRenew || !!displaySubscription.razorpaySubscriptionId,
+      subscriptionType: (displaySubscription.autoRenew || displaySubscription.razorpaySubscriptionId) ? 'autopay' : 'monthly',
     } : null;
 
     // Get active promotion for display
@@ -894,21 +905,21 @@ export class ProSubscriptionService {
       cancelReason: reason || 'Pending payment cancelled - gateway configuration issue',
     });
 
-    // Cancel any pending invoices
-    if (subscription.invoices && subscription.invoices.length > 0) {
-      await this.proInvoiceModel.update(
-        {
-          paymentStatus: InvoiceStatus.CANCELLED,
-          updatedAt: createDatabaseDate(),
+    // Cancel any pending invoices — always run the DB update directly to avoid
+    // relying on Sequelize association hydration (subscription.invoices may be empty
+    // even when pending invoices exist, leaving them as orphaned pending records).
+    await this.proInvoiceModel.update(
+      {
+        paymentStatus: InvoiceStatus.CANCELLED,
+        updatedAt: createDatabaseDate(),
+      },
+      {
+        where: {
+          subscriptionId: subscription.id,
+          paymentStatus: InvoiceStatus.PENDING,
         },
-        {
-          where: {
-            subscriptionId: subscription.id,
-            paymentStatus: InvoiceStatus.PENDING,
-          },
-        },
-      );
-    }
+      },
+    );
 
     console.log(`✅ Cancelled pending subscription ${subscription.id} for influencer ${influencerId}`);
 
@@ -2996,7 +3007,12 @@ export class ProSubscriptionService {
             (now.getTime() - subscription.createdAt.getTime()) / (1000 * 60 * 60);
           if (hoursSinceCreation > 24) {
             await subscription.update({ status: SubscriptionStatus.INACTIVE });
-            console.log(`  ✅ Marked subscription as INACTIVE (abandoned after 24h)`);
+            // Cancel any lingering pending invoices so they don't appear as orphaned records
+            await this.proInvoiceModel.update(
+              { paymentStatus: InvoiceStatus.CANCELLED, updatedAt: createDatabaseDate() },
+              { where: { subscriptionId: subscription.id, paymentStatus: InvoiceStatus.PENDING } },
+            );
+            console.log(`  ✅ Marked subscription as INACTIVE (abandoned after 24h) and cancelled pending invoices`);
             abandonedCount++;
           } else {
             console.log(`  ⏳ Created less than 24h ago, keeping as PAYMENT_PENDING`);
