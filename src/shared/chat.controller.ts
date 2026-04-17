@@ -108,11 +108,49 @@ export class ChatController {
   ) {}
 
   @Post('chat/conversations')
-  @ApiOperation({ summary: 'Create or get conversation with another user' })
+  @ApiOperation({
+    summary: 'Create or get conversation with another user',
+    description:
+      'Creates a new personal conversation or retrieves an existing one.\n\n' +
+      '**Block behavior:** If you have blocked the other user, the conversation is created but `isBlocked: true` is returned. ' +
+      'If the other user has blocked you, their profile will be masked as "Collabkaroo User" with `accountStatus: "blocked"`.',
+  })
   @ApiResponse({
     status: 201,
     description: 'Conversation created or retrieved',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', example: 45 },
+        otherParty: {
+          type: 'object',
+          description: 'Profile of the other participant. Masked as "Collabkaroo User" if they have blocked you.',
+          properties: {
+            id: { type: 'number', example: 32 },
+            name: { type: 'string', example: 'John Doe', nullable: true },
+            username: { type: 'string', example: 'johndoe', nullable: true },
+            profileImage: { type: 'string', nullable: true },
+            accountStatus: {
+              type: 'string',
+              enum: ['active', 'blocked'],
+              example: 'active',
+              description: '"blocked" means this user has blocked you — their identity is masked',
+            },
+          },
+        },
+        otherPartyType: { type: 'string', enum: ['influencer', 'brand'], example: 'influencer' },
+        isBlocked: {
+          type: 'boolean',
+          example: false,
+          description: 'true if the current user has blocked the other party',
+        },
+        conversationType: { type: 'string', example: 'personal' },
+        createdAt: { type: 'string' },
+        updatedAt: { type: 'string' },
+      },
+    },
   })
+  @ApiResponse({ status: 404, description: 'Other party user not found' })
   async createOrGetConversation(
     @Req() req: RequestWithUser,
     @Body() dto: CreateConversationDto,
@@ -365,8 +403,17 @@ export class ChatController {
   }
 
   @Get('chat/conversations/:id/messages')
-  @ApiOperation({ summary: 'Get messages in a conversation' })
+  @ApiOperation({
+    summary: 'Get messages in a conversation',
+    description:
+      'Retrieve paginated messages in a conversation.\n\n' +
+      '**Block behavior:** If the other participant has blocked you, messages sent by them will have their ' +
+      'sender identity masked — `senderDetails` will show `"Collabkaroo User"` with `accountStatus: "blocked"`. ' +
+      'Their message content is still returned (only identity is masked).',
+  })
   @ApiResponse({ status: 200, description: 'Messages retrieved' })
+  @ApiResponse({ status: 403, description: 'Forbidden - not a participant of this conversation' })
+  @ApiResponse({ status: 404, description: 'Conversation not found' })
   async getMessages(
     @Req() req: RequestWithUser,
     @Param('id', ParseIntPipe) conversationId: number,
@@ -632,7 +679,9 @@ export class ChatController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - This campaign chat has been closed (no new messages allowed)',
+    description:
+      'Forbidden - Either the campaign chat has been closed (no new messages allowed), ' +
+      'or one of the parties has blocked the other (cannot send messages to/from a blocked user)',
   })
   @ApiResponse({
     status: 404,
