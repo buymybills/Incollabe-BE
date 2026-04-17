@@ -22,6 +22,7 @@ import { ProfileReviewService } from '../admin/profile-review.service';
 import { EncryptionService } from '../shared/services/encryption.service';
 import { AppReviewService } from '../shared/services/app-review.service';
 import { ProfileViewService } from '../shared/services/profile-view.service';
+import { BlockService } from '../shared/services/block.service';
 import { ProfileType } from '../admin/models/profile-review.model';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { UpdateBrandProfileDto } from './dto/update-brand-profile.dto';
@@ -91,6 +92,14 @@ const mockProfileViewService = {
   trackView: jest.fn().mockResolvedValue({ success: true, isNewView: true }),
   getProfileViewCount: jest.fn().mockResolvedValue(0),
   getProfileViewers: jest.fn().mockResolvedValue({ viewers: [], total: 0, page: 1, limit: 20, totalPages: 0 }),
+};
+
+const mockBlockService = {
+  blockUser: jest.fn().mockResolvedValue({ message: 'User blocked successfully' }),
+  unblockUser: jest.fn().mockResolvedValue({ message: 'User unblocked successfully' }),
+  getBlockedUsers: jest.fn().mockResolvedValue({ blockedUsers: [], total: 0, page: 1, limit: 20, totalPages: 0 }),
+  isBlockedBy: jest.fn().mockResolvedValue(false),
+  hasBlocked: jest.fn().mockResolvedValue(false),
 };
 
 describe('BrandService', () => {
@@ -202,6 +211,10 @@ describe('BrandService', () => {
         {
           provide: ProfileViewService,
           useValue: mockProfileViewService,
+        },
+        {
+          provide: BlockService,
+          useValue: mockBlockService,
         },
       ],
     }).compile();
