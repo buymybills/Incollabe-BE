@@ -5,11 +5,13 @@ import {
   DataType,
   ForeignKey,
   BelongsTo,
+  HasMany,
   Index,
 } from 'sequelize-typescript';
 import { Conversation } from './conversation.model';
 import { Influencer } from '../../auth/model/influencer.model';
 import { Brand } from '../../brand/model/brand.model';
+import { MessageEncryptedKey } from './message-encrypted-key.model';
 
 export enum MessageType {
   TEXT = 'text',
@@ -150,4 +152,7 @@ export class Message extends Model<Message> {
 
   @BelongsTo(() => Message, 'replyToMessageId')
   declare repliedToMessage: Message;
+
+  @HasMany(() => MessageEncryptedKey)
+  declare messageEncryptedKeys: MessageEncryptedKey[];
 }
