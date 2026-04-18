@@ -212,7 +212,17 @@ export class InfluencerService {
         'influencer',
       );
       if (isBlockedByOwner) {
-        throw new ForbiddenException('You do not have permission to view this profile');
+        return {
+          id: influencerId,
+          name: 'Collabkaroo User',
+          username: '',
+          bio: '',
+          profileImage: null as unknown as string,
+          profileBanner: null as unknown as string,
+          profileHeadline: undefined,
+          userType: 'influencer' as const,
+          isBlocked: true,
+        } as any;
       }
     }
 

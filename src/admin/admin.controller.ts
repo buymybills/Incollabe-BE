@@ -1742,10 +1742,15 @@ export class AdminController {
       100,
     );
 
+    // Return early for blocked profiles
+    if ((profile as any).isBlocked) {
+      return profile as any;
+    }
+
     // Return public fields with experiences
     return {
       ...profile,
-      collaborationCosts: profile.collaborationCosts || {},
+      collaborationCosts: (profile as any).collaborationCosts || {},
       experiences:
         typeof experiences === 'object' && 'experiences' in experiences
           ? experiences.experiences
