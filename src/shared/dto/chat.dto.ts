@@ -68,7 +68,7 @@ export class SendMessageDto {
   @ApiProperty({ description: 'Message content', required: false })
   @IsString()
   @IsOptional()
-  @MaxLength(5000)
+  @MaxLength(10000)
   content?: string;
 
   @ApiProperty({
