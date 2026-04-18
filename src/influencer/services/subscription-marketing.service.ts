@@ -618,7 +618,7 @@ export class SubscriptionMarketingService {
       const savings = originalPrice - discountedPrice;
 
       const message = {
-        title: "⚡ FLASH SALE! ⚡",
+        title: `⚡ ${promotion.name} ⚡`,
         body: `MAX at ₹${discountedPrice} (was ₹${originalPrice}) - Save ₹${savings}! Limited time only! 🔥`,
       };
 
