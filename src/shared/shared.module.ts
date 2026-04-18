@@ -49,6 +49,7 @@ import { SupportTicket } from './models/support-ticket.model';
 import { SupportTicketReply } from './models/support-ticket-reply.model';
 import { Conversation } from './models/conversation.model';
 import { Message } from './models/message.model';
+import { MessageEncryptedKey } from './models/message-encrypted-key.model';
 import { KeyBackup } from './models/key-backup.model';
 import { InstagramMedia } from './models/instagram-media.model';
 import { InstagramMediaInsight } from './models/instagram-media-insight.model';
@@ -116,6 +117,7 @@ import { BlockController } from './controllers/block.controller';
       SupportTicketReply,
       Conversation,
       Message,
+      MessageEncryptedKey,
       KeyBackup,
       InstagramMedia,
       InstagramMediaInsight,

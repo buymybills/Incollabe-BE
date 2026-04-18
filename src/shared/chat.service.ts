@@ -7,6 +7,7 @@ import {
 import { InjectModel } from '@nestjs/sequelize';
 import { Conversation, ParticipantType } from './models/conversation.model';
 import { Message, MessageType, SenderType } from './models/message.model';
+import { MessageEncryptedKey } from './models/message-encrypted-key.model';
 import { CampaignReview, ReviewerType } from './models/campaign-review.model';
 import { GroupMember, MemberRole } from './models/group-member.model';
 import { GroupChat } from './models/group-chat.model';
@@ -47,6 +48,8 @@ export class ChatService {
     private groupMemberModel: typeof GroupMember,
     @InjectModel(GroupChat)
     private groupChatModel: typeof GroupChat,
+    @InjectModel(MessageEncryptedKey)
+    private messageEncryptedKeyModel: typeof MessageEncryptedKey,
     private s3Service: S3Service,
     private blockService: BlockService,
   ) {}
@@ -774,6 +777,7 @@ export class ChatService {
       attachmentName,
       mediaType,
       replyToMessageId,
+      encryptedKeys: encryptedKeysFromDto,
     } = dto;
 
     const userParticipantType = userType as ParticipantType;
@@ -893,10 +897,22 @@ export class ChatService {
     // Auto-detect if message is encrypted
     let isEncrypted = false;
     let encryptionVersion = 'v1';
+    let contentToStore = content || null;
+    // encryptedKeys collected from either the DTO field or embedded in content
+    let encryptedKeysToStore: Record<string, string> | null = encryptedKeysFromDto || null;
 
     if (content) {
       try {
         const parsed = JSON.parse(content);
+
+        // Check for multi-recipient format with encryptedKeys embedded in content (legacy group format)
+        const hasEmbeddedEncryptedKeys =
+          parsed.encryptedKeys &&
+          typeof parsed.encryptedKeys === 'object' &&
+          parsed.iv &&
+          parsed.ciphertext &&
+          typeof parsed.iv === 'string' &&
+          typeof parsed.ciphertext === 'string';
 
         // Check for multi-recipient format (group chats): { recipients: { userId: encryptedKey }, iv, ciphertext }
         const isMultiRecipient =
@@ -927,9 +943,16 @@ export class ChatService {
           typeof parsed.iv === 'string' &&
           typeof parsed.ciphertext === 'string';
 
-        if (isMultiRecipient || isDualKey || isLegacy) {
+        if (hasEmbeddedEncryptedKeys || isMultiRecipient || isDualKey || isLegacy) {
           isEncrypted = true;
           encryptionVersion = parsed.version || 'v1';
+
+          // Extract encryptedKeys from content and store only iv+ciphertext+version in content
+          if (hasEmbeddedEncryptedKeys) {
+            encryptedKeysToStore = parsed.encryptedKeys as Record<string, string>;
+            const { encryptedKeys: _keys, ...rest } = parsed;
+            contentToStore = JSON.stringify(rest);
+          }
         }
       } catch {
         // Not JSON or invalid structure - treat as plaintext
@@ -946,7 +969,7 @@ export class ChatService {
       influencerId: userType === 'influencer' ? userId : null,
       brandId: userType === 'brand' ? userId : null,
       messageType,
-      content: content || null,
+      content: contentToStore,
       attachmentUrl: isEncrypted ? null : attachmentUrl || null,
       attachmentName: isEncrypted ? null : attachmentName || null,
       mediaType: isEncrypted ? null : mediaType || null,
@@ -955,6 +978,20 @@ export class ChatService {
       isEncrypted,
       encryptionVersion,
     } as any);
+
+    // Store per-recipient encrypted keys in the dedicated table
+    if (encryptedKeysToStore && Object.keys(encryptedKeysToStore).length > 0) {
+      const keyRecords = Object.entries(encryptedKeysToStore).map(([key, encryptedKey]) => {
+        const [recipientId, recipientType] = key.split(':');
+        return {
+          messageId: message.id,
+          recipientId: parseInt(recipientId, 10),
+          recipientType: recipientType as 'influencer' | 'brand',
+          encryptedKey,
+        };
+      });
+      await this.messageEncryptedKeyModel.bulkCreate(keyRecords as any);
+    }
 
     // Update conversation's last message and increment unread count for other participant
     const isParticipant1 =
@@ -1079,6 +1116,12 @@ export class ChatService {
       await this.messageModel.findAndCountAll({
         where: whereClause,
         include: [
+          {
+            model: MessageEncryptedKey,
+            where: { recipientId: userId, recipientType: userType },
+            required: false,
+            attributes: ['encryptedKey'],
+          },
           {
             model: Influencer,
             attributes: ['id', 'username', 'name', 'profileImage', 'deletedAt'],
@@ -1238,12 +1281,17 @@ export class ChatService {
         };
       }
 
+      // Attach the caller's encrypted key if present in the dedicated table
+      const encryptedKeyRecord = (msg as any).messageEncryptedKeys?.[0];
+      const encryptedKey = encryptedKeyRecord?.encryptedKey ?? null;
+
       return {
         id: msg.id,
         sender,
         senderType: msg.senderType,
         messageType: msg.messageType,
         content: msg.content,
+        encryptedKey,
         attachmentUrl: this.s3Service.convertToSignedUrl(msg.attachmentUrl, 120), // 2 minutes expiry
         attachmentName: msg.attachmentName,
         mediaType: msg.mediaType,

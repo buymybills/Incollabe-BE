@@ -5,6 +5,7 @@ import {
   IsString,
   IsOptional,
   IsEnum,
+  IsObject,
   MaxLength,
   Min,
   Max,
@@ -70,6 +71,15 @@ export class SendMessageDto {
   @IsOptional()
   @MaxLength(10000)
   content?: string;
+
+  @ApiProperty({
+    description: 'Encrypted AES keys per recipient, keyed as "recipientId:recipientType". Used for group E2EE messages instead of embedding keys in content.',
+    required: false,
+    example: { '6:influencer': 'base64...', '1:brand': 'base64...' },
+  })
+  @IsObject()
+  @IsOptional()
+  encryptedKeys?: Record<string, string>;
 
   @ApiProperty({
     description: 'Message type',
