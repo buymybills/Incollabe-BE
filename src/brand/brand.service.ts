@@ -2,7 +2,6 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ForbiddenException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Op } from 'sequelize';
@@ -129,7 +128,17 @@ export class BrandService {
         'brand',
       );
       if (isBlockedByOwner) {
-        throw new ForbiddenException('You do not have permission to view this profile');
+        return {
+          id: brandId,
+          brandName: 'Collabkaroo User',
+          username: '',
+          brandBio: '',
+          profileImage: null as unknown as string,
+          profileBanner: null as unknown as string,
+          profileHeadline: undefined,
+          userType: 'brand' as const,
+          isBlocked: true,
+        } as any;
       }
     }
 
