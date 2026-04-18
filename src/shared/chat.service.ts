@@ -332,10 +332,21 @@ export class ChatService {
       this.blockService.hasBlocked(userId, userType, otherPartyId, otherPartyType),
     ]);
 
+    const maskedOtherParty = isBlocked
+      ? {
+          id: otherParty.id,
+          username: 'collabkaroo_user',
+          name: 'Collabkaroo User',
+          ...(otherPartyType === 'brand' ? { brandName: 'Collabkaroo User' } : {}),
+          profileImage: null,
+          accountStatus: 'blocked',
+        }
+      : otherParty;
+
     return {
       id: conversation.id,
       currentUser,
-      otherParty,
+      otherParty: maskedOtherParty,
       otherPartyType,
       isBlocked,
       lastMessage: conversation.lastMessage,
@@ -629,10 +640,21 @@ export class ChatService {
           }
         }
 
+        const maskedOtherPartyDetails = isBlocked
+          ? {
+              id: otherPartyDetails?.id,
+              username: 'collabkaroo_user',
+              name: 'Collabkaroo User',
+              ...(otherParticipant.type === ParticipantType.BRAND ? { brandName: 'Collabkaroo User' } : {}),
+              profileImage: null,
+              accountStatus: 'blocked',
+            }
+          : otherPartyDetails;
+
         const base = {
           id: conv.id,
           conversationType: conv.conversationType, // 'personal' or 'campaign'
-          otherParty: otherPartyDetails,
+          otherParty: maskedOtherPartyDetails,
           otherPartyType: otherParticipant.type,
           isBlocked,
           lastMessage: conv.lastMessage,
