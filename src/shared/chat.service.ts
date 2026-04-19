@@ -248,7 +248,9 @@ export class ChatService {
       otherPartyId,
     );
 
-    // Check if conversation already exists (check both possible orderings)
+    // Check if a personal conversation already exists (check both possible orderings)
+    // Explicitly filter by conversationType: 'personal' so campaign conversations
+    // between the same two parties are never reused as personal chats.
     let conversation = await this.conversationModel.findOne({
       where: {
         [Op.or]: [
@@ -267,14 +269,16 @@ export class ChatService {
             participant2Id: normalized.participant1Id,
           },
         ],
+        conversationType: 'personal',
         isActive: true,
       },
     } as any);
 
-    // Create new conversation if doesn't exist
+    // Create new personal conversation if one doesn't exist
     if (!conversation) {
       conversation = await this.conversationModel.create({
         ...normalized,
+        conversationType: 'personal',
         isActive: true,
         unreadCountParticipant1: 0,
         unreadCountParticipant2: 0,

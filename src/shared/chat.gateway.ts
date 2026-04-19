@@ -410,11 +410,16 @@ export class ChatGateway
         `Message sent by ${userId} (${userType}) in conversation ${conversationId}`,
       );
 
-      // Acknowledge to sender
+      // Acknowledge to sender (include sender's own encrypted key if applicable)
       console.log('✅ Acknowledging to sender');
+      const senderEncryptedKey = await this.getEncryptedKeyForRecipient(
+        message.id,
+        userId,
+        userType,
+      );
       client.emit('message:sent', {
         tempId: dto['tempId'], // Frontend can send tempId for optimistic UI
-        message,
+        message: { ...message, encryptedKey: senderEncryptedKey },
       });
 
       console.log('==========================\n');
@@ -482,17 +487,25 @@ export class ChatGateway
 
         if (memberSocket) {
           console.log('   ✅ Member is online, sending WebSocket notification');
+          // Fetch this member's encrypted key for the message
+          const memberEncryptedKey = await this.getEncryptedKeyForRecipient(
+            message.id,
+            memberId,
+            memberType,
+          );
+          const messageForMember = { ...message, encryptedKey: memberEncryptedKey };
+
           // Member is online, send WebSocket notification
           memberSocket.emit('message:notification', {
             conversationId,
-            message,
+            message: messageForMember,
           });
 
           // Send group conversation update
           memberSocket.emit('group:message:new', {
             conversationId,
             groupChatId,
-            message,
+            message: messageForMember,
           });
         } else {
           console.log('   📱 Member is offline, sending push notification');
@@ -509,11 +522,16 @@ export class ChatGateway
         }
       }
 
-      // Send conversation update to sender
+      // Send conversation update to sender (include sender's own encrypted key)
+      const senderEncryptedKey = await this.getEncryptedKeyForRecipient(
+        message.id,
+        senderUserId,
+        senderUserType,
+      );
       senderSocket.emit('group:message:sent', {
         conversationId,
         groupChatId,
-        message,
+        message: { ...message, encryptedKey: senderEncryptedKey },
       });
 
       console.log('✅ Group message broadcasted successfully');
@@ -1220,10 +1238,17 @@ export class ChatGateway
       const recipientSocket = this.userSockets.get(userKey);
 
       if (recipientSocket) {
-        // Send message notification
+        // Fetch recipient's encrypted key for this message
+        const recipientEncryptedKey = await this.getEncryptedKeyForRecipient(
+          message.id,
+          recipientUserId,
+          recipientUserType,
+        );
+
+        // Send message notification with recipient's encrypted key
         recipientSocket.emit('message:notification', {
           conversationId,
-          message,
+          message: { ...message, encryptedKey: recipientEncryptedKey },
         });
 
         // Get recipient's unread count for this conversation
@@ -1605,6 +1630,27 @@ export class ChatGateway
     this.server.to(roomName).emit('campaign:review:requested', {
       conversationId,
     });
+  }
+
+  /**
+   * Helper: Fetch the encrypted AES key for a specific recipient from message_encrypted_keys table
+   */
+  private async getEncryptedKeyForRecipient(
+    messageId: number,
+    recipientId: number,
+    recipientType: string,
+  ): Promise<string | null> {
+    try {
+      const MessageEncryptedKey = this.chatService['messageEncryptedKeyModel'];
+      if (!MessageEncryptedKey) return null;
+      const record = await MessageEncryptedKey.findOne({
+        where: { messageId, recipientId, recipientType },
+        attributes: ['encryptedKey'],
+      });
+      return record?.encryptedKey ?? null;
+    } catch {
+      return null;
+    }
   }
 
   /**

@@ -25,24 +25,28 @@ export class MessageEncryptedKey extends Model<MessageEncryptedKey> {
   @Column({
     type: DataType.INTEGER,
     allowNull: false,
+    field: 'message_id',
   })
   declare messageId: number;
 
   @Column({
     type: DataType.INTEGER,
     allowNull: false,
+    field: 'recipient_id',
   })
   declare recipientId: number;
 
   @Column({
     type: DataType.ENUM('influencer', 'brand'),
     allowNull: false,
+    field: 'recipient_type',
   })
   declare recipientType: 'influencer' | 'brand';
 
   @Column({
     type: DataType.TEXT,
     allowNull: false,
+    field: 'encrypted_key',
   })
   declare encryptedKey: string;
 }

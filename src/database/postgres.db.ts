@@ -25,6 +25,7 @@ import { SupportTicket } from '../shared/models/support-ticket.model';
 import { SupportTicketReply } from '../shared/models/support-ticket-reply.model';
 import { Conversation } from '../shared/models/conversation.model';
 import { Message } from '../shared/models/message.model';
+import { MessageEncryptedKey } from '../shared/models/message-encrypted-key.model';
 import { InfluencerReferralUsage } from '../auth/model/influencer-referral-usage.model';
 import { PushNotification } from '../admin/models/push-notification.model';
 import { InfluencerCredibilityScore } from '../shared/models/influencer-credibility-score.model';
@@ -143,6 +144,7 @@ import { InAppNotification } from '../shared/models/in-app-notification.model';
             SupportTicketReply,
             Conversation,
             Message,
+            MessageEncryptedKey,
             InfluencerReferralUsage,
             PushNotification,
             InfluencerCredibilityScore,
