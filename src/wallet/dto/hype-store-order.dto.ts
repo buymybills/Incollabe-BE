@@ -18,6 +18,7 @@ export enum OrderStatus {
   CANCELLED = 'cancelled',
   REFUNDED = 'refunded',
   RETURNED = 'returned',
+  PARTIAL_RETURN = 'partial_return',
 }
 
 export enum CashbackStatus {

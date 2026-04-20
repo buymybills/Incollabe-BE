@@ -2450,18 +2450,36 @@ export class HypeStoreService {
         // IMPORTANT: Capture original cashback status BEFORE updating
         const originalCashbackStatus = order.cashbackStatus;
 
-        // Update order status to returned/refunded
-        await order.update(
-          {
-            orderStatus: OrderStatus.RETURNED,
-            cashbackStatus: CashbackStatus.CANCELLED,
-            visibleToInfluencer: false, // Ensure order stays hidden from influencer
-            notes: `Return processed on ${new Date(webhookDto.returnDate).toISOString()}. Reason: ${webhookDto.returnReason || 'Not specified'}`,
-          },
-          { transaction },
-        );
+        // Detect partial vs full return
+        const orderAmount = parseFloat(order.orderAmount.toString());
+        const returnAmount = parseFloat(webhookDto.returnAmount.toString());
+        const isPartialReturn = returnAmount < orderAmount;
 
-        const cashbackAmount = parseFloat(order.cashbackAmount.toString());
+        // For partial returns, reverse only the proportional cashback; order stays visible
+        // For full returns, reverse full cashback and hide order from influencer
+        const cashbackAmount = isPartialReturn
+          ? parseFloat(order.cashbackAmount.toString()) * (returnAmount / orderAmount)
+          : parseFloat(order.cashbackAmount.toString());
+
+        if (isPartialReturn) {
+          await order.update(
+            {
+              orderStatus: OrderStatus.PARTIAL_RETURN,
+              notes: `Partial return processed on ${new Date(webhookDto.returnDate).toISOString()}. Return amount: ₹${returnAmount}. Reason: ${webhookDto.returnReason || 'Not specified'}`,
+            },
+            { transaction },
+          );
+        } else {
+          await order.update(
+            {
+              orderStatus: OrderStatus.RETURNED,
+              cashbackStatus: CashbackStatus.CANCELLED,
+              visibleToInfluencer: false,
+              notes: `Return processed on ${new Date(webhookDto.returnDate).toISOString()}. Reason: ${webhookDto.returnReason || 'Not specified'}`,
+            },
+            { transaction },
+          );
+        }
 
         // Prepare brand wallet credit (refund)
         const brandWallet = await this.walletModel.findOne({
