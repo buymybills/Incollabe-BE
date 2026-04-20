@@ -58,12 +58,18 @@ export class CashbackLockUnlockService {
 
       this.logger.log(`Found ${expiredTransactions.length} expired locked transactions to unlock`);
 
-      // Process each expired transaction
+      // Process each expired transaction independently so one failure doesn't block others
+      let successCount = 0;
       for (const lockedTx of expiredTransactions) {
-        await this.unlockCashbackTransaction(lockedTx);
+        try {
+          await this.unlockCashbackTransaction(lockedTx);
+          successCount++;
+        } catch (err) {
+          // Error already logged inside unlockCashbackTransaction; continue with next
+        }
       }
 
-      this.logger.log(`✅ Successfully unlocked ${expiredTransactions.length} transactions`);
+      this.logger.log(`✅ Unlocked ${successCount}/${expiredTransactions.length} transactions`);
     } catch (error) {
       this.logger.error('❌ Error during cashback unlock process:', error);
     }
@@ -114,14 +120,13 @@ export class CashbackLockUnlockService {
       );
 
       // Mark the locked transaction as unlocked
-      const updateData: any = {
-        isLocked: false,
-      };
-      if (lockedTx.lockExpiresAt) {
-        updateData.lockExpiresAt = undefined;
-      }
-
-      await lockedTx.update(updateData, { transaction });
+      await lockedTx.update(
+        {
+          isLocked: false,
+          lockExpiresAt: null,
+        },
+        { transaction },
+      );
 
       // Update the hype store order to CREDITED status with wallet transaction reference
       if (lockedTx.hypeStoreOrderId) {
