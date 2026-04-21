@@ -567,8 +567,12 @@ export class InfluencerHypeStoreService {
     const purchaseLineItems: any[] = metadata.lineItems ?? [];
     const returnedLineItems: any[] = metadata.returnedLineItems ?? [];
     const totalOrderAmount = parseFloat(order.orderAmount.toString());
-    const totalCashback = parseFloat(order.cashbackAmount.toString());
-    const cashbackRate = totalOrderAmount > 0 ? totalCashback / totalOrderAmount : 0;
+    const activeCashback = parseFloat(order.cashbackAmount.toString());
+    // Restore original cashback to compute the correct per-item rate.
+    // cashbackAmount is reduced in DB on partial return, so we add back what was reversed.
+    const reversedCashback = metadata.partialReturnCashbackReversed ?? 0;
+    const originalTotalCashback = activeCashback + reversedCashback;
+    const cashbackRate = totalOrderAmount > 0 ? originalTotalCashback / totalOrderAmount : 0;
 
     let cashbackBreakdown: any = null;
     if (purchaseLineItems.length > 0) {
@@ -590,26 +594,19 @@ export class InfluencerHypeStoreService {
         };
       });
 
-      const activeCashback = items
-        .filter((i: any) => !i.isReturned)
-        .reduce((sum: number, i: any) => sum + i.cashback, 0);
-      const returnedCashback = items
-        .filter((i: any) => i.isReturned)
-        .reduce((sum: number, i: any) => sum + i.cashback, 0);
-
       cashbackBreakdown = {
         items,
-        totalCashback,
-        activeCashback: Math.round(activeCashback * 100) / 100,
-        returnedCashback: Math.round(returnedCashback * 100) / 100,
+        totalCashback: activeCashback,
+        activeCashback,
+        returnedCashback: Math.round(reversedCashback * 100) / 100,
       };
-    } else if (metadata.partialReturnCashbackReversed != null) {
-      // Old orders without stored lineItems — derive active cashback from stored reversal amount
+    } else if (reversedCashback > 0) {
+      // Old orders without stored lineItems — derive from stored reversal amount
       cashbackBreakdown = {
         items: [],
-        totalCashback,
-        activeCashback: Math.round((totalCashback - metadata.partialReturnCashbackReversed) * 100) / 100,
-        returnedCashback: Math.round(metadata.partialReturnCashbackReversed * 100) / 100,
+        totalCashback: activeCashback,
+        activeCashback,
+        returnedCashback: Math.round(reversedCashback * 100) / 100,
       };
     }
 
@@ -650,7 +647,7 @@ export class InfluencerHypeStoreService {
         orderCurrency: order.orderCurrency,
         orderDate: order.orderDate,
         orderStatus: order.orderStatus,
-        cashbackAmount: parseFloat(order.cashbackAmount.toString()),
+        cashbackAmount: activeCashback,
         cashbackType: order.cashbackType || null,
         cashbackStatus: order.cashbackStatus,
         cashbackCreditedAt: order.cashbackCreditedAt || null,
