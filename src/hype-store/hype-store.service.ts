@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/sequelize';
-import { Op, Transaction } from 'sequelize';
+import { Op, Transaction, literal } from 'sequelize';
 import { HypeStore } from '../wallet/models/hype-store.model';
 import { HypeStoreCashbackConfig } from './models/hype-store-cashback-config.model';
 import { Wallet, UserType } from '../wallet/models/wallet.model';
@@ -2365,14 +2365,17 @@ export class HypeStoreService {
       });
 
       // Fallback for Shopify refunds: Shopify sends refund.order_id (numeric e.g. 450789469)
-      // but the purchase was stored with order.name (e.g. "#1001"). Match via metadata.shopifyOrderId.
+      // but the purchase was stored with order.name (e.g. "NN1021SO"). Match via metadata.shopifyOrderId.
       if (!order && webhookDto.metadata?.shopifyOrderId) {
-        order = await this.orderModel.findOne({
-          where: {
-            hypeStoreId: hypeStore.id,
-            metadata: { [Op.contains]: { shopifyOrderId: webhookDto.metadata.shopifyOrderId } } as any,
-          },
-        });
+        const shopifyOrderIdNum = Number(webhookDto.metadata.shopifyOrderId);
+        if (!isNaN(shopifyOrderIdNum)) {
+          order = await this.orderModel.findOne({
+            where: {
+              hypeStoreId: hypeStore.id,
+              [Op.and]: [literal(`(metadata->>'shopifyOrderId')::bigint = ${shopifyOrderIdNum}`)],
+            },
+          });
+        }
       }
 
       if (!order) {
