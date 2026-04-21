@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
-import { ScheduleModule } from '@nestjs/schedule';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AccountCleanupService } from './account-cleanup.service';
@@ -42,7 +41,6 @@ import { InfluencerReferralUsage } from './model/influencer-referral-usage.model
       ProfileReview,
       InfluencerReferralUsage,
     ]),
-    ScheduleModule.forRoot(),
     SharedModule,
   ],
   controllers: [AuthController, SeedController],

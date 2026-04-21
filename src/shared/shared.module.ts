@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { SequelizeModule } from '@nestjs/sequelize';
-import { ScheduleModule } from '@nestjs/schedule';
 import { SmsService } from './sms.service';
 import { S3Service } from './s3.service';
 import { EmailService } from './email.service';
@@ -105,7 +104,6 @@ import { BlockController } from './controllers/block.controller';
 @Module({
   imports: [
     ConfigModule.forRoot(),
-    ScheduleModule.forRoot(),
     JwtAuthModule,
     SequelizeModule.forFeature([
       Otp,

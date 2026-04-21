@@ -5,7 +5,7 @@ import { Op, Transaction } from 'sequelize';
 import { Sequelize } from 'sequelize-typescript';
 import { WalletTransaction, TransactionType, TransactionStatus } from '../models/wallet-transaction.model';
 import { Wallet } from '../models/wallet.model';
-import { HypeStoreOrder } from '../models/hype-store-order.model';
+import { HypeStoreOrder, CashbackStatus } from '../models/hype-store-order.model';
 
 /**
  * Service to handle automatic unlocking of locked cashback when return window closes
@@ -43,12 +43,6 @@ export class CashbackLockUnlockService {
           },
           status: TransactionStatus.COMPLETED,
         },
-        include: [
-          {
-            model: this.walletModel,
-            as: 'wallet',
-          },
-        ],
       });
 
       if (expiredTransactions.length === 0) {
@@ -80,26 +74,51 @@ export class CashbackLockUnlockService {
    * Converts locked amount to available balance
    */
   private async unlockCashbackTransaction(lockedTx: WalletTransaction) {
-    // Safety check: never credit wallet for an order whose proof was rejected
-    if (lockedTx.hypeStoreOrderId) {
-      const order = await this.hypeStoreOrderModel.findByPk(lockedTx.hypeStoreOrderId);
-      if (order && order.proofApprovalStatus === 'rejected') {
-        this.logger.warn(
-          `Skipping unlock for locked tx #${lockedTx.id} — order ${lockedTx.hypeStoreOrderId} proof was rejected. Cancelling locked tx.`,
-        );
-        await lockedTx.update({ isLocked: false, status: 'cancelled' as any });
-        return;
-      }
-    }
-
     const transaction: Transaction = await this.sequelize.transaction();
 
     try {
-      const wallet = lockedTx.wallet;
-      const cashbackAmount = parseFloat(lockedTx.amount.toString());
+      // Re-fetch locked tx with a row lock to prevent concurrent processing by multiple workers
+      const freshLockedTx = await this.walletTransactionModel.findOne({
+        where: { id: lockedTx.id, isLocked: true },
+        lock: true,
+        skipLocked: true,
+        transaction,
+      });
+
+      // Already processed by another worker — skip silently
+      if (!freshLockedTx) {
+        await transaction.commit();
+        return;
+      }
+
+      // Safety check: never credit wallet for an order whose proof was rejected
+      if (freshLockedTx.hypeStoreOrderId) {
+        const order = await this.hypeStoreOrderModel.findByPk(freshLockedTx.hypeStoreOrderId, { transaction });
+        if (order && order.proofApprovalStatus === 'rejected') {
+          this.logger.warn(
+            `Skipping unlock for locked tx #${freshLockedTx.id} — order ${freshLockedTx.hypeStoreOrderId} proof was rejected. Cancelling locked tx.`,
+          );
+          await freshLockedTx.update({ isLocked: false, status: 'cancelled' as any }, { transaction });
+          await transaction.commit();
+          return;
+        }
+      }
+
+      // Fetch wallet inside transaction with row lock to prevent concurrent balance mutations
+      const wallet = await this.walletModel.findOne({
+        where: { id: freshLockedTx.walletId },
+        lock: true,
+        transaction,
+      });
+
+      if (!wallet) {
+        throw new Error(`Wallet not found for transaction #${freshLockedTx.id}`);
+      }
+
+      const cashbackAmount = parseFloat(freshLockedTx.amount.toString());
       const previousBalance = parseFloat(wallet.balance.toString());
       const previousLockedAmount = parseFloat(wallet.lockedAmount.toString());
-      
+
       const newBalance = previousBalance + cashbackAmount;
       const newLockedAmount = Math.max(0, previousLockedAmount - cashbackAmount);
 
@@ -123,16 +142,16 @@ export class CashbackLockUnlockService {
           balanceAfter: newBalance,
           status: TransactionStatus.COMPLETED,
           isLocked: false,
-          description: `Cashback unlocked from previous locked transaction #${lockedTx.id}`,
-          hypeStoreOrderId: lockedTx.hypeStoreOrderId,
-          hypeStoreId: lockedTx.hypeStoreId,
+          description: `Cashback unlocked from previous locked transaction #${freshLockedTx.id}`,
+          hypeStoreOrderId: freshLockedTx.hypeStoreOrderId,
+          hypeStoreId: freshLockedTx.hypeStoreId,
           notes: `Automatic unlock after return window closed on ${new Date().toISOString()}`,
         } as any,
         { transaction },
       );
 
       // Mark the locked transaction as unlocked
-      await lockedTx.update(
+      await freshLockedTx.update(
         {
           isLocked: false,
           lockExpiresAt: null,
@@ -141,15 +160,15 @@ export class CashbackLockUnlockService {
       );
 
       // Update the hype store order to CREDITED status with wallet transaction reference
-      if (lockedTx.hypeStoreOrderId) {
+      if (freshLockedTx.hypeStoreOrderId) {
         await this.hypeStoreOrderModel.update(
           {
-            cashbackStatus: 'CREDITED' as any, // Mark as credited now that it's in available balance
-            walletTransactionId: unlockTransaction.id, // Reference to the unlock transaction
+            cashbackStatus: CashbackStatus.CREDITED,
+            walletTransactionId: unlockTransaction.id,
             notes: `Cashback unlocked after return window closed on ${new Date().toISOString()}`,
           },
           {
-            where: { id: lockedTx.hypeStoreOrderId },
+            where: { id: freshLockedTx.hypeStoreOrderId },
             transaction,
           },
         );
@@ -158,7 +177,7 @@ export class CashbackLockUnlockService {
       await transaction.commit();
 
       this.logger.log(
-        `✅ Unlocked ₹${cashbackAmount.toFixed(2)} for wallet ${wallet.id} (Order: ${lockedTx.hypeStoreOrderId})`,
+        `✅ Unlocked ₹${cashbackAmount.toFixed(2)} for wallet ${wallet.id} (Order: ${freshLockedTx.hypeStoreOrderId})`,
       );
     } catch (error) {
       await transaction.rollback();
