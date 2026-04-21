@@ -2367,12 +2367,12 @@ export class HypeStoreService {
       // Fallback for Shopify refunds: Shopify sends refund.order_id (numeric e.g. 450789469)
       // but the purchase was stored with order.name (e.g. "NN1021SO"). Match via metadata.shopifyOrderId.
       if (!order && webhookDto.metadata?.shopifyOrderId) {
-        const shopifyOrderIdNum = Number(webhookDto.metadata.shopifyOrderId);
-        if (!isNaN(shopifyOrderIdNum)) {
+        const shopifyOrderIdStr = String(webhookDto.metadata.shopifyOrderId).replace(/[^0-9]/g, '');
+        if (shopifyOrderIdStr) {
           order = await this.orderModel.findOne({
             where: {
               hypeStoreId: hypeStore.id,
-              [Op.and]: [literal(`(metadata->>'shopifyOrderId')::bigint = ${shopifyOrderIdNum}`)],
+              [Op.and]: [literal(`metadata->>'shopifyOrderId' = '${shopifyOrderIdStr}'`)],
             },
           });
         }
