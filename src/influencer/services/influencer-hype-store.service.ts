@@ -1514,12 +1514,67 @@ export class InfluencerHypeStoreService {
       );
     }
 
-    await order.update({
-      proofApprovalStatus: 'rejected',
-      proofApprovedBy: adminId,
-      proofApprovedAt: new Date(),
-      proofRejectionReason: rejectionReason,
-    } as any);
+    const dbTransaction: Transaction = await this.sequelize.transaction();
+
+    try {
+      // If a locked cashback transaction exists (e.g. from claimMinimumCashback called after
+      // submitProof), cancel it so the cron does not credit the wallet after rejection.
+      if (order.lockedCashbackTransactionId) {
+        const lockedTx = await this.walletTransactionModel.findByPk(
+          order.lockedCashbackTransactionId,
+          { transaction: dbTransaction },
+        );
+
+        if (lockedTx && lockedTx.isLocked) {
+          const wallet = await this.walletModel.findByPk(lockedTx.walletId, {
+            transaction: dbTransaction,
+          });
+
+          if (wallet) {
+            const cashbackAmount = parseFloat(lockedTx.amount.toString());
+            await wallet.update(
+              {
+                lockedAmount: Math.max(
+                  0,
+                  parseFloat(wallet.lockedAmount.toString()) - cashbackAmount,
+                ),
+                totalCashbackReceived: Math.max(
+                  0,
+                  parseFloat(wallet.totalCashbackReceived.toString()) - cashbackAmount,
+                ),
+              },
+              { transaction: dbTransaction },
+            );
+          }
+
+          await lockedTx.update(
+            { isLocked: false, status: TransactionStatus.CANCELLED },
+            { transaction: dbTransaction },
+          );
+
+          this.logger.log(
+            `[rejectProof order=${orderId}] Cancelled locked cashback tx #${lockedTx.id}`,
+          );
+        }
+      }
+
+      await order.update(
+        {
+          proofApprovalStatus: 'rejected',
+          proofApprovedBy: adminId,
+          proofApprovedAt: new Date(),
+          proofRejectionReason: rejectionReason,
+          cashbackStatus: CashbackStatus.PENDING,
+          lockedCashbackTransactionId: null,
+        } as any,
+        { transaction: dbTransaction },
+      );
+
+      await dbTransaction.commit();
+    } catch (error) {
+      await dbTransaction.rollback();
+      throw error;
+    }
 
     this.logger.log(
       `[rejectProof order=${orderId} admin=${adminId}] Proof rejected. Reason: ${rejectionReason}`,
@@ -1527,7 +1582,7 @@ export class InfluencerHypeStoreService {
 
     return {
       success: true,
-      message: 'Proof rejected successfully. Influencer can resubmit.',
+      message: 'Proof rejected successfully.',
       data: {
         orderId: order.id,
         externalOrderId: order.externalOrderId,
@@ -1579,6 +1634,13 @@ export class InfluencerHypeStoreService {
     // Check if minimum cashback already claimed
     if (order.minimumCashbackClaimed) {
       throw new BadRequestException('Minimum cashback has already been claimed for this order');
+    }
+
+    // Block if proof has already been submitted — influencer must wait for admin review
+    if (order.instagramProofUrl) {
+      throw new BadRequestException(
+        'Cannot claim minimum cashback because a proof has already been submitted. Please wait for admin review.',
+      );
     }
 
     // Calculate minimum cashback amount

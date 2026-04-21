@@ -80,6 +80,18 @@ export class CashbackLockUnlockService {
    * Converts locked amount to available balance
    */
   private async unlockCashbackTransaction(lockedTx: WalletTransaction) {
+    // Safety check: never credit wallet for an order whose proof was rejected
+    if (lockedTx.hypeStoreOrderId) {
+      const order = await this.hypeStoreOrderModel.findByPk(lockedTx.hypeStoreOrderId);
+      if (order && order.proofApprovalStatus === 'rejected') {
+        this.logger.warn(
+          `Skipping unlock for locked tx #${lockedTx.id} — order ${lockedTx.hypeStoreOrderId} proof was rejected. Cancelling locked tx.`,
+        );
+        await lockedTx.update({ isLocked: false, status: 'cancelled' as any });
+        return;
+      }
+    }
+
     const transaction: Transaction = await this.sequelize.transaction();
 
     try {
