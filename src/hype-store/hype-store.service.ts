@@ -2370,7 +2370,7 @@ export class HypeStoreService {
         order = await this.orderModel.findOne({
           where: {
             hypeStoreId: hypeStore.id,
-            metadata: { [Op.contains]: { shopifyOrderId: webhookDto.metadata.shopifyOrderId } },
+            metadata: { [Op.contains]: { shopifyOrderId: webhookDto.metadata.shopifyOrderId } } as any,
           },
         });
       }
