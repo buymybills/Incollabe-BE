@@ -562,6 +562,57 @@ export class InfluencerHypeStoreService {
       throw new ForbiddenException('This order does not belong to you');
     }
 
+    // Compute per-item cashback breakdown
+    const metadata = (order.metadata || {}) as Record<string, any>;
+    const purchaseLineItems: any[] = metadata.lineItems ?? [];
+    const returnedLineItems: any[] = metadata.returnedLineItems ?? [];
+    const totalOrderAmount = parseFloat(order.orderAmount.toString());
+    const totalCashback = parseFloat(order.cashbackAmount.toString());
+    const cashbackRate = totalOrderAmount > 0 ? totalCashback / totalOrderAmount : 0;
+
+    let cashbackBreakdown: any = null;
+    if (purchaseLineItems.length > 0) {
+      const items = purchaseLineItems.map((item: any) => {
+        const itemTotal = item.unitPrice * item.quantity;
+        const itemCashback = Math.round(itemTotal * cashbackRate * 100) / 100;
+        const returnedItem = returnedLineItems.find((r: any) => r.lineItemId === item.lineItemId);
+        return {
+          lineItemId: item.lineItemId,
+          title: item.title,
+          sku: item.sku || null,
+          variantTitle: item.variantTitle || null,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          total: itemTotal,
+          cashback: itemCashback,
+          isReturned: !!returnedItem,
+          returnedQuantity: returnedItem?.quantity ?? 0,
+        };
+      });
+
+      const activeCashback = items
+        .filter((i: any) => !i.isReturned)
+        .reduce((sum: number, i: any) => sum + i.cashback, 0);
+      const returnedCashback = items
+        .filter((i: any) => i.isReturned)
+        .reduce((sum: number, i: any) => sum + i.cashback, 0);
+
+      cashbackBreakdown = {
+        items,
+        totalCashback,
+        activeCashback: Math.round(activeCashback * 100) / 100,
+        returnedCashback: Math.round(returnedCashback * 100) / 100,
+      };
+    } else if (metadata.partialReturnCashbackReversed != null) {
+      // Old orders without stored lineItems — derive active cashback from stored reversal amount
+      cashbackBreakdown = {
+        items: [],
+        totalCashback,
+        activeCashback: Math.round((totalCashback - metadata.partialReturnCashbackReversed) * 100) / 100,
+        returnedCashback: Math.round(metadata.partialReturnCashbackReversed * 100) / 100,
+      };
+    }
+
     // Calculate tier labels for performance metrics
     const getTierLabel = (value: number | null, type: 'roi' | 'engagement' | 'reach'): string => {
       if (!value) return 'Unknown';
@@ -615,6 +666,9 @@ export class InfluencerHypeStoreService {
           viewCount: order.proofViewCount || null,
           postedAt: order.proofPostedAt || null,
           submittedAt: order.proofSubmittedAt || null,
+          approvalStatus: order.proofApprovalStatus || null,
+          approvedAt: order.proofApprovedAt || null,
+          rejectionReason: order.proofRejectionReason || null,
         },
         performance: {
           expectedROI: order.expectedRoi || null,
@@ -659,6 +713,7 @@ export class InfluencerHypeStoreService {
                 : null,
             }
           : null,
+        cashbackBreakdown,
         metadata: order.metadata || null,
         createdAt: order.createdAt,
         updatedAt: order.updatedAt,

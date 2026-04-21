@@ -2486,10 +2486,28 @@ export class HypeStoreService {
           : parseFloat(order.cashbackAmount.toString());
 
         if (isPartialReturn) {
+          // Build returned line items from refund payload so the API can show per-item breakdown
+          const returnedLineItems = ((webhookDto.metadata?.refundLineItems as any[]) ?? []).map((ri: any) => ({
+            lineItemId: ri.line_item_id,
+            title: ri.line_item?.title ?? null,
+            sku: ri.line_item?.sku ?? null,
+            variantTitle: ri.line_item?.variant_title ?? null,
+            quantity: ri.quantity ?? 1,
+            unitPrice: parseFloat(ri.line_item?.price ?? '0'),
+            subtotal: ri.subtotal ?? 0,
+          }));
+
           await order.update(
             {
               orderStatus: OrderStatus.PARTIAL_RETURN,
+              cashbackAmount: Math.max(0, parseFloat(order.cashbackAmount.toString()) - cashbackAmount),
               notes: `Partial return processed on ${new Date(webhookDto.returnDate).toISOString()}. Return amount: ₹${returnAmount}. Reason: ${webhookDto.returnReason || 'Not specified'}`,
+              metadata: {
+                ...(order.metadata || {}),
+                returnedLineItems,
+                partialReturnAmount: returnAmount,
+                partialReturnCashbackReversed: Math.round(cashbackAmount * 100) / 100,
+              } as any,
             },
             { transaction },
           );
@@ -2593,14 +2611,32 @@ export class HypeStoreService {
               { transaction },
             );
 
-            await lockedTx.update(
-              {
-                status: TransactionStatus.CANCELLED,
-                isLocked: false,
-                notes: `Return processed before unlock for order ${order.externalOrderId}`,
-              },
-              { transaction },
-            );
+            if (isPartialReturn) {
+              // Partial return: reduce the locked transaction to the remaining cashback amount.
+              // The cron will still find this locked tx and credit the correct reduced amount
+              // when the return window expires. Do NOT cancel it.
+              const remainingCashback = Math.max(
+                0,
+                parseFloat(lockedTx.amount.toString()) - cashbackAmount,
+              );
+              await lockedTx.update(
+                {
+                  amount: remainingCashback,
+                  notes: `Partial return: reversed ₹${cashbackAmount.toFixed(2)}, remaining ₹${remainingCashback.toFixed(2)} for order ${order.externalOrderId}`,
+                },
+                { transaction },
+              );
+            } else {
+              // Full return: cancel the locked transaction entirely
+              await lockedTx.update(
+                {
+                  status: TransactionStatus.CANCELLED,
+                  isLocked: false,
+                  notes: `Full return processed before unlock for order ${order.externalOrderId}`,
+                },
+                { transaction },
+              );
+            }
 
             cashbackReversed = true;
           }

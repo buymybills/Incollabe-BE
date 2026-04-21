@@ -104,6 +104,15 @@ export class ShopifyWebhookNormalizerService {
         lineItemsCount: order.line_items?.length ?? 0,
         financialStatus: order.financial_status,
         fulfillmentStatus: order.fulfillment_status,
+        lineItems: (order.line_items ?? []).map((item: any) => ({
+          lineItemId: item.id,
+          title: item.title,
+          sku: item.sku ?? null,
+          variantTitle: item.variant_title ?? null,
+          quantity: item.quantity ?? 1,
+          unitPrice: parseFloat(item.price ?? '0'),
+          total: parseFloat(item.price ?? '0') * (item.quantity ?? 1),
+        })),
       },
     };
   }

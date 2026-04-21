@@ -281,6 +281,9 @@ export class InfluencerHypeStoreController {
                 viewCount: { type: 'number', nullable: true, example: 15000 },
                 postedAt: { type: 'string', nullable: true, example: '2026-03-08T12:00:00.000Z' },
                 submittedAt: { type: 'string', nullable: true, example: '2026-03-08T14:00:00.000Z' },
+                approvalStatus: { type: 'string', nullable: true, example: 'pending_review', enum: ['pending_review', 'approved', 'rejected'] },
+                approvedAt: { type: 'string', nullable: true, example: '2026-03-09T10:00:00.000Z' },
+                rejectionReason: { type: 'string', nullable: true, example: 'Content does not clearly feature the product' },
               }
             },
             performance: {
