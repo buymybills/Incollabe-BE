@@ -159,7 +159,7 @@ export class WalletTransaction extends Model<WalletTransaction> {
     allowNull: true,
     comment: 'When this locked amount will be unlocked',
   })
-  declare lockExpiresAt: Date;
+  declare lockExpiresAt: Date | null;
 
   // Metadata
   @Column({
