@@ -115,16 +115,24 @@ import { BlockedUser } from '../shared/models/blocked-user.model';
             acquire: 60000, // 60 seconds timeout for acquiring connection
             idle: 10000, // 10 seconds idle time before releasing
             evict: 1000, // Run eviction every 1 second
-            // Validate connection before use — destroys connections that are ending/destroyed
-            // or stuck in an aborted-transaction state (PostgreSQL error code 25P02)
-            validate: (connection: any): boolean => {
-              return (
-                connection != null &&
-                !connection.ending &&
-                !connection._ending &&
-                !connection._destroyed
-              );
-            },
+            // Validate connection before use.
+            // Sends ROLLBACK which:
+            //   - is a no-op on a clean connection (autocommit mode)
+            //   - CLEARS aborted-transaction state (PostgreSQL error code 25P02)
+            //     so the connection becomes usable again instead of being recycled
+            //     into a never-ending failure loop
+            //   - returns false (destroy) only if the connection is completely dead
+            validate: ((connection: any): Promise<boolean> => {
+              if (!connection || connection.ending || connection._ending || connection._destroyed) {
+                return Promise.resolve(false);
+              }
+              // ROLLBACK is a no-op on clean connections but clears aborted-transaction
+              // state (PostgreSQL error 25P02) on poisoned connections, making them
+              // reusable instead of recycling endlessly through the pool.
+              return new Promise((resolve) => {
+                connection.query('ROLLBACK', (err: any) => resolve(!err));
+              });
+            }) as any,
           },
           // Enable connection retry on transient failures
           retry: {
