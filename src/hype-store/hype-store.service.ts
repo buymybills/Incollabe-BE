@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/sequelize';
-import { Transaction } from 'sequelize';
+import { Op, Transaction } from 'sequelize';
 import { HypeStore } from '../wallet/models/hype-store.model';
 import { HypeStoreCashbackConfig } from './models/hype-store-cashback-config.model';
 import { Wallet, UserType } from '../wallet/models/wallet.model';
@@ -2256,6 +2256,10 @@ export class HypeStoreService {
           orderId: order.id,
           cashbackAmount,
           cashbackStatus: CashbackStatus.PENDING,
+          returnWindow: {
+            days: returnPeriodDays,
+            endsAt: returnPeriodEndsAt,
+          },
         };
 
         // Log successful webhook
@@ -2366,7 +2370,7 @@ export class HypeStoreService {
         order = await this.orderModel.findOne({
           where: {
             hypeStoreId: hypeStore.id,
-            metadata: { shopifyOrderId: webhookDto.metadata.shopifyOrderId },
+            metadata: { [Op.contains]: { shopifyOrderId: webhookDto.metadata.shopifyOrderId } },
           },
         });
       }

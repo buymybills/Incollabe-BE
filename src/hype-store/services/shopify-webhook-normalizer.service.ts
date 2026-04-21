@@ -74,6 +74,13 @@ export class ShopifyWebhookNormalizerService {
     const referralCode = rawReferralCode ? this.sanitizeReferralCode(rawReferralCode) : undefined;
     const customerName = this.buildCustomerName(order.customer) ?? undefined;
 
+    // Extract return period days from note_attributes if brand provides it
+    // e.g. note_attributes: [{ name: "returnPeriodDays", value: "15" }]
+    const rawReturnPeriodDays =
+      this.extractNoteAttribute(order.note_attributes, 'returnPeriodDays') ??
+      this.extractNoteAttribute(order.note_attributes, 'return_period_days');
+    const returnPeriodDays = rawReturnPeriodDays ? parseInt(rawReturnPeriodDays, 10) : undefined;
+
     return {
       eventType: WebhookEventType.PURCHASE,
       externalOrderId: order.name,                      // e.g. "#1001"
@@ -90,6 +97,7 @@ export class ShopifyWebhookNormalizerService {
       customerName,
       customerEmail: order.customer?.email ?? undefined,
       customerPhone: order.customer?.phone ?? undefined,
+      returnPeriodDays,
       metadata: {
         shopifyOrderId: order.id,
         shopifyOrderNumber: order.order_number,
