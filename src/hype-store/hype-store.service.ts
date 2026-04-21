@@ -2289,21 +2289,26 @@ export class HypeStoreService {
         message: errorMessage,
       };
 
-      // Log failed webhook
+      // Log failed webhook — wrap in try/catch so a poisoned DB connection
+      // cannot replace the original error with "current transaction is aborted"
       if (webhookSecret) {
-        await this.logWebhookRequest({
-          hypeStoreId: webhookSecret.hypeStoreId,
-          method: 'POST',
-          path: '/webhooks/purchase',
-          headers: {},
-          body: webhookDto,
-          ipAddress,
-          status: responseStatus,
-          responseBody,
-          isValid: false,
-          errorMessage: errorMessage,
-          processedOrderId,
-        });
+        try {
+          await this.logWebhookRequest({
+            hypeStoreId: webhookSecret.hypeStoreId,
+            method: 'POST',
+            path: '/webhooks/purchase',
+            headers: {},
+            body: webhookDto,
+            ipAddress,
+            status: responseStatus,
+            responseBody,
+            isValid: false,
+            errorMessage: errorMessage,
+            processedOrderId,
+          });
+        } catch (logErr) {
+          this.logger.error('Failed to log purchase webhook error (ignoring):', logErr);
+        }
       }
 
       throw error;
@@ -2381,18 +2386,22 @@ export class HypeStoreService {
       if (!order) {
         responseStatus = 404;
         responseBody = { success: false, message: 'Order not found' };
-        await this.logWebhookRequest({
-          hypeStoreId: hypeStore.id,
-          method: 'POST',
-          path: '/webhooks/return',
-          headers: {},
-          body: webhookDto,
-          ipAddress,
-          status: responseStatus,
-          responseBody,
-          isValid: true,
-          errorMessage: 'Order not found',
-        });
+        try {
+          await this.logWebhookRequest({
+            hypeStoreId: hypeStore.id,
+            method: 'POST',
+            path: '/webhooks/return',
+            headers: {},
+            body: webhookDto,
+            ipAddress,
+            status: responseStatus,
+            responseBody,
+            isValid: true,
+            errorMessage: 'Order not found',
+          });
+        } catch (logErr) {
+          this.logger.error('Failed to log return webhook (order not found):', logErr);
+        }
         throw new NotFoundException('Order not found');
       }
 
@@ -2411,18 +2420,22 @@ export class HypeStoreService {
           returnWindowEndsAt: returnWindowEnds.toISOString(),
           currentTime: now.toISOString(),
         };
-        await this.logWebhookRequest({
-          hypeStoreId: hypeStore.id,
-          method: 'POST',
-          path: '/webhooks/return',
-          headers: {},
-          body: webhookDto,
-          ipAddress,
-          status: responseStatus,
-          responseBody,
-          isValid: true,
-          errorMessage: 'Return window has closed',
-        });
+        try {
+          await this.logWebhookRequest({
+            hypeStoreId: hypeStore.id,
+            method: 'POST',
+            path: '/webhooks/return',
+            headers: {},
+            body: webhookDto,
+            ipAddress,
+            status: responseStatus,
+            responseBody,
+            isValid: true,
+            errorMessage: 'Return window has closed',
+          });
+        } catch (logErr) {
+          this.logger.error('Failed to log return webhook (return window closed):', logErr);
+        }
         throw new BadRequestException('Return window has closed. Cashback has already been unlocked and credited to influencer.');
       }
 
@@ -2434,18 +2447,22 @@ export class HypeStoreService {
           message: 'Cannot process return. Cashback has already been credited to influencer.',
           cashbackStatus: order.cashbackStatus,
         };
-        await this.logWebhookRequest({
-          hypeStoreId: hypeStore.id,
-          method: 'POST',
-          path: '/webhooks/return',
-          headers: {},
-          body: webhookDto,
-          ipAddress,
-          status: responseStatus,
-          responseBody,
-          isValid: true,
-          errorMessage: 'Cashback already credited',
-        });
+        try {
+          await this.logWebhookRequest({
+            hypeStoreId: hypeStore.id,
+            method: 'POST',
+            path: '/webhooks/return',
+            headers: {},
+            body: webhookDto,
+            ipAddress,
+            status: responseStatus,
+            responseBody,
+            isValid: true,
+            errorMessage: 'Cashback already credited',
+          });
+        } catch (logErr) {
+          this.logger.error('Failed to log return webhook (cashback credited):', logErr);
+        }
         throw new BadRequestException('Cannot process return. Cashback has already been credited to influencer.');
       }
 
@@ -2674,21 +2691,26 @@ export class HypeStoreService {
         message: errorMessage,
       };
 
-      // Log failed webhook
+      // Log failed webhook — wrap in try/catch so a poisoned DB connection
+      // cannot replace the original error with "current transaction is aborted"
       if (webhookSecret) {
-        await this.logWebhookRequest({
-          hypeStoreId: webhookSecret.hypeStoreId,
-          method: 'POST',
-          path: '/webhooks/return',
-          headers: {},
-          body: webhookDto,
-          ipAddress,
-          status: responseStatus,
-          responseBody,
-          isValid: false,
-          errorMessage: errorMessage,
-          processedOrderId,
-        });
+        try {
+          await this.logWebhookRequest({
+            hypeStoreId: webhookSecret.hypeStoreId,
+            method: 'POST',
+            path: '/webhooks/return',
+            headers: {},
+            body: webhookDto,
+            ipAddress,
+            status: responseStatus,
+            responseBody,
+            isValid: false,
+            errorMessage: errorMessage,
+            processedOrderId,
+          });
+        } catch (logErr) {
+          this.logger.error('Failed to log return webhook error (ignoring):', logErr);
+        }
       }
 
       throw error;

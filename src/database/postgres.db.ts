@@ -115,6 +115,16 @@ import { BlockedUser } from '../shared/models/blocked-user.model';
             acquire: 60000, // 60 seconds timeout for acquiring connection
             idle: 10000, // 10 seconds idle time before releasing
             evict: 1000, // Run eviction every 1 second
+            // Validate connection before use — destroys connections that are ending/destroyed
+            // or stuck in an aborted-transaction state (PostgreSQL error code 25P02)
+            validate: (connection: any): boolean => {
+              return (
+                connection != null &&
+                !connection.ending &&
+                !connection._ending &&
+                !connection._destroyed
+              );
+            },
           },
           // Enable connection retry on transient failures
           retry: {
