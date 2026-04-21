@@ -113,9 +113,18 @@ export class ShopifyWebhookNormalizerService {
     const refund = payload;
     const transaction = refund.transactions?.[0];
 
+    // Shopify refund transactions carry payment_id in the format "{order_name}.{n}"
+    // e.g. "NN1024SO.2" → order name is "NN1024SO" (everything before the last dot).
+    // This matches the externalOrderId stored during the purchase webhook.
+    const paymentId: string = transaction?.payment_id ?? '';
+    const lastDot = paymentId.lastIndexOf('.');
+    const orderNameFromPayment = lastDot > 0 ? paymentId.substring(0, lastDot) : undefined;
+
     return {
       eventType: WebhookEventType.RETURN,
-      externalOrderId: `#${refund.order_id}`,          // Shopify order_id (numeric)
+      // Prefer the order name extracted from payment_id (avoids JSONB lookup).
+      // Fall back to numeric order_id form when payment_id is absent or unexpected.
+      externalOrderId: orderNameFromPayment ?? `#${refund.order_id}`,
       returnAmount: parseFloat(transaction?.amount ?? '0'),
       returnDate: refund.created_at ?? new Date().toISOString(),
       returnReason: refund.note ?? undefined,

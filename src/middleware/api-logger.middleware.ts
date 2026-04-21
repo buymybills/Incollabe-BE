@@ -255,7 +255,10 @@ export class ApiLoggerMiddleware implements NestMiddleware {
     }
 
     if (typeof responseBody === 'object') {
-      return responseBody.message || responseBody.error || 'Unknown error';
+      const msg = responseBody.message || responseBody.error || 'Unknown error';
+      // NestJS validation errors set message as an array of strings
+      if (typeof msg === 'string') return msg.substring(0, 500);
+      return JSON.stringify(msg).substring(0, 500);
     }
 
     return null;
