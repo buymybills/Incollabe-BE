@@ -22,6 +22,7 @@ import { Niche } from '../../auth/model/niche.model';
 import { Influencer } from '../../auth/model/influencer.model';
 import { InstagramProfileAnalysis } from '../../shared/models/instagram-profile-analysis.model';
 import { InstagramService } from '../../shared/services/instagram.service';
+import { S3Service } from '../../shared/s3.service';
 import axios from 'axios';
 
 @Injectable()
@@ -51,6 +52,7 @@ export class InfluencerHypeStoreService {
     private instagramProfileAnalysisModel: typeof InstagramProfileAnalysis,
     private instagramService: InstagramService,
     private sequelize: Sequelize,
+    private s3Service: S3Service,
   ) {}
 
   /**
@@ -1102,9 +1104,16 @@ export class InfluencerHypeStoreService {
     orderId: number,
     submitProofDto: SubmitProofDto,
   ) {
-    // Validate that either mediaId or instagramUrl is provided (not both)
+    const isStory = submitProofDto.contentType === 'story';
+
+    // Stories must be submitted via mediaId (fetched from GET /{ig-user-id}/stories)
+    // Reels/posts: mediaId OR instagramUrl
     if (!submitProofDto.mediaId && !submitProofDto.instagramUrl) {
-      throw new BadRequestException('Either mediaId or instagramUrl must be provided');
+      throw new BadRequestException(
+        isStory
+          ? 'mediaId is required for story submissions — select your story from the available stories list'
+          : 'Either mediaId or instagramUrl must be provided',
+      );
     }
     if (submitProofDto.mediaId && submitProofDto.instagramUrl) {
       throw new BadRequestException('Provide either mediaId OR instagramUrl, not both');
@@ -1171,8 +1180,64 @@ export class InfluencerHypeStoreService {
     let mediaTimestamp: Date | null = null;
     let mediaUrl: string | null = null;
     let mediaThumbnail: string | null = null;
+    let storyCaption: string | null = null;
 
-    if (submitProofDto.mediaId) {
+    if (isStory && submitProofDto.mediaId) {
+      // Stories expire after 24h — fetch details + download media to S3 immediately
+      // so admin can review even after the story is gone from Instagram
+      try {
+        this.logger.log(`[submitProof order=${orderId}] Fetching story mediaId=${submitProofDto.mediaId}`);
+        const story = await this.instagramService.getStoryById(influencerId, 'influencer', submitProofDto.mediaId);
+        if (!story) {
+          throw new BadRequestException(
+            'Story not found. Stories expire after 24 hours — make sure the story is still active.',
+          );
+        }
+
+        // Anti-scam: story must have been live for at least 2 hours
+        // Prevents influencer from posting → submitting proof → immediately deleting
+        const MINIMUM_STORY_AGE_HOURS = 2;
+        const storyAgeMs = Date.now() - new Date(story.timestamp).getTime();
+        const storyAgeHours = storyAgeMs / (1000 * 60 * 60);
+        if (storyAgeHours < MINIMUM_STORY_AGE_HOURS) {
+          throw new BadRequestException(
+            `Story must be at least ${MINIMUM_STORY_AGE_HOURS} hours old before submitting as proof. ` +
+            `Your story has only been live for ${Math.floor(storyAgeHours * 60)} minutes.`,
+          );
+        }
+
+        // Determine content type for S3
+        const isVideoStory = story.mediaType === 'VIDEO';
+        const mimeType = isVideoStory ? 'video/mp4' : 'image/jpeg';
+        const ext = isVideoStory ? 'mp4' : 'jpg';
+        const s3Key = `hype-store/story-proofs/influencer-${influencerId}-order-${orderId}-${Date.now()}.${ext}`;
+
+        // Download from Instagram CDN and upload to S3 — Instagram CDN URLs expire with the story
+        this.logger.log(`[submitProof order=${orderId}] Archiving story media to S3 (${story.mediaType})`);
+        const s3Url = await this.s3Service.uploadFromUrl(story.mediaUrl, s3Key, mimeType);
+
+        // For video stories, also archive the thumbnail
+        let s3ThumbnailUrl = s3Url;
+        if (isVideoStory && story.thumbnailUrl && story.thumbnailUrl !== story.mediaUrl) {
+          const thumbKey = `hype-store/story-proofs/influencer-${influencerId}-order-${orderId}-${Date.now()}-thumb.jpg`;
+          s3ThumbnailUrl = await this.s3Service.uploadFromUrl(story.thumbnailUrl, thumbKey, 'image/jpeg');
+        }
+
+        instagramUrl = s3Url;               // permanent S3 URL (admin can view anytime)
+        mediaThumbnail = s3ThumbnailUrl;
+        mediaTimestamp = new Date(story.timestamp);
+        storyCaption = story.caption || null;
+
+        // Store original Instagram metadata alongside for admin context
+        mediaUrl = story.mediaUrl;          // original (will expire, kept for reference)
+
+        this.logger.log(`[submitProof order=${orderId}] Story archived to S3: ${s3Url}`);
+      } catch (error) {
+        if (error instanceof BadRequestException) throw error;
+        this.logger.error(`[submitProof order=${orderId}] Story archival failed:`, error);
+        throw new BadRequestException('Failed to archive story. Please try again.');
+      }
+    } else if (submitProofDto.mediaId) {
       try {
         this.logger.log(`[submitProof order=${orderId}] Fetching Instagram media details for mediaId=${submitProofDto.mediaId}`);
 
@@ -1306,6 +1371,11 @@ export class InfluencerHypeStoreService {
           ...(order.metadata || {}),
           mediaId: submitProofDto.mediaId || null,
           mediaUrl: mediaUrl || null,
+          // Story-specific: caption + original CDN URL (expires with story, S3 copy is the permanent proof)
+          ...(isStory && {
+            storyCaption: storyCaption,
+            originalInstagramMediaUrl: mediaUrl,
+          }),
         },
         notes: submitProofDto.notes
           ? `${order.notes ? order.notes + '\n' : ''}Proof submitted: ${submitProofDto.notes}`

@@ -204,6 +204,30 @@ export class S3Service {
     return this.getFileUrl(s3Key);
   }
 
+  /**
+   * Download a file from a remote URL and upload it directly to S3.
+   * Used to archive Instagram story media before it expires.
+   */
+  async uploadFromUrl(
+    url: string,
+    s3Key: string,
+    contentType: string,
+  ): Promise<string> {
+    const response = await require('axios').default.get(url, { responseType: 'arraybuffer', timeout: 30000 });
+    const buffer = Buffer.from(response.data);
+
+    const isVideo = contentType.startsWith('video/');
+    await this.s3.upload({
+      Bucket: this.bucketName,
+      Key: s3Key,
+      Body: buffer,
+      ContentType: contentType,
+      ContentDisposition: isVideo || contentType.startsWith('image/') ? 'inline' : undefined,
+    }).promise();
+
+    return this.getFileUrl(s3Key);
+  }
+
   // ============================================================================
   // Multipart Upload Methods (Instagram-style chunked uploads for large files)
   // ============================================================================

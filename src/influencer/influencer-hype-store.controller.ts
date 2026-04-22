@@ -534,8 +534,8 @@ export class InfluencerHypeStoreController {
   @ApiQuery({
     name: 'contentType',
     required: false,
-    enum: ['story', 'post_reel'],
-    description: 'Filter by content type (story or post_reel)',
+    enum: ['reel', 'story'],
+    description: '"reel" = reels and carousels, "story" = active stories (last 24h)',
   })
   @ApiQuery({
     name: 'days',
@@ -577,14 +577,25 @@ export class InfluencerHypeStoreController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getAvailableMedia(
     @Request() req: any,
-    @Query('contentType') contentType?: 'story' | 'post_reel',
+    @Query('contentType') contentType?: 'reel' | 'story',
     @Query('days') days?: string,
   ) {
     const influencerId = req.user.id;
+
+    // Stories use a dedicated endpoint — GET /{ig-user-id}/stories (active for 24h only)
+    if (contentType === 'story') {
+      const result = await this.instagramService.getInstagramStories(influencerId, 'influencer');
+      return {
+        success: true,
+        data: result.data,
+        total: result.total,
+        message: `Found ${result.total} active stories`,
+      };
+    }
+
     const parsedDays = days ? Number.parseInt(days, 10) : 30;
     const daysBack = Number.isFinite(parsedDays) && parsedDays > 0 ? parsedDays : 30;
 
-    // Calculate date range (last X days)
     const toDate = new Date();
     const fromDate = new Date();
     fromDate.setDate(fromDate.getDate() - daysBack);
@@ -595,7 +606,7 @@ export class InfluencerHypeStoreController {
       fromDate,
       toDate,
       contentType,
-      50, // Limit to 50 items
+      50,
     );
 
     return {
@@ -710,9 +721,10 @@ export class InfluencerHypeStoreController {
   @ApiOperation({
     summary: 'Submit Instagram proof for cashback (Reel/Post/Story)',
     description:
-      'Submit Instagram Reel, Post, or Story URL as proof of promotion to claim full cashback. ' +
-      'After submission, cashback status changes to "processing" and will be reviewed by brand admin. ' +
-      'Once approved, full cashback (up to 30%) will be credited to wallet.',
+      'Submit Instagram Reel, Post, or Story as proof of promotion to claim full cashback.\n\n' +
+      'For **reels/posts**: provide `mediaId` OR `instagramUrl`.\n\n' +
+      'For **stories**: provide `mediaId` from the available stories list (`GET /available-media?contentType=story`). ' +
+      'Stories are verified live against the Instagram Stories API (active for 24 hours only).',
   })
   @ApiParam({ name: 'orderId', type: Number, description: 'Order ID' })
   @ApiBody({ type: SubmitProofDto })

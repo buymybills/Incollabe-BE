@@ -753,15 +753,15 @@ export class InstagramService {
     userType: UserType,
     fromDate: Date,
     toDate: Date = new Date(),
-    contentType?: 'story' | 'post_reel',
+    contentType?: 'reel',
     limit: number = 50,
   ): Promise<{
     data: Array<{
       id: string;
       caption: string;
       mediaType: string; // IMAGE, VIDEO, CAROUSEL_ALBUM
-      mediaProductType: string; // FEED, REELS, STORY
-      contentType: 'story' | 'post_reel'; // Our classification
+      mediaProductType: string; // FEED, REELS
+      contentType: 'reel'; // Our classification — stories are fetched separately via /stories endpoint
       mediaUrl: string;
       thumbnailUrl: string;
       permalink: string;
@@ -813,16 +813,8 @@ export class InstagramService {
           const timestamp = new Date(media.timestamp);
           const timestampMs = timestamp.getTime();
 
-          // Determine our content type classification
-          let ourContentType: 'story' | 'post_reel';
-          if (media.media_product_type === 'STORY') {
-            ourContentType = 'story';
-          } else if (media.media_product_type === 'REELS') {
-            ourContentType = 'post_reel';
-          } else {
-            // FEED or other types are classified as post_reel
-            ourContentType = 'post_reel';
-          }
+          // Everything from /media endpoint is a reel or carousel — stories never appear here
+          const ourContentType: 'reel' = 'reel';
 
           return {
             id: media.id,
@@ -866,6 +858,102 @@ export class InstagramService {
     } catch (error) {
       this.handleInstagramError(error, 'Failed to fetch Instagram media by date range');
     }
+  }
+
+  /**
+   * Get active Instagram stories for a user via GET /{ig-user-id}/stories.
+   * Stories are only available for 24 hours. Returns image and video stories.
+   */
+  async getInstagramStories(
+    userId: number,
+    userType: UserType,
+  ): Promise<{
+    data: Array<{
+      id: string;
+      caption: string;
+      mediaType: string;
+      mediaProductType: string;
+      contentType: 'story';
+      mediaUrl: string;
+      thumbnailUrl: string;
+      permalink: string;
+      timestamp: string;
+      formattedDate: string;
+    }>;
+    total: number;
+  }> {
+    let user: Influencer | Brand | null;
+    if (userType === 'influencer') {
+      user = await this.influencerModel.findByPk(userId);
+      if (!user) throw new NotFoundException(`Influencer with ID ${userId} not found`);
+    } else {
+      user = await this.brandModel.findByPk(userId);
+      if (!user) throw new NotFoundException(`Brand with ID ${userId} not found`);
+    }
+
+    if (!user.instagramAccessToken || !user.instagramUserId) {
+      throw new BadRequestException('No Instagram account connected');
+    }
+
+    try {
+      const fields = 'id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp';
+      const response = await axios.get(
+        `https://graph.instagram.com/v24.0/${user.instagramUserId}/stories`,
+        {
+          params: {
+            fields,
+            access_token: user.instagramAccessToken,
+          },
+        },
+      );
+
+      const stories = (response.data.data || []).map((media: any) => {
+        const timestamp = new Date(media.timestamp);
+        return {
+          id: media.id,
+          caption: media.caption || '',
+          mediaType: media.media_type, // IMAGE or VIDEO
+          mediaProductType: 'STORY',
+          contentType: 'story' as const,
+          mediaUrl: media.media_url || '',
+          thumbnailUrl: media.thumbnail_url || media.media_url || '',
+          permalink: media.permalink || '',
+          timestamp: media.timestamp,
+          formattedDate: timestamp.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+        };
+      });
+
+      return { data: stories, total: stories.length };
+    } catch (error) {
+      this.handleInstagramError(error, 'Failed to fetch Instagram stories');
+    }
+  }
+
+  /**
+   * Fetch a single story by mediaId from the active stories list.
+   * Returns null if the story is not found (expired or invalid ID).
+   */
+  async getStoryById(
+    userId: number,
+    userType: UserType,
+    mediaId: string,
+  ): Promise<{ mediaUrl: string; thumbnailUrl: string; mediaType: string; timestamp: string; caption: string } | null> {
+    const { data: stories } = await this.getInstagramStories(userId, userType);
+    const story = stories.find((s) => s.id === mediaId);
+    if (!story) return null;
+    return {
+      mediaUrl: story.mediaUrl,
+      thumbnailUrl: story.thumbnailUrl,
+      mediaType: story.mediaType,
+      timestamp: story.timestamp,
+      caption: story.caption,
+    };
   }
 
   /**
