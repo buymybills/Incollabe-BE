@@ -577,7 +577,7 @@ export class InfluencerHypeStoreController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getAvailableMedia(
     @Request() req: any,
-    @Query('contentType') contentType?: 'reel' | 'story',
+    @Query('contentType') contentType?: 'reel' | 'post_reel' | 'story',
     @Query('days') days?: string,
   ) {
     const influencerId = req.user.id;
@@ -600,12 +600,16 @@ export class InfluencerHypeStoreController {
     const fromDate = new Date();
     fromDate.setDate(fromDate.getDate() - daysBack);
 
+    // post_reel is the legacy value from frontend — treat as 'reel'
+    const normalizedContentType: 'reel' | undefined =
+      contentType === 'post_reel' || contentType === 'reel' ? 'reel' : undefined;
+
     const result = await this.instagramService.getInstagramMediaByDateRange(
       influencerId,
       'influencer',
       fromDate,
       toDate,
-      contentType,
+      normalizedContentType,
       50,
     );
 
