@@ -1131,8 +1131,7 @@ describe('CampaignService', () => {
         expect.objectContaining({
           where: {
             brandId,
-            isActive: true,
-            status: CampaignStatus.ACTIVE,
+            status: { [Op.ne]: CampaignStatus.DRAFT },
           },
           order: [['createdAt', 'DESC']],
           limit: 10,
