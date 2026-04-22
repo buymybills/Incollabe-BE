@@ -315,10 +315,11 @@ describe('CampaignController', () => {
 
       campaignService.getBrandCampaigns.mockResolvedValue(mockResponse);
 
-      const result = await controller.getMyBrandCampaigns(mockRequest, 1, 10);
+      const dto = { page: 1, limit: 10 };
+      const result = await controller.getMyBrandCampaigns(mockRequest, dto as any);
 
       expect(result).toEqual(mockResponse);
-      expect(campaignService.getBrandCampaigns).toHaveBeenCalledWith(1, 1, 10);
+      expect(campaignService.getBrandCampaigns).toHaveBeenCalledWith(1, dto);
     });
   });
 
@@ -424,9 +425,9 @@ describe('CampaignController', () => {
       const mockCampaigns = [];
       campaignService.getBrandCampaigns.mockResolvedValue(mockCampaigns);
 
-      await controller.getMyBrandCampaigns(mockRequest);
+      await controller.getMyBrandCampaigns(mockRequest, {} as any);
 
-      expect(campaignService.getBrandCampaigns).toHaveBeenCalledWith(42, 1, 10);
+      expect(campaignService.getBrandCampaigns).toHaveBeenCalledWith(42, {});
     });
   });
 
