@@ -1008,8 +1008,7 @@ export class CampaignService {
 
   async getBrandCampaigns(
     brandId: number,
-    page: number = 1,
-    limit: number = 10,
+    getCampaignsDto: GetCampaignsDto = {},
   ): Promise<{
     campaigns: Campaign[];
     total: number;
@@ -1017,25 +1016,47 @@ export class CampaignService {
     limit: number;
     totalPages: number;
   }> {
+    const { page = 1, limit = 10, status, type, search } = getCampaignsDto;
     const offset = (page - 1) * limit;
 
-    // Debug logging
-    console.log('getBrandCampaigns called with:', {
+    const whereCondition: any = {
       brandId,
-      page,
-      limit,
-      offset,
-      pageType: typeof page,
-      limitType: typeof limit,
-    });
+      isActive: true,
+    };
+
+    if (status) {
+      whereCondition.status = status;
+    } else {
+      // Exclude drafts by default unless explicitly requested
+      whereCondition.status = { [Op.ne]: CampaignStatus.DRAFT };
+    }
+
+    if (type) {
+      whereCondition.type = type;
+    }
+
+    const filtersToApply: any[] = [];
+
+    if (search && search.trim()) {
+      filtersToApply.push({
+        [Op.or]: [
+          { name: { [Op.iLike]: `%${search.trim()}%` } },
+          { description: { [Op.iLike]: `%${search.trim()}%` } },
+        ],
+      });
+    }
+
+    if (filtersToApply.length > 0) {
+      if (filtersToApply.length === 1) {
+        Object.assign(whereCondition, filtersToApply[0]);
+      } else {
+        whereCondition[Op.and] = filtersToApply;
+      }
+    }
 
     const { rows: campaigns, count: total } =
       await this.campaignModel.findAndCountAll({
-        where: {
-          brandId,
-          isActive: true,
-          status: CampaignStatus.ACTIVE, // Only return active campaigns, exclude drafts
-        },
+        where: whereCondition,
         include: [
           {
             model: CampaignDeliverable,
@@ -1053,15 +1074,8 @@ export class CampaignService {
         order: [['createdAt', 'DESC']],
         limit,
         offset,
+        distinct: true,
       });
-
-    console.log('Query result:', {
-      campaignsReturned: campaigns.length,
-      total,
-      page,
-      limit,
-      offset,
-    });
 
     // Add application count to each campaign and transform field names
     const campaignsWithStats = campaigns.map((campaign) => {

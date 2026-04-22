@@ -413,6 +413,24 @@ export class CampaignController {
     description: 'Number of campaigns per page',
     example: 10,
   })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['draft', 'active', 'paused', 'completed', 'cancelled'],
+    description: 'Filter by campaign status',
+  })
+  @ApiQuery({
+    name: 'type',
+    required: false,
+    enum: ['ugc', 'paid', 'barter', 'engagement'],
+    description: 'Filter by campaign type',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search by campaign name or description',
+  })
   @ApiResponse({
     status: 200,
     description: 'Brand campaigns retrieved successfully',
@@ -449,18 +467,13 @@ export class CampaignController {
   })
   async getMyBrandCampaigns(
     @Req() req: RequestWithUser,
-    @Query('page', new ParseIntPipe({ optional: true })) page: number = 1,
-    @Query('limit', new ParseIntPipe({ optional: true })) limit: number = 10,
+    @Query() getCampaignsDto: GetCampaignsDto,
   ) {
     if (req.user.userType !== 'brand') {
       throw new ForbiddenException('Only brands can access this endpoint');
     }
 
-    return this.campaignService.getBrandCampaigns(
-      req.user.id,
-      page || 1,
-      limit || 10,
-    );
+    return this.campaignService.getBrandCampaigns(req.user.id, getCampaignsDto);
   }
 
   @Get('brand/:brandId/campaigns')
@@ -526,14 +539,9 @@ export class CampaignController {
   })
   async getBrandCampaigns(
     @Param('brandId', ParseIntPipe) brandId: number,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
+    @Query() getCampaignsDto: GetCampaignsDto,
   ) {
-    return this.campaignService.getBrandCampaigns(
-      brandId,
-      page || 1,
-      limit || 10,
-    );
+    return this.campaignService.getBrandCampaigns(brandId, getCampaignsDto);
   }
 
   @Get('cities/popular')
