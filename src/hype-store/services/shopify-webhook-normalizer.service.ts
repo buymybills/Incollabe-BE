@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { UnifiedWebhookDto, WebhookEventType } from '../../wallet/dto/hype-store-webhook.dto';
+import { OrderStatus } from '../../wallet/dto/hype-store-order.dto';
 
 /**
  * Shopify webhook topics we handle
@@ -84,6 +85,7 @@ export class ShopifyWebhookNormalizerService {
     return {
       eventType: WebhookEventType.PURCHASE,
       externalOrderId: order.name,                      // e.g. "#1001"
+      orderStatus: order.financial_status === 'paid' ? OrderStatus.CONFIRMED : OrderStatus.PENDING,
       couponCode,
       referralCode,
       orderTitle: lineItem?.title ?? order.name,

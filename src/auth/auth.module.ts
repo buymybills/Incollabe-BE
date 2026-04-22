@@ -23,6 +23,7 @@ import { Admin } from '../admin/models/admin.model';
 import { CustomNiche } from './model/custom-niche.model';
 import { ProfileReview } from '../admin/models/profile-review.model';
 import { InfluencerReferralUsage } from './model/influencer-referral-usage.model';
+import { ProSubscription } from '../influencer/models/pro-subscription.model';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { InfluencerReferralUsage } from './model/influencer-referral-usage.model
       CustomNiche,
       ProfileReview,
       InfluencerReferralUsage,
+      ProSubscription,
     ]),
     SharedModule,
   ],

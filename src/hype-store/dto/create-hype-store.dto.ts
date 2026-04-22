@@ -56,6 +56,14 @@ export class CreateHypeStoreDto {
   @Min(1)
   @Max(99)
   cashbackPercentage?: number;
+
+  // Return window in days — used to lock cashback until the return period closes
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(90)
+  returnPeriodDays?: number;
 }
 
 export class UpdateHypeStoreDto {
@@ -74,4 +82,12 @@ export class UpdateHypeStoreDto {
   @Min(1)
   @Max(100)
   monthlyCreatorLimit?: number;
+
+  // Return window in days — can be updated post-creation
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(90)
+  returnPeriodDays?: number;
 }

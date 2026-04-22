@@ -167,6 +167,11 @@ export class HypeStoreService {
 
       // Create the main store
       // Use uploaded banner, or auto-populate from brand profile if not provided
+      const storeSettings: Record<string, any> = {};
+      if (createDto.returnPeriodDays !== undefined) {
+        storeSettings.returnPeriodDays = createDto.returnPeriodDays;
+      }
+
       const store = await this.hypeStoreModel.create(
         {
           brandId,
@@ -175,6 +180,7 @@ export class HypeStoreService {
           storeLogo: brand.profileImage || null,
           storeDescription: brand.brandBio || null,
           isActive: createDto.isActive ?? true,
+          settings: Object.keys(storeSettings).length > 0 ? storeSettings : null,
         },
         { transaction },
       );
@@ -670,6 +676,7 @@ export class HypeStoreService {
       ...store.toJSON(),
       brandCouponCode: brandCoupon?.couponCode || null,
       cashbackLimit: cashbackPercentage ? `${cashbackPercentage}%` : null,
+      returnPeriodDays: (store.settings as any)?.returnPeriodDays ?? 30,
       monthlyPurchaseLimit: store.cashbackConfig?.monthlyClaimCount || null,
       // Include webhook credentials only for brand requests
       webhookCredentials: webhookCredentials ? {
@@ -727,7 +734,18 @@ export class HypeStoreService {
       throw new NotFoundException('Hype Store not found');
     }
 
-    await store.update(updateDto);
+    const updateData: any = { ...updateDto };
+
+    // Handle returnPeriodDays — merge into settings JSONB, don't pass raw to model update
+    if (updateDto.returnPeriodDays !== undefined) {
+      updateData.settings = {
+        ...(store.settings || {}),
+        returnPeriodDays: updateDto.returnPeriodDays,
+      };
+      delete updateData.returnPeriodDays;
+    }
+
+    await store.update(updateData);
     return this.getStoreById(storeId, brandId);
   }
 
@@ -2161,14 +2179,18 @@ export class HypeStoreService {
       const transaction: Transaction = await this.sequelize.transaction();
 
       try {
-        // Calculate return period end date (use webhook value or default to 30 days)
+        // Calculate return period end date
+        // Priority: webhook payload > store settings > default 30 days
         const orderDate = new Date(webhookDto.orderDate);
-        const returnPeriodDays = webhookDto.returnPeriodDays || 30;
+        const returnPeriodDays = webhookDto.returnPeriodDays || (hypeStore.settings as any)?.returnPeriodDays || 30;
         const returnPeriodEndsAt = new Date(orderDate);
         returnPeriodEndsAt.setDate(returnPeriodEndsAt.getDate() + returnPeriodDays);
 
-        // Auto-derive cashback type from coupon code
-        const derivedCashbackType = this.deriveCashbackTypeFromCoupon(webhookDto.couponCode);
+        // Derive cashback type from actual cashback rate (not coupon name, which is unreliable)
+        const cashbackPercentage = webhookDto.orderAmount > 0
+          ? Math.round((cashbackAmount / webhookDto.orderAmount) * 100)
+          : 0;
+        const derivedCashbackType = cashbackPercentage > 0 ? `Flat ${cashbackPercentage}%` : null;
 
         const order = await this.orderModel.create(
           {

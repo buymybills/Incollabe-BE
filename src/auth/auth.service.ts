@@ -53,6 +53,9 @@ import { Gender } from './types/gender.enum';
 import { SearchUsersResult } from '../shared/services/search.service';
 import { isReservedUsername } from '../shared/constants/reserved-usernames';
 import { InfluencerReferralUsage } from './model/influencer-referral-usage.model';
+import { ProSubscription } from '../influencer/models/pro-subscription.model';
+import { SubscriptionStatus } from '../influencer/models/payment-enums';
+import { RazorpayService } from '../shared/razorpay.service';
 // Interfaces for token payload
 interface DecodedRefresh {
   id: number;
@@ -98,6 +101,9 @@ export class AuthService {
     private readonly whatsappService: WhatsAppService,
     private readonly deviceTokenService: DeviceTokenService,
     private readonly campusAmbassadorService: CampusAmbassadorService,
+    @InjectModel(ProSubscription)
+    private readonly proSubscriptionModel: typeof ProSubscription,
+    private readonly razorpayService: RazorpayService,
   ) {}
 
   // Redis key helpers
@@ -2210,6 +2216,39 @@ export class AuthService {
       if (!influencer) {
         throw new NotFoundException('Influencer not found');
       }
+
+      // Cancel active Razorpay auto-payment before soft delete
+      const activeSubscription = await this.proSubscriptionModel.findOne({
+        where: {
+          influencerId: userId,
+          status: {
+            [Op.in]: [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAUSED],
+          },
+        },
+      });
+
+      if (activeSubscription?.razorpaySubscriptionId) {
+        await this.razorpayService.cancelSubscription(
+          activeSubscription.razorpaySubscriptionId,
+          false, // cancel immediately, not at cycle end
+        );
+      }
+
+      if (activeSubscription) {
+        await activeSubscription.update({
+          status: SubscriptionStatus.CANCELLED,
+          autoRenew: false,
+          cancelledAt: new Date(),
+          cancelReason: 'Account deleted by user',
+          isPaused: false,
+          pausedAt: null,
+          pauseStartDate: null,
+          pauseDurationDays: null,
+          resumeDate: null,
+          pauseReason: null,
+        });
+      }
+
       await influencer.update({ isActive: false });
       await influencer.destroy(); // Sets deletedAt with paranoid mode
     } else if (userType === 'brand') {

@@ -1155,8 +1155,8 @@ export class InfluencerHypeStoreService {
       );
     }
 
-    // Check if proof already submitted
-    if (order.instagramProofUrl) {
+    // Check if proof already submitted — allow resubmission only if previously rejected
+    if (order.instagramProofUrl && order.proofApprovalStatus !== 'rejected') {
       throw new BadRequestException('Proof has already been submitted for this order');
     }
 
@@ -1300,6 +1300,8 @@ export class InfluencerHypeStoreService {
         estimatedEngagement: estimatedEngagement,
         estimatedReach: estimatedReach,
         proofApprovalStatus: 'pending_review', // Admin needs to approve
+        proofRejectionReason: null, // Clear any previous rejection reason on resubmission
+        proofApprovedAt: null,
         metadata: {
           ...(order.metadata || {}),
           mediaId: submitProofDto.mediaId || null,
