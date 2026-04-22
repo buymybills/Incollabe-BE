@@ -583,9 +583,9 @@ export class ProSubscriptionService {
       amount: displaySubscription.subscriptionAmount / 100, // Convert to Rs
       autoRenew: displaySubscription.autoRenew,
       paymentMethod: displaySubscription.paymentMethod,
-      // Autopay can be true if autoRenew is enabled OR razorpaySubscriptionId exists
-      isAutopay: displaySubscription.autoRenew || !!displaySubscription.razorpaySubscriptionId,
-      subscriptionType: (displaySubscription.autoRenew || displaySubscription.razorpaySubscriptionId) ? 'autopay' : 'monthly',
+      // Autopay can be true if autoRenew is enabled OR razorpaySubscriptionId exists, but not if cancelled
+      isAutopay: displaySubscription.status !== SubscriptionStatus.CANCELLED && (displaySubscription.autoRenew || !!displaySubscription.razorpaySubscriptionId),
+      subscriptionType: displaySubscription.status !== SubscriptionStatus.CANCELLED && (displaySubscription.autoRenew || displaySubscription.razorpaySubscriptionId) ? 'autopay' : 'monthly',
     } : null;
 
     // Get active promotion for display
