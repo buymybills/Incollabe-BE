@@ -1019,15 +1019,13 @@ export class CampaignService {
     const { page = 1, limit = 10, status, type, search } = getCampaignsDto;
     const offset = (page - 1) * limit;
 
-    const whereCondition: any = {
-      brandId,
-      isActive: true,
-    };
+    const whereCondition: any = { brandId };
 
     if (status) {
       whereCondition.status = status;
     } else {
-      // Exclude drafts by default unless explicitly requested
+      // For brands viewing their own campaigns, show all except drafts by default
+      // Note: completed/cancelled campaigns have isActive=false, so we don't filter by isActive here
       whereCondition.status = { [Op.ne]: CampaignStatus.DRAFT };
     }
 
