@@ -34,6 +34,8 @@ import { InfluencerReferralUsage } from './model/influencer-referral-usage.model
 import { WhatsAppService } from '../shared/whatsapp.service';
 import { DeviceTokenService } from '../shared/device-token.service';
 import { CampusAmbassadorService } from '../shared/services/campus-ambassador.service';
+import { ProSubscription } from '../influencer/models/pro-subscription.model';
+import { RazorpayService } from '../shared/razorpay.service';
 
 // Mock bcrypt at module level
 jest.mock('bcrypt', () => ({
@@ -256,6 +258,14 @@ describe('AuthService', () => {
         {
           provide: CampusAmbassadorService,
           useValue: mockCampusAmbassadorService,
+        },
+        {
+          provide: getModelToken(ProSubscription),
+          useValue: mockModel(),
+        },
+        {
+          provide: RazorpayService,
+          useValue: { cancelSubscription: jest.fn().mockResolvedValue({}) },
         },
       ],
     }).compile();
