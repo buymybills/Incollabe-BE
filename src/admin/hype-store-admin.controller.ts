@@ -410,6 +410,13 @@ export class HypeStoreAdminController {
     description: 'Filter by store ID',
     example: 1,
   })
+  @ApiQuery({
+    name: 'orderId',
+    required: false,
+    type: Number,
+    description: 'Filter by order ID',
+    example: 360,
+  })
   @ApiResponse({
     status: 200,
     description: 'Proofs list retrieved successfully',

@@ -71,6 +71,16 @@ export class ListPendingProofsDto {
   @IsInt()
   @Type(() => Number)
   influencerId?: number;
+
+  @ApiProperty({
+    description: 'Filter by order ID',
+    example: 360,
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  @Type(() => Number)
+  orderId?: number;
 }
 
 export class ProofApprovalResponseDto {
