@@ -4,8 +4,6 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
-import { Wallet, UserType as WalletUserType } from '../wallet/models/wallet.model';
-import { WalletTransaction } from '../wallet/models/wallet-transaction.model';
 import { Op } from 'sequelize';
 import { Brand } from './model/brand.model';
 import { BrandNiche } from './model/brand-niche.model';
@@ -77,10 +75,6 @@ export class BrandService {
     private readonly appReviewService: AppReviewService,
     private readonly profileViewService: ProfileViewService,
     private readonly blockService: BlockService,
-    @InjectModel(Wallet)
-    private readonly walletModel: typeof Wallet,
-    @InjectModel(WalletTransaction)
-    private readonly walletTransactionModel: typeof WalletTransaction,
   ) {}
 
   async getBrandProfile(
@@ -1307,94 +1301,6 @@ export class BrandService {
       total: sortedBrands.length,
       limit,
       offset,
-    };
-  }
-
-  async getBrandWallet(brandId: number) {
-    let wallet = await this.walletModel.findOne({
-      where: { userId: brandId, userType: WalletUserType.BRAND },
-    });
-
-    if (!wallet) {
-      wallet = await this.walletModel.create({
-        userId: brandId,
-        userType: WalletUserType.BRAND,
-        balance: 0,
-        lockedAmount: 0,
-        totalCredited: 0,
-        totalDebited: 0,
-        totalCashbackReceived: 0,
-        totalRedeemed: 0,
-        isActive: true,
-      } as any);
-    }
-
-    const availableBalance = parseFloat(wallet.balance.toString());
-    const lockedAmount = parseFloat((wallet.lockedAmount ?? 0).toString());
-    const totalAmount = availableBalance + lockedAmount;
-
-    return {
-      success: true,
-      data: {
-        ...wallet.toJSON(),
-        availableBalance,
-        lockedAmount,
-        totalAmount,
-      },
-      message: 'Wallet balance retrieved successfully',
-    };
-  }
-
-  async getBrandWalletTransactions(
-    brandId: number,
-    page: number = 1,
-    limit: number = 20,
-    type?: string,
-  ) {
-    let wallet = await this.walletModel.findOne({
-      where: { userId: brandId, userType: WalletUserType.BRAND },
-    });
-
-    if (!wallet) {
-      wallet = await this.walletModel.create({
-        userId: brandId,
-        userType: WalletUserType.BRAND,
-        balance: 0,
-        lockedAmount: 0,
-        totalCredited: 0,
-        totalDebited: 0,
-        totalCashbackReceived: 0,
-        totalRedeemed: 0,
-        isActive: true,
-      } as any);
-    }
-
-    const whereClause: any = { walletId: wallet.id };
-    if (type) {
-      whereClause.transactionType = type;
-    }
-
-    const offset = (page - 1) * limit;
-    const { rows: transactions, count: total } =
-      await this.walletTransactionModel.findAndCountAll({
-        where: whereClause,
-        limit,
-        offset,
-        order: [['createdAt', 'DESC']],
-      });
-
-    return {
-      success: true,
-      data: {
-        transactions,
-        pagination: {
-          total,
-          page,
-          limit,
-          totalPages: Math.ceil(total / limit),
-        },
-      },
-      message: 'Transactions retrieved successfully',
     };
   }
 }

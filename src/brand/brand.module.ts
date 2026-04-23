@@ -24,8 +24,6 @@ import { AiCreditPaymentService } from './ai-credit-payment.service';
 import { AdminModule } from '../admin/admin.module';
 import { SharedModule } from '../shared/shared.module';
 import { CampaignModule } from '../campaign/campaign.module';
-import { Wallet } from '../wallet/models/wallet.model';
-import { WalletTransaction } from '../wallet/models/wallet-transaction.model';
 
 @Module({
   imports: [
@@ -45,8 +43,6 @@ import { WalletTransaction } from '../wallet/models/wallet-transaction.model';
       ProfileReview,
       Admin,
       AiCreditInvoice,
-      Wallet,
-      WalletTransaction,
     ]),
     ConfigModule,
     forwardRef(() => AdminModule),

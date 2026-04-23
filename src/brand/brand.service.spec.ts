@@ -23,8 +23,6 @@ import { EncryptionService } from '../shared/services/encryption.service';
 import { AppReviewService } from '../shared/services/app-review.service';
 import { ProfileViewService } from '../shared/services/profile-view.service';
 import { BlockService } from '../shared/services/block.service';
-import { Wallet } from '../wallet/models/wallet.model';
-import { WalletTransaction } from '../wallet/models/wallet-transaction.model';
 import { ProfileType } from '../admin/models/profile-review.model';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { UpdateBrandProfileDto } from './dto/update-brand-profile.dto';
@@ -180,14 +178,6 @@ describe('BrandService', () => {
         },
         {
           provide: getModelToken(Admin),
-          useValue: mockModel(),
-        },
-        {
-          provide: getModelToken(Wallet),
-          useValue: mockModel(),
-        },
-        {
-          provide: getModelToken(WalletTransaction),
           useValue: mockModel(),
         },
         {
