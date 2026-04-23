@@ -319,6 +319,18 @@ export class InfluencerHypeStoreService {
       .filter((order) => order.cashbackStatus === CashbackStatus.CREDITED)
       .reduce((sum, order) => sum + parseFloat(order.cashbackAmount.toString()), 0);
 
+    // Monthly claim window
+    const startOfMonth = new Date();
+    startOfMonth.setUTCDate(1);
+    startOfMonth.setUTCHours(0, 0, 0, 0);
+    const endOfMonth = new Date(startOfMonth);
+    endOfMonth.setUTCMonth(endOfMonth.getUTCMonth() + 1);
+
+    const monthlyClaimLimit = store.cashbackConfig?.monthlyClaimCount ?? 3;
+    const usedThisMonth = orders.filter(
+      (order) => new Date(order.createdAt) >= startOfMonth && new Date(order.createdAt) < endOfMonth,
+    ).length;
+
     return {
       success: true,
       data: {
@@ -340,6 +352,13 @@ export class InfluencerHypeStoreService {
           totalCashbackEarned,
           pendingCashback,
           creditedCashback,
+        },
+        monthlyClaimStatus: {
+          limit: monthlyClaimLimit,
+          usedThisMonth,
+          remaining: Math.max(0, monthlyClaimLimit - usedThisMonth),
+          windowStart: startOfMonth,
+          windowEnd: endOfMonth,
         },
         createdAt: store.createdAt,
         updatedAt: store.updatedAt,
@@ -567,29 +586,6 @@ export class InfluencerHypeStoreService {
       throw new ForbiddenException('This order does not belong to you');
     }
 
-    // Calculate monthly claim usage for this influencer at this store
-    const cashbackConfig = await this.cashbackConfigModel.findOne({
-      where: { storeId: order.hypeStoreId },
-    });
-    const monthlyClaimLimit = cashbackConfig?.monthlyClaimCount ?? 3;
-
-    const startOfMonth = new Date();
-    startOfMonth.setUTCDate(1);
-    startOfMonth.setUTCHours(0, 0, 0, 0);
-
-    const endOfMonth = new Date(startOfMonth);
-    endOfMonth.setUTCMonth(endOfMonth.getUTCMonth() + 1);
-
-    const usedThisMonth = await this.orderModel.count({
-      where: {
-        hypeStoreId: order.hypeStoreId,
-        influencerId,
-        createdAt: { [Op.gte]: startOfMonth, [Op.lt]: endOfMonth },
-      },
-    });
-
-    const claimsRemaining = Math.max(0, monthlyClaimLimit - usedThisMonth);
-
     // Compute per-item cashback breakdown
     const metadata = (order.metadata || {}) as Record<string, any>;
     const purchaseLineItems: any[] = metadata.lineItems ?? [];
@@ -739,13 +735,6 @@ export class InfluencerHypeStoreService {
             }
           : null,
         cashbackBreakdown,
-        monthlyClaimStatus: {
-          limit: monthlyClaimLimit,
-          usedThisMonth,
-          remaining: claimsRemaining,
-          windowStart: startOfMonth,
-          windowEnd: endOfMonth,
-        },
         metadata: order.metadata || null,
         createdAt: order.createdAt,
         updatedAt: order.updatedAt,
