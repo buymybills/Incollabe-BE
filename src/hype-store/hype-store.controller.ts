@@ -80,6 +80,7 @@ export class HypeStoreController {
       '**Optional Cashback Fields:**\n' +
       '- reelPostMinCashback: Minimum cashback for reels/posts (default: Rs 100)\n' +
       '- storyMinCashback: Minimum cashback for stories (default: Rs 100)\n' +
+      '- returnPeriodDays: Days customer can return product (default: 30, max: 90). Cashback locked until window closes.\n' +
       '- bannerImage: Upload custom banner image (JPG, PNG, max 5MB) - overrides brand profile banner\n\n' +
       '**Note:** Creator targeting preferences (age, gender, niche, locations) are configured at brand level using the PUT /creator-preferences endpoint and apply to all stores.\n\n' +
       '**Claim Strategy (Auto-derived from monthly claim count):**\n' +
@@ -138,6 +139,14 @@ export class HypeStoreController {
           minimum: 1,
           maximum: 6,
           example: 3
+        },
+        returnPeriodDays: {
+          type: 'number',
+          description: 'Number of days within which a customer can return the product (optional - default: 30). Cashback is locked until this window closes.',
+          minimum: 0,
+          maximum: 90,
+          example: 30,
+          default: 30
         },
         cashbackPercentage: {
           type: 'number',

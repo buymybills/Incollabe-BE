@@ -2166,7 +2166,46 @@ export class HypeStoreService {
         }
       }
 
-      // 6. Calculate cashback
+      // 6. Enforce monthly claim limit per influencer per store
+      const cashbackConfig = await this.cashbackConfigModel.findOne({
+        where: { storeId: hypeStore.id },
+      });
+      const monthlyClaimLimit = cashbackConfig?.monthlyClaimCount ?? 3;
+
+      const startOfMonth = new Date();
+      startOfMonth.setUTCDate(1);
+      startOfMonth.setUTCHours(0, 0, 0, 0);
+
+      const existingMonthlyOrders = await this.orderModel.count({
+        where: {
+          hypeStoreId: hypeStore.id,
+          influencerId: attributedInfluencerId,
+          createdAt: { [Op.gte]: startOfMonth },
+        },
+      });
+
+      if (existingMonthlyOrders >= monthlyClaimLimit) {
+        responseStatus = 200;
+        responseBody = {
+          success: false,
+          message: `Influencer has reached the monthly cashback limit of ${monthlyClaimLimit} order(s) for this store`,
+        };
+        await this.logWebhookRequest({
+          hypeStoreId: hypeStore.id,
+          method: 'POST',
+          path: '/webhooks/purchase',
+          headers: {},
+          body: webhookDto,
+          ipAddress,
+          status: responseStatus,
+          responseBody,
+          isValid: true,
+          errorMessage: `Monthly claim limit reached for influencer ${attributedInfluencerId}`,
+        });
+        return responseBody;
+      }
+
+      // 7. Calculate cashback
       const contentType = webhookDto.contentType || 'post_reel'; // Default to post_reel if not provided
       const { cashbackAmount, tierId } = await this.calculateCashbackAmount(
         webhookDto.orderAmount,
@@ -2175,7 +2214,7 @@ export class HypeStoreService {
         contentType,
       );
 
-      // 7. Create order in transaction
+      // 8. Create order in transaction
       const transaction: Transaction = await this.sequelize.transaction();
 
       try {
@@ -2406,7 +2445,7 @@ export class HypeStoreService {
       }
 
       if (!order) {
-        responseStatus = 404;
+        responseStatus = 200;
         responseBody = { success: false, message: 'Order not found' };
         try {
           await this.logWebhookRequest({
@@ -2424,7 +2463,7 @@ export class HypeStoreService {
         } catch (logErr) {
           this.logger.error('Failed to log return webhook (order not found):', logErr);
         }
-        throw new NotFoundException('Order not found');
+        return responseBody;
       }
 
       processedOrderId = order.id;
@@ -2458,7 +2497,7 @@ export class HypeStoreService {
         } catch (logErr) {
           this.logger.error('Failed to log return webhook (return window closed):', logErr);
         }
-        throw new BadRequestException('Return window has closed. Cashback has already been unlocked and credited to influencer.');
+        return responseBody;
       }
 
       // Additional validation: Only allow returns for orders with locked or pending cashback
@@ -2485,7 +2524,7 @@ export class HypeStoreService {
         } catch (logErr) {
           this.logger.error('Failed to log return webhook (cashback credited):', logErr);
         }
-        throw new BadRequestException('Cannot process return. Cashback has already been credited to influencer.');
+        return responseBody;
       }
 
       // 4. Update order status and reverse cashback if needed
