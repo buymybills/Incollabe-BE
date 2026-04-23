@@ -11,6 +11,7 @@ import { HypeStoreCashbackConfig } from '../../hype-store/models/hype-store-cash
 import { HypeStoreCouponCode } from '../../wallet/models/hype-store-coupon-code.model';
 import { HypeStoreWallet } from '../../hype-store/models/hype-store-wallet.model';
 import { HypeStoreWalletTransaction } from '../../hype-store/models/hype-store-wallet-transaction.model';
+import { WalletTransaction } from '../../wallet/models/wallet-transaction.model';
 import { InfluencerHypeStoreService } from '../../influencer/services/influencer-hype-store.service';
 import {
   DateRangeFilterDto,
@@ -48,6 +49,8 @@ export class HypeStoreAdminService {
     private hypeStoreWalletModel: typeof HypeStoreWallet,
     @InjectModel(HypeStoreWalletTransaction)
     private walletTransactionModel: typeof HypeStoreWalletTransaction,
+    @InjectModel(WalletTransaction)
+    private sharedWalletTransactionModel: typeof WalletTransaction,
     private sequelize: Sequelize,
     @Inject(forwardRef(() => InfluencerHypeStoreService))
     private influencerHypeStoreService: InfluencerHypeStoreService,
@@ -586,11 +589,11 @@ export class HypeStoreAdminService {
     const limit = pagination.limit || 20;
     const offset = (page - 1) * limit;
 
-    // Get brand wallet
-    const wallet = await this.hypeStoreWalletModel.findOne({
+    // Get brand wallet from the shared wallets table (UserType.BRAND)
+    const wallet = await this.walletModel.findOne({
       where: {
         userId: brandId,
-        userType: 'brand',
+        userType: UserType.BRAND,
       },
     });
 
@@ -599,7 +602,7 @@ export class HypeStoreAdminService {
     }
 
     const { rows: transactions, count: total } =
-      await this.walletTransactionModel.findAndCountAll({
+      await this.sharedWalletTransactionModel.findAndCountAll({
         where: {
           walletId: wallet.id,
         },
@@ -613,9 +616,9 @@ export class HypeStoreAdminService {
       transactionType: txn.transactionType,
       description: txn.description || 'Wallet transaction',
       amount: parseFloat(txn.amount.toString()),
-      balanceAfter: parseFloat(txn.newBalance.toString()),
-      status: txn.paymentReferenceId ? 'SUCCESS' : 'SUCCESS', // Simplification - all recorded transactions are successful
-      paymentMethod: txn.paymentMethod || 'N/A',
+      balanceAfter: parseFloat(txn.balanceAfter.toString()),
+      status: txn.status,
+      paymentMethod: txn.paymentGateway || 'N/A',
       paymentReferenceId: txn.paymentReferenceId || 'N/A',
       createdAt: txn.createdAt.toISOString(),
     }));

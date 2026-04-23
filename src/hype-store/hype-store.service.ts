@@ -2882,8 +2882,7 @@ export class HypeStoreService {
       throw new BadRequestException('Cashback already credited');
     }
 
-    // Find or create influencer wallet
-    let influencerWallet = await this.walletModel.findOne({
+    const influencerWallet = await this.walletModel.findOne({
       where: {
         userId: order.influencerId,
         userType: UserType.INFLUENCER,
@@ -2891,64 +2890,57 @@ export class HypeStoreService {
     });
 
     if (!influencerWallet) {
-      influencerWallet = await this.walletModel.create({
-        userId: order.influencerId,
-        userType: UserType.INFLUENCER,
-        balance: 0,
-        totalCredited: 0,
-        totalDebited: 0,
-        totalCashbackReceived: 0,
-        totalRedeemed: 0,
-        isActive: true,
-      } as any);
+      throw new NotFoundException('Influencer wallet not found');
     }
 
     const transaction: Transaction = await this.sequelize.transaction();
 
     try {
-      const previousBalance = parseFloat(influencerWallet.balance.toString());
       const cashbackAmount = parseFloat(order.cashbackAmount.toString());
+      const previousBalance = parseFloat(influencerWallet.balance.toString());
+      const previousLocked = parseFloat(influencerWallet.lockedAmount.toString());
       const newBalance = previousBalance + cashbackAmount;
+      const newLocked = Math.max(0, previousLocked - cashbackAmount);
 
-      // Update wallet
+      // Move amount from locked → available balance
       await influencerWallet.update(
         {
           balance: newBalance,
+          lockedAmount: newLocked,
           totalCredited: parseFloat(influencerWallet.totalCredited.toString()) + cashbackAmount,
-          totalCashbackReceived:
-            parseFloat(influencerWallet.totalCashbackReceived.toString()) + cashbackAmount,
         },
         { transaction },
       );
 
-      // Create transaction record
-      const walletTransaction = await this.walletTransactionModel.create(
-        {
-          walletId: influencerWallet.id,
-          transactionType: TransactionType.CASHBACK,
-          amount: cashbackAmount,
-          balanceBefore: previousBalance,
-          balanceAfter: newBalance,
-          status: TransactionStatus.COMPLETED,
-          description: `Cashback for order ${order.externalOrderId}`,
-          storeId: order.hypeStoreId,
-        } as any,
-        { transaction },
-      );
+      // Unlock the existing locked transaction created at proof approval — no new record needed
+      if (order.lockedCashbackTransactionId) {
+        await this.walletTransactionModel.update(
+          {
+            isLocked: false,
+            lockExpiresAt: null,
+            balanceAfter: newBalance,
+            notes: `Cashback unlocked after return window closed for order ${order.externalOrderId}`,
+          } as any,
+          {
+            where: { id: order.lockedCashbackTransactionId },
+            transaction,
+          },
+        );
+      }
 
       // Update order
       await order.update(
         {
           cashbackStatus: CashbackStatus.CREDITED,
           cashbackCreditedAt: new Date(),
-          walletTransactionId: walletTransaction.id,
+          walletTransactionId: order.lockedCashbackTransactionId,
         },
         { transaction },
       );
 
       await transaction.commit();
     } catch (error) {
-      await transaction.rollback(); 
+      await transaction.rollback();
       throw error;
     }
   }
