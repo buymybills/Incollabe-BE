@@ -29,7 +29,7 @@ export class ShopifyWebhookNormalizerService {
    *   line_items[0].variant_title       → productVariant
    *   line_items[0].image.src           → productImageUrl
    *   line_items[0].quantity            → productQuantity
-   *   order.total_price                 → orderAmount
+   *   order.subtotal_price              → orderAmount (product total only, excludes shipping)
    *   order.currency                    → orderCurrency
    *   order.created_at                  → orderDate
    *   customer.first_name + last_name   → customerName
@@ -93,7 +93,7 @@ export class ShopifyWebhookNormalizerService {
       productVariant: lineItem?.variant_title ?? undefined,
       productImageUrl: lineItem?.image?.src ?? undefined,
       productQuantity: lineItem?.quantity ?? 1,
-      orderAmount: parseFloat(order.total_price ?? '0'),
+      orderAmount: parseFloat(order.subtotal_price ?? order.total_price ?? '0'),
       orderCurrency: order.currency ?? 'INR',
       orderDate: order.created_at,
       customerName,
