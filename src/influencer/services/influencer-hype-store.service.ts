@@ -1403,9 +1403,25 @@ export class InfluencerHypeStoreService {
       dbContentType,
     );
 
-    const updatedCashbackAmount = recalculated.tierFound
+    let updatedCashbackAmount = recalculated.tierFound
       ? recalculated.cashbackAmount
       : parseFloat(order.cashbackAmount.toString()); // fallback: keep existing if no tier found
+
+    // Enforce store-level max cashback limit for the submitted content type.
+    const storeConfig = await this.cashbackConfigModel.findOne({
+      where: { storeId: order.hypeStoreId },
+    });
+    if (storeConfig) {
+      const maxAllowed = submitProofDto.contentType === 'story'
+        ? parseFloat((storeConfig.storyMaxCashback ?? 0).toString())
+        : parseFloat((storeConfig.reelPostMaxCashback ?? 0).toString());
+      if (maxAllowed > 0 && updatedCashbackAmount > maxAllowed) {
+        this.logger.log(
+          `[submitProof order=${orderId}] Cashback ₹${updatedCashbackAmount} exceeds store max ₹${maxAllowed} for ${submitProofDto.contentType}, capping.`,
+        );
+        updatedCashbackAmount = maxAllowed;
+      }
+    }
 
     const updatedTierId = recalculated.tierId ?? order.cashbackTierId;
 
