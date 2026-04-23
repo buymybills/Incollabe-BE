@@ -23,6 +23,8 @@ import { Influencer } from '../../auth/model/influencer.model';
 import { InstagramProfileAnalysis } from '../../shared/models/instagram-profile-analysis.model';
 import { InstagramService } from '../../shared/services/instagram.service';
 import { S3Service } from '../../shared/s3.service';
+import { CashbackTierService } from '../../hype-store/services/cashback-tier.service';
+import { ContentType } from '../../hype-store/models/cashback-tier.model';
 import axios from 'axios';
 
 @Injectable()
@@ -53,6 +55,7 @@ export class InfluencerHypeStoreService {
     private instagramService: InstagramService,
     private sequelize: Sequelize,
     private s3Service: S3Service,
+    private cashbackTierService: CashbackTierService,
   ) {}
 
   /**
@@ -1347,6 +1350,29 @@ export class InfluencerHypeStoreService {
       } as any);
     }
 
+    // Recalculate cashback using the correct tier for the submitted content type.
+    // At order creation we don't know content type yet, so it defaults to post_reel.
+    // Now that we know (story vs reel), look up the right tier and update cashbackAmount.
+    // 'reel' in our API maps to 'post_reel' in the DB enum.
+    const dbContentType: ContentType =
+      submitProofDto.contentType === 'story' ? ContentType.STORY : ContentType.POST_REEL;
+
+    const recalculated = await this.cashbackTierService.calculateCashback(
+      influencerId,
+      parseFloat(order.orderAmount.toString()),
+      dbContentType,
+    );
+
+    const updatedCashbackAmount = recalculated.tierFound
+      ? recalculated.cashbackAmount
+      : parseFloat(order.cashbackAmount.toString()); // fallback: keep existing if no tier found
+
+    const updatedTierId = recalculated.tierId ?? order.cashbackTierId;
+
+    this.logger.log(
+      `[submitProof order=${orderId}] Cashback recalculated: ${dbContentType} tier ${updatedTierId} → ₹${updatedCashbackAmount} (was ₹${order.cashbackAmount})`,
+    );
+
     // Save proof details for admin review - NO wallet transactions yet
     try {
       this.logger.log(
@@ -1357,6 +1383,8 @@ export class InfluencerHypeStoreService {
       await order.update({
         instagramProofUrl: instagramUrl,
         proofContentType: submitProofDto.contentType,
+        cashbackAmount: updatedCashbackAmount,
+        cashbackTierId: updatedTierId,
         proofSubmittedAt: new Date(),
         proofThumbnailUrl: thumbnailUrl,
         proofViewCount: viewCount,

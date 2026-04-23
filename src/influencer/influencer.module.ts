@@ -40,6 +40,8 @@ import { HypeStoreCouponCode } from '../wallet/models/hype-store-coupon-code.mod
 import { HypeStoreOrder } from '../wallet/models/hype-store-order.model';
 import { HypeStoreReferralCode } from '../wallet/models/hype-store-referral-code.model';
 import { HypeStoreReferralClick } from '../wallet/models/hype-store-referral-click.model';
+import { CashbackTier } from '../hype-store/models/cashback-tier.model';
+import { CashbackTierService } from '../hype-store/services/cashback-tier.service';
 import { Wallet } from '../wallet/models/wallet.model';
 import { WalletTransaction } from '../wallet/models/wallet-transaction.model';
 import { BrandNiche } from '../brand/model/brand-niche.model';
@@ -90,6 +92,7 @@ import { AdminModule } from '../admin/admin.module';
       WalletTransaction,
       DeviceToken,
       NudgeMessageTemplate,
+      CashbackTier,
     ]),
     SharedModule,
     CampaignModule,
@@ -99,6 +102,7 @@ import { AdminModule } from '../admin/admin.module';
   providers: [
     InfluencerService,
     InfluencerHypeStoreService,
+    CashbackTierService,
     InfluencerRepository,
     ProSubscriptionService,
     SubscriptionSchedulerService,
