@@ -447,6 +447,7 @@ export class InfluencerHypeStoreService {
     limit: number = 20,
     storeId?: number,
     cashbackStatus?: string,
+    search?: string,
   ) {
     const offset = (page - 1) * limit;
 
@@ -462,6 +463,26 @@ export class InfluencerHypeStoreService {
 
     if (cashbackStatus) {
       whereClause.cashbackStatus = cashbackStatus;
+    }
+
+    if (search) {
+      // Find store IDs where brand name matches the search term
+      const matchingStores = await this.hypeStoreModel.findAll({
+        attributes: ['id'],
+        include: [{
+          model: this.brandModel,
+          as: 'brand',
+          where: { brandName: { [Op.iLike]: `%${search}%` } },
+          required: true,
+          attributes: [],
+        }],
+      });
+      const matchingStoreIds = matchingStores.map((s) => s.id);
+
+      whereClause[Op.or] = [
+        { externalOrderId: { [Op.iLike]: `%${search}%` } },
+        ...(matchingStoreIds.length > 0 ? [{ hypeStoreId: { [Op.in]: matchingStoreIds } }] : []),
+      ];
     }
 
     // Get orders

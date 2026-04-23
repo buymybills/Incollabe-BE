@@ -137,7 +137,7 @@ export class InfluencerHypeStoreController {
   @Get('my-orders')
   @ApiOperation({
     summary: 'Get my orders and cashback history',
-    description: 'Get all orders placed using influencer\'s coupon codes with cashback details'
+    description: 'Get all orders placed using influencer\'s coupon codes with cashback details. Supports search by order ID (e.g. NN1038SO) or brand name.'
   })
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 20)' })
@@ -148,6 +148,7 @@ export class InfluencerHypeStoreController {
     enum: ['pending', 'processing', 'credited', 'failed', 'cancelled'],
     description: 'Filter by cashback status'
   })
+  @ApiQuery({ name: 'search', required: false, type: String, description: 'Search by order ID (e.g. NN1038SO) or brand name' })
   @ApiResponse({
     status: 200,
     description: 'Orders retrieved successfully',
@@ -228,6 +229,7 @@ export class InfluencerHypeStoreController {
     @Query('limit') limit?: string,
     @Query('storeId') storeId?: string,
     @Query('cashbackStatus') cashbackStatus?: string,
+    @Query('search') search?: string,
   ) {
     const influencerId = req.user.id;
     return this.hypeStoreService.getMyOrders(
@@ -236,6 +238,7 @@ export class InfluencerHypeStoreController {
       limit ? parseInt(limit) : 20,
       storeId ? parseInt(storeId) : undefined,
       cashbackStatus,
+      search,
     );
   }
 
