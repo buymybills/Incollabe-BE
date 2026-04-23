@@ -1369,6 +1369,11 @@ export class InfluencerHypeStoreService {
 
     const updatedTierId = recalculated.tierId ?? order.cashbackTierId;
 
+    const orderAmount = parseFloat(order.orderAmount.toString());
+    const updatedCashbackType = orderAmount > 0 && updatedCashbackAmount > 0
+      ? `Flat ${Math.round((updatedCashbackAmount / orderAmount) * 100)}%`
+      : order.cashbackType;
+
     this.logger.log(
       `[submitProof order=${orderId}] Cashback recalculated: ${dbContentType} tier ${updatedTierId} → ₹${updatedCashbackAmount} (was ₹${order.cashbackAmount})`,
     );
@@ -1384,6 +1389,7 @@ export class InfluencerHypeStoreService {
         instagramProofUrl: instagramUrl,
         proofContentType: submitProofDto.contentType,
         cashbackAmount: updatedCashbackAmount,
+        cashbackType: updatedCashbackType,
         cashbackTierId: updatedTierId,
         proofSubmittedAt: new Date(),
         proofThumbnailUrl: thumbnailUrl,
