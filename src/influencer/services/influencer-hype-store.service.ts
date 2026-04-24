@@ -1594,44 +1594,71 @@ export class InfluencerHypeStoreService {
         `[approveProof order=${orderId} admin=${adminId}] Starting approval process`,
       );
 
-      const previousLockedAmount = parseFloat(wallet.lockedAmount.toString());
-      const newLockedAmount = previousLockedAmount + cashbackAmount;
       const returnPeriodEndsAt =
         order.returnPeriodEndsAt ||
         new Date(
           Date.now() +
             parseFloat(order.returnPeriodDays.toString()) * 24 * 60 * 60 * 1000,
         );
+      const returnWindowAlreadyClosed = new Date() > returnPeriodEndsAt;
 
-      // 1. Create locked cashback transaction for influencer
-      const lockedTransaction = await this.walletTransactionModel.create(
-        {
-          walletId: wallet.id,
-          transactionType: TransactionType.CASHBACK,
-          amount: cashbackAmount,
-          balanceBefore: parseFloat(wallet.balance.toString()),
-          balanceAfter: parseFloat(wallet.balance.toString()),
-          status: TransactionStatus.COMPLETED,
-          isLocked: true,
-          lockExpiresAt: returnPeriodEndsAt,
-          description: `Locked cashback for order ${order.externalOrderId} (Admin approved)`,
-          hypeStoreId: order.hypeStoreId,
-          hypeStoreOrderId: order.id,
-          notes: `Cashback locked during return window. Will be unlocked on ${returnPeriodEndsAt.toISOString()}`,
-        } as any,
+      const previousBalance = parseFloat(wallet.balance.toString());
+      const previousLockedAmount = parseFloat(wallet.lockedAmount.toString());
+
+      // 1. Create cashback transaction for influencer
+      // If return window already closed: credit directly to available balance (no lock)
+      // If still within return window: lock until returnPeriodEndsAt
+      const walletTxData: Record<string, any> = {
+        walletId: wallet.id,
+        transactionType: TransactionType.CASHBACK,
+        amount: cashbackAmount,
+        balanceBefore: previousBalance,
+        status: TransactionStatus.COMPLETED,
+        hypeStoreId: order.hypeStoreId,
+        hypeStoreOrderId: order.id,
+      };
+
+      if (returnWindowAlreadyClosed) {
+        walletTxData.isLocked = false;
+        walletTxData.lockExpiresAt = null;
+        walletTxData.balanceAfter = previousBalance + cashbackAmount;
+        walletTxData.description = `Cashback credited for order ${order.externalOrderId} (return window already closed)`;
+        walletTxData.notes = `Cashback credited immediately as return window ended on ${returnPeriodEndsAt.toISOString()}`;
+      } else {
+        walletTxData.isLocked = true;
+        walletTxData.lockExpiresAt = returnPeriodEndsAt;
+        walletTxData.balanceAfter = previousBalance;
+        walletTxData.description = `Locked cashback for order ${order.externalOrderId} (Admin approved)`;
+        walletTxData.notes = `Cashback locked during return window. Will be unlocked on ${returnPeriodEndsAt.toISOString()}`;
+      }
+
+      const cashbackTransaction = await this.walletTransactionModel.create(
+        walletTxData as any,
         { transaction },
       );
 
-      // 2. Update influencer wallet with locked amount
-      await wallet.update(
-        {
-          lockedAmount: newLockedAmount,
-          totalCashbackReceived:
-            parseFloat(wallet.totalCashbackReceived.toString()) +
-            cashbackAmount,
-        },
-        { transaction },
-      );
+      // 2. Update influencer wallet
+      if (returnWindowAlreadyClosed) {
+        await wallet.update(
+          {
+            balance: previousBalance + cashbackAmount,
+            totalCashbackReceived:
+              parseFloat(wallet.totalCashbackReceived.toString()) + cashbackAmount,
+            totalCredited:
+              parseFloat((wallet as any).totalCredited?.toString() || '0') + cashbackAmount,
+          },
+          { transaction },
+        );
+      } else {
+        await wallet.update(
+          {
+            lockedAmount: previousLockedAmount + cashbackAmount,
+            totalCashbackReceived:
+              parseFloat(wallet.totalCashbackReceived.toString()) + cashbackAmount,
+          },
+          { transaction },
+        );
+      }
 
       // 3. Create debit transaction for brand
       const brandDebitTx = await this.walletTransactionModel.create(
@@ -1665,8 +1692,10 @@ export class InfluencerHypeStoreService {
           proofApprovalStatus: 'approved',
           proofApprovedBy: adminId,
           proofApprovedAt: new Date(),
-          cashbackStatus: CashbackStatus.PROCESSING,
-          lockedCashbackTransactionId: lockedTransaction.id,
+          cashbackStatus: returnWindowAlreadyClosed ? CashbackStatus.CREDITED : CashbackStatus.PROCESSING,
+          walletTransactionId: returnWindowAlreadyClosed ? cashbackTransaction.id : null,
+          lockedCashbackTransactionId: returnWindowAlreadyClosed ? null : cashbackTransaction.id,
+          cashbackCreditedAt: returnWindowAlreadyClosed ? new Date() : null,
           metadata: {
             ...(order.metadata || {}),
             brandDebitTransactionId: brandDebitTx.id,
@@ -1678,18 +1707,20 @@ export class InfluencerHypeStoreService {
       await transaction.commit();
 
       this.logger.log(
-        `[approveProof order=${orderId} admin=${adminId}] Proof approved successfully. Cashback locked.`,
+        `[approveProof order=${orderId} admin=${adminId}] Proof approved successfully. Cashback ${returnWindowAlreadyClosed ? 'credited directly (return window closed)' : 'locked'}.`,
       );
 
       return {
         success: true,
-        message: `Proof approved successfully. Cashback of ₹${cashbackAmount.toFixed(2)} has been locked and will be available after the return window closes.`,
+        message: returnWindowAlreadyClosed
+          ? `Proof approved successfully. Cashback of ₹${cashbackAmount.toFixed(2)} has been credited to the influencer's wallet (return window already closed).`
+          : `Proof approved successfully. Cashback of ₹${cashbackAmount.toFixed(2)} has been locked and will be available after the return window closes.`,
         data: {
           orderId: order.id,
           externalOrderId: order.externalOrderId,
           cashbackAmount,
           proofApprovalStatus: 'approved',
-          cashbackStatus: CashbackStatus.PROCESSING,
+          cashbackStatus: returnWindowAlreadyClosed ? CashbackStatus.CREDITED : CashbackStatus.PROCESSING,
           returnPeriodEndsAt,
         },
       };
