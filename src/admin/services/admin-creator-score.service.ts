@@ -48,7 +48,7 @@ export class AdminCreatorScoreService {
       if (grade === 'Not Scored') {
         whereClause.id = {
           [Op.notIn]: this.influencerProfileScoreModel.sequelize!.literal(
-            'SELECT DISTINCT influencer_id FROM influencer_profile_scores',
+            '(SELECT DISTINCT influencer_id FROM influencer_profile_scores)',
           ),
         };
       } else {
