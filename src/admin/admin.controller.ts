@@ -3808,6 +3808,7 @@ export class AdminController {
   @ApiQuery({ name: 'searchQuery', required: false, type: String, description: 'Search by name, username or Instagram username' })
   @ApiQuery({ name: 'startDate', required: false, type: String, example: '2025-09-01' })
   @ApiQuery({ name: 'endDate', required: false, type: String, example: '2025-10-31' })
+  @ApiQuery({ name: 'grade', required: false, enum: ['Strong Profile', 'Good Profile', 'Average Profile', 'Weak Profile', 'Not Scored'], description: 'Filter by grade' })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Creator scores list returned successfully',

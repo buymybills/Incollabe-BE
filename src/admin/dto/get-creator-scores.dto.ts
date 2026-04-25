@@ -1,6 +1,9 @@
-import { IsOptional, IsString, IsDateString } from 'class-validator';
+import { IsOptional, IsString, IsDateString, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+
+export const CREATOR_GRADES = ['Strong Profile', 'Good Profile', 'Average Profile', 'Weak Profile', 'Not Scored'] as const;
+export type CreatorGrade = typeof CREATOR_GRADES[number];
 
 export class GetCreatorScoresDto {
   @ApiPropertyOptional({ default: 1 })
@@ -27,6 +30,15 @@ export class GetCreatorScoresDto {
   @IsOptional()
   @IsDateString()
   endDate?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter by grade',
+    enum: CREATOR_GRADES,
+    example: 'Strong Profile',
+  })
+  @IsOptional()
+  @IsIn(CREATOR_GRADES)
+  grade?: CreatorGrade;
 }
 
 export class GetCreatorScoresDashboardDto {

@@ -17,7 +17,7 @@ export class AdminCreatorScoreService {
   ) {}
 
   async getCreatorScores(dto: GetCreatorScoresDto) {
-    const { page = 1, limit = 20, searchQuery, startDate, endDate } = dto;
+    const { page = 1, limit = 20, searchQuery, startDate, endDate, grade } = dto;
     const offset = (page - 1) * limit;
 
     const whereClause: any = {
@@ -41,6 +41,38 @@ export class AdminCreatorScoreService {
         { username: { [Op.iLike]: `%${searchQuery.trim()}%` } },
         { instagramUsername: { [Op.iLike]: `%${searchQuery.trim()}%` } },
       ];
+    }
+
+    // When filtering by grade, resolve matching influencer IDs from scores first
+    if (grade) {
+      if (grade === 'Not Scored') {
+        whereClause.id = {
+          [Op.notIn]: this.influencerProfileScoreModel.sequelize!.literal(
+            'SELECT DISTINCT influencer_id FROM influencer_profile_scores',
+          ),
+        };
+      } else {
+        const gradeScores: any[] = await this.influencerProfileScoreModel.sequelize!.query(
+          `
+          SELECT DISTINCT ON (influencer_id) influencer_id
+          FROM influencer_profile_scores
+          WHERE grade = :grade
+          ORDER BY influencer_id, calculated_at DESC
+          `,
+          {
+            replacements: { grade },
+            type: require('sequelize').QueryTypes.SELECT,
+            raw: true,
+          },
+        );
+        const gradeFilteredInfluencerIds = gradeScores.map((s: any) => s.influencer_id);
+
+        if (gradeFilteredInfluencerIds.length === 0) {
+          return { data: [], total: 0, page, limit, totalPages: 0 };
+        }
+
+        whereClause.id = { [Op.in]: gradeFilteredInfluencerIds };
+      }
     }
 
     const { rows, count } = await this.influencerModel.findAndCountAll({
