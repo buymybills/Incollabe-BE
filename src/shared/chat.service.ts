@@ -331,9 +331,10 @@ export class ChatService {
     }
 
     // Get participant details and block status in parallel
-    const [currentUser, isBlocked] = await Promise.all([
+    const [currentUser, isBlocked, isBlockedByOther] = await Promise.all([
       this.getParticipantDetails(userParticipantType, userId),
       this.blockService.hasBlocked(userId, userType, otherPartyId, otherPartyType),
+      this.blockService.isBlockedBy(userId, userType, otherPartyId, otherPartyType),
     ]);
 
     const maskedOtherParty = isBlocked
@@ -353,6 +354,7 @@ export class ChatService {
       otherParty: maskedOtherParty,
       otherPartyType,
       isBlocked,
+      isBlockedByOther,
       lastMessage: conversation.lastMessage,
       lastMessageType: conversation.lastMessageType ?? 'text',
       lastMessageAt: conversation.lastMessageAt,
@@ -614,7 +616,7 @@ export class ChatService {
           userId,
           userParticipantType,
         );
-        const [otherPartyDetails, isBlocked] = await Promise.all([
+        const [otherPartyDetails, isBlocked, isBlockedByOther] = await Promise.all([
           this.getParticipantDetails(
             otherParticipant.type,
             otherParticipant.id,
@@ -622,6 +624,12 @@ export class ChatService {
             userType,
           ),
           this.blockService.hasBlocked(
+            userId,
+            userType,
+            otherParticipant.id,
+            otherParticipant.type as 'influencer' | 'brand',
+          ),
+          this.blockService.isBlockedBy(
             userId,
             userType,
             otherParticipant.id,
@@ -661,6 +669,7 @@ export class ChatService {
           otherParty: maskedOtherPartyDetails,
           otherPartyType: otherParticipant.type,
           isBlocked,
+          isBlockedByOther,
           lastMessage: conv.lastMessage,
           lastMessageType: conv.lastMessageType ?? 'text',
           lastMessageAt: conv.lastMessageAt,
