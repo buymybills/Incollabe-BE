@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { SequelizeModule } from '@nestjs/sequelize';
+import { BullModule } from '@nestjs/bull';
 import { SmsService } from './sms.service';
 import { S3Service } from './s3.service';
 import { EmailService } from './email.service';
@@ -100,11 +101,13 @@ import { ApiLoggerMiddleware } from '../middleware/api-logger.middleware';
 import { BlockedUser } from './models/blocked-user.model';
 import { BlockService } from './services/block.service';
 import { BlockController } from './controllers/block.controller';
+import { GroupNotificationProcessor } from './queues/group-notification.processor';
 
 @Module({
   imports: [
     ConfigModule.forRoot(),
     JwtAuthModule,
+    BullModule.registerQueue({ name: 'group-notifications' }),
     SequelizeModule.forFeature([
       Otp,
       CustomNiche,
@@ -209,6 +212,7 @@ import { BlockController } from './controllers/block.controller';
     FiamCampaignMobileService,
     ApiLoggerMiddleware,
     BlockService,
+    GroupNotificationProcessor,
   ],
   exports: [
     SmsService,

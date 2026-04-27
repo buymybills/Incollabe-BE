@@ -10,6 +10,9 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger, UseGuards, UnauthorizedException } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bull';
+import type { Queue } from 'bull';
+import { createAdapter } from '@socket.io/redis-adapter';
 import { ChatService } from './chat.service';
 import { GroupChatService } from './group-chat.service';
 import { WsAuthGuard } from './guards/ws-auth.guard';
@@ -23,6 +26,8 @@ import { UserType as DeviceUserType } from './models/device-token.model';
 import { ChatDecryptionService } from './services/chat-decryption.service';
 import { InAppNotificationService } from './in-app-notification.service';
 import { NotificationType } from './models/in-app-notification.model';
+import { RedisService } from '../redis/redis.service';
+import { GroupPushNotificationJobData } from './queues/group-notification.processor';
 import { Op } from 'sequelize';
 
 @WebSocketGateway({
@@ -57,6 +62,8 @@ export class ChatGateway
     private readonly deviceTokenService: DeviceTokenService,
     private readonly chatDecryptionService: ChatDecryptionService,
     private readonly inAppNotificationService: InAppNotificationService,
+    private readonly redisService: RedisService,
+    @InjectQueue('group-notifications') private readonly groupNotificationQueue: Queue,
   ) { }
 
   afterInit(server: Server) {
@@ -69,6 +76,16 @@ export class ChatGateway
     console.log('===========================================\n');
 
     this.logger.log('WebSocket Gateway initialized');
+
+    // Redis adapter — enables WebSocket rooms to work across multiple server instances
+    try {
+      const pubClient = this.redisService.getClient();
+      const subClient = pubClient.duplicate();
+      server.adapter(createAdapter(pubClient, subClient));
+      this.logger.log('Socket.io Redis adapter attached');
+    } catch (err) {
+      this.logger.error('Failed to attach Redis adapter, running single-instance mode', err);
+    }
 
     // Setup server-level error handling (if engine is available)
     if (server.engine) {
@@ -438,7 +455,15 @@ export class ChatGateway
   }
 
   /**
-   * Broadcast a message to all members of a group chat
+   * Broadcast a message to all members of a group chat.
+   *
+   * Optimised flow:
+   *  1. Fetch all active members (1 query)
+   *  2. Fetch all encrypted keys for the message (1 query)
+   *  3. Emit to Socket.io room — all members already in the room get it instantly
+   *  4. Direct-emit to online members not in the room (no DB round-trip per member)
+   *  5. Ack sender immediately
+   *  6. Enqueue FCM for offline members — fire and forget via Bull queue
    */
   private async broadcastGroupMessage(
     conversationId: number,
@@ -449,102 +474,75 @@ export class ChatGateway
     senderSocket: Socket,
   ) {
     try {
-      console.log('📢 === BROADCASTING GROUP MESSAGE ===');
-      console.log('Group ID:', groupChatId);
-      console.log('Message ID:', message.id);
-      console.log('Sender:', senderUserId, '(' + senderUserType + ')');
-
-      // Get all active members of the group
+      // 1. Fetch all active members (single query)
       const members = await this.groupChatService['groupMemberModel'].findAll({
-        where: {
-          groupChatId,
-          leftAt: { [Op.is]: null } as any,
-        },
+        where: { groupChatId, leftAt: { [Op.is]: null } as any },
+        attributes: ['memberId', 'memberType'],
       });
 
-      console.log('📋 Found', members.length, 'active members');
+      // 2. Fetch ALL encrypted keys for this message in ONE query
+      const allKeys = await this.chatService['messageEncryptedKeyModel'].findAll({
+        where: { messageId: message.id },
+        attributes: ['recipientId', 'recipientType', 'encryptedKey'],
+      });
+      const keyMap = new Map<string, string>(
+        allKeys.map((k: any) => [`${k.recipientId}:${k.recipientType}`, k.encryptedKey]),
+      );
 
-      // Emit to conversation room (for members already in the room)
+      // 3. Broadcast to the conversation room (instant — hits all members who joined the room)
       const roomName = `conversation_${conversationId}`;
-      console.log('📡 Emitting to room:', roomName);
       this.server.to(roomName).emit('message:new', message);
 
-      // Send direct notifications and push notifications to all members
+      // 4. Direct-emit to online members + collect offline keys for FCM queue
+      const offlineMemberKeys: string[] = [];
+
       for (const member of members) {
-        const memberId = member.memberId;
-        const memberType = member.memberType;
+        const { memberId, memberType } = member;
+        if (memberId === senderUserId && memberType === senderUserType) continue;
+
         const memberKey = `${memberId}:${memberType}`;
-
-        console.log('📬 Processing member:', memberId, '(' + memberType + ')');
-
-        // Skip sender for push notification
-        if (memberId === senderUserId && memberType === senderUserType) {
-          console.log('   ⏭️  Skipping sender');
-          continue;
-        }
-
         const memberSocket = this.userSockets.get(memberKey);
 
         if (memberSocket) {
-          console.log('   ✅ Member is online, sending WebSocket notification');
-          // Fetch this member's encrypted key for the message
-          const memberEncryptedKey = await this.getEncryptedKeyForRecipient(
-            message.id,
-            memberId,
-            memberType,
-          );
-          const messageForMember = { ...message, encryptedKey: memberEncryptedKey };
-
-          // Member is online, send WebSocket notification
-          memberSocket.emit('message:notification', {
-            conversationId,
-            message: messageForMember,
-          });
-
-          // Send group conversation update
-          memberSocket.emit('group:message:new', {
-            conversationId,
-            groupChatId,
-            message: messageForMember,
-          });
+          const messageForMember = { ...message, encryptedKey: keyMap.get(memberKey) ?? null };
+          memberSocket.emit('message:notification', { conversationId, message: messageForMember });
+          memberSocket.emit('group:message:new', { conversationId, groupChatId, message: messageForMember });
         } else {
-          console.log('   📱 Member is offline, sending push notification');
-          // Member is offline, send push notification
-          await this.sendGroupPushNotification(
-            memberId,
-            memberType,
-            groupChatId,
-            conversationId,
-            senderUserId,
-            senderUserType,
-            message,
-          );
+          offlineMemberKeys.push(memberKey);
         }
       }
 
-      // Send conversation update to sender (include sender's own encrypted key)
-      const senderEncryptedKey = await this.getEncryptedKeyForRecipient(
-        message.id,
-        senderUserId,
-        senderUserType,
-      );
+      // 5. Ack sender immediately — no longer blocked by FCM work
+      const senderEncryptedKey = keyMap.get(`${senderUserId}:${senderUserType}`) ?? null;
       senderSocket.emit('group:message:sent', {
         conversationId,
         groupChatId,
         message: { ...message, encryptedKey: senderEncryptedKey },
       });
 
-      console.log('✅ Group message broadcasted successfully');
-      console.log('======================================\n');
+      // 6. Enqueue FCM for offline members — fire and forget
+      if (offlineMemberKeys.length > 0) {
+        this.groupNotificationQueue.add(
+          'group-push-notification',
+          {
+            groupChatId,
+            conversationId,
+            messageId: message.id,
+            messageContent: message.content,
+            isEncrypted: message.isEncrypted,
+            messageType: message.messageType,
+            senderUserId,
+            senderUserType,
+            offlineMemberKeys,
+          } as GroupPushNotificationJobData,
+          { attempts: 3, backoff: { type: 'exponential', delay: 2000 } },
+        );
+      }
 
       this.logger.log(
-        `Group message ${message.id} broadcasted to ${members.length} members`,
+        `Group message ${message.id} broadcasted to ${members.length} members (${offlineMemberKeys.length} queued for FCM)`,
       );
     } catch (error) {
-      console.error('❌ GROUP BROADCAST ERROR:', error.message);
-      console.error('Stack:', error.stack);
-      console.log('======================================\n');
-
       this.logger.error(`Group broadcast error: ${error.message}`, error.stack);
     }
   }
