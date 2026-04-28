@@ -25,6 +25,7 @@ import {
   SubmitReviewDto,
 } from './dto/chat.dto';
 import { S3Service } from './s3.service';
+import { BlockService } from './services/block.service';
 
 @Injectable()
 export class ChatService {
@@ -50,6 +51,7 @@ export class ChatService {
     @InjectModel(MessageEncryptedKey)
     private messageEncryptedKeyModel: typeof MessageEncryptedKey,
     private s3Service: S3Service,
+    private blockService: BlockService,
   ) {}
 
   /**
@@ -84,7 +86,33 @@ export class ChatService {
    * Includes soft-deleted users so conversations with deleted participants still display
    * Returns accountStatus flag: 'active', 'soft_deleted', or 'hard_deleted'
    */
-  private async getParticipantDetails(type: ParticipantType, id: number) {
+  private async getParticipantDetails(
+    type: ParticipantType,
+    id: number,
+    currentUserId?: number,
+    currentUserType?: 'influencer' | 'brand',
+  ) {
+    // If currentUser context is provided, check if this participant has blocked the current user.
+    // If blocked, mask their identity as "Collabkaroo User".
+    if (currentUserId !== undefined && currentUserType !== undefined) {
+      const isBlockedByParticipant = await this.blockService.isBlockedBy(
+        currentUserId,
+        currentUserType,
+        id,
+        type as 'influencer' | 'brand',
+      );
+      if (isBlockedByParticipant) {
+        return {
+          id,
+          username: 'collabkaroo_user',
+          name: 'Collabkaroo User',
+          brandName: type === ParticipantType.BRAND ? 'Collabkaroo User' : undefined,
+          profileImage: null,
+          accountStatus: 'blocked',
+        };
+      }
+    }
+
     if (type === ParticipantType.INFLUENCER) {
       const influencer = await this.influencerModel.findByPk(id, {
         attributes: ['id', 'username', 'name', 'profileImage', 'deletedAt'],
@@ -229,10 +257,12 @@ export class ChatService {
     const userParticipantType = userType as ParticipantType;
     const otherParticipantType = otherPartyType as ParticipantType;
 
-    // Verify other party exists
+    // Verify other party exists (pass current user context to apply block masking)
     const otherParty = await this.getParticipantDetails(
       otherParticipantType,
       otherPartyId,
+      userId,
+      userType,
     );
     if (!otherParty) {
       throw new NotFoundException(
@@ -300,17 +330,18 @@ export class ChatService {
       } as any);
     }
 
-    // Get participant details
-    const currentUser = await this.getParticipantDetails(
-      userParticipantType,
-      userId,
-    );
+    // Get participant details and block status in parallel
+    const [currentUser, isBlocked] = await Promise.all([
+      this.getParticipantDetails(userParticipantType, userId),
+      this.blockService.hasBlocked(userId, userType, otherPartyId, otherPartyType),
+    ]);
 
     return {
       id: conversation.id,
       currentUser,
       otherParty,
       otherPartyType,
+      isBlocked,
       lastMessage: conversation.lastMessage,
       lastMessageType: conversation.lastMessageType ?? 'text',
       lastMessageAt: conversation.lastMessageAt,
@@ -572,10 +603,20 @@ export class ChatService {
           userId,
           userParticipantType,
         );
-        const otherPartyDetails = await this.getParticipantDetails(
-          otherParticipant.type,
-          otherParticipant.id,
-        );
+        const [otherPartyDetails, isBlocked] = await Promise.all([
+          this.getParticipantDetails(
+            otherParticipant.type,
+            otherParticipant.id,
+            userId,
+            userType,
+          ),
+          this.blockService.hasBlocked(
+            userId,
+            userType,
+            otherParticipant.id,
+            otherParticipant.type as 'influencer' | 'brand',
+          ),
+        ]);
 
         // Apply search filter if provided
         if (search && otherPartyDetails) {
@@ -597,6 +638,7 @@ export class ChatService {
           conversationType: conv.conversationType, // 'personal' or 'campaign'
           otherParty: otherPartyDetails,
           otherPartyType: otherParticipant.type,
+          isBlocked,
           lastMessage: conv.lastMessage,
           lastMessageType: conv.lastMessageType ?? 'text',
           lastMessageAt: conv.lastMessageAt,
@@ -785,6 +827,18 @@ export class ChatService {
     // Block messaging in closed campaign chats
     if (conversation.isCampaignClosed) {
       throw new ForbiddenException('This campaign chat has been closed');
+    }
+
+    // For personal/campaign conversations, prevent messaging if either party has blocked the other
+    if (conversation.conversationType !== 'group') {
+      const otherParticipant = this.getOtherParticipant(conversation, userId, userParticipantType);
+      const [iBlockedThem, theyBlockedMe] = await Promise.all([
+        this.blockService.hasBlocked(userId, userType, otherParticipant.id, otherParticipant.type as 'influencer' | 'brand'),
+        this.blockService.hasBlocked(otherParticipant.id, otherParticipant.type as 'influencer' | 'brand', userId, userType),
+      ]);
+      if (iBlockedThem || theyBlockedMe) {
+        throw new ForbiddenException('Cannot send messages to a blocked user');
+      }
     }
 
     // For group chats, verify user is a member and enforce broadcast rules
@@ -1042,6 +1096,26 @@ export class ChatService {
       whereClause.id = { [Op.lt]: beforeMessageId };
     }
 
+    // For personal/campaign conversations, check if the other participant blocked the current user.
+    // If so, all their messages will have their identity masked.
+    let blockedSenderKey: string | null = null;
+    if (conversation.conversationType !== 'group') {
+      const otherParticipant = this.getOtherParticipant(
+        conversation,
+        userId,
+        userParticipantType,
+      );
+      const isBlockedByOther = await this.blockService.isBlockedBy(
+        userId,
+        userType,
+        otherParticipant.id,
+        otherParticipant.type as 'influencer' | 'brand',
+      );
+      if (isBlockedByOther) {
+        blockedSenderKey = `${otherParticipant.type}:${otherParticipant.id}`;
+      }
+    }
+
     const { rows: messages, count: total } =
       await this.messageModel.findAndCountAll({
         where: whereClause,
@@ -1091,8 +1165,21 @@ export class ChatService {
     const formattedMessages = messages.map((msg) => {
       let sender: any;
 
+      // Determine the sender's key to check block status
+      const senderId = msg.senderType === SenderType.INFLUENCER ? msg.influencerId : msg.brandId;
+      const senderKey = `${msg.senderType}:${senderId}`;
+      const isSenderBlocked = blockedSenderKey === senderKey;
+
       if (msg.senderType === SenderType.INFLUENCER) {
-        if (msg.influencer) {
+        if (isSenderBlocked) {
+          sender = {
+            id: msg.influencerId,
+            username: 'collabkaroo_user',
+            name: 'Collabkaroo User',
+            profileImage: null,
+            accountStatus: 'blocked',
+          };
+        } else if (msg.influencer) {
           // Active or soft-deleted influencer
           const influencerData = msg.influencer.toJSON();
           sender = {
@@ -1113,7 +1200,15 @@ export class ChatService {
           };
         }
       } else {
-        if (msg.brand) {
+        if (isSenderBlocked) {
+          sender = {
+            id: msg.brandId,
+            username: 'collabkaroo_user',
+            brandName: 'Collabkaroo User',
+            profileImage: null,
+            accountStatus: 'blocked',
+          };
+        } else if (msg.brand) {
           // Active or soft-deleted brand
           const brandData = msg.brand.toJSON();
           sender = {

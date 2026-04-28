@@ -18,6 +18,7 @@ import { NotificationType } from '../shared/models/in-app-notification.model';
 import { AppVersionService } from '../shared/services/app-version.service';
 import { OtpService } from '../shared/services/otp.service';
 import { ProfileViewService } from '../shared/services/profile-view.service';
+import { BlockService } from '../shared/services/block.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto';
 import { RespondInvitationDto } from './dto/respond-invitation.dto';
@@ -151,6 +152,7 @@ export class InfluencerService {
     private readonly chatService: ChatService,
     private readonly inAppNotificationService: InAppNotificationService,
     private readonly profileViewService: ProfileViewService,
+    private readonly blockService: BlockService,
     @Inject(forwardRef(() => InfluencerScoringService))
     private readonly influencerScoringService: InfluencerScoringService,
   ) {}
@@ -196,6 +198,20 @@ export class InfluencerService {
 
     if (!influencer) {
       throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
+    }
+
+    // If a viewer is requesting this profile, check if the profile owner has blocked them
+    const isViewingOwnProfile = currentUserType === 'influencer' && currentUserId === influencerId;
+    if (currentUserId && currentUserType && !isViewingOwnProfile) {
+      const isBlockedByOwner = await this.blockService.isBlockedBy(
+        currentUserId,
+        currentUserType,
+        influencerId,
+        'influencer',
+      );
+      if (isBlockedByOwner) {
+        throw new ForbiddenException('You do not have permission to view this profile');
+      }
     }
 
     // Check if profile is actually complete and update flag if needed
