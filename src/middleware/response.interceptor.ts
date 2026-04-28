@@ -14,7 +14,12 @@ import { toIST } from '../shared/utils/date.utils';
  */
 function rewriteUrls(obj: any, s3Prefix: string, cfPrefix: string): any {
   if (typeof obj === 'string') {
-    return obj.startsWith(s3Prefix) ? cfPrefix + obj.slice(s3Prefix.length) : obj;
+    // Never rewrite presigned URLs — their signature is bound to the S3 hostname
+    // and CloudFront cannot handle multipart PUT uploads
+    if (obj.startsWith(s3Prefix) && !obj.includes('X-Amz-Signature')) {
+      return cfPrefix + obj.slice(s3Prefix.length);
+    }
+    return obj;
   }
   if (Array.isArray(obj)) {
     return obj.map((item) => rewriteUrls(item, s3Prefix, cfPrefix));
