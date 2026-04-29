@@ -97,6 +97,85 @@ export class ReportService {
     }
   }
 
+  async getAllReportedUsers(
+    page = 1,
+    limit = 20,
+    reportedType?: 'influencer' | 'brand',
+  ) {
+    const offset = (page - 1) * limit;
+    const sequelize = this.reportedUserModel.sequelize!;
+
+    const whereClause = reportedType ? { reportedType } : {};
+
+    // Grouped query: one row per reported user with count and last report date
+    const groups = (await this.reportedUserModel.findAll({
+      attributes: [
+        'reportedType',
+        'reportedInfluencerId',
+        'reportedBrandId',
+        [sequelize.fn('COUNT', sequelize.col('ReportedUser.id')), 'reportCount'],
+        [sequelize.fn('MAX', sequelize.col('ReportedUser.created_at')), 'lastReportedAt'],
+      ],
+      where: whereClause as any,
+      group: ['reportedType', 'reportedInfluencerId', 'reportedBrandId'],
+      order: [[sequelize.literal('COUNT("ReportedUser"."id")'), 'DESC']],
+      raw: true,
+    })) as any[];
+
+    const total = groups.length;
+    const pageGroups = groups.slice(offset, offset + limit);
+
+    // Batch-fetch profiles to avoid N+1
+    const influencerIds = pageGroups
+      .filter((g) => g.reportedType === 'influencer' && g.reportedInfluencerId)
+      .map((g) => g.reportedInfluencerId);
+    const brandIds = pageGroups
+      .filter((g) => g.reportedType === 'brand' && g.reportedBrandId)
+      .map((g) => g.reportedBrandId);
+
+    const [influencers, brands] = await Promise.all([
+      influencerIds.length
+        ? this.influencerModel.findAll({
+            where: { id: influencerIds },
+            attributes: ['id', 'name', 'username', 'profileImage', 'isActive'],
+          })
+        : Promise.resolve([]),
+      brandIds.length
+        ? this.brandModel.findAll({
+            where: { id: brandIds },
+            attributes: ['id', 'brandName', 'username', 'profileImage', 'isActive'],
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const influencerMap = new Map(influencers.map((i) => [i.id, i.toJSON()]));
+    const brandMap = new Map(brands.map((b) => [b.id, b.toJSON()]));
+
+    const reportedUsers = pageGroups.map((group) => {
+      let reportedUser: any = null;
+      if (group.reportedType === 'influencer' && group.reportedInfluencerId) {
+        const inf = influencerMap.get(group.reportedInfluencerId);
+        if (inf) reportedUser = { ...inf, userType: 'influencer' };
+      } else if (group.reportedType === 'brand' && group.reportedBrandId) {
+        const brand = brandMap.get(group.reportedBrandId);
+        if (brand) reportedUser = { ...brand, userType: 'brand' };
+      }
+      return {
+        reportedUser,
+        reportCount: parseInt(group.reportCount, 10),
+        lastReportedAt: group.lastReportedAt,
+      };
+    });
+
+    return {
+      reportedUsers,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
   async getReportsAgainstUser(
     reportedId: number,
     reportedType: 'influencer' | 'brand',
