@@ -54,6 +54,7 @@ import { Wallet } from '../wallet/models/wallet.model';
 import { WalletTransaction } from '../wallet/models/wallet-transaction.model';
 import { WalletRechargeLimit } from '../wallet/models/wallet-recharge-limit.model';
 import { BlockedUser } from '../shared/models/blocked-user.model';
+import { ReportedUser } from '../shared/models/reported-user.model';
 
 @Module({
   imports: [
@@ -191,6 +192,8 @@ import { BlockedUser } from '../shared/models/blocked-user.model';
             WalletRechargeLimit,
             // Block feature
             BlockedUser,
+            // Report feature
+            ReportedUser,
           ],
           autoLoadModels: true,
           synchronize: false, // Disabled to prevent index conflicts with existing database
