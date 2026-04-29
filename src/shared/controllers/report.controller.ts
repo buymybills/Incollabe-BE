@@ -12,6 +12,7 @@ import {
   ApiBody,
   ApiProperty,
   ApiResponse,
+  ApiConsumes,
 } from '@nestjs/swagger';
 import { IsIn, IsInt, IsPositive, IsOptional, IsEnum, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -62,6 +63,7 @@ export class ReportController {
 
   @Post()
   @ApiOperation({ summary: 'Report a user' })
+  @ApiConsumes('application/x-www-form-urlencoded', 'application/json')
   @ApiBody({ type: ReportUserDto })
   @ApiResponse({
     status: 201,
