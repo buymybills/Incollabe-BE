@@ -101,6 +101,9 @@ import { ApiLoggerMiddleware } from '../middleware/api-logger.middleware';
 import { BlockedUser } from './models/blocked-user.model';
 import { BlockService } from './services/block.service';
 import { BlockController } from './controllers/block.controller';
+import { ReportedUser } from './models/reported-user.model';
+import { ReportService } from './services/report.service';
+import { ReportController } from './controllers/report.controller';
 import { GroupNotificationProcessor } from './queues/group-notification.processor';
 
 @Module({
@@ -151,6 +154,7 @@ import { GroupNotificationProcessor } from './queues/group-notification.processo
       FiamCampaignEvent,
       ApiActivityLog,
       BlockedUser,
+      ReportedUser,
     ]),
   ],
   controllers: [
@@ -166,6 +170,7 @@ import { GroupNotificationProcessor } from './queues/group-notification.processo
     CreatorStudioController,
     FiamCampaignMobileController,
     BlockController,
+    ReportController,
   ],
   providers: [
     SmsService,
@@ -212,6 +217,7 @@ import { GroupNotificationProcessor } from './queues/group-notification.processo
     FiamCampaignMobileService,
     ApiLoggerMiddleware,
     BlockService,
+    ReportService,
     GroupNotificationProcessor,
   ],
   exports: [
@@ -252,6 +258,7 @@ import { GroupNotificationProcessor } from './queues/group-notification.processo
     FiamCampaignMobileService,
     ApiLoggerMiddleware,
     BlockService,
+    ReportService,
   ],
 })
 export class SharedModule { }
