@@ -80,6 +80,7 @@ export class ReportService {
       where: {
         reportedType,
         [reportedIdField]: reportedId,
+        isOverruled: false,
       } as any,
     });
 
@@ -301,6 +302,7 @@ export class ReportService {
   ) {
     const isActive = action === 'activate';
     const isSuspended = action === 'suspend';
+    const reportedIdField = userType === 'influencer' ? 'reportedInfluencerId' : 'reportedBrandId';
 
     if (userType === 'influencer') {
       const user = await this.influencerModel.findByPk(userId);
@@ -310,6 +312,20 @@ export class ReportService {
       const user = await this.brandModel.findByPk(userId);
       if (!user) throw new NotFoundException('Brand not found');
       await user.update({ isActive, isSuspended });
+    }
+
+    // On activate: overrule all existing reports so they don't re-trigger auto-suspend
+    if (action === 'activate') {
+      await this.reportedUserModel.update(
+        { isOverruled: true, overruledAt: new Date() },
+        {
+          where: {
+            reportedType: userType,
+            [reportedIdField]: userId,
+            isOverruled: false,
+          } as any,
+        },
+      );
     }
 
     return {

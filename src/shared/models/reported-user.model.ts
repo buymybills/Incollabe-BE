@@ -79,6 +79,14 @@ export class ReportedUser extends Model {
   @Column({ type: DataType.TEXT, field: 'description' })
   declare description: string | null;
 
+  @AllowNull(false)
+  @Column({ type: DataType.BOOLEAN, defaultValue: false })
+  declare isOverruled: boolean;
+
+  @AllowNull(true)
+  @Column(DataType.DATE)
+  declare overruledAt: Date | null;
+
   @CreatedAt
   declare createdAt: Date;
 
