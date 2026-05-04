@@ -92,6 +92,9 @@ export class AuthGuard implements CanActivate {
             'Account not found or has been deleted',
           );
         }
+        if (influencer.isSuspended) {
+          throw new UnauthorizedException('Your account has been suspended due to multiple reports. Please contact support.');
+        }
         if (!influencer.isActive) {
           throw new UnauthorizedException('Account is inactive');
         }
@@ -101,6 +104,9 @@ export class AuthGuard implements CanActivate {
           throw new UnauthorizedException(
             'Account not found or has been deleted',
           );
+        }
+        if (brand.isSuspended) {
+          throw new UnauthorizedException('Your account has been suspended due to multiple reports. Please contact support.');
         }
         if (!brand.isActive) {
           throw new UnauthorizedException('Account is inactive');
