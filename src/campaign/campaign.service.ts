@@ -2094,7 +2094,12 @@ export class CampaignService {
     }
 
     // Get campaign niches
-    const campaignNiches = await this.getCampaignNiches(campaign.nicheIds);
+    // If the campaign has selected ALL available niches it means "open to all niches" —
+    // pass an empty array so the scorer treats it as a broad campaign (nicheMatch = 70)
+    // instead of demanding the influencer covers every niche.
+    const totalNicheCount = await this.nicheModel.count();
+    const rawCampaignNiches = await this.getCampaignNiches(campaign.nicheIds);
+    const campaignNiches = rawCampaignNiches.length >= totalNicheCount ? [] : rawCampaignNiches;
 
     // Get campaign cities
     const campaignCities = campaign.isPanIndia ? ['All India'] : await this.getCampaignCities(campaign.id);
@@ -2268,12 +2273,11 @@ export class CampaignService {
     if (recentInsights.length === 0) return null;
 
     // Get follower count for engagement rate calculation
-    // Prefer passed-in follower count (from Instagram profile) over Follow table
+    // Priority 1: passed-in override (already resolved Instagram followers from caller)
+    // Priority 2: fetch instagramFollowersCount directly from influencer profile
+    // NOTE: app Follow table is intentionally skipped — it reflects in-app followers,
+    //       not Instagram audience, and would produce wildly inflated engagement rates.
     let followerCount = followerCountOverride || 0;
-    if (followerCount === 0) {
-      followerCount = await this.getFollowerCount(influencerId);
-    }
-    // If still no followers, try getting from influencer profile
     if (followerCount === 0) {
       const influencer = await this.influencerModel.findByPk(influencerId, {
         attributes: ['instagramFollowersCount'],
@@ -2333,7 +2337,7 @@ export class CampaignService {
 
     return {
       total: completedCampaigns,
-      successful: completedCampaigns,
+      successRate: completedCampaigns > 0 ? 100 : 0,
     };
   }
 
@@ -2664,6 +2668,8 @@ export class CampaignService {
             'profileImage',
             'isVerified',
             'instagramFollowersCount',
+            'instagramFollowsCount',
+            'instagramMediaCount',
             'bio',
           ],
           include: [
@@ -4210,7 +4216,7 @@ export class CampaignService {
       include: [
         {
           model: Influencer,
-          attributes: ['id', 'name', 'username', 'profileImage', 'isVerified', 'instagramFollowersCount', 'bio'],
+          attributes: ['id', 'name', 'username', 'profileImage', 'isVerified', 'instagramFollowersCount', 'instagramFollowsCount', 'instagramMediaCount', 'bio'],
           include: [
             {
               model: Niche,

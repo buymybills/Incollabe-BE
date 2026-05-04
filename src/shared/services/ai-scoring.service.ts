@@ -444,7 +444,7 @@ Return ONLY valid JSON in this exact format:
     }
 
     // Demographic match analysis
-    if (!campaign.isOpenToAllGenders || !campaign.isOpenToAllAges) {
+    if (demographicScore !== undefined && (!campaign.isOpenToAllGenders || !campaign.isOpenToAllAges)) {
       if (demographicScore >= 75) {
         strengths.push('Audience demographics closely match campaign targeting');
       } else if (demographicScore < 40) {
@@ -720,8 +720,8 @@ Return ONLY valid JSON in this exact format:
   private calculateDemographicMatch(
     audienceAgeGender: Array<{ ageRange: string; gender?: string; percentage: number }> | undefined,
     campaign: CampaignData,
-  ): number {
-    if (!audienceAgeGender || audienceAgeGender.length === 0) return 0; // No data — cannot verify demographic match
+  ): number | undefined {
+    if (!audienceAgeGender || audienceAgeGender.length === 0) return undefined; // No data — fall back to reach-only scoring
 
     // ── Gender match ─────────────────────────────────────────────────────────
     let genderScore = 100;
