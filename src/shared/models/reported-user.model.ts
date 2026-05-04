@@ -32,7 +32,7 @@ export enum ReportReason {
 
 export const AUTO_SUSPEND_THRESHOLD = 5;
 
-@Table({ tableName: 'reported_users', timestamps: true })
+@Table({ tableName: 'reported_users', timestamps: true, underscored: true })
 export class ReportedUser extends Model {
   @PrimaryKey
   @AutoIncrement
@@ -80,11 +80,9 @@ export class ReportedUser extends Model {
   declare description: string | null;
 
   @CreatedAt
-  @Column(DataType.DATE)
   declare createdAt: Date;
 
   @UpdatedAt
-  @Column(DataType.DATE)
   declare updatedAt: Date;
 
   // Associations
