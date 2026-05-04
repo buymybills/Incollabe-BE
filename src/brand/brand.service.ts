@@ -120,6 +120,21 @@ export class BrandService {
       throw new NotFoundException('Brand not found');
     }
 
+    // Show masked profile if account is suspended
+    if (brand.isSuspended) {
+      return {
+        id: brandId,
+        brandName: 'Collabkaroo User',
+        username: '',
+        brandBio: '',
+        profileImage: null as unknown as string,
+        profileBanner: null as unknown as string,
+        profileHeadline: undefined,
+        userType: 'brand' as const,
+        isSuspended: true,
+      } as any;
+    }
+
     // If a viewer is requesting this profile, check if the brand owner has blocked them
     const isViewingOwnProfile = currentUserType === 'brand' && currentUserId === brandId;
     if (currentUserId && currentUserType && !isViewingOwnProfile) {

@@ -204,6 +204,21 @@ export class InfluencerService {
       throw new NotFoundException(ERROR_MESSAGES.INFLUENCER.NOT_FOUND);
     }
 
+    // Show masked profile if account is suspended
+    if (influencer.isSuspended) {
+      return {
+        id: influencerId,
+        name: 'Collabkaroo User',
+        username: '',
+        bio: '',
+        profileImage: null as unknown as string,
+        profileBanner: null as unknown as string,
+        profileHeadline: undefined,
+        userType: 'influencer' as const,
+        isSuspended: true,
+      } as any;
+    }
+
     // If a viewer is requesting this profile, check if the profile owner has blocked them
     const isViewingOwnProfile = currentUserType === 'influencer' && currentUserId === influencerId;
     if (currentUserId && currentUserType && !isViewingOwnProfile) {
