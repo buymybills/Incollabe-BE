@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, ParseIntPipe, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Param, Query, Body, ParseIntPipe, UseGuards } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -7,9 +7,10 @@ import {
   ApiQuery,
   ApiResponse,
   ApiProperty,
+  ApiBody,
 } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsPositive, IsOptional, Min, IsIn } from 'class-validator';
+import { IsInt, IsPositive, IsOptional, Min, IsIn, IsNotEmpty } from 'class-validator';
 import { AdminAuthGuard } from '../guards/admin-auth.guard';
 import { ReportService } from '../../shared/services/report.service';
 
@@ -32,6 +33,13 @@ class GetReportedUsersQuery {
   @IsOptional()
   @IsIn(['influencer', 'brand'])
   type?: 'influencer' | 'brand';
+}
+
+class SetUserStatusBody {
+  @ApiProperty({ enum: ['activate', 'suspend'], description: 'Action to perform on the user' })
+  @IsNotEmpty()
+  @IsIn(['activate', 'suspend'])
+  action: 'activate' | 'suspend';
 }
 
 class GetReportsQuery {
@@ -147,5 +155,28 @@ export class AdminReportController {
     @Query() query: GetReportsQuery,
   ) {
     return this.reportService.getReportsAgainstUser(id, type as 'influencer' | 'brand', query.page, query.limit);
+  }
+
+  @Patch(':type/:id/status')
+  @ApiOperation({ summary: 'Activate or suspend a user account' })
+  @ApiParam({ name: 'type', enum: ['influencer', 'brand'], description: 'User type' })
+  @ApiParam({ name: 'id', type: Number, description: 'User ID' })
+  @ApiBody({ type: SetUserStatusBody })
+  @ApiResponse({
+    status: 200,
+    description: 'User status updated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'User activated successfully' },
+      },
+    },
+  })
+  setUserStatus(
+    @Param('type') type: string,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: SetUserStatusBody,
+  ) {
+    return this.reportService.setUserStatus(id, type as 'influencer' | 'brand', body.action);
   }
 }

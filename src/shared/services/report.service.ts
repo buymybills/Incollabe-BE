@@ -2,6 +2,7 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Op } from 'sequelize';
@@ -85,12 +86,12 @@ export class ReportService {
     if (reportCount >= AUTO_SUSPEND_THRESHOLD) {
       if (reportedType === 'influencer') {
         await this.influencerModel.update(
-          { isActive: false },
+          { isActive: false, isSuspended: true },
           { where: { id: reportedId } },
         );
       } else {
         await this.brandModel.update(
-          { isActive: false },
+          { isActive: false, isSuspended: true },
           { where: { id: reportedId } },
         );
       }
@@ -231,6 +232,39 @@ export class ReportService {
       page,
       limit,
       totalPages: Math.ceil(count / limit),
+    };
+  }
+
+  async hasUserReported(
+    reporterId: number,
+    reporterType: 'influencer' | 'brand',
+    reportedId: number,
+    reportedType: 'influencer' | 'brand',
+  ): Promise<boolean> {
+    const existing = await this.findReport(reporterId, reporterType, reportedId, reportedType);
+    return !!existing;
+  }
+
+  async setUserStatus(
+    userId: number,
+    userType: 'influencer' | 'brand',
+    action: 'activate' | 'suspend',
+  ) {
+    const isActive = action === 'activate';
+    const isSuspended = action === 'suspend';
+
+    if (userType === 'influencer') {
+      const user = await this.influencerModel.findByPk(userId);
+      if (!user) throw new NotFoundException('Influencer not found');
+      await user.update({ isActive, isSuspended });
+    } else {
+      const user = await this.brandModel.findByPk(userId);
+      if (!user) throw new NotFoundException('Brand not found');
+      await user.update({ isActive, isSuspended });
+    }
+
+    return {
+      message: `User ${action === 'activate' ? 'activated' : 'suspended'} successfully`,
     };
   }
 

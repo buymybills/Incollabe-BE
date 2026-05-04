@@ -59,6 +59,7 @@ export interface BrandCreationAttributes {
   panDocument?: string;
   isProfileCompleted?: boolean;
   isActive?: boolean;
+  isSuspended?: boolean;
   isVerified?: boolean;
   isTopBrand?: boolean;
   aiCreditsRemaining?: number;
@@ -389,6 +390,12 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
     defaultValue: true,
   })
   declare isActive: boolean;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+  })
+  declare isSuspended: boolean;
 
   @Column({
     type: DataType.BOOLEAN,

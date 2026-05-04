@@ -20,6 +20,7 @@ import { AppReviewService } from '../shared/services/app-review.service';
 import { OtpService } from '../shared/services/otp.service';
 import { ProfileViewService } from '../shared/services/profile-view.service';
 import { BlockService } from '../shared/services/block.service';
+import { ReportService } from '../shared/services/report.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto';
 import { RespondInvitationDto } from './dto/respond-invitation.dto';
@@ -155,6 +156,7 @@ export class InfluencerService {
     private readonly inAppNotificationService: InAppNotificationService,
     private readonly profileViewService: ProfileViewService,
     private readonly blockService: BlockService,
+    private readonly reportService: ReportService,
     @Inject(forwardRef(() => InfluencerScoringService))
     private readonly influencerScoringService: InfluencerScoringService,
   ) {}
@@ -244,9 +246,31 @@ export class InfluencerService {
       }
     }
 
-    // Check if current user follows this influencer
+    // Check if current user follows or has reported this influencer
     let isFollowing = false;
-    if (currentUserId && currentUserType) {
+    let isReported = false;
+    if (currentUserId && currentUserType && !isViewingOwnProfile) {
+      const [followRecord, reported] = await Promise.all([
+        this.followModel.findOne({
+          where: {
+            followingType: FollowingType.INFLUENCER,
+            followingInfluencerId: influencerId,
+            ...(currentUserType === 'influencer'
+              ? {
+                  followerType: FollowingType.INFLUENCER,
+                  followerInfluencerId: currentUserId,
+                }
+              : {
+                  followerType: FollowingType.BRAND,
+                  followerBrandId: currentUserId,
+                }),
+          },
+        }),
+        this.reportService.hasUserReported(currentUserId, currentUserType, influencerId, 'influencer'),
+      ]);
+      isFollowing = !!followRecord;
+      isReported = reported;
+    } else if (currentUserId && currentUserType && isViewingOwnProfile) {
       const followRecord = await this.followModel.findOne({
         where: {
           followingType: FollowingType.INFLUENCER,
@@ -356,6 +380,9 @@ export class InfluencerService {
 
       // Following status
       isFollowing,
+
+      // Report status (only meaningful when viewer is not the owner)
+      isReported,
 
       // Verification status (available for both public and private)
       verificationStatus,

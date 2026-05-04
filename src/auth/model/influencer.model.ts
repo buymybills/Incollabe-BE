@@ -275,6 +275,13 @@ export class Influencer extends Model {
     type: DataType.BOOLEAN,
     defaultValue: false,
   })
+  declare isSuspended: boolean;
+
+  @AllowNull(false)
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+  })
   declare isVerified: boolean;
 
   @AllowNull(true)

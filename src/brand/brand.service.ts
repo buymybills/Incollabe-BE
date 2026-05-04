@@ -24,6 +24,7 @@ import { EncryptionService } from '../shared/services/encryption.service';
 import { AppReviewService } from '../shared/services/app-review.service';
 import { ProfileViewService } from '../shared/services/profile-view.service';
 import { BlockService } from '../shared/services/block.service';
+import { ReportService } from '../shared/services/report.service';
 import {
   ProfileReview,
   ProfileType,
@@ -75,6 +76,7 @@ export class BrandService {
     private readonly appReviewService: AppReviewService,
     private readonly profileViewService: ProfileViewService,
     private readonly blockService: BlockService,
+    private readonly reportService: ReportService,
   ) {}
 
   async getBrandProfile(
@@ -142,22 +144,38 @@ export class BrandService {
       }
     }
 
-    // Check if current user follows this brand
+    // Check if current user follows or has reported this brand
     let isFollowing = false;
-    if (currentUserId && currentUserType) {
+    let isReported = false;
+    if (currentUserId && currentUserType && !isViewingOwnProfile) {
+      const [followRecord, reported] = await Promise.all([
+        this.followModel.findOne({
+          where: {
+            followingType: FollowingType.BRAND,
+            followingBrandId: brandId,
+            ...(currentUserType === 'influencer'
+              ? {
+                  followerType: FollowingType.INFLUENCER,
+                  followerInfluencerId: currentUserId,
+                }
+              : {
+                  followerType: FollowingType.BRAND,
+                  followerBrandId: currentUserId,
+                }),
+          },
+        }),
+        this.reportService.hasUserReported(currentUserId, currentUserType, brandId, 'brand'),
+      ]);
+      isFollowing = !!followRecord;
+      isReported = reported;
+    } else if (currentUserId && currentUserType && isViewingOwnProfile) {
+      // Brand viewing their own profile — can't report yourself, just check follow
       const followRecord = await this.followModel.findOne({
         where: {
           followingType: FollowingType.BRAND,
           followingBrandId: brandId,
-          ...(currentUserType === 'influencer'
-            ? {
-                followerType: FollowingType.INFLUENCER,
-                followerInfluencerId: currentUserId,
-              }
-            : {
-                followerType: FollowingType.BRAND,
-                followerBrandId: currentUserId,
-              }),
+          followerType: FollowingType.BRAND,
+          followerBrandId: currentUserId,
         },
       });
       isFollowing = !!followRecord;
@@ -290,6 +308,9 @@ export class BrandService {
 
       // Following status
       isFollowing,
+
+      // Report status (only meaningful when viewer is not the owner)
+      isReported,
 
       // Verification status
       verificationStatus,

@@ -417,7 +417,14 @@ export class AuthService {
 
     // 🔹 Step 6: Handle returning users → issue tokens
 
-    // Reactivate account if deactivated
+    // Block suspended accounts from logging in
+    if (user.isSuspended) {
+      throw new ForbiddenException(
+        'Your account has been suspended due to multiple reports. Please contact support.',
+      );
+    }
+
+    // Reactivate account if user self-deactivated
     if (!user.isActive) {
       await user.update({ isActive: true });
       this.loggerService.info(`Account reactivated for influencer: ${user.id}`);
@@ -1449,7 +1456,14 @@ export class AuthService {
       throw new UnauthorizedException('Brand not found');
     }
 
-    // Reactivate account if deactivated
+    // Block suspended accounts from logging in
+    if (brand.isSuspended) {
+      throw new ForbiddenException(
+        'Your account has been suspended due to multiple reports. Please contact support.',
+      );
+    }
+
+    // Reactivate account if user self-deactivated
     if (!brand.isActive) {
       await brand.update({ isActive: true });
       this.loggerService.info(`Account reactivated for brand: ${brand.id}`);
