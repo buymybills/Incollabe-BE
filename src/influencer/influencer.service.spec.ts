@@ -12,6 +12,7 @@ import { AppVersionService } from '../shared/services/app-version.service';
 import { AppReviewService } from '../shared/services/app-review.service';
 import { ProfileViewService } from '../shared/services/profile-view.service';
 import { BlockService } from '../shared/services/block.service';
+import { ReportService } from '../shared/services/report.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import { CampaignService } from '../campaign/campaign.service';
 import { MaxCampaignScoringQueueService } from '../campaign/services/max-campaign-scoring-queue.service';
@@ -183,6 +184,10 @@ const mockProfileViewService = {
 
 const mockBlockService = {
   isBlockedBy: jest.fn().mockResolvedValue(false),
+};
+
+const mockReportService = {
+  hasUserReported: jest.fn().mockResolvedValue(false),
 };
 
 const mockCampaignService = {
@@ -409,6 +414,10 @@ describe('InfluencerService', () => {
         {
           provide: BlockService,
           useValue: mockBlockService,
+        },
+        {
+          provide: ReportService,
+          useValue: mockReportService,
         },
         {
           provide: CampaignService,

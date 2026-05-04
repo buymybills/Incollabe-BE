@@ -24,6 +24,7 @@ import { EncryptionService } from '../shared/services/encryption.service';
 import { AppReviewService } from '../shared/services/app-review.service';
 import { ProfileViewService } from '../shared/services/profile-view.service';
 import { BlockService } from '../shared/services/block.service';
+import { ReportService } from '../shared/services/report.service';
 import {
   ProfileReview,
   ProfileType,
@@ -75,6 +76,7 @@ export class BrandService {
     private readonly appReviewService: AppReviewService,
     private readonly profileViewService: ProfileViewService,
     private readonly blockService: BlockService,
+    private readonly reportService: ReportService,
   ) {}
 
   async getBrandProfile(
@@ -142,25 +144,47 @@ export class BrandService {
       }
     }
 
-    // Check if current user follows this brand
+    // If brand is suspended, show masked profile to non-owner viewers
+    if ((brand as any).isSuspended && !isViewingOwnProfile) {
+      return {
+        id: brandId,
+        brandName: 'Collabkaroo User',
+        username: '',
+        brandBio: '',
+        profileImage: null as unknown as string,
+        profileBanner: null as unknown as string,
+        profileHeadline: undefined,
+        userType: 'brand' as const,
+        isSuspended: true,
+      } as any;
+    }
+
+    // Check if current user follows this brand and if they've reported them
     let isFollowing = false;
+    let isReported = false;
     if (currentUserId && currentUserType) {
-      const followRecord = await this.followModel.findOne({
-        where: {
-          followingType: FollowingType.BRAND,
-          followingBrandId: brandId,
-          ...(currentUserType === 'influencer'
-            ? {
-                followerType: FollowingType.INFLUENCER,
-                followerInfluencerId: currentUserId,
-              }
-            : {
-                followerType: FollowingType.BRAND,
-                followerBrandId: currentUserId,
-              }),
-        },
-      });
+      const [followRecord, reportedFlag] = await Promise.all([
+        this.followModel.findOne({
+          where: {
+            followingType: FollowingType.BRAND,
+            followingBrandId: brandId,
+            ...(currentUserType === 'influencer'
+              ? {
+                  followerType: FollowingType.INFLUENCER,
+                  followerInfluencerId: currentUserId,
+                }
+              : {
+                  followerType: FollowingType.BRAND,
+                  followerBrandId: currentUserId,
+                }),
+          },
+        }),
+        !isViewingOwnProfile
+          ? this.reportService.hasUserReported(currentUserId, currentUserType, brandId, 'brand')
+          : Promise.resolve(false),
+      ]);
       isFollowing = !!followRecord;
+      isReported = reportedFlag;
     }
 
     // Automatically track profile view (fire-and-forget, don't block response)
@@ -290,6 +314,9 @@ export class BrandService {
 
       // Following status
       isFollowing,
+
+      // Report status (has current viewer reported this profile)
+      isReported,
 
       // Verification status
       verificationStatus,

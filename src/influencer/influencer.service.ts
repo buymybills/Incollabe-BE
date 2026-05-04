@@ -19,6 +19,7 @@ import { AppVersionService } from '../shared/services/app-version.service';
 import { OtpService } from '../shared/services/otp.service';
 import { ProfileViewService } from '../shared/services/profile-view.service';
 import { BlockService } from '../shared/services/block.service';
+import { ReportService } from '../shared/services/report.service';
 import { InfluencerRepository } from './repositories/influencer.repository';
 import { UpdateInfluencerProfileDto } from './dto/update-influencer-profile.dto';
 import { RespondInvitationDto } from './dto/respond-invitation.dto';
@@ -153,6 +154,7 @@ export class InfluencerService {
     private readonly inAppNotificationService: InAppNotificationService,
     private readonly profileViewService: ProfileViewService,
     private readonly blockService: BlockService,
+    private readonly reportService: ReportService,
     @Inject(forwardRef(() => InfluencerScoringService))
     private readonly influencerScoringService: InfluencerScoringService,
   ) {}
@@ -224,6 +226,21 @@ export class InfluencerService {
       }
     }
 
+    // If the profile owner is suspended, show masked profile to non-owner viewers
+    if ((influencer as any).isSuspended && !isViewingOwnProfile) {
+      return {
+        id: influencerId,
+        name: 'Collabkaroo User',
+        username: '',
+        bio: '',
+        profileImage: null as unknown as string,
+        profileBanner: null as unknown as string,
+        profileHeadline: undefined,
+        userType: 'influencer' as const,
+        isSuspended: true,
+      } as any;
+    }
+
     // Check if profile is actually complete and update flag if needed
     const isActuallyComplete =
       this.checkInfluencerProfileCompletion(influencer);
@@ -242,25 +259,32 @@ export class InfluencerService {
       }
     }
 
-    // Check if current user follows this influencer
+    // Check if current user follows this influencer and if they've reported them
     let isFollowing = false;
+    let isReported = false;
     if (currentUserId && currentUserType) {
-      const followRecord = await this.followModel.findOne({
-        where: {
-          followingType: FollowingType.INFLUENCER,
-          followingInfluencerId: influencerId,
-          ...(currentUserType === 'influencer'
-            ? {
-                followerType: FollowingType.INFLUENCER,
-                followerInfluencerId: currentUserId,
-              }
-            : {
-                followerType: FollowingType.BRAND,
-                followerBrandId: currentUserId,
-              }),
-        },
-      });
+      const [followRecord, reportedFlag] = await Promise.all([
+        this.followModel.findOne({
+          where: {
+            followingType: FollowingType.INFLUENCER,
+            followingInfluencerId: influencerId,
+            ...(currentUserType === 'influencer'
+              ? {
+                  followerType: FollowingType.INFLUENCER,
+                  followerInfluencerId: currentUserId,
+                }
+              : {
+                  followerType: FollowingType.BRAND,
+                  followerBrandId: currentUserId,
+                }),
+          },
+        }),
+        !isViewingOwnProfile
+          ? this.reportService.hasUserReported(currentUserId, currentUserType, influencerId, 'influencer')
+          : Promise.resolve(false),
+      ]);
       isFollowing = !!followRecord;
+      isReported = reportedFlag;
     }
 
     // Automatically track profile view (fire-and-forget, don't block response)
@@ -354,6 +378,9 @@ export class InfluencerService {
 
       // Following status
       isFollowing,
+
+      // Report status (has current viewer reported this profile)
+      isReported,
 
       // Verification status (available for both public and private)
       verificationStatus,

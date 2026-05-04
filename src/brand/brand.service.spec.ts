@@ -23,6 +23,7 @@ import { EncryptionService } from '../shared/services/encryption.service';
 import { AppReviewService } from '../shared/services/app-review.service';
 import { ProfileViewService } from '../shared/services/profile-view.service';
 import { BlockService } from '../shared/services/block.service';
+import { ReportService } from '../shared/services/report.service';
 import { ProfileType } from '../admin/models/profile-review.model';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { UpdateBrandProfileDto } from './dto/update-brand-profile.dto';
@@ -96,6 +97,10 @@ const mockProfileViewService = {
 
 const mockBlockService = {
   isBlockedBy: jest.fn().mockResolvedValue(false),
+};
+
+const mockReportService = {
+  hasUserReported: jest.fn().mockResolvedValue(false),
 };
 
 describe('BrandService', () => {
@@ -211,6 +216,10 @@ describe('BrandService', () => {
         {
           provide: BlockService,
           useValue: mockBlockService,
+        },
+        {
+          provide: ReportService,
+          useValue: mockReportService,
         },
       ],
     }).compile();

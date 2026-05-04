@@ -271,6 +271,10 @@ export class Influencer extends Model {
   declare isActive: boolean;
 
   @AllowNull(false)
+  @Column({ type: DataType.BOOLEAN, defaultValue: false, field: 'is_suspended' })
+  declare isSuspended: boolean;
+
+  @AllowNull(false)
   @Column({
     type: DataType.BOOLEAN,
     defaultValue: false,

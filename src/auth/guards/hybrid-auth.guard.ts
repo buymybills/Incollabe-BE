@@ -156,6 +156,11 @@ export class HybridAuthGuard implements CanActivate {
             'Influencer account not found or has been deleted',
           );
         }
+        if (influencer.isSuspended) {
+          throw new UnauthorizedException(
+            'Your account has been suspended due to multiple reports. Please contact support.',
+          );
+        }
         if (!influencer.isActive) {
           throw new UnauthorizedException('Account is inactive');
         }
@@ -164,6 +169,11 @@ export class HybridAuthGuard implements CanActivate {
         if (!brand) {
           throw new UnauthorizedException(
             'Brand account not found or has been deleted',
+          );
+        }
+        if ((brand as any).isSuspended) {
+          throw new UnauthorizedException(
+            'Your account has been suspended due to multiple reports. Please contact support.',
           );
         }
         if (!brand.isActive) {

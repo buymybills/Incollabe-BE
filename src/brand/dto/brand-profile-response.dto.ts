@@ -257,6 +257,13 @@ export class BrandProfileResponseDto {
   isFollowing?: boolean;
 
   @ApiProperty({
+    description: 'Whether the current viewer has reported this profile',
+    example: false,
+    required: false,
+  })
+  isReported?: boolean;
+
+  @ApiProperty({
     description: 'Verification status of the profile',
     required: false,
     example: {
