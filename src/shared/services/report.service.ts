@@ -5,7 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
-import { Op } from 'sequelize';
+import { Op, WhereOptions } from 'sequelize';
 import {
   ReportedUser,
   ReportUserType,
@@ -102,11 +102,60 @@ export class ReportService {
     page = 1,
     limit = 20,
     reportedType?: 'influencer' | 'brand',
+    search?: string,
   ) {
     const offset = (page - 1) * limit;
     const sequelize = this.reportedUserModel.sequelize!;
 
-    const whereClause = reportedType ? { reportedType } : {};
+    // If search is provided, resolve matching IDs from influencers/brands first
+    let matchingInfluencerIds: number[] | null = null;
+    let matchingBrandIds: number[] | null = null;
+
+    if (search) {
+      const searchPattern = { [Op.iLike]: `%${search}%` };
+
+      const shouldSearchInfluencers = !reportedType || reportedType === 'influencer';
+      const shouldSearchBrands = !reportedType || reportedType === 'brand';
+
+      const [matchedInfluencers, matchedBrands] = await Promise.all([
+        shouldSearchInfluencers
+          ? this.influencerModel.findAll({
+              where: { [Op.or]: [{ name: searchPattern }, { username: searchPattern }] },
+              attributes: ['id'],
+            })
+          : Promise.resolve([]),
+        shouldSearchBrands
+          ? this.brandModel.findAll({
+              where: { [Op.or]: [{ brandName: searchPattern }, { username: searchPattern }] },
+              attributes: ['id'],
+            })
+          : Promise.resolve([]),
+      ]);
+
+      matchingInfluencerIds = matchedInfluencers.map((i) => i.id);
+      matchingBrandIds = matchedBrands.map((b) => b.id);
+    }
+
+    // Build WHERE clause for the group query
+    const whereClause: WhereOptions<any> = {};
+    if (reportedType) {
+      whereClause['reportedType'] = reportedType;
+    }
+    if (matchingInfluencerIds !== null || matchingBrandIds !== null) {
+      const conditions: any[] = [];
+      if (matchingInfluencerIds?.length) {
+        conditions.push({ reportedType: 'influencer', reportedInfluencerId: { [Op.in]: matchingInfluencerIds } });
+      }
+      if (matchingBrandIds?.length) {
+        conditions.push({ reportedType: 'brand', reportedBrandId: { [Op.in]: matchingBrandIds } });
+      }
+      // No matches for the search term — return empty result immediately
+      if (!conditions.length) {
+        return { reportedUsers: [], total: 0, page, limit, totalPages: 0 };
+      }
+      whereClause[Op.or as any] = conditions;
+      delete whereClause['reportedType']; // already encoded inside each condition
+    }
 
     // Grouped query: one row per reported user with count and last report date
     const groups = (await this.reportedUserModel.findAll({
@@ -117,7 +166,7 @@ export class ReportService {
         [sequelize.fn('COUNT', sequelize.col('ReportedUser.id')), 'reportCount'],
         [sequelize.fn('MAX', sequelize.col('ReportedUser.created_at')), 'lastReportedAt'],
       ],
-      where: whereClause as any,
+      where: whereClause,
       group: ['reportedType', 'reportedInfluencerId', 'reportedBrandId'],
       order: [[sequelize.literal('COUNT("ReportedUser"."id")'), 'DESC']],
       raw: true,

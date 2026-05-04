@@ -10,7 +10,7 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsPositive, IsOptional, Min, IsIn, IsNotEmpty } from 'class-validator';
+import { IsInt, IsPositive, IsOptional, Min, IsIn, IsNotEmpty, IsString } from 'class-validator';
 import { AdminAuthGuard } from '../guards/admin-auth.guard';
 import { ReportService } from '../../shared/services/report.service';
 
@@ -33,6 +33,11 @@ class GetReportedUsersQuery {
   @IsOptional()
   @IsIn(['influencer', 'brand'])
   type?: 'influencer' | 'brand';
+
+  @ApiProperty({ required: false, example: 'john', description: 'Search by name or username' })
+  @IsOptional()
+  @IsString()
+  search?: string;
 }
 
 class SetUserStatusBody {
@@ -70,6 +75,7 @@ export class AdminReportController {
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'type', required: false, enum: ['influencer', 'brand'] })
+  @ApiQuery({ name: 'search', required: false, type: String, description: 'Search by name or username' })
   @ApiResponse({
     status: 200,
     description: 'Reported users list retrieved successfully',
@@ -105,7 +111,7 @@ export class AdminReportController {
     },
   })
   getAllReportedUsers(@Query() query: GetReportedUsersQuery) {
-    return this.reportService.getAllReportedUsers(query.page, query.limit, query.type);
+    return this.reportService.getAllReportedUsers(query.page, query.limit, query.type, query.search);
   }
 
   @Get(':type/:id')
