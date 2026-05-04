@@ -394,6 +394,7 @@ export class Brand extends Model<Brand, BrandCreationAttributes> {
   @Column({
     type: DataType.BOOLEAN,
     defaultValue: false,
+    field: 'is_suspended',
   })
   declare isSuspended: boolean;
 
