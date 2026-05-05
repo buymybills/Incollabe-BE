@@ -15,6 +15,7 @@ import {
 import { Influencer } from '../../auth/model/influencer.model';
 import { Brand } from '../../brand/model/brand.model';
 import { Like } from './like.model';
+import { Comment } from './comment.model';
 
 export enum UserType {
   INFLUENCER = 'influencer',
@@ -81,6 +82,13 @@ export class Post extends Model {
   })
   declare viewsCount: number;
 
+  @AllowNull(false)
+  @Column({
+    type: DataType.INTEGER,
+    defaultValue: 0,
+  })
+  declare commentsCount: number;
+
   // Boost Mode fields
   @AllowNull(false)
   @Column({
@@ -130,6 +138,9 @@ export class Post extends Model {
 
   @HasMany(() => Like)
   declare likes: Like[];
+
+  @HasMany(() => Comment)
+  declare comments: Comment[];
 
   get user() {
     return this.userType === UserType.INFLUENCER ? this.influencer : this.brand;

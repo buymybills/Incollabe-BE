@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Post, UserType } from './models/post.model';
+import { Comment, CommentAuthorType } from './models/comment.model';
 import { Like, LikerType } from './models/like.model';
 import { Follow, FollowerType, FollowingType } from './models/follow.model';
 import { Share, SharerType } from './models/share.model';
@@ -60,6 +61,8 @@ export class PostService {
   constructor(
     @InjectModel(Post)
     private readonly postModel: typeof Post,
+    @InjectModel(Comment)
+    private readonly commentModel: typeof Comment,
     @InjectModel(Like)
     private readonly likeModel: typeof Like,
     @InjectModel(Follow)
@@ -4160,5 +4163,201 @@ export class PostService {
       views: viewsTrend,
       interactions: interactionsTrend,
     };
+  }
+
+  async addComment(
+    postId: number,
+    userType: UserType,
+    userId: number,
+    content: string,
+  ): Promise<Comment> {
+    const post = await this.postModel.findByPk(postId);
+
+    if (!post || !post.isActive) {
+      throw new NotFoundException('Post not found');
+    }
+
+    const authorType =
+      userType === UserType.INFLUENCER
+        ? CommentAuthorType.INFLUENCER
+        : CommentAuthorType.BRAND;
+    const authorField =
+      userType === UserType.INFLUENCER ? 'authorInfluencerId' : 'authorBrandId';
+
+    const commentData: any = { postId, content, authorType };
+    commentData[authorField] = userId;
+
+    const comment = await this.commentModel.create(commentData);
+    await post.increment('commentsCount');
+
+    // Send notification to post author (fire-and-forget, skip if own post)
+    const isOwnPost =
+      (post.userType === UserType.INFLUENCER &&
+        post.influencerId === userId &&
+        userType === UserType.INFLUENCER) ||
+      (post.userType === UserType.BRAND &&
+        post.brandId === userId &&
+        userType === UserType.BRAND);
+
+    if (!isOwnPost) {
+      try {
+        let commenter: Influencer | Brand | null = null;
+        if (userType === UserType.INFLUENCER) {
+          commenter = await this.influencerModel.findByPk(userId, {
+            attributes: ['id', 'name', 'username', 'profileImage'],
+          });
+        } else {
+          commenter = await this.brandModel.findByPk(userId, {
+            attributes: ['id', 'brandName', 'username', 'profileImage'],
+          });
+        }
+
+        if (commenter) {
+          const commenterName =
+            userType === UserType.INFLUENCER
+              ? (commenter as Influencer).name
+              : (commenter as Brand).brandName;
+
+          const postTitle = post.content
+            ? post.content.substring(0, 50) +
+              (post.content.length > 50 ? '...' : '')
+            : 'your post';
+
+          const postAuthorUserType =
+            post.userType === UserType.INFLUENCER
+              ? DeviceUserType.INFLUENCER
+              : DeviceUserType.BRAND;
+          const postAuthorDbUserType =
+            post.userType === UserType.INFLUENCER ? 'influencer' : 'brand';
+          const postAuthorId =
+            post.userType === UserType.INFLUENCER
+              ? post.influencerId
+              : post.brandId;
+
+          this.inAppNotificationService
+            .createNotification({
+              userId: postAuthorId,
+              userType: postAuthorDbUserType as 'influencer' | 'brand',
+              title: 'New Comment',
+              body: `${commenterName} commented on your post`,
+              type: NotificationType.POST_LIKE,
+              actionUrl: `app://influencers/posts/${postId}`,
+              actionType: 'view_post',
+              relatedEntityType: 'post',
+              relatedEntityId: postId,
+              metadata: {
+                postId,
+                commentId: comment.id,
+                commenterUserId: userId,
+                commenterUserType: userType === UserType.INFLUENCER ? 'influencer' : 'brand',
+                commenterName,
+                commenterProfileImage: (commenter as Influencer | Brand).profileImage,
+              },
+            } as any)
+            .catch(() => {});
+
+          this.deviceTokenService
+            .getAllUserTokens(postAuthorId, postAuthorUserType)
+            .then((deviceTokens: string[]) => {
+              if (deviceTokens.length > 0) {
+                const notificationPromises = deviceTokens.map((token) =>
+                  this.notificationService.sendPostCommentNotification(
+                    token,
+                    commenterName,
+                    postTitle,
+                    postId.toString(),
+                    content.substring(0, 100),
+                    commenter!.username,
+                  ),
+                );
+                return Promise.allSettled(notificationPromises);
+              }
+            })
+            .catch(() => {});
+        }
+      } catch (_) {
+        // Notification errors must not fail the request
+      }
+    }
+
+    return comment.reload({
+      include: [
+        { model: Influencer, as: 'authorInfluencer', attributes: ['id', 'name', 'username', 'profileImage'] },
+        { model: Brand, as: 'authorBrand', attributes: ['id', 'brandName', 'username', 'profileImage'] },
+      ],
+    });
+  }
+
+  async getComments(
+    postId: number,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<{ comments: Comment[]; total: number; page: number; limit: number }> {
+    const post = await this.postModel.findByPk(postId, { attributes: ['id', 'isActive'] });
+
+    if (!post || !post.isActive) {
+      throw new NotFoundException('Post not found');
+    }
+
+    const offset = (page - 1) * limit;
+
+    const { count, rows } = await this.commentModel.findAndCountAll({
+      where: { postId },
+      include: [
+        { model: Influencer, as: 'authorInfluencer', attributes: ['id', 'name', 'username', 'profileImage'] },
+        { model: Brand, as: 'authorBrand', attributes: ['id', 'brandName', 'username', 'profileImage'] },
+      ],
+      order: [['createdAt', 'DESC']],
+      limit,
+      offset,
+    });
+
+    return { comments: rows, total: count, page, limit };
+  }
+
+  async deleteComment(
+    postId: number,
+    commentId: number,
+    userType: UserType,
+    userId: number,
+  ): Promise<void> {
+    const comment = await this.commentModel.findOne({
+      where: { id: commentId, postId },
+    });
+
+    if (!comment) {
+      throw new NotFoundException('Comment not found');
+    }
+
+    const authorType =
+      userType === UserType.INFLUENCER
+        ? CommentAuthorType.INFLUENCER
+        : CommentAuthorType.BRAND;
+    const authorField =
+      userType === UserType.INFLUENCER ? 'authorInfluencerId' : 'authorBrandId';
+
+    const isOwner =
+      comment.authorType === authorType && comment[authorField] === userId;
+
+    // Also allow post owner to delete any comment on their post
+    const post = await this.postModel.findByPk(postId, { attributes: ['id', 'userType', 'influencerId', 'brandId'] });
+    const isPostOwner =
+      post &&
+      ((post.userType === UserType.INFLUENCER &&
+        post.influencerId === userId &&
+        userType === UserType.INFLUENCER) ||
+        (post.userType === UserType.BRAND &&
+          post.brandId === userId &&
+          userType === UserType.BRAND));
+
+    if (!isOwner && !isPostOwner) {
+      throw new ForbiddenException('You cannot delete this comment');
+    }
+
+    await comment.destroy();
+
+    if (post) {
+      await post.decrement('commentsCount');
+    }
   }
 }

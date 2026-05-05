@@ -14,6 +14,7 @@ import { Admin } from '../admin/models/admin.model';
 import { ProfileReview } from '../admin/models/profile-review.model';
 import { Post } from '../post/models/post.model';
 import { Like } from '../post/models/like.model';
+import { Comment } from '../post/models/comment.model';
 import { Follow } from '../post/models/follow.model';
 import { Campaign } from '../campaign/models/campaign.model';
 import { CampaignCity } from '../campaign/models/campaign-city.model';
@@ -153,6 +154,7 @@ import { ReportedUser } from '../shared/models/reported-user.model';
             ProfileReview,
             Post,
             Like,
+            Comment,
             Follow,
             Campaign,
             CampaignCity,
