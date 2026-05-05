@@ -114,6 +114,16 @@ export class SendMessageDto {
   @IsInt()
   @IsOptional()
   replyToMessageId?: number;
+
+  @ApiProperty({
+    description: 'Post ID to share as a message card (messageType must be "post")',
+    required: false,
+    example: 42,
+  })
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  postId?: number;
 }
 
 export class GetConversationsDto {

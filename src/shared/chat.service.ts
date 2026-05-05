@@ -15,6 +15,7 @@ import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { Campaign } from '../campaign/models/campaign.model';
 import { CampaignApplication, ApplicationStatus } from '../campaign/models/campaign-application.model';
+import { Post } from '../post/models/post.model';
 import { Op } from 'sequelize';
 import {
   CreateConversationDto,
@@ -812,6 +813,7 @@ export class ChatService {
       attachmentName,
       mediaType,
       replyToMessageId,
+      postId,
       encryptedKeys: encryptedKeysFromDto,
     } = dto;
 
@@ -911,7 +913,11 @@ export class ChatService {
     }
 
     // Validate message has content
-    if (!content && !attachmentUrl) {
+    if (messageType === MessageType.POST) {
+      if (!postId) {
+        throw new BadRequestException('postId is required when messageType is "post"');
+      }
+    } else if (!content && !attachmentUrl) {
       throw new BadRequestException('Message must have content or attachment');
     }
 
@@ -1009,6 +1015,7 @@ export class ChatService {
       attachmentName: isEncrypted ? null : attachmentName || null,
       mediaType: isEncrypted ? null : mediaType || null,
       replyToMessageId: replyToMessageId || null,
+      postId: messageType === MessageType.POST ? postId : null,
       isRead: false,
       isEncrypted,
       encryptionVersion,
@@ -1187,6 +1194,23 @@ export class ChatService {
               },
             ],
           },
+          {
+            model: Post,
+            attributes: ['id', 'content', 'mediaUrls', 'userType', 'influencerId', 'brandId', 'likesCount', 'sharesCount', 'commentsCount', 'createdAt'],
+            required: false,
+            include: [
+              {
+                model: Influencer,
+                attributes: ['id', 'username', 'name', 'profileImage'],
+                required: false,
+              },
+              {
+                model: Brand,
+                attributes: ['id', 'username', 'brandName', 'profileImage'],
+                required: false,
+              },
+            ],
+          },
         ],
         order: [['createdAt', 'DESC']],
         limit,
@@ -1320,6 +1344,34 @@ export class ChatService {
       const encryptedKeyRecord = (msg as any).messageEncryptedKeys?.[0];
       const encryptedKey = encryptedKeyRecord?.encryptedKey ?? null;
 
+      // Format shared post if present
+      let sharedPost: any = null;
+      if (msg.post) {
+        const postData = msg.post.toJSON();
+        const postAuthor = postData.userType === 'influencer' && (msg.post as any).influencer
+          ? (() => {
+              const d = (msg.post as any).influencer.toJSON();
+              return { id: d.id, username: d.username, name: d.name, profileImage: d.profileImage };
+            })()
+          : postData.userType === 'brand' && (msg.post as any).brand
+          ? (() => {
+              const d = (msg.post as any).brand.toJSON();
+              return { id: d.id, username: d.username, brandName: d.brandName, profileImage: d.profileImage };
+            })()
+          : null;
+        sharedPost = {
+          id: postData.id,
+          content: postData.content,
+          mediaUrls: postData.mediaUrls,
+          userType: postData.userType,
+          author: postAuthor,
+          likesCount: postData.likesCount,
+          sharesCount: postData.sharesCount,
+          commentsCount: postData.commentsCount,
+          createdAt: postData.createdAt,
+        };
+      }
+
       return {
         id: msg.id,
         sender,
@@ -1332,6 +1384,8 @@ export class ChatService {
         mediaType: msg.mediaType,
         replyToMessageId: msg.replyToMessageId,
         repliedMessage,
+        postId: msg.postId,
+        post: sharedPost,
         isRead: msg.isRead,
         readAt: msg.readAt,
         createdAt: msg.createdAt,

@@ -12,6 +12,7 @@ import { Conversation } from './conversation.model';
 import { Influencer } from '../../auth/model/influencer.model';
 import { Brand } from '../../brand/model/brand.model';
 import { MessageEncryptedKey } from './message-encrypted-key.model';
+import { Post } from '../../post/models/post.model';
 
 export enum MessageType {
   TEXT = 'text',
@@ -20,6 +21,7 @@ export enum MessageType {
   AUDIO = 'audio',
   FILE = 'file',
   MEDIA = 'media', // For mixed/multiple media attachments
+  POST = 'post',  // Shared post card
 }
 
 export enum SenderType {
@@ -140,6 +142,15 @@ export class Message extends Model<Message> {
   })
   declare replyToMessageId: number | null;
 
+  // Post sharing
+  @ForeignKey(() => Post)
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    field: 'post_id',
+  })
+  declare postId: number | null;
+
   // Associations
   @BelongsTo(() => Conversation)
   declare conversation: Conversation;
@@ -152,6 +163,9 @@ export class Message extends Model<Message> {
 
   @BelongsTo(() => Message, 'replyToMessageId')
   declare repliedToMessage: Message;
+
+  @BelongsTo(() => Post)
+  declare post: Post;
 
   @HasMany(() => MessageEncryptedKey)
   declare messageEncryptedKeys: MessageEncryptedKey[];
