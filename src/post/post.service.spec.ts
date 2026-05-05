@@ -7,6 +7,7 @@ import { Follow, FollowerType, FollowingType } from './models/follow.model';
 import { Share } from './models/share.model';
 import { PostView } from './models/post-view.model';
 import { PostBoostInvoice } from './models/post-boost-invoice.model';
+import { Comment } from './models/comment.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { InfluencerNiche } from '../auth/model/influencer-niche.model';
@@ -43,6 +44,10 @@ const mockModel = () => ({
 const mockPostModel = {
   ...mockModel(),
   findAndCountAll: jest.fn(),
+};
+
+const mockCommentModel = {
+  ...mockModel(),
 };
 
 const mockLikeModel = {
@@ -153,6 +158,10 @@ describe('PostService', () => {
         {
           provide: getModelToken(Post),
           useValue: mockPostModel,
+        },
+        {
+          provide: getModelToken(Comment),
+          useValue: mockCommentModel,
         },
         {
           provide: getModelToken(Like),
