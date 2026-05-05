@@ -43,6 +43,7 @@ import {
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserType } from './models/post.model';
+import { CreateCommentDto, GetCommentsDto } from './dto/comment.dto';
 import type { User } from '../types/request.types';
 import { S3Service } from '../shared/s3.service';
 
@@ -1212,5 +1213,55 @@ export class PostController {
       uploadedParts,
       totalPartsUploaded: uploadedParts.length,
     };
+  }
+
+  @Post(':id/comments')
+  @ApiOperation({ summary: 'Add a comment to a post' })
+  @ApiParam({ name: 'id', description: 'Post ID', type: 'number' })
+  @ApiResponse({ status: 201, description: 'Comment added successfully' })
+  @ApiResponse({ status: 404, description: 'Post not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async addComment(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateCommentDto,
+    @CurrentUser() user: User,
+  ) {
+    const userType =
+      user.userType === 'influencer' ? UserType.INFLUENCER : UserType.BRAND;
+    return this.postService.addComment(id, userType, user.id, dto.content);
+  }
+
+  @Get(':id/comments')
+  @ApiOperation({ summary: 'Get comments for a post' })
+  @ApiParam({ name: 'id', description: 'Post ID', type: 'number' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number (default: 1)', type: 'number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page (default: 20)', type: 'number' })
+  @ApiResponse({ status: 200, description: 'Comments retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Post not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getComments(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: GetCommentsDto,
+  ) {
+    return this.postService.getComments(id, query.page, query.limit);
+  }
+
+  @Delete(':id/comments/:commentId')
+  @ApiOperation({ summary: 'Delete a comment' })
+  @ApiParam({ name: 'id', description: 'Post ID', type: 'number' })
+  @ApiParam({ name: 'commentId', description: 'Comment ID', type: 'number' })
+  @ApiResponse({ status: 200, description: 'Comment deleted successfully' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Not your comment' })
+  @ApiResponse({ status: 404, description: 'Comment not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async deleteComment(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('commentId', ParseIntPipe) commentId: number,
+    @CurrentUser() user: User,
+  ) {
+    const userType =
+      user.userType === 'influencer' ? UserType.INFLUENCER : UserType.BRAND;
+    await this.postService.deleteComment(id, commentId, userType, user.id);
+    return { message: 'Comment deleted successfully' };
   }
 }

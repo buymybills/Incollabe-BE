@@ -11,6 +11,7 @@ import { Share } from './models/share.model';
 import { PostView } from './models/post-view.model';
 import { ProfileView } from '../shared/models/profile-view.model';
 import { PostBoostInvoice } from './models/post-boost-invoice.model';
+import { Comment } from './models/comment.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { InfluencerNiche } from '../auth/model/influencer-niche.model';
@@ -28,6 +29,7 @@ import { SharedModule } from '../shared/shared.module';
       PostView,
       ProfileView,
       PostBoostInvoice,
+      Comment,
       Influencer,
       Brand,
       InfluencerNiche,
