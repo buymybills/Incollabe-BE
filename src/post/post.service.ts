@@ -4292,7 +4292,7 @@ export class PostService {
     postId: number,
     page: number = 1,
     limit: number = 20,
-  ): Promise<{ comments: Comment[]; total: number; page: number; limit: number }> {
+  ): Promise<{ comments: Comment[]; total: number; commentsCount: number; page: number; limit: number }> {
     const post = await this.postModel.findByPk(postId, { attributes: ['id', 'isActive'] });
 
     if (!post || !post.isActive) {
@@ -4312,7 +4312,7 @@ export class PostService {
       offset,
     });
 
-    return { comments: rows, total: count, page, limit };
+    return { comments: rows, total: count, commentsCount: count, page, limit };
   }
 
   async deleteComment(
