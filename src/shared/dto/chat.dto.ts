@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsEnum,
   IsObject,
+  IsBoolean,
   MaxLength,
   Min,
   Max,
@@ -114,6 +115,26 @@ export class SendMessageDto {
   @IsInt()
   @IsOptional()
   replyToMessageId?: number;
+
+  @ApiProperty({
+    description: 'Post ID to share as a message card (messageType must be "post")',
+    required: false,
+    example: 42,
+  })
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  postId?: number;
+
+  @ApiProperty({
+    description: 'Duration of voice note in seconds (only for messageType "audio")',
+    required: false,
+    example: 23,
+  })
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  audioDuration?: number;
 }
 
 export class GetConversationsDto {
@@ -142,6 +163,16 @@ export class GetConversationsDto {
   @IsString()
   @IsOptional()
   type?: 'personal' | 'campaign' | 'group';
+
+  @ApiProperty({
+    description: 'Exclude conversations with blocked users (both directions). Useful when picking recipients e.g. share-post flow.',
+    required: false,
+    default: false,
+  })
+  @Type(() => Boolean)
+  @IsBoolean()
+  @IsOptional()
+  excludeBlocked?: boolean;
 }
 
 export class SubmitReviewDto {
@@ -191,6 +222,16 @@ export class GetMessagesDto {
   @IsInt()
   @IsOptional()
   beforeMessageId?: number;
+
+  @ApiProperty({
+    description: 'Search within messages (only searches plaintext — encrypted messages are excluded)',
+    required: false,
+    example: 'hello',
+  })
+  @IsString()
+  @IsOptional()
+  @MaxLength(200)
+  search?: string;
 }
 
 export class MarkAsReadDto {
@@ -342,4 +383,33 @@ export class GetUploadStatusDto {
   @IsString()
   @IsNotEmpty()
   key: string;
+}
+
+export class SearchMessagesDto {
+  @ApiProperty({ description: 'Search query (minimum 1 character)', example: 'hello' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  search: string;
+
+  @ApiProperty({ description: 'Page number', required: false, default: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  page?: number;
+
+  @ApiProperty({ description: 'Results per page', required: false, default: 20 })
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  limit?: number;
+
+  @ApiProperty({
+    description: 'Filter by message type',
+    enum: MessageType,
+    required: false,
+  })
+  @IsEnum(MessageType)
+  @IsOptional()
+  messageType?: MessageType;
 }

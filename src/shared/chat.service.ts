@@ -14,6 +14,7 @@ import { GroupChat } from './models/group-chat.model';
 import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
 import { Campaign } from '../campaign/models/campaign.model';
+import { Post } from '../post/models/post.model';
 import { CampaignApplication, ApplicationStatus } from '../campaign/models/campaign-application.model';
 import { Op } from 'sequelize';
 import {
@@ -468,7 +469,7 @@ export class ChatService {
     userType: 'influencer' | 'brand',
     dto: GetConversationsDto,
   ) {
-    const { page = 1, limit = 20, search, type } = dto;
+    const { page = 1, limit = 20, search, type, excludeBlocked = false } = dto;
     const offset = (page - 1) * limit;
     const userParticipantType = userType as ParticipantType;
 
@@ -625,6 +626,11 @@ export class ChatService {
             otherParticipant.type as 'influencer' | 'brand',
           ),
         ]);
+
+        // Exclude blocked conversations when requested (e.g. share-post recipient picker)
+        if (excludeBlocked && (isBlocked || isBlockedByOther)) {
+          return null;
+        }
 
         // Apply search filter if provided
         if (search && otherPartyDetails) {
@@ -1079,7 +1085,7 @@ export class ChatService {
     userType: 'influencer' | 'brand',
     dto: GetMessagesDto,
   ) {
-    const { conversationId, page = 1, limit = 50, beforeMessageId } = dto;
+    const { conversationId, page = 1, limit = 50, beforeMessageId, search } = dto;
     const offset = (page - 1) * limit;
     const userParticipantType = userType as ParticipantType;
 
@@ -1105,6 +1111,11 @@ export class ChatService {
       whereClause.id = { [Op.lt]: beforeMessageId };
     }
 
+    if (search) {
+      whereClause.isEncrypted = false;
+      whereClause.content = { [Op.iLike]: `%${search}%` };
+    }
+
     // For personal/campaign conversations, check if the other participant blocked the current user.
     // If so, all their messages will have their identity masked.
     let blockedSenderKey: string | null = null;
@@ -1128,193 +1139,15 @@ export class ChatService {
     const { rows: messages, count: total } =
       await this.messageModel.findAndCountAll({
         where: whereClause,
-        include: [
-          {
-            model: MessageEncryptedKey,
-            where: { recipientId: userId, recipientType: userType },
-            required: false,
-            attributes: ['encryptedKey'],
-          },
-          {
-            model: Influencer,
-            attributes: ['id', 'username', 'name', 'profileImage', 'deletedAt'],
-            required: false,
-            paranoid: false, // Include soft-deleted influencers
-          },
-          {
-            model: Brand,
-            attributes: ['id', 'username', 'brandName', 'profileImage', 'deletedAt'],
-            required: false,
-            paranoid: false, // Include soft-deleted brands
-          },
-          {
-            model: this.messageModel,
-            as: 'repliedToMessage',
-            attributes: ['id', 'content', 'messageType', 'senderType', 'attachmentUrl', 'attachmentName', 'mediaType', 'createdAt', 'influencerId', 'brandId'],
-            required: false,
-            include: [
-              {
-                model: Influencer,
-                attributes: ['id', 'username', 'name', 'profileImage'],
-                required: false,
-              },
-              {
-                model: Brand,
-                attributes: ['id', 'username', 'brandName', 'profileImage'],
-                required: false,
-              },
-            ],
-          },
-        ],
+        include: this.buildMessageIncludes(userId, userType),
         order: [['createdAt', 'DESC']],
         limit,
         offset,
       });
 
-    const formattedMessages = messages.map((msg) => {
-      let sender: any;
-
-      // Determine the sender's key to check block status
-      const senderId = msg.senderType === SenderType.INFLUENCER ? msg.influencerId : msg.brandId;
-      const senderKey = `${msg.senderType}:${senderId}`;
-      const isSenderBlocked = blockedSenderKey === senderKey;
-
-      if (msg.senderType === SenderType.INFLUENCER) {
-        if (isSenderBlocked) {
-          sender = {
-            id: msg.influencerId,
-            username: 'collabkaroo_user',
-            name: 'Collabkaroo User',
-            profileImage: null,
-            accountStatus: 'blocked',
-          };
-        } else if (msg.influencer) {
-          // Active or soft-deleted influencer
-          const influencerData = msg.influencer.toJSON();
-          sender = {
-            id: influencerData.id,
-            username: influencerData.username,
-            name: influencerData.name,
-            profileImage: influencerData.profileImage,
-            accountStatus: influencerData.deletedAt ? 'soft_deleted' : 'active',
-          };
-        } else {
-          // Hard deleted influencer
-          sender = {
-            id: msg.influencerId,
-            username: 'Deleted User',
-            name: 'Deleted User',
-            profileImage: null,
-            accountStatus: 'hard_deleted',
-          };
-        }
-      } else {
-        if (isSenderBlocked) {
-          sender = {
-            id: msg.brandId,
-            username: 'collabkaroo_user',
-            brandName: 'Collabkaroo User',
-            profileImage: null,
-            accountStatus: 'blocked',
-          };
-        } else if (msg.brand) {
-          // Active or soft-deleted brand
-          const brandData = msg.brand.toJSON();
-          sender = {
-            id: brandData.id,
-            username: brandData.username,
-            brandName: brandData.brandName,
-            profileImage: brandData.profileImage,
-            accountStatus: brandData.deletedAt ? 'soft_deleted' : 'active',
-          };
-        } else {
-          // Hard deleted brand
-          sender = {
-            id: msg.brandId,
-            username: 'Deleted User',
-            brandName: 'Deleted User',
-            profileImage: null,
-            accountStatus: 'hard_deleted',
-          };
-        }
-      }
-
-      // Format replied message if present
-      let repliedMessage: any = null;
-      if (msg.repliedToMessage) {
-        const repliedMsg = msg.repliedToMessage;
-        let repliedSender: any;
-
-        if (repliedMsg.senderType === SenderType.INFLUENCER) {
-          if (repliedMsg.influencer) {
-            const influencerData = repliedMsg.influencer.toJSON();
-            repliedSender = {
-              id: influencerData.id,
-              username: influencerData.username,
-              name: influencerData.name,
-              profileImage: influencerData.profileImage,
-            };
-          } else {
-            repliedSender = {
-              id: repliedMsg.influencerId,
-              username: 'Deleted User',
-              name: 'Deleted User',
-              profileImage: null,
-            };
-          }
-        } else {
-          if (repliedMsg.brand) {
-            const brandData = repliedMsg.brand.toJSON();
-            repliedSender = {
-              id: brandData.id,
-              username: brandData.username,
-              brandName: brandData.brandName,
-              profileImage: brandData.profileImage,
-            };
-          } else {
-            repliedSender = {
-              id: repliedMsg.brandId,
-              username: 'Deleted User',
-              brandName: 'Deleted User',
-              profileImage: null,
-            };
-          }
-        }
-
-        repliedMessage = {
-          id: repliedMsg.id,
-          content: repliedMsg.content,
-          messageType: repliedMsg.messageType,
-          senderType: repliedMsg.senderType,
-          sender: repliedSender,
-          attachmentUrl: this.s3Service.convertToSignedUrl(repliedMsg.attachmentUrl, 120),
-          attachmentName: repliedMsg.attachmentName,
-          mediaType: repliedMsg.mediaType,
-          createdAt: repliedMsg.createdAt,
-        };
-      }
-
-      // Attach the caller's encrypted key if present in the dedicated table
-      const encryptedKeyRecord = (msg as any).messageEncryptedKeys?.[0];
-      const encryptedKey = encryptedKeyRecord?.encryptedKey ?? null;
-
-      return {
-        id: msg.id,
-        sender,
-        senderType: msg.senderType,
-        messageType: msg.messageType,
-        content: msg.content,
-        encryptedKey,
-        attachmentUrl: this.s3Service.convertToSignedUrl(msg.attachmentUrl, 120), // 2 minutes expiry
-        attachmentName: msg.attachmentName,
-        mediaType: msg.mediaType,
-        replyToMessageId: msg.replyToMessageId,
-        repliedMessage,
-        isRead: msg.isRead,
-        readAt: msg.readAt,
-        createdAt: msg.createdAt,
-      };
-    });
+    const formattedMessages = messages.map((msg) =>
+      this.formatMessage(msg, blockedSenderKey),
+    );
 
     return {
       messages: formattedMessages.reverse(), // Return in chronological order
@@ -1324,6 +1157,301 @@ export class ChatService {
         total,
         totalPages: Math.ceil(total / limit),
       },
+    };
+  }
+
+  /**
+   * Helper: Format a single message record into the API response shape.
+   */
+  private formatMessage(msg: Message, blockedSenderKey: string | null): any {
+    let sender: any;
+
+    const senderId = msg.senderType === SenderType.INFLUENCER ? msg.influencerId : msg.brandId;
+    const senderKey = `${msg.senderType}:${senderId}`;
+    const isSenderBlocked = blockedSenderKey === senderKey;
+
+    if (msg.senderType === SenderType.INFLUENCER) {
+      if (isSenderBlocked) {
+        sender = {
+          id: msg.influencerId,
+          username: 'collabkaroo_user',
+          name: 'Collabkaroo User',
+          profileImage: null,
+          accountStatus: 'blocked',
+        };
+      } else if (msg.influencer) {
+        const influencerData = msg.influencer.toJSON();
+        sender = {
+          id: influencerData.id,
+          username: influencerData.username,
+          name: influencerData.name,
+          profileImage: influencerData.profileImage,
+          accountStatus: influencerData.deletedAt ? 'soft_deleted' : 'active',
+        };
+      } else {
+        sender = {
+          id: msg.influencerId,
+          username: 'Deleted User',
+          name: 'Deleted User',
+          profileImage: null,
+          accountStatus: 'hard_deleted',
+        };
+      }
+    } else {
+      if (isSenderBlocked) {
+        sender = {
+          id: msg.brandId,
+          username: 'collabkaroo_user',
+          brandName: 'Collabkaroo User',
+          profileImage: null,
+          accountStatus: 'blocked',
+        };
+      } else if (msg.brand) {
+        const brandData = msg.brand.toJSON();
+        sender = {
+          id: brandData.id,
+          username: brandData.username,
+          brandName: brandData.brandName,
+          profileImage: brandData.profileImage,
+          accountStatus: brandData.deletedAt ? 'soft_deleted' : 'active',
+        };
+      } else {
+        sender = {
+          id: msg.brandId,
+          username: 'Deleted User',
+          brandName: 'Deleted User',
+          profileImage: null,
+          accountStatus: 'hard_deleted',
+        };
+      }
+    }
+
+    let repliedMessage: any = null;
+    if (msg.repliedToMessage) {
+      const repliedMsg = msg.repliedToMessage;
+      let repliedSender: any;
+
+      if (repliedMsg.senderType === SenderType.INFLUENCER) {
+        if (repliedMsg.influencer) {
+          const influencerData = repliedMsg.influencer.toJSON();
+          repliedSender = {
+            id: influencerData.id,
+            username: influencerData.username,
+            name: influencerData.name,
+            profileImage: influencerData.profileImage,
+          };
+        } else {
+          repliedSender = {
+            id: repliedMsg.influencerId,
+            username: 'Deleted User',
+            name: 'Deleted User',
+            profileImage: null,
+          };
+        }
+      } else {
+        if (repliedMsg.brand) {
+          const brandData = repliedMsg.brand.toJSON();
+          repliedSender = {
+            id: brandData.id,
+            username: brandData.username,
+            brandName: brandData.brandName,
+            profileImage: brandData.profileImage,
+          };
+        } else {
+          repliedSender = {
+            id: repliedMsg.brandId,
+            username: 'Deleted User',
+            brandName: 'Deleted User',
+            profileImage: null,
+          };
+        }
+      }
+
+      repliedMessage = {
+        id: repliedMsg.id,
+        content: repliedMsg.content,
+        messageType: repliedMsg.messageType,
+        senderType: repliedMsg.senderType,
+        sender: repliedSender,
+        attachmentUrl: this.s3Service.convertToSignedUrl(repliedMsg.attachmentUrl, 120),
+        attachmentName: repliedMsg.attachmentName,
+        mediaType: repliedMsg.mediaType,
+        createdAt: repliedMsg.createdAt,
+      };
+    }
+
+    const encryptedKeyRecord = (msg as any).messageEncryptedKeys?.[0];
+    const encryptedKey = encryptedKeyRecord?.encryptedKey ?? null;
+
+    let sharedPost: any = null;
+    if (msg.post) {
+      const postData = msg.post.toJSON();
+      const postAuthor =
+        postData.userType === 'influencer' && (msg.post as any).influencer
+          ? (() => {
+              const d = (msg.post as any).influencer.toJSON();
+              return { id: d.id, username: d.username, name: d.name, profileImage: d.profileImage };
+            })()
+          : postData.userType === 'brand' && (msg.post as any).brand
+          ? (() => {
+              const d = (msg.post as any).brand.toJSON();
+              return { id: d.id, username: d.username, brandName: d.brandName, profileImage: d.profileImage };
+            })()
+          : null;
+      sharedPost = {
+        id: postData.id,
+        content: postData.content,
+        mediaUrls: postData.mediaUrls,
+        userType: postData.userType,
+        author: postAuthor,
+        likesCount: postData.likesCount,
+        sharesCount: postData.sharesCount,
+        commentsCount: postData.commentsCount,
+        createdAt: postData.createdAt,
+      };
+    }
+
+    return {
+      id: msg.id,
+      conversationId: msg.conversationId,
+      sender,
+      senderType: msg.senderType,
+      messageType: msg.messageType,
+      content: msg.content,
+      encryptedKey,
+      attachmentUrl: this.s3Service.convertToSignedUrl(msg.attachmentUrl, 120),
+      attachmentName: msg.attachmentName,
+      mediaType: msg.mediaType,
+      audioDuration: msg.audioDuration ?? null,
+      replyToMessageId: msg.replyToMessageId,
+      repliedMessage,
+      postId: msg.postId,
+      post: sharedPost,
+      isRead: msg.isRead,
+      readAt: msg.readAt,
+      createdAt: msg.createdAt,
+    };
+  }
+
+  /**
+   * Helper: Build the standard message include array used by getMessages / search.
+   */
+  private buildMessageIncludes(userId: number, userType: string) {
+    return [
+      {
+        model: MessageEncryptedKey,
+        where: { recipientId: userId, recipientType: userType },
+        required: false,
+        attributes: ['encryptedKey'],
+      },
+      {
+        model: Influencer,
+        attributes: ['id', 'username', 'name', 'profileImage', 'deletedAt'],
+        required: false,
+        paranoid: false,
+      },
+      {
+        model: Brand,
+        attributes: ['id', 'username', 'brandName', 'profileImage', 'deletedAt'],
+        required: false,
+        paranoid: false,
+      },
+      {
+        model: this.messageModel,
+        as: 'repliedToMessage',
+        attributes: ['id', 'content', 'messageType', 'senderType', 'attachmentUrl', 'attachmentName', 'mediaType', 'createdAt', 'influencerId', 'brandId'],
+        required: false,
+        include: [
+          {
+            model: Influencer,
+            attributes: ['id', 'username', 'name', 'profileImage'],
+            required: false,
+          },
+          {
+            model: Brand,
+            attributes: ['id', 'username', 'brandName', 'profileImage'],
+            required: false,
+          },
+        ],
+      },
+      {
+        model: Post,
+        attributes: ['id', 'content', 'mediaUrls', 'userType', 'influencerId', 'brandId', 'likesCount', 'sharesCount', 'commentsCount', 'createdAt'],
+        required: false,
+        include: [
+          {
+            model: Influencer,
+            attributes: ['id', 'username', 'name', 'profileImage'],
+            required: false,
+          },
+          {
+            model: Brand,
+            attributes: ['id', 'username', 'brandName', 'profileImage'],
+            required: false,
+          },
+        ],
+      },
+    ];
+  }
+
+  /**
+   * Search messages across all of the user's conversations.
+   * Only non-encrypted (plaintext) messages are matched.
+   */
+  async globalSearchMessages(
+    userId: number,
+    userType: 'influencer' | 'brand',
+    q: string,
+    page = 1,
+    limit = 20,
+    messageType?: string,
+  ) {
+    const offset = (page - 1) * limit;
+    const userParticipantType = userType as ParticipantType;
+
+    // Find all conversation IDs the user participates in
+    const conversations = await this.conversationModel.findAll({
+      where: {
+        [Op.or]: [
+          { participant1Type: userParticipantType, participant1Id: userId },
+          { participant2Type: userParticipantType, participant2Id: userId },
+        ],
+        isActive: true,
+      },
+      attributes: ['id', 'participant1Type', 'participant1Id', 'participant2Type', 'participant2Id', 'conversationType', 'groupChatId'],
+    });
+
+    if (conversations.length === 0) {
+      return {
+        messages: [],
+        pagination: { page, limit, total: 0, totalPages: 0 },
+      };
+    }
+
+    const conversationIds = conversations.map((c) => c.id);
+
+    const whereClause: any = {
+      conversationId: { [Op.in]: conversationIds },
+      isDeleted: false,
+      isEncrypted: false,
+      content: { [Op.iLike]: `%${q}%` },
+    };
+    if (messageType) {
+      whereClause.messageType = messageType;
+    }
+
+    const { rows: messages, count: total } = await this.messageModel.findAndCountAll({
+      where: whereClause,
+      include: this.buildMessageIncludes(userId, userType),
+      order: [['createdAt', 'DESC']],
+      limit,
+      offset,
+    });
+
+    // For global search we don't apply block masking per-conversation (expensive); identity is shown as-is.
+    return {
+      messages: messages.map((msg) => this.formatMessage(msg, null)),
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }
 
