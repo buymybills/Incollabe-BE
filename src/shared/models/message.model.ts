@@ -142,6 +142,14 @@ export class Message extends Model<Message> {
   })
   declare replyToMessageId: number | null;
 
+  // Voice note duration in seconds
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    field: 'audio_duration',
+  })
+  declare audioDuration: number | null;
+
   // Post sharing
   @ForeignKey(() => Post)
   @Column({

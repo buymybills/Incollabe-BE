@@ -124,6 +124,16 @@ export class SendMessageDto {
   @IsInt()
   @IsOptional()
   postId?: number;
+
+  @ApiProperty({
+    description: 'Duration of voice note in seconds (only for messageType "audio")',
+    required: false,
+    example: 23,
+  })
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  audioDuration?: number;
 }
 
 export class GetConversationsDto {

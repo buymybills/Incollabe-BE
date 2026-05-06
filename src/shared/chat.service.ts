@@ -814,6 +814,7 @@ export class ChatService {
       mediaType,
       replyToMessageId,
       postId,
+      audioDuration,
       encryptedKeys: encryptedKeysFromDto,
     } = dto;
 
@@ -1014,6 +1015,7 @@ export class ChatService {
       attachmentUrl: isEncrypted ? null : attachmentUrl || null,
       attachmentName: isEncrypted ? null : attachmentName || null,
       mediaType: isEncrypted ? null : mediaType || null,
+      audioDuration: messageType === MessageType.AUDIO ? (audioDuration ?? null) : null,
       replyToMessageId: replyToMessageId || null,
       postId: messageType === MessageType.POST ? postId : null,
       isRead: false,
@@ -1041,10 +1043,13 @@ export class ChatService {
       conversation.participant1Id === userId;
 
     // Set last message preview
-    // Media messages → null; text (plain or encrypted) → store content as-is.
-    const lastMessagePreview: string | null = attachmentUrl
-      ? null
-      : content || null;
+    // Audio → "Voice note"; other media → null; text (plain or encrypted) → store content as-is.
+    const lastMessagePreview: string | null =
+      messageType === MessageType.AUDIO
+        ? 'Voice note'
+        : attachmentUrl
+          ? null
+          : content || null;
 
     const updateData: any = {
       lastMessage: lastMessagePreview,
@@ -1094,6 +1099,7 @@ export class ChatService {
       attachmentUrl: this.s3Service.convertToSignedUrl(message.attachmentUrl, 120), // 2 minutes expiry
       attachmentName: message.attachmentName,
       mediaType: message.mediaType,
+      audioDuration: message.audioDuration ?? null,
       isRead: message.isRead,
       readAt: message.readAt,
       createdAt: message.createdAt,
@@ -1382,6 +1388,7 @@ export class ChatService {
         attachmentUrl: this.s3Service.convertToSignedUrl(msg.attachmentUrl, 120), // 2 minutes expiry
         attachmentName: msg.attachmentName,
         mediaType: msg.mediaType,
+        audioDuration: msg.audioDuration ?? null,
         replyToMessageId: msg.replyToMessageId,
         repliedMessage,
         postId: msg.postId,
