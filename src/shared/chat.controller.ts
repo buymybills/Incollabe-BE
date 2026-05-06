@@ -46,6 +46,7 @@ import {
   AbortMultipartUploadDto,
   UpdateUploadProgressDto,
   GetUploadStatusDto,
+  SearchMessagesDto,
 } from './dto/chat.dto';
 import {
   CreateGroupDto,
@@ -407,6 +408,7 @@ export class ChatController {
     summary: 'Get messages in a conversation',
     description:
       'Retrieve paginated messages in a conversation.\n\n' +
+      '**Search:** Pass `?search=query` to filter messages by text content (plaintext only — E2EE messages are excluded).\n\n' +
       '**Block behavior:** If the other participant has blocked you, messages sent by them will have their ' +
       'sender identity masked — `senderDetails` will show `"Collabkaroo User"` with `accountStatus: "blocked"`. ' +
       'Their message content is still returned (only identity is masked).',
@@ -429,6 +431,33 @@ export class ChatController {
       dto,
     );
     return result; // Let interceptor wrap it
+  }
+
+  @Get('chat/messages/search')
+  @ApiOperation({
+    summary: 'Search messages across all conversations',
+    description:
+      'Full-text search over plaintext messages across all of the current user\'s conversations.\n\n' +
+      '**Note:** End-to-end encrypted messages cannot be searched server-side and are excluded from results.\n\n' +
+      'Each result includes `conversationId` so the client can navigate to the correct conversation.',
+  })
+  @ApiQuery({ name: 'search', description: 'Search query', required: true })
+  @ApiQuery({ name: 'page', description: 'Page number', required: false })
+  @ApiQuery({ name: 'limit', description: 'Results per page (default 20)', required: false })
+  @ApiQuery({ name: 'messageType', description: 'Filter by message type', required: false, enum: ['text', 'image', 'video', 'audio', 'file', 'media', 'post'] })
+  @ApiResponse({ status: 200, description: 'Search results' })
+  async globalSearchMessages(
+    @Req() req: RequestWithUser,
+    @Query() dto: SearchMessagesDto,
+  ) {
+    return this.chatService.globalSearchMessages(
+      req.user.id,
+      req.user.userType,
+      dto.search,
+      dto.page,
+      dto.limit,
+      dto.messageType,
+    );
   }
 
   @Post('chat/messages')
