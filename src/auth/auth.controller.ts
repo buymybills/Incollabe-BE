@@ -1219,6 +1219,7 @@ export class AuthController {
     description: 'Influencer not found',
   })
   async updateFcmToken(@Body() updateFcmTokenDto: UpdateFcmTokenDto) {
+    console.log('[update-fcm-token] payload:', JSON.stringify(updateFcmTokenDto));
     return this.authService.updateFcmToken(
       updateFcmTokenDto.userId,
       updateFcmTokenDto.fcmToken,
