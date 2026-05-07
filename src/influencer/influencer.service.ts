@@ -454,7 +454,7 @@ export class InfluencerService {
       // If deviceId is provided, find that specific device; otherwise use most recent
       let selectedDevice: typeof devices[number] | undefined = undefined;
       if (deviceId) {
-        selectedDevice = devices.find(device => device.deviceId === deviceId);
+        selectedDevice = devices.find(device => device.deviceId?.toLowerCase() === deviceId.toLowerCase());
       } else if (devices.length > 0) {
         selectedDevice = devices[0]; // Most recently used device
       }
