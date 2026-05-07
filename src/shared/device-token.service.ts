@@ -60,6 +60,29 @@ export class DeviceTokenService {
         return existingDevice;
       }
 
+      // Check if fcmToken already exists on a different device row (unique constraint)
+      const existingByToken = await this.deviceTokenModel.findOne({
+        where: { fcmToken },
+      });
+
+      if (existingByToken) {
+        // Same token, different deviceId — update that row with new deviceId and details
+        await existingByToken.update({
+          userId,
+          userType,
+          deviceId,
+          deviceName: deviceName || existingByToken.deviceName,
+          deviceOs: deviceOs || existingByToken.deviceOs,
+          appVersion: appVersion || existingByToken.appVersion,
+          versionCode: versionCode || existingByToken.versionCode,
+          installationId: installationId || existingByToken.installationId,
+          lastUsedAt: new Date(),
+        });
+
+        console.log(`♻️ Reused existing token row (id=${existingByToken.id}) for new deviceId ${deviceId} for ${userType} ${userId}`);
+        return existingByToken;
+      }
+
       // Device doesn't exist - check if we need to remove old devices before creating
       const userDeviceCount = await this.deviceTokenModel.count({
         where: { userId, userType },
