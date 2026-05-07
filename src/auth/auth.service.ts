@@ -2596,6 +2596,7 @@ export class AuthService {
     }
 
     // Add or update device token (enforces 5-device limit, auto-removes oldest)
+    console.log('[update-fcm-token] device_tokens write:', JSON.stringify({ userId, userType: UserType.INFLUENCER, fcmToken, deviceId, deviceName, deviceOs, appVersion, versionCode, installationId }));
     await this.deviceTokenService.addOrUpdateDeviceToken({
       userId,
       userType: UserType.INFLUENCER,
