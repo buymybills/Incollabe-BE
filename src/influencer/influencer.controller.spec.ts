@@ -148,6 +148,9 @@ describe('InfluencerController', () => {
         1,
         'influencer',
         undefined,
+        undefined,
+        undefined,
+        undefined,
       );
     });
 
@@ -419,6 +422,9 @@ describe('InfluencerController', () => {
         false,
         999,
         'influencer',
+        undefined,
+        undefined,
+        undefined,
         undefined,
       );
     });

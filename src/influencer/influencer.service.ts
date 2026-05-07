@@ -192,6 +192,9 @@ export class InfluencerService {
     currentUserId?: number,
     currentUserType?: 'influencer' | 'brand',
     deviceId?: string,
+    queryAppVersion?: string,
+    queryVersionCode?: number,
+    queryDeviceOs?: 'ios' | 'android',
   ) {
     // Validate that only influencers can access their own profile
     if (influencerId === currentUserId && currentUserType === 'brand') {
@@ -471,8 +474,12 @@ export class InfluencerService {
         };
       }
 
-      // Get the most recently used device for app version comparison
-      const mostRecentDevice = selectedDevice || (devices.length > 0 ? devices[0] : null);
+      // If deviceId provided but not found in DB, use query params for version check instead of falling back to another device
+      const mostRecentDevice = selectedDevice || (
+        deviceId && (queryAppVersion || queryVersionCode || queryDeviceOs)
+          ? { appVersion: queryAppVersion, versionCode: queryVersionCode, deviceOs: queryDeviceOs }
+          : (devices.length > 0 ? devices[0] : null)
+      );
 
       // Get version config from database based on device OS
       if (mostRecentDevice?.deviceOs) {

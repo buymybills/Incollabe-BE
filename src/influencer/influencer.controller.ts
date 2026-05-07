@@ -117,10 +117,16 @@ export class InfluencerController {
   async getInfluencerProfile(
     @Req() req: RequestWithUser,
     @Headers('x-device-id') deviceId?: string,
+    @Query('appVersion') appVersion?: string,
+    @Query('versionCode') versionCode?: string,
+    @Query('deviceOs') deviceOs?: string,
   ) {
     const influencerId = req.user.id;
     const userType = req.user.userType;
-    return await this.influencerService.getInfluencerProfile(influencerId, false, influencerId, userType, deviceId);
+    return await this.influencerService.getInfluencerProfile(
+      influencerId, false, influencerId, userType, deviceId,
+      appVersion, versionCode ? parseInt(versionCode) : undefined, deviceOs as 'ios' | 'android' | undefined,
+    );
   }
 
   @Put('profile')
