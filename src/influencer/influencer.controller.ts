@@ -105,6 +105,22 @@ export class InfluencerController {
     required: false,
     description: 'Device ID to get all device token details for this specific device',
   })
+  @ApiQuery({
+    name: 'appVersion',
+    required: false,
+    description: 'App version installed on the device (e.g. 5.1.1). Used for version check when deviceId is not yet registered in DB.',
+  })
+  @ApiQuery({
+    name: 'versionCode',
+    required: false,
+    description: 'Numeric version code of the installed app (e.g. 20). Used for version check when deviceId is not yet registered in DB.',
+  })
+  @ApiQuery({
+    name: 'deviceOs',
+    required: false,
+    enum: ['ios', 'android'],
+    description: 'Device OS platform. Used for version check when deviceId is not yet registered in DB.',
+  })
   @ApiResponse({
     status: 200,
     description: 'Influencer profile retrieved successfully',
