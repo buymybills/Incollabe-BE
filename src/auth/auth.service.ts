@@ -2597,7 +2597,7 @@ export class AuthService {
 
     // Add or update device token (enforces 5-device limit, auto-removes oldest)
     console.log('[update-fcm-token] device_tokens write:', JSON.stringify({ userId, userType: UserType.INFLUENCER, fcmToken, deviceId, deviceName, deviceOs, appVersion, versionCode, installationId }));
-    await this.deviceTokenService.addOrUpdateDeviceToken({
+    const savedDeviceToken = await this.deviceTokenService.addOrUpdateDeviceToken({
       userId,
       userType: UserType.INFLUENCER,
       fcmToken,
@@ -2608,9 +2608,11 @@ export class AuthService {
       versionCode,
       installationId,
     });
+    console.log('[update-fcm-token] device_tokens saved:', JSON.stringify({ id: savedDeviceToken.id, userId: savedDeviceToken.userId, fcmToken: savedDeviceToken.fcmToken, deviceId: savedDeviceToken.deviceId, deviceName: savedDeviceToken.deviceName, deviceOs: savedDeviceToken.deviceOs, appVersion: savedDeviceToken.appVersion, versionCode: savedDeviceToken.versionCode, installationId: savedDeviceToken.installationId, lastUsedAt: savedDeviceToken.lastUsedAt }));
 
     // Still update the main fcmToken field for backward compatibility
     await influencer.update({ fcmToken });
+    console.log('[update-fcm-token] influencers table saved: fcmToken =', fcmToken, '| influencerId =', userId);
 
     // Get current device count
     const deviceCount = await this.deviceTokenService.getUserDeviceCount(
