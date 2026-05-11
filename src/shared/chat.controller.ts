@@ -532,10 +532,32 @@ export class ChatController {
         },
         messageType: {
           type: 'string',
-          enum: ['text', 'image', 'video', 'audio', 'file', 'media'],
-          description: 'Type of message being sent. Use "media" for mixed/multiple media attachments.',
+          enum: ['text', 'image', 'video', 'audio', 'file', 'media', 'post', 'poll'],
+          description: 'Type of message being sent. Use "poll" for opinion polls in group chats.',
           default: 'text',
           example: 'text',
+        },
+        pollData: {
+          type: 'object',
+          description: 'Required when messageType is "poll". Only valid in group chats.',
+          properties: {
+            question: { type: 'string', example: 'Which feature should we prioritize?' },
+            options: {
+              type: 'array',
+              minItems: 2,
+              maxItems: 10,
+              items: {
+                type: 'object',
+                properties: {
+                  text: { type: 'string', example: 'Dark mode' },
+                },
+                required: ['text'],
+              },
+            },
+            allowMultiple: { type: 'boolean', default: false, description: 'Allow voting for multiple options' },
+            expiresAt: { type: 'string', format: 'date-time', example: '2026-05-20T00:00:00Z', description: 'Optional poll expiry' },
+          },
+          required: ['question', 'options'],
         },
         attachmentUrl: {
           type: 'string',
@@ -652,6 +674,28 @@ export class ChatController {
           replyToMessageId: 123,
         },
       },
+      groupPoll: {
+        summary: '📊 Group Chat - Opinion Poll',
+        description:
+          'Create an opinion poll in a group chat. ' +
+          'pollData is required when messageType is "poll". ' +
+          'content and attachmentUrl should be omitted. ' +
+          'Polls are only allowed in group conversations.',
+        value: {
+          conversationId: 78,
+          messageType: 'poll',
+          pollData: {
+            question: 'Which feature should we prioritize?',
+            options: [
+              { text: 'Dark mode' },
+              { text: 'Voice calls' },
+              { text: 'Story sharing' },
+            ],
+            allowMultiple: false,
+            expiresAt: '2026-05-20T00:00:00Z',
+          },
+        },
+      },
     },
   })
   @ApiResponse({
@@ -679,6 +723,27 @@ export class ChatController {
             attachmentName: { type: 'string', example: 'vacation-photo.jpg', nullable: true },
             mediaType: { type: 'string', example: 'image/jpeg', nullable: true, description: 'MIME type of the media attachment' },
             replyToMessageId: { type: 'number', example: 100, nullable: true, description: 'ID of the message being replied to' },
+            pollData: {
+              nullable: true,
+              description: 'Present only when messageType is "poll"',
+              type: 'object',
+              properties: {
+                question: { type: 'string', example: 'Which feature should we prioritize?' },
+                options: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string', example: 'opt_1' },
+                      text: { type: 'string', example: 'Dark mode' },
+                      voterIds: { type: 'array', items: { type: 'string' }, example: ['42:influencer'] },
+                    },
+                  },
+                },
+                allowMultiple: { type: 'boolean', example: false },
+                expiresAt: { type: 'string', nullable: true, example: '2026-05-20T00:00:00Z' },
+              },
+            },
             isEncrypted: {
               type: 'boolean',
               example: true,
