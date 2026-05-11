@@ -16,7 +16,7 @@ import { createAdapter } from '@socket.io/redis-adapter';
 import { ChatService } from './chat.service';
 import { GroupChatService } from './group-chat.service';
 import { WsAuthGuard } from './guards/ws-auth.guard';
-import { SendMessageDto, MarkAsReadDto, TypingDto, UpdateUploadProgressDto } from './dto/chat.dto';
+import { SendMessageDto, MarkAsReadDto, TypingDto, UpdateUploadProgressDto, VotePollDto } from './dto/chat.dto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { ParticipantType } from './models/conversation.model';
@@ -1819,6 +1819,48 @@ export class ChatGateway
    * Called after updateFcmToken so the client gets correct appVersionInfo
    * without needing a second profile API call.
    */
+  /**
+   * WebSocket handler: poll:vote
+   * Payload: { messageId: number, optionId: string }
+   * Emits poll:updated to the conversation room on success.
+   */
+  @UseGuards(WsAuthGuard)
+  @SubscribeMessage('poll:vote')
+  async handlePollVote(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { messageId: number; optionId: string },
+  ) {
+    const userId = (client as any).userId as number;
+    const userType = (client as any).userType as 'influencer' | 'brand';
+
+    if (!userId || !userType) {
+      client.emit('error', { message: 'Unauthorized' });
+      return;
+    }
+
+    try {
+      const dto: VotePollDto = { optionId: data.optionId };
+      const updatedMessage = await this.chatService.votePoll(
+        data.messageId,
+        userId,
+        userType,
+        dto,
+      );
+      this.emitPollUpdated(updatedMessage.conversationId, updatedMessage);
+    } catch (err: any) {
+      client.emit('error', { message: err?.message ?? 'Failed to record vote' });
+    }
+  }
+
+  /**
+   * Broadcast updated poll data to all members of the conversation room.
+   * Called both from the WebSocket handler and the REST controller.
+   */
+  public emitPollUpdated(conversationId: number, message: any) {
+    const roomName = `conversation_${conversationId}`;
+    this.server.to(roomName).emit('poll:updated', { conversationId, message });
+  }
+
   public emitAppVersionUpdate(
     userId: number,
     userType: string,

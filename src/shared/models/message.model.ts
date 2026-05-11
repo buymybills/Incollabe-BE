@@ -22,6 +22,20 @@ export enum MessageType {
   FILE = 'file',
   MEDIA = 'media', // For mixed/multiple media attachments
   POST = 'post',  // Shared post card
+  POLL = 'poll',  // Opinion poll in group chats
+}
+
+export interface PollOption {
+  id: string;
+  text: string;
+  voterIds: string[]; // "userId:userType" e.g. "42:influencer"
+}
+
+export interface PollData {
+  question: string;
+  options: PollOption[];
+  allowMultiple: boolean;
+  expiresAt?: string; // ISO date string
 }
 
 export enum SenderType {
@@ -158,6 +172,14 @@ export class Message extends Model<Message> {
     field: 'post_id',
   })
   declare postId: number | null;
+
+  // Poll data for opinion polls in group chats
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+    field: 'poll_data',
+  })
+  declare pollData: PollData | null;
 
   // Associations
   @BelongsTo(() => Conversation)
