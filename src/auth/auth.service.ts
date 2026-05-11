@@ -56,6 +56,8 @@ import { InfluencerReferralUsage } from './model/influencer-referral-usage.model
 import { ProSubscription } from '../influencer/models/pro-subscription.model';
 import { SubscriptionStatus } from '../influencer/models/payment-enums';
 import { RazorpayService } from '../shared/razorpay.service';
+import { ChatGateway } from '../shared/chat.gateway';
+import { AppVersionService } from '../shared/services/app-version.service';
 // Interfaces for token payload
 interface DecodedRefresh {
   id: number;
@@ -104,6 +106,8 @@ export class AuthService {
     @InjectModel(ProSubscription)
     private readonly proSubscriptionModel: typeof ProSubscription,
     private readonly razorpayService: RazorpayService,
+    private readonly chatGateway: ChatGateway,
+    private readonly appVersionService: AppVersionService,
   ) {}
 
   // Redis key helpers
@@ -2619,6 +2623,41 @@ export class AuthService {
       userId,
       UserType.INFLUENCER,
     );
+
+    // Push correct appVersionInfo to the client via WebSocket so they don't
+    // need a second profile API call (fixes the race condition where profile
+    // API runs before the device token is registered).
+    if (deviceOs) {
+      try {
+        const versionStatus = await this.appVersionService.checkVersionStatus(
+          deviceOs,
+          versionCode || 0,
+          appVersion,
+        );
+        if (versionStatus.config) {
+          this.chatGateway.emitAppVersionUpdate(userId, 'influencer', {
+            installedVersion: {
+              appVersion: appVersion || null,
+              versionCode: versionCode || null,
+            },
+            minimumVersion: {
+              appVersion: versionStatus.config.minimumVersion,
+              versionCode: versionStatus.config.minimumVersionCode,
+            },
+            latestVersion: {
+              appVersion: versionStatus.config.latestVersion,
+              versionCode: versionStatus.config.latestVersionCode,
+            },
+            updateAvailable: versionStatus.updateAvailable,
+            forceUpdate: versionStatus.forceUpdate,
+            updateMessage: versionStatus.updateMessage,
+          });
+        }
+      } catch (e) {
+        // Non-critical — don't fail the FCM update if WebSocket emit fails
+        console.error('[update-fcm-token] failed to emit app-version-updated via WS:', (e as Error).message);
+      }
+    }
 
     console.log(`✅ FCM token updated for influencer ${userId} (${deviceCount}/5 devices)`);
 

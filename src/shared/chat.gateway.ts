@@ -1813,4 +1813,28 @@ export class ChatGateway
       createdAt: msg.createdAt,
     };
   }
+
+  /**
+   * Emit profile:app-version-updated to a specific influencer.
+   * Called after updateFcmToken so the client gets correct appVersionInfo
+   * without needing a second profile API call.
+   */
+  public emitAppVersionUpdate(
+    userId: number,
+    userType: string,
+    appVersionInfo: {
+      installedVersion: { appVersion: string | null; versionCode: number | null };
+      minimumVersion: { appVersion: string; versionCode: number };
+      latestVersion: { appVersion: string; versionCode: number };
+      updateAvailable: boolean;
+      forceUpdate: boolean;
+      updateMessage: string;
+    },
+  ) {
+    const userKey = `${userType}_${userId}`;
+    const socket = this.userSockets.get(userKey);
+    if (socket) {
+      socket.emit('profile:app-version-updated', { appVersionInfo });
+    }
+  }
 }
