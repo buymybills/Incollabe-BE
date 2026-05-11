@@ -7,12 +7,57 @@ import {
   IsEnum,
   IsObject,
   IsBoolean,
+  IsArray,
+  ArrayMinSize,
+  ArrayMaxSize,
+  ValidateNested,
   MaxLength,
   Min,
   Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { MessageType } from '../models/message.model';
+
+export class PollOptionDto {
+  @ApiProperty({ description: 'Option text', example: 'Option A' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  text: string;
+}
+
+export class CreatePollDto {
+  @ApiProperty({ description: 'The poll question', example: 'Which feature should we prioritize?' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(500)
+  question: string;
+
+  @ApiProperty({ description: 'Poll options (2–10)', type: [PollOptionDto] })
+  @IsArray()
+  @ArrayMinSize(2)
+  @ArrayMaxSize(10)
+  @ValidateNested({ each: true })
+  @Type(() => PollOptionDto)
+  options: PollOptionDto[];
+
+  @ApiProperty({ description: 'Allow members to vote for multiple options', default: false })
+  @IsBoolean()
+  @IsOptional()
+  allowMultiple?: boolean;
+
+  @ApiProperty({ description: 'Optional poll expiry (ISO date string)', required: false, example: '2026-05-20T00:00:00Z' })
+  @IsString()
+  @IsOptional()
+  expiresAt?: string;
+}
+
+export class VotePollDto {
+  @ApiProperty({ description: 'Option ID to vote for', example: 'opt_1' })
+  @IsString()
+  @IsNotEmpty()
+  optionId: string;
+}
 
 export class CreateConversationDto {
   @ApiProperty({ description: 'ID of the other party (influencer or brand)' })
@@ -144,6 +189,16 @@ export class SendMessageDto {
   @IsInt()
   @IsOptional()
   audioDuration?: number;
+
+  @ApiProperty({
+    description: 'Poll data — required when messageType is "poll". Only valid in group chats.',
+    required: false,
+    type: CreatePollDto,
+  })
+  @ValidateNested()
+  @Type(() => CreatePollDto)
+  @IsOptional()
+  pollData?: CreatePollDto;
 }
 
 export class GetConversationsDto {

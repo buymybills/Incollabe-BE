@@ -57,6 +57,7 @@ import {
   GetGroupsDto,
   GetGroupDetailsDto,
 } from './dto/group-chat.dto';
+import { VotePollDto } from './dto/chat.dto';
 
 @ApiTags('Chat')
 @ApiBearerAuth()
@@ -721,6 +722,36 @@ export class ChatController {
       dto,
     );
     return result; // Let interceptor wrap it
+  }
+
+  @Post('chat/messages/:messageId/poll/vote')
+  @ApiOperation({
+    summary: 'Vote on a poll message',
+    description:
+      'Cast or retract a vote on a poll message in a group chat. ' +
+      'Voting the same option again removes the vote (toggle). ' +
+      'In single-vote mode, selecting a new option automatically removes the previous vote.',
+  })
+  @ApiParam({ name: 'messageId', description: 'Poll message ID' })
+  @ApiResponse({ status: 200, description: 'Vote recorded — returns updated poll message' })
+  @ApiResponse({ status: 400, description: 'Not a poll / expired poll / invalid option' })
+  @ApiResponse({ status: 403, description: 'Not a participant in the conversation' })
+  async votePoll(
+    @Req() req: RequestWithUser,
+    @Param('messageId', ParseIntPipe) messageId: number,
+    @Body() dto: VotePollDto,
+  ) {
+    const updatedMessage = await this.chatService.votePoll(
+      messageId,
+      req.user.id,
+      req.user.userType,
+      dto,
+    );
+
+    // Broadcast updated poll to all conversation members via WebSocket
+    this.chatGateway.emitPollUpdated(updatedMessage.conversationId, updatedMessage);
+
+    return updatedMessage;
   }
 
   @Get('chat/unread-count')

@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Conversation, ParticipantType } from './models/conversation.model';
-import { Message, MessageType, SenderType } from './models/message.model';
+import { Message, MessageType, PollData, SenderType } from './models/message.model';
 import { MessageEncryptedKey } from './models/message-encrypted-key.model';
 import { CampaignReview, ReviewerType } from './models/campaign-review.model';
 import { GroupMember, MemberRole } from './models/group-member.model';
@@ -24,6 +24,7 @@ import {
   GetMessagesDto,
   MarkAsReadDto,
   SubmitReviewDto,
+  VotePollDto,
 } from './dto/chat.dto';
 import { S3Service } from './s3.service';
 import { BlockService } from './services/block.service';
@@ -798,6 +799,7 @@ export class ChatService {
       mediaType,
       replyToMessageId,
       encryptedKeys: encryptedKeysFromDto,
+      pollData: pollDataFromDto,
     } = dto;
 
     const userParticipantType = userType as ParticipantType;
@@ -896,7 +898,18 @@ export class ChatService {
     }
 
     // Validate message has content
-    if (!content && !attachmentUrl) {
+    if (messageType === MessageType.POST) {
+      if (!postId) {
+        throw new BadRequestException('postId is required when messageType is "post"');
+      }
+    } else if (messageType === MessageType.POLL) {
+      if (!pollDataFromDto) {
+        throw new BadRequestException('pollData is required when messageType is "poll"');
+      }
+      if (conversation.conversationType !== 'group') {
+        throw new BadRequestException('Polls are only allowed in group chats');
+      }
+    } else if (!content && !attachmentUrl) {
       throw new BadRequestException('Message must have content or attachment');
     }
 
@@ -980,6 +993,21 @@ export class ChatService {
       }
     }
 
+    // Build poll data with generated option IDs
+    let pollDataToStore: PollData | null = null;
+    if (messageType === MessageType.POLL && pollDataFromDto) {
+      pollDataToStore = {
+        question: pollDataFromDto.question,
+        options: pollDataFromDto.options.map((opt, idx) => ({
+          id: `opt_${idx + 1}`,
+          text: opt.text,
+          voterIds: [],
+        })),
+        allowMultiple: pollDataFromDto.allowMultiple ?? false,
+        ...(pollDataFromDto.expiresAt ? { expiresAt: pollDataFromDto.expiresAt } : {}),
+      };
+    }
+
     // Create message
     // For encrypted messages, DO NOT store attachmentUrl/attachmentName in plain text
     // They should be included inside the encrypted content for E2EE security
@@ -990,11 +1018,12 @@ export class ChatService {
       brandId: userType === 'brand' ? userId : null,
       messageType,
       content: messageType === MessageType.POLL ? null : contentToStore,
-      searchableContent: isEncrypted ? (searchableContentFromDto || null) : null,
       attachmentUrl: isEncrypted ? null : attachmentUrl || null,
       attachmentName: isEncrypted ? null : attachmentName || null,
       mediaType: isEncrypted ? null : mediaType || null,
       replyToMessageId: replyToMessageId || null,
+      postId: messageType === MessageType.POST ? postId : null,
+      pollData: pollDataToStore,
       isRead: false,
       isEncrypted,
       encryptionVersion,
@@ -1020,10 +1049,15 @@ export class ChatService {
       conversation.participant1Id === userId;
 
     // Set last message preview
-    // Media messages → null; text (plain or encrypted) → store content as-is.
-    const lastMessagePreview: string | null = attachmentUrl
-      ? null
-      : content || null;
+    // Poll → "Poll: <question>"; Audio → "Voice note"; other media → null; text → content.
+    const lastMessagePreview: string | null =
+      messageType === MessageType.POLL
+        ? `Poll: ${pollDataToStore?.question ?? ''}`
+        : messageType === MessageType.AUDIO
+          ? 'Voice note'
+          : attachmentUrl
+            ? null
+            : content || null;
 
     const updateData: any = {
       lastMessage: lastMessagePreview,
@@ -2333,5 +2367,66 @@ export class ChatService {
       conversationType: conversation.conversationType,
       participants: publicKeys,
     };
+  }
+
+  /**
+   * Vote on a poll message in a group chat.
+   * Returns the updated message with refreshed pollData.
+   */
+  async votePoll(
+    messageId: number,
+    userId: number,
+    userType: 'influencer' | 'brand',
+    dto: VotePollDto,
+  ) {
+    const message = await this.messageModel.findByPk(messageId);
+    if (!message) {
+      throw new NotFoundException('Message not found');
+    }
+    if (message.messageType !== MessageType.POLL || !message.pollData) {
+      throw new BadRequestException('This message is not a poll');
+    }
+
+    const pollData: PollData = JSON.parse(JSON.stringify(message.pollData));
+
+    // Check expiry
+    if (pollData.expiresAt && new Date(pollData.expiresAt) < new Date()) {
+      throw new BadRequestException('This poll has expired');
+    }
+
+    // Verify user is a member of the conversation
+    const conversation = await this.conversationModel.findByPk(message.conversationId);
+    if (!conversation) {
+      throw new NotFoundException('Conversation not found');
+    }
+    if (!(await this.isParticipant(conversation, userId, userType as ParticipantType))) {
+      throw new ForbiddenException('You are not a participant in this conversation');
+    }
+
+    const voterKey = `${userId}:${userType}`;
+    const targetOption = pollData.options.find((o) => o.id === dto.optionId);
+    if (!targetOption) {
+      throw new BadRequestException('Invalid option ID');
+    }
+
+    const alreadyVotedThisOption = targetOption.voterIds.includes(voterKey);
+
+    if (alreadyVotedThisOption) {
+      // Toggle off — remove the vote
+      targetOption.voterIds = targetOption.voterIds.filter((v) => v !== voterKey);
+    } else {
+      // If single-vote mode, remove any existing vote from other options first
+      if (!pollData.allowMultiple) {
+        for (const option of pollData.options) {
+          option.voterIds = option.voterIds.filter((v) => v !== voterKey);
+        }
+      }
+      targetOption.voterIds.push(voterKey);
+    }
+
+    await message.update({ pollData } as any);
+    await message.reload();
+
+    return message;
   }
 }
