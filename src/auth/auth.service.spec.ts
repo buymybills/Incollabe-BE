@@ -36,6 +36,8 @@ import { DeviceTokenService } from '../shared/device-token.service';
 import { CampusAmbassadorService } from '../shared/services/campus-ambassador.service';
 import { ProSubscription } from '../influencer/models/pro-subscription.model';
 import { RazorpayService } from '../shared/razorpay.service';
+import { ChatGateway } from '../shared/chat.gateway';
+import { AppVersionService } from '../shared/services/app-version.service';
 
 // Mock bcrypt at module level
 jest.mock('bcrypt', () => ({
@@ -266,6 +268,14 @@ describe('AuthService', () => {
         {
           provide: RazorpayService,
           useValue: { cancelSubscription: jest.fn().mockResolvedValue({}) },
+        },
+        {
+          provide: ChatGateway,
+          useValue: { emitAppVersionUpdate: jest.fn() },
+        },
+        {
+          provide: AppVersionService,
+          useValue: { checkVersionStatus: jest.fn().mockResolvedValue({ config: null }) },
         },
       ],
     }).compile();
