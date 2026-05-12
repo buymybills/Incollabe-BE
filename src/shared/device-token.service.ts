@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { DeviceToken, UserType } from './models/device-token.model';
 import { Op } from 'sequelize';
+import { Influencer } from '../auth/model/influencer.model';
+import { Brand } from '../brand/model/brand.model';
 
 interface AddDeviceTokenParams {
   userId: number;
@@ -22,6 +24,10 @@ export class DeviceTokenService {
   constructor(
     @InjectModel(DeviceToken)
     private deviceTokenModel: typeof DeviceToken,
+    @InjectModel(Influencer)
+    private influencerModel: typeof Influencer,
+    @InjectModel(Brand)
+    private brandModel: typeof Brand,
   ) {}
 
   /**
@@ -279,5 +285,32 @@ export class DeviceTokenService {
     });
 
     return device ? device.userType : null;
+  }
+
+  /**
+   * Get user type from userId using any registered device
+   */
+  async getUserTypeFromAnyDevice(userId: number): Promise<UserType | null> {
+    const device = await this.deviceTokenModel.findOne({
+      where: { userId },
+      attributes: ['userType'],
+    });
+
+    return device ? device.userType : null;
+  }
+
+  /**
+   * Resolve user type by checking influencers and brands tables directly.
+   * More reliable than device_tokens since it doesn't depend on FCM registration.
+   */
+  async resolveUserType(userId: number): Promise<'influencer' | 'brand' | null> {
+    const [influencer, brand] = await Promise.all([
+      this.influencerModel.findOne({ where: { id: userId }, attributes: ['id'] }),
+      this.brandModel.findOne({ where: { id: userId }, attributes: ['id'] }),
+    ]);
+
+    if (influencer) return 'influencer';
+    if (brand) return 'brand';
+    return null;
   }
 }
