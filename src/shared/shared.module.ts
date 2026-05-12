@@ -31,6 +31,7 @@ import { InfluencerProfileScoringService } from './services/influencer-profile-s
 import { GeminiAIService } from './services/gemini-ai.service';
 // import { AIBatchProcessorService } from './services/ai-batch-processor.service';
 import { AppReviewController } from './controllers/app-review.controller';
+import { AppVersionController } from './controllers/app-version.controller';
 import { AppReviewService } from './services/app-review.service';
 import { InfluencerProfileScoringController } from './controllers/influencer-profile-scoring.controller';
 import { CampusAmbassadorController } from './controllers/campus-ambassador.controller';
@@ -160,6 +161,7 @@ import { ReportController } from './controllers/report.controller';
     KeyBackupController,
     InstagramController,
     AppReviewController,
+    AppVersionController,
     InfluencerProfileScoringController,
     CampusAmbassadorController,
     ConfigController,
