@@ -7,6 +7,7 @@ import {
   IsString,
   IsIn,
   IsBoolean,
+  IsArray,
   ValidationArguments,
   registerDecorator,
   ValidationOptions,
@@ -152,6 +153,19 @@ export class GetCampaignApplicationsDto {
     return value;
   })
   isPro?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Filter by influencer tier. Valid values: below_1k, nano_1k_10k, micro_10k_100k, mid_tier_100k_500k, macro_500k_1m, mega_celebrity_1m_plus',
+    example: ['micro_10k_100k', 'mid_tier_100k_500k'],
+    type: [String],
+    isArray: true,
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @Transform(({ value }) => (Array.isArray(value) ? value : [value]))
+  influencerTypes?: string[];
 
   @IsOptional()
   @IsString()

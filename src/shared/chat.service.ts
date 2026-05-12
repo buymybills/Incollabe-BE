@@ -1175,10 +1175,7 @@ export class ChatService {
     }
 
     if (search) {
-      whereClause[Op.or] = [
-        { searchableContent: { [Op.iLike]: `%${search}%` } },
-        { searchableContent: null, content: { [Op.iLike]: `%${search}%` } },
-      ];
+      whereClause[Op.or] = this.buildMessageSearchCondition(search);
     }
 
     // For personal/campaign conversations, check if the other participant blocked the current user.
@@ -1401,6 +1398,13 @@ export class ChatService {
   /**
    * Helper: Build the standard message include array used by getMessages / search.
    */
+  private buildMessageSearchCondition(term: string) {
+    return [
+      { searchableContent: { [Op.iLike]: `%${term}%` } },
+      { searchableContent: null, content: { [Op.iLike]: `%${term}%` } },
+    ];
+  }
+
   private buildMessageIncludes(userId: number, userType: string) {
     return [
       {
@@ -1470,31 +1474,33 @@ export class ChatService {
     page = 1,
     limit = 20,
     messageType?: string,
+    minFollowers?: number,
+    maxFollowers?: number,
   ) {
     const offset = (page - 1) * limit;
     const userParticipantType = userType as ParticipantType;
 
-    // Find all conversation IDs the user participates in (personal + campaign)
-    const directConversations = await this.conversationModel.findAll({
-      where: {
-        [Op.or]: [
-          { participant1Type: userParticipantType, participant1Id: userId },
-          { participant2Type: userParticipantType, participant2Id: userId },
-        ],
-        isActive: true,
-      },
-      attributes: ['id'],
-    });
-
-    // Find group conversation IDs via GroupMember table
-    const groupMemberships = await this.groupMemberModel.findAll({
-      where: {
-        memberId: userId,
-        memberType: userType,
-        leftAt: { [Op.is]: null },
-      } as any,
-      attributes: ['groupChatId'],
-    });
+    // Fetch direct conversations and group memberships in parallel
+    const [directConversations, groupMemberships] = await Promise.all([
+      this.conversationModel.findAll({
+        where: {
+          [Op.or]: [
+            { participant1Type: userParticipantType, participant1Id: userId },
+            { participant2Type: userParticipantType, participant2Id: userId },
+          ],
+          isActive: true,
+        },
+        attributes: ['id'],
+      }),
+      this.groupMemberModel.findAll({
+        where: {
+          memberId: userId,
+          memberType: userType,
+          leftAt: { [Op.is]: null },
+        } as any,
+        attributes: ['groupChatId'],
+      }),
+    ]);
     const groupChatIds = groupMemberships.map((gm: any) => gm.groupChatId);
     const groupConversations = groupChatIds.length > 0
       ? await this.conversationModel.findAll({
@@ -1522,18 +1528,29 @@ export class ChatService {
     const whereClause: any = {
       conversationId: { [Op.in]: conversationIds },
       isDeleted: false,
-      [Op.or]: [
-        { searchableContent: { [Op.iLike]: `%${q}%` } },
-        { searchableContent: null, content: { [Op.iLike]: `%${q}%` } },
-      ],
+      [Op.or]: this.buildMessageSearchCondition(q),
     };
     if (messageType) {
       whereClause.messageType = messageType;
     }
 
+    // Build includes, optionally adding follower range filter on the Influencer join
+    const includes = this.buildMessageIncludes(userId, userType);
+    if (minFollowers !== undefined || maxFollowers !== undefined) {
+      whereClause.senderType = 'influencer';
+      const followerWhere: any = {};
+      if (minFollowers !== undefined) followerWhere[Op.gte] = minFollowers;
+      if (maxFollowers !== undefined) followerWhere[Op.lte] = maxFollowers;
+      const influencerInclude = includes.find((inc: any) => inc.model === Influencer) as any;
+      if (influencerInclude) {
+        influencerInclude.where = { instagramFollowersCount: followerWhere };
+        influencerInclude.required = true;
+      }
+    }
+
     const { rows: messages, count: total } = await this.messageModel.findAndCountAll({
       where: whereClause,
-      include: this.buildMessageIncludes(userId, userType),
+      include: includes,
       order: [['createdAt', 'DESC']],
       limit,
       offset,
