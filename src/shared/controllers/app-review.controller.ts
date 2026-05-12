@@ -82,18 +82,18 @@ export class AppReviewController {
       throw new BadRequestException('user_id must be a valid number');
     }
 
-    // Determine user type from device_id
-    const detectedUserType = await this.deviceTokenService.getUserTypeFromDevice(userIdNum, deviceId);
-    if (!detectedUserType) {
-      throw new BadRequestException('Device not found for this user. Please update your FCM token first.');
-    }
-
-    const resolvedUserType = detectedUserType as 'influencer' | 'brand';
-
-    if (!['influencer', 'brand'].includes(resolvedUserType)) {
-      throw new BadRequestException(
-        'Invalid user type detected from device',
-      );
+    // Resolve user type directly from influencers/brands tables — most reliable
+    // since it doesn't depend on FCM token registration or deviceId
+    const resolvedUserType = await this.deviceTokenService.resolveUserType(userIdNum);
+    if (!resolvedUserType) {
+      return {
+        shouldShow: false,
+        reason: 'User not found',
+        campaignCount: 0,
+        isReviewed: false,
+        lastPromptedAt: undefined,
+        promptCount: 0,
+      };
     }
 
     const result = await this.appReviewService.shouldShowReviewPrompt(
@@ -294,18 +294,10 @@ export class AppReviewController {
       throw new BadRequestException('user_id must be a valid number');
     }
 
-    // Determine user type from device_id
-    const detectedUserType = await this.deviceTokenService.getUserTypeFromDevice(userIdNum, deviceId);
-    if (!detectedUserType) {
-      throw new BadRequestException('Device not found for this user. Please update your FCM token first.');
-    }
-
-    const resolvedUserType = detectedUserType as 'influencer' | 'brand';
-
-    if (!['influencer', 'brand'].includes(resolvedUserType)) {
-      throw new BadRequestException(
-        'Invalid user type detected from device',
-      );
+    // Resolve user type directly from influencers/brands tables
+    const resolvedUserType = await this.deviceTokenService.resolveUserType(userIdNum);
+    if (!resolvedUserType) {
+      throw new BadRequestException('User not found');
     }
 
     const status = await this.appReviewService.getReviewStatus(

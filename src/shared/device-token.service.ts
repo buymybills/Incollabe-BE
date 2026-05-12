@@ -291,6 +291,33 @@ export class DeviceTokenService {
   }
 
   /**
+   * Get user type from userId using any registered device
+   */
+  async getUserTypeFromAnyDevice(userId: number): Promise<UserType | null> {
+    const device = await this.deviceTokenModel.findOne({
+      where: { userId },
+      attributes: ['userType'],
+    });
+
+    return device ? device.userType : null;
+  }
+
+  /**
+   * Resolve user type by checking influencers and brands tables directly.
+   * More reliable than device_tokens since it doesn't depend on FCM registration.
+   */
+  async resolveUserType(userId: number): Promise<'influencer' | 'brand' | null> {
+    const [influencer, brand] = await Promise.all([
+      this.influencerModel.findOne({ where: { id: userId }, attributes: ['id'] }),
+      this.brandModel.findOne({ where: { id: userId }, attributes: ['id'] }),
+    ]);
+
+    if (influencer) return 'influencer';
+    if (brand) return 'brand';
+    return null;
+  }
+
+  /**
    * Find all orphaned tokens (tokens belonging to deleted accounts)
    * Returns tokens for users that no longer exist in the database
    */
