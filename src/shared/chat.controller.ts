@@ -400,15 +400,12 @@ export class ChatController {
       'Search messages across all of the current user\'s conversations (personal, campaign, and group).\n\n' +
       '**Plaintext messages** are matched directly against their content.\n\n' +
       '**E2EE encrypted messages** are matched via the `searchableContent` field — the client must include this plaintext field when sending an encrypted message for it to appear in search results.\n\n' +
-      '**Follower filter** (`minFollowers`/`maxFollowers`) restricts results to messages sent by influencers within the given Instagram follower range.\n\n' +
       'Each result includes `conversationId` so the client can navigate to the correct conversation.',
   })
   @ApiQuery({ name: 'search', description: 'Search query', required: true })
   @ApiQuery({ name: 'page', description: 'Page number', required: false })
   @ApiQuery({ name: 'limit', description: 'Results per page (default 20)', required: false })
   @ApiQuery({ name: 'messageType', description: 'Filter by message type', required: false, enum: ['text', 'image', 'video', 'audio', 'file', 'media', 'post'] })
-  @ApiQuery({ name: 'minFollowers', description: 'Minimum Instagram followers of the message sender', required: false })
-  @ApiQuery({ name: 'maxFollowers', description: 'Maximum Instagram followers of the message sender', required: false })
   @ApiResponse({ status: 200, description: 'Search results' })
   async globalSearchMessages(
     @Req() req: RequestWithUser,
@@ -421,8 +418,6 @@ export class ChatController {
       dto.page,
       dto.limit,
       dto.messageType,
-      dto.minFollowers,
-      dto.maxFollowers,
     );
   }
 

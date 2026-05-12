@@ -1413,8 +1413,6 @@ export class ChatService {
     page = 1,
     limit = 20,
     messageType?: string,
-    minFollowers?: number,
-    maxFollowers?: number,
   ) {
     const offset = (page - 1) * limit;
     const userParticipantType = userType as ParticipantType;
@@ -1473,19 +1471,7 @@ export class ChatService {
       whereClause.messageType = messageType;
     }
 
-    // Build includes, optionally adding follower range filter on the Influencer join
     const includes = this.buildMessageIncludes(userId, userType);
-    if (minFollowers !== undefined || maxFollowers !== undefined) {
-      whereClause.senderType = 'influencer';
-      const followerWhere: any = {};
-      if (minFollowers !== undefined) followerWhere[Op.gte] = minFollowers;
-      if (maxFollowers !== undefined) followerWhere[Op.lte] = maxFollowers;
-      const influencerInclude = includes.find((inc: any) => inc.model === Influencer) as any;
-      if (influencerInclude) {
-        influencerInclude.where = { instagramFollowersCount: followerWhere };
-        influencerInclude.required = true;
-      }
-    }
 
     const { rows: messages, count: total } = await this.messageModel.findAndCountAll({
       where: whereClause,
