@@ -421,4 +421,18 @@ export class SearchMessagesDto {
   @IsEnum(MessageType)
   @IsOptional()
   messageType?: MessageType;
+
+  @ApiProperty({ description: 'Minimum Instagram followers of the message sender', required: false, example: 1000 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  minFollowers?: number;
+
+  @ApiProperty({ description: 'Maximum Instagram followers of the message sender', required: false, example: 100000 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  maxFollowers?: number;
 }

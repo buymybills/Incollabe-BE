@@ -1162,6 +1162,14 @@ export class CampaignService {
       whereCondition.cityId = { [Op.in]: cityIds };
     }
 
+    // Follower range filter
+    if (minFollowers !== undefined || maxFollowers !== undefined) {
+      const followerCondition: any = {};
+      if (minFollowers !== undefined) followerCondition[Op.gte] = minFollowers;
+      if (maxFollowers !== undefined) followerCondition[Op.lte] = maxFollowers;
+      whereCondition.instagramFollowersCount = followerCondition;
+    }
+
     const includeOptions: any[] = [
       {
         model: City,
@@ -1570,6 +1578,7 @@ export class CampaignService {
       platforms,
       experience,
       isPro,
+      influencerTypes,
       sortBy = 'application_new_old',
       page = 1,
       limit = 10,
@@ -1689,6 +1698,26 @@ export class CampaignService {
       });
     }
 
+    // Influencer type filter (tier-based follower ranges) — each type becomes an OR'd range condition
+    const influencerTypeRangeMap: Record<string, { min: number; max: number | null }> = {
+      below_1k: { min: 0, max: 999 },
+      nano_1k_10k: { min: 1000, max: 10000 },
+      micro_10k_100k: { min: 10000, max: 100000 },
+      mid_tier_100k_500k: { min: 100000, max: 500000 },
+      macro_500k_1m: { min: 500000, max: 1000000 },
+      mega_celebrity_1m_plus: { min: 1000000, max: null },
+    };
+    const typeRangeConditions: any[] = [];
+    if (influencerTypes?.length) {
+      const typeList = influencerTypes.filter((t) => t in influencerTypeRangeMap);
+      for (const type of typeList) {
+        const { min, max } = influencerTypeRangeMap[type];
+        const cond: any = { [Op.gte]: min };
+        if (max !== null) cond[Op.lte] = max;
+        typeRangeConditions.push({ instagramFollowersCount: cond });
+      }
+    }
+
     // Search filter - search by name or username
     const searchConditions: any[] = [];
     if (search && search.trim()) {
@@ -1699,21 +1728,23 @@ export class CampaignService {
       );
     }
 
-    // Combine search and platform conditions using Op.or
-    // If both exist, we need Op.and at the top level with nested Op.or for each
-    if (searchConditions.length > 0 && platformConditions.length > 0) {
-      influencerFilter[Op.and] = [
-        { [Op.or]: searchConditions },
-        { [Op.or]: platformConditions },
-      ];
-    } else if (searchConditions.length > 0) {
-      influencerFilter[Op.or] = searchConditions;
-    } else if (platformConditions.length > 0) {
-      // If only one platform, add directly; if multiple, use Op.or
-      if (platformConditions.length === 1) {
-        Object.assign(influencerFilter, platformConditions[0]);
+    // Combine search, platform, and type-range conditions.
+    // Each group is independently OR'd; groups are AND'd together.
+    const andGroups: any[] = [];
+    if (typeRangeConditions.length > 0) andGroups.push({ [Op.or]: typeRangeConditions });
+    if (searchConditions.length > 0) andGroups.push({ [Op.or]: searchConditions });
+    if (platformConditions.length > 0) andGroups.push({ [Op.or]: platformConditions });
+
+    if (andGroups.length > 1) {
+      influencerFilter[Op.and] = andGroups;
+    } else if (andGroups.length === 1) {
+      // Single group — flatten into influencerFilter directly
+      const [group] = andGroups;
+      if (group[Op.or]?.length === 1 && !searchConditions.length && !typeRangeConditions.length) {
+        // Single platform condition — merge directly (preserve existing behaviour)
+        Object.assign(influencerFilter, group[Op.or][0]);
       } else {
-        influencerFilter[Op.or] = platformConditions;
+        influencerFilter[Op.or] = group[Op.or];
       }
     }
 
