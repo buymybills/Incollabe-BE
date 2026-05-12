@@ -791,6 +791,7 @@ export class ChatService {
       otherPartyId,
       otherPartyType,
       content,
+      searchableContent: searchableContentFromDto,
       messageType = MessageType.TEXT,
       attachmentUrl,
       attachmentName,
@@ -988,7 +989,8 @@ export class ChatService {
       influencerId: userType === 'influencer' ? userId : null,
       brandId: userType === 'brand' ? userId : null,
       messageType,
-      content: contentToStore,
+      content: messageType === MessageType.POLL ? null : contentToStore,
+      searchableContent: isEncrypted ? (searchableContentFromDto || null) : null,
       attachmentUrl: isEncrypted ? null : attachmentUrl || null,
       attachmentName: isEncrypted ? null : attachmentName || null,
       mediaType: isEncrypted ? null : mediaType || null,
@@ -1112,8 +1114,10 @@ export class ChatService {
     }
 
     if (search) {
-      whereClause.isEncrypted = false;
-      whereClause.content = { [Op.iLike]: `%${search}%` };
+      whereClause[Op.or] = [
+        { searchableContent: { [Op.iLike]: `%${search}%` } },
+        { searchableContent: null, content: { [Op.iLike]: `%${search}%` } },
+      ];
     }
 
     // For personal/campaign conversations, check if the other participant blocked the current user.
@@ -1409,8 +1413,8 @@ export class ChatService {
     const offset = (page - 1) * limit;
     const userParticipantType = userType as ParticipantType;
 
-    // Find all conversation IDs the user participates in
-    const conversations = await this.conversationModel.findAll({
+    // Find all conversation IDs the user participates in (personal + campaign)
+    const directConversations = await this.conversationModel.findAll({
       where: {
         [Op.or]: [
           { participant1Type: userParticipantType, participant1Id: userId },
@@ -1418,23 +1422,49 @@ export class ChatService {
         ],
         isActive: true,
       },
-      attributes: ['id', 'participant1Type', 'participant1Id', 'participant2Type', 'participant2Id', 'conversationType', 'groupChatId'],
+      attributes: ['id'],
     });
 
-    if (conversations.length === 0) {
+    // Find group conversation IDs via GroupMember table
+    const groupMemberships = await this.groupMemberModel.findAll({
+      where: {
+        memberId: userId,
+        memberType: userType,
+        leftAt: { [Op.is]: null },
+      } as any,
+      attributes: ['groupChatId'],
+    });
+    const groupChatIds = groupMemberships.map((gm: any) => gm.groupChatId);
+    const groupConversations = groupChatIds.length > 0
+      ? await this.conversationModel.findAll({
+          where: {
+            conversationType: 'group',
+            groupChatId: { [Op.in]: groupChatIds },
+            isActive: true,
+          },
+          attributes: ['id'],
+        })
+      : [];
+
+    const conversationIds = [
+      ...directConversations.map((c) => c.id),
+      ...groupConversations.map((c) => c.id),
+    ];
+
+    if (conversationIds.length === 0) {
       return {
         messages: [],
         pagination: { page, limit, total: 0, totalPages: 0 },
       };
     }
 
-    const conversationIds = conversations.map((c) => c.id);
-
     const whereClause: any = {
       conversationId: { [Op.in]: conversationIds },
       isDeleted: false,
-      isEncrypted: false,
-      content: { [Op.iLike]: `%${q}%` },
+      [Op.or]: [
+        { searchableContent: { [Op.iLike]: `%${q}%` } },
+        { searchableContent: null, content: { [Op.iLike]: `%${q}%` } },
+      ],
     };
     if (messageType) {
       whereClause.messageType = messageType;

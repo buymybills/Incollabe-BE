@@ -74,6 +74,15 @@ export class SendMessageDto {
   content?: string;
 
   @ApiProperty({
+    description: 'Plaintext version of the message for server-side search. Required when sending E2EE encrypted content so the server can index the message without decrypting it.',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  @MaxLength(10000)
+  searchableContent?: string;
+
+  @ApiProperty({
     description: 'Encrypted AES keys per recipient, keyed as "recipientId:recipientType". Used for group E2EE messages instead of embedding keys in content.',
     required: false,
     example: { '6:influencer': 'base64...', '1:brand': 'base64...' },

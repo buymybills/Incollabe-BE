@@ -133,6 +133,24 @@ export class Message extends Model<Message> {
   })
   declare encryptionVersion: string;
 
+  // Plaintext version of content provided by the client for encrypted messages,
+  // so server-side search works without decrypting the ciphertext in `content`.
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+  })
+  declare searchableContent: string | null;
+
+  // Reply functionality (WhatsApp-style)
+  @ForeignKey(() => Message)
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    field: 'reply_to_message_id',
+  })
+  declare replyToMessageId: number | null;
+
+  // Voice note duration in seconds
   @Column({
     type: DataType.INTEGER,
     allowNull: true,
