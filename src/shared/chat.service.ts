@@ -1401,7 +1401,6 @@ export class ChatService {
   private buildMessageSearchCondition(term: string) {
     return [
       { searchableContent: { [Op.iLike]: `%${term}%` } },
-      { searchableContent: null, content: { [Op.iLike]: `%${term}%` } },
     ];
   }
 
