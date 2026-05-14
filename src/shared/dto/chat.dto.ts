@@ -233,6 +233,15 @@ export class GetMessagesDto {
   beforeMessageId?: number;
 
   @ApiProperty({
+    description: 'Jump to this message ID — loads 60% before (including it) and 40% after',
+    required: false,
+  })
+  @Type(() => Number)
+  @IsInt()
+  @IsOptional()
+  aroundMessageId?: number;
+
+  @ApiProperty({
     description: 'Search within messages (only searches plaintext — encrypted messages are excluded)',
     required: false,
     example: 'hello',
