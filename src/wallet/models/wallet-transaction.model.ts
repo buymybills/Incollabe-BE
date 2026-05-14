@@ -10,12 +10,13 @@ import {
 import { Wallet } from './wallet.model';
 
 export enum TransactionType {
-  RECHARGE = 'recharge',           // Brand adds money to wallet
-  DEBIT = 'debit',                 // Brand pays influencer
-  CASHBACK = 'cashback',           // Influencer receives cashback
-  REDEMPTION = 'redemption',       // Influencer withdraws money
-  REFUND = 'refund',               // Money returned to wallet
-  ADJUSTMENT = 'adjustment',       // Admin adjustment
+  RECHARGE = 'recharge',               // Brand adds money to wallet
+  DEBIT = 'debit',                     // Brand pays influencer
+  CASHBACK = 'cashback',               // Influencer receives cashback
+  REDEMPTION = 'redemption',           // Influencer withdraws money
+  REFUND = 'refund',                   // Money returned to wallet
+  ADJUSTMENT = 'adjustment',           // Admin adjustment
+  PLATFORM_COMMISSION = 'platform_commission', // Platform's cut from affiliate cashback
 }
 
 export enum TransactionStatus {

@@ -896,6 +896,46 @@ export class InfluencerHypeStoreController {
     return this.hypeStoreService.getOrCreateReferralCode(influencerId, parseInt(storeId));
   }
 
+  @Get(':storeId/affiliate-link')
+  @ApiOperation({
+    summary: 'Get affiliate link for a store',
+    description:
+      'Returns a unique affiliate link for this influencer and store. ' +
+      'Share this link with your audience — every purchase made through it earns you a flat 10% cashback. ' +
+      'No content creation or proof required.',
+  })
+  @ApiParam({ name: 'storeId', description: 'Hype Store ID', example: 1 })
+  @ApiResponse({
+    status: 200,
+    description: 'Affiliate link generated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        data: {
+          type: 'object',
+          properties: {
+            affiliateLink: { type: 'string', example: 'https://api.incollabe.com/affiliate/r/INFL15' },
+            referralCode: { type: 'string', example: 'INFL15' },
+            hypeStoreId: { type: 'number', example: 1 },
+            storeName: { type: 'string', example: 'Snitch Store' },
+            brandName: { type: 'string', example: 'Snitch' },
+            totalClicks: { type: 'number', example: 432 },
+            totalOrders: { type: 'number', example: 28 },
+            totalRevenue: { type: 'number', example: 145000 },
+          },
+        },
+        message: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Store not found' })
+  @ApiResponse({ status: 400, description: 'Store is not active' })
+  async getAffiliateLink(@Request() req: any, @Param('storeId') storeId: string) {
+    const influencerId = req.user.id;
+    return this.hypeStoreService.getAffiliateLink(influencerId, parseInt(storeId));
+  }
+
   @Get(':storeId/brand-coupon')
   @ApiOperation({
     summary: 'Get brand-shared coupon with tracking link',

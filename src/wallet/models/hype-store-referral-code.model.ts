@@ -15,6 +15,7 @@ export interface HypeStoreReferralCodeCreationAttributes {
   influencerId: number;
   referralCode: string;
   isActive?: boolean;
+  isAffiliate?: boolean;
   totalClicks?: number;
   totalOrders?: number;
   totalRevenue?: number;
@@ -72,6 +73,14 @@ export class HypeStoreReferralCode extends Model<
     allowNull: false,
   })
   declare isActive: boolean;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
+    comment: 'Whether this referral code is used for affiliate link (no content required, flat 10% cashback)',
+  })
+  declare isAffiliate: boolean;
 
   @Column({
     type: DataType.INTEGER,

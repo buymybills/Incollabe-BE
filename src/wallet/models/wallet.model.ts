@@ -11,6 +11,7 @@ import { WalletTransaction } from './wallet-transaction.model';
 export enum UserType {
   INFLUENCER = 'influencer',
   BRAND = 'brand',
+  PLATFORM = 'platform',
 }
 
 @Table({

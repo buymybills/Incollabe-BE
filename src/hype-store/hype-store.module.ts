@@ -25,6 +25,8 @@ import { CashbackTier } from './models/cashback-tier.model';
 import { CashbackTierService } from './services/cashback-tier.service';
 import { ShopifyWebhookNormalizerService } from './services/shopify-webhook-normalizer.service';
 import { WooCommerceWebhookNormalizerService } from './services/woocommerce-webhook-normalizer.service';
+import { AffiliateController } from './affiliate.controller';
+import { AffiliateCashbackSchedulerService } from './services/affiliate-cashback-scheduler.service';
 import { SharedModule } from '../shared/shared.module';
 import { WebhookLoggerMiddleware } from './webhook-logger.middleware';
 
@@ -52,8 +54,8 @@ import { WebhookLoggerMiddleware } from './webhook-logger.middleware';
     ]),
     SharedModule,
   ],
-  controllers: [HypeStoreController, HypeStoreWebhookController],
-  providers: [HypeStoreService, OrderVisibilitySchedulerService, CashbackTierService, ShopifyWebhookNormalizerService, WooCommerceWebhookNormalizerService],
+  controllers: [HypeStoreController, HypeStoreWebhookController, AffiliateController],
+  providers: [HypeStoreService, OrderVisibilitySchedulerService, CashbackTierService, ShopifyWebhookNormalizerService, WooCommerceWebhookNormalizerService, AffiliateCashbackSchedulerService],
   exports: [HypeStoreService, CashbackTierService],
 })
 export class HypeStoreModule implements NestModule {

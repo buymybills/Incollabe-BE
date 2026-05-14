@@ -2153,6 +2153,61 @@ export class InfluencerHypeStoreService {
   }
 
   /**
+   * Get or create an affiliate link for an influencer per store.
+   * Marks the referral code as isAffiliate = true.
+   * Returns a shareable link that routes through our tracking endpoint.
+   */
+  async getAffiliateLink(influencerId: number, hypeStoreId: number) {
+    const store = await this.hypeStoreModel.findByPk(hypeStoreId, {
+      include: [{ model: this.brandModel }],
+    });
+
+    if (!store) {
+      throw new NotFoundException('Store not found');
+    }
+
+    if (!store.isActive) {
+      throw new BadRequestException('Store is not active');
+    }
+
+    // Get or create referral code, then mark it as affiliate
+    let referralCode = await this.referralCodeModel.findOne({
+      where: { influencerId, hypeStoreId },
+    });
+
+    if (!referralCode) {
+      const code = `INFL${influencerId}`;
+      referralCode = await this.referralCodeModel.create({
+        influencerId,
+        hypeStoreId,
+        referralCode: code,
+        isActive: true,
+        isAffiliate: true,
+      });
+    } else if (!referralCode.isAffiliate) {
+      await referralCode.update({ isAffiliate: true });
+    }
+
+    const baseUrl = process.env.API_BASE_URL || 'https://api.incollabe.com';
+    const affiliateLink = `${baseUrl}/affiliate/r/${referralCode.referralCode}`;
+
+    return {
+      success: true,
+      data: {
+        affiliateLink,
+        referralCode: referralCode.referralCode,
+        hypeStoreId: store.id,
+        storeName: store.storeName,
+        brandName: (store as any).brand?.brandName || '',
+        totalClicks: referralCode.totalClicks,
+        totalOrders: referralCode.totalOrders,
+        totalRevenue: referralCode.totalRevenue,
+      },
+      message: 'Share this link with your audience. Earn 10% cashback on every purchase made through it.',
+    };
+  }
+
+  /**
    * Mark an order as returned by customer
    * This removes the locked cashback from the wallet
    */

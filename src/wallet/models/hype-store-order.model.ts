@@ -187,6 +187,14 @@ export class HypeStoreOrder extends Model<HypeStoreOrder> {
   declare cashbackAmount: number;
 
   @Column({
+    type: DataType.DECIMAL(10, 2),
+    allowNull: true,
+    defaultValue: 0,
+    comment: 'Platform commission (40% of cashback amount) for affiliate orders',
+  })
+  declare platformCommissionAmount: number;
+
+  @Column({
     type: DataType.STRING(100),
     allowNull: true,
     comment: 'Cashback type description (e.g., Flat 20%, Fixed ₹500)',
@@ -199,9 +207,9 @@ export class HypeStoreOrder extends Model<HypeStoreOrder> {
     allowNull: false,
     defaultValue: 'post_reel',
     field: 'content_type',
-    comment: 'Content type for cashback calculation: story or post_reel',
+    comment: 'Content type for cashback calculation: story, post_reel, or affiliate',
   })
-  declare contentType: 'story' | 'post_reel';
+  declare contentType: 'story' | 'post_reel' | 'affiliate';
 
   @Index
   @Column({

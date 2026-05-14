@@ -30,6 +30,7 @@ import { HypeStoreCashbackTier, CashbackType } from '../wallet/models/hype-store
 import { HypeStoreWebhookLog } from '../wallet/models/hype-store-webhook-log.model';
 import { HypeStoreWebhookSecret } from '../wallet/models/hype-store-webhook-secret.model';
 import { HypeStoreReferralCode } from '../wallet/models/hype-store-referral-code.model';
+import { HypeStoreReferralClick } from '../wallet/models/hype-store-referral-click.model';
 import { OrderStatus, CashbackStatus } from '../wallet/models/hype-store-order.model';
 import { PurchaseWebhookDto, ReturnWebhookDto } from '../wallet/dto/hype-store-webhook.dto';
 import { Influencer } from '../auth/model/influencer.model';
@@ -70,6 +71,8 @@ export class HypeStoreService {
     private influencerModel: typeof Influencer,
     @InjectModel(HypeStoreReferralCode)
     private referralCodeModel: typeof HypeStoreReferralCode,
+    @InjectModel(HypeStoreReferralClick)
+    private referralClickModel: typeof HypeStoreReferralClick,
     @InjectModel(InstagramProfileAnalysis)
     private instagramProfileAnalysisModel: typeof InstagramProfileAnalysis,
     private influencerProfileScoringService: InfluencerProfileScoringService,
@@ -2114,43 +2117,37 @@ export class HypeStoreService {
 
       // 5. Determine influencer attribution
       let attributedInfluencerId: number;
+      let referralCodeRecord: HypeStoreReferralCode | null = null;
 
       // ATTRIBUTION FLOW:
-      // 1. If referralCode is provided → parse influencerId from "INFL{id}" format
+      // 1. If referralCode is provided → always DB-fetch to get the record (needed for click conversion tracking)
       // 2. Else if coupon code is "INFL{id}" → parse influencerId directly
       // 3. Else → use coupon's influencerId field (for brand-shared coupons)
 
       if (webhookDto.referralCode) {
-        // Parse influencerId from referral code format: INFL123 → 123
-        const match = webhookDto.referralCode.match(/^INFL(\d+)$/);
-        if (match) {
-          attributedInfluencerId = parseInt(match[1], 10);
-        } else {
-          // Fallback: lookup in database for custom referral codes
-          const referralCodeRecord = await this.referralCodeModel.findOne({
-            where: { referralCode: webhookDto.referralCode, isActive: true },
+        referralCodeRecord = await this.referralCodeModel.findOne({
+          where: { referralCode: webhookDto.referralCode, isActive: true },
+        });
+
+        if (!referralCodeRecord) {
+          responseStatus = 400;
+          responseBody = { success: false, message: 'Invalid or inactive referral code' };
+          await this.logWebhookRequest({
+            hypeStoreId: hypeStore.id,
+            method: 'POST',
+            path: '/webhooks/purchase',
+            headers: {},
+            body: webhookDto,
+            ipAddress,
+            status: responseStatus,
+            responseBody,
+            isValid: true,
+            errorMessage: 'Referral code not found',
           });
-
-          if (!referralCodeRecord) {
-            responseStatus = 400;
-            responseBody = { success: false, message: 'Invalid or inactive referral code' };
-            await this.logWebhookRequest({
-              hypeStoreId: hypeStore.id,
-              method: 'POST',
-              path: '/webhooks/purchase',
-              headers: {},
-              body: webhookDto,
-              ipAddress,
-              status: responseStatus,
-              responseBody,
-              isValid: true,
-              errorMessage: 'Referral code not found',
-            });
-            throw new BadRequestException('Invalid or inactive referral code');
-          }
-
-          attributedInfluencerId = referralCodeRecord.influencerId;
+          throw new BadRequestException('Invalid or inactive referral code');
         }
+
+        attributedInfluencerId = referralCodeRecord.influencerId;
       } else {
         // Parse from coupon code if it's INFL{id} format
         const match = webhookDto.couponCode.match(/^INFL(\d+)$/);
@@ -2206,13 +2203,26 @@ export class HypeStoreService {
       }
 
       // 7. Calculate cashback
-      const contentType = webhookDto.contentType || 'post_reel'; // Default to post_reel if not provided
-      const { cashbackAmount, tierId } = await this.calculateCashbackAmount(
-        webhookDto.orderAmount,
-        attributedInfluencerId,
-        hypeStore.id,
-        contentType,
-      );
+      // Affiliate orders (identified by referralCode) always get a flat 10% — no content was created.
+      // Regular orders use the follower-based tier system.
+      let cashbackAmount: number;
+      let tierId: number | null = null;
+      let contentType: string;
+
+      if (webhookDto.referralCode) {
+        cashbackAmount = Math.round(webhookDto.orderAmount * 0.10 * 100) / 100;
+        contentType = 'affiliate';
+      } else {
+        contentType = webhookDto.contentType || 'post_reel';
+        const result = await this.calculateCashbackAmount(
+          webhookDto.orderAmount,
+          attributedInfluencerId,
+          hypeStore.id,
+          contentType as 'story' | 'post_reel',
+        );
+        cashbackAmount = result.cashbackAmount;
+        tierId = result.tierId;
+      }
 
       // 8. Create order in transaction
       const transaction: Transaction = await this.sequelize.transaction();
@@ -2293,6 +2303,26 @@ export class HypeStoreService {
               transaction,
             },
           );
+
+          // Mark the most recent unconverted click as converted
+          const latestClick = await this.referralClickModel.findOne({
+            where: {
+              referralCodeId: referralCodeRecord!.id,
+              converted: false,
+            },
+            order: [['clicked_at', 'DESC']],
+            transaction,
+          });
+          if (latestClick) {
+            await latestClick.update(
+              {
+                converted: true,
+                orderId: order.id,
+                convertedAt: new Date(),
+              },
+              { transaction },
+            );
+          }
         }
 
         // Update hype store total orders and revenue
