@@ -1148,7 +1148,7 @@ export class ChatService {
     userType: 'influencer' | 'brand',
     dto: GetMessagesDto,
   ) {
-    const { conversationId, page = 1, limit = 50, beforeMessageId, search } = dto;
+    const { conversationId, page = 1, limit = 50, beforeMessageId, aroundMessageId, search } = dto;
     const offset = (page - 1) * limit;
     const userParticipantType = userType as ParticipantType;
 
@@ -1170,8 +1170,9 @@ export class ChatService {
       isDeleted: false,
     };
 
-    if (beforeMessageId) {
-      whereClause.id = { [Op.lt]: beforeMessageId };
+    // beforeMessageId is only used for normal scroll pagination, not during search
+    if (beforeMessageId && !search) {
+      whereClause.id = { [Op.lte]: beforeMessageId };
     }
 
     if (search) {
@@ -1196,6 +1197,37 @@ export class ChatService {
       if (isBlockedByOther) {
         blockedSenderKey = `${otherParticipant.type}:${otherParticipant.id}`;
       }
+    }
+
+    // aroundMessageId: load 60% before (including target) + 40% after
+    if (aroundMessageId && !search) {
+      const includes = this.buildMessageIncludes(userId, userType);
+      const beforeCount = Math.round(limit * 0.6); // e.g. limit=20 → 12 (11 before + target)
+      const afterCount = limit - beforeCount;       // e.g. 8 after
+
+      const baseWhere = { conversationId, isDeleted: false };
+
+      const [beforeRows, afterRows] = await Promise.all([
+        this.messageModel.findAll({
+          where: { ...baseWhere, id: { [Op.lte]: aroundMessageId } },
+          include: includes,
+          order: [['id', 'DESC']],
+          limit: beforeCount,
+        }),
+        this.messageModel.findAll({
+          where: { ...baseWhere, id: { [Op.gt]: aroundMessageId } },
+          include: includes,
+          order: [['id', 'ASC']],
+          limit: afterCount,
+        }),
+      ]);
+
+      const allMessages = [
+        ...beforeRows.reverse(),
+        ...afterRows,
+      ].map((msg) => this.formatMessage(msg, blockedSenderKey));
+
+      return { messages: allMessages };
     }
 
     const { rows: messages, count: total } =
