@@ -369,6 +369,7 @@ export class HypeStoreService {
         brandCouponCode: brandCoupon?.couponCode || null,
         webhookCredentials: webhookCredentials ? {
           apiKey: webhookCredentials.apiKey,
+          webhookSecret: webhookCredentials.webhookSecret,
           webhookUrl,
           message: 'POST to this URL with eventType ("purchase" or "return") in the request body. See API docs for examples.',
         } : null,
@@ -684,6 +685,7 @@ export class HypeStoreService {
       // Include webhook credentials only for brand requests
       webhookCredentials: webhookCredentials ? {
         apiKey: webhookCredentials.apiKey,
+        webhookSecret: webhookCredentials.webhookSecret,
         webhookUrl,
         isActive: webhookCredentials.isActive,
         createdAt: webhookCredentials.createdAt,
