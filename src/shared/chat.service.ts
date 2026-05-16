@@ -800,6 +800,8 @@ export class ChatService {
       replyToMessageId,
       encryptedKeys: encryptedKeysFromDto,
       pollData: pollDataFromDto,
+      postId,
+      audioDuration,
     } = dto;
 
     const userParticipantType = userType as ParticipantType;
@@ -1018,9 +1020,11 @@ export class ChatService {
       brandId: userType === 'brand' ? userId : null,
       messageType,
       content: messageType === MessageType.POLL ? null : contentToStore,
+      searchableContent: isEncrypted ? (searchableContentFromDto || null) : null,
       attachmentUrl: isEncrypted ? null : attachmentUrl || null,
       attachmentName: isEncrypted ? null : attachmentName || null,
       mediaType: isEncrypted ? null : mediaType || null,
+      audioDuration: messageType === MessageType.AUDIO ? (audioDuration || null) : null,
       replyToMessageId: replyToMessageId || null,
       postId: messageType === MessageType.POST ? postId : null,
       pollData: pollDataToStore,
