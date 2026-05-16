@@ -1101,6 +1101,37 @@ export class ChatService {
       userId,
     );
 
+    // Load post with author details if this is a post-share message
+    let sharedPost: any = null;
+    if (message.messageType === MessageType.POST && message.postId) {
+      const post = await Post.findByPk(message.postId, {
+        include: [
+          { model: Influencer, attributes: ['id', 'username', 'name', 'profileImage'], required: false },
+          { model: Brand, attributes: ['id', 'username', 'brandName', 'profileImage'], required: false },
+        ],
+      }) as any;
+      if (post) {
+        const postData = post.toJSON();
+        const postAuthor =
+          postData.userType === 'influencer' && post.influencer
+            ? (() => { const d = post.influencer.toJSON(); return { id: d.id, username: d.username, name: d.name, profileImage: d.profileImage }; })()
+            : postData.userType === 'brand' && post.brand
+            ? (() => { const d = post.brand.toJSON(); return { id: d.id, username: d.username, brandName: d.brandName, profileImage: d.profileImage }; })()
+            : null;
+        sharedPost = {
+          id: postData.id,
+          content: postData.content,
+          mediaUrls: postData.mediaUrls,
+          userType: postData.userType,
+          author: postAuthor,
+          likesCount: postData.likesCount,
+          sharesCount: postData.sharesCount,
+          commentsCount: postData.commentsCount,
+          createdAt: postData.createdAt,
+        };
+      }
+    }
+
     return {
       id: message.id,
       conversationId: message.conversationId,
@@ -1108,9 +1139,12 @@ export class ChatService {
       senderType: message.senderType,
       messageType: message.messageType,
       content: message.content,
-      attachmentUrl: this.s3Service.convertToSignedUrl(message.attachmentUrl, 120), // 2 minutes expiry
+      attachmentUrl: this.s3Service.convertToSignedUrl(message.attachmentUrl, 120),
       attachmentName: message.attachmentName,
       mediaType: message.mediaType,
+      audioDuration: message.audioDuration ?? null,
+      postId: message.postId ?? null,
+      post: sharedPost,
       isRead: message.isRead,
       readAt: message.readAt,
       createdAt: message.createdAt,
