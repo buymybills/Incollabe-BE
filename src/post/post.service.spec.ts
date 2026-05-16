@@ -18,6 +18,7 @@ import { S3Service } from '../shared/s3.service';
 import { RazorpayService } from '../shared/razorpay.service';
 import { PostViewService } from './services/post-view.service';
 import { ProfileView } from '../shared/models/profile-view.model';
+import { Comment } from './models/comment.model';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { FollowDto, FollowUserType } from './dto/follow.dto';
@@ -217,6 +218,10 @@ describe('PostService', () => {
         {
           provide: PostViewService,
           useValue: mockPostViewService,
+        },
+        {
+          provide: getModelToken(Comment),
+          useValue: { findAll: jest.fn(), findAndCountAll: jest.fn(), create: jest.fn(), findOne: jest.fn(), destroy: jest.fn() },
         },
       ],
     }).compile();
