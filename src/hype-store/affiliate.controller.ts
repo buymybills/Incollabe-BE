@@ -1,5 +1,6 @@
-import { Controller, Get, Param, Ip, Headers, NotFoundException, Logger, Redirect } from '@nestjs/common';
+import { Controller, Get, Param, Ip, Headers, Res, NotFoundException, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { InjectModel } from '@nestjs/sequelize';
 import { HypeStoreReferralCode } from '../wallet/models/hype-store-referral-code.model';
 import { HypeStoreReferralClick } from '../wallet/models/hype-store-referral-click.model';
@@ -24,7 +25,6 @@ export class AffiliateController {
    * Brands should include the referral code in their webhook when a purchase is made.
    */
   @Get('r/:referralCode')
-  @Redirect()
   @ApiOperation({
     summary: 'Track affiliate link click and redirect to brand store',
     description:
@@ -39,6 +39,7 @@ export class AffiliateController {
     @Ip() ip: string,
     @Headers('user-agent') userAgent: string,
     @Headers('referer') referrer: string,
+    @Res() res: Response,
   ) {
     const refCode = await this.referralCodeModel.findOne({
       where: { referralCode, isActive: true },
@@ -82,6 +83,6 @@ export class AffiliateController {
 
     const separator = destinationUrl.includes('?') ? '&' : '?';
     const redirectUrl = `${destinationUrl}${separator}ref=${referralCode}`;
-    return { url: redirectUrl, statusCode: 302 };
+    return res.redirect(302, redirectUrl);
   }
 }
