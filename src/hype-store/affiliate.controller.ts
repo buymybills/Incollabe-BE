@@ -1,6 +1,5 @@
-import { Controller, Get, Param, Ip, Headers, Res, NotFoundException, Logger } from '@nestjs/common';
+import { Controller, Get, Param, Ip, Headers, NotFoundException, Logger, Redirect } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
-import type { Response } from 'express';
 import { InjectModel } from '@nestjs/sequelize';
 import { HypeStoreReferralCode } from '../wallet/models/hype-store-referral-code.model';
 import { HypeStoreReferralClick } from '../wallet/models/hype-store-referral-click.model';
@@ -25,6 +24,7 @@ export class AffiliateController {
    * Brands should include the referral code in their webhook when a purchase is made.
    */
   @Get('r/:referralCode')
+  @Redirect()
   @ApiOperation({
     summary: 'Track affiliate link click and redirect to brand store',
     description:
@@ -39,15 +39,13 @@ export class AffiliateController {
     @Ip() ip: string,
     @Headers('user-agent') userAgent: string,
     @Headers('referer') referrer: string,
-    @Res() res: Response,
   ) {
     const refCode = await this.referralCodeModel.findOne({
       where: { referralCode, isActive: true },
       include: [
         {
           model: HypeStore,
-          as: 'hypeStore',
-          include: [{ model: Brand, as: 'brand' }],
+          include: [{ model: Brand }],
         },
       ],
     });
@@ -58,7 +56,12 @@ export class AffiliateController {
 
     const hypeStore = (refCode as any).hypeStore as HypeStore;
     const brand = (hypeStore as any)?.brand as Brand;
-    const destinationUrl = (hypeStore as any)?.storeUrl || brand?.websiteUrl || '';
+    const destinationUrl = brand?.websiteUrl || '';
+
+    if (!destinationUrl) {
+      this.logger.warn(`No destination URL configured for affiliate link ${referralCode} (store #${refCode.hypeStoreId})`);
+      throw new NotFoundException('Brand store URL not configured. Please contact the brand.');
+    }
 
     // Record the click asynchronously (don't block the redirect)
     this.referralClickModel
@@ -77,16 +80,8 @@ export class AffiliateController {
       )
       .catch((err) => this.logger.error(`Failed to record affiliate click for ${referralCode}:`, err));
 
-    if (!destinationUrl) {
-      this.logger.warn(`No destination URL configured for affiliate link ${referralCode} (store #${refCode.hypeStoreId})`);
-      return res.status(404).json({
-        success: false,
-        message: 'Brand store URL not configured. Please contact the brand.',
-      });
-    }
-
     const separator = destinationUrl.includes('?') ? '&' : '?';
     const redirectUrl = `${destinationUrl}${separator}ref=${referralCode}`;
-    return res.redirect(302, redirectUrl);
+    return { url: redirectUrl, statusCode: 302 };
   }
 }
