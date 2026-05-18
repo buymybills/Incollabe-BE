@@ -45,9 +45,11 @@ export class ResponseInterceptor<T> implements NestInterceptor<T, any> {
     private readonly cfPrefix?: string,
   ) {}
 
-  intercept(_context: ExecutionContext, next: CallHandler<T>): Observable<any> {
+  intercept(context: ExecutionContext, next: CallHandler<T>): Observable<any> {
     return next.handle().pipe(
       map((data) => {
+        const res = context.switchToHttp().getResponse();
+        if (res.headersSent || data === undefined) return data;
         const plain = JSON.parse(JSON.stringify(data));
         const rewritten =
           this.s3Prefix && this.cfPrefix
