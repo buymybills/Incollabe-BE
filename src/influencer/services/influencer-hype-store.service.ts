@@ -2058,41 +2058,47 @@ export class InfluencerHypeStoreService {
       };
     }
 
-    // Generate new referral code
+    // Generate unique referral code
     let newReferralCode = `INFL${influencerId}`;
-    let attempts = 0;
     const maxAttempts = 10;
 
-    // Check for uniqueness
-    while (attempts < maxAttempts) {
-      const exists = await this.referralCodeModel.findOne({
-        where: { referralCode: newReferralCode },
-      });
+    for (let attempts = 0; attempts < maxAttempts; attempts++) {
+      try {
+        referralCode = await this.referralCodeModel.create({
+          influencerId,
+          hypeStoreId,
+          referralCode: newReferralCode,
+          isActive: true,
+          totalClicks: 0,
+          totalOrders: 0,
+          totalRevenue: 0,
+        });
+        break; // success
+      } catch (err: any) {
+        const isUniqueViolation =
+          err?.name === 'SequelizeUniqueConstraintError' ||
+          (err?.name === 'SequelizeValidationError' && err?.message?.includes('unique'));
+        if (!isUniqueViolation) throw err;
 
-      if (!exists) {
-        break;
+        // Re-check if this influencer-store combo was created by a concurrent request
+        referralCode = await this.referralCodeModel.findOne({
+          where: { influencerId, hypeStoreId },
+        });
+        if (referralCode) break;
+
+        // Code itself was taken — try a new one
+        const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+        newReferralCode = `INFL${influencerId}${randomSuffix}`;
+
+        if (attempts === maxAttempts - 1) {
+          throw new BadRequestException('Unable to generate unique referral code');
+        }
       }
-
-      // If collision, append random suffix
-      const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
-      newReferralCode = `INFL${influencerId}${randomSuffix}`;
-      attempts++;
     }
 
-    if (attempts >= maxAttempts) {
+    if (!referralCode) {
       throw new BadRequestException('Unable to generate unique referral code');
     }
-
-    // Create new referral code
-    referralCode = await this.referralCodeModel.create({
-      influencerId,
-      hypeStoreId,
-      referralCode: newReferralCode,
-      isActive: true,
-      totalClicks: 0,
-      totalOrders: 0,
-      totalRevenue: 0,
-    });
 
     return {
       success: true,
