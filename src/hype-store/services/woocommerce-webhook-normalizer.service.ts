@@ -96,7 +96,10 @@ export class WooCommerceWebhookNormalizerService {
   private normalizePurchase(order: any): UnifiedWebhookDto {
     const lineItem = order.line_items?.[0];
     const couponCode = order.coupon_lines?.[0]?.code ?? undefined;
-    const referralCode = this.extractMetaData(order.meta_data, 'referral_code') ?? undefined;
+    const referralCode =
+      this.extractMetaData(order.meta_data, 'referral_code') ??
+      this.extractRefFromSessionEntry(order.meta_data) ??
+      undefined;
     const customerName = this.buildCustomerName(order.billing) ?? undefined;
 
     return {
@@ -153,6 +156,17 @@ export class WooCommerceWebhookNormalizerService {
   private extractMetaData(metaData: any[], key: string): string | null {
     if (!Array.isArray(metaData)) return null;
     return metaData.find((m) => m.key === key)?.value ?? null;
+  }
+
+  private extractRefFromSessionEntry(metaData: any[]): string | null {
+    const sessionEntry = this.extractMetaData(metaData, '_wc_order_attribution_session_entry');
+    if (!sessionEntry) return null;
+    try {
+      const url = new URL(sessionEntry);
+      return url.searchParams.get('ref');
+    } catch {
+      return null;
+    }
   }
 
   private buildCustomerName(billing: any): string | null {
