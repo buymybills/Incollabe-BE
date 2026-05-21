@@ -11,6 +11,7 @@ import {
   Headers,
   BadRequestException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody, ApiHeader } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { HypeStoreService } from './hype-store.service';
@@ -31,6 +32,7 @@ export class HypeStoreWebhookController {
     private readonly hypeStoreService: HypeStoreService,
     private readonly shopifyNormalizer: ShopifyWebhookNormalizerService,
     private readonly wooCommerceNormalizer: WooCommerceWebhookNormalizerService,
+    private readonly configService: ConfigService,
   ) {}
 
   @Post(':apiKey')
@@ -423,7 +425,7 @@ export class HypeStoreWebhookController {
     // Verify HMAC signature if provided
     // WooCommerce always sends this; skip only in dev/testing without a secret
     if (signature) {
-      const webhookSecret = await this.hypeStoreService.getWebhookSecret(apiKey);
+      const webhookSecret = this.configService.get<string>('WOOCOMMERCE_WEBHOOK_SECRET');
       if (webhookSecret) {
         const rawBody: Buffer = (req as any).rawBody;
         if (rawBody) {
