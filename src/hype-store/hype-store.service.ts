@@ -2086,7 +2086,7 @@ export class HypeStoreService {
       }
 
       const couponCode = await this.couponCodeModel.findOne({
-        where: { couponCode: webhookDto.couponCode, isActive: true },
+        where: { couponCode: webhookDto.couponCode.toUpperCase(), isActive: true },
         include: [{ model: this.influencerModel }],
       });
 
