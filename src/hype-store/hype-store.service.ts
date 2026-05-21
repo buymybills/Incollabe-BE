@@ -2230,6 +2230,7 @@ export class HypeStoreService {
       const transaction: Transaction = await this.sequelize.transaction();
 
       try {
+        this.logger.log('Transaction started — beginning order creation');
         // Calculate return period end date
         // Priority: webhook payload > store settings > default 30 days
         const orderDate = new Date(webhookDto.orderDate);
@@ -2371,6 +2372,7 @@ export class HypeStoreService {
 
         return responseBody;
       } catch (error) {
+        this.logger.error('Transaction failed — root cause:', error instanceof Error ? error.stack : error);
         await transaction.rollback();
         throw error;
       }
@@ -2809,6 +2811,7 @@ export class HypeStoreService {
 
         return responseBody;
       } catch (error) {
+        this.logger.error('Transaction failed — root cause:', error instanceof Error ? error.stack : error);
         await transaction.rollback();
         throw error;
       }
