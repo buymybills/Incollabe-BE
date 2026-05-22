@@ -92,7 +92,7 @@ export class ShoppingAgentService {
     private readonly catalogSearchService: CatalogSearchService,
     private readonly razorpayService: RazorpayService,
   ) {
-    const apiKey = this.configService.get<string>('GEMINI_API_KEY');
+    const apiKey = this.configService.get<string>('SHOPPING_GEMINI_API_KEY');
     if (apiKey) this.agentGenAI = new GoogleGenerativeAI(apiKey);
   }
 
