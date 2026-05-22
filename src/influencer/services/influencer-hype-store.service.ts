@@ -2176,13 +2176,15 @@ export class InfluencerHypeStoreService {
       throw new BadRequestException('Store is not active');
     }
 
-    // Get or create referral code, then mark it as affiliate
+    // Get or create an affiliate-specific referral code.
+    // We look only for codes with isAffiliate = true to avoid mutating
+    // the regular attribution code (isAffiliate = false) used for brand-shared coupons.
     let referralCode = await this.referralCodeModel.findOne({
-      where: { influencerId, hypeStoreId },
+      where: { influencerId, hypeStoreId, isAffiliate: true },
     });
 
     if (!referralCode) {
-      const code = `INFL${influencerId}`;
+      const code = `AFF${influencerId}`;
       referralCode = await this.referralCodeModel.create({
         influencerId,
         hypeStoreId,
@@ -2190,8 +2192,6 @@ export class InfluencerHypeStoreService {
         isActive: true,
         isAffiliate: true,
       });
-    } else if (!referralCode.isAffiliate) {
-      await referralCode.update({ isAffiliate: true });
     }
 
     const baseUrl = process.env.API_BASE_URL || 'https://api.incollabe.com';
