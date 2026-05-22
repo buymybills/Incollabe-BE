@@ -1788,7 +1788,7 @@ export class AuthService {
 
     // Step 1: Check if brand exists
     const brand = await this.brandModel.findOne({
-      where: { email: email.toLowerCase() },
+      where: { email: { [Op.iLike]: email } },
       attributes: ['id', 'email', 'brandName'],
     });
 
