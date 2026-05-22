@@ -2094,7 +2094,9 @@ export class HypeStoreService {
 
       const isAffiliateOrder = referralCodeRecord?.isAffiliate === true;
 
-      // 5. Find coupon code — skipped for affiliate orders (they track via referral link, no coupon)
+      // 5. Find coupon code — skipped only for affiliate orders (isAffiliate=true).
+      // Regular purchases (case 1) always have coupon + referral code → tier-based cashback.
+      // Affiliate link purchases (case 2) have only referral code (isAffiliate=true) → flat 10% cashback.
       let couponCode: HypeStoreCouponCode | null = null;
       if (!isAffiliateOrder) {
         if (!webhookDto.couponCode) {
