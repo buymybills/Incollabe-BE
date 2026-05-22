@@ -2184,7 +2184,7 @@ export class InfluencerHypeStoreService {
     });
 
     if (!referralCode) {
-      const code = `AFF${influencerId}`;
+      const code = `AFF${influencerId}S${hypeStoreId}`;
       referralCode = await this.referralCodeModel.create({
         influencerId,
         hypeStoreId,
