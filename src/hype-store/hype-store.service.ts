@@ -2205,13 +2205,15 @@ export class HypeStoreService {
       }
 
       // 7. Calculate cashback
-      // Affiliate orders (identified by referralCode) always get a flat 10% — no content was created.
-      // Regular orders use the follower-based tier system.
+      // Affiliate orders (referralCode with isAffiliate=true) always get a flat 10% — no content was created.
+      // Regular orders (including brand-shared coupon + referral for attribution) use the follower-based tier system.
       let cashbackAmount: number;
       let tierId: number | null = null;
       let contentType: string;
 
-      if (webhookDto.referralCode) {
+      const isAffiliate = referralCodeRecord?.isAffiliate === true;
+
+      if (isAffiliate) {
         cashbackAmount = Math.round(webhookDto.orderAmount * 0.10 * 100) / 100;
         contentType = 'affiliate';
       } else {
@@ -2373,6 +2375,9 @@ export class HypeStoreService {
         return responseBody;
       } catch (error) {
         this.logger.error('Transaction failed — root cause:', error instanceof Error ? error.stack : error);
+        this.logger.error('Original DB error:', (error as any)?.original);
+        this.logger.error('Parent DB error:', (error as any)?.parent);
+        this.logger.error('SQL:', (error as any)?.sql);
         await transaction.rollback();
         throw error;
       }
