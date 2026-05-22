@@ -19,6 +19,9 @@ import { RedisModule } from './redis/redis.module';
 import { WalletModule } from './wallet/wallet.module';
 import { HypeStoreModule } from './hype-store/hype-store.module';
 import { CreatorStudioModule } from './shared/creator-studio.module';
+import { ReelScannerModule } from './reel-scanner/reel-scanner.module';
+import { CatalogSearchModule } from './catalog-search/catalog-search.module';
+import { ShoppingAgentModule } from './shopping-agent/shopping-agent.module';
 import { LoggingMiddleware } from './shared/middleware/logging.middleware';
 import { ApiLoggerMiddleware } from './middleware/api-logger.middleware';
 import { ApiActivityLog } from './shared/models/api-activity-log.model';
@@ -52,6 +55,9 @@ import { ApiActivityLog } from './shared/models/api-activity-log.model';
     WalletModule,
     HypeStoreModule,
     CreatorStudioModule,
+    ReelScannerModule,
+    CatalogSearchModule,
+    ShoppingAgentModule,
   ],
   controllers: [AppController],
   providers: [AppService, ApiLoggerMiddleware],
