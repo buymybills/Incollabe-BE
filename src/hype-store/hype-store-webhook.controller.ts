@@ -418,7 +418,13 @@ export class HypeStoreWebhookController {
     this.logger.log(`Raw Payload: ${JSON.stringify(rawPayload, null, 2)}`);
     this.logger.log('==================================================');
 
+    // WooCommerce sends a ping request with { "webhook_id": "..." } and no topic header
+    // to verify the endpoint is reachable. Return 200 to acknowledge it.
     if (!topic) {
+      if (rawPayload?.webhook_id !== undefined) {
+        this.logger.log(`WooCommerce ping received (webhook_id: ${rawPayload.webhook_id}) — acknowledging`);
+        return { success: true, message: 'Ping acknowledged' };
+      }
       throw new BadRequestException('Missing x-wc-webhook-topic header');
     }
 
