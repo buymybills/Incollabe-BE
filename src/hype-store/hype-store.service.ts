@@ -2066,66 +2066,8 @@ export class HypeStoreService {
         return responseBody;
       }
 
-      // 4. Find coupon code
-      if (!webhookDto.couponCode) {
-        responseStatus = 400;
-        responseBody = { success: false, message: 'Coupon code is required for purchase events' };
-        await this.logWebhookRequest({
-          hypeStoreId: hypeStore.id,
-          method: 'POST',
-          path: '/webhooks/purchase',
-          headers: {},
-          body: webhookDto,
-          ipAddress,
-          status: responseStatus,
-          responseBody,
-          isValid: false,
-          errorMessage: 'Missing coupon code in webhook payload',
-        });
-        throw new BadRequestException('Coupon code is required for purchase events');
-      }
-
-      const couponCode = await this.couponCodeModel.findOne({
-        where: { couponCode: webhookDto.couponCode.toUpperCase(), isActive: true },
-        include: [{ model: this.influencerModel }],
-      });
-
-      if (!couponCode) {
-        responseStatus = 400;
-        responseBody = { success: false, message: 'Invalid or inactive coupon code' };
-        await this.logWebhookRequest({
-          hypeStoreId: hypeStore.id,
-          method: 'POST',
-          path: '/webhooks/purchase',
-          headers: {},
-          body: webhookDto,
-          ipAddress,
-          status: responseStatus,
-          responseBody,
-          isValid: true,
-          errorMessage: 'Coupon code not found',
-        });
-        throw new BadRequestException('Invalid or inactive coupon code');
-      }
-
-      // Validate coupon belongs to this store OR is a universal coupon
-      // Universal coupons have hypeStoreId = null and work for all stores
-      const isUniversalCoupon = couponCode.hypeStoreId === null || (couponCode as any).isUniversal === true;
-      if (!isUniversalCoupon && couponCode.hypeStoreId !== hypeStore.id) {
-        responseStatus = 400;
-        responseBody = { success: false, message: 'Coupon does not belong to this store' };
-        throw new BadRequestException('Coupon does not belong to this store');
-      }
-
-      // 5. Determine influencer attribution
-      let attributedInfluencerId: number;
+      // 4. Resolve referral code early (needed to detect affiliate orders before coupon check)
       let referralCodeRecord: HypeStoreReferralCode | null = null;
-
-      // ATTRIBUTION FLOW:
-      // 1. If referralCode is provided → always DB-fetch to get the record (needed for click conversion tracking)
-      // 2. Else if coupon code is "INFL{id}" → parse influencerId directly
-      // 3. Else → use coupon's influencerId field (for brand-shared coupons)
-
       if (webhookDto.referralCode) {
         referralCodeRecord = await this.referralCodeModel.findOne({
           where: { referralCode: webhookDto.referralCode, isActive: true },
@@ -2148,16 +2090,83 @@ export class HypeStoreService {
           });
           throw new BadRequestException('Invalid or inactive referral code');
         }
+      }
 
+      const isAffiliateOrder = referralCodeRecord?.isAffiliate === true;
+
+      // 5. Find coupon code — skipped for affiliate orders (they track via referral link, no coupon)
+      let couponCode: HypeStoreCouponCode | null = null;
+      if (!isAffiliateOrder) {
+        if (!webhookDto.couponCode) {
+          responseStatus = 400;
+          responseBody = { success: false, message: 'Coupon code is required for purchase events' };
+          await this.logWebhookRequest({
+            hypeStoreId: hypeStore.id,
+            method: 'POST',
+            path: '/webhooks/purchase',
+            headers: {},
+            body: webhookDto,
+            ipAddress,
+            status: responseStatus,
+            responseBody,
+            isValid: false,
+            errorMessage: 'Missing coupon code in webhook payload',
+          });
+          throw new BadRequestException('Coupon code is required for purchase events');
+        }
+
+        couponCode = await this.couponCodeModel.findOne({
+          where: { couponCode: webhookDto.couponCode.toUpperCase(), isActive: true },
+          include: [{ model: this.influencerModel }],
+        });
+
+        if (!couponCode) {
+          responseStatus = 400;
+          responseBody = { success: false, message: 'Invalid or inactive coupon code' };
+          await this.logWebhookRequest({
+            hypeStoreId: hypeStore.id,
+            method: 'POST',
+            path: '/webhooks/purchase',
+            headers: {},
+            body: webhookDto,
+            ipAddress,
+            status: responseStatus,
+            responseBody,
+            isValid: true,
+            errorMessage: 'Coupon code not found',
+          });
+          throw new BadRequestException('Invalid or inactive coupon code');
+        }
+
+        // Validate coupon belongs to this store OR is a universal coupon
+        // Universal coupons have hypeStoreId = null and work for all stores
+        const isUniversalCoupon = couponCode.hypeStoreId === null || (couponCode as any).isUniversal === true;
+        if (!isUniversalCoupon && couponCode.hypeStoreId !== hypeStore.id) {
+          responseStatus = 400;
+          responseBody = { success: false, message: 'Coupon does not belong to this store' };
+          throw new BadRequestException('Coupon does not belong to this store');
+        }
+      }
+
+      // 6. Determine influencer attribution
+      let attributedInfluencerId: number;
+
+      // ATTRIBUTION FLOW:
+      // 1. Affiliate order → attributed via referral code record
+      // 2. Non-affiliate with referralCode → referral code record (for click conversion tracking)
+      // 3. Else if coupon code is "INFL{id}" → parse influencerId directly
+      // 4. Else → use coupon's influencerId field (for brand-shared coupons)
+
+      if (referralCodeRecord) {
         attributedInfluencerId = referralCodeRecord.influencerId;
       } else {
         // Parse from coupon code if it's INFL{id} format
-        const match = webhookDto.couponCode.match(/^INFL(\d+)$/);
+        const match = webhookDto.couponCode!.match(/^INFL(\d+)$/);
         if (match) {
           attributedInfluencerId = parseInt(match[1], 10);
-        } else if (couponCode.influencerId) {
+        } else if (couponCode!.influencerId) {
           // Use couponCode's influencerId (for old system compatibility)
-          attributedInfluencerId = couponCode.influencerId;
+          attributedInfluencerId = couponCode!.influencerId;
         } else {
           responseStatus = 400;
           responseBody = { success: false, message: 'Coupon requires referral code for attribution' };
@@ -2249,7 +2258,7 @@ export class HypeStoreService {
         const order = await this.orderModel.create(
           {
             hypeStoreId: hypeStore.id,
-            couponCodeId: couponCode.id,
+            couponCodeId: couponCode?.id ?? null,
             influencerId: attributedInfluencerId, // Use attributed influencer (from referral or coupon)
             externalOrderId: webhookDto.externalOrderId,
             referralCode: webhookDto.referralCode || null, // Store referral code if provided
@@ -2286,8 +2295,10 @@ export class HypeStoreService {
 
         processedOrderId = order.id;
 
-        // Update coupon usage count
-        await couponCode.increment('totalUses', { by: 1, transaction });
+        // Update coupon usage count (skipped for affiliate orders which have no coupon)
+        if (couponCode) {
+          await couponCode.increment('totalUses', { by: 1, transaction });
+        }
 
         // Update referral code stats if referral code was used
         if (webhookDto.referralCode) {

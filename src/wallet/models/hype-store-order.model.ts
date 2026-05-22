@@ -56,9 +56,9 @@ export class HypeStoreOrder extends Model<HypeStoreOrder> {
   @Index
   @Column({
     type: DataType.INTEGER,
-    allowNull: false,
+    allowNull: true,
   })
-  declare couponCodeId: number;
+  declare couponCodeId: number | null;
 
   @ForeignKey(() => Influencer)
   @Index
