@@ -40,11 +40,11 @@ export class UnifiedWebhookDto {
 
   // Purchase-specific fields (required when eventType = 'purchase')
   @ApiProperty({
-    description: 'Coupon code used for this order (required for purchase events)',
+    description: 'Coupon code used for this order. Required for purchase events unless referralCode is an affiliate code (isAffiliate=true).',
     example: 'SNITCHCOLLABKAROO',
     required: false,
   })
-  @ValidateIf((o) => o.eventType === WebhookEventType.PURCHASE)
+  @ValidateIf((o) => o.eventType === WebhookEventType.PURCHASE && !o.referralCode)
   @IsString()
   couponCode?: string;
 
