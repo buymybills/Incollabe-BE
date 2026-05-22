@@ -542,16 +542,21 @@ export class InfluencerService {
       endOfMonth.setDate(0);
       endOfMonth.setHours(23, 59, 59, 999);
 
-      const monthlyReferralUsageCount = await this.influencerReferralUsageModel.count({
-        where: {
-          influencerId: influencer.id,
-          referralCode: influencer.referralCode || '',
-          createdAt: {
-            [Op.gte]: startOfMonth,
-            [Op.lte]: endOfMonth,
+      const [monthlyReferralUsageCount, maxxCampaignApplied] = await Promise.all([
+        this.influencerReferralUsageModel.count({
+          where: {
+            influencerId: influencer.id,
+            referralCode: influencer.referralCode || '',
+            createdAt: {
+              [Op.gte]: startOfMonth,
+              [Op.lte]: endOfMonth,
+            },
           },
-        },
-      });
+        }),
+        this.campaignApplicationModel.count({
+          where: { influencerId: influencer.id },
+        }),
+      ]);
 
       // Calculate next reset date (first day of next month)
       const nextResetDate = new Date();
@@ -625,6 +630,11 @@ export class InfluencerService {
         appReview: {
           shouldShow: appReviewPrompt.shouldShow,
           campaignCount: appReviewPrompt.campaignCount,
+        },
+        maxxBenefitsUtilised: {
+          maxxCampaignApplied,
+          messageCreditUsed: Math.max(0, 5 - (influencer.weeklyCredits || 0)),
+          profileViews: influencer.profileViewsCount || 0,
         },
       };
     }
