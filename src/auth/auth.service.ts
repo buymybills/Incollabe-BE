@@ -1733,8 +1733,6 @@ export class AuthService {
   async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
     const { email } = forgotPasswordDto;
 
-    console.log(`[ForgotPassword] Request received for email: ${email}`);
-
     // Step 1: Check if brand exists (email is encrypted in DB, lookup must use emailHash)
     const normalizedEmail = email.toLowerCase().trim();
     const emailHash = crypto
@@ -1748,15 +1746,12 @@ export class AuthService {
     });
 
     if (!brand) {
-      console.log(`[ForgotPassword] No brand found for email: ${email}`);
       // Don't reveal if email exists or not for security
       return {
         message: 'If the email exists, a password reset link has been sent',
         success: true,
       };
     }
-
-    console.log(`[ForgotPassword] Brand found: id=${brand.id}, email=${brand.email}`);
 
     // Step 2: Generate password reset token (JWT with brand ID and expiration)
     const resetPayload = {
@@ -1770,8 +1765,6 @@ export class AuthService {
       expiresIn: '1h', // 1 hour expiry
     });
 
-    console.log(`[ForgotPassword] Reset token generated`);
-
     // Step 3: Store token in Redis with 1 hour TTL for additional validation
     const tokenKey = this.passwordResetKey(resetToken);
     await this.redisService.set(
@@ -1784,14 +1777,9 @@ export class AuthService {
       3600,
     ); // 1 hour
 
-    console.log(`[ForgotPassword] Token stored in Redis with key: ${tokenKey.substring(0, 30)}...`);
-
     // Step 4: Generate password reset URL
     const frontendUrl = this.configService.get<string>('FRONTEND_URL');
-    console.log(`[ForgotPassword] FRONTEND_URL from config: ${frontendUrl}`);
-    const resetUrl = `${frontendUrl || 'http://localhost:3000'}/app/auth/brands/reset-password?token=${resetToken}`;
-
-    console.log(`[ForgotPassword] Attempting to send email to: ${brand.email}`);
+    const resetUrl = `${frontendUrl || 'http://localhost:3000'}/app/auth/brands/reset-password?token=${resetToken}&email=${encodeURIComponent(brand.email)}`;
 
     // Step 5: Send password reset email
     await this.emailService.sendPasswordResetEmail(
@@ -1800,8 +1788,6 @@ export class AuthService {
       resetUrl,
       resetToken,
     );
-
-    console.log(`[ForgotPassword] Email sent successfully to: ${brand.email}`);
 
     return {
       message: 'If the email exists, a password reset link has been sent',
