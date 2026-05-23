@@ -1789,7 +1789,7 @@ export class AuthService {
     // Step 4: Generate password reset URL
     const frontendUrl = this.configService.get<string>('FRONTEND_URL');
     console.log(`[ForgotPassword] FRONTEND_URL from config: ${frontendUrl}`);
-    const resetUrl = `${frontendUrl || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
+    const resetUrl = `${frontendUrl || 'http://localhost:3000'}/app/auth/brands/reset-password?token=${resetToken}`;
 
     console.log(`[ForgotPassword] Attempting to send email to: ${brand.email}`);
 
