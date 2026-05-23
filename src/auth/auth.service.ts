@@ -1788,9 +1788,15 @@ export class AuthService {
 
     console.log(`[ForgotPassword] Request received for email: ${email}`);
 
-    // Step 1: Check if brand exists
+    // Step 1: Check if brand exists (email is encrypted in DB, lookup must use emailHash)
+    const normalizedEmail = email.toLowerCase().trim();
+    const emailHash = crypto
+      .createHash('sha256')
+      .update(normalizedEmail)
+      .digest('hex');
+
     const brand = await this.brandModel.findOne({
-      where: { email: { [Op.iLike]: email } },
+      where: { emailHash },
       attributes: ['id', 'email', 'brandName'],
     });
 
