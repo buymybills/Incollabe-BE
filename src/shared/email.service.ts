@@ -257,18 +257,23 @@ export class EmailService {
       </html>
     `;
 
+    console.log(`[EmailService] Sending password reset email to: ${email}`);
+    console.log(`[EmailService] EMAIL_USER: ${process.env.EMAIL_USER}`);
+    console.log(`[EmailService] EMAIL_PASS set: ${!!process.env.EMAIL_PASS}`);
+    console.log(`[EmailService] Transporter exists: ${!!this.transporter}`);
+
     try {
-      await this.transporter.sendMail({
+      const result = await this.transporter.sendMail({
         from: process.env.EMAIL_USER,
         to: email,
         subject: subject,
         html: html,
       });
 
-      console.log(`Password reset email sent to: ${email}`);
+      console.log(`[EmailService] Password reset email sent to: ${email}, messageId: ${result.messageId}`);
     } catch (error) {
-      console.error('Failed to send password reset email:', error);
-      throw new Error(`Failed to send password reset email: ${error.message}`);
+      console.error('[EmailService] Failed to send password reset email:', error);
+      throw new Error(`Failed to send password reset email: ${(error as Error).message}`);
     }
   }
 
