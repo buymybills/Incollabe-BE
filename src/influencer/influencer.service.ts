@@ -16,6 +16,7 @@ import { UserType as DeviceUserType } from '../shared/models/device-token.model'
 import { InAppNotificationService } from '../shared/in-app-notification.service';
 import { NotificationType } from '../shared/models/in-app-notification.model';
 import { AppVersionService } from '../shared/services/app-version.service';
+import { AppReviewService } from '../shared/services/app-review.service';
 import { OtpService } from '../shared/services/otp.service';
 import { ProfileViewService } from '../shared/services/profile-view.service';
 import { BlockService } from '../shared/services/block.service';
@@ -155,6 +156,7 @@ export class InfluencerService {
     private readonly profileViewService: ProfileViewService,
     private readonly blockService: BlockService,
     private readonly reportService: ReportService,
+    private readonly appReviewService: AppReviewService,
     @Inject(forwardRef(() => InfluencerScoringService))
     private readonly influencerScoringService: InfluencerScoringService,
   ) {}
@@ -560,6 +562,12 @@ export class InfluencerService {
           appVersion: appVersionInfo,
         }, null, 2));
       }
+
+      // Check if app review prompt should be shown
+      const appReviewPrompt = await this.appReviewService.shouldShowReviewPrompt(
+        influencerId,
+        'influencer',
+      );
 
       return {
         ...baseProfile,
