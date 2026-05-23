@@ -1830,12 +1830,9 @@ export class AuthService {
       );
     }
 
-    // Step 4: Find the brand
+    // Step 4: Find the brand (email is encrypted in DB, match by id only)
     const brand = await this.brandModel.findOne({
-      where: {
-        id: decoded.brandId,
-        email: decoded.email.toLowerCase(),
-      },
+      where: { id: decoded.brandId },
     });
 
     if (!brand) {
