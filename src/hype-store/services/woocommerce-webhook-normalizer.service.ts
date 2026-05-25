@@ -98,7 +98,6 @@ export class WooCommerceWebhookNormalizerService {
     const couponCode = order.coupon_lines?.[0]?.code ?? undefined;
     const referralCode =
       this.extractMetaData(order.meta_data, 'referral_code') ??
-      this.extractRefFromSessionEntry(order.meta_data) ??
       undefined;
     const customerName = this.buildCustomerName(order.billing) ?? undefined;
 
