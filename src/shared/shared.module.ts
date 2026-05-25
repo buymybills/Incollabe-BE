@@ -106,6 +106,8 @@ import { ReportedUser } from './models/reported-user.model';
 import { ReportService } from './services/report.service';
 import { ReportController } from './controllers/report.controller';
 import { GroupNotificationProcessor } from './queues/group-notification.processor';
+import { MetaWebhookController } from './controllers/meta-webhook.controller';
+import { MetaWebhookService } from './services/meta-webhook.service';
 
 @Module({
   imports: [
@@ -173,6 +175,7 @@ import { GroupNotificationProcessor } from './queues/group-notification.processo
     FiamCampaignMobileController,
     BlockController,
     ReportController,
+    MetaWebhookController,
   ],
   providers: [
     SmsService,
@@ -221,6 +224,7 @@ import { GroupNotificationProcessor } from './queues/group-notification.processo
     BlockService,
     ReportService,
     GroupNotificationProcessor,
+    MetaWebhookService,
   ],
   exports: [
     SmsService,

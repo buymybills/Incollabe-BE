@@ -59,7 +59,18 @@ async function bootstrap() {
   // These limits are for standard uploads and API payloads
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const express = require('express');
-  app.use(express.json({ limit: '10mb' })); // For JSON payloads (increased for chunked upload metadata)
+  // Capture raw body on webhook routes so HMAC-SHA256 signature verification works.
+  // The parsed JSON is still available via req.body as usual.
+  app.use(
+    express.json({
+      limit: '10mb',
+      verify: (req: any, _res: any, buf: Buffer) => {
+        if (req.path?.startsWith('/api/webhooks/')) {
+          req.rawBody = buf;
+        }
+      },
+    }),
+  );
   app.use(express.urlencoded({ limit: '50mb', extended: true })); // For URL-encoded and standard uploads (50MB max)
   app.useGlobalPipes(
     new ValidationPipe({
