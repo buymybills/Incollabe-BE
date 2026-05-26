@@ -13,7 +13,8 @@ import { ConfigService } from '@nestjs/config';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { Public } from '../../auth/decorators/public.decorator';
-import { MetaWebhookService } from '../services/meta-webhook.service';
+import { MetaWebhookService, IgMessageEvent, IgTemplateElement } from '../services/meta-webhook.service';
+import { ShoppingAgentService } from '../../shopping-agent/shopping-agent.service';
 
 /**
  * Public webhook controller for receiving Instagram DM events from Meta.
@@ -31,6 +32,7 @@ export class MetaWebhookController {
   constructor(
     private readonly metaWebhookService: MetaWebhookService,
     private readonly configService: ConfigService,
+    private readonly shoppingAgentService: ShoppingAgentService,
   ) {}
 
   /**
@@ -85,7 +87,7 @@ export class MetaWebhookController {
 
     if (!this.metaWebhookService.verifySignature(rawBody, signature)) {
       this.logger.warn(
-        `Invalid signature — check IG_APP_SECRET matches the registered Meta app`,
+        `Invalid signature — check IG_WEBHOOK_APP_SECRET matches the registered Meta app`,
       );
       // Still return 200 to prevent Meta from retrying indefinitely
       return 'OK';
@@ -122,12 +124,7 @@ export class MetaWebhookController {
     return 'OK';
   }
 
-  private async processEvent(event: {
-    senderId: string;
-    text: string;
-    attachments: any[];
-    mid: string | null;
-  }) {
+  private async processEvent(event: IgMessageEvent) {
     this.logger.log(
       `Message from ${event.senderId}: "${event.text.slice(0, 80)}" attachments=${event.attachments.length}`,
     );
@@ -145,9 +142,82 @@ export class MetaWebhookController {
         .catch(() => {});
     }
 
-    // TODO: Wire up your AI agent / reply logic here.
-    // Example:
-    //   const reply = await this.yourAgentService.handle(event);
-    //   await this.metaWebhookService.sendMessage(event.senderId, reply);
+    // Build the message string for the agent.
+    // For reel/media attachments, resolve to a CDN URL so the agent can scan them.
+    let agentMessage = event.text;
+
+    if (event.attachments.length > 0) {
+      const resolvedUrls: string[] = [];
+      for (const att of event.attachments) {
+        if (att.url) {
+          resolvedUrls.push(att.url);
+        } else if (att.reel_video_id) {
+          const cdnUrl = await this.metaWebhookService
+            .resolveIgMediaUrl(att.reel_video_id)
+            .catch((err) => {
+              this.logger.warn(`Could not resolve reel ${att.reel_video_id}: ${err.message}`);
+              return null;
+            });
+          if (cdnUrl) resolvedUrls.push(cdnUrl);
+        }
+      }
+      if (resolvedUrls.length > 0) {
+        const urlsText = resolvedUrls.join(' ');
+        agentMessage = agentMessage ? `${agentMessage} ${urlsText}` : urlsText;
+      }
+    }
+
+    if (!agentMessage.trim()) return;
+
+    // Keep typing bubble alive every 15 s while the agent is thinking / calling tools
+    const typingInterval = setInterval(() => {
+      this.metaWebhookService.sendSenderAction(event.senderId, 'typing_on').catch(() => {});
+    }, 15_000);
+
+    try {
+      // Use senderId as the sessionId so each Instagram user has persistent conversation history
+      const result = await this.shoppingAgentService.chat(event.senderId, agentMessage);
+
+      clearInterval(typingInterval);
+
+      // Strip markdown formatting — IG DMs render plain text only
+      const cleanReply = result.reply
+        .replace(/\*\*(.*?)\*\*/g, '$1')   // bold
+        .replace(/\*(.*?)\*/g, '$1')        // italic
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'); // inline links → label only
+
+      await this.metaWebhookService.sendMessage(event.senderId, cleanReply);
+
+      // Send product carousel if the agent found products
+      if (result.products?.length > 0) {
+        const elements: IgTemplateElement[] = result.products
+          .slice(0, 10)
+          .map((p) => ({
+            title: `${p.brand} – ${p.title}`,
+            subtitle: `₹${p.priceInr}`,
+            image_url: p.image || undefined,
+            url: p.url,
+            buttons: [{ url: p.url, title: 'Buy Now' }],
+          }));
+        await this.metaWebhookService.sendGenericTemplate(event.senderId, elements);
+
+        // Quick-reply chips so users can refine without typing
+        await this.metaWebhookService.sendQuickReplies(
+          event.senderId,
+          'Anything else?',
+          [
+            { title: 'Show more', payload: 'SHOW_MORE' },
+            { title: 'Under ₹1000', payload: 'UNDER_1000' },
+            { title: 'Different style', payload: 'DIFFERENT_STYLE' },
+          ],
+        );
+      }
+    } catch (err: any) {
+      clearInterval(typingInterval);
+      this.logger.error(`Agent error for ${event.senderId}: ${err.message}`);
+      await this.metaWebhookService
+        .sendMessage(event.senderId, 'Sorry, I ran into an issue. Please try again in a moment.')
+        .catch(() => {});
+    }
   }
 }

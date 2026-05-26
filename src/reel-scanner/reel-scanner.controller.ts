@@ -1,13 +1,12 @@
-import { Controller, Post, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ReelScannerService } from './reel-scanner.service';
 import { ScanReelRequestDto } from './dto/scan-reel-request.dto';
-import { AuthGuard } from '../auth/guards/auth.guard';
+import { Public } from '../auth/decorators/public.decorator';
 
 @ApiTags('Reel Scanner')
-@ApiBearerAuth()
+@Public()
 @Controller('reel-scanner')
-@UseGuards(AuthGuard)
 export class ReelScannerController {
   constructor(private readonly reelScannerService: ReelScannerService) {}
 

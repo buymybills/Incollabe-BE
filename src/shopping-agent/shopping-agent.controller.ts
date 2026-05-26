@@ -1,13 +1,12 @@
-import { Controller, Post, Get, Delete, Body, Param, UseGuards, HttpCode, HttpStatus, NotFoundException } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam, ApiResponse } from '@nestjs/swagger';
+import { Controller, Post, Get, Delete, Body, Param, HttpCode, HttpStatus, NotFoundException } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
 import { ShoppingAgentService } from './shopping-agent.service';
 import { AgentMessageDto } from './dto/agent-message.dto';
-import { AuthGuard } from '../auth/guards/auth.guard';
+import { Public } from '../auth/decorators/public.decorator';
 
 @ApiTags('Shopping Agent')
-@ApiBearerAuth()
+@Public()
 @Controller('shopping-agent')
-@UseGuards(AuthGuard)
 export class ShoppingAgentController {
   constructor(private readonly shoppingAgentService: ShoppingAgentService) {}
 

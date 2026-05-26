@@ -175,7 +175,6 @@ import { MetaWebhookService } from './services/meta-webhook.service';
     FiamCampaignMobileController,
     BlockController,
     ReportController,
-    MetaWebhookController,
   ],
   providers: [
     SmsService,
@@ -265,6 +264,7 @@ import { MetaWebhookService } from './services/meta-webhook.service';
     ApiLoggerMiddleware,
     BlockService,
     ReportService,
+    MetaWebhookService,
   ],
 })
 export class SharedModule { }

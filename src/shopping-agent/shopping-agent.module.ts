@@ -13,5 +13,6 @@ import { Brand } from '../brand/model/brand.model';
   imports: [SharedModule, ReelScannerModule, CatalogSearchModule, SequelizeModule.forFeature([Influencer, Brand])],
   controllers: [ShoppingAgentController],
   providers: [ShoppingAgentService, AuthGuard],
+  exports: [ShoppingAgentService],
 })
 export class ShoppingAgentModule {}

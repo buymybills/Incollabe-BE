@@ -1,13 +1,12 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Query } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { CatalogSearchService } from './catalog-search.service';
 import { CatalogSearchRequestDto } from './dto/catalog-search.dto';
-import { AuthGuard } from '../auth/guards/auth.guard';
+import { Public } from '../auth/decorators/public.decorator';
 
 @ApiTags('Catalog Search')
-@ApiBearerAuth()
+@Public()
 @Controller('catalog-search')
-@UseGuards(AuthGuard)
 export class CatalogSearchController {
   constructor(private readonly catalogSearchService: CatalogSearchService) {}
 
