@@ -132,6 +132,19 @@ export class MetaWebhookController {
       `Message from ${event.senderId}: "${event.text.slice(0, 80)}" attachments=${event.attachments.length}`,
     );
 
+    // Acknowledge immediately — blue read receipt + typing bubble
+    this.metaWebhookService.sendSenderAction(event.senderId, 'mark_seen').catch(() => {});
+    this.metaWebhookService.sendSenderAction(event.senderId, 'typing_on').catch(() => {});
+
+    // For slow operations (reel scans, URL processing) send a text ack so user isn't left waiting
+    const isSlowScan =
+      event.attachments.length > 0 || /https?:\/\//i.test(event.text);
+    if (isSlowScan) {
+      this.metaWebhookService
+        .sendMessage(event.senderId, 'On it — scanning the reel 👀 give me a few seconds…')
+        .catch(() => {});
+    }
+
     // TODO: Wire up your AI agent / reply logic here.
     // Example:
     //   const reply = await this.yourAgentService.handle(event);
