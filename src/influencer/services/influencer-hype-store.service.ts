@@ -173,12 +173,12 @@ export class InfluencerHypeStoreService {
             hypeStoreId: store.id,
             influencerId,
           },
-          attributes: ['cashbackAmount', 'cashbackStatus'],
+          attributes: ['cashbackAmount', 'cashbackStatus', 'contentType'],
         });
 
         const totalOrders = orders.length;
         const totalCashbackEarned = orders.reduce(
-          (sum, order) => sum + parseFloat(order.cashbackAmount.toString()),
+          (sum, order) => sum + this.influencerCashback(order),
           0,
         );
 
@@ -309,15 +309,15 @@ export class InfluencerHypeStoreService {
       0,
     );
     const totalCashbackEarned = orders.reduce(
-      (sum, order) => sum + parseFloat(order.cashbackAmount.toString()),
+      (sum, order) => sum + this.influencerCashback(order),
       0,
     );
     const pendingCashback = orders
       .filter((order) => order.cashbackStatus === CashbackStatus.PENDING || order.cashbackStatus === CashbackStatus.PROCESSING)
-      .reduce((sum, order) => sum + parseFloat(order.cashbackAmount.toString()), 0);
+      .reduce((sum, order) => sum + this.influencerCashback(order), 0);
     const creditedCashback = orders
       .filter((order) => order.cashbackStatus === CashbackStatus.CREDITED)
-      .reduce((sum, order) => sum + parseFloat(order.cashbackAmount.toString()), 0);
+      .reduce((sum, order) => sum + this.influencerCashback(order), 0);
 
     // Monthly claim window
     const startOfMonth = new Date();
@@ -526,7 +526,7 @@ export class InfluencerHypeStoreService {
       0,
     );
     const totalCashbackEarned = allOrders.reduce(
-      (sum, order) => sum + parseFloat(order.cashbackAmount.toString()),
+      (sum, order) => sum + this.influencerCashback(order),
       0,
     );
     const pendingCashback = allOrders
@@ -535,10 +535,10 @@ export class InfluencerHypeStoreService {
           order.cashbackStatus === CashbackStatus.PENDING ||
           order.cashbackStatus === CashbackStatus.PROCESSING,
       )
-      .reduce((sum, order) => sum + parseFloat(order.cashbackAmount.toString()), 0);
+      .reduce((sum, order) => sum + this.influencerCashback(order), 0);
     const creditedCashback = allOrders
       .filter((order) => order.cashbackStatus === CashbackStatus.CREDITED)
-      .reduce((sum, order) => sum + parseFloat(order.cashbackAmount.toString()), 0);
+      .reduce((sum, order) => sum + this.influencerCashback(order), 0);
 
     return {
       success: true,
@@ -612,7 +612,7 @@ export class InfluencerHypeStoreService {
     const purchaseLineItems: any[] = metadata.lineItems ?? [];
     const returnedLineItems: any[] = metadata.returnedLineItems ?? [];
     const totalOrderAmount = parseFloat(order.orderAmount.toString());
-    const activeCashback = parseFloat(order.cashbackAmount.toString());
+    const activeCashback = this.influencerCashback(order);
     // Restore original cashback to compute the correct per-item rate.
     // cashbackAmount is reduced in DB on partial return, so we add back what was reversed.
     const reversedCashback = metadata.partialReturnCashbackReversed ?? 0;
@@ -956,6 +956,12 @@ export class InfluencerHypeStoreService {
    * - https://www.instagram.com/reel/ABC123xyz/ -> ABC123xyz
    * - https://www.instagram.com/p/ABC123xyz/ -> ABC123xyz
    */
+  /** Affiliate orders: influencer earns 60% of the total cashback. All others: 100%. */
+  private influencerCashback(order: { cashbackAmount: number | string; contentType?: string }): number {
+    const amount = parseFloat(order.cashbackAmount.toString());
+    return order.contentType === 'affiliate' ? Math.round(amount * 0.60 * 100) / 100 : amount;
+  }
+
   private extractInstagramShortcode(url: string): string | null {
     try {
       const patterns = [

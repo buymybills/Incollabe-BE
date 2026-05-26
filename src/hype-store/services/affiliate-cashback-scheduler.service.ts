@@ -37,7 +37,7 @@ export class AffiliateCashbackSchedulerService {
     try {
       const pendingOrders = await this.orderModel.findAll({
         where: {
-          referralCode: { [Op.ne]: '' },
+          contentType: 'affiliate',
           cashbackStatus: CashbackStatus.PENDING,
           isReturned: false,
           returnPeriodEndsAt: { [Op.lte]: new Date() },
@@ -252,7 +252,7 @@ export class AffiliateCashbackSchedulerService {
 
     const pendingOrders = await this.orderModel.findAll({
       where: {
-        referralCode: { [Op.ne]: '' },
+        contentType: 'affiliate',
         cashbackStatus: CashbackStatus.PENDING,
         isReturned: false,
         returnPeriodEndsAt: { [Op.lte]: new Date() },
