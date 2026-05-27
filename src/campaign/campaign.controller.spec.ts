@@ -77,6 +77,7 @@ describe('CampaignController', () => {
         isOpenToAllGenders: true,
         deliverableFormat: ['instagram_post'],
         isOpenToAllAges: false,
+        numberOfInfluencers: 1,
       };
 
       const mockRequest: RequestWithUser = {
@@ -396,6 +397,7 @@ describe('CampaignController', () => {
         isOpenToAllGenders: true,
         deliverableFormat: ['instagram_post'],
         isOpenToAllAges: false,
+        numberOfInfluencers: 1,
       };
 
       const mockRequest: RequestWithUser = {
