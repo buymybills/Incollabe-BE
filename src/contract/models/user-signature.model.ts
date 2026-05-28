@@ -5,7 +5,7 @@ export enum SignatureUserType {
   INFLUENCER = 'influencer',
 }
 
-@Table({ tableName: 'user_signatures', timestamps: true })
+@Table({ tableName: 'user_signatures', timestamps: true, underscored: true })
 export class UserSignature extends Model<UserSignature> {
   @Column({ type: DataType.INTEGER, primaryKey: true, autoIncrement: true })
   declare id: number;

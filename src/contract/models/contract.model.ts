@@ -22,7 +22,7 @@ export enum ContractStatus {
   VOID = 'void',
 }
 
-@Table({ tableName: 'contracts', timestamps: true })
+@Table({ tableName: 'contracts', timestamps: true, underscored: true })
 export class Contract extends Model<Contract> {
   @Column({ type: DataType.INTEGER, primaryKey: true, autoIncrement: true })
   declare id: number;

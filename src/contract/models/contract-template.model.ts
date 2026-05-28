@@ -1,7 +1,7 @@
 import { Table, Column, Model, DataType } from 'sequelize-typescript';
 import { ContractType } from './contract.model';
 
-@Table({ tableName: 'contract_templates', timestamps: true })
+@Table({ tableName: 'contract_templates', timestamps: true, underscored: true })
 export class ContractTemplate extends Model<ContractTemplate> {
   @Column({ type: DataType.INTEGER, primaryKey: true, autoIncrement: true })
   declare id: number;

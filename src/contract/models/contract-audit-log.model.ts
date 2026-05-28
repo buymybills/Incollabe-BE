@@ -18,7 +18,7 @@ export enum AuditAction {
   CONTRACT_VOIDED = 'contract_voided',
 }
 
-@Table({ tableName: 'contract_audit_logs', timestamps: false })
+@Table({ tableName: 'contract_audit_logs', timestamps: false, underscored: true })
 export class ContractAuditLog extends Model<ContractAuditLog> {
   @Column({ type: DataType.INTEGER, primaryKey: true, autoIncrement: true })
   declare id: number;

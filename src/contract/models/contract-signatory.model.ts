@@ -19,7 +19,7 @@ export enum SignatoryStatus {
   SIGNED = 'signed',
 }
 
-@Table({ tableName: 'contract_signatories', timestamps: true })
+@Table({ tableName: 'contract_signatories', timestamps: true, underscored: true })
 export class ContractSignatory extends Model<ContractSignatory> {
   @Column({ type: DataType.INTEGER, primaryKey: true, autoIncrement: true })
   declare id: number;
