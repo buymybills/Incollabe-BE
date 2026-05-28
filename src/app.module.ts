@@ -23,6 +23,7 @@ import { ReelScannerModule } from './reel-scanner/reel-scanner.module';
 import { CatalogSearchModule } from './catalog-search/catalog-search.module';
 import { ShoppingAgentModule } from './shopping-agent/shopping-agent.module';
 import { MetaWebhookModule } from './shared/meta-webhook.module';
+import { ContractModule } from './contract/contract.module';
 import { LoggingMiddleware } from './shared/middleware/logging.middleware';
 import { ApiLoggerMiddleware } from './middleware/api-logger.middleware';
 import { ApiActivityLog } from './shared/models/api-activity-log.model';
@@ -60,6 +61,7 @@ import { ApiActivityLog } from './shared/models/api-activity-log.model';
     CatalogSearchModule,
     ShoppingAgentModule,
     MetaWebhookModule,
+    ContractModule,
   ],
   controllers: [AppController],
   providers: [AppService, ApiLoggerMiddleware],
