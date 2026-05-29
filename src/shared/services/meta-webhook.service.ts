@@ -16,12 +16,16 @@ export interface IgAttachment {
   title: string | null;
 }
 
+export type IgTemplateButton =
+  | { type?: 'web_url'; url: string; title: string }
+  | { type: 'postback'; payload: string; title: string };
+
 export interface IgTemplateElement {
   title: string;
   subtitle?: string;
   image_url?: string;
   url?: string;
-  buttons?: Array<{ url: string; title: string }>;
+  buttons?: IgTemplateButton[];
 }
 
 export interface IgQuickReply {
@@ -94,8 +98,15 @@ export class MetaWebhookService {
     const events: IgMessageEvent[] = [];
 
     for (const entry of body.entry ?? []) {
+      const pageId = entry.id as string;
+
       for (const m of entry.messaging ?? []) {
-        const ev = this.buildEvent(m.sender?.id, m.message);
+        const senderId = m.sender?.id as string;
+        // Skip echoes (messages the page itself sent)
+        if (senderId && pageId && senderId === pageId) continue;
+
+        const ev = this.buildMessageEvent(senderId, m.message)
+          ?? this.buildPostbackEvent(senderId, m.postback);
         if (ev) events.push(ev);
       }
 
@@ -103,7 +114,9 @@ export class MetaWebhookService {
         if (change.field !== 'messages') continue;
         const v = change.value;
         if (!v) continue;
-        const ev = this.buildEvent(v.sender?.id, v.message);
+        const senderId = v.sender?.id as string;
+        const ev = this.buildMessageEvent(senderId, v.message)
+          ?? this.buildPostbackEvent(senderId, v.postback);
         if (ev) events.push(ev);
       }
     }
@@ -111,7 +124,7 @@ export class MetaWebhookService {
     return events;
   }
 
-  private buildEvent(senderId: string, message: any): IgMessageEvent | null {
+  private buildMessageEvent(senderId: string, message: any): IgMessageEvent | null {
     if (!senderId || !message) return null;
     if (message.is_echo) return null;
 
@@ -126,10 +139,19 @@ export class MetaWebhookService {
 
     return {
       senderId,
-      text: message.text ?? '',
+      // Quick reply taps arrive as message.quick_reply.payload, not message.text
+      text: (message.quick_reply?.payload as string) ?? (message.text as string) ?? '',
       attachments,
       mid: message.mid ?? null,
     };
+  }
+
+  private buildPostbackEvent(senderId: string, postback: any): IgMessageEvent | null {
+    if (!senderId || !postback) return null;
+    // Postback payload is the "I want this 🛍️" WANT|... string
+    const text = (postback.payload ?? postback.title) as string;
+    if (!text) return null;
+    return { senderId, text, attachments: [], mid: postback.mid ?? null };
   }
 
   // ---- Messaging primitives ----
@@ -199,9 +221,18 @@ export class MetaWebhookService {
       if (this.isHttpsUrl(el.image_url)) e.image_url = el.image_url;
       if (this.isHttpsUrl(el.url)) e.default_action = { type: 'web_url', url: el.url };
       const buttons = (el.buttons || [])
-        .filter((b) => this.isHttpsUrl(b.url))
         .slice(0, 3)
-        .map((b) => ({ type: 'web_url', url: b.url, title: this.truncate(b.title || 'Open', 20) }));
+        .map((b) => {
+          if (b.type === 'postback') {
+            return { type: 'postback', payload: (b as any).payload, title: this.truncate(b.title || 'Select', 20) };
+          }
+          const url = (b as any).url;
+          if (this.isHttpsUrl(url)) {
+            return { type: 'web_url', url, title: this.truncate(b.title || 'Open', 20) };
+          }
+          return null;
+        })
+        .filter(Boolean);
       if (buttons.length) e.buttons = buttons;
       return e;
     });
