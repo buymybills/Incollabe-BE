@@ -19,6 +19,6 @@ import { SharedModule } from '../shared/shared.module';
   ],
   controllers: [ContractController],
   providers: [ContractService, ContractPdfService, ContractBreachService, ContractTemplateService],
-  exports: [ContractService],
+  exports: [ContractService, ContractTemplateService],
 })
 export class ContractModule {}

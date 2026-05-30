@@ -2,7 +2,6 @@ import {
   Controller,
   Get,
   Post,
-  Put,
   Param,
   Body,
   Req,
@@ -17,16 +16,12 @@ import {
   ApiOperation,
   ApiParam,
   ApiResponse,
-  ApiBody,
 } from '@nestjs/swagger';
 import { ContractService } from './contract.service';
-import { ContractTemplateService } from './services/contract-template.service';
 import { SignContractDto } from './dto/sign-contract.dto';
 import { SaveSignatureDto } from './dto/save-signature.dto';
-import { UpdateTemplateDto } from './dto/update-template.dto';
 import { SignatoryPartyType } from './models/contract-signatory.model';
 import { SignatureUserType } from './models/user-signature.model';
-import { ContractType } from './models/contract.model';
 
 function resolveParty(req: any): { partyType: SignatoryPartyType; partyId: number; userType: SignatureUserType } {
   const userType: 'brand' | 'influencer' = req.user?.userType;
@@ -48,10 +43,7 @@ function getIp(req: any): string {
 @ApiBearerAuth()
 @Controller('contracts')
 export class ContractController {
-  constructor(
-    private readonly contractService: ContractService,
-    private readonly templateService: ContractTemplateService,
-  ) {}
+  constructor(private readonly contractService: ContractService) {}
 
   // ─────────────────────────────────────────────────────────────────────────
   // SIGNATURE
@@ -193,94 +185,4 @@ export class ContractController {
     return { pdfUrl: url };
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // INTEGRITY VERIFICATION
-  // ─────────────────────────────────────────────────────────────────────────
-
-  @ApiOperation({
-    summary: 'Verify contract integrity',
-    description: 'Re-computes the SHA-256 hash of the contract text and compares it with the stored hash. If valid: true, the document has not been tampered with. No auth required.',
-  })
-  @ApiParam({ name: 'id', type: Number, description: 'Contract ID' })
-  @ApiResponse({ status: 200, description: 'Hash verification result', schema: { example: { valid: true, storedHash: 'e3b0c44298fc1c149afb...', computedHash: 'e3b0c44298fc1c149afb...' } } })
-  @ApiResponse({ status: 404, description: 'Contract not found' })
-  @Get(':id/verify')
-  async verifyIntegrity(@Param('id', ParseIntPipe) id: number) {
-    return this.contractService.verifyContractIntegrity(id);
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // ADMIN — CONTRACT TEMPLATE MANAGEMENT
-  // ─────────────────────────────────────────────────────────────────────────
-
-  @ApiOperation({
-    summary: '[Admin] List all contract templates',
-    description: 'Returns all templates across all contract types and versions, ordered by type then newest first.',
-  })
-  @ApiResponse({ status: 200, description: 'All templates', schema: { example: { templates: [{ id: 1, contractType: 'platform_brand', version: '1.1', isActive: true, updatedBy: 5, notes: 'Updated penalty clause' }] } } })
-  @Get('admin/templates')
-  async listTemplates() {
-    const templates = await this.templateService.getAllTemplates();
-    return { templates };
-  }
-
-  @ApiOperation({
-    summary: '[Admin] Get active template for a contract type',
-    description: 'Returns the currently active template body with its placeholder tokens.',
-  })
-  @ApiParam({ name: 'type', enum: ContractType, description: 'Contract type' })
-  @ApiResponse({ status: 200, description: 'Active template', schema: { example: { template: { id: 3, contractType: 'brand_influencer', version: '1.0', body: 'BRAND–CREATOR COLLABORATION AGREEMENT\n...', isActive: true } } } })
-  @ApiResponse({ status: 404, description: 'No active template found for this type' })
-  @Get('admin/templates/:type')
-  async getTemplate(@Param('type') type: ContractType) {
-    const template = await this.templateService.getActiveTemplate(type);
-    return { template };
-  }
-
-  @ApiOperation({
-    summary: '[Admin] Get version history for a contract type',
-    description: 'Returns all past and present versions. Useful for auditing what changed between versions.',
-  })
-  @ApiParam({ name: 'type', enum: ContractType, description: 'Contract type' })
-  @ApiResponse({ status: 200, description: 'Version history', schema: { example: { history: [{ id: 3, version: '1.1', isActive: true }, { id: 1, version: '1.0', isActive: false }] } } })
-  @Get('admin/templates/:type/history')
-  async getTemplateHistory(@Param('type') type: ContractType) {
-    const history = await this.templateService.getTemplateHistory(type);
-    return { history };
-  }
-
-  @ApiOperation({
-    summary: '[Admin] Preview template with sample data',
-    description: 'Renders the active template with placeholder sample values so admin can review how it looks before editing. Always call this after making changes.',
-  })
-  @ApiParam({ name: 'type', enum: ContractType, description: 'Contract type' })
-  @ApiResponse({ status: 200, description: 'Rendered preview with sample values', schema: { example: { contractType: 'platform_brand', preview: 'COLLABKAROO PLATFORM AGREEMENT — BRAND\n\nThis Brand Platform Agreement is entered into on 28 May 2026 between:\n\nPARTY A — PLATFORM OPERATOR\nDepshanta Marketing Solutions Pvt. Ltd...' } } })
-  @ApiResponse({ status: 404, description: 'No active template found for this type' })
-  @Get('admin/templates/:type/preview')
-  async previewTemplate(@Param('type') type: ContractType) {
-    const rendered = await this.templateService.previewTemplate(type);
-    return { contractType: type, preview: rendered };
-  }
-
-  @ApiOperation({
-    summary: '[Admin] Update contract template body',
-    description: 'Creates a new version and deactivates the current one. Past signed contracts are unaffected — they use their own stored snapshot. Use {{placeholderName}} tokens for dynamic values.',
-  })
-  @ApiParam({ name: 'type', enum: ContractType, description: 'Contract type to update' })
-  @ApiBody({ type: UpdateTemplateDto })
-  @ApiResponse({ status: 200, description: 'Template updated', schema: { example: { message: 'Template updated to v1.2', template: { id: 5, version: '1.2', isActive: true } } } })
-  @ApiResponse({ status: 400, description: 'Validation error — body is required' })
-  @Put('admin/templates/:type')
-  async updateTemplate(
-    @Req() req: any,
-    @Param('type') type: ContractType,
-    @Body() dto: UpdateTemplateDto,
-  ) {
-    const adminId: number = req.user?.id;
-    const template = await this.templateService.updateTemplate(type, dto.body, adminId, dto.notes);
-    return {
-      message: `Template updated to v${template.version}`,
-      template,
-    };
-  }
 }

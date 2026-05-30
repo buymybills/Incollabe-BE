@@ -87,10 +87,13 @@ import { AdminManagementService } from './services/admin-management.service';
 import { AdminRoleController } from './controllers/admin-role.controller';
 import { AdminRoleService } from './services/admin-role.service';
 import { AdminReportController } from './controllers/admin-report.controller';
+import { ContractTemplateAdminController } from './controllers/contract-template-admin.controller';
+import { ContractAdminController } from './controllers/contract-admin.controller';
 import { AdminRoleDefinition } from './models/admin-role-definition.model';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { PermissionsGuard } from './guards/permissions.guard';
+import { ContractModule } from '../contract/contract.module';
 
 @Module({
   imports: [
@@ -149,6 +152,7 @@ import { PermissionsGuard } from './guards/permissions.guard';
     PostModule,
     forwardRef(() => AuthModule),
     forwardRef(() => CampaignModule),
+    ContractModule,
   ],
   controllers: [
     AdminController,
@@ -159,6 +163,8 @@ import { PermissionsGuard } from './guards/permissions.guard';
     AdminManagementController,
     AdminRoleController,
     AdminReportController,
+    ContractTemplateAdminController,
+    ContractAdminController,
   ],
   providers: [
     AdminAuthService,

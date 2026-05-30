@@ -367,6 +367,13 @@ export class ContractService {
     if (!contract) throw new NotFoundException('Contract not found');
 
     const bodyText = this.renderContract(contract);
+
+    const computedHash = this.pdfService.hashContractText(bodyText);
+    if (computedHash !== contract.contentHash) {
+      throw new BadRequestException(
+        'Contract integrity check failed — the contract text does not match the hash recorded at signing time. The document may have been tampered with.',
+      );
+    }
     const signatureBlocks = await this.buildSignatureBlocks(contract);
     const auditLog = (contract.auditLogs ?? []).map((l) => ({
       action: l.action,
