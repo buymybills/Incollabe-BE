@@ -22,8 +22,9 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
+# Install dumb-init, python3, ffmpeg and yt-dlp (required for Instagram reel downloading)
+RUN apk add --no-cache dumb-init python3 py3-pip ffmpeg && \
+    pip3 install --no-cache-dir --break-system-packages yt-dlp
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs

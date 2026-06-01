@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { readFile, unlink, mkdir } from 'fs/promises';
@@ -6,7 +7,7 @@ import { existsSync } from 'fs';
 import { tmpdir, homedir } from 'os';
 import * as path from 'path';
 import axios from 'axios';
-import { GeminiAIService } from '../shared/services/gemini-ai.service';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const execFileAsync = promisify(execFile);
 
@@ -75,11 +76,50 @@ If no fashion items are visible, return { "items": [] }`;
 // Generate with: yt-dlp --cookies-from-browser safari -o /dev/null https://www.instagram.com/
 const COOKIES_FILE = path.join(homedir(), '.config', 'yt-dlp', 'ig-cookies.txt');
 
+const SCAN_MODELS = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+
 @Injectable()
 export class ReelScannerService {
   private readonly logger = new Logger(ReelScannerService.name);
+  private readonly genAI: GoogleGenerativeAI | null = null;
 
-  constructor(private readonly geminiService: GeminiAIService) {}
+  constructor(private readonly configService: ConfigService) {
+    const apiKey = this.configService.get<string>('SHOPPING_GEMINI_API_KEY');
+    if (apiKey) {
+      this.genAI = new GoogleGenerativeAI(apiKey);
+      this.logger.log('ReelScannerService: Gemini initialized with SHOPPING_GEMINI_API_KEY');
+    } else {
+      this.logger.warn('ReelScannerService: SHOPPING_GEMINI_API_KEY not set — reel scanning disabled');
+    }
+  }
+
+  private isAvailable(): boolean {
+    return this.genAI !== null;
+  }
+
+  private async runWithFallback(
+    operation: (model: any) => Promise<any>,
+    tag: string,
+  ): Promise<any> {
+    if (!this.genAI) throw new Error('Gemini not initialized');
+    for (const modelName of SCAN_MODELS) {
+      try {
+        const model = this.genAI.getGenerativeModel({ model: modelName });
+        return await operation(model);
+      } catch (err: any) {
+        const retryable =
+          String(err?.message).includes('429') ||
+          String(err?.message).includes('503') ||
+          String(err?.message).includes('RESOURCE_EXHAUSTED') ||
+          String(err?.message).includes('UNAVAILABLE');
+        if (retryable && modelName !== SCAN_MODELS[SCAN_MODELS.length - 1]) {
+          this.logger.warn(`[${tag}] ${modelName} unavailable — trying next model`);
+          continue;
+        }
+        throw err;
+      }
+    }
+  }
 
   async scanUrl(url: string): Promise<ScanResult> {
     const trimmed = url.trim();
@@ -217,8 +257,8 @@ export class ReelScannerService {
   // ─── Gemini vision analysis ──────────────────────────────────────────────────
 
   async scanImageUrl(imageUrl: string): Promise<ScanResult> {
-    if (!this.geminiService.isAvailable()) {
-      this.logger.warn('Gemini not available — GEMINI_API_KEY missing');
+    if (!this.isAvailable()) {
+      this.logger.warn('Gemini not available — SHOPPING_GEMINI_API_KEY missing');
       return { sourceImageUrl: imageUrl, items: [] };
     }
 
@@ -237,7 +277,7 @@ export class ReelScannerService {
     mimeType: string,
     caption = '',
   ): Promise<ScanResult> {
-    if (!this.geminiService.isAvailable()) {
+    if (!this.isAvailable()) {
       return { sourceImageUrl: sourceUrl, items: [] };
     }
 
@@ -246,7 +286,7 @@ export class ReelScannerService {
       : '';
 
     try {
-      const result = await this.geminiService.executeWithFallback(async (model) => {
+      const result = await this.runWithFallback(async (model) => {
         const response = await model.generateContent({
           contents: [{
             role: 'user',
@@ -268,7 +308,7 @@ export class ReelScannerService {
   }
 
   private async scanVideoFile(sourceUrl: string, filePath: string, caption = ''): Promise<ScanResult> {
-    if (!this.geminiService.isAvailable()) {
+    if (!this.isAvailable()) {
       return { sourceImageUrl: sourceUrl, items: [] };
     }
 
@@ -281,55 +321,19 @@ export class ReelScannerService {
       const base64 = fileData.toString('base64');
 
       // Try Gemini Files API first (handles larger videos, enables audio analysis)
-      let parts: any[];
-      try {
-        const ai = (this.geminiService as any).ai; // access underlying GoogleGenAI if exposed
-        if (ai?.files) {
-          const uploaded = await ai.files.upload({
-            file: new Blob([new Uint8Array(fileData)], { type: 'video/mp4' }),
-            config: { mimeType: 'video/mp4' },
-          });
-
-          let file = uploaded;
-          let attempts = 0;
-          while (file.state === 'PROCESSING' && attempts < 20) {
-            await new Promise((r) => setTimeout(r, 3000));
-            file = await ai.files.get({ name: file.name });
-            attempts++;
-          }
-
-          if (file.state === 'ACTIVE') {
-            parts = [{ fileData: { mimeType: 'video/mp4', fileUri: file.uri } }, { text: VIDEO_SCAN_PROMPT + captionContext }];
-            const result = await this.geminiService.executeWithFallback(async (model) => {
-              const response = await model.generateContent({
-                contents: [{ role: 'user', parts }],
-                generationConfig: { response_mime_type: 'application/json', temperature: 0.2 },
-              });
-              return response.response;
-            }, 'scanReelVideo');
-
-            // Clean up uploaded file
-            await ai.files.delete({ name: file.name }).catch(() => {});
-            return { sourceImageUrl: sourceUrl, items: this.parseItems(result.text()) };
-          }
-        }
-      } catch (uploadErr) {
-        this.logger.warn(`Gemini Files API upload failed — falling back to inline: ${uploadErr.message}`);
-      }
-
-      // Fallback: inline base64 (works for smaller videos)
-      parts = [
+      // Inline base64 scan (works for smaller videos)
+      const parts = [
         { inlineData: { data: base64, mimeType: 'video/mp4' } },
         { text: VIDEO_SCAN_PROMPT + captionContext },
       ];
 
-      const result = await this.geminiService.executeWithFallback(async (model) => {
+      const result = await this.runWithFallback(async (model) => {
         const response = await model.generateContent({
           contents: [{ role: 'user', parts }],
           generationConfig: { response_mime_type: 'application/json', temperature: 0.2 },
         });
         return response.response;
-      }, 'scanReelVideoInline');
+      }, 'scanReelVideo');
 
       return { sourceImageUrl: sourceUrl, items: this.parseItems(result.text()) };
     } catch (error) {
