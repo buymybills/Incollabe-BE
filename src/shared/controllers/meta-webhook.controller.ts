@@ -248,9 +248,8 @@ export class MetaWebhookController {
           url: hit.url,
           buttons: [
             { url: hit.url, title: 'View Product' },
-            // "I want this" sends a postback so the agent can start the purchase flow
-            // Payload format: WANT|title|brand|price|url  (handled by agent's PURCHASE FLOW)
-            { url: hit.url, title: 'I want this 🛍️' },
+            // Postback payload triggers the PURCHASE FLOW in the shopping agent
+            { type: 'postback' as const, payload: `WANT|${hit.title}|${hit.brand}|${hit.priceInr ?? ''}|${hit.url}`, title: 'I want this 🛍️' },
           ],
         }));
 
