@@ -526,9 +526,9 @@ export class ShoppingAgentService {
           const result = await this.razorpayService.createPaymentLink(
             args.amount_inr,
             `${args.product_name} — ${args.brand_name}${args.size ? ` (Size: ${args.size})` : ''}`.slice(0, 100),
-            args.customer_name || 'Shopper',
-            args.customer_phone || '9999999999',
-            args.customer_email || 'shopper@incollab.in',
+            args.customer_name || undefined,
+            args.customer_phone || undefined,
+            args.customer_email || undefined,
             uuidv4(),
             { product_url: (args.product_url ?? '').slice(0, 256), ...(args.size ? { size: args.size } : {}) },
           );

@@ -649,25 +649,28 @@ export class RazorpayService {
   async createPaymentLink(
     amount: number,
     description: string,
-    customerName: string,
-    customerPhone: string,
-    customerEmail: string,
+    customerName?: string,
+    customerPhone?: string,
+    customerEmail?: string,
     referenceId?: string,
     notes?: Record<string, any>,
   ) {
     try {
+      const hasCustomer = customerName || customerPhone || customerEmail;
       const paymentLink = await this.razorpay.paymentLink.create({
         amount: amount * 100, // Convert to paise
         currency: 'INR',
         description,
-        customer: {
-          name: customerName,
-          contact: customerPhone,
-          email: customerEmail,
-        },
+        ...(hasCustomer && {
+          customer: {
+            ...(customerName && { name: customerName }),
+            ...(customerPhone && { contact: customerPhone }),
+            ...(customerEmail && { email: customerEmail }),
+          },
+        }),
         notify: {
-          sms: false, // Disabled: Do not send SMS
-          email: false, // Disabled: Do not send email
+          sms: false,
+          email: false,
         },
         reminder_enable: true,
         reference_id: referenceId,
