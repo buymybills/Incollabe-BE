@@ -521,6 +521,7 @@ export class InstagramService {
   async syncInstagramProfile(
     userId: number,
     userType: UserType,
+    bypassThrottle = false,
   ): Promise<Influencer | Brand> {
     // Get user
     let user: Influencer | Brand | null;
@@ -540,8 +541,8 @@ export class InstagramService {
       throw new BadRequestException('No Instagram account connected');
     }
 
-    // Check if last sync was less than 15 days ago (only for influencers)
-    if (userType === 'influencer') {
+    // Check if last sync was less than 15 days ago (only for influencers, skipped for cron)
+    if (userType === 'influencer' && !bypassThrottle) {
       const latestAnalysis = await this.instagramProfileAnalysisModel.findOne({
         where: { influencerId: userId },
         order: [['syncDate', 'DESC']],
