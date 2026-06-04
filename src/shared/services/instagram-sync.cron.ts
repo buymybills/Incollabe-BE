@@ -67,7 +67,7 @@ export class InstagramSyncCronService {
 
     for (const influencer of influencers) {
       try {
-        await this.instagramService.syncInstagramProfile(influencer.id, 'influencer');
+        await this.instagramService.syncInstagramProfile(influencer.id, 'influencer', true);
         successCount++;
         this.logger.debug(
           `✓ Synced influencer ${influencer.id} (@${influencer.instagramUsername})`
@@ -109,7 +109,7 @@ export class InstagramSyncCronService {
 
     for (const brand of brands) {
       try {
-        await this.instagramService.syncInstagramProfile(brand.id, 'brand');
+        await this.instagramService.syncInstagramProfile(brand.id, 'brand', true);
         successCount++;
         this.logger.debug(
           `✓ Synced brand ${brand.id} (@${brand.instagramUsername})`
