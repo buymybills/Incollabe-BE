@@ -28,7 +28,14 @@ export class ContractTemplateService implements OnModuleInit {
    * After that, admin manages them exclusively via API.
    */
   async onModuleInit() {
-    await this.seedIfEmpty();
+    // Don't let template seeding crash app boot (e.g. table not yet migrated).
+    try {
+      await this.seedIfEmpty();
+    } catch (err) {
+      this.logger?.warn?.(
+        `ContractTemplate seedIfEmpty skipped: ${err instanceof Error ? err.message : err}`,
+      );
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────

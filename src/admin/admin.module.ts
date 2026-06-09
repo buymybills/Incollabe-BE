@@ -94,6 +94,8 @@ import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { PermissionsGuard } from './guards/permissions.guard';
 import { ContractModule } from '../contract/contract.module';
+import { BotAnalyticsModule } from '../bot-analytics/bot-analytics.module';
+import { BotAnalyticsAdminController } from './controllers/bot-analytics-admin.controller';
 
 @Module({
   imports: [
@@ -153,6 +155,7 @@ import { ContractModule } from '../contract/contract.module';
     forwardRef(() => AuthModule),
     forwardRef(() => CampaignModule),
     ContractModule,
+    BotAnalyticsModule,
   ],
   controllers: [
     AdminController,
@@ -165,6 +168,7 @@ import { ContractModule } from '../contract/contract.module';
     AdminReportController,
     ContractTemplateAdminController,
     ContractAdminController,
+    BotAnalyticsAdminController,
   ],
   providers: [
     AdminAuthService,
