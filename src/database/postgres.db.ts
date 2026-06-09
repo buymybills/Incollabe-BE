@@ -198,7 +198,7 @@ import { ReportedUser } from '../shared/models/reported-user.model';
             ReportedUser,
           ],
           autoLoadModels: true,
-          synchronize: false, // Disabled to prevent index conflicts with existing database
+          synchronize: config.get<string>('NODE_ENV') !== 'production', // Auto-sync in dev only
           logging: false, // Disabled for performance
         };
       },
