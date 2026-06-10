@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS bot_events (
   brand         VARCHAR(60)  NOT NULL DEFAULT 'thesouledstore',
   source        VARCHAR(20)  NOT NULL DEFAULT 'instagram',
   user_key      VARCHAR(64),
+  username      VARCHAR(120),
   session_id    VARCHAR(100),
   event_type    VARCHAR(40)  NOT NULL,
   product_slug  VARCHAR(180),

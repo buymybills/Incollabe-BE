@@ -30,6 +30,10 @@ export class TrackBotEventDto {
 
   @IsOptional()
   @IsString()
+  username?: string;
+
+  @IsOptional()
+  @IsString()
   sessionId?: string;
 
   @IsOptional()

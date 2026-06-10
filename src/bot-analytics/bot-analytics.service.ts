@@ -30,6 +30,7 @@ export class BotAnalyticsService {
       brand: e.brand || DEFAULT_BRAND,
       source: e.source || 'instagram',
       userKey: e.userKey ?? null,
+      username: e.username ?? null,
       sessionId: e.sessionId ?? null,
       eventType: e.eventType,
       productSlug: e.productSlug ?? null,
@@ -114,18 +115,19 @@ export class BotAnalyticsService {
     const [counts, users, gmv, prev] = await Promise.all([
       this.countByType(range),
       this.uniqueUsers(range),
-      this.sumValue(range, BotEventType.PAYMENT_LINK_CREATED),
+      this.sumValue(range, BotEventType.PAYMENT_COMPLETED),
       this.previousRange(range)
         ? Promise.all([
             this.countByType(this.previousRange(range)!),
             this.uniqueUsers(this.previousRange(range)!),
-            this.sumValue(this.previousRange(range)!, BotEventType.PAYMENT_LINK_CREATED),
+            this.sumValue(this.previousRange(range)!, BotEventType.PAYMENT_COMPLETED),
           ])
         : Promise.resolve(null),
     ]);
 
     const c = (t: BotEventType) => counts[t] || 0;
-    const orders = c(BotEventType.PAYMENT_LINK_CREATED);
+    // GMV + orders reflect ACTUAL paid orders (Razorpay success), not links created
+    const orders = c(BotEventType.PAYMENT_COMPLETED);
     const buyIt = c(BotEventType.BUY_IT_TAP);
     const csAnswered = c(BotEventType.FAQ_ANSWERED);
     const csUnanswered = c(BotEventType.FAQ_UNANSWERED);
@@ -143,7 +145,7 @@ export class BotAnalyticsService {
     return {
       uniqueUsers: wrap(users, pu as number),
       buyItTaps: wrap(buyIt, pCount(BotEventType.BUY_IT_TAP)),
-      orders: wrap(orders, pCount(BotEventType.PAYMENT_LINK_CREATED)),
+      orders: wrap(orders, pCount(BotEventType.PAYMENT_COMPLETED)),
       gmv: wrap(gmv, pgmv as number),
       aov: { count: aov, percentageChange: 0 },
       conversionRate: { count: conversionRate, percentageChange: 0 },
@@ -155,33 +157,41 @@ export class BotAnalyticsService {
 
   async funnel(range: DateRange) {
     const counts = await this.countByType(range);
+    // The monotonic PURCHASE funnel. Deliberately excludes "Reels analysed"
+    // (not the true top — text searches also show products, so products_shown
+    // can exceed reels_analysed and produce a nonsensical negative drop-off) and
+    // "Product taps"/tile_tap (users tap "Buy it" directly on a card, so it's
+    // often 0 and breaks the descending chain). Those live as separate metrics.
     const steps: { key: BotEventType; label: string }[] = [
-      { key: BotEventType.REEL_ANALYZED, label: 'Reels analysed' },
       { key: BotEventType.PRODUCTS_SHOWN, label: 'Products shown' },
-      { key: BotEventType.TILE_TAP, label: 'Product taps' },
       { key: BotEventType.BUY_IT_TAP, label: 'Buy it taps' },
       { key: BotEventType.SIZE_SELECTED, label: 'Size selected' },
       { key: BotEventType.PAYMENT_LINK_CREATED, label: 'Payment link' },
       { key: BotEventType.PAYMENT_COMPLETED, label: 'Paid' },
     ];
-    let prev = 0;
     return steps.map((s, i) => {
       const count = counts[s.key] || 0;
-      const dropOff = i === 0 || !prev ? 0 : Math.round(((prev - count) / prev) * 100);
-      prev = i === 0 ? count : prev && count ? count : prev;
-      return { step: s.label, count, dropOffPct: i === 0 ? 0 : dropOff };
+      const prev = i === 0 ? count : counts[steps[i - 1].key] || 0;
+      // drop-off vs the immediately preceding step, clamped to [0,100] so a
+      // data anomaly can never render as a negative / double-negative percent
+      const dropOff =
+        i === 0 || !prev
+          ? 0
+          : Math.max(0, Math.min(100, Math.round(((prev - count) / prev) * 100)));
+      return { step: s.label, count, dropOffPct: dropOff };
     });
   }
 
   async timeseries(range: DateRange, metric: 'orders' | 'gmv' | 'users') {
     const where = this.where(range);
-    const day = fn('DATE', col('created_at'));
+    // Daily buckets in IST (created_at is UTC) so chart days match the brand's day.
+    const day: any = literal("DATE(created_at AT TIME ZONE 'Asia/Kolkata')");
     let attributes: any[];
     if (metric === 'gmv') {
-      where['eventType'] = BotEventType.PAYMENT_LINK_CREATED;
+      where['eventType'] = BotEventType.PAYMENT_COMPLETED;
       attributes = [[day, 'date'], [fn('COALESCE', fn('SUM', col('value_inr')), 0), 'value']];
     } else if (metric === 'orders') {
-      where['eventType'] = BotEventType.PAYMENT_LINK_CREATED;
+      where['eventType'] = BotEventType.PAYMENT_COMPLETED;
       attributes = [[day, 'date'], [fn('COUNT', col('id')), 'value']];
     } else {
       where['userKey'] = { [Op.ne]: null };
@@ -197,13 +207,7 @@ export class BotAnalyticsService {
     return rows.map((r) => ({ date: r.date, value: Number(r.value) }));
   }
 
-  async topProducts(range: DateRange, metric: 'views' | 'buys' | 'saves', limit = 20) {
-    const eventType =
-      metric === 'buys'
-        ? BotEventType.BUY_IT_TAP
-        : metric === 'saves'
-          ? BotEventType.SAVE
-          : BotEventType.PRODUCTS_SHOWN;
+  private async topByEvent(range: DateRange, eventType: BotEventType, limit: number) {
     const rows = (await this.botEventModel.findAll({
       where: this.where(range, { eventType, productSlug: { [Op.ne]: null } }),
       attributes: [
@@ -224,6 +228,51 @@ export class BotAnalyticsService {
       category: r.category,
       priceInr: r.priceInr ? Math.round(Number(r.priceInr)) : null,
       count: parseInt(r.count, 10),
+    }));
+  }
+
+  async topProducts(range: DateRange, metric: 'views' | 'buys' | 'saves' | 'purchases', limit = 20) {
+    if (metric === 'purchases') {
+      // Real paid orders; fall back to checkout intent until the webhook has data
+      const paid = await this.topByEvent(range, BotEventType.PAYMENT_COMPLETED, limit);
+      return paid.length ? paid : this.topByEvent(range, BotEventType.PAYMENT_LINK_CREATED, limit);
+    }
+    const eventType =
+      metric === 'buys' ? BotEventType.BUY_IT_TAP
+        : metric === 'saves' ? BotEventType.SAVE
+          : BotEventType.PRODUCTS_SHOWN;
+    return this.topByEvent(range, eventType, limit);
+  }
+
+  /**
+   * Order list with details — each completed payment (Razorpay success), falling
+   * back to payment links created until the webhook has data. For the admin table.
+   */
+  async orders(range: DateRange, limit = 100) {
+    const completed = await this.orderRows(range, BotEventType.PAYMENT_COMPLETED, limit, true);
+    if (completed.length) return completed;
+    return this.orderRows(range, BotEventType.PAYMENT_LINK_CREATED, limit, false);
+  }
+
+  private async orderRows(range: DateRange, eventType: BotEventType, limit: number, paid: boolean) {
+    const rows = (await this.botEventModel.findAll({
+      where: this.where(range, { eventType }),
+      attributes: ['productTitle', 'productSlug', 'category', 'size', 'valueInr', 'priceInr', 'username', 'userKey', 'gender', 'createdAt'],
+      order: [['createdAt', 'DESC']],
+      limit,
+      raw: true,
+    })) as unknown as any[];
+    return rows.map((r) => ({
+      product: r.productTitle,
+      slug: r.productSlug,
+      category: r.category,
+      size: r.size,
+      amountInr: Math.round(Number(r.valueInr ?? r.priceInr ?? 0)),
+      username: r.username,
+      userKey: r.userKey,
+      gender: r.gender,
+      paid,
+      createdAt: r.createdAt,
     }));
   }
 
@@ -324,8 +373,10 @@ export class BotAnalyticsService {
 
   /** Activity by hour-of-day × weekday — when shoppers engage (heatmap). */
   async heatmap(range: DateRange) {
-    const dow = fn('date_part', 'dow', col('created_at'));
-    const hour = fn('date_part', 'hour', col('created_at'));
+    // Weekday + hour in IST so "when do shoppers engage" reflects local time.
+    const istTs = literal("(created_at AT TIME ZONE 'Asia/Kolkata')");
+    const dow = fn('date_part', 'dow', istTs);
+    const hour = fn('date_part', 'hour', istTs);
     const rows = (await this.botEventModel.findAll({
       where: this.where(range),
       attributes: [[dow, 'dow'], [hour, 'hour'], [fn('COUNT', col('id')), 'count']],
@@ -399,28 +450,28 @@ export class BotAnalyticsService {
     return { total, products: rows };
   }
 
-  /** New vs returning shoppers in the window (returning = also active before it). */
+  /**
+   * New vs returning shoppers. Returning = shopper active on 2+ distinct days
+   * (they came back); new = active on a single day. This is meaningful for any
+   * view — including the default with no date filter.
+   */
   async retention(range: DateRange) {
-    if (!range.startDate) {
-      const total = await this.uniqueUsers(range);
-      return { newUsers: total, returningUsers: 0 };
-    }
-    const inWindow = (await this.botEventModel.findAll({
-      where: this.where(range, { userKey: { [Op.ne]: null } }),
-      attributes: [[fn('DISTINCT', col('user_key')), 'userKey']],
-      raw: true,
-    })) as unknown as { userKey: string }[];
-    const keys = inWindow.map((r) => r.userKey).filter(Boolean);
-    if (keys.length === 0) return { newUsers: 0, returningUsers: 0 };
-    const priorReturning = (await this.botEventModel.count({
-      where: {
-        brand: range.brand,
-        userKey: { [Op.in]: keys },
-        createdAt: { [Op.lt]: range.startDate },
-      },
-      distinct: true,
-      col: 'user_key',
-    })) as number;
-    return { newUsers: Math.max(0, keys.length - priorReturning), returningUsers: priorReturning };
+    const [total, returningRows] = await Promise.all([
+      this.uniqueUsers(range),
+      this.botEventModel.findAll({
+        where: this.where(range, { userKey: { [Op.ne]: null } }),
+        attributes: ['userKey'],
+        group: ['userKey'],
+        // Bucket by INDIAN calendar day (created_at is stored UTC). A shopper who
+        // returns just after IST midnight must count as 2 days → returning, even
+        // though both events fall on the same UTC date.
+        having: literal(
+          "COUNT(DISTINCT DATE(created_at AT TIME ZONE 'Asia/Kolkata')) >= 2",
+        ),
+        raw: true,
+      }) as unknown as Promise<{ userKey: string }[]>,
+    ]);
+    const returningUsers = returningRows.length;
+    return { newUsers: Math.max(0, total - returningUsers), returningUsers };
   }
 }

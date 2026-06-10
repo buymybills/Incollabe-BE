@@ -125,4 +125,14 @@ export class BotAnalyticsAdminController {
   retention(@Query('brand') b?: string, @Query('startDate') s?: string, @Query('endDate') e?: string) {
     return this.botAnalytics.retention(this.range(b, s, e));
   }
+
+  @Get('orders')
+  orders(
+    @Query('limit') limit?: string,
+    @Query('brand') b?: string,
+    @Query('startDate') s?: string,
+    @Query('endDate') e?: string,
+  ) {
+    return this.botAnalytics.orders(this.range(b, s, e), limit ? Math.min(parseInt(limit, 10) || 100, 500) : 100);
+  }
 }

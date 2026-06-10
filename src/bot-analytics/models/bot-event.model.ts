@@ -76,11 +76,18 @@ export class BotEvent extends Model<BotEvent> {
   @Column(DataType.STRING(20))
   declare source: string;
 
-  // Hashed Instagram sender id (never store the raw id)
+  // Hashed Instagram sender id (stable per-user key)
   @AllowNull(true)
   @Index
   @Column(DataType.STRING(64))
   declare userKey: string | null;
+
+  // Instagram @username of the shopper (resolved via the IG Graph API), so the
+  // brand can see who their real customers are.
+  @AllowNull(true)
+  @Index
+  @Column(DataType.STRING(120))
+  declare username: string | null;
 
   @AllowNull(true)
   @Column(DataType.STRING(100))
