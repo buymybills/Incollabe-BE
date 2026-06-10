@@ -19,7 +19,6 @@ import { ChatService } from './chat.service';
 import { GroupChatService } from './group-chat.service';
 import { ChatGateway } from './chat.gateway';
 import { InstagramSyncGateway } from './instagram-sync.gateway';
-import { BrandNotificationsGateway } from './brand-notifications.gateway';
 import { SearchController } from './controllers/search.controller';
 import { ChatController } from './chat.controller';
 import { InstagramController } from './controllers/instagram.controller';
@@ -195,7 +194,6 @@ import { MetaWebhookService } from './services/meta-webhook.service';
     GroupChatService,
     ChatGateway,
     InstagramSyncGateway,
-    BrandNotificationsGateway,
     IsValidUsernameConstraint,
     RazorpayService,
     KeyBackupService,
@@ -245,7 +243,6 @@ import { MetaWebhookService } from './services/meta-webhook.service';
     GroupChatService,
     ChatGateway,
     InstagramSyncGateway,
-    BrandNotificationsGateway,
     IsValidUsernameConstraint,
     RazorpayService,
     InstagramService,
