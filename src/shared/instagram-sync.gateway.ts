@@ -9,8 +9,8 @@ import { Server, Socket } from 'socket.io';
 import { Logger, OnModuleDestroy } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { createAdapter } from '@socket.io/redis-adapter';
-import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
+import { RedisService } from '../redis/redis.service';
 
 /**
  * WebSocket Gateway for Instagram Sync Progress Updates
@@ -80,16 +80,15 @@ export class InstagramSyncGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy
 {
   @WebSocketServer()
-  server: Server;
+  server!: Server;
 
-  private logger: Logger = new Logger('InstagramSyncGateway');
-  private authenticatedSockets: Map<string, { userId: number; userType: string }> = new Map();
+  private readonly logger = new Logger(InstagramSyncGateway.name);
   private redisPubClient: Redis | null = null;
   private redisSubClient: Redis | null = null;
 
   constructor(
     private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
+    private readonly redisService: RedisService,
   ) {}
 
   onModuleDestroy() {
@@ -98,145 +97,99 @@ export class InstagramSyncGateway
   }
 
   afterInit(server: Server) {
-    const redisHost = this.configService.get<string>('REDIS_HOST') || 'localhost';
-    const redisPort = Number(this.configService.get<string>('REDIS_PORT')) || 6379;
+    this.redisPubClient = this.redisService.getClient().duplicate();
+    this.redisSubClient = this.redisService.getClient().duplicate();
 
-    this.redisPubClient = new Redis({ host: redisHost, port: redisPort });
-    this.redisSubClient = this.redisPubClient.duplicate();
-
-    // afterInit receives the Namespace (not root Server) in a namespaced gateway.
-    // adapter() must be called on the root Server, accessible via namespace.server.
     const rootServer = (server as any).server ?? server;
     rootServer.adapter(createAdapter(this.redisPubClient, this.redisSubClient));
 
-    console.log('\n🚀 ===== INSTAGRAM SYNC WEBSOCKET GATEWAY INITIALIZED =====');
-    console.log('Namespace: /instagram-sync');
-    console.log('Purpose: Real-time sync progress updates');
-    console.log(`Redis adapter attached (${redisHost}:${redisPort})`);
-    console.log('==========================================================\n');
-    this.logger.log('Instagram Sync WebSocket Gateway initialized with Redis adapter');
+    this.logger.log('Instagram Sync WebSocket Gateway initialised with Redis adapter');
   }
 
-  /**
-   * Handle new client connections
-   * Validates JWT token and stores authenticated user info
-   */
   async handleConnection(client: Socket) {
     try {
-      console.log(`\n🔌 New sync gateway connection: ${client.id}`);
-
-      // Extract and verify JWT token
       let token =
         client.handshake.auth.token ||
         client.handshake.headers.authorization;
 
       if (!token) {
-        this.logger.warn(`Client ${client.id} rejected: No token provided`);
+        this.logger.warn(`Client ${client.id} rejected: no token`);
         client.emit('error', { message: 'Authentication required' });
         client.disconnect();
         return;
       }
 
-      // Strip "Bearer " prefix if present
-      if (token.startsWith('Bearer ')) {
-        token = token.replace('Bearer ', '');
-      }
+      if (token.startsWith('Bearer ')) token = token.slice(7);
 
-      // Verify JWT token
+      let decoded: any;
       try {
-        const decoded = this.jwtService.verify(token);
-
-        // Store authenticated user info
-        this.authenticatedSockets.set(client.id, {
-          userId: decoded.sub || decoded.id,
-          userType: decoded.type || decoded.userType,
-        });
-
-        console.log(`✅ Client ${client.id} authenticated as ${decoded.type || decoded.userType} ${decoded.sub || decoded.id}`);
-        console.log(`   Total connected clients: ${this.authenticatedSockets.size}`);
-        console.log(`   Client IDs in map: [${Array.from(this.authenticatedSockets.keys()).join(', ')}]`);
-        this.logger.log(`Client ${client.id} connected and authenticated`);
-
-        // Send connection success event
-        client.emit('connected', {
-          message: 'Connected to Instagram sync updates',
-          socketId: client.id,
-          timestamp: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error(`❌ Token verification failed for ${client.id}:`, error.message);
-        this.logger.error(`Token verification failed: ${error.message}`);
+        decoded = this.jwtService.verify(token);
+      } catch (err: any) {
+        this.logger.warn(`Invalid token for ${client.id}: ${err.message}`);
         client.emit('error', { message: 'Invalid token' });
         client.disconnect();
         return;
       }
-    } catch (error) {
-      console.error(`❌ Connection error for ${client.id}:`, error);
-      this.logger.error(`Connection error: ${error.message}`);
+
+      const userId: number = decoded.sub || decoded.id;
+      const userType: string = decoded.type || decoded.userType;
+
+      // Store on client.data so WsAuthGuard can read it
+      client.data.userId = userId;
+      client.data.userType = userType;
+
+      // Join user-scoped room so progress events are only sent to this user
+      await client.join(`user:${userId}`);
+
+      this.logger.log(`Client ${client.id} authenticated as ${userType} ${userId}`);
+
+      client.emit('connected', {
+        message: 'Connected to Instagram sync updates',
+        socketId: client.id,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err: any) {
+      this.logger.error(`Connection error for ${client.id}: ${err.message}`);
       client.disconnect();
     }
   }
 
-  /**
-   * Handle client disconnections
-   */
   handleDisconnect(client: Socket) {
-    this.authenticatedSockets.delete(client.id);
-    console.log(`🔌 Client disconnected: ${client.id}`);
-    console.log(`   Remaining clients: ${this.authenticatedSockets.size}`);
     this.logger.log(`Client disconnected: ${client.id}`);
   }
 
   /**
-   * Emit sync progress update to specific user
-   * Called by background job workers during sync
-   *
-   * @param _userId - Influencer or brand ID (reserved for future targeted emissions)
-   * @param _userType - 'influencer' or 'brand' (reserved for future targeted emissions)
-   * @param jobId - Unique job identifier
-   * @param progress - Progress percentage (0-100)
-   * @param message - Human-readable progress message
+   * Emit sync progress update to the specific user who owns the job.
    */
   emitSyncProgress(
-    _userId: number,
+    userId: number,
     _userType: string,
     jobId: string,
     progress: number,
     message: string,
   ) {
     const eventName = `sync:${jobId}:progress`;
-
-    console.log(`📡 Emitting progress for job ${jobId}: ${progress}% - ${message}`);
-    console.log(`   Event name: ${eventName}`);
-
     const payload = {
       jobId,
-      progress: Math.min(100, Math.max(0, progress)), // Clamp between 0-100
+      progress: Math.min(100, Math.max(0, progress)),
       message,
       timestamp: new Date().toISOString(),
     };
 
-    // Broadcast to ALL clients in the namespace
-    // This works across processes if Redis adapter is configured
-    this.server.emit(eventName, payload);
-
-    console.log(`   ✅ Event broadcast to namespace (will reach all connected clients across all processes)`);
+    this.server.to(`user:${userId}`).emit(eventName, payload);
+    this.logger.debug(`Emitted progress ${progress}% for job ${jobId} → user:${userId}`);
   }
 
   /**
-   * Emit sync completion notification
-   * Called when background sync finishes successfully
+   * Emit sync completion to the specific user who owns the job.
    */
   emitSyncComplete(
-    _userId: number,
+    userId: number,
     _userType: string,
     jobId: string,
     summary: any,
   ) {
     const eventName = `sync:${jobId}:complete`;
-
-    console.log(`✅ Emitting completion for job ${jobId}`);
-
     const payload = {
       jobId,
       success: true,
@@ -245,26 +198,20 @@ export class InstagramSyncGateway
       timestamp: new Date().toISOString(),
     };
 
-    // Broadcast to ALL clients in the namespace
-    this.server.emit(eventName, payload);
-
-    console.log(`   ✅ Completion event broadcast to namespace`);
+    this.server.to(`user:${userId}`).emit(eventName, payload);
+    this.logger.log(`Emitted sync complete for job ${jobId} → user:${userId}`);
   }
 
   /**
-   * Emit sync error notification
-   * Called when background sync fails
+   * Emit sync error to the specific user who owns the job.
    */
   emitSyncError(
-    _userId: number,
+    userId: number,
     _userType: string,
     jobId: string,
     error: { message: string; code?: string },
   ) {
     const eventName = `sync:${jobId}:error`;
-
-    console.log(`❌ Emitting error for job ${jobId}: ${error.message}`);
-
     const payload = {
       jobId,
       success: false,
@@ -275,9 +222,7 @@ export class InstagramSyncGateway
       timestamp: new Date().toISOString(),
     };
 
-    // Broadcast to ALL clients in the namespace
-    this.server.emit(eventName, payload);
-
-    console.log(`   ✅ Error event broadcast to namespace`);
+    this.server.to(`user:${userId}`).emit(eventName, payload);
+    this.logger.warn(`Emitted sync error for job ${jobId} → user:${userId}: ${error.message}`);
   }
 }
