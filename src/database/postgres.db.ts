@@ -200,9 +200,7 @@ import { ReportedUser } from '../shared/models/reported-user.model';
           autoLoadModels: true,
           // Auto-sync in dev only — but allow an explicit opt-out (DB_SYNC=false)
           // when running against a restored real schema (sync would conflict with it).
-          synchronize:
-            config.get<string>('NODE_ENV') !== 'production' &&
-            config.get<string>('DB_SYNC') !== 'false',
+          synchronize: false, // Disabled to prevent index conflicts with existing database
           logging: false, // Disabled for performance
         };
       },
