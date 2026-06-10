@@ -9,10 +9,8 @@ import { Server, Socket } from 'socket.io';
 import { Logger, OnModuleDestroy } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { createAdapter } from '@socket.io/redis-adapter';
+import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
-import { RedisService } from '../redis/redis.service';
-import { InAppNotificationService } from './in-app-notification.service';
-import { NotificationType, NotificationPriority } from './models/in-app-notification.model';
 
 /**
  * WebSocket Gateway for real-time brand notifications.
@@ -34,7 +32,6 @@ import { NotificationType, NotificationPriority } from './models/in-app-notifica
  * - `notification:payment_received`  — payment confirmed / funds added
  * - `notification:payment_failed`    — payment attempt failed
  * - `notification:campaign_update`   — generic campaign status change
- * - `notification:new_order`         — new Instagram DM order placed
  * - `notification:new`               — generic catch-all for any other event
  *
  * **Client usage (React / React Native):**
@@ -63,16 +60,17 @@ export class BrandNotificationsGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy
 {
   @WebSocketServer()
-  server!: Server;
+  server: Server;
 
   private readonly logger = new Logger(BrandNotificationsGateway.name);
+  /** socketId → { brandId, userId } */
+  private readonly connectedBrands = new Map<string, { brandId: number; userId: number }>();
   private redisPubClient: Redis | null = null;
   private redisSubClient: Redis | null = null;
 
   constructor(
     private readonly jwtService: JwtService,
-    private readonly redisService: RedisService,
-    private readonly inAppNotificationService: InAppNotificationService,
+    private readonly configService: ConfigService,
   ) {}
 
   onModuleDestroy() {
@@ -81,14 +79,17 @@ export class BrandNotificationsGateway
   }
 
   afterInit(server: Server) {
-    this.redisPubClient = this.redisService.getClient().duplicate();
-    this.redisSubClient = this.redisService.getClient().duplicate();
+    const redisHost = this.configService.get<string>('REDIS_HOST') || 'localhost';
+    const redisPort = Number(this.configService.get<string>('REDIS_PORT')) || 6379;
+
+    this.redisPubClient = new Redis({ host: redisHost, port: redisPort });
+    this.redisSubClient = this.redisPubClient.duplicate();
 
     // afterInit receives the Namespace (not root Server) in a namespaced gateway.
     const rootServer = (server as any).server ?? server;
     rootServer.adapter(createAdapter(this.redisPubClient, this.redisSubClient));
 
-    this.logger.log('Brand Notifications Gateway initialised with Redis adapter');
+    this.logger.log(`Brand Notifications Gateway initialised — Redis ${redisHost}:${redisPort}`);
   }
 
   /** Authenticate, then join the brand-scoped room. */
@@ -116,6 +117,7 @@ export class BrandNotificationsGateway
       }
 
       const userId: number = decoded.sub || decoded.id;
+      // Support both formats: decoded.brandId (explicit) or decoded.sub when type === 'brand'
       const brandId: number = decoded.brandId || (decoded.type === 'brand' ? userId : null);
 
       if (!brandId) {
@@ -125,11 +127,9 @@ export class BrandNotificationsGateway
         return;
       }
 
-      // Store on client.data so WsAuthGuard can read it
-      client.data.userId = userId;
-      client.data.userType = 'brand';
-      client.data.brandId = brandId;
+      this.connectedBrands.set(client.id, { brandId, userId });
 
+      // Join the brand-scoped room so emits can be targeted
       const room = `brand:${brandId}`;
       await client.join(room);
 
@@ -148,7 +148,8 @@ export class BrandNotificationsGateway
   }
 
   handleDisconnect(client: Socket) {
-    this.logger.log(`Client disconnected: ${client.id}`);
+    this.connectedBrands.delete(client.id);
+    this.logger.log(`Client disconnected: ${client.id} — ${this.connectedBrands.size} brand clients remaining`);
   }
 
   // ─── Emit helpers (called by other services) ──────────────────────────────
@@ -164,14 +165,6 @@ export class BrandNotificationsGateway
     influencerUsername: string;
     influencerAvatar?: string;
   }) {
-    this.persistNotification(brandId, {
-      type: NotificationType.NEW_APPLICATION,
-      title: 'New Application',
-      body: `${payload.influencerName} applied to "${payload.campaignName}"`,
-      relatedEntityType: 'campaign_application',
-      relatedEntityId: payload.applicationId,
-      metadata: payload,
-    });
     this.emitToBrand(brandId, 'notification:new_application', payload);
   }
 
@@ -186,14 +179,6 @@ export class BrandNotificationsGateway
     contentType: string;
     contentUrl?: string;
   }) {
-    this.persistNotification(brandId, {
-      type: NotificationType.CONTENT_SUBMITTED,
-      title: 'Content Submitted',
-      body: `${payload.influencerName} submitted ${payload.contentType} for "${payload.campaignName}"`,
-      relatedEntityType: 'campaign_application',
-      relatedEntityId: payload.applicationId,
-      metadata: payload,
-    });
     this.emitToBrand(brandId, 'notification:content_submitted', payload);
   }
 
@@ -206,13 +191,6 @@ export class BrandNotificationsGateway
     currency: string;
     description?: string;
   }) {
-    this.persistNotification(brandId, {
-      type: NotificationType.PAYMENT_RECEIVED,
-      title: 'Payment Received',
-      body: payload.description || `Payment of ${payload.currency} ${payload.amount} confirmed`,
-      priority: NotificationPriority.HIGH,
-      metadata: payload,
-    });
     this.emitToBrand(brandId, 'notification:payment_received', payload);
   }
 
@@ -224,13 +202,6 @@ export class BrandNotificationsGateway
     amount?: number;
     reason: string;
   }) {
-    this.persistNotification(brandId, {
-      type: NotificationType.PAYMENT_FAILED,
-      title: 'Payment Failed',
-      body: `Payment failed: ${payload.reason}`,
-      priority: NotificationPriority.HIGH,
-      metadata: payload,
-    });
     this.emitToBrand(brandId, 'notification:payment_failed', payload);
   }
 
@@ -243,14 +214,6 @@ export class BrandNotificationsGateway
     status: string;
     message?: string;
   }) {
-    this.persistNotification(brandId, {
-      type: NotificationType.CAMPAIGN_STATUS_UPDATE,
-      title: 'Campaign Update',
-      body: payload.message || `${payload.campaignName} status changed to ${payload.status}`,
-      relatedEntityType: 'campaign',
-      relatedEntityId: payload.campaignId,
-      metadata: payload,
-    });
     this.emitToBrand(brandId, 'notification:campaign_update', payload);
   }
 
@@ -271,20 +234,15 @@ export class BrandNotificationsGateway
     shippingPincode?: string;
     paymentShortUrl: string;
   }) {
-    this.persistNotification(brandId, {
-      type: NotificationType.CUSTOM,
-      title: 'New Order',
-      body: `${payload.customerName || 'A customer'} ordered ${payload.productName}`,
-      relatedEntityType: 'order',
-      relatedEntityId: payload.orderId,
-      priority: NotificationPriority.HIGH,
-      metadata: payload,
-    });
     this.emitToBrand(brandId, 'notification:new_order', payload);
   }
 
   /**
    * Generic emit — use when no specific helper fits.
+   *
+   * @param brandId  Target brand
+   * @param type     Notification type string (e.g. NotificationType enum value)
+   * @param data     Arbitrary payload
    */
   emitNotification(brandId: number, type: string, data: Record<string, any>) {
     this.emitToBrand(brandId, 'notification:new', { type, ...data });
@@ -297,38 +255,5 @@ export class BrandNotificationsGateway
     const full = { ...payload, brandId, timestamp: new Date().toISOString() };
     this.server.to(room).emit(event, full);
     this.logger.debug(`Emitted "${event}" to room ${room}`);
-  }
-
-  /**
-   * Persist notification to DB so it survives brand being offline.
-   * Errors are swallowed — a DB hiccup must never block the WebSocket emit.
-   */
-  private persistNotification(
-    brandId: number,
-    opts: {
-      type: NotificationType;
-      title: string;
-      body: string;
-      relatedEntityType?: string;
-      relatedEntityId?: number;
-      priority?: NotificationPriority;
-      metadata?: Record<string, any>;
-    },
-  ) {
-    this.inAppNotificationService
-      .createNotification({
-        userId: brandId,
-        userType: 'brand',
-        title: opts.title,
-        body: opts.body,
-        type: opts.type,
-        relatedEntityType: opts.relatedEntityType,
-        relatedEntityId: opts.relatedEntityId,
-        priority: opts.priority ?? NotificationPriority.NORMAL,
-        metadata: opts.metadata,
-      })
-      .catch((err) =>
-        this.logger.error(`Failed to persist notification for brand ${brandId}: ${err.message}`),
-      );
   }
 }
