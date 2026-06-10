@@ -5,6 +5,7 @@ import { BotAddress } from './models/bot-address.model';
 import { BotOrder } from './models/bot-order.model';
 import { BotCheckoutService } from './bot-checkout.service';
 import { BotCheckoutController } from './bot-checkout.controller';
+import { CheckoutPageController } from './checkout-page.controller';
 import { BotAnalyticsModule } from '../bot-analytics/bot-analytics.module';
 
 @Module({
@@ -12,7 +13,7 @@ import { BotAnalyticsModule } from '../bot-analytics/bot-analytics.module';
     SequelizeModule.forFeature([BotCustomer, BotAddress, BotOrder]),
     BotAnalyticsModule,
   ],
-  controllers: [BotCheckoutController],
+  controllers: [BotCheckoutController, CheckoutPageController],
   providers: [BotCheckoutService],
   exports: [BotCheckoutService],
 })

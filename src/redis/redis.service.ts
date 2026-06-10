@@ -9,24 +9,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   constructor(private configService: ConfigService) {}
 
   onModuleInit() {
-    this.redis = new Redis({
-      host: this.configService.get('REDIS_HOST') || 'localhost',
-      port: Number(this.configService.get('REDIS_PORT')) || 6379,
-      enableReadyCheck: false,
-      maxRetriesPerRequest: null,
-    });
-
-    this.redis.on('connect', () => {
-      console.log('Redis connected successfully');
-    });
-
-    this.redis.on('error', (error) => {
-      console.error('Redis connection error:', error);
-    });
-
-    this.redis.on('ready', () => {
-      console.log('Redis is ready');
-    });
+    // Ensure the client exists early. getClient() is the single source of truth
+    // and lazily creates the client, so it can never return undefined — even if a
+    // WebSocket gateway's afterInit runs before this module init (that race
+    // previously crashed the whole app via InstagramSyncGateway).
+    this.getClient();
   }
 
   onModuleDestroy() {
@@ -37,6 +24,17 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   getClient(): Redis {
+    if (!this.redis) {
+      this.redis = new Redis({
+        host: this.configService.get('REDIS_HOST') || 'localhost',
+        port: Number(this.configService.get('REDIS_PORT')) || 6379,
+        enableReadyCheck: false,
+        maxRetriesPerRequest: null,
+      });
+      this.redis.on('connect', () => console.log('Redis connected successfully'));
+      this.redis.on('error', (error) => console.error('Redis connection error:', error));
+      this.redis.on('ready', () => console.log('Redis is ready'));
+    }
     return this.redis;
   }
 
