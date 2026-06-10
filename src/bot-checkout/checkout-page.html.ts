@@ -97,6 +97,10 @@ const SHELL = (inner: string) => `<!doctype html>
   input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
   .two{display:flex;gap:10px}
   .two>*{flex:1;min-width:0}
+  /* vertical rhythm between fields/rows in the add-address form */
+  .addform input{margin-bottom:11px}
+  .addform .two input{margin-bottom:0}
+  .addform .two{margin-bottom:11px}
 
   /* buttons */
   button{font-family:inherit}
