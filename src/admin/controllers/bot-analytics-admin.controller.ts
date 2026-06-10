@@ -4,6 +4,7 @@ import {
   BotAnalyticsService,
   DateRange,
 } from '../../bot-analytics/bot-analytics.service';
+import { BotCheckoutService } from '../../bot-checkout/bot-checkout.service';
 
 /**
  * Admin-only analytics for the Instagram shopping bot.
@@ -13,7 +14,10 @@ import {
 @Controller('admin/dashboard/bot')
 @UseGuards(AdminAuthGuard)
 export class BotAnalyticsAdminController {
-  constructor(private readonly botAnalytics: BotAnalyticsService) {}
+  constructor(
+    private readonly botAnalytics: BotAnalyticsService,
+    private readonly botCheckout: BotCheckoutService,
+  ) {}
 
   private range(brand?: string, startDate?: string, endDate?: string): DateRange {
     const end = endDate ? new Date(`${endDate}T23:59:59.999Z`) : undefined;
@@ -127,12 +131,18 @@ export class BotAnalyticsAdminController {
   }
 
   @Get('orders')
-  orders(
+  async orders(
     @Query('limit') limit?: string,
     @Query('brand') b?: string,
     @Query('startDate') s?: string,
     @Query('endDate') e?: string,
   ) {
-    return this.botAnalytics.orders(this.range(b, s, e), limit ? Math.min(parseInt(limit, 10) || 100, 500) : 100);
+    const range = this.range(b, s, e);
+    const lim = limit ? Math.min(parseInt(limit, 10) || 100, 500) : 100;
+    // Prefer the rich bot_orders table (shipping address + Razorpay txn). Fall back
+    // to the bot_events-derived list until checkout orders exist.
+    const rich = await this.botCheckout.adminOrders(range, lim);
+    if (rich.length) return rich;
+    return this.botAnalytics.orders(range, lim);
   }
 }

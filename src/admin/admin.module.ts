@@ -95,6 +95,7 @@ import { RolesGuard } from './guards/roles.guard';
 import { PermissionsGuard } from './guards/permissions.guard';
 import { ContractModule } from '../contract/contract.module';
 import { BotAnalyticsModule } from '../bot-analytics/bot-analytics.module';
+import { BotCheckoutModule } from '../bot-checkout/bot-checkout.module';
 import { BotAnalyticsAdminController } from './controllers/bot-analytics-admin.controller';
 
 @Module({
@@ -156,6 +157,7 @@ import { BotAnalyticsAdminController } from './controllers/bot-analytics-admin.c
     forwardRef(() => CampaignModule),
     ContractModule,
     BotAnalyticsModule,
+    BotCheckoutModule,
   ],
   controllers: [
     AdminController,
