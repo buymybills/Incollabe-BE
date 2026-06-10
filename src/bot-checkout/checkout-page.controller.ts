@@ -1,4 +1,5 @@
-import { Controller, Get, Header, Param } from '@nestjs/common';
+import { Controller, Get, Param, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { verifyCheckoutToken } from './checkout-token.util';
 import { renderCheckoutPage, renderInvalidPage } from './checkout-page.html';
@@ -24,14 +25,20 @@ export class CheckoutPageController {
   }
 
   @Get(':token')
-  @Header('Content-Type', 'text/html; charset=utf-8')
-  page(@Param('token') token: string): string {
+  page(@Param('token') token: string, @Res() res: Response): void {
     const payload = verifyCheckoutToken(token, this.secret());
-    if (!payload) return renderInvalidPage();
-    return renderCheckoutPage(token, {
-      title: payload.title ?? 'Your order',
-      size: payload.size ?? '',
-      priceInr: payload.priceInr,
-    });
+    const html = payload
+      ? renderCheckoutPage(token, {
+          title: payload.title ?? 'Your order',
+          size: payload.size ?? '',
+          priceInr: payload.priceInr,
+        })
+      : renderInvalidPage();
+    // Send raw HTML directly through Express so the global ResponseInterceptor
+    // (which JSON-wraps every return value) does not mangle this page.
+    res
+      .status(payload ? 200 : 400)
+      .type('text/html; charset=utf-8')
+      .send(html);
   }
 }
