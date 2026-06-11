@@ -140,6 +140,19 @@ export class InstagramSyncCronService {
     return this.syncAllInstagramProfiles();
   }
 
+  /** Sync a single influencer by ID — useful for one-off fixes. */
+  async syncSingleInfluencer(influencerId: number): Promise<{ success: boolean; error?: string }> {
+    this.logger.log(`🔧 Manual sync triggered for influencer #${influencerId}`);
+    try {
+      await this.instagramService.syncInstagramProfile(influencerId, 'influencer', true);
+      this.logger.log(`✅ Synced influencer #${influencerId}`);
+      return { success: true };
+    } catch (error: any) {
+      this.logger.warn(`✗ Failed to sync influencer #${influencerId}: ${error?.message}`);
+      return { success: false, error: error?.message };
+    }
+  }
+
   /**
    * Sync only users with tokens expiring soon (within 7 days)
    * Runs every day at 1:00 AM

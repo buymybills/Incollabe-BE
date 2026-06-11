@@ -420,6 +420,19 @@ export class InstagramController {
   // }
 
   /**
+   * Manually sync a single influencer's Instagram profile by ID
+   * POST /instagram/sync-influencer/:id
+   */
+  @Public()
+  @Post('sync-influencer/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Manually sync a single influencer Instagram profile' })
+  async syncSingleInfluencer(@Param('id') id: string) {
+    const result = await this.instagramSyncCronService.syncSingleInfluencer(parseInt(id, 10));
+    return result;
+  }
+
+  /**
    * Get Instagram media/posts for a user
    * GET /instagram/media
    */
