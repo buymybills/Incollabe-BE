@@ -23,7 +23,7 @@ export class InstagramSyncCronService {
    * Runs every day at 2:00 AM
    * Cron format: second minute hour day month dayOfWeek
    */
-  @Cron('0 30 15 * * *', {
+  @Cron('0 0 16 * * *', {
     name: 'instagram-profile-sync',
     timeZone: 'Asia/Kolkata',
   })
