@@ -1,9 +1,27 @@
 import * as crypto from 'crypto';
+import type { ConfigService } from '@nestjs/config';
 
 // Verifies the signed checkout-link token minted by the bot. The token carries
 // the IG sender id + product + price so the link itself is the identity, and the
 // HMAC signature (shared CHECKOUT_SECRET) makes it tamper-proof — a client can't
 // change the price or impersonate another shopper.
+
+/**
+ * Centralised secret resolver. Throws in production if no secret is configured
+ * so a misconfigured deploy can't silently accept tokens signed with the dev key.
+ */
+export function getCheckoutSecret(config: ConfigService): string {
+  const secret =
+    config.get<string>('CHECKOUT_SECRET') ||
+    config.get<string>('RAZORPAY_WEBHOOK_SECRET');
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('CHECKOUT_SECRET env var is required in production');
+    }
+    return 'dev_checkout_secret';
+  }
+  return secret;
+}
 
 export interface CheckoutPayload {
   igsid: string;

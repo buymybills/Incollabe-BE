@@ -1,7 +1,7 @@
 import { Controller, Get, Param, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
-import { verifyCheckoutToken } from './checkout-token.util';
+import { verifyCheckoutToken, getCheckoutSecret } from './checkout-token.util';
 import { renderCheckoutPage, renderInvalidPage } from './checkout-page.html';
 
 /**
@@ -16,17 +16,9 @@ import { renderCheckoutPage, renderInvalidPage } from './checkout-page.html';
 export class CheckoutPageController {
   constructor(private readonly config: ConfigService) {}
 
-  private secret(): string {
-    return (
-      this.config.get<string>('CHECKOUT_SECRET') ||
-      this.config.get<string>('RAZORPAY_WEBHOOK_SECRET') ||
-      'dev_checkout_secret'
-    );
-  }
-
   @Get(':token')
   page(@Param('token') token: string, @Res() res: Response): void {
-    const payload = verifyCheckoutToken(token, this.secret());
+    const payload = verifyCheckoutToken(token, getCheckoutSecret(this.config));
     const html = payload
       ? renderCheckoutPage(token, {
           title: payload.title ?? 'Your order',

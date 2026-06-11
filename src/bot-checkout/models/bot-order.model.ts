@@ -75,7 +75,7 @@ export class BotOrder extends Model<BotOrder> {
   declare gender: string | null;
 
   @AllowNull(false)
-  @Column({ field: 'amount_inr', type: DataType.FLOAT })
+  @Column({ field: 'amount_inr', type: DataType.DECIMAL(10, 2) })
   declare amountInr: number;
 
   // Razorpay transaction details

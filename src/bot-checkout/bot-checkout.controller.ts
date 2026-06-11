@@ -1,7 +1,18 @@
-import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Query,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotCheckoutService } from './bot-checkout.service';
-import { verifyCheckoutToken, hashUserKey } from './checkout-token.util';
+import { verifyCheckoutToken, hashUserKey, getCheckoutSecret } from './checkout-token.util';
 
 /**
  * Checkout API for the Instagram shopping bot's hosted checkout page.
@@ -18,20 +29,12 @@ export class BotCheckoutController {
     private readonly config: ConfigService,
   ) {}
 
-  private secret(): string {
-    return (
-      this.config.get<string>('CHECKOUT_SECRET') ||
-      this.config.get<string>('RAZORPAY_WEBHOOK_SECRET') ||
-      'dev_checkout_secret'
-    );
-  }
-
   // Customer + saved addresses for the checkout page
   @Get('customer')
   async customer(@Query('token') token: string) {
-    const p = verifyCheckoutToken(token, this.secret());
-    if (!p) return { error: 'invalid_token' };
-    const data = await this.checkout.getCustomerWithAddresses('thesouledstore', p.igsid);
+    const p = verifyCheckoutToken(token, getCheckoutSecret(this.config));
+    if (!p) throw new UnauthorizedException('invalid_token');
+    const data = await this.checkout.getCustomerWithAddresses(p.igsid);
     return {
       customer: data.customer
         ? {
@@ -59,10 +62,10 @@ export class BotCheckoutController {
       };
     },
   ) {
-    const p = verifyCheckoutToken(body.token, this.secret());
-    if (!p) return { error: 'invalid_token' };
-    if (!body.address?.line1 || !body.address?.city || !body.address?.pincode) {
-      return { error: 'missing_address_fields' };
+    const p = verifyCheckoutToken(body.token, getCheckoutSecret(this.config));
+    if (!p) throw new UnauthorizedException('invalid_token');
+    if (!body.address?.line1 || !body.address?.city || !body.address?.state || !body.address?.pincode) {
+      throw new BadRequestException('missing_address_fields');
     }
     const addr = await this.checkout.addAddress(
       {
@@ -80,20 +83,23 @@ export class BotCheckoutController {
 
   // Delete (soft) a saved address belonging to this shopper
   @Delete('address/:id')
-  async deleteAddress(@Param('id') id: string, @Body() body: { token: string }) {
-    const p = verifyCheckoutToken(body?.token, this.secret());
-    if (!p) return { error: 'invalid_token' };
-    const ok = await this.checkout.deleteAddress('thesouledstore', p.igsid, parseInt(id, 10));
+  async deleteAddress(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { token: string },
+  ) {
+    const p = verifyCheckoutToken(body?.token, getCheckoutSecret(this.config));
+    if (!p) throw new UnauthorizedException('invalid_token');
+    const ok = await this.checkout.deleteAddress(p.igsid, id);
     return { deleted: ok };
   }
 
   // Create a Razorpay order (amount comes from the signed token, never the client)
   @Post('order')
   async createOrder(@Body() body: { token: string }) {
-    const p = verifyCheckoutToken(body.token, this.secret());
-    if (!p) return { error: 'invalid_token' };
+    const p = verifyCheckoutToken(body.token, getCheckoutSecret(this.config));
+    if (!p) throw new UnauthorizedException('invalid_token');
     const order = await this.checkout.createRazorpayOrder(p);
-    if (!order) return { error: 'order_failed' };
+    if (!order) throw new BadRequestException('order_failed');
     return order;
   }
 
@@ -110,10 +116,10 @@ export class BotCheckoutController {
       method?: string;
     },
   ) {
-    const p = verifyCheckoutToken(body.token, this.secret());
-    if (!p) return { error: 'invalid_token' };
+    const p = verifyCheckoutToken(body.token, getCheckoutSecret(this.config));
+    if (!p) throw new UnauthorizedException('invalid_token');
     if (!body.razorpay_order_id || !body.razorpay_payment_id || !body.razorpay_signature) {
-      return { error: 'missing_fields' };
+      throw new BadRequestException('missing_fields');
     }
     return this.checkout.completePayment(p, body);
   }

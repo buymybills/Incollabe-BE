@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { ConfigService } from '@nestjs/config';
 import { Op } from 'sequelize';
+import { Sequelize } from 'sequelize-typescript';
 import { BotCustomer } from './models/bot-customer.model';
 import { BotAddress } from './models/bot-address.model';
 import { BotOrder } from './models/bot-order.model';
@@ -12,6 +13,10 @@ import {
   hashUserKey,
   verifyRazorpaySignature,
 } from './checkout-token.util';
+
+const DEFAULT_BRAND = 'thesouledstore';
+const MAX_ADDRESSES_PER_CUSTOMER = 10;
+const RAZORPAY_TIMEOUT_MS = 10_000;
 
 export interface CustomerInput {
   igsid: string;
@@ -44,13 +49,14 @@ export class BotCheckoutService {
     @InjectModel(BotCustomer) private readonly customerModel: typeof BotCustomer,
     @InjectModel(BotAddress) private readonly addressModel: typeof BotAddress,
     @InjectModel(BotOrder) private readonly orderModel: typeof BotOrder,
+    private readonly sequelize: Sequelize,
     private readonly config: ConfigService,
     private readonly analytics: BotAnalyticsService,
   ) {}
 
   /** Find or create the customer for an IG sender, updating any contact fields provided. */
   async getOrCreateCustomer(input: CustomerInput): Promise<BotCustomer> {
-    const brand = input.brand || 'thesouledstore';
+    const brand = input.brand || DEFAULT_BRAND;
     let customer = await this.customerModel.findOne({
       where: { brand, igsid: input.igsid },
     });
@@ -78,8 +84,8 @@ export class BotCheckoutService {
   }
 
   /** Customer + their active saved addresses (default first), for the checkout page. */
-  async getCustomerWithAddresses(brand: string, igsid: string) {
-    const customer = await this.customerModel.findOne({ where: { brand, igsid } });
+  async getCustomerWithAddresses(igsid: string) {
+    const customer = await this.customerModel.findOne({ where: { brand: DEFAULT_BRAND, igsid } });
     if (!customer) return { customer: null, addresses: [] as BotAddress[] };
     const addresses = await this.listAddresses(customer.id);
     return { customer, addresses };
@@ -98,51 +104,74 @@ export class BotCheckoutService {
   /** Add a new address for an IG sender (creating the customer if needed). */
   async addAddress(input: CustomerInput, address: AddressInput): Promise<BotAddress> {
     const customer = await this.getOrCreateCustomer(input);
-    const existing = await this.addressModel.count({
-      where: { customerId: customer.id, isActive: true },
+
+    return this.sequelize.transaction(async (t) => {
+      const existing = await this.addressModel.count({
+        where: { customerId: customer.id, isActive: true },
+        transaction: t,
+      });
+
+      if (existing >= MAX_ADDRESSES_PER_CUSTOMER) {
+        throw new BadRequestException(
+          `You can save a maximum of ${MAX_ADDRESSES_PER_CUSTOMER} addresses. Please delete one before adding a new one.`,
+        );
+      }
+
+      // First address (or explicitly requested) becomes the default
+      const makeDefault = address.isDefault || existing === 0;
+      if (makeDefault) {
+        await this.addressModel.update(
+          { isDefault: false },
+          { where: { customerId: customer.id }, transaction: t },
+        );
+      }
+
+      return this.addressModel.create({
+        customerId: customer.id,
+        label: address.label ?? null,
+        name: address.name ?? customer.name ?? null,
+        mobile: address.mobile ?? customer.mobile ?? null,
+        line1: address.line1,
+        line2: address.line2 ?? null,
+        city: address.city,
+        state: address.state,
+        pincode: address.pincode,
+        country: address.country || 'India',
+        isDefault: makeDefault,
+        isActive: true,
+      } as any, { transaction: t });
     });
-    // First address (or explicitly requested) becomes the default
-    const makeDefault = address.isDefault || existing === 0;
-    if (makeDefault) {
-      await this.addressModel.update(
-        { isDefault: false },
-        { where: { customerId: customer.id } },
-      );
-    }
-    return this.addressModel.create({
-      customerId: customer.id,
-      label: address.label ?? null,
-      name: address.name ?? customer.name ?? null,
-      mobile: address.mobile ?? customer.mobile ?? null,
-      line1: address.line1,
-      line2: address.line2 ?? null,
-      city: address.city,
-      state: address.state,
-      pincode: address.pincode,
-      country: address.country || 'India',
-      isDefault: makeDefault,
-      isActive: true,
-    } as any);
   }
 
   /** Soft-delete an address, but only if it belongs to this IG sender. */
-  async deleteAddress(brand: string, igsid: string, addressId: number): Promise<boolean> {
-    const customer = await this.customerModel.findOne({ where: { brand, igsid } });
-    if (!customer) return false;
-    const addr = await this.addressModel.findOne({
-      where: { id: addressId, customerId: customer.id, isActive: true },
-    });
-    if (!addr) return false;
-    await addr.update({ isActive: false });
-    // If we removed the default, promote the most recent remaining address
-    if (addr.isDefault) {
-      const next = await this.addressModel.findOne({
-        where: { customerId: customer.id, isActive: true },
-        order: [['updated_at', 'DESC']],
+  async deleteAddress(igsid: string, addressId: number): Promise<boolean> {
+    return this.sequelize.transaction(async (t) => {
+      const customer = await this.customerModel.findOne({
+        where: { brand: DEFAULT_BRAND, igsid },
+        transaction: t,
       });
-      if (next) await next.update({ isDefault: true });
-    }
-    return true;
+      if (!customer) return false;
+
+      const addr = await this.addressModel.findOne({
+        where: { id: addressId, customerId: customer.id, isActive: true },
+        transaction: t,
+      });
+      if (!addr) return false;
+
+      await addr.update({ isActive: false }, { transaction: t });
+
+      // If we removed the default, promote the most-recently-updated remaining address
+      if (addr.isDefault) {
+        const next = await this.addressModel.findOne({
+          where: { customerId: customer.id, isActive: true },
+          order: [['updated_at', 'DESC']],
+          transaction: t,
+        });
+        if (next) await next.update({ isDefault: true }, { transaction: t });
+      }
+
+      return true;
+    });
   }
 
   /** Persist a paid order (idempotent on razorpay_payment_id). */
@@ -163,51 +192,56 @@ export class BotCheckoutService {
   }): Promise<BotOrder> {
     const customer = await this.getOrCreateCustomer(params.input);
 
-    if (params.razorpayPaymentId) {
-      const dup = await this.orderModel.findOne({
-        where: { razorpayPaymentId: params.razorpayPaymentId },
-      });
-      if (dup) return dup;
-    }
-
-    let snapshot: Record<string, any> | null = null;
-    if (params.addressId) {
-      const addr = await this.addressModel.findOne({
-        where: { id: params.addressId, customerId: customer.id },
-      });
-      if (addr) {
-        snapshot = {
-          label: addr.label,
-          name: addr.name,
-          mobile: addr.mobile,
-          line1: addr.line1,
-          line2: addr.line2,
-          city: addr.city,
-          state: addr.state,
-          pincode: addr.pincode,
-          country: addr.country,
-        };
+    return this.sequelize.transaction(async (t) => {
+      // Idempotency: return the existing order if this payment was already recorded
+      if (params.razorpayPaymentId) {
+        const dup = await this.orderModel.findOne({
+          where: { razorpayPaymentId: params.razorpayPaymentId },
+          transaction: t,
+        });
+        if (dup) return dup;
       }
-    }
 
-    return this.orderModel.create({
-      brand: params.input.brand || 'thesouledstore',
-      customerId: customer.id,
-      igsid: params.input.igsid,
-      username: params.input.username ?? customer.username ?? null,
-      productSlug: params.productSlug ?? null,
-      productTitle: params.productTitle ?? null,
-      size: params.size ?? null,
-      gender: params.gender ?? null,
-      qty: params.qty ?? 1,
-      amountInr: params.amountInr,
-      razorpayOrderId: params.razorpayOrderId ?? null,
-      razorpayPaymentId: params.razorpayPaymentId ?? null,
-      razorpaySignature: params.razorpaySignature ?? null,
-      method: params.method ?? null,
-      status: params.status ?? 'paid',
-      shippingAddress: snapshot,
-    } as any);
+      let snapshot: Record<string, any> | null = null;
+      if (params.addressId) {
+        const addr = await this.addressModel.findOne({
+          where: { id: params.addressId, customerId: customer.id },
+          transaction: t,
+        });
+        if (addr) {
+          snapshot = {
+            label: addr.label,
+            name: addr.name,
+            mobile: addr.mobile,
+            line1: addr.line1,
+            line2: addr.line2,
+            city: addr.city,
+            state: addr.state,
+            pincode: addr.pincode,
+            country: addr.country,
+          };
+        }
+      }
+
+      return this.orderModel.create({
+        brand: params.input.brand || DEFAULT_BRAND,
+        customerId: customer.id,
+        igsid: params.input.igsid,
+        username: params.input.username ?? customer.username ?? null,
+        productSlug: params.productSlug ?? null,
+        productTitle: params.productTitle ?? null,
+        size: params.size ?? null,
+        gender: params.gender ?? null,
+        qty: params.qty ?? 1,
+        amountInr: params.amountInr,
+        razorpayOrderId: params.razorpayOrderId ?? null,
+        razorpayPaymentId: params.razorpayPaymentId ?? null,
+        razorpaySignature: params.razorpaySignature ?? null,
+        method: params.method ?? null,
+        status: params.status ?? 'paid',
+        shippingAddress: snapshot,
+      } as any, { transaction: t });
+    });
   }
 
   /** Detailed order list for the admin table — includes shipping address + Razorpay txn. */
@@ -215,7 +249,7 @@ export class BotCheckoutService {
     range: { brand?: string; startDate?: Date; endDate?: Date },
     limit = 100,
   ) {
-    const where: any = { brand: range.brand || 'thesouledstore' };
+    const where: any = { brand: range.brand || DEFAULT_BRAND };
     if (range.startDate || range.endDate) {
       where.createdAt = {};
       if (range.startDate) where.createdAt[Op.gte] = range.startDate;
@@ -265,6 +299,8 @@ export class BotCheckoutService {
     const keyId = this.config.get<string>('RAZORPAY_KEY_ID');
     const keySecret = this.config.get<string>('RAZORPAY_KEY_SECRET');
     if (!keyId || !keySecret || !payload.priceInr || payload.priceInr <= 0) return null;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), RAZORPAY_TIMEOUT_MS);
     try {
       const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
       const amount = Math.round(payload.priceInr * 100);
@@ -282,6 +318,7 @@ export class BotCheckoutService {
             size: payload.size ?? '',
           },
         }),
+        signal: controller.signal,
       });
       if (!res.ok) {
         this.logger.warn(`Razorpay order create failed: ${res.status}`);
@@ -293,6 +330,8 @@ export class BotCheckoutService {
     } catch (err: any) {
       this.logger.error(`Razorpay order error: ${err?.message}`);
       return null;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -335,7 +374,7 @@ export class BotCheckoutService {
     });
 
     // Record the sale (GMV / Orders) directly via the analytics service
-    this.analytics.track([
+    void this.analytics.track([
       {
         eventType: BotEventType.PAYMENT_COMPLETED,
         userKey,
@@ -367,9 +406,13 @@ export class BotCheckoutService {
     const version = this.config.get<string>('IG_GRAPH_VERSION') || 'v21.0';
     if (!token) return;
     try {
-      await fetch(`https://graph.instagram.com/${version}/me/messages?access_token=${token}`, {
+      // Use Authorization header so the token never appears in server/proxy access logs
+      await fetch(`https://graph.instagram.com/${version}/me/messages`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ recipient: { id: igsid }, message: { text } }),
       });
     } catch (err: any) {

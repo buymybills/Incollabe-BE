@@ -220,8 +220,30 @@ export function renderCheckoutPage(token: string, product: PageProduct): string 
 
     function api(path, init){
       return fetch('/api/bot-checkout' + path, Object.assign({ headers:{'Content-Type':'application/json'} }, init||{}))
-        .then(function(r){ return r.json().catch(function(){return {};}); })
-        .then(function(j){ return (j && typeof j==='object' && 'data' in j) ? j.data : j; });
+        .then(function(r){
+          return r.json().catch(function(){return {};}).then(function(j){ return { ok: r.ok, status: r.status, body: j }; });
+        })
+        .then(function(res){
+          var j = res.body;
+          var data = (j && typeof j==='object' && 'data' in j) ? j.data : j;
+          // Propagate auth / validation errors so callers can react
+          if (!res.ok || (data && data.error)) {
+            var err = new Error((data && (data.error || data.message)) || 'request_failed');
+            err.status = res.status;
+            throw err;
+          }
+          return data;
+        });
+    }
+
+    function showExpired(){
+      document.querySelector('.paybar') && document.querySelector('.paybar').remove();
+      document.querySelector('.wrap').innerHTML =
+        '<div class="card fade"><div class="state">'+
+        '<div class="ic bad">⚠️</div>'+
+        '<h2>This checkout link has expired</h2>'+
+        '<p>Head back to Instagram and tap "Buy it" again to get a fresh, secure link.</p>'+
+        '</div></div>';
     }
     function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 
@@ -289,7 +311,14 @@ export function renderCheckoutPage(token: string, product: PageProduct): string 
         state.adding = state.addresses.length === 0;
         if(d && d.customer){ state.contact = {name:d.customer.name||'',email:d.customer.email||'',mobile:d.customer.mobile||''}; }
         sync();
-      }).catch(function(){ state.loading = false; state.adding = true; sync(); });
+      }).catch(function(err){
+        state.loading = false;
+        if(err && (err.status === 401 || (err.message && err.message.indexOf('invalid_token') !== -1))){
+          showExpired();
+        } else {
+          state.adding = true; sync();
+        }
+      });
     }
 
     function saveAddress(){
