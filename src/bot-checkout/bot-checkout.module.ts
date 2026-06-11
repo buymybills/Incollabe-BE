@@ -4,6 +4,7 @@ import { BotCustomer } from './models/bot-customer.model';
 import { BotAddress } from './models/bot-address.model';
 import { BotOrder } from './models/bot-order.model';
 import { BotCheckoutService } from './bot-checkout.service';
+import { OrderForwardService } from './order-forward.service';
 import { BotCheckoutController } from './bot-checkout.controller';
 import { CheckoutPageController } from './checkout-page.controller';
 import { BotAnalyticsModule } from '../bot-analytics/bot-analytics.module';
@@ -14,7 +15,7 @@ import { BotAnalyticsModule } from '../bot-analytics/bot-analytics.module';
     BotAnalyticsModule,
   ],
   controllers: [BotCheckoutController, CheckoutPageController],
-  providers: [BotCheckoutService],
+  providers: [BotCheckoutService, OrderForwardService],
   exports: [BotCheckoutService],
 })
 export class BotCheckoutModule {}

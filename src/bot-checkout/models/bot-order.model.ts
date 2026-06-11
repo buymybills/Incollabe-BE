@@ -109,6 +109,28 @@ export class BotOrder extends Model<BotOrder> {
   @Column({ field: 'shipping_address', type: DataType.JSONB })
   declare shippingAddress: Record<string, any> | null;
 
+  // Outbound forwarding to the brand's store/system ("revert the order to them")
+  // pending | sent | failed | skipped
+  @AllowNull(false)
+  @Default('pending')
+  @Index
+  @Column({ field: 'fulfillment_status', type: DataType.STRING(20) })
+  declare fulfillmentStatus: string;
+
+  // Brand's reference for the order (returned by their endpoint), if any
+  @AllowNull(true)
+  @Column({ field: 'fulfillment_ref', type: DataType.STRING(120) })
+  declare fulfillmentRef: string | null;
+
+  @AllowNull(true)
+  @Column({ field: 'fulfillment_error', type: DataType.STRING(400) })
+  declare fulfillmentError: string | null;
+
+  @AllowNull(false)
+  @Default(0)
+  @Column({ field: 'fulfillment_attempts', type: DataType.INTEGER })
+  declare fulfillmentAttempts: number;
+
   @CreatedAt
   @Index
   @Column({ field: 'created_at' })

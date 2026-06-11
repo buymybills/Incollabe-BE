@@ -8,6 +8,7 @@ import { BotAddress } from './models/bot-address.model';
 import { BotOrder } from './models/bot-order.model';
 import { BotAnalyticsService } from '../bot-analytics/bot-analytics.service';
 import { BotEventType } from '../bot-analytics/models/bot-event.model';
+import { OrderForwardService } from './order-forward.service';
 import {
   CheckoutPayload,
   hashUserKey,
@@ -52,6 +53,7 @@ export class BotCheckoutService {
     private readonly sequelize: Sequelize,
     private readonly config: ConfigService,
     private readonly analytics: BotAnalyticsService,
+    private readonly forwarder: OrderForwardService,
   ) {}
 
   /** Find or create the customer for an IG sender, updating any contact fields provided. */
@@ -388,6 +390,10 @@ export class BotCheckoutService {
         metadata: { razorpayPaymentId: body.razorpay_payment_id, orderId: order.id },
       } as any,
     ]);
+
+    // Forward the order OUTBOUND to the brand's system ("revert it to them").
+    // Non-blocking — updates the order's fulfillment_status itself.
+    void this.forwarder.forward(order);
 
     // Confirm to the shopper in Instagram
     const sizeLabel = payload.size ? ` (Size ${payload.size})` : '';
