@@ -9,7 +9,7 @@ COPY tsconfig*.json ./
 COPY nest-cli.json ./
 
 # Install all dependencies (including dev dependencies for build)
-RUN npm ci && npm cache clean --force
+RUN npm ci --fetch-retries=5 --fetch-retry-mintimeout=10000 --fetch-retry-maxtimeout=60000 && npm cache clean --force
 
 # Copy source code
 COPY src/ ./src/
@@ -35,7 +35,7 @@ RUN addgroup -g 1001 -S nodejs && \
 COPY package*.json ./
 
 # Install only production dependencies
-RUN npm ci --only=production && npm cache clean --force
+RUN npm ci --omit=dev --fetch-retries=5 --fetch-retry-mintimeout=10000 --fetch-retry-maxtimeout=60000 && npm cache clean --force
 
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
