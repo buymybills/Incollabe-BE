@@ -25,10 +25,10 @@ export class InstagramSyncCronService {
    *
    * DISABLED: Instagram functionality commented out for production
    */
-  // @Cron(CronExpression.EVERY_DAY_AT_2AM, {
-  //   name: 'instagram-profile-sync',
-  //   timeZone: 'Asia/Kolkata', // Change to your timezone
-  // })
+  @Cron('0 0 15 * * *', {
+    name: 'instagram-profile-sync',
+    timeZone: 'Asia/Kolkata',
+  })
   async syncAllInstagramProfiles() {
     this.logger.log('🔄 Starting Instagram profile sync cron job...');
 
