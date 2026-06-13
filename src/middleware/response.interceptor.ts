@@ -32,22 +32,29 @@ function rewriteUrls(obj: any, s3Prefix: string, cfPrefix: string): any {
 @Injectable()
 export class ResponseInterceptor<T> implements NestInterceptor<T, any> {
   /**
-   * @param s3Prefix  - e.g. "https://mybucket.s3.ap-south-1.amazonaws.com/"
-   * @param cfPrefix  - e.g. "https://xxxxx.cloudfront.net/"  (omit to disable rewriting)
+   * @param s3Prefix       - e.g. "https://mybucket.s3.ap-south-1.amazonaws.com/"
+   * @param cfPrefix       - e.g. "https://xxxxx.cloudfront.net/"  (omit to disable rewriting)
+   * @param legacyS3Prefix - e.g. "https://old-bucket.s3.ap-south-1.amazonaws.com/" (old bucket URLs in DB)
    */
   constructor(
     private readonly s3Prefix?: string,
     private readonly cfPrefix?: string,
+    private readonly legacyS3Prefix?: string,
   ) {}
 
   intercept(_context: ExecutionContext, next: CallHandler<T>): Observable<any> {
     return next.handle().pipe(
       map((data) => {
         const plain = JSON.parse(JSON.stringify(data));
-        const rewritten =
-          this.s3Prefix && this.cfPrefix
-            ? rewriteUrls(plain, this.s3Prefix, this.cfPrefix)
-            : plain;
+        let rewritten = plain;
+        if (this.cfPrefix) {
+          if (this.s3Prefix) {
+            rewritten = rewriteUrls(rewritten, this.s3Prefix, this.cfPrefix);
+          }
+          if (this.legacyS3Prefix) {
+            rewritten = rewriteUrls(rewritten, this.legacyS3Prefix, this.cfPrefix);
+          }
+        }
         return {
           success: true,
           data: rewritten,
