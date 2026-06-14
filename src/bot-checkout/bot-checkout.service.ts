@@ -395,6 +395,42 @@ export class BotCheckoutService {
     // Non-blocking — updates the order's fulfillment_status itself.
     void this.forwarder.forward(order);
 
+    // Push the placed order to the bot's order hub the instant it's confirmed, so
+    // the per-brand connector (Shopify / WooCommerce / Next.js) creates the store
+    // entry in real time. Fire-and-forget — must never block or fail the checkout.
+    void (async () => {
+      const url = this.config.get<string>('BOT_ORDER_INGEST_URL');
+      if (!url) return;
+      try {
+        await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-order-key': this.config.get<string>('ORDER_INGEST_KEY') || '',
+          },
+          body: JSON.stringify({
+            orderId: `chk_${order.id}`, // stable id → connector dedupes on it
+            brand: order.brand,
+            productTitle: payload.title,
+            productSlug: payload.slug,
+            size: payload.size,
+            gender,
+            priceInr: payload.priceInr,
+            amountInr: payload.priceInr,
+            username: payload.username,
+            igsid: payload.igsid,
+            paymentEvent: 'checkout.verified',
+            customerName: (order as any).shippingAddress?.name,
+            customerPhone: (order as any).shippingAddress?.mobile,
+            shippingAddress: (order as any).shippingAddress || undefined,
+          }),
+          signal: AbortSignal.timeout(8000),
+        });
+      } catch (err: any) {
+        this.logger.warn(`Order ingest push failed for #${order.id}: ${err?.message}`);
+      }
+    })();
+
     // Confirm to the shopper in Instagram
     const sizeLabel = payload.size ? ` (Size ${payload.size})` : '';
     void this.sendInstagramDm(
