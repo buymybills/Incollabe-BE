@@ -192,12 +192,16 @@ async function bootstrap() {
   const s3Bucket = configService.get<string>('AWS_S3_BUCKET_NAME');
   const awsRegion = configService.get<string>('AWS_REGION');
   const cloudFrontDomain = configService.get<string>('CLOUDFRONT_DOMAIN');
+  const legacyS3Bucket = configService.get<string>('LEGACY_S3_BUCKET_NAME');
   const s3Prefix = s3Bucket && awsRegion
     ? `https://${s3Bucket}.s3.${awsRegion}.amazonaws.com/`
     : undefined;
   const cfPrefix = cloudFrontDomain ? `https://${cloudFrontDomain}/` : undefined;
+  const legacyS3Prefix = legacyS3Bucket && awsRegion
+    ? `https://${legacyS3Bucket}.s3.${awsRegion}.amazonaws.com/`
+    : undefined;
 
-  app.useGlobalInterceptors(new ResponseInterceptor(s3Prefix, cfPrefix));
+  app.useGlobalInterceptors(new ResponseInterceptor(s3Prefix, cfPrefix, legacyS3Prefix));
   app.useGlobalFilters(new GlobalExceptionFilter(loggerService));
 
   const port = configService.get('PORT') || 3002;
