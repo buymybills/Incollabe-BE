@@ -1,10 +1,19 @@
 // Self-contained checkout page (inline CSS + vanilla JS). Served by the backend
 // at /api/checkout/:token. Same-origin with /api/bot-checkout/* so no CORS.
 
+export interface PageLineItem {
+  title: string;
+  size: string;
+  priceInr: number;
+  qty: number;
+}
+
 export interface PageProduct {
   title: string;
   size: string;
   priceInr: number;
+  // When present, the order summary shows a multi-item cart instead of one product.
+  items?: PageLineItem[];
 }
 
 const SHELL = (inner: string) => `<!doctype html>
@@ -52,6 +61,9 @@ const SHELL = (inner: string) => `<!doctype html>
 
   /* order summary */
   .order .item{display:flex;gap:14px;align-items:center}
+  /* vertical space + divider between cart line items */
+  #p-items{display:flex;flex-direction:column;gap:18px}
+  #p-items .item + .item{padding-top:18px;border-top:1px solid var(--line2)}
   .thumb{width:54px;height:54px;border-radius:13px;background:linear-gradient(135deg,#1a1a22,#3a3a4a);color:#fff;display:grid;place-items:center;font-size:22px;flex:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
   .item .info{flex:1;min-width:0}
   .item .name{font-weight:700;font-size:15px;color:var(--ink);line-height:1.25}
@@ -169,14 +181,7 @@ export function renderCheckoutPage(token: string, product: PageProduct): string 
   const inner = `
   <div class="step">Order summary</div>
   <div class="card order fade"><div class="pad">
-    <div class="item">
-      <div class="thumb">🛍️</div>
-      <div class="info">
-        <div class="name" id="p-title"></div>
-        <div class="vary" id="p-vary"></div>
-      </div>
-      <div class="price-now" id="p-price"></div>
-    </div>
+    <div id="p-items"></div>
     <div class="breakdown">
       <div class="ln"><span>Subtotal</span><b id="p-sub"></b></div>
       <div class="ln"><span>Delivery</span><span class="free">FREE</span></div>
@@ -210,13 +215,28 @@ export function renderCheckoutPage(token: string, product: PageProduct): string 
     var $ = function(id){ return document.getElementById(id); };
     var TICK = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 
-    $('p-title').textContent = PRODUCT.title || 'Your order';
-    $('p-vary').innerHTML = (PRODUCT.size ? '<span class="chip">Size ' + esc(PRODUCT.size) + '</span>' : '') + '<span class="qty">Qty 1</span>';
-    $('p-price').textContent = fmt(PRODUCT.priceInr);
-    $('p-sub').textContent = fmt(PRODUCT.priceInr);
-    $('p-total').textContent = fmt(PRODUCT.priceInr);
-    $('bar-total').textContent = fmt(PRODUCT.priceInr);
-    $('payBtn').textContent = 'Pay ' + fmt(PRODUCT.priceInr);
+    // Cart checkout shows every line; single-item checkout shows one row.
+    var LINES = (PRODUCT.items && PRODUCT.items.length)
+      ? PRODUCT.items
+      : [{ title: PRODUCT.title, size: PRODUCT.size, priceInr: PRODUCT.priceInr, qty: 1 }];
+    var TOTAL = LINES.reduce(function(s, it){ return s + Number(it.priceInr||0) * Math.max(1, Number(it.qty||1)); }, 0);
+
+    $('p-items').innerHTML = LINES.map(function(it){
+      var qty = Math.max(1, Number(it.qty||1));
+      var lineTotal = Number(it.priceInr||0) * qty;
+      return '<div class="item">'+
+        '<div class="thumb">🛍️</div>'+
+        '<div class="info">'+
+          '<div class="name">'+esc(it.title||'Your order')+'</div>'+
+          '<div class="vary">'+(it.size ? '<span class="chip">Size '+esc(it.size)+'</span>' : '')+'<span class="qty">Qty '+qty+'</span></div>'+
+        '</div>'+
+        '<div class="price-now">'+fmt(lineTotal)+'</div>'+
+      '</div>';
+    }).join('');
+    $('p-sub').textContent = fmt(TOTAL);
+    $('p-total').textContent = fmt(TOTAL);
+    $('bar-total').textContent = fmt(TOTAL);
+    $('payBtn').textContent = 'Pay ' + fmt(TOTAL);
 
     function api(path, init){
       return fetch('/api/bot-checkout' + path, Object.assign({ headers:{'Content-Type':'application/json'} }, init||{}))
@@ -367,14 +387,14 @@ export function renderCheckoutPage(token: string, product: PageProduct): string 
         rzp.open();
       });
     }
-    function reset(){ $('payBtn').disabled=false; $('payBtn').textContent='Pay '+fmt(PRODUCT.priceInr); }
+    function reset(){ $('payBtn').disabled=false; $('payBtn').textContent='Pay '+fmt(TOTAL); }
     function success(){
       var bar = document.querySelector('.paybar'); if(bar) bar.remove();
       document.querySelector('.wrap').innerHTML =
         '<div class="card pop"><div class="state">'+
         '<div class="ic ok">✅</div>'+
         '<h2>Order confirmed!</h2>'+
-        '<p>Payment of <b>'+fmt(PRODUCT.priceInr)+'</b> for <b>'+esc(PRODUCT.title)+'</b> received.</p>'+
+        '<p>Payment of <b>'+fmt(TOTAL)+'</b> for <b>'+esc(PRODUCT.title)+'</b> received.</p>'+
         '<p style="margin-top:10px">We\\'ve sent a confirmation to your Instagram. You can safely close this tab.</p>'+
         '</div></div>';
     }

@@ -108,6 +108,8 @@ import { ReportController } from './controllers/report.controller';
 import { GroupNotificationProcessor } from './queues/group-notification.processor';
 import { MetaWebhookController } from './controllers/meta-webhook.controller';
 import { MetaWebhookService } from './services/meta-webhook.service';
+import { CommentAutomationService } from './services/comment-automation.service';
+import { CommentAutomation } from './models/comment-automation.model';
 
 @Module({
   imports: [
@@ -158,6 +160,7 @@ import { MetaWebhookService } from './services/meta-webhook.service';
       ApiActivityLog,
       BlockedUser,
       ReportedUser,
+      CommentAutomation,
     ]),
   ],
   controllers: [
@@ -224,6 +227,7 @@ import { MetaWebhookService } from './services/meta-webhook.service';
     ReportService,
     GroupNotificationProcessor,
     MetaWebhookService,
+    CommentAutomationService,
   ],
   exports: [
     SmsService,
@@ -265,6 +269,7 @@ import { MetaWebhookService } from './services/meta-webhook.service';
     BlockService,
     ReportService,
     MetaWebhookService,
+    CommentAutomationService,
   ],
 })
 export class SharedModule { }

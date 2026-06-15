@@ -23,6 +23,14 @@ export function getCheckoutSecret(config: ConfigService): string {
   return secret;
 }
 
+export interface CheckoutLineItem {
+  slug?: string;
+  title: string;
+  size?: string;
+  priceInr: number;
+  qty?: number;
+}
+
 export interface CheckoutPayload {
   igsid: string;
   slug?: string;
@@ -31,6 +39,9 @@ export interface CheckoutPayload {
   priceInr: number;
   username?: string;
   gender?: string;
+  // When present, this is a CART checkout: multiple line items paid in one go.
+  // priceInr carries the cart total (kept for back-compat with single-item code).
+  items?: CheckoutLineItem[];
   ts: number;
 }
 

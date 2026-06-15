@@ -13,8 +13,9 @@ import { ConfigService } from '@nestjs/config';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { Public } from '../../auth/decorators/public.decorator';
-import { MetaWebhookService, IgMessageEvent, IgTemplateElement } from '../services/meta-webhook.service';
+import { MetaWebhookService, IgMessageEvent, IgCommentEvent, IgTemplateElement } from '../services/meta-webhook.service';
 import { ShoppingAgentService, DmResponse } from '../../shopping-agent/shopping-agent.service';
+import { CommentAutomationService } from '../services/comment-automation.service';
 
 /**
  * Public webhook controller for receiving Instagram DM events from Meta.
@@ -28,11 +29,15 @@ import { ShoppingAgentService, DmResponse } from '../../shopping-agent/shopping-
 export class MetaWebhookController {
   private readonly logger = new Logger(MetaWebhookController.name);
   private readonly seenMessageIds = new Set<string>();
+  private readonly seenCommentIds = new Set<string>();
+  /** mediaId → shortcode cache to avoid re-resolving permalinks per comment. */
+  private readonly shortcodeCache = new Map<string, string | null>();
 
   constructor(
     private readonly metaWebhookService: MetaWebhookService,
     private readonly configService: ConfigService,
     private readonly shoppingAgentService: ShoppingAgentService,
+    private readonly commentAutomationService: CommentAutomationService,
   ) {}
 
   /**
@@ -120,7 +125,79 @@ export class MetaWebhookController {
       });
     }
 
+    // Comment events → keyword-scoped automation (auto-reply + private DM).
+    const comments = this.metaWebhookService.extractComments(body);
+    if (comments.length > 0) {
+      this.logger.log(`Extracted ${comments.length} comment event(s)`);
+    }
+    for (const comment of comments) {
+      if (this.seenCommentIds.has(comment.commentId)) {
+        this.logger.debug(`Duplicate comment ${comment.commentId} — skipping`);
+        continue;
+      }
+      this.seenCommentIds.add(comment.commentId);
+      if (this.seenCommentIds.size > 5000) {
+        const first = this.seenCommentIds.values().next().value;
+        if (first) this.seenCommentIds.delete(first);
+      }
+
+      this.processComment(comment).catch((err) => {
+        this.logger.error(`Error processing comment ${comment.commentId}: ${err.message}`);
+      });
+    }
+
     return 'OK';
+  }
+
+  /**
+   * Handle a single Instagram comment. Only comments on a configured post/reel
+   * whose text matches a configured keyword trigger anything — everything else
+   * is ignored (no "alert on every post").
+   */
+  private async processComment(comment: IgCommentEvent) {
+    if (!comment.text?.trim()) return;
+
+    // Resolve the media's shortcode (cached) so we can match against the
+    // post/reel link the admin configured.
+    let shortcode: string | null = null;
+    if (comment.mediaId) {
+      if (this.shortcodeCache.has(comment.mediaId)) {
+        shortcode = this.shortcodeCache.get(comment.mediaId) ?? null;
+      } else {
+        shortcode = await this.metaWebhookService
+          .resolveMediaShortcode(comment.mediaId)
+          .catch(() => null);
+        this.shortcodeCache.set(comment.mediaId, shortcode);
+      }
+    }
+
+    const rule = await this.commentAutomationService.findMatchingRule(
+      comment.mediaId,
+      shortcode,
+      comment.text,
+    );
+
+    if (!rule) return; // No configured rule for this post + keyword → do nothing.
+
+    this.logger.log(
+      `Comment ${comment.commentId} matched rule #${rule.id} ("${rule.title}") from @${comment.fromUsername ?? '?'}`,
+    );
+
+    // Public auto-reply under the comment.
+    if (rule.commentReply?.trim()) {
+      await this.metaWebhookService
+        .replyToComment(comment.commentId, rule.commentReply)
+        .catch((e) => this.logger.error(`replyToComment failed: ${e.message}`));
+    }
+
+    // Private DM to the commenter (Instagram private reply).
+    if (rule.dmMessage?.trim()) {
+      await this.metaWebhookService
+        .sendPrivateReply(comment.commentId, rule.dmMessage)
+        .catch((e) => this.logger.error(`sendPrivateReply failed: ${e.message}`));
+    }
+
+    await this.commentAutomationService.markTriggered(rule.id).catch(() => {});
   }
 
   private async processEvent(event: IgMessageEvent) {

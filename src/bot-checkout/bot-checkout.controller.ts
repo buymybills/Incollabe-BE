@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotCheckoutService } from './bot-checkout.service';
+import { CheckoutLinkService } from './checkout-link.service';
 import { verifyCheckoutToken, hashUserKey, getCheckoutSecret } from './checkout-token.util';
 
 /**
@@ -26,8 +27,21 @@ import { verifyCheckoutToken, hashUserKey, getCheckoutSecret } from './checkout-
 export class BotCheckoutController {
   constructor(
     private readonly checkout: BotCheckoutService,
+    private readonly checkoutLink: CheckoutLinkService,
     private readonly config: ConfigService,
   ) {}
+
+  /**
+   * Mint a short id for a full signed checkout token. The bot calls this so the
+   * DM'd link is `/api/checkout/<id>` instead of the long embedded-token URL.
+   */
+  @Post('shorten')
+  async shorten(@Body('token') token: string) {
+    const p = verifyCheckoutToken(token, getCheckoutSecret(this.config));
+    if (!p) throw new UnauthorizedException('invalid_token');
+    const id = await this.checkoutLink.shorten(token);
+    return { id };
+  }
 
   // Customer + saved addresses for the checkout page
   @Get('customer')

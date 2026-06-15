@@ -33,6 +33,14 @@ export interface IgQuickReply {
   payload?: string;
 }
 
+export interface IgCommentEvent {
+  commentId: string;
+  mediaId: string | null;
+  text: string;
+  fromId: string | null;
+  fromUsername: string | null;
+}
+
 @Injectable()
 export class MetaWebhookService {
   private readonly logger = new Logger(MetaWebhookService.name);
@@ -144,6 +152,42 @@ export class MetaWebhookService {
       attachments,
       mid: message.mid ?? null,
     };
+  }
+
+  /**
+   * Parse a Meta webhook body into a flat list of comment events.
+   * IG comment webhooks arrive as entry[].changes[] with field === 'comments'.
+   * Echoes (comments authored by the connected page itself, e.g. our own
+   * auto-replies) are skipped to avoid loops.
+   */
+  extractComments(body: any): IgCommentEvent[] {
+    if (body?.object !== 'instagram') return [];
+
+    const events: IgCommentEvent[] = [];
+
+    for (const entry of body.entry ?? []) {
+      const pageId = entry.id as string;
+
+      for (const change of entry.changes ?? []) {
+        if (change.field !== 'comments') continue;
+        const v = change.value;
+        if (!v?.id) continue;
+
+        const fromId = (v.from?.id as string) ?? null;
+        // Skip our own comments/replies.
+        if (fromId && pageId && fromId === pageId) continue;
+
+        events.push({
+          commentId: v.id,
+          mediaId: (v.media?.id as string) ?? null,
+          text: (v.text as string) ?? '',
+          fromId,
+          fromUsername: (v.from?.username as string) ?? null,
+        });
+      }
+    }
+
+    return events;
   }
 
   private buildPostbackEvent(senderId: string, postback: any): IgMessageEvent | null {
@@ -283,6 +327,80 @@ export class MetaWebhookService {
     }
     const data: any = await res.json();
     return data.media_url || data.thumbnail_url || null;
+  }
+
+  /**
+   * Resolve an IG media id to its permalink shortcode (e.g. "Cabc123" from
+   * https://www.instagram.com/reel/Cabc123/). Used to match incoming comments
+   * against admin-configured post/reel links. Returns null on failure.
+   */
+  async resolveMediaShortcode(mediaId: string): Promise<string | null> {
+    const token = this.accessToken;
+    if (!mediaId || !token) return null;
+
+    const url = `${this.graphUrl}/${encodeURIComponent(mediaId)}?fields=permalink&access_token=${encodeURIComponent(token)}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      this.logger.warn(`Could not resolve permalink for ${mediaId}: ${res.status} ${body.slice(0, 200)}`);
+      return null;
+    }
+    const data: any = await res.json();
+    const permalink: string = data?.permalink ?? '';
+    const match = permalink.match(/\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i);
+    return match ? match[1] : null;
+  }
+
+  /**
+   * Post a public reply under an Instagram comment.
+   * Graph API: POST /{ig-comment-id}/replies
+   */
+  async replyToComment(commentId: string, message: string): Promise<void> {
+    const token = this.accessToken;
+    if (!token) {
+      this.logger.error('IG_PAGE_ACCESS_TOKEN not configured');
+      return;
+    }
+    if (!commentId || !message?.trim()) return;
+
+    const url = `${this.graphUrl}/${encodeURIComponent(commentId)}/replies?access_token=${encodeURIComponent(token)}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: this.truncate(message, 2000) }),
+    });
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      throw new Error(`Graph API ${res.status} replying to comment: ${errBody}`);
+    }
+  }
+
+  /**
+   * Send a private DM in response to a comment (Instagram "private reply").
+   * Graph API: POST /me/messages with recipient { comment_id }.
+   * Note: IG only allows one private reply per comment, within 7 days.
+   */
+  async sendPrivateReply(commentId: string, text: string): Promise<void> {
+    const token = this.accessToken;
+    if (!token) {
+      this.logger.error('IG_PAGE_ACCESS_TOKEN not configured');
+      return;
+    }
+    if (!commentId || !text?.trim()) return;
+
+    const url = `${this.graphUrl}/me/messages?access_token=${encodeURIComponent(token)}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipient: { comment_id: commentId },
+        message: { text: this.truncate(text, 980) },
+      }),
+    });
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      throw new Error(`Graph API ${res.status} sending private reply: ${errBody}`);
+    }
   }
 
   // ---- Private helpers ----

@@ -56,6 +56,10 @@ import { WalletTransaction } from '../wallet/models/wallet-transaction.model';
 import { WalletRechargeLimit } from '../wallet/models/wallet-recharge-limit.model';
 import { BlockedUser } from '../shared/models/blocked-user.model';
 import { ReportedUser } from '../shared/models/reported-user.model';
+import { CommentAutomation } from '../shared/models/comment-automation.model';
+import { CheckoutLink } from '../bot-checkout/models/checkout-link.model';
+import { BotSavedItem } from '../bot-checkout/models/bot-saved-item.model';
+import { BotCartItem } from '../bot-checkout/models/bot-cart-item.model';
 
 @Module({
   imports: [
@@ -196,6 +200,14 @@ import { ReportedUser } from '../shared/models/reported-user.model';
             BlockedUser,
             // Report feature
             ReportedUser,
+            // Instagram comment automation
+            CommentAutomation,
+            // Bot checkout short links
+            CheckoutLink,
+            // Bot saved items
+            BotSavedItem,
+            // Bot cart
+            BotCartItem,
           ],
           autoLoadModels: true,
           // Auto-sync in dev only — but allow an explicit opt-out (DB_SYNC=false)

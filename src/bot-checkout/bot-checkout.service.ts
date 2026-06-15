@@ -9,6 +9,7 @@ import { BotOrder } from './models/bot-order.model';
 import { BotAnalyticsService } from '../bot-analytics/bot-analytics.service';
 import { BotEventType } from '../bot-analytics/models/bot-event.model';
 import { OrderForwardService } from './order-forward.service';
+import { BotCartService } from './bot-cart.service';
 import {
   CheckoutPayload,
   hashUserKey,
@@ -18,6 +19,17 @@ import {
 const DEFAULT_BRAND = 'thesouledstore';
 const MAX_ADDRESSES_PER_CUSTOMER = 10;
 const RAZORPAY_TIMEOUT_MS = 10_000;
+
+/** Amount to charge: sum of cart line items, or the single-item priceInr. */
+function cartTotalInr(payload: CheckoutPayload): number {
+  if (payload.items?.length) {
+    return payload.items.reduce(
+      (sum, it) => sum + (Number(it.priceInr) || 0) * Math.max(1, it.qty ?? 1),
+      0,
+    );
+  }
+  return Number(payload.priceInr) || 0;
+}
 
 export interface CustomerInput {
   igsid: string;
@@ -54,6 +66,7 @@ export class BotCheckoutService {
     private readonly config: ConfigService,
     private readonly analytics: BotAnalyticsService,
     private readonly forwarder: OrderForwardService,
+    private readonly cart: BotCartService,
   ) {}
 
   /** Find or create the customer for an IG sender, updating any contact fields provided. */
@@ -191,16 +204,21 @@ export class BotCheckoutService {
     razorpaySignature?: string;
     method?: string;
     status?: string;
+    // Cart checkout writes one row per line under the same payment id, so dedup
+    // must be per (payment, product, size) rather than per payment alone.
+    dedupeBySlugSize?: boolean;
   }): Promise<BotOrder> {
     const customer = await this.getOrCreateCustomer(params.input);
 
     return this.sequelize.transaction(async (t) => {
-      // Idempotency: return the existing order if this payment was already recorded
+      // Idempotency: return the existing order if this payment (line) was already recorded
       if (params.razorpayPaymentId) {
-        const dup = await this.orderModel.findOne({
-          where: { razorpayPaymentId: params.razorpayPaymentId },
-          transaction: t,
-        });
+        const where: any = { razorpayPaymentId: params.razorpayPaymentId };
+        if (params.dedupeBySlugSize) {
+          where.productSlug = params.productSlug ?? null;
+          where.size = params.size ?? null;
+        }
+        const dup = await this.orderModel.findOne({ where, transaction: t });
         if (dup) return dup;
       }
 
@@ -300,12 +318,15 @@ export class BotCheckoutService {
   ): Promise<{ orderId: string; keyId: string; amount: number } | null> {
     const keyId = this.config.get<string>('RAZORPAY_KEY_ID');
     const keySecret = this.config.get<string>('RAZORPAY_KEY_SECRET');
-    if (!keyId || !keySecret || !payload.priceInr || payload.priceInr <= 0) return null;
+    // Cart checkout: charge the sum of the line items. Single item: charge priceInr.
+    const amountInr = cartTotalInr(payload);
+    if (!keyId || !keySecret || !amountInr || amountInr <= 0) return null;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), RAZORPAY_TIMEOUT_MS);
     try {
       const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
-      const amount = Math.round(payload.priceInr * 100);
+      const amount = Math.round(amountInr * 100);
+      const isCart = !!payload.items?.length;
       const res = await fetch('https://api.razorpay.com/v1/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
@@ -315,9 +336,11 @@ export class BotCheckoutService {
           notes: {
             source: 'checkout',
             igsid: payload.igsid,
-            productSlug: payload.slug ?? '',
-            productTitle: (payload.title ?? '').slice(0, 100),
-            size: payload.size ?? '',
+            productSlug: isCart ? '' : (payload.slug ?? ''),
+            productTitle: isCart
+              ? `Cart (${payload.items!.length} item${payload.items!.length === 1 ? '' : 's'})`
+              : (payload.title ?? '').slice(0, 100),
+            size: isCart ? '' : (payload.size ?? ''),
           },
         }),
         signal: controller.signal,
@@ -360,6 +383,73 @@ export class BotCheckoutService {
     const userKey = hashUserKey(payload.igsid);
     const gender = payload.gender || undefined;
 
+    // ---- Cart checkout: one paid order row per line, sharing the payment id ----
+    if (payload.items?.length) {
+      const orders: BotOrder[] = [];
+      let total = 0;
+      for (const it of payload.items) {
+        const qty = Math.max(1, it.qty ?? 1);
+        const lineAmount = (Number(it.priceInr) || 0) * qty;
+        total += lineAmount;
+
+        const order = await this.saveOrder({
+          input: { igsid: payload.igsid, username: payload.username, userKey },
+          addressId: body.addressId,
+          productSlug: it.slug,
+          productTitle: it.title,
+          size: it.size,
+          gender,
+          qty,
+          amountInr: lineAmount,
+          razorpayOrderId: body.razorpay_order_id,
+          razorpayPaymentId: body.razorpay_payment_id,
+          razorpaySignature: body.razorpay_signature,
+          method: body.method,
+          status: 'paid',
+          dedupeBySlugSize: true,
+        });
+        orders.push(order);
+
+        void this.analytics.track([
+          {
+            eventType: BotEventType.PAYMENT_COMPLETED,
+            userKey,
+            username: payload.username,
+            productSlug: it.slug,
+            productTitle: it.title,
+            size: it.size,
+            gender,
+            priceInr: it.priceInr,
+            valueInr: lineAmount,
+            metadata: { razorpayPaymentId: body.razorpay_payment_id, orderId: order.id },
+          } as any,
+        ]);
+
+        void this.forwarder.forward(order);
+        void this.pushOrderToHub(order, {
+          title: it.title,
+          slug: it.slug,
+          size: it.size,
+          gender,
+          priceInr: it.priceInr,
+          amountInr: lineAmount,
+          igsid: payload.igsid,
+          username: payload.username,
+        });
+      }
+
+      // Empty the shopper's cart now that it's paid (best-effort).
+      void this.cart.clear(payload.igsid).catch(() => {});
+
+      void this.sendInstagramDm(
+        payload.igsid,
+        `✅ Payment of ₹${total.toLocaleString('en-IN')} received for ${payload.items.length} item${payload.items.length === 1 ? '' : 's'}! 🎉\nYour order is confirmed — we'll ship everything to your saved address. Thanks for shopping with The Souled Store! 🛍️`,
+      );
+      this.logger.log(`Cart checkout paid — ${payload.items.length} lines ₹${total} (${body.razorpay_payment_id})`);
+      return { ok: true, orderId: orders[0]?.id };
+    }
+
+    // ---- Single-item checkout ----
     const order = await this.saveOrder({
       input: { igsid: payload.igsid, username: payload.username, userKey },
       addressId: body.addressId,
@@ -392,44 +482,18 @@ export class BotCheckoutService {
     ]);
 
     // Forward the order OUTBOUND to the brand's system ("revert it to them").
-    // Non-blocking — updates the order's fulfillment_status itself.
     void this.forwarder.forward(order);
-
-    // Push the placed order to the bot's order hub the instant it's confirmed, so
-    // the per-brand connector (Shopify / WooCommerce / Next.js) creates the store
-    // entry in real time. Fire-and-forget — must never block or fail the checkout.
-    void (async () => {
-      const url = this.config.get<string>('BOT_ORDER_INGEST_URL');
-      if (!url) return;
-      try {
-        await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-order-key': this.config.get<string>('ORDER_INGEST_KEY') || '',
-          },
-          body: JSON.stringify({
-            orderId: `chk_${order.id}`, // stable id → connector dedupes on it
-            brand: order.brand,
-            productTitle: payload.title,
-            productSlug: payload.slug,
-            size: payload.size,
-            gender,
-            priceInr: payload.priceInr,
-            amountInr: payload.priceInr,
-            username: payload.username,
-            igsid: payload.igsid,
-            paymentEvent: 'checkout.verified',
-            customerName: (order as any).shippingAddress?.name,
-            customerPhone: (order as any).shippingAddress?.mobile,
-            shippingAddress: (order as any).shippingAddress || undefined,
-          }),
-          signal: AbortSignal.timeout(8000),
-        });
-      } catch (err: any) {
-        this.logger.warn(`Order ingest push failed for #${order.id}: ${err?.message}`);
-      }
-    })();
+    // Push to the bot's order hub so the connector creates the store entry in real time.
+    void this.pushOrderToHub(order, {
+      title: payload.title,
+      slug: payload.slug,
+      size: payload.size,
+      gender,
+      priceInr: payload.priceInr,
+      amountInr: payload.priceInr,
+      igsid: payload.igsid,
+      username: payload.username,
+    });
 
     // Confirm to the shopper in Instagram
     const sizeLabel = payload.size ? ` (Size ${payload.size})` : '';
@@ -440,6 +504,50 @@ export class BotCheckoutService {
 
     this.logger.log(`Checkout order #${order.id} paid — ${payload.title} ₹${payload.priceInr} (${body.razorpay_payment_id})`);
     return { ok: true, orderId: order.id };
+  }
+
+  /**
+   * Push a placed order line to the bot's order-ingest hub (fire-and-forget) so
+   * the per-brand connector (Shopify / WooCommerce / Next.js) creates the store
+   * entry in real time. Must never block or fail the checkout.
+   */
+  private async pushOrderToHub(
+    order: BotOrder,
+    line: {
+      title?: string; slug?: string; size?: string; gender?: string;
+      priceInr: number; amountInr: number; igsid: string; username?: string;
+    },
+  ): Promise<void> {
+    const url = this.config.get<string>('BOT_ORDER_INGEST_URL');
+    if (!url) return;
+    try {
+      await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-order-key': this.config.get<string>('ORDER_INGEST_KEY') || '',
+        },
+        body: JSON.stringify({
+          orderId: `chk_${order.id}`, // stable id → connector dedupes on it
+          brand: order.brand,
+          productTitle: line.title,
+          productSlug: line.slug,
+          size: line.size,
+          gender: line.gender,
+          priceInr: line.priceInr,
+          amountInr: line.amountInr,
+          username: line.username,
+          igsid: line.igsid,
+          paymentEvent: 'checkout.verified',
+          customerName: (order as any).shippingAddress?.name,
+          customerPhone: (order as any).shippingAddress?.mobile,
+          shippingAddress: (order as any).shippingAddress || undefined,
+        }),
+        signal: AbortSignal.timeout(8000),
+      });
+    } catch (err: any) {
+      this.logger.warn(`Order ingest push failed for #${order.id}: ${err?.message}`);
+    }
   }
 
   /** Send a plain-text Instagram DM via the Graph API (reuses the bot's page token). */

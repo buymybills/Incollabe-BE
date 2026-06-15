@@ -2,6 +2,7 @@ import { Controller, Get, Param, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { verifyCheckoutToken, getCheckoutSecret } from './checkout-token.util';
+import { CheckoutLinkService } from './checkout-link.service';
 import { renderCheckoutPage, renderInvalidPage } from './checkout-page.html';
 
 /**
@@ -14,16 +15,33 @@ import { renderCheckoutPage, renderInvalidPage } from './checkout-page.html';
  */
 @Controller('checkout')
 export class CheckoutPageController {
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly checkoutLink: CheckoutLinkService,
+  ) {}
 
   @Get(':token')
-  page(@Param('token') token: string, @Res() res: Response): void {
-    const payload = verifyCheckoutToken(token, getCheckoutSecret(this.config));
+  async page(@Param('token') token: string, @Res() res: Response): Promise<void> {
+    // A short id (no '.') resolves to the full signed token; a token that
+    // already contains '.' is used as-is (backwards compatible with old links).
+    let fullToken = token;
+    if (!token.includes('.')) {
+      const resolved = await this.checkoutLink.resolve(token);
+      if (resolved) fullToken = resolved;
+    }
+
+    const payload = verifyCheckoutToken(fullToken, getCheckoutSecret(this.config));
     const html = payload
-      ? renderCheckoutPage(token, {
+      ? renderCheckoutPage(fullToken, {
           title: payload.title ?? 'Your order',
           size: payload.size ?? '',
           priceInr: payload.priceInr,
+          items: payload.items?.map((i) => ({
+            title: i.title,
+            size: i.size ?? '',
+            priceInr: i.priceInr,
+            qty: i.qty ?? 1,
+          })),
         })
       : renderInvalidPage();
     // Send raw HTML directly through Express so the global ResponseInterceptor
