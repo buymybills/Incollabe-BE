@@ -98,6 +98,8 @@ import { BotAnalyticsModule } from '../bot-analytics/bot-analytics.module';
 import { BotCheckoutModule } from '../bot-checkout/bot-checkout.module';
 import { BotAnalyticsAdminController } from './controllers/bot-analytics-admin.controller';
 import { CommentAutomationController } from './controllers/comment-automation.controller';
+import { BotCommentAutomationController } from './controllers/bot-comment-automation.controller';
+import { BotKeyGuard } from '../bot-analytics/guards/bot-key.guard';
 
 @Module({
   imports: [
@@ -173,8 +175,10 @@ import { CommentAutomationController } from './controllers/comment-automation.co
     ContractAdminController,
     BotAnalyticsAdminController,
     CommentAutomationController,
+    BotCommentAutomationController,
   ],
   providers: [
+    BotKeyGuard,
     AdminAuthService,
     ProfileReviewService,
     AdminCampaignService,
