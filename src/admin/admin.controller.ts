@@ -100,6 +100,7 @@ import { GetCampaignsDto } from './dto/get-campaigns.dto';
 import { GetPostsDto, AdminPostsResponseDto } from './dto/get-posts.dto';
 import { TopInfluencersResponseDto } from './dto/top-influencer-response.dto';
 import { GetCampaignApplicationsDto } from '../campaign/dto/get-campaign-applications.dto';
+import { ApplicationStatus } from '../campaign/models/campaign-application.model';
 import {
   DashboardRequestDto,
   CampaignDashboardRequestDto,
@@ -1974,6 +1975,63 @@ export class AdminController {
     );
     return {
       message: 'Campaign closed successfully',
+      ...result,
+    };
+  }
+
+  @Put('campaigns/applications/:applicationId/status')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Select or reject a campaign applicant',
+    description: 'Update the status of a specific campaign application to selected or rejected. Cannot be used on withdrawn or completed applications.',
+  })
+  @ApiParam({ name: 'applicationId', description: 'Campaign application ID', type: 'number' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['status'],
+      properties: {
+        status: {
+          type: 'string',
+          enum: [ApplicationStatus.SELECTED, ApplicationStatus.REJECTED],
+          example: ApplicationStatus.SELECTED,
+        },
+        notes: {
+          type: 'string',
+          example: 'Great engagement rate and niche fit',
+          description: 'Optional review notes',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Application status updated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'Application status updated to selected' },
+        applicationId: { type: 'number', example: 42 },
+        influencerName: { type: 'string', example: 'John Doe' },
+        campaignName: { type: 'string', example: 'Summer Campaign 2024' },
+        status: { type: 'string', example: 'selected' },
+      },
+    },
+  })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Invalid status or application cannot be updated' })
+  @ApiNotFoundResponse({ description: 'Application not found' })
+  async updateApplicationStatus(
+    @Param('applicationId', ParseIntPipe) applicationId: number,
+    @Body('status') status: ApplicationStatus.SELECTED | ApplicationStatus.REJECTED,
+    @Body('notes') notes?: string,
+  ) {
+    if (![ApplicationStatus.SELECTED, ApplicationStatus.REJECTED].includes(status)) {
+      throw new BadRequestException(`Status must be '${ApplicationStatus.SELECTED}' or '${ApplicationStatus.REJECTED}'`);
+    }
+    const result = await this.adminCampaignService.updateApplicationStatus(applicationId, status, notes);
+    return {
+      message: `Application status updated to ${status}`,
       ...result,
     };
   }

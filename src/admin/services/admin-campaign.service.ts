@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Op } from 'sequelize';
 import {
@@ -638,6 +638,40 @@ export class AdminCampaignService {
       page,
       limit,
       totalPages,
+    };
+  }
+
+  async updateApplicationStatus(
+    applicationId: number,
+    status: ApplicationStatus.SELECTED | ApplicationStatus.REJECTED,
+    notes?: string,
+  ): Promise<{ applicationId: number; influencerName: string; campaignName: string; status: string }> {
+    const application = await this.campaignApplicationModel.findByPk(applicationId, {
+      include: [
+        { model: Influencer, attributes: ['id', 'name', 'username'] },
+        { model: Campaign, attributes: ['id', 'name'] },
+      ],
+    });
+
+    if (!application) {
+      throw new NotFoundException(`Application with ID ${applicationId} not found`);
+    }
+
+    if ([ApplicationStatus.WITHDRAWN, ApplicationStatus.COMPLETED].includes(application.status)) {
+      throw new BadRequestException(`Cannot update application with status '${application.status}'`);
+    }
+
+    await application.update({
+      status,
+      reviewNotes: notes || undefined,
+      reviewedAt: new Date(),
+    });
+
+    return {
+      applicationId: application.id,
+      influencerName: application.influencer?.name || application.influencer?.username || 'Unknown',
+      campaignName: application.campaign?.name || 'Unknown',
+      status,
     };
   }
 
