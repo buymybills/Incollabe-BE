@@ -26,6 +26,8 @@ import {
   AIScore,
   ScoredApplication,
 } from '../interfaces/scored-application.interface';
+import { Brand } from '../../brand/model/brand.model';
+import { EmailService } from '../../shared/email.service';
 
 @Injectable()
 export class AdminCampaignService {
@@ -52,7 +54,10 @@ export class AdminCampaignService {
     private readonly influencerProfileScoreModel: typeof InfluencerProfileScore,
     @InjectModel(InstagramProfileAnalysis)
     private readonly instagramProfileAnalysisModel: typeof InstagramProfileAnalysis,
+    @InjectModel(Brand)
+    private readonly brandModel: typeof Brand,
     private readonly aiScoringService: AIScoringService,
+    private readonly emailService: EmailService,
   ) {}
 
   // Transform campaign response to match API requirements
@@ -634,5 +639,56 @@ export class AdminCampaignService {
       limit,
       totalPages,
     };
+  }
+
+  async closeCampaignAndRejectAllInfluencers(
+    campaignId: number,
+    reason?: string,
+  ): Promise<{ rejectedCount: number; campaignName: string; previousStatus: string }> {
+    const campaign = await this.campaignModel.findByPk(campaignId, {
+      include: [{ model: Brand, attributes: ['id', 'brandName', 'email'] }],
+    });
+
+    if (!campaign) {
+      throw new NotFoundException(`Campaign with ID ${campaignId} not found`);
+    }
+
+    const previousStatus = campaign.status;
+
+    // Cancel the campaign
+    await campaign.update({ status: CampaignStatus.CANCELLED });
+
+    // Reject all non-rejected applications
+    const [rejectedCount] = await this.campaignApplicationModel.update(
+      {
+        status: ApplicationStatus.REJECTED,
+        reviewNotes: reason || 'Campaign closed by admin',
+        reviewedAt: new Date(),
+      },
+      {
+        where: {
+          campaignId,
+          status: { [Op.notIn]: [ApplicationStatus.REJECTED] },
+        },
+      },
+    );
+
+    // Send email to brand (non-blocking)
+    if (campaign.brand && campaign.brand.email) {
+      await campaign.brand.reload();
+      this.emailService
+        .sendBrandCampaignClosedEmail(
+          campaign.brand.email,
+          campaign.brand.brandName || 'Brand',
+          campaign.name,
+          rejectedCount,
+          reason,
+        )
+        .catch((err) =>
+          console.error('[EMAIL ERROR] closeCampaignAndRejectAllInfluencers email failed', err),
+        );
+    }
+
+    return { rejectedCount, campaignName: campaign.name, previousStatus };
   }
 }

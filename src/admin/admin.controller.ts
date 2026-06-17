@@ -1928,6 +1928,56 @@ export class AdminController {
     );
   }
 
+  @Post('campaigns/:id/close')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Close an inactive campaign and reject all influencer applications',
+    description:
+      'Cancels the campaign and rejects all pending influencer applications. Sends a notification email to the brand explaining the closure. Use this for campaigns where the brand has been inactive for a long time.',
+  })
+  @ApiParam({ name: 'id', description: 'Campaign ID', type: 'number' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        reason: {
+          type: 'string',
+          description: 'Optional reason for closure shown in brand email',
+          example: 'Campaign has been inactive for over 30 days',
+        },
+      },
+    },
+    required: false,
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Campaign cancelled and all influencer applications rejected. Brand notified via email.',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'Campaign closed successfully' },
+        campaignName: { type: 'string', example: 'Summer Campaign 2024' },
+        previousStatus: { type: 'string', example: 'active' },
+        rejectedCount: { type: 'number', example: 12 },
+      },
+    },
+  })
+  @ApiNotFoundResponse({ description: 'Campaign not found' })
+  async closeCampaign(
+    @Param('id', ParseIntPipe) campaignId: number,
+    @Body('reason') reason?: string,
+  ) {
+    const result = await this.adminCampaignService.closeCampaignAndRejectAllInfluencers(
+      campaignId,
+      reason,
+    );
+    return {
+      message: 'Campaign closed successfully',
+      ...result,
+    };
+  }
+
   @Get('dashboard/timeframe-options')
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
