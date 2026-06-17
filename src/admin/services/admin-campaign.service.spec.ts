@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AdminCampaignService } from './admin-campaign.service';
 import { AIScoringService } from '../../shared/services/ai-scoring.service';
+import { EmailService } from '../../shared/email.service';
 import { getModelToken } from '@nestjs/sequelize';
 import {
   Campaign,
@@ -120,8 +121,16 @@ describe('AdminCampaignService', () => {
           useValue: { findOne: jest.fn(), findAll: jest.fn() },
         },
         {
+          provide: getModelToken(Brand),
+          useValue: { findByPk: jest.fn(), update: jest.fn() },
+        },
+        {
           provide: AIScoringService,
           useValue: mockAIScoringService,
+        },
+        {
+          provide: EmailService,
+          useValue: { sendBrandCampaignClosedEmail: jest.fn() },
         },
       ],
     }).compile();
