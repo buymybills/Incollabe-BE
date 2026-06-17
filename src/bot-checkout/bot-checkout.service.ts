@@ -10,6 +10,7 @@ import { BotAnalyticsService } from '../bot-analytics/bot-analytics.service';
 import { BotEventType } from '../bot-analytics/models/bot-event.model';
 import { OrderForwardService } from './order-forward.service';
 import { BotCartService } from './bot-cart.service';
+import { BotCouponService } from './bot-coupon.service';
 import {
   CheckoutPayload,
   hashUserKey,
@@ -21,7 +22,7 @@ const MAX_ADDRESSES_PER_CUSTOMER = 10;
 const RAZORPAY_TIMEOUT_MS = 10_000;
 
 /** Amount to charge: sum of cart line items, or the single-item priceInr. */
-function cartTotalInr(payload: CheckoutPayload): number {
+export function cartTotalInr(payload: CheckoutPayload): number {
   if (payload.items?.length) {
     return payload.items.reduce(
       (sum, it) => sum + (Number(it.priceInr) || 0) * Math.max(1, it.qty ?? 1),
@@ -67,6 +68,7 @@ export class BotCheckoutService {
     private readonly analytics: BotAnalyticsService,
     private readonly forwarder: OrderForwardService,
     private readonly cart: BotCartService,
+    private readonly coupon: BotCouponService,
   ) {}
 
   /** Find or create the customer for an IG sender, updating any contact fields provided. */
@@ -199,6 +201,8 @@ export class BotCheckoutService {
     gender?: string;
     qty?: number;
     amountInr: number;
+    couponCode?: string | null;
+    discountInr?: number;
     razorpayOrderId?: string;
     razorpayPaymentId?: string;
     razorpaySignature?: string;
@@ -254,6 +258,8 @@ export class BotCheckoutService {
         gender: params.gender ?? null,
         qty: params.qty ?? 1,
         amountInr: params.amountInr,
+        couponCode: params.couponCode ?? null,
+        discountInr: params.discountInr ?? 0,
         razorpayOrderId: params.razorpayOrderId ?? null,
         razorpayPaymentId: params.razorpayPaymentId ?? null,
         razorpaySignature: params.razorpaySignature ?? null,
@@ -315,17 +321,33 @@ export class BotCheckoutService {
   /** Create a Razorpay Order for Standard Checkout. Amount comes from the signed token. */
   async createRazorpayOrder(
     payload: CheckoutPayload,
-  ): Promise<{ orderId: string; keyId: string; amount: number } | null> {
+    couponCode?: string,
+  ): Promise<{ orderId: string; keyId: string; amount: number; baseInr: number; discountInr: number; couponCode: string | null } | null> {
     const keyId = this.config.get<string>('RAZORPAY_KEY_ID');
     const keySecret = this.config.get<string>('RAZORPAY_KEY_SECRET');
     // Cart checkout: charge the sum of the line items. Single item: charge priceInr.
-    const amountInr = cartTotalInr(payload);
-    if (!keyId || !keySecret || !amountInr || amountInr <= 0) return null;
+    const baseInr = cartTotalInr(payload);
+    if (!keyId || !keySecret || !baseInr || baseInr <= 0) return null;
+
+    // Apply a bot coupon (validated server-side — never trust a client discount).
+    let chargeInr = baseInr;
+    let discountInr = 0;
+    let appliedCode: string | null = null;
+    if (couponCode) {
+      const cp = await this.coupon.validate(couponCode, baseInr);
+      if (cp.valid) {
+        chargeInr = cp.finalInr;
+        discountInr = cp.discountInr;
+        appliedCode = cp.code ?? null;
+      }
+    }
+    if (chargeInr < 1) chargeInr = 1; // Razorpay minimum is ₹1
+
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), RAZORPAY_TIMEOUT_MS);
     try {
       const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
-      const amount = Math.round(amountInr * 100);
+      const amount = Math.round(chargeInr * 100);
       const isCart = !!payload.items?.length;
       const res = await fetch('https://api.razorpay.com/v1/orders', {
         method: 'POST',
@@ -341,6 +363,8 @@ export class BotCheckoutService {
               ? `Cart (${payload.items!.length} item${payload.items!.length === 1 ? '' : 's'})`
               : (payload.title ?? '').slice(0, 100),
             size: isCart ? '' : (payload.size ?? ''),
+            couponCode: appliedCode ?? '',
+            discountInr,
           },
         }),
         signal: controller.signal,
@@ -351,7 +375,7 @@ export class BotCheckoutService {
       }
       const data: any = await res.json();
       if (!data?.id) return null;
-      return { orderId: data.id, keyId, amount };
+      return { orderId: data.id, keyId, amount, baseInr, discountInr, couponCode: appliedCode };
     } catch (err: any) {
       this.logger.error(`Razorpay order error: ${err?.message}`);
       return null;
@@ -372,6 +396,7 @@ export class BotCheckoutService {
       razorpay_payment_id: string;
       razorpay_signature: string;
       method?: string;
+      code?: string;
     },
   ): Promise<{ ok: boolean; orderId?: number; error?: string }> {
     const keySecret = this.config.get<string>('RAZORPAY_KEY_SECRET') || '';
@@ -383,14 +408,35 @@ export class BotCheckoutService {
     const userKey = hashUserKey(payload.igsid);
     const gender = payload.gender || undefined;
 
+    // Re-validate the coupon server-side and compute the total discount applied.
+    const baseTotal = cartTotalInr(payload);
+    let discountTotal = 0;
+    let appliedCode: string | null = null;
+    if (body.code) {
+      const cp = await this.coupon.validate(body.code, baseTotal);
+      if (cp.valid) {
+        discountTotal = cp.discountInr;
+        appliedCode = cp.code ?? null;
+      }
+    }
+    const netTotal = Math.max(0, baseTotal - discountTotal);
+
     // ---- Cart checkout: one paid order row per line, sharing the payment id ----
     if (payload.items?.length) {
       const orders: BotOrder[] = [];
-      let total = 0;
-      for (const it of payload.items) {
+      let remainingDiscount = discountTotal;
+      for (let i = 0; i < payload.items.length; i++) {
+        const it = payload.items[i];
         const qty = Math.max(1, it.qty ?? 1);
-        const lineAmount = (Number(it.priceInr) || 0) * qty;
-        total += lineAmount;
+        const lineBase = (Number(it.priceInr) || 0) * qty;
+        // Distribute the discount across lines proportionally; the last line takes
+        // the rounding remainder so the recorded amounts sum to what was charged.
+        const isLast = i === payload.items.length - 1;
+        const lineDiscount = isLast
+          ? remainingDiscount
+          : (baseTotal > 0 ? Math.min(remainingDiscount, Math.round(discountTotal * (lineBase / baseTotal))) : 0);
+        remainingDiscount -= lineDiscount;
+        const lineAmount = Math.max(0, lineBase - lineDiscount);
 
         const order = await this.saveOrder({
           input: { igsid: payload.igsid, username: payload.username, userKey },
@@ -401,6 +447,8 @@ export class BotCheckoutService {
           gender,
           qty,
           amountInr: lineAmount,
+          couponCode: appliedCode,
+          discountInr: lineDiscount,
           razorpayOrderId: body.razorpay_order_id,
           razorpayPaymentId: body.razorpay_payment_id,
           razorpaySignature: body.razorpay_signature,
@@ -421,7 +469,7 @@ export class BotCheckoutService {
             gender,
             priceInr: it.priceInr,
             valueInr: lineAmount,
-            metadata: { razorpayPaymentId: body.razorpay_payment_id, orderId: order.id },
+            metadata: { razorpayPaymentId: body.razorpay_payment_id, orderId: order.id, couponCode: appliedCode, discountInr: lineDiscount },
           } as any,
         ]);
 
@@ -438,14 +486,16 @@ export class BotCheckoutService {
         });
       }
 
+      if (appliedCode) void this.coupon.redeem(appliedCode).catch(() => {});
       // Empty the shopper's cart now that it's paid (best-effort).
       void this.cart.clear(payload.igsid).catch(() => {});
 
+      const savedLine = discountTotal > 0 ? ` (saved ₹${discountTotal.toLocaleString('en-IN')} with ${appliedCode})` : '';
       void this.sendInstagramDm(
         payload.igsid,
-        `✅ Payment of ₹${total.toLocaleString('en-IN')} received for ${payload.items.length} item${payload.items.length === 1 ? '' : 's'}! 🎉\nYour order is confirmed — we'll ship everything to your saved address. Thanks for shopping with The Souled Store! 🛍️`,
+        `✅ Payment of ₹${netTotal.toLocaleString('en-IN')} received for ${payload.items.length} item${payload.items.length === 1 ? '' : 's'}!${savedLine} 🎉\nYour order is confirmed — we'll ship everything to your saved address. Thanks for shopping with The Souled Store! 🛍️`,
       );
-      this.logger.log(`Cart checkout paid — ${payload.items.length} lines ₹${total} (${body.razorpay_payment_id})`);
+      this.logger.log(`Cart checkout paid — ${payload.items.length} lines ₹${netTotal} (disc ₹${discountTotal}) (${body.razorpay_payment_id})`);
       return { ok: true, orderId: orders[0]?.id };
     }
 
@@ -457,13 +507,16 @@ export class BotCheckoutService {
       productTitle: payload.title,
       size: payload.size,
       gender,
-      amountInr: payload.priceInr,
+      amountInr: netTotal,
+      couponCode: appliedCode,
+      discountInr: discountTotal,
       razorpayOrderId: body.razorpay_order_id,
       razorpayPaymentId: body.razorpay_payment_id,
       razorpaySignature: body.razorpay_signature,
       method: body.method,
       status: 'paid',
     });
+    if (appliedCode) void this.coupon.redeem(appliedCode).catch(() => {});
 
     // Record the sale (GMV / Orders) directly via the analytics service
     void this.analytics.track([
@@ -476,8 +529,8 @@ export class BotCheckoutService {
         size: payload.size,
         gender,
         priceInr: payload.priceInr,
-        valueInr: payload.priceInr,
-        metadata: { razorpayPaymentId: body.razorpay_payment_id, orderId: order.id },
+        valueInr: netTotal,
+        metadata: { razorpayPaymentId: body.razorpay_payment_id, orderId: order.id, couponCode: appliedCode, discountInr: discountTotal },
       } as any,
     ]);
 
@@ -490,16 +543,17 @@ export class BotCheckoutService {
       size: payload.size,
       gender,
       priceInr: payload.priceInr,
-      amountInr: payload.priceInr,
+      amountInr: netTotal,
       igsid: payload.igsid,
       username: payload.username,
     });
 
     // Confirm to the shopper in Instagram
     const sizeLabel = payload.size ? ` (Size ${payload.size})` : '';
+    const savedLine = discountTotal > 0 ? ` (saved ₹${discountTotal.toLocaleString('en-IN')} with ${appliedCode})` : '';
     void this.sendInstagramDm(
       payload.igsid,
-      `✅ Payment of ₹${payload.priceInr.toLocaleString('en-IN')} received for ${payload.title ?? 'your order'}${sizeLabel}! 🎉\nYour order is confirmed — we'll get it shipped to your saved address. Thanks for shopping with The Souled Store! 🛍️`,
+      `✅ Payment of ₹${netTotal.toLocaleString('en-IN')} received for ${payload.title ?? 'your order'}${sizeLabel}!${savedLine} 🎉\nYour order is confirmed — we'll get it shipped to your saved address. Thanks for shopping with The Souled Store! 🛍️`,
     );
 
     this.logger.log(`Checkout order #${order.id} paid — ${payload.title} ₹${payload.priceInr} (${body.razorpay_payment_id})`);

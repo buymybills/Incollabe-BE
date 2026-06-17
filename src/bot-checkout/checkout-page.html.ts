@@ -64,6 +64,15 @@ const SHELL = (inner: string) => `<!doctype html>
   /* vertical space + divider between cart line items */
   #p-items{display:flex;flex-direction:column;gap:18px}
   #p-items .item + .item{padding-top:18px;border-top:1px solid var(--line2)}
+  /* coupon */
+  .coupon{display:flex;gap:8px;margin:14px 0 0}
+  .coupon input{flex:1;padding:11px 12px;border:1.5px solid var(--line2);border-radius:11px;font-size:14px;text-transform:uppercase;font-family:inherit;color:var(--ink);outline:none}
+  .coupon input:focus{border-color:var(--ink)}
+  .coupon button{padding:0 16px;border:none;border-radius:11px;background:var(--ink);color:#fff;font-weight:700;font-size:13.5px;cursor:pointer}
+  .coupon button:disabled{opacity:.5;cursor:default}
+  .coupon-msg{font-size:12.5px;margin-top:7px;min-height:0;font-weight:600}
+  .coupon-msg.ok{color:var(--ok)}
+  .coupon-msg.bad{color:#d33}
   .thumb{width:54px;height:54px;border-radius:13px;background:linear-gradient(135deg,#1a1a22,#3a3a4a);color:#fff;display:grid;place-items:center;font-size:22px;flex:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
   .item .info{flex:1;min-width:0}
   .item .name{font-weight:700;font-size:15px;color:var(--ink);line-height:1.25}
@@ -182,8 +191,14 @@ export function renderCheckoutPage(token: string, product: PageProduct): string 
   <div class="step">Order summary</div>
   <div class="card order fade"><div class="pad">
     <div id="p-items"></div>
+    <div class="coupon">
+      <input id="couponInput" type="text" placeholder="Coupon code" autocomplete="off" autocapitalize="characters" />
+      <button id="couponBtn" type="button">Apply</button>
+    </div>
+    <div id="couponMsg" class="coupon-msg"></div>
     <div class="breakdown">
       <div class="ln"><span>Subtotal</span><b id="p-sub"></b></div>
+      <div class="ln" id="p-disc-row" style="display:none"><span id="p-disc-lab">Discount</span><b id="p-disc" class="free"></b></div>
       <div class="ln"><span>Delivery</span><span class="free">FREE</span></div>
     </div>
     <div class="total"><span class="lab">Total</span><span class="amt" id="p-total"></span></div>
@@ -233,10 +248,44 @@ export function renderCheckoutPage(token: string, product: PageProduct): string 
         '<div class="price-now">'+fmt(lineTotal)+'</div>'+
       '</div>';
     }).join('');
-    $('p-sub').textContent = fmt(TOTAL);
-    $('p-total').textContent = fmt(TOTAL);
-    $('bar-total').textContent = fmt(TOTAL);
-    $('payBtn').textContent = 'Pay ' + fmt(TOTAL);
+    // Coupon state — discount is recomputed server-side at /order and /verify;
+    // this is just the display.
+    var couponCode = null, discount = 0;
+    function netTotal(){ return Math.max(0, TOTAL - discount); }
+    function renderTotals(){
+      $('p-sub').textContent = fmt(TOTAL);
+      if (discount > 0) {
+        $('p-disc-row').style.display = 'flex';
+        $('p-disc-lab').textContent = 'Discount' + (couponCode ? ' (' + couponCode + ')' : '');
+        $('p-disc').textContent = '− ' + fmt(discount);
+      } else {
+        $('p-disc-row').style.display = 'none';
+      }
+      $('p-total').textContent = fmt(netTotal());
+      $('bar-total').textContent = fmt(netTotal());
+      $('payBtn').textContent = 'Pay ' + fmt(netTotal());
+    }
+    renderTotals();
+
+    $('couponBtn').addEventListener('click', function(){
+      var code = ($('couponInput').value || '').trim().toUpperCase();
+      var msg = $('couponMsg');
+      if (!code) { msg.className = 'coupon-msg'; msg.textContent = ''; return; }
+      $('couponBtn').disabled = true; $('couponBtn').textContent = '…';
+      api('/apply-coupon', { method:'POST', body: JSON.stringify({ token: TOKEN, code: code }) })
+        .then(function(r){
+          if (r && r.valid) {
+            couponCode = r.code || code; discount = Number(r.discountInr) || 0;
+            msg.className = 'coupon-msg ok'; msg.textContent = (r.label || 'Applied') + ' — you save ' + fmt(discount);
+          } else {
+            couponCode = null; discount = 0;
+            msg.className = 'coupon-msg bad'; msg.textContent = (r && r.reason) || 'Invalid code';
+          }
+          renderTotals();
+        })
+        .catch(function(){ couponCode = null; discount = 0; msg.className = 'coupon-msg bad'; msg.textContent = 'Could not apply code'; renderTotals(); })
+        .then(function(){ $('couponBtn').disabled = false; $('couponBtn').textContent = 'Apply'; });
+    });
 
     function api(path, init){
       return fetch('/api/bot-checkout' + path, Object.assign({ headers:{'Content-Type':'application/json'} }, init||{}))
@@ -369,7 +418,7 @@ export function renderCheckoutPage(token: string, product: PageProduct): string 
       if(!state.selectedId){ alert('Please select or add a delivery address first.'); return; }
       if(!window.Razorpay){ alert('Payment is still loading, one moment…'); return; }
       $('payBtn').disabled = true; $('payBtn').textContent = 'Please wait…';
-      api('/order', { method:'POST', body: JSON.stringify({ token:TOKEN }) }).then(function(o){
+      api('/order', { method:'POST', body: JSON.stringify({ token:TOKEN, code: couponCode }) }).then(function(o){
         if(!o || !o.orderId){ alert('Couldn\\'t start the payment. Please try again.'); reset(); return; }
         var sel = state.addresses.filter(function(a){return a.id===state.selectedId;})[0] || {};
         var rzp = new window.Razorpay({
@@ -378,7 +427,7 @@ export function renderCheckoutPage(token: string, product: PageProduct): string 
           prefill:{ name: sel.name||state.contact.name||'', email: state.contact.email||'', contact: sel.mobile||state.contact.mobile||'' },
           theme:{ color:'#0b0b0f' },
           handler: function(resp){
-            api('/verify', { method:'POST', body: JSON.stringify(Object.assign({ token:TOKEN, addressId:state.selectedId }, resp)) }).then(function(vj){
+            api('/verify', { method:'POST', body: JSON.stringify(Object.assign({ token:TOKEN, addressId:state.selectedId, code: couponCode }, resp)) }).then(function(vj){
               if(vj && vj.ok) success(); else { alert('We couldn\\'t verify the payment. If money was deducted, our team will reach out.'); reset(); }
             });
           },
@@ -387,14 +436,14 @@ export function renderCheckoutPage(token: string, product: PageProduct): string 
         rzp.open();
       });
     }
-    function reset(){ $('payBtn').disabled=false; $('payBtn').textContent='Pay '+fmt(TOTAL); }
+    function reset(){ $('payBtn').disabled=false; $('payBtn').textContent='Pay '+fmt(netTotal()); }
     function success(){
       var bar = document.querySelector('.paybar'); if(bar) bar.remove();
       document.querySelector('.wrap').innerHTML =
         '<div class="card pop"><div class="state">'+
         '<div class="ic ok">✅</div>'+
         '<h2>Order confirmed!</h2>'+
-        '<p>Payment of <b>'+fmt(TOTAL)+'</b> for <b>'+esc(PRODUCT.title)+'</b> received.</p>'+
+        '<p>Payment of <b>'+fmt(netTotal())+'</b> for <b>'+esc(PRODUCT.title)+'</b> received.</p>'+
         '<p style="margin-top:10px">We\\'ve sent a confirmation to your Instagram. You can safely close this tab.</p>'+
         '</div></div>';
     }

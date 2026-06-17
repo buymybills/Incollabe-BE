@@ -99,6 +99,7 @@ import { BotCheckoutModule } from '../bot-checkout/bot-checkout.module';
 import { BotAnalyticsAdminController } from './controllers/bot-analytics-admin.controller';
 import { CommentAutomationController } from './controllers/comment-automation.controller';
 import { BotCommentAutomationController } from './controllers/bot-comment-automation.controller';
+import { BotCouponAdminController } from './controllers/bot-coupon-admin.controller';
 import { BotKeyGuard } from '../bot-analytics/guards/bot-key.guard';
 
 @Module({
@@ -176,6 +177,7 @@ import { BotKeyGuard } from '../bot-analytics/guards/bot-key.guard';
     BotAnalyticsAdminController,
     CommentAutomationController,
     BotCommentAutomationController,
+    BotCouponAdminController,
   ],
   providers: [
     BotKeyGuard,

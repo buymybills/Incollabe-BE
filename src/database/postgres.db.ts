@@ -60,6 +60,7 @@ import { CommentAutomation } from '../shared/models/comment-automation.model';
 import { CheckoutLink } from '../bot-checkout/models/checkout-link.model';
 import { BotSavedItem } from '../bot-checkout/models/bot-saved-item.model';
 import { BotCartItem } from '../bot-checkout/models/bot-cart-item.model';
+import { BotCoupon } from '../bot-checkout/models/bot-coupon.model';
 
 @Module({
   imports: [
@@ -208,6 +209,8 @@ import { BotCartItem } from '../bot-checkout/models/bot-cart-item.model';
             BotSavedItem,
             // Bot cart
             BotCartItem,
+            // Bot coupons
+            BotCoupon,
           ],
           autoLoadModels: true,
           // Auto-sync in dev only — but allow an explicit opt-out (DB_SYNC=false)

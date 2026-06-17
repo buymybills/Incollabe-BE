@@ -78,6 +78,16 @@ export class BotOrder extends Model<BotOrder> {
   @Column({ field: 'amount_inr', type: DataType.DECIMAL(10, 2) })
   declare amountInr: number;
 
+  // Coupon applied (bot-managed promo codes)
+  @AllowNull(true)
+  @Column({ field: 'coupon_code', type: DataType.STRING(40) })
+  declare couponCode: string | null;
+
+  @AllowNull(false)
+  @Default(0)
+  @Column({ field: 'discount_inr', type: DataType.DECIMAL(10, 2) })
+  declare discountInr: number;
+
   // Razorpay transaction details
   @AllowNull(true)
   @Index

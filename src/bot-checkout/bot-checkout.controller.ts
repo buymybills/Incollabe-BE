@@ -11,8 +11,9 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { BotCheckoutService } from './bot-checkout.service';
+import { BotCheckoutService, cartTotalInr } from './bot-checkout.service';
 import { CheckoutLinkService } from './checkout-link.service';
+import { BotCouponService } from './bot-coupon.service';
 import { verifyCheckoutToken, hashUserKey, getCheckoutSecret } from './checkout-token.util';
 
 /**
@@ -28,6 +29,7 @@ export class BotCheckoutController {
   constructor(
     private readonly checkout: BotCheckoutService,
     private readonly checkoutLink: CheckoutLinkService,
+    private readonly coupon: BotCouponService,
     private readonly config: ConfigService,
   ) {}
 
@@ -107,12 +109,22 @@ export class BotCheckoutController {
     return { deleted: ok };
   }
 
-  // Create a Razorpay order (amount comes from the signed token, never the client)
-  @Post('order')
-  async createOrder(@Body() body: { token: string }) {
+  // Validate a coupon against the order amount (display only — the real discount
+  // is recomputed server-side at /order and /verify).
+  @Post('apply-coupon')
+  async applyCoupon(@Body() body: { token: string; code: string }) {
     const p = verifyCheckoutToken(body.token, getCheckoutSecret(this.config));
     if (!p) throw new UnauthorizedException('invalid_token');
-    const order = await this.checkout.createRazorpayOrder(p);
+    const base = cartTotalInr(p);
+    return this.coupon.validate(body.code, base);
+  }
+
+  // Create a Razorpay order (amount comes from the signed token, never the client)
+  @Post('order')
+  async createOrder(@Body() body: { token: string; code?: string }) {
+    const p = verifyCheckoutToken(body.token, getCheckoutSecret(this.config));
+    if (!p) throw new UnauthorizedException('invalid_token');
+    const order = await this.checkout.createRazorpayOrder(p, body.code);
     if (!order) throw new BadRequestException('order_failed');
     return order;
   }
@@ -128,6 +140,7 @@ export class BotCheckoutController {
       razorpay_payment_id: string;
       razorpay_signature: string;
       method?: string;
+      code?: string;
     },
   ) {
     const p = verifyCheckoutToken(body.token, getCheckoutSecret(this.config));
