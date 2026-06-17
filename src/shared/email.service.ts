@@ -1417,4 +1417,76 @@ export class EmailService {
       // Intentionally not throwing – email is non-critical
     }
   }
+
+  /**
+   * Notify brand that their campaign has been closed by admin and all influencer applications rejected
+   */
+  async sendBrandCampaignClosedEmail(
+    email: string,
+    brandName: string,
+    campaignName: string,
+    rejectedCount: number,
+    reason?: string,
+  ): Promise<void> {
+    try {
+      const reasonSection = reason
+        ? `<p><strong>Reason:</strong> ${reason}</p>`
+        : '';
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Campaign Closed by Admin</title>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: #f8f9fa; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .content { background: #fff; padding: 30px; border: 1px solid #dee2e6; }
+            .footer { background: #f8f9fa; padding: 15px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; color: #6c757d; }
+            .alert { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 15px; border-radius: 4px; margin: 15px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Campaign Closed</h1>
+            </div>
+            <div class="content">
+              <p>Dear ${brandName},</p>
+              <div class="alert">
+                <strong>Your campaign has been closed by the Collabkaroo team.</strong><br>
+                Due to inactivity, your campaign has been cancelled and all influencer applications have been rejected.
+              </div>
+              <p><strong>Campaign:</strong> ${campaignName}</p>
+              <p><strong>Applications rejected:</strong> ${rejectedCount}</p>
+              ${reasonSection}
+              <p>If you'd like to re-launch this campaign or have any questions, please contact our support team.</p>
+              <p>Best regards,<br>The Collabkaroo Team</p>
+            </div>
+            <div class="footer">
+              <p>This is an automated message. Please do not reply to this email.</p>
+              <p>&copy; 2024 Collabkaroo. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      await this.transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `Your Campaign "${campaignName}" Has Been Closed`,
+        html: htmlContent,
+      });
+
+      console.log(`[EMAIL] Campaign closed email sent to brand: ${email}`);
+    } catch (error) {
+      console.error(
+        `[EMAIL ERROR] Failed to send campaign closed email to brand ${email}`,
+        error,
+      );
+    }
+  }
 }
