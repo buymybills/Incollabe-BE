@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-// import { Cron, CronExpression } from '@nestjs/schedule'; // DISABLED: Commented out with cron jobs
+import { Cron } from '@nestjs/schedule';
 import { InjectModel } from '@nestjs/sequelize';
 import { Op, WhereOptions } from 'sequelize';
 import { Influencer } from '../../auth/model/influencer.model';
