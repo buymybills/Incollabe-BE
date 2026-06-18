@@ -692,7 +692,7 @@ export class AdminCampaignService {
     // Cancel the campaign
     await campaign.update({ status: CampaignStatus.CANCELLED });
 
-    // Reject all non-rejected applications
+    // Reject only pending/under-review applications — do not touch selected, completed, or withdrawn
     const [rejectedCount] = await this.campaignApplicationModel.update(
       {
         status: ApplicationStatus.REJECTED,
@@ -702,7 +702,7 @@ export class AdminCampaignService {
       {
         where: {
           campaignId,
-          status: { [Op.notIn]: [ApplicationStatus.REJECTED] },
+          status: { [Op.in]: [ApplicationStatus.APPLIED, ApplicationStatus.UNDER_REVIEW] },
         },
       },
     );
