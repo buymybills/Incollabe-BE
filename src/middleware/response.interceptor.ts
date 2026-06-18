@@ -16,7 +16,7 @@ function rewriteUrls(obj: any, s3Prefix: string, cfPrefix: string): any {
   if (typeof obj === 'string') {
     // Never rewrite presigned URLs — their signature is bound to the S3 hostname
     // and CloudFront cannot handle multipart PUT uploads
-    if (obj.startsWith(s3Prefix) && !obj.includes('X-Amz-Signature')) {
+    if (obj.startsWith(s3Prefix) && !obj.includes('X-Amz-')) {
       return cfPrefix + obj.slice(s3Prefix.length);
     }
     return obj;
