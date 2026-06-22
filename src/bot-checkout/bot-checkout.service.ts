@@ -474,16 +474,19 @@ export class BotCheckoutService {
         ]);
 
         void this.forwarder.forward(order);
-        void this.pushOrderToHub(order, {
-          title: it.title,
-          slug: it.slug,
-          size: it.size,
-          gender,
-          priceInr: it.priceInr,
-          amountInr: lineAmount,
-          igsid: payload.igsid,
-          username: payload.username,
-        });
+        void this.fetchRazorpayEmail(body.razorpay_payment_id).then((customerEmail) =>
+          this.pushOrderToHub(order, {
+            title: it.title,
+            slug: it.slug,
+            size: it.size,
+            gender,
+            priceInr: it.priceInr,
+            amountInr: lineAmount,
+            igsid: payload.igsid,
+            username: payload.username,
+            customerEmail,
+          }),
+        );
       }
 
       if (appliedCode) void this.coupon.redeem(appliedCode).catch(() => {});
@@ -537,16 +540,19 @@ export class BotCheckoutService {
     // Forward the order OUTBOUND to the brand's system ("revert it to them").
     void this.forwarder.forward(order);
     // Push to the bot's order hub so the connector creates the store entry in real time.
-    void this.pushOrderToHub(order, {
-      title: payload.title,
-      slug: payload.slug,
-      size: payload.size,
-      gender,
-      priceInr: payload.priceInr,
-      amountInr: netTotal,
-      igsid: payload.igsid,
-      username: payload.username,
-    });
+    void this.fetchRazorpayEmail(body.razorpay_payment_id).then((customerEmail) =>
+      this.pushOrderToHub(order, {
+        title: payload.title,
+        slug: payload.slug,
+        size: payload.size,
+        gender,
+        priceInr: payload.priceInr,
+        amountInr: netTotal,
+        igsid: payload.igsid,
+        username: payload.username,
+        customerEmail,
+      }),
+    );
 
     // Confirm to the shopper in Instagram
     const sizeLabel = payload.size ? ` (Size ${payload.size})` : '';
@@ -560,6 +566,24 @@ export class BotCheckoutService {
     return { ok: true, orderId: order.id };
   }
 
+  /** Fetch the customer email from Razorpay payment details (best-effort). */
+  private async fetchRazorpayEmail(paymentId: string): Promise<string | null> {
+    try {
+      const keyId = this.config.get<string>('RAZORPAY_KEY_ID') || '';
+      const keySecret = this.config.get<string>('RAZORPAY_KEY_SECRET') || '';
+      const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+      const res = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}`, {
+        headers: { Authorization: `Basic ${auth}` },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return null;
+      const data: any = await res.json();
+      return data?.email ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   /**
    * Push a placed order line to the bot's order-ingest hub (fire-and-forget) so
    * the per-brand connector (Shopify / WooCommerce / Next.js) creates the store
@@ -570,6 +594,7 @@ export class BotCheckoutService {
     line: {
       title?: string; slug?: string; size?: string; gender?: string;
       priceInr: number; amountInr: number; igsid: string; username?: string;
+      customerEmail?: string | null;
     },
   ): Promise<void> {
     const url = this.config.get<string>('BOT_ORDER_INGEST_URL');
@@ -594,6 +619,7 @@ export class BotCheckoutService {
           igsid: line.igsid,
           paymentEvent: 'checkout.verified',
           customerName: (order as any).shippingAddress?.name,
+          customerEmail: line.customerEmail ?? null,
           customerPhone: (order as any).shippingAddress?.mobile,
           shippingAddress: (order as any).shippingAddress || undefined,
         }),
