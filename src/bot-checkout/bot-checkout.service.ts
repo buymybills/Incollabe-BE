@@ -594,6 +594,7 @@ export class BotCheckoutService {
           igsid: line.igsid,
           paymentEvent: 'checkout.verified',
           customerName: (order as any).shippingAddress?.name,
+          customerEmail: (order as any).customer?.email ?? null,
           customerPhone: (order as any).shippingAddress?.mobile,
           shippingAddress: (order as any).shippingAddress || undefined,
         }),
