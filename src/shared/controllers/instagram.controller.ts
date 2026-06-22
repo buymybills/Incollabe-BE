@@ -1,7 +1,7 @@
 import { Controller, Post, Get, Body, Query, Param, HttpCode, HttpStatus, UseGuards, Req, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { InstagramService } from '../services/instagram.service';
-//import { InstagramSyncCronService } from '../services/instagram-sync.cron';
+import { InstagramSyncCronService } from '../services/instagram-sync.cron';
 //import { InstagramGrowthCronService } from '../services/instagram-growth.cron';
 import { InfluencerCredibilityScoringService } from '../services/influencer-credibility-scoring.service';
 import { InstagramSyncGateway } from '../instagram-sync.gateway';
@@ -26,7 +26,7 @@ import type { RequestWithUser } from '../../types/request.types';
 export class InstagramController {
   constructor(
     private readonly instagramService: InstagramService,
-    //private readonly instagramSyncCronService: InstagramSyncCronService,
+    private readonly instagramSyncCronService: InstagramSyncCronService,
     //private readonly instagramGrowthCronService: InstagramGrowthCronService,
     private readonly credibilityScoringService: InfluencerCredibilityScoringService,
     private readonly instagramSyncGateway: InstagramSyncGateway,

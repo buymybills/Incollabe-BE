@@ -24,6 +24,7 @@ import { ChatController } from './chat.controller';
 import { InstagramController } from './controllers/instagram.controller';
 import { ConfigController } from './controllers/config.controller';
 import { InstagramService } from './services/instagram.service';
+import { InstagramSyncCronService } from './services/instagram-sync.cron';
 import { InstagramTokenRefreshCronService } from './services/instagram-token-refresh.cron';
 import { CredibilityScoreCronService } from './services/credibility-score.cron';
 import { InfluencerCredibilityScoringService } from './services/influencer-credibility-scoring.service';
@@ -194,6 +195,7 @@ import { ReportController } from './controllers/report.controller';
     KeyBackupService,
     ChatDecryptionService,
     InstagramService,
+    InstagramSyncCronService,
     InstagramTokenRefreshCronService,
     CredibilityScoreCronService,
     InfluencerCredibilityScoringService,
