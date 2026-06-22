@@ -27,6 +27,7 @@ import { ContractModule } from './contract/contract.module';
 import { BotAnalyticsModule } from './bot-analytics/bot-analytics.module';
 import { BotCheckoutModule } from './bot-checkout/bot-checkout.module';
 import { StockAlertModule } from './stock-alert/stock-alert.module';
+import { BotRefundModule } from './bot-refund/bot-refund.module';
 import { LoggingMiddleware } from './shared/middleware/logging.middleware';
 import { ApiLoggerMiddleware } from './middleware/api-logger.middleware';
 import { ApiActivityLog } from './shared/models/api-activity-log.model';
@@ -68,6 +69,7 @@ import { ApiActivityLog } from './shared/models/api-activity-log.model';
     BotAnalyticsModule,
     BotCheckoutModule,
     StockAlertModule,
+    BotRefundModule,
   ],
   controllers: [AppController],
   providers: [AppService, ApiLoggerMiddleware],

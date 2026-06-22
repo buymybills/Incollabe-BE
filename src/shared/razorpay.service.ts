@@ -185,6 +185,22 @@ export class RazorpayService {
   }
 
   /**
+   * Refund a captured payment. Full refund when amountPaise is omitted.
+   * Idempotency must be enforced by the caller (we mark the order refunded).
+   */
+  async refundPayment(paymentId: string, amountPaise?: number) {
+    try {
+      const opts: Record<string, any> = { speed: 'normal' };
+      if (amountPaise != null) opts.amount = amountPaise;
+      const refund = await this.razorpay.payments.refund(paymentId, opts);
+      return { success: true, data: { id: refund.id, status: refund.status, amount: Number(refund.amount) } };
+    } catch (error) {
+      console.error('Error refunding payment:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Get all payments for an order
    */
   async getOrderPayments(orderId: string) {
