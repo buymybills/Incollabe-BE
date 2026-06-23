@@ -514,12 +514,15 @@ export class InstagramService {
     const expiresAt = new Date();
     expiresAt.setSeconds(expiresAt.getSeconds() + refreshResponse.expires_in);
 
-    // Update database — also clear reauth flag since refresh succeeded
-    await user.update({
+    // Update database — also clear reauth flag since refresh succeeded (influencer only)
+    const updatePayload: any = {
       instagramAccessToken: refreshResponse.access_token,
       instagramTokenExpiresAt: expiresAt,
-      instagramReauthRequired: false,
-    });
+    };
+    if (userType === 'influencer') {
+      updatePayload.instagramReauthRequired = false;
+    }
+    await user.update(updatePayload);
 
     return user.reload();
   }
