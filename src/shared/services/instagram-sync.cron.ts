@@ -74,11 +74,20 @@ export class InstagramSyncCronService {
         this.logger.debug(
           `✓ Synced influencer ${influencer.id} (@${influencer.instagramUsername})`
         );
-      } catch (error) {
+      } catch (error: any) {
         failCount++;
-        this.logger.warn(
-          `✗ Failed to sync influencer ${influencer.id}: ${error.message}`
-        );
+        const isAuthError =
+          error?.getResponse?.()?.error === 'OAuthException' ||
+          (error?.message || '').includes('session has been invalidated');
+        if (isAuthError) {
+          this.logger.warn(
+            `✗ Instagram reauth required for influencer ${influencer.id} (@${influencer.instagramUsername}) — session invalidated`
+          );
+        } else {
+          this.logger.warn(
+            `✗ Failed to sync influencer ${influencer.id}: ${error.message}`
+          );
+        }
       }
     }
 
@@ -116,11 +125,20 @@ export class InstagramSyncCronService {
         this.logger.debug(
           `✓ Synced brand ${brand.id} (@${brand.instagramUsername})`
         );
-      } catch (error) {
+      } catch (error: any) {
         failCount++;
-        this.logger.warn(
-          `✗ Failed to sync brand ${brand.id}: ${error.message}`
-        );
+        const isAuthError =
+          error?.getResponse?.()?.error === 'OAuthException' ||
+          (error?.message || '').includes('session has been invalidated');
+        if (isAuthError) {
+          this.logger.warn(
+            `✗ Instagram reauth required for brand ${brand.id} (@${brand.instagramUsername}) — session invalidated`
+          );
+        } else {
+          this.logger.warn(
+            `✗ Failed to sync brand ${brand.id}: ${error.message}`
+          );
+        }
       }
     }
 
@@ -212,11 +230,20 @@ export class InstagramSyncCronService {
           this.logger.debug(
             `✓ Refreshed token for influencer ${influencer.id}`
           );
-        } catch (error) {
+        } catch (error: any) {
           failCount++;
-          this.logger.warn(
-            `✗ Failed to refresh token for influencer ${influencer.id}: ${error.message}`
-          );
+          const isAuthError =
+            error?.getResponse?.()?.error === 'OAuthException' ||
+            (error?.message || '').includes('session has been invalidated');
+          if (isAuthError) {
+            this.logger.warn(
+              `✗ Instagram reauth required for influencer ${influencer.id} — session invalidated, token refresh failed`
+            );
+          } else {
+            this.logger.warn(
+              `✗ Failed to refresh token for influencer ${influencer.id}: ${error.message}`
+            );
+          }
         }
       }
 
@@ -229,11 +256,20 @@ export class InstagramSyncCronService {
           );
           successCount++;
           this.logger.debug(`✓ Refreshed token for brand ${brand.id}`);
-        } catch (error) {
+        } catch (error: any) {
           failCount++;
-          this.logger.warn(
-            `✗ Failed to refresh token for brand ${brand.id}: ${error.message}`
-          );
+          const isAuthError =
+            error?.getResponse?.()?.error === 'OAuthException' ||
+            (error?.message || '').includes('session has been invalidated');
+          if (isAuthError) {
+            this.logger.warn(
+              `✗ Instagram reauth required for brand ${brand.id} — session invalidated, token refresh failed`
+            );
+          } else {
+            this.logger.warn(
+              `✗ Failed to refresh token for brand ${brand.id}: ${error.message}`
+            );
+          }
         }
       }
 

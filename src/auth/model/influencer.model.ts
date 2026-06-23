@@ -223,6 +223,10 @@ export class Influencer extends Model {
   @Column({ type: DataType.DATE, field: 'instagram_connected_at' })
   declare instagramConnectedAt: Date;
 
+  @AllowNull(false)
+  @Column({ type: DataType.BOOLEAN, field: 'instagram_reauth_required', defaultValue: false })
+  declare instagramReauthRequired: boolean;
+
   @AllowNull(true)
   @Column({ type: DataType.STRING, field: 'instagram_access_token_hash' })
   declare instagramAccessTokenHash: string;
