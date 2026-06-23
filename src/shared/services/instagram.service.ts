@@ -288,6 +288,7 @@ export class InstagramService {
         instagramIsVerified: true, // Set to true when Instagram is connected
         instagramTokenExpiresAt: expiresAt,
         instagramConnectedAt: new Date(),
+        instagramReauthRequired: false, // Clear any prior auth error flag on successful reconnect
         isVerified: true, // Automatically verify Instagram-connected influencers
         verifiedAt: new Date(), // Set verification timestamp when Instagram is connected
       };
@@ -435,6 +436,7 @@ export class InstagramService {
         instagramBio: profile.biography || undefined,
         instagramTokenExpiresAt: expiresAt,
         instagramConnectedAt: new Date(),
+        instagramReauthRequired: false, // Clear any prior auth error flag on successful reconnect
       };
 
       await brand.update(updateData);
@@ -495,19 +497,28 @@ export class InstagramService {
       throw new BadRequestException('No Instagram account connected');
     }
 
-    // Refresh token
-    const refreshResponse = await this.refreshAccessToken({
-      access_token: user.instagramAccessToken,
-    });
+    // Refresh token — detect and flag auth errors so the user can reconnect
+    let refreshResponse: Awaited<ReturnType<typeof this.refreshAccessToken>>;
+    try {
+      refreshResponse = await this.refreshAccessToken({
+        access_token: user.instagramAccessToken,
+      });
+    } catch (error) {
+      if (this.isInstagramAuthError(error)) {
+        await this.markInstagramReauthRequired(userId, userType);
+      }
+      throw error;
+    }
 
     // Calculate new expiry date
     const expiresAt = new Date();
     expiresAt.setSeconds(expiresAt.getSeconds() + refreshResponse.expires_in);
 
-    // Update database
+    // Update database — also clear reauth flag since refresh succeeded
     await user.update({
       instagramAccessToken: refreshResponse.access_token,
       instagramTokenExpiresAt: expiresAt,
+      instagramReauthRequired: false,
     });
 
     return user.reload();
@@ -573,8 +584,16 @@ export class InstagramService {
       }
     }
 
-    // Fetch fresh profile data
-    const profile = await this.getUserProfile(user.instagramAccessToken);
+    // Fetch fresh profile data — detect and flag auth errors so the user can reconnect
+    let profile: Awaited<ReturnType<typeof this.getUserProfile>>;
+    try {
+      profile = await this.getUserProfile(user.instagramAccessToken);
+    } catch (error) {
+      if (this.isInstagramAuthError(error)) {
+        await this.markInstagramReauthRequired(userId, userType);
+      }
+      throw error;
+    }
 
     // Update database with fresh data
     const updateData: any = {
@@ -636,6 +655,59 @@ export class InstagramService {
     });
 
     return user.reload();
+  }
+
+  /**
+   * Detect whether an error is an Instagram OAuth session invalidation error
+   * (e.g. user changed password, or Facebook invalidated the session).
+   * Works on both raw Axios errors and BadRequestExceptions thrown by handleInstagramError.
+   */
+  private isInstagramAuthError(error: any): boolean {
+    // Raw Axios error (before handleInstagramError converts it)
+    if (axios.isAxiosError(error)) {
+      const errorData = error.response?.data as any;
+      const type = errorData?.error?.type;
+      const code = errorData?.error?.code;
+      const msg: string = errorData?.error?.message || '';
+      return (
+        type === 'OAuthException' &&
+        (code === 190 ||
+          msg.includes('session has been invalidated') ||
+          msg.includes('changed their password'))
+      );
+    }
+
+    // BadRequestException already thrown by handleInstagramError
+    if (typeof error?.getResponse === 'function') {
+      const response = error.getResponse() as any;
+      const errorType: string = response?.error || '';
+      const msg: string = response?.message || '';
+      return (
+        errorType === 'OAuthException' ||
+        msg.includes('session has been invalidated') ||
+        msg.includes('changed their password')
+      );
+    }
+
+    return false;
+  }
+
+  /**
+   * Mark an influencer or brand as requiring Instagram re-authentication.
+   * Called whenever Instagram returns an OAuthException session error.
+   */
+  private async markInstagramReauthRequired(
+    userId: number,
+    userType: UserType,
+  ): Promise<void> {
+    if (userType !== 'influencer') return;
+    await this.influencerModel.update(
+      { instagramReauthRequired: true },
+      { where: { id: userId } },
+    );
+    console.warn(
+      `[InstagramService] Reauth required for influencer #${userId} — Instagram session invalidated`,
+    );
   }
 
   /**
