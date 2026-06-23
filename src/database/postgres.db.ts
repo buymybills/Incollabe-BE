@@ -59,6 +59,7 @@ import { ReportedUser } from '../shared/models/reported-user.model';
 import { CommentAutomation } from '../shared/models/comment-automation.model';
 import { CheckoutLink } from '../bot-checkout/models/checkout-link.model';
 import { BotSavedItem } from '../bot-checkout/models/bot-saved-item.model';
+import { BotShareCode } from '../bot-checkout/models/bot-share-code.model';
 import { BotCartItem } from '../bot-checkout/models/bot-cart-item.model';
 import { BotCoupon } from '../bot-checkout/models/bot-coupon.model';
 
@@ -207,6 +208,8 @@ import { BotCoupon } from '../bot-checkout/models/bot-coupon.model';
             CheckoutLink,
             // Bot saved items
             BotSavedItem,
+            // Bot saved-list share codes
+            BotShareCode,
             // Bot cart
             BotCartItem,
             // Bot coupons
