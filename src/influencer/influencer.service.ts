@@ -2451,6 +2451,7 @@ export class InfluencerService {
       syncNeeded,
       lastSyncDate,
       daysSinceLastSync,
+      reauthRequired: influencer.instagramReauthRequired ?? false,
     };
   }
 
