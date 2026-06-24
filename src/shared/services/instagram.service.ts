@@ -288,7 +288,7 @@ export class InstagramService {
         instagramIsVerified: true, // Set to true when Instagram is connected
         instagramTokenExpiresAt: expiresAt,
         instagramConnectedAt: new Date(),
-        instagramReauthRequired: false, // Clear any prior auth error flag on successful reconnect
+        instagramReauthRequired: false,
         isVerified: true, // Automatically verify Instagram-connected influencers
         verifiedAt: new Date(), // Set verification timestamp when Instagram is connected
       };
@@ -436,7 +436,6 @@ export class InstagramService {
         instagramBio: profile.biography || undefined,
         instagramTokenExpiresAt: expiresAt,
         instagramConnectedAt: new Date(),
-        instagramReauthRequired: false, // Clear any prior auth error flag on successful reconnect
       };
 
       await brand.update(updateData);
@@ -514,7 +513,6 @@ export class InstagramService {
     const expiresAt = new Date();
     expiresAt.setSeconds(expiresAt.getSeconds() + refreshResponse.expires_in);
 
-    // Update database — also clear reauth flag since refresh succeeded (influencer only)
     const updatePayload: any = {
       instagramAccessToken: refreshResponse.access_token,
       instagramTokenExpiresAt: expiresAt,
@@ -665,7 +663,7 @@ export class InstagramService {
    * (e.g. user changed password, or Facebook invalidated the session).
    * Works on both raw Axios errors and BadRequestExceptions thrown by handleInstagramError.
    */
-  private isInstagramAuthError(error: any): boolean {
+  isInstagramAuthError(error: any): boolean {
     // Raw Axios error (before handleInstagramError converts it)
     if (axios.isAxiosError(error)) {
       const errorData = error.response?.data as any;

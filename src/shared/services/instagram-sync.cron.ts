@@ -74,10 +74,7 @@ export class InstagramSyncCronService {
         );
       } catch (error: any) {
         failCount++;
-        const isAuthError =
-          error?.getResponse?.()?.error === 'OAuthException' ||
-          (error?.message || '').includes('session has been invalidated');
-        if (isAuthError) {
+        if (this.instagramService.isInstagramAuthError(error)) {
           this.logger.warn(
             `✗ Instagram reauth required for influencer ${influencer.id} (@${influencer.instagramUsername}) — session invalidated`
           );
@@ -125,10 +122,7 @@ export class InstagramSyncCronService {
         );
       } catch (error: any) {
         failCount++;
-        const isAuthError =
-          error?.getResponse?.()?.error === 'OAuthException' ||
-          (error?.message || '').includes('session has been invalidated');
-        if (isAuthError) {
+        if (this.instagramService.isInstagramAuthError(error)) {
           this.logger.warn(
             `✗ Instagram reauth required for brand ${brand.id} (@${brand.instagramUsername}) — session invalidated`
           );
@@ -228,10 +222,7 @@ export class InstagramSyncCronService {
           );
         } catch (error: any) {
           failCount++;
-          const isAuthError =
-            error?.getResponse?.()?.error === 'OAuthException' ||
-            (error?.message || '').includes('session has been invalidated');
-          if (isAuthError) {
+          if (this.instagramService.isInstagramAuthError(error)) {
             this.logger.warn(
               `✗ Instagram reauth required for influencer ${influencer.id} — session invalidated, token refresh failed`
             );
@@ -254,10 +245,7 @@ export class InstagramSyncCronService {
           this.logger.debug(`✓ Refreshed token for brand ${brand.id}`);
         } catch (error: any) {
           failCount++;
-          const isAuthError =
-            error?.getResponse?.()?.error === 'OAuthException' ||
-            (error?.message || '').includes('session has been invalidated');
-          if (isAuthError) {
+          if (this.instagramService.isInstagramAuthError(error)) {
             this.logger.warn(
               `✗ Instagram reauth required for brand ${brand.id} — session invalidated, token refresh failed`
             );
