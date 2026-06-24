@@ -23,6 +23,15 @@ import { IsValidUsername } from '../../shared/validators/is-valid-username.valid
 
 export class InfluencerSignupDto {
   @ApiProperty({
+    description: 'HYPE platform invite code (e.g. HYPE-XYZ9). Required for HYPE influencer signup.',
+    example: 'HYPE-XYZ9',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  inviteCode?: string;
+
+  @ApiProperty({
     description: 'Referral or campus ambassador code (optional). Accepts either:\n- Campus Ambassador Code: CA-XXXX format (e.g., CA-0001)\n- Influencer Referral Code: 8-character alphanumeric (e.g., ABC12XYZ)',
     required: false,
     examples: {

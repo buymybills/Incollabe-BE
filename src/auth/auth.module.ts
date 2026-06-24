@@ -24,6 +24,8 @@ import { CustomNiche } from './model/custom-niche.model';
 import { ProfileReview } from '../admin/models/profile-review.model';
 import { InfluencerReferralUsage } from './model/influencer-referral-usage.model';
 import { ProSubscription } from '../influencer/models/pro-subscription.model';
+import { Consumer } from './model/consumer.model';
+import { InfluencerInviteCode } from './model/influencer-invite-code.model';
 
 @Module({
   imports: [
@@ -42,6 +44,8 @@ import { ProSubscription } from '../influencer/models/pro-subscription.model';
       ProfileReview,
       InfluencerReferralUsage,
       ProSubscription,
+      Consumer,
+      InfluencerInviteCode,
     ]),
     SharedModule,
   ],

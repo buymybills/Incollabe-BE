@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, Matches, Length } from 'class-validator';
+import { IsNotEmpty, IsString, Matches, Length, IsOptional, IsIn } from 'class-validator';
 
 export class VerifyOtpDto {
   @ApiProperty({
@@ -26,4 +26,15 @@ export class VerifyOtpDto {
   @IsString()
   @Length(6, 6, { message: 'OTP must be 6 digits' })
   otp: string;
+
+  @ApiProperty({
+    description: 'User type: "influencer" (default) or "consumer"',
+    example: 'influencer',
+    required: false,
+    enum: ['influencer', 'consumer'],
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(['influencer', 'consumer'], { message: 'userType must be influencer or consumer' })
+  userType?: 'influencer' | 'consumer';
 }

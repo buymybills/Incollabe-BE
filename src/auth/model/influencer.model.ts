@@ -340,6 +340,27 @@ export class Influencer extends Model {
   @Column(DataType.DATE)
   declare lastLoginAt: Date;
 
+  // HYPE Platform fields
+  @AllowNull(true)
+  @Column({ type: DataType.STRING, field: 'invite_code' })
+  declare inviteCode: string;
+
+  @AllowNull(false)
+  @Column({ type: DataType.BOOLEAN, defaultValue: false, field: 'is_hype_influencer' })
+  declare isHypeInfluencer: boolean;
+
+  @AllowNull(false)
+  @Column({ type: DataType.INTEGER, defaultValue: 1, field: 'hype_influencer_level' })
+  declare hypeInfluencerLevel: number;
+
+  @AllowNull(false)
+  @Column({ type: DataType.INTEGER, defaultValue: 0, field: 'hype_reels_count' })
+  declare hypeReelsCount: number;
+
+  @AllowNull(true)
+  @Column({ type: DataType.DATE, field: 'hype_level_updated_at' })
+  declare hypeLevelUpdatedAt: Date;
+
   @CreatedAt
   @Column(DataType.DATE)
   declare createdAt: Date;

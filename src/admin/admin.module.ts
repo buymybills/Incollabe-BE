@@ -101,6 +101,9 @@ import { CommentAutomationController } from './controllers/comment-automation.co
 import { BotCommentAutomationController } from './controllers/bot-comment-automation.controller';
 import { BotCouponAdminController } from './controllers/bot-coupon-admin.controller';
 import { BotKeyGuard } from '../bot-analytics/guards/bot-key.guard';
+import { HypePlatformAdminController } from './controllers/hype-platform-admin.controller';
+import { HypePlatformAdminService } from './services/hype-platform-admin.service';
+import { AffiliateEarning } from '../influencer/models/affiliate-earning.model';
 
 @Module({
   imports: [
@@ -151,6 +154,7 @@ import { BotKeyGuard } from '../bot-analytics/guards/bot-key.guard';
       Conversation,
       TopInfluencerScoreCache,
       AdminRoleDefinition,
+      AffiliateEarning,
     ]),
     SharedModule,
     NotificationQueueModule,
@@ -178,6 +182,7 @@ import { BotKeyGuard } from '../bot-analytics/guards/bot-key.guard';
     CommentAutomationController,
     BotCommentAutomationController,
     BotCouponAdminController,
+    HypePlatformAdminController,
   ],
   providers: [
     BotKeyGuard,
@@ -200,6 +205,7 @@ import { BotKeyGuard } from '../bot-analytics/guards/bot-key.guard';
     FiamCampaignService,
     FiamCampaignBroadcastService,
     HypeStoreAdminService,
+    HypePlatformAdminService,
     TopInfluencerCacheCronService,
     AdminManagementService,
     AdminRoleService,

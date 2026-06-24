@@ -38,6 +38,8 @@ import { ProSubscription } from '../influencer/models/pro-subscription.model';
 import { RazorpayService } from '../shared/razorpay.service';
 import { ChatGateway } from '../shared/chat.gateway';
 import { AppVersionService } from '../shared/services/app-version.service';
+import { Consumer } from './model/consumer.model';
+import { InfluencerInviteCode } from './model/influencer-invite-code.model';
 
 // Mock bcrypt at module level
 jest.mock('bcrypt', () => ({
@@ -276,6 +278,14 @@ describe('AuthService', () => {
         {
           provide: AppVersionService,
           useValue: { checkVersionStatus: jest.fn().mockResolvedValue({ config: null }) },
+        },
+        {
+          provide: getModelToken(Consumer),
+          useValue: mockModel(),
+        },
+        {
+          provide: getModelToken(InfluencerInviteCode),
+          useValue: mockModel(),
         },
       ],
     }).compile();

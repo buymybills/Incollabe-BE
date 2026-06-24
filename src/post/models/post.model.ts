@@ -16,10 +16,23 @@ import { Influencer } from '../../auth/model/influencer.model';
 import { Brand } from '../../brand/model/brand.model';
 import { Like } from './like.model';
 import { Comment } from './comment.model';
+import { PostCategory } from './post-category.model';
+import { PostSubcategory } from './post-subcategory.model';
 
 export enum UserType {
   INFLUENCER = 'influencer',
   BRAND = 'brand',
+}
+
+export enum PostType {
+  REGULAR = 'regular',
+  HYPE_REEL = 'hype_reel',
+}
+
+export enum CollaboratorStatus {
+  PENDING = 'pending',
+  ACCEPTED = 'accepted',
+  DECLINED = 'declined',
 }
 
 @Table({
@@ -122,6 +135,50 @@ export class Post extends Model {
   @Column(DataType.STRING)
   declare boostPaymentStatus: string;
 
+  // HYPE Reel fields
+  @AllowNull(false)
+  @Column({
+    type: DataType.STRING,
+    defaultValue: PostType.REGULAR,
+    field: 'post_type',
+  })
+  declare postType: string;
+
+  @AllowNull(false)
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: false,
+    field: 'is_hype_reel',
+  })
+  declare isHypeReel: boolean;
+
+  @AllowNull(true)
+  @ForeignKey(() => PostCategory)
+  @Column({ type: DataType.INTEGER, field: 'post_category_id' })
+  declare postCategoryId: number;
+
+  @AllowNull(true)
+  @ForeignKey(() => PostSubcategory)
+  @Column({ type: DataType.INTEGER, field: 'post_subcategory_id' })
+  declare postSubcategoryId: number;
+
+  @AllowNull(true)
+  @Column({ type: DataType.STRING, field: 'thumbnail_url' })
+  declare thumbnailUrl: string;
+
+  @AllowNull(true)
+  @Column({ type: DataType.INTEGER, field: 'video_duration_seconds' })
+  declare videoDurationSeconds: number;
+
+  @AllowNull(true)
+  @ForeignKey(() => Influencer)
+  @Column({ type: DataType.INTEGER, field: 'collaborator_id' })
+  declare collaboratorId: number;
+
+  @AllowNull(true)
+  @Column({ type: DataType.STRING, field: 'collaborator_status' })
+  declare collaboratorStatus: string;
+
   @CreatedAt
   @Column(DataType.DATE)
   declare createdAt: Date;
@@ -141,6 +198,12 @@ export class Post extends Model {
 
   @HasMany(() => Comment)
   declare comments: Comment[];
+
+  @BelongsTo(() => PostCategory)
+  declare postCategory: PostCategory;
+
+  @BelongsTo(() => PostSubcategory)
+  declare postSubcategory: PostSubcategory;
 
   get user() {
     return this.userType === UserType.INFLUENCER ? this.influencer : this.brand;

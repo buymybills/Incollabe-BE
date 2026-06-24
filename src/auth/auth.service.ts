@@ -54,6 +54,8 @@ import { SearchUsersResult } from '../shared/services/search.service';
 import { isReservedUsername } from '../shared/constants/reserved-usernames';
 import { InfluencerReferralUsage } from './model/influencer-referral-usage.model';
 import { ProSubscription } from '../influencer/models/pro-subscription.model';
+import { Consumer } from './model/consumer.model';
+import { InfluencerInviteCode } from './model/influencer-invite-code.model';
 import { SubscriptionStatus } from '../influencer/models/payment-enums';
 import { RazorpayService } from '../shared/razorpay.service';
 import { ChatGateway } from '../shared/chat.gateway';
@@ -108,6 +110,10 @@ export class AuthService {
     private readonly razorpayService: RazorpayService,
     private readonly chatGateway: ChatGateway,
     private readonly appVersionService: AppVersionService,
+    @InjectModel(Consumer)
+    private readonly consumerModel: typeof Consumer,
+    @InjectModel(InfluencerInviteCode)
+    private readonly inviteCodeModel: typeof InfluencerInviteCode,
   ) {}
 
   // Redis key helpers
@@ -287,12 +293,20 @@ export class AuthService {
     return `OTP sent to ${formattedPhone}`;
   }
 
+  async validateInviteCode(code: string) {
+    const record = await this.inviteCodeModel.findOne({ where: { code, isActive: true } });
+    if (!record) {
+      return { valid: false, message: 'Invalid or inactive invite code' };
+    }
+    return { valid: true, message: 'Code is valid' };
+  }
+
   async verifyOtp(
     verifyOtpDto: VerifyOtpDto,
     deviceId?: string,
     userAgent?: string,
   ) {
-    const { phone, otp } = verifyOtpDto;
+    const { phone, otp, userType } = verifyOtpDto;
     const formattedPhone = `+91${phone}`; // Add Indian country code
     const attemptsKey = this.attemptsKey(phone);
 
@@ -343,6 +357,33 @@ export class AuthService {
       .del(attemptsKey)
       .set(verificationKey, '1', 'EX', this.OTP_VERIFIED_TTL)
       .exec();
+
+    // 🔹 Consumer flow: if userType is consumer, upsert consumer record and issue JWT
+    if (userType === 'consumer') {
+      await this.otpModel.destroy({ where: { id: otpRecord.id } });
+
+      const phoneHash = crypto.createHash('sha256').update(formattedPhone).digest('hex');
+      let consumer = await this.consumerModel.findOne({ where: { phoneHash } });
+      if (!consumer) {
+        consumer = await this.consumerModel.create({
+          phone: this.encryptionService.encrypt(formattedPhone),
+          phoneHash,
+          isActive: true,
+        });
+      }
+
+      const accessToken = this.jwtService.sign(
+        { id: consumer.id, userType: 'consumer' },
+        { expiresIn: '7d' },
+      );
+
+      return {
+        message: 'OTP verified successfully',
+        accessToken,
+        userType: 'consumer',
+        consumerId: consumer.id,
+      };
+    }
 
     // 🔹 Step 4: Transaction → consume OTP + find user
     // Create phone hash for lookup
@@ -502,8 +543,20 @@ export class AuthService {
       nicheIds,
       customNiches,
       referralCode,
+      inviteCode,
       ...influencerData
     } = signupDto;
+
+    // Validate HYPE invite code if provided
+    let validatedInviteCode: InfluencerInviteCode | null = null;
+    if (inviteCode) {
+      validatedInviteCode = await this.inviteCodeModel.findOne({
+        where: { code: inviteCode, isActive: true },
+      });
+      if (!validatedInviteCode) {
+        throw new ForbiddenException('Invalid invite code');
+      }
+    }
 
     // Handle gender mapping logic
     let finalGender: string | undefined;
@@ -659,9 +712,24 @@ export class AuthService {
           isPhoneVerified: true,
           referralCode: newInfluencerReferralCode, // New influencer gets their own code
           campusAmbassadorId: campusAmbassadorId || null, // Store campus ambassador ID if referred by one
+          // HYPE platform fields
+          ...(validatedInviteCode && {
+            inviteCode: validatedInviteCode.code,
+            isHypeInfluencer: true,
+            hypeInfluencerLevel: 1,
+            hypeReelsCount: 0,
+          }),
         },
         { transaction },
       );
+
+      // Increment invite code usage count after successful signup
+      if (validatedInviteCode) {
+        await this.inviteCodeModel.increment('totalUsed', {
+          where: { id: validatedInviteCode.id },
+          transaction,
+        });
+      }
 
       // Associate niches
       const nicheAssociations = nicheIds.map((nicheId) => ({
