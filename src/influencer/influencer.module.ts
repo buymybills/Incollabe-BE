@@ -35,6 +35,7 @@ import { HomePageHistory } from './models/home-page-history.model';
 import { CampaignModule } from '../campaign/campaign.module';
 import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
 import { HypeStore } from '../wallet/models/hype-store.model';
+import { InfluencerInviteCode } from '../auth/model/influencer-invite-code.model';
 import { HypeStoreCashbackConfig } from '../hype-store/models/hype-store-cashback-config.model';
 import { HypeStoreCouponCode } from '../wallet/models/hype-store-coupon-code.model';
 import { HypeStoreOrder } from '../wallet/models/hype-store-order.model';
@@ -93,6 +94,7 @@ import { AdminModule } from '../admin/admin.module';
       DeviceToken,
       NudgeMessageTemplate,
       CashbackTier,
+      InfluencerInviteCode,
     ]),
     SharedModule,
     CampaignModule,

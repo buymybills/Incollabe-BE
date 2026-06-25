@@ -34,6 +34,18 @@ export class Consumer extends Model {
 
   @AllowNull(true)
   @Column(DataType.STRING)
+  declare name: string;
+
+  @AllowNull(true)
+  @Column(DataType.TEXT)
+  declare profileImage: string;
+
+  @AllowNull(true)
+  @Column({ type: DataType.DATEONLY, field: 'date_of_birth' })
+  declare dateOfBirth: string;
+
+  @AllowNull(true)
+  @Column(DataType.STRING)
   declare fcmToken: string;
 
   @AllowNull(false)

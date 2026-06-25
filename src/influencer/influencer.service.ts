@@ -6,6 +6,7 @@ import {
   Inject,
   forwardRef,
 } from '@nestjs/common';
+import { InjectModel } from '@nestjs/sequelize';
 import { S3Service } from '../shared/s3.service';
 import { EmailService } from '../shared/email.service';
 import { WhatsAppService } from '../shared/whatsapp.service';
@@ -69,6 +70,7 @@ import { CustomNicheService } from '../shared/services/custom-niche.service';
 import { UserType as CustomNicheUserType } from '../auth/model/custom-niche.model';
 import { CreditTransaction } from 'src/admin/models/credit-transaction.model';
 import { InfluencerReferralUsage } from 'src/auth/model/influencer-referral-usage.model';
+import { InfluencerInviteCode } from '../auth/model/influencer-invite-code.model';
 import { InfluencerUpi } from './models/influencer-upi.model';
 import { ProSubscriptionService } from './services/pro-subscription.service';
 import { InstagramProfileAnalysis } from '../shared/models/instagram-profile-analysis.model';
@@ -159,6 +161,8 @@ export class InfluencerService {
     private readonly reportService: ReportService,
     @Inject(forwardRef(() => InfluencerScoringService))
     private readonly influencerScoringService: InfluencerScoringService,
+    @InjectModel(InfluencerInviteCode)
+    private readonly influencerInviteCodeModel: typeof InfluencerInviteCode,
   ) {}
 
   /**
@@ -3503,5 +3507,28 @@ export class InfluencerService {
     } catch (error) {
       console.error('Error sending invitation response notification:', error);
     }
+  }
+
+  async getMyInviteCode(influencerId: number): Promise<{ inviteCode: string }> {
+    const influencer = await this.influencerRepository.findById(influencerId);
+    if (!influencer) throw new NotFoundException('Influencer not found');
+
+    // Already has an invite code → return it
+    if (influencer.inviteCode) {
+      return { inviteCode: influencer.inviteCode };
+    }
+
+    // Pick any active code from the admin pool
+    const available = await this.influencerInviteCodeModel.findOne({
+      where: { isActive: true },
+    });
+
+    if (!available) {
+      throw new NotFoundException('No invite codes available. Please contact admin.');
+    }
+
+    await influencer.update({ inviteCode: available.code });
+
+    return { inviteCode: available.code };
   }
 }

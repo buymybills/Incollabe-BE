@@ -31,6 +31,7 @@ import { BotRefundModule } from './bot-refund/bot-refund.module';
 import { CategoriesModule } from './categories/categories.module';
 import { FeedModule } from './feed/feed.module';
 import { InviteCodesModule } from './invite-codes/invite-codes.module';
+import { ConsumerModule } from './consumer/consumer.module';
 import { LoggingMiddleware } from './shared/middleware/logging.middleware';
 import { ApiLoggerMiddleware } from './middleware/api-logger.middleware';
 import { ApiActivityLog } from './shared/models/api-activity-log.model';
@@ -76,6 +77,7 @@ import { ApiActivityLog } from './shared/models/api-activity-log.model';
     CategoriesModule,
     FeedModule,
     InviteCodesModule,
+    ConsumerModule,
   ],
   controllers: [AppController],
   providers: [AppService, ApiLoggerMiddleware],

@@ -2396,6 +2396,21 @@ export class InfluencerController {
     return await this.influencerService.selectUpiAndRedeemRewards(influencerId, upiIdRecordId);
   }
 
+  // ==================== HYPE Invite Code ====================
+
+  @Get('my-invite-code')
+  @ApiOperation({
+    summary: 'Get my HYPE invite code',
+    description: 'Returns the invite code for this influencer. If they joined with one it is returned directly; otherwise one is assigned from the admin pool.',
+  })
+  @ApiResponse({
+    status: 200,
+    schema: { example: { inviteCode: 'HYPE-6SH5' } },
+  })
+  async getMyInviteCode(@Req() req: RequestWithUser) {
+    return this.influencerService.getMyInviteCode(req.user.id);
+  }
+
   // ==================== Home Page Activity Tracking ====================
 
   // @Post('home-page-activity')
