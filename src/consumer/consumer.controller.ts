@@ -36,7 +36,7 @@ export class ConsumerController {
   @ApiResponse({
     status: 200,
     schema: {
-      example: { id: 3, name: 'Rahul Sharma', profileImage: null, dateOfBirth: '1998-05-15' },
+      example: { id: 3, phone: '9876543210', name: 'Rahul Sharma', profileImage: null, dateOfBirth: '1998-05-15' },
     },
   })
   async getProfile(@Req() req: any) {

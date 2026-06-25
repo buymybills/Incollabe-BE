@@ -44,7 +44,6 @@ import { BrandLoginDto } from './dto/brand-login.dto';
 import { BrandResendOtpDto } from './dto/brand-resend-otp.dto';
 import { BrandVerifyOtpDto } from './dto/brand-verify-otp.dto';
 import { CheckUsernameDto } from './dto/check-username.dto';
-import { ValidateInviteCodeDto } from './dto/validate-invite-code.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { LogoutResponseDto } from './dto/logout-response.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -1237,24 +1236,6 @@ export class AuthController {
       updateFcmTokenDto.versionCode,
       updateFcmTokenDto.installationId,
     );
-  }
-
-  @Post('validate-invite-code')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Validate HYPE invite code',
-    description: 'Validate a HYPE platform invite code before starting signup. Returns valid/invalid status.',
-  })
-  @ApiBody({ type: ValidateInviteCodeDto })
-  @ApiResponse({
-    status: 200,
-    description: 'Code validation result',
-    schema: {
-      example: { valid: true, message: 'Code is valid' },
-    },
-  })
-  async validateInviteCode(@Body() body: ValidateInviteCodeDto) {
-    return this.authService.validateInviteCode(body.code);
   }
 
   @Post('validate-referral-code')

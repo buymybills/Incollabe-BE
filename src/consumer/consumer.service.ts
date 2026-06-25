@@ -33,6 +33,7 @@ export class ConsumerService {
 
     return {
       id: consumer.id,
+      phone: consumer.phone ?? null,
       name: consumer.name ?? null,
       profileImage: consumer.profileImage ?? null,
       dateOfBirth: consumer.dateOfBirth ?? null,

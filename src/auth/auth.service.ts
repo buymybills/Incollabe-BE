@@ -293,14 +293,6 @@ export class AuthService {
     return `OTP sent to ${formattedPhone}`;
   }
 
-  async validateInviteCode(code: string) {
-    const record = await this.inviteCodeModel.findOne({ where: { code, isActive: true } });
-    if (!record) {
-      return { valid: false, message: 'Invalid or inactive invite code' };
-    }
-    return { valid: true, message: 'Code is valid' };
-  }
-
   async verifyOtp(
     verifyOtpDto: VerifyOtpDto,
     deviceId?: string,
