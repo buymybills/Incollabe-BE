@@ -690,6 +690,8 @@ describe('AuthService', () => {
       });
       otpModel.destroy.mockResolvedValue(1);
 
+      // No existing influencer → falls through to consumer flow
+      influencerModel.findOne.mockResolvedValue(null);
       consumerModel.findOne.mockResolvedValue(null);
       consumerModel.create.mockResolvedValue({ id: 99 });
 

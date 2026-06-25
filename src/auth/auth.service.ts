@@ -358,11 +358,83 @@ export class AuthService {
       .set(verificationKey, '1', 'EX', this.OTP_VERIFIED_TTL)
       .exec();
 
-    // 🔹 Consumer flow: upsert consumer record and issue JWT
-    // Users start as consumers; they become influencers after connecting Instagram
     await this.otpModel.destroy({ where: { id: otpRecord.id } });
 
     const phoneHash = crypto.createHash('sha256').update(formattedPhone).digest('hex');
+
+    // 🔹 Check if an existing influencer is registered with this phone
+    const existingInfluencer = await this.influencerModel.findOne({
+      where: { phoneHash },
+      paranoid: false,
+    });
+
+    if (existingInfluencer) {
+      // Restore soft-deleted account if within 30-day grace period
+      if (existingInfluencer.deletedAt) {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        if (existingInfluencer.deletedAt > thirtyDaysAgo) {
+          await existingInfluencer.restore();
+          await existingInfluencer.update({ isActive: true });
+        } else {
+          // Deleted > 30 days ago — fall through to consumer flow
+          return this.upsertConsumerAndReturn(phoneHash, formattedPhone);
+        }
+      }
+
+      if (existingInfluencer.isSuspended) {
+        throw new ForbiddenException(
+          'Your account has been suspended due to multiple reports. Please contact support.',
+        );
+      }
+
+      if (!existingInfluencer.isActive) {
+        await existingInfluencer.update({ isActive: true });
+      }
+
+      const profileCompleted = Boolean(
+        existingInfluencer.dataValues.name && existingInfluencer.dataValues.username,
+      );
+
+      const { accessToken, refreshToken, jti } = await this.generateTokens(
+        existingInfluencer.id,
+        profileCompleted,
+        'influencer',
+        { username: existingInfluencer.username },
+      );
+
+      const sessionPayload = JSON.stringify({
+        deviceId: deviceId ?? null,
+        userAgent: userAgent ?? null,
+        createdAt: new Date().toISOString(),
+      });
+
+      await this.redisService
+        .getClient()
+        .multi()
+        .set(this.sessionKey(existingInfluencer.id, jti), sessionPayload)
+        .sadd(this.sessionsSetKey(existingInfluencer.id), jti)
+        .exec();
+
+      await existingInfluencer.update({ lastLoginAt: new Date() });
+
+      return {
+        message: 'OTP verified successfully',
+        id: existingInfluencer.id,
+        accessToken,
+        refreshToken,
+        phone: existingInfluencer.phone,
+        profileCompleted,
+        requiresProfileCompletion: !profileCompleted,
+        userType: 'influencer',
+      };
+    }
+
+    // 🔹 No influencer found — upsert consumer (new user or consumer-only user)
+    return this.upsertConsumerAndReturn(phoneHash, formattedPhone);
+  }
+
+  private async upsertConsumerAndReturn(phoneHash: string, formattedPhone: string) {
     let consumer = await this.consumerModel.findOne({ where: { phoneHash } });
     if (!consumer) {
       consumer = await this.consumerModel.create({
