@@ -449,11 +449,20 @@ export class AuthService {
       { expiresIn: '7d' },
     );
 
+    // Store verified phone in Redis so consumer can proceed to influencer signup
+    const verificationId = `verify_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    await this.redisService.set(
+      this.phoneVerificationKey(verificationId),
+      formattedPhone,
+      15 * 60,
+    );
+
     return {
       message: 'OTP verified successfully',
       accessToken,
       userType: 'consumer',
       consumerId: consumer.id,
+      verificationKey: verificationId,
     };
   }
 
