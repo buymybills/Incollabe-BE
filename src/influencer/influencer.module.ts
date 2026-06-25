@@ -52,6 +52,12 @@ import { PostBoostInvoice } from '../post/models/post-boost-invoice.model';
 import { DeviceToken } from '../shared/models/device-token.model';
 import { NudgeMessageTemplate } from '../shared/models/nudge-message-template.model';
 import { AdminModule } from '../admin/admin.module';
+import { AffiliateEarningsController } from './controllers/affiliate-earnings.controller';
+import { AffiliateEarningsService } from './services/affiliate-earnings.service';
+import { WithdrawalAccountController } from './controllers/withdrawal-account.controller';
+import { WithdrawalAccountService } from './services/withdrawal-account.service';
+import { AffiliateEarning } from './models/affiliate-earning.model';
+import { InfluencerWithdrawalAccount } from './models/influencer-withdrawal-account.model';
 
 @Module({
   imports: [
@@ -95,15 +101,19 @@ import { AdminModule } from '../admin/admin.module';
       NudgeMessageTemplate,
       CashbackTier,
       InfluencerInviteCode,
+      AffiliateEarning,
+      InfluencerWithdrawalAccount,
     ]),
     SharedModule,
     CampaignModule,
     forwardRef(() => AdminModule),
   ],
-  controllers: [InfluencerController, InfluencerHypeStoreController],
+  controllers: [InfluencerController, InfluencerHypeStoreController, AffiliateEarningsController, WithdrawalAccountController],
   providers: [
     InfluencerService,
     InfluencerHypeStoreService,
+    AffiliateEarningsService,
+    WithdrawalAccountService,
     CashbackTierService,
     InfluencerRepository,
     ProSubscriptionService,
