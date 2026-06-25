@@ -213,6 +213,12 @@ export class AuthController {
       'Create a new influencer account with optional profile image upload. Bio is optional. Requires x-verification-key header from OTP verification.',
   })
   @ApiFileFields(['profileImage'], {
+    inviteCode: {
+      type: 'string',
+      description: 'HYPE platform invite code (e.g. HYPE-XYZ9). Optional — required only for HYPE influencer signup.',
+      example: 'HYPE-XYZ9',
+      required: false,
+    },
     referralCode: {
       type: 'string',
       description: 'Referral code of the influencer who referred you (optional). Enter the 8-character code you received.',

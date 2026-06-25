@@ -176,6 +176,7 @@ describe('AuthService', () => {
   let jwtService: any;
   let configService: any;
   let sequelize: any;
+  let consumerModel: any;
 
   const mockInfluencerReferralUsageModel = mockModel();
 
@@ -297,6 +298,7 @@ describe('AuthService', () => {
     otpModel = module.get(getModelToken(Otp));
     influencerNicheModel = module.get(getModelToken(InfluencerNiche));
     brandNicheModel = module.get(getModelToken(BrandNiche));
+    consumerModel = module.get(getModelToken(Consumer));
     redisService = module.get(RedisService);
     whatsappService = module.get(WhatsAppService);
     emailService = module.get(EmailService);
@@ -686,6 +688,10 @@ describe('AuthService', () => {
         isUsed: false,
         update: jest.fn(),
       });
+      otpModel.destroy.mockResolvedValue(1);
+
+      consumerModel.findOne.mockResolvedValue(null);
+      consumerModel.create.mockResolvedValue({ id: 99 });
 
       // Mock Redis client for successful verification
       const mockRedisClient = {
@@ -700,7 +706,9 @@ describe('AuthService', () => {
       const result = await service.verifyOtp(verifyOtpDto);
 
       expect(result.message).toBe('OTP verified successfully');
-      expect(result.verified).toBe(true);
+      expect(result.userType).toBe('consumer');
+      expect(result.consumerId).toBe(99);
+      expect(result.accessToken).toBeDefined();
     });
 
     it('should throw BadRequestException for invalid OTP', async () => {

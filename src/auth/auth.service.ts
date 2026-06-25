@@ -306,7 +306,7 @@ export class AuthService {
     deviceId?: string,
     userAgent?: string,
   ) {
-    const { phone, otp, userType } = verifyOtpDto;
+    const { phone, otp } = verifyOtpDto;
     const formattedPhone = `+91${phone}`; // Add Indian country code
     const attemptsKey = this.attemptsKey(phone);
 
@@ -358,172 +358,30 @@ export class AuthService {
       .set(verificationKey, '1', 'EX', this.OTP_VERIFIED_TTL)
       .exec();
 
-    // 🔹 Consumer flow: if userType is consumer, upsert consumer record and issue JWT
-    if (userType === 'consumer') {
-      await this.otpModel.destroy({ where: { id: otpRecord.id } });
+    // 🔹 Consumer flow: upsert consumer record and issue JWT
+    // Users start as consumers; they become influencers after connecting Instagram
+    await this.otpModel.destroy({ where: { id: otpRecord.id } });
 
-      const phoneHash = crypto.createHash('sha256').update(formattedPhone).digest('hex');
-      let consumer = await this.consumerModel.findOne({ where: { phoneHash } });
-      if (!consumer) {
-        consumer = await this.consumerModel.create({
-          phone: this.encryptionService.encrypt(formattedPhone),
-          phoneHash,
-          isActive: true,
-        });
-      }
-
-      const accessToken = this.jwtService.sign(
-        { id: consumer.id, userType: 'consumer' },
-        { expiresIn: '7d' },
-      );
-
-      return {
-        message: 'OTP verified successfully',
-        accessToken,
-        userType: 'consumer',
-        consumerId: consumer.id,
-      };
+    const phoneHash = crypto.createHash('sha256').update(formattedPhone).digest('hex');
+    let consumer = await this.consumerModel.findOne({ where: { phoneHash } });
+    if (!consumer) {
+      consumer = await this.consumerModel.create({
+        phone: this.encryptionService.encrypt(formattedPhone),
+        phoneHash,
+        isActive: true,
+      });
     }
 
-    // 🔹 Step 4: Transaction → consume OTP + find user
-    // Create phone hash for lookup
-    const phoneHash = crypto
-      .createHash('sha256')
-      .update(formattedPhone)
-      .digest('hex');
-
-    const user = await this.sequelize.transaction(async (t) => {
-      try {
-        await this.otpModel.destroy({
-          where: { id: otpRecord.id },
-          transaction: t,
-        });
-      } catch (error) {
-        console.error('OTP destroy error:', error);
-        throw error;
-      }
-
-      // Check for deleted account within 30 days
-      try {
-        const deletedUser = await this.influencerModel.findOne({
-          where: { phoneHash },
-          paranoid: false,
-          transaction: t,
-        });
-
-        // If account was deleted within 30 days, restore it
-        if (deletedUser && deletedUser.deletedAt) {
-          const thirtyDaysAgo = new Date();
-          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-          if (deletedUser.deletedAt > thirtyDaysAgo) {
-            await deletedUser.restore({ transaction: t });
-            await deletedUser.update({ isActive: true }, { transaction: t });
-            this.loggerService.info(
-              `Restored deleted account for influencer: ${deletedUser.id}`,
-            );
-            return deletedUser;
-          } else {
-            // Account deleted more than 30 days ago, treat as new user
-            return null;
-          }
-        }
-
-        return await this.influencerModel.findOne({
-          where: { phoneHash },
-          transaction: t,
-        });
-      } catch (error) {
-        console.error('Influencer lookup error:', error);
-        throw error;
-      }
-    });
-
-    // 🔹 Step 5: Handle new users (OTP verified but signup required)
-    if (!user) {
-      // Generate unique verification key for Redis
-      const verificationId = `verify_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const phoneVerificationKey = this.phoneVerificationKey(verificationId);
-
-      // Store verified phone number in Redis with 15-minute expiry
-      await this.redisService.set(
-        phoneVerificationKey,
-        formattedPhone,
-        15 * 60,
-      );
-
-      return {
-        message: 'OTP verified successfully',
-        verificationKey: verificationId,
-        verified: true,
-        requiresSignup: true,
-      };
-    }
-
-    // 🔹 Step 6: Handle returning users → issue tokens
-
-    // Block suspended accounts from logging in
-    if (user.isSuspended) {
-      throw new ForbiddenException(
-        'Your account has been suspended due to multiple reports. Please contact support.',
-      );
-    }
-
-    // Reactivate account if user self-deactivated
-    if (!user.isActive) {
-      await user.update({ isActive: true });
-      this.loggerService.info(`Account reactivated for influencer: ${user.id}`);
-    }
-
-    const profileCompleted = Boolean(
-      user.dataValues.name && user.dataValues.username,
+    const accessToken = this.jwtService.sign(
+      { id: consumer.id, userType: 'consumer' },
+      { expiresIn: '7d' },
     );
 
-    if (profileCompleted) {
-      // Update last login timestamp
-      await user.update({ lastLoginAt: new Date() });
-
-      const { accessToken, refreshToken, jti } = await this.generateTokens(
-        user.id,
-        profileCompleted,
-        'influencer',
-        { username: user.username },
-      );
-
-      const sessionKey = this.sessionKey(user.id, jti);
-      const sessionsSetKey = this.sessionsSetKey(user.id);
-
-      const sessionPayload = JSON.stringify({
-        deviceId: deviceId ?? null,
-        userAgent: userAgent ?? null,
-        createdAt: new Date().toISOString(),
-      });
-
-      await this.redisService
-        .getClient()
-        .multi()
-        .set(sessionKey, sessionPayload) // No expiry - session persists until logout
-        .sadd(sessionsSetKey, jti)
-        .exec();
-
-      return {
-        message: 'OTP verified successfully',
-        id: user.id,
-        accessToken,
-        refreshToken,
-        phone: user.phone,
-        profileCompleted,
-        requiresProfileCompletion: !profileCompleted,
-      };
-    }
-
-    // 🔹 Step 7: User exists but profile incomplete
     return {
       message: 'OTP verified successfully',
-      id: user.id,
-      phone: formattedPhone,
-      verified: true,
-      requiresProfileCompletion: true,
+      accessToken,
+      userType: 'consumer',
+      consumerId: consumer.id,
     };
   }
 
