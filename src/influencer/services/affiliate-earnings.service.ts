@@ -45,7 +45,7 @@ export class AffiliateEarningsService {
       offset,
     });
 
-    const wallet = await this.walletModel.findOne({ where: { influencerId } as any });
+    const wallet = await this.walletModel.findOne({ where: { userId: influencerId, userType: 'influencer' } as any });
     const currentEarning = wallet ? (wallet as any).totalAffiliateEarned ?? 0 : 0;
     const availableBalance = wallet ? (wallet as any).affiliateEarningsBalance ?? 0 : 0;
 
@@ -66,7 +66,7 @@ export class AffiliateEarningsService {
   }
 
   async withdraw(influencerId: number, dto: WithdrawAffiliateEarningsDto) {
-    const wallet = await this.walletModel.findOne({ where: { influencerId } as any });
+    const wallet = await this.walletModel.findOne({ where: { userId: influencerId, userType: 'influencer' } as any });
     if (!wallet) throw new BadRequestException('Wallet not found');
 
     const availableBalance = (wallet as any).affiliateEarningsBalance ?? 0;
