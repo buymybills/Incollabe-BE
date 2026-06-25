@@ -10,7 +10,9 @@ import {
   AllowNull,
   Unique,
   Index,
+  AfterFind,
 } from 'sequelize-typescript';
+import { EncryptionService } from '../../shared/services/encryption.service';
 
 @Table({
   tableName: 'consumers',
@@ -63,4 +65,22 @@ export class Consumer extends Model {
   @UpdatedAt
   @Column(DataType.DATE)
   declare updatedAt: Date;
+
+  @AfterFind
+  static decryptSensitiveData(instances: Consumer[] | Consumer | null) {
+    if (!instances) return;
+    const encryptionService = new EncryptionService({
+      get: (key: string) => process.env[key],
+    } as any);
+    const decrypt = (instance: Consumer) => {
+      if (instance.phone) {
+        instance.phone = encryptionService.decrypt(instance.phone);
+      }
+    };
+    if (Array.isArray(instances)) {
+      instances.forEach(decrypt);
+    } else {
+      decrypt(instances);
+    }
+  }
 }
