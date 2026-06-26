@@ -91,16 +91,12 @@ export class ConsumerService {
     });
     if (existing) throw new ConflictException('An influencer account already exists for this phone number');
 
-    // Placeholder username — user updates via PUT /influencer/profile
-    const username = `user_${consumerId}_${Date.now().toString(36)}`;
-
     const influencer = await this.influencerModel.create({
       phone: consumer.phone,
       phoneHash: consumer.phoneHash,
       name: consumer.name,
       profileImage: consumer.profileImage ?? null,
       dateOfBirth: consumer.dateOfBirth ?? null,
-      username,
       isPhoneVerified: true,
       isActive: true,
       inviteCode: inviteCode.code,

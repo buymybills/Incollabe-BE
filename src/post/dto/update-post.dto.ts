@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsOptional, IsString, IsArray, Length } from 'class-validator';
+import { IsOptional, IsString, IsArray, Length, IsNumber } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class UpdatePostDto {
   @ApiProperty({
@@ -27,4 +28,16 @@ export class UpdatePostDto {
   @IsArray()
   @IsString({ each: true })
   mediaUrls?: string[];
+
+  @ApiProperty({ description: 'Category ID', required: false })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  postCategoryId?: number;
+
+  @ApiProperty({ description: 'Subcategory ID', required: false })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  postSubcategoryId?: number;
 }
