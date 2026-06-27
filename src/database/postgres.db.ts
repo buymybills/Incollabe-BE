@@ -65,6 +65,15 @@ import { BotShareCode } from '../bot-checkout/models/bot-share-code.model';
 import { BotCartItem } from '../bot-checkout/models/bot-cart-item.model';
 import { BotCoupon } from '../bot-checkout/models/bot-coupon.model';
 
+// HYPE platform models
+import { Consumer } from '../auth/model/consumer.model';
+import { InfluencerInviteCode } from '../auth/model/influencer-invite-code.model';
+import { PostCategory } from '../post/models/post-category.model';
+import { PostSubcategory } from '../post/models/post-subcategory.model';
+import { HypeReelProduct } from '../post/models/hype-reel-product.model';
+import { AffiliateEarning } from '../influencer/models/affiliate-earning.model';
+import { InfluencerWithdrawalAccount } from '../influencer/models/influencer-withdrawal-account.model';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -218,6 +227,14 @@ import { BotCoupon } from '../bot-checkout/models/bot-coupon.model';
             BotCartItem,
             // Bot coupons
             BotCoupon,
+            // HYPE platform models
+            Consumer,
+            InfluencerInviteCode,
+            PostCategory,
+            PostSubcategory,
+            HypeReelProduct,
+            AffiliateEarning,
+            InfluencerWithdrawalAccount,
           ],
           autoLoadModels: true,
           // Auto-sync in dev only — but allow an explicit opt-out (DB_SYNC=false)

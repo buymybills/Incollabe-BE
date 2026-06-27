@@ -1,5 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { getModelToken } from '@nestjs/sequelize';
 import { InfluencerService } from './influencer.service';
+import { InfluencerInviteCode } from '../auth/model/influencer-invite-code.model';
 import { S3Service } from '../shared/s3.service';
 import { EmailService } from '../shared/email.service';
 import { WhatsAppService } from '../shared/whatsapp.service';
@@ -461,6 +463,10 @@ describe('InfluencerService', () => {
           useValue: {
             getTopInfluencersNewScoring: jest.fn().mockResolvedValue([]),
           },
+        },
+        {
+          provide: getModelToken(InfluencerInviteCode),
+          useValue: { findOne: jest.fn() },
         },
       ],
     }).compile();

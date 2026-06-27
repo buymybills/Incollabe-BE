@@ -73,7 +73,7 @@ export class Influencer extends Model {
   @Column(DataType.STRING)
   declare name: string;
 
-  @AllowNull(false)
+  @AllowNull(true)
   @Unique
   @Column(DataType.STRING)
   declare username: string;

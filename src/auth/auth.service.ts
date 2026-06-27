@@ -293,20 +293,12 @@ export class AuthService {
     return `OTP sent to ${formattedPhone}`;
   }
 
-  async validateInviteCode(code: string) {
-    const record = await this.inviteCodeModel.findOne({ where: { code, isActive: true } });
-    if (!record) {
-      return { valid: false, message: 'Invalid or inactive invite code' };
-    }
-    return { valid: true, message: 'Code is valid' };
-  }
-
   async verifyOtp(
     verifyOtpDto: VerifyOtpDto,
     deviceId?: string,
     userAgent?: string,
   ) {
-    const { phone, otp, userType } = verifyOtpDto;
+    const { phone, otp } = verifyOtpDto;
     const formattedPhone = `+91${phone}`; // Add Indian country code
     const attemptsKey = this.attemptsKey(phone);
 
@@ -358,140 +350,50 @@ export class AuthService {
       .set(verificationKey, '1', 'EX', this.OTP_VERIFIED_TTL)
       .exec();
 
-    // 🔹 Consumer flow: if userType is consumer, upsert consumer record and issue JWT
-    if (userType === 'consumer') {
-      await this.otpModel.destroy({ where: { id: otpRecord.id } });
+    await this.otpModel.destroy({ where: { id: otpRecord.id } });
 
-      const phoneHash = crypto.createHash('sha256').update(formattedPhone).digest('hex');
-      let consumer = await this.consumerModel.findOne({ where: { phoneHash } });
-      if (!consumer) {
-        consumer = await this.consumerModel.create({
-          phone: this.encryptionService.encrypt(formattedPhone),
-          phoneHash,
-          isActive: true,
-        });
-      }
+    const phoneHash = crypto.createHash('sha256').update(formattedPhone).digest('hex');
 
-      const accessToken = this.jwtService.sign(
-        { id: consumer.id, userType: 'consumer' },
-        { expiresIn: '7d' },
-      );
-
-      return {
-        message: 'OTP verified successfully',
-        accessToken,
-        userType: 'consumer',
-        consumerId: consumer.id,
-      };
-    }
-
-    // 🔹 Step 4: Transaction → consume OTP + find user
-    // Create phone hash for lookup
-    const phoneHash = crypto
-      .createHash('sha256')
-      .update(formattedPhone)
-      .digest('hex');
-
-    const user = await this.sequelize.transaction(async (t) => {
-      try {
-        await this.otpModel.destroy({
-          where: { id: otpRecord.id },
-          transaction: t,
-        });
-      } catch (error) {
-        console.error('OTP destroy error:', error);
-        throw error;
-      }
-
-      // Check for deleted account within 30 days
-      try {
-        const deletedUser = await this.influencerModel.findOne({
-          where: { phoneHash },
-          paranoid: false,
-          transaction: t,
-        });
-
-        // If account was deleted within 30 days, restore it
-        if (deletedUser && deletedUser.deletedAt) {
-          const thirtyDaysAgo = new Date();
-          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-          if (deletedUser.deletedAt > thirtyDaysAgo) {
-            await deletedUser.restore({ transaction: t });
-            await deletedUser.update({ isActive: true }, { transaction: t });
-            this.loggerService.info(
-              `Restored deleted account for influencer: ${deletedUser.id}`,
-            );
-            return deletedUser;
-          } else {
-            // Account deleted more than 30 days ago, treat as new user
-            return null;
-          }
-        }
-
-        return await this.influencerModel.findOne({
-          where: { phoneHash },
-          transaction: t,
-        });
-      } catch (error) {
-        console.error('Influencer lookup error:', error);
-        throw error;
-      }
+    // 🔹 Check if an existing influencer is registered with this phone
+    const existingInfluencer = await this.influencerModel.findOne({
+      where: { phoneHash },
+      paranoid: false,
     });
 
-    // 🔹 Step 5: Handle new users (OTP verified but signup required)
-    if (!user) {
-      // Generate unique verification key for Redis
-      const verificationId = `verify_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const phoneVerificationKey = this.phoneVerificationKey(verificationId);
+    if (existingInfluencer) {
+      // Restore soft-deleted account if within 30-day grace period
+      if (existingInfluencer.deletedAt) {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        if (existingInfluencer.deletedAt > thirtyDaysAgo) {
+          await existingInfluencer.restore();
+          await existingInfluencer.update({ isActive: true });
+        } else {
+          // Deleted > 30 days ago — fall through to consumer flow
+          return this.upsertConsumerAndReturn(phoneHash, formattedPhone);
+        }
+      }
 
-      // Store verified phone number in Redis with 15-minute expiry
-      await this.redisService.set(
-        phoneVerificationKey,
-        formattedPhone,
-        15 * 60,
+      if (existingInfluencer.isSuspended) {
+        throw new ForbiddenException(
+          'Your account has been suspended due to multiple reports. Please contact support.',
+        );
+      }
+
+      if (!existingInfluencer.isActive) {
+        await existingInfluencer.update({ isActive: true });
+      }
+
+      const profileCompleted = Boolean(
+        existingInfluencer.dataValues.name && existingInfluencer.dataValues.username,
       );
-
-      return {
-        message: 'OTP verified successfully',
-        verificationKey: verificationId,
-        verified: true,
-        requiresSignup: true,
-      };
-    }
-
-    // 🔹 Step 6: Handle returning users → issue tokens
-
-    // Block suspended accounts from logging in
-    if (user.isSuspended) {
-      throw new ForbiddenException(
-        'Your account has been suspended due to multiple reports. Please contact support.',
-      );
-    }
-
-    // Reactivate account if user self-deactivated
-    if (!user.isActive) {
-      await user.update({ isActive: true });
-      this.loggerService.info(`Account reactivated for influencer: ${user.id}`);
-    }
-
-    const profileCompleted = Boolean(
-      user.dataValues.name && user.dataValues.username,
-    );
-
-    if (profileCompleted) {
-      // Update last login timestamp
-      await user.update({ lastLoginAt: new Date() });
 
       const { accessToken, refreshToken, jti } = await this.generateTokens(
-        user.id,
+        existingInfluencer.id,
         profileCompleted,
         'influencer',
-        { username: user.username },
+        { username: existingInfluencer.username },
       );
-
-      const sessionKey = this.sessionKey(user.id, jti);
-      const sessionsSetKey = this.sessionsSetKey(user.id);
 
       const sessionPayload = JSON.stringify({
         deviceId: deviceId ?? null,
@@ -502,28 +404,57 @@ export class AuthService {
       await this.redisService
         .getClient()
         .multi()
-        .set(sessionKey, sessionPayload) // No expiry - session persists until logout
-        .sadd(sessionsSetKey, jti)
+        .set(this.sessionKey(existingInfluencer.id, jti), sessionPayload)
+        .sadd(this.sessionsSetKey(existingInfluencer.id), jti)
         .exec();
+
+      await existingInfluencer.update({ lastLoginAt: new Date() });
 
       return {
         message: 'OTP verified successfully',
-        id: user.id,
+        id: existingInfluencer.id,
         accessToken,
         refreshToken,
-        phone: user.phone,
+        phone: existingInfluencer.phone,
         profileCompleted,
         requiresProfileCompletion: !profileCompleted,
+        userType: 'influencer',
       };
     }
 
-    // 🔹 Step 7: User exists but profile incomplete
+    // 🔹 No influencer found — upsert consumer (new user or consumer-only user)
+    return this.upsertConsumerAndReturn(phoneHash, formattedPhone);
+  }
+
+  private async upsertConsumerAndReturn(phoneHash: string, formattedPhone: string) {
+    let consumer = await this.consumerModel.findOne({ where: { phoneHash } });
+    if (!consumer) {
+      consumer = await this.consumerModel.create({
+        phone: this.encryptionService.encrypt(formattedPhone),
+        phoneHash,
+        isActive: true,
+      });
+    }
+
+    const accessToken = this.jwtService.sign(
+      { id: consumer.id, userType: 'consumer' },
+      { expiresIn: '7d' },
+    );
+
+    // Store verified phone in Redis so consumer can proceed to influencer signup
+    const verificationId = `verify_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    await this.redisService.set(
+      this.phoneVerificationKey(verificationId),
+      formattedPhone,
+      15 * 60,
+    );
+
     return {
       message: 'OTP verified successfully',
-      id: user.id,
-      phone: formattedPhone,
-      verified: true,
-      requiresProfileCompletion: true,
+      accessToken,
+      userType: 'consumer',
+      consumerId: consumer.id,
+      verificationKey: verificationId,
     };
   }
 
