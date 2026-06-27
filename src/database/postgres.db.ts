@@ -13,6 +13,8 @@ import { CompanyType } from '../shared/models/company-type.model';
 import { Admin } from '../admin/models/admin.model';
 import { ProfileReview } from '../admin/models/profile-review.model';
 import { Post } from '../post/models/post.model';
+import { PostCategory } from '../post/models/post-category.model';
+import { PostSubcategory } from '../post/models/post-subcategory.model';
 import { Like } from '../post/models/like.model';
 import { Comment } from '../post/models/comment.model';
 import { Follow } from '../post/models/follow.model';
@@ -159,6 +161,8 @@ import { BotCoupon } from '../bot-checkout/models/bot-coupon.model';
             Admin,
             ProfileReview,
             Post,
+            PostCategory,
+            PostSubcategory,
             Like,
             Comment,
             Follow,
