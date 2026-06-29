@@ -15,6 +15,7 @@ import { InfluencerModule } from './influencer/influencer.module';
 import { AdminModule } from './admin/admin.module';
 import { PostModule } from './post/post.module';
 import { CampaignModule } from './campaign/campaign.module';
+import { CategoriesModule } from './categories/categories.module';
 import { RedisModule } from './redis/redis.module';
 import { LoggingMiddleware } from './shared/middleware/logging.middleware';
 import { ApiLoggerMiddleware } from './middleware/api-logger.middleware';
@@ -46,6 +47,7 @@ import { ApiActivityLog } from './shared/models/api-activity-log.model';
     AdminModule,
     PostModule,
     CampaignModule,
+    CategoriesModule,
   ],
   controllers: [AppController],
   providers: [AppService, ApiLoggerMiddleware],
