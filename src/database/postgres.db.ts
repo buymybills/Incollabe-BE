@@ -68,8 +68,6 @@ import { BotCoupon } from '../bot-checkout/models/bot-coupon.model';
 // HYPE platform models
 import { Consumer } from '../auth/model/consumer.model';
 import { InfluencerInviteCode } from '../auth/model/influencer-invite-code.model';
-import { PostCategory } from '../post/models/post-category.model';
-import { PostSubcategory } from '../post/models/post-subcategory.model';
 import { HypeReelProduct } from '../post/models/hype-reel-product.model';
 import { AffiliateEarning } from '../influencer/models/affiliate-earning.model';
 import { InfluencerWithdrawalAccount } from '../influencer/models/influencer-withdrawal-account.model';
@@ -230,8 +228,6 @@ import { InfluencerWithdrawalAccount } from '../influencer/models/influencer-wit
             // HYPE platform models
             Consumer,
             InfluencerInviteCode,
-            PostCategory,
-            PostSubcategory,
             HypeReelProduct,
             AffiliateEarning,
             InfluencerWithdrawalAccount,
