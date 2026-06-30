@@ -272,6 +272,7 @@ import { ApiLogCleanupCronService } from './services/api-log-cleanup.cron';
     ReportService,
     MetaWebhookService,
     CommentAutomationService,
+    ApiLogCleanupCronService,
   ],
 })
 export class SharedModule { }
