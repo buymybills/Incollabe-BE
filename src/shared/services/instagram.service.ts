@@ -641,7 +641,7 @@ export class InstagramService {
     }
 
     // Clear Instagram data and reset verification/connection status
-    await user.update({
+    const commonUpdates = {
       instagramAccessToken: undefined,
       instagramUserId: undefined,
       instagramUsername: undefined,
@@ -654,11 +654,19 @@ export class InstagramService {
       instagramTokenExpiresAt: undefined,
       instagramConnectedAt: undefined,
       instagramAccessTokenHash: undefined,
-      instagramIsVerified: false,
-      isVerified: false,
-      verifiedAt: undefined,
       instagramReauthRequired: false,
-    });
+    };
+
+    if (userType === 'influencer') {
+      await (user as Influencer).update({
+        ...commonUpdates,
+        instagramIsVerified: false,
+        isVerified: false,
+        verifiedAt: undefined,
+      });
+    } else {
+      await (user as Brand).update(commonUpdates);
+    }
 
     return user.reload();
   }
