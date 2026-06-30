@@ -110,6 +110,7 @@ import { MetaWebhookController } from './controllers/meta-webhook.controller';
 import { MetaWebhookService } from './services/meta-webhook.service';
 import { CommentAutomationService } from './services/comment-automation.service';
 import { CommentAutomation } from './models/comment-automation.model';
+import { ApiLogCleanupCronService } from './services/api-log-cleanup.cron';
 
 @Module({
   imports: [
@@ -228,6 +229,7 @@ import { CommentAutomation } from './models/comment-automation.model';
     GroupNotificationProcessor,
     MetaWebhookService,
     CommentAutomationService,
+    ApiLogCleanupCronService,
   ],
   exports: [
     SmsService,
