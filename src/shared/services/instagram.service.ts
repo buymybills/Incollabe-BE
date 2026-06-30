@@ -599,6 +599,7 @@ export class InstagramService {
     // Update database with fresh data
     const updateData: any = {
       instagramUsername: profile.username,
+      instagramUrl: `https://www.instagram.com/${profile.username}/`,
       instagramAccountType: profile.account_type || undefined,
       instagramFollowersCount: profile.followers_count || undefined,
       instagramFollowsCount: profile.follows_count || undefined,
