@@ -46,6 +46,15 @@ export class GroupChatService {
     isBroadcastOnly: boolean = false,
     isJoinable: boolean = true,
   ) {
+    // Only verified brands can create communities
+    if (creatorType !== 'brand') {
+      throw new ForbiddenException('Only brands can create communities');
+    }
+    const brand = await this.brandModel.findByPk(creatorId, { attributes: ['isVerified'] });
+    if (!brand?.isVerified) {
+      throw new ForbiddenException('Only verified brands can create communities');
+    }
+
     // Validate group name
     if (!name || name.trim().length === 0) {
       throw new BadRequestException('Group name is required');
