@@ -1,10 +1,11 @@
-import { Controller, Get, Query, Param, UseGuards, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Query, Param, UseGuards, ParseIntPipe, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { InjectModel } from '@nestjs/sequelize';
 import { Op } from 'sequelize';
 import { AdminAuthGuard } from '../guards/admin-auth.guard';
 import { ApiActivityLog } from '../../shared/models/api-activity-log.model';
 import { GetApiActivityLogsDto, ApiActivityLogStatsDto, LogFilterStatus } from '../dto/api-activity-log.dto';
+import { ApiLogCleanupCronService } from '../../shared/services/api-log-cleanup.cron';
 
 @ApiTags('Admin - API Activity Logs')
 @Controller('admin/api-logs')
@@ -14,6 +15,7 @@ export class ApiActivityLogsController {
   constructor(
     @InjectModel(ApiActivityLog)
     private apiActivityLogModel: typeof ApiActivityLog,
+    private readonly apiLogCleanupCronService: ApiLogCleanupCronService,
   ) {}
 
   /**
@@ -972,6 +974,22 @@ export class ApiActivityLogsController {
   ) {
     dto.userId = userId;
     return this.getApiLogs(dto);
+  }
+
+  /**
+   * POST /admin/api-logs/cleanup
+   * Manually trigger deletion of api_activity_logs older than 30 days
+   */
+  @Post('cleanup')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Manually trigger API log cleanup',
+    description: 'Deletes all api_activity_logs records older than 30 days. Same job that runs automatically at 2 AM IST daily.',
+  })
+  @ApiResponse({ status: 200, description: 'Cleanup completed — returns number of deleted records' })
+  async triggerCleanup() {
+    const result = await this.apiLogCleanupCronService.manualCleanup();
+    return { success: true, message: 'API log cleanup completed', ...result };
   }
 
   /**

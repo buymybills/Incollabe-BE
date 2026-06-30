@@ -32,8 +32,15 @@ export class ApiLogCleanupCronService {
       });
 
       this.logger.log(`API log cleanup completed: deleted ${deleted} records older than 30 days`);
+      return { deleted };
     } catch (error) {
       this.logger.error('API log cleanup cron job failed:', error);
+      throw error;
     }
+  }
+
+  async manualCleanup() {
+    this.logger.log('Manual API log cleanup triggered');
+    return this.cleanupOldLogs();
   }
 }
