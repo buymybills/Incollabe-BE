@@ -640,7 +640,7 @@ export class InstagramService {
       }
     }
 
-    // Clear Instagram data
+    // Clear Instagram data and reset verification/connection status
     await user.update({
       instagramAccessToken: undefined,
       instagramUserId: undefined,
@@ -654,6 +654,10 @@ export class InstagramService {
       instagramTokenExpiresAt: undefined,
       instagramConnectedAt: undefined,
       instagramAccessTokenHash: undefined,
+      instagramIsVerified: false,
+      isVerified: false,
+      verifiedAt: undefined,
+      instagramReauthRequired: false,
     });
 
     return user.reload();

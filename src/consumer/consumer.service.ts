@@ -53,11 +53,11 @@ export class ConsumerService {
     if (dto.dateOfBirth !== undefined) updates.dateOfBirth = dto.dateOfBirth;
 
     if (profileImage) {
-      const imageUrl = await this.s3Service.uploadFile(
+      updates.profileImage = await this.s3Service.uploadFileToS3(
         profileImage,
-        `consumers/profile-${consumerId}-${Date.now()}`,
+        'consumers',
+        `profile-${consumerId}`,
       );
-      updates.profileImage = imageUrl;
     }
 
     await consumer.update(updates);
