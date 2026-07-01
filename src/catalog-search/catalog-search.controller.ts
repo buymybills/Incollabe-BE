@@ -1,5 +1,13 @@
-import { Controller, Get, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Post, Query, Body } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBody } from '@nestjs/swagger';
+import { IsUrl } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+
+class ResolveProductUrlDto {
+  @ApiProperty({ description: 'Direct product page URL from a partner brand', example: 'https://www.snitch.co.in/products/cargo-pants' })
+  @IsUrl()
+  url: string;
+}
 import { CatalogSearchService } from './catalog-search.service';
 import { CatalogSearchRequestDto } from './dto/catalog-search.dto';
 import { Public } from '../auth/decorators/public.decorator';
@@ -66,5 +74,35 @@ export class CatalogSearchController {
   })
   listBrands() {
     return this.catalogSearchService.listBrands();
+  }
+
+  @Post('resolve-product-url')
+  @ApiOperation({
+    summary: 'Validate a product URL and fetch its details',
+    description:
+      'Pass a product page URL. Returns product details if the URL belongs to a partner brand. ' +
+      'Throws 400 if the domain is not in our partner brand list (e.g. myntra.com, amazon.in).',
+  })
+  @ApiBody({ type: ResolveProductUrlDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Product details fetched successfully',
+    schema: {
+      example: {
+        brand: 'Snitch',
+        productName: 'Cargo Pants',
+        productThumbnailUrl: 'https://cdn.snitch.co.in/products/cargo.jpg',
+        priceInr: 1299,
+        category: 'Pants',
+        originalUrl: 'https://www.snitch.co.in/products/cargo-pants',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: '"myntra.com" is not a partner brand. Only products from our partner brands can be tagged.',
+  })
+  async resolveProductUrl(@Body() dto: ResolveProductUrlDto) {
+    return this.catalogSearchService.resolveProductUrl(dto.url);
   }
 }

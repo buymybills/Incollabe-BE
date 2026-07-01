@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { CatalogProduct } from './dto/catalog-search.dto';
@@ -439,6 +439,163 @@ export class CatalogSearchService {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; CollabKaroo/1.0)' },
     });
     return typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+  }
+
+  // ─── Product URL resolver ──────────────────────────────────────────────────
+
+  /**
+   * Validate a product URL against our partner brand list and fetch its details.
+   * Throws BadRequestException if the domain is not a partner brand.
+   */
+  async resolveProductUrl(productUrl: string): Promise<{
+    brand: string;
+    productName: string;
+    productThumbnailUrl: string | null;
+    priceInr: number | null;
+    category?: string;
+    originalUrl: string;
+  }> {
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(productUrl);
+    } catch {
+      throw new BadRequestException('Invalid URL format');
+    }
+
+    const inputHostname = parsedUrl.hostname.replace(/^www\./, '');
+
+    // Find matching partner brand by comparing hostnames
+    const matchedBrand = BRANDS.find((b) => {
+      const brandHostname = new URL(b.origin).hostname.replace(/^www\./, '');
+      return inputHostname === brandHostname || inputHostname.endsWith(`.${brandHostname}`);
+    });
+
+    if (!matchedBrand) {
+      throw new BadRequestException(
+        `"${parsedUrl.hostname}" is not a partner brand. Only products from our partner brands can be tagged in HYPE reels.`,
+      );
+    }
+
+    // Extract product handle from URL path (works for /products/<handle> pattern)
+    const pathParts = parsedUrl.pathname.split('/').filter(Boolean);
+    const productsIdx = pathParts.indexOf('products');
+    const handle = productsIdx !== -1 ? pathParts[productsIdx + 1] : null;
+
+    if (!handle) {
+      throw new BadRequestException(
+        'Could not extract product from URL. Please use a direct product page URL.',
+      );
+    }
+
+    // Fetch product details based on brand type
+    if (matchedBrand.type === 'shopify' || matchedBrand.type === 'snitch-sitemap') {
+      return this.resolveShopifyProduct(matchedBrand, handle, productUrl);
+    }
+
+    if (matchedBrand.type === 'newme-sitemap') {
+      return this.resolveGenericProduct(matchedBrand, productUrl);
+    }
+
+    throw new BadRequestException(
+      'Product details could not be fetched for this brand.',
+    );
+  }
+
+  private async resolveShopifyProduct(
+    brand: BrandConfig,
+    handle: string,
+    originalUrl: string,
+  ) {
+    const apiUrl = `${brand.origin}/products/${handle}.json`;
+    try {
+      const res = await axios.get<{ product: ShopifyProduct }>(apiUrl, {
+        timeout: 10000,
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; CollabKaroo/1.0)' },
+      });
+      const p = res.data?.product;
+      if (!p) throw new Error('No product data');
+
+      return {
+        brand: brand.brand,
+        productName: p.title,
+        productThumbnailUrl: p.images?.[0]?.src ?? null,
+        priceInr: this.parsePrice(p.variants?.[0]?.price),
+        category: p.product_type || this.guessCategory(p.title),
+        originalUrl,
+      };
+    } catch (err) {
+      throw new BadRequestException(
+        `Could not fetch product details from ${brand.brand}. Please check the URL and try again.`,
+      );
+    }
+  }
+
+  /**
+   * Generic fallback: fetch the product page HTML and extract details
+   * via JSON-LD structured data or Open Graph meta tags.
+   * Used for brands like Newme that don't expose a JSON product API.
+   */
+  private async resolveGenericProduct(
+    brand: BrandConfig,
+    originalUrl: string,
+  ) {
+    let html: string;
+    try {
+      html = await this.fetchText(originalUrl);
+    } catch {
+      throw new BadRequestException(
+        `Could not fetch product page from ${brand.brand}. Please check the URL and try again.`,
+      );
+    }
+
+    // 1. Try JSON-LD first (most reliable)
+    const jsonLdMatch = html.match(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i);
+    if (jsonLdMatch) {
+      try {
+        const data = JSON.parse(jsonLdMatch[1]);
+        const product = Array.isArray(data)
+          ? data.find((d: any) => d['@type'] === 'Product')
+          : data['@type'] === 'Product' ? data : null;
+
+        if (product) {
+          const offers = Array.isArray(product.offers) ? product.offers[0] : product.offers;
+          const price = offers?.price ? parseFloat(String(offers.price)) : null;
+          const image = Array.isArray(product.image) ? product.image[0] : product.image;
+
+          return {
+            brand: brand.brand,
+            productName: product.name ?? null,
+            productThumbnailUrl: typeof image === 'string' ? image : image?.url ?? null,
+            priceInr: isNaN(price ?? NaN) ? null : price,
+            originalUrl,
+          };
+        }
+      } catch {
+        // JSON-LD parse failed, fall through to OG
+      }
+    }
+
+    // 2. Fallback: Open Graph meta tags
+    const ogTitle = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]+)"/i)?.[1]
+      ?? html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:title"/i)?.[1];
+    const ogImage = html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]+)"/i)?.[1]
+      ?? html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:image"/i)?.[1];
+    const ogPrice = html.match(/<meta[^>]+property="product:price:amount"[^>]+content="([^"]+)"/i)?.[1]
+      ?? html.match(/<meta[^>]+content="([^"]+)"[^>]+property="product:price:amount"/i)?.[1];
+
+    if (!ogTitle) {
+      throw new BadRequestException(
+        `Could not extract product details from ${brand.brand}. Please check the URL and try again.`,
+      );
+    }
+
+    return {
+      brand: brand.brand,
+      productName: ogTitle,
+      productThumbnailUrl: ogImage ?? null,
+      priceInr: ogPrice ? parseFloat(ogPrice) || null : null,
+      originalUrl,
+    };
   }
 
   private extractXmlTags(xml: string, tag: string): string[] {
