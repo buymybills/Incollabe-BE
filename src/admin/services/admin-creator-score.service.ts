@@ -17,7 +17,7 @@ export class AdminCreatorScoreService {
   ) {}
 
   async getCreatorScores(dto: GetCreatorScoresDto) {
-    const { page = 1, limit = 20, searchQuery, startDate, endDate, grade } = dto;
+    const { page = 1, limit = 20, searchQuery, startDate, endDate, grade, minScore, maxScore } = dto;
     const offset = (page - 1) * limit;
 
     const whereClause: any = {
@@ -73,6 +73,43 @@ export class AdminCreatorScoreService {
 
         whereClause.id = { [Op.in]: gradeFilteredInfluencerIds };
       }
+    }
+
+    if (minScore !== undefined || maxScore !== undefined) {
+      const conditions: string[] = [];
+      const replacements: any = {};
+
+      if (minScore !== undefined) {
+        conditions.push('total_score >= :minScore');
+        replacements.minScore = minScore;
+      }
+      if (maxScore !== undefined) {
+        conditions.push('total_score <= :maxScore');
+        replacements.maxScore = maxScore;
+      }
+
+      const scoreRangeRows: any[] = await this.influencerProfileScoreModel.sequelize!.query(
+        `
+        SELECT DISTINCT ON (influencer_id) influencer_id
+        FROM influencer_profile_scores
+        WHERE ${conditions.join(' AND ')}
+        ORDER BY influencer_id, calculated_at DESC
+        `,
+        {
+          replacements,
+          type: require('sequelize').QueryTypes.SELECT,
+          raw: true,
+        },
+      );
+
+      const scoreRangeIds = scoreRangeRows.map((s: any) => s.influencer_id);
+      if (scoreRangeIds.length === 0) {
+        return { data: [], total: 0, page, limit, totalPages: 0 };
+      }
+
+      whereClause.id = whereClause.id
+        ? { [Op.in]: scoreRangeIds.filter((id: number) => whereClause.id[Op.in]?.includes(id) ?? true) }
+        : { [Op.in]: scoreRangeIds };
     }
 
     const { rows, count } = await this.influencerModel.findAndCountAll({

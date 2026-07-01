@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsDateString, IsIn } from 'class-validator';
+import { IsOptional, IsString, IsDateString, IsIn, IsNumber, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -39,6 +39,22 @@ export class GetCreatorScoresDto {
   @IsOptional()
   @IsIn(CREATOR_GRADES)
   grade?: CreatorGrade;
+
+  @ApiPropertyOptional({ description: 'Minimum profile score (0-100)', example: 50 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  minScore?: number;
+
+  @ApiPropertyOptional({ description: 'Maximum profile score (0-100)', example: 80 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  maxScore?: number;
 }
 
 export class GetCreatorScoresDashboardDto {
