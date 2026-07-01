@@ -60,9 +60,23 @@ export class CreateHypeReelDto {
   @IsString()
   content: string;
 
-  @ApiProperty({ description: 'Array of media URLs (video URL first)', type: [String] })
+  @ApiProperty({
+    description: 'Media files to upload directly (video + thumbnail). Max 2 files, 50MB each.',
+    type: 'array',
+    items: { type: 'string', format: 'binary' },
+    required: false,
+  })
+  @IsOptional()
+  media?: any[];
+
+  @ApiProperty({
+    description: 'Pre-uploaded media URLs (from chunked/S3 uploads). Use this OR media file upload.',
+    type: [String],
+    required: false,
+  })
+  @IsOptional()
   @IsArray()
-  mediaUrls: string[];
+  mediaUrls?: string[];
 
   @ApiProperty({ description: 'Category ID', required: false })
   @IsOptional()

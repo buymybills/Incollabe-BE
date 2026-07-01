@@ -9,6 +9,7 @@ import { HypeReelProduct } from '../models/hype-reel-product.model';
 import { Influencer } from '../../auth/model/influencer.model';
 import { HypeStoreOrder } from '../../wallet/models/hype-store-order.model';
 import { CreateHypeReelDto } from '../dto/create-hype-reel.dto';
+import { S3Service } from '../../shared/s3.service';
 
 @Injectable()
 export class HypeReelService {
@@ -21,12 +22,27 @@ export class HypeReelService {
     private readonly influencerModel: typeof Influencer,
     @InjectModel(HypeStoreOrder)
     private readonly hypeStoreOrderModel: typeof HypeStoreOrder,
+    private readonly s3Service: S3Service,
   ) {}
 
-  async createHypeReel(influencerId: number, dto: CreateHypeReelDto) {
+  async createHypeReel(influencerId: number, dto: CreateHypeReelDto, files?: Express.Multer.File[]) {
+    // Upload files to S3 if provided, merge with any pre-supplied URLs
+    const mediaUrls: string[] = dto.mediaUrls ? [...dto.mediaUrls] : [];
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const folder = file.mimetype.startsWith('video/') ? 'posts/videos' : 'posts/images';
+        const url = await this.s3Service.uploadFileToS3(file, folder, `influencer-${influencerId}`);
+        mediaUrls.push(url);
+      }
+    }
+
+    if (mediaUrls.length === 0) {
+      throw new BadRequestException('At least one media file or URL is required');
+    }
+
     const post = await this.postModel.create({
       content: dto.content,
-      mediaUrls: dto.mediaUrls,
+      mediaUrls,
       userType: 'influencer',
       influencerId,
       isActive: true,
