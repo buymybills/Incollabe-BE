@@ -44,7 +44,7 @@ import { SharedModule } from '../shared/shared.module';
     JwtAuthModule,
     SharedModule,
   ],
-  controllers: [PostController, HypeReelController],
+  controllers: [HypeReelController, PostController],
   providers: [PostService, PostViewService, PostBoostExpiryCronService, HypeReelService],
   exports: [PostService],
 })
