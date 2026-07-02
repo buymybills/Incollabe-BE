@@ -59,6 +59,8 @@ import { WalletRechargeLimit } from '../wallet/models/wallet-recharge-limit.mode
 import { BlockedUser } from '../shared/models/blocked-user.model';
 import { ReportedUser } from '../shared/models/reported-user.model';
 import { CommentAutomation } from '../shared/models/comment-automation.model';
+import { ReelCategory } from '../shared/models/reel-category.model';
+import { CategoryReel } from '../shared/models/category-reel.model';
 import { CheckoutLink } from '../bot-checkout/models/checkout-link.model';
 import { BotSavedItem } from '../bot-checkout/models/bot-saved-item.model';
 import { BotShareCode } from '../bot-checkout/models/bot-share-code.model';
@@ -215,6 +217,9 @@ import { InfluencerWithdrawalAccount } from '../influencer/models/influencer-wit
             ReportedUser,
             // Instagram comment automation
             CommentAutomation,
+            // Admin-curated category reels (bot look-discovery)
+            ReelCategory,
+            CategoryReel,
             // Bot checkout short links
             CheckoutLink,
             // Bot saved items

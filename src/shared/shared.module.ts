@@ -110,6 +110,9 @@ import { MetaWebhookController } from './controllers/meta-webhook.controller';
 import { MetaWebhookService } from './services/meta-webhook.service';
 import { CommentAutomationService } from './services/comment-automation.service';
 import { CommentAutomation } from './models/comment-automation.model';
+import { CategoryReelService } from './services/category-reel.service';
+import { ReelCategory } from './models/reel-category.model';
+import { CategoryReel } from './models/category-reel.model';
 
 @Module({
   imports: [
@@ -161,6 +164,8 @@ import { CommentAutomation } from './models/comment-automation.model';
       BlockedUser,
       ReportedUser,
       CommentAutomation,
+      ReelCategory,
+      CategoryReel,
     ]),
   ],
   controllers: [
@@ -228,6 +233,7 @@ import { CommentAutomation } from './models/comment-automation.model';
     GroupNotificationProcessor,
     MetaWebhookService,
     CommentAutomationService,
+    CategoryReelService,
   ],
   exports: [
     SmsService,
@@ -270,6 +276,7 @@ import { CommentAutomation } from './models/comment-automation.model';
     ReportService,
     MetaWebhookService,
     CommentAutomationService,
+    CategoryReelService,
   ],
 })
 export class SharedModule { }

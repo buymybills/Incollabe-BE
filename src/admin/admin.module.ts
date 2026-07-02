@@ -99,6 +99,11 @@ import { BotCheckoutModule } from '../bot-checkout/bot-checkout.module';
 import { BotAnalyticsAdminController } from './controllers/bot-analytics-admin.controller';
 import { CommentAutomationController } from './controllers/comment-automation.controller';
 import { BotCommentAutomationController } from './controllers/bot-comment-automation.controller';
+import {
+  ReelCategoryController,
+  CategoryReelController,
+} from './controllers/category-reel.controller';
+import { BotCategoryReelController } from './controllers/bot-category-reel.controller';
 import { BotCouponAdminController } from './controllers/bot-coupon-admin.controller';
 import { BotKeyGuard } from '../bot-analytics/guards/bot-key.guard';
 import { HypePlatformAdminController } from './controllers/hype-platform-admin.controller';
@@ -181,6 +186,9 @@ import { AffiliateEarning } from '../influencer/models/affiliate-earning.model';
     BotAnalyticsAdminController,
     CommentAutomationController,
     BotCommentAutomationController,
+    ReelCategoryController,
+    CategoryReelController,
+    BotCategoryReelController,
     BotCouponAdminController,
     HypePlatformAdminController,
   ],
