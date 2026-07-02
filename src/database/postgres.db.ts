@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
+import { MigrationService } from './migration.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Influencer } from '../auth/model/influencer.model';
 import { Brand } from '../brand/model/brand.model';
@@ -246,6 +247,7 @@ import { InfluencerWithdrawalAccount } from '../influencer/models/influencer-wit
       },
     }),
   ],
+  providers: [MigrationService],
   exports: [SequelizeModule],
 })
 export class DatabaseModule {}

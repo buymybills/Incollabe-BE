@@ -46,10 +46,15 @@ Scaffold a complete NestJS module under `src/<module-name>/` with the following 
 - Add relationships (`@HasMany`, `@BelongsTo`, `@ForeignKey`) if needed
 - Export a `<ModuleName>CreationAttributes` interface
 
-#### 6. `src/<module-name>/migrations/create_<module_name>.sql`
+#### 6. `migrations/YYYYMMDD_create_<module_name>.sql`
+- File lives at the **project root** `migrations/` folder — NOT inside `src/`
+- Filename MUST start with today's date in `YYYYMMDD_` format (e.g. `20260703_create_reel_categories.sql`)
+- This naming convention is required — the auto-migration runner only picks up files matching `YYYYMMDD_*.sql`
 - Raw SQL `CREATE TABLE IF NOT EXISTS` matching the Sequelize model exactly
 - Snake_case column names
-- Include `created_at` and `updated_at` TIMESTAMP columns
+- Include `created_at` and `updated_at TIMESTAMPTZ` columns
+- Add `CREATE INDEX IF NOT EXISTS` for foreign key and frequently queried columns
+- All statements must be idempotent (`IF NOT EXISTS`) so re-runs are safe
 
 ---
 
@@ -57,7 +62,7 @@ Scaffold a complete NestJS module under `src/<module-name>/` with the following 
 
 After creating all files, remind the user to:
 1. Add the new module to `src/app.module.ts` imports
-2. Run the SQL migration against the database
+2. The migration runs **automatically on next deploy** — no manual `psql` needed
 3. Add any required env vars to `.env.example`
 
 ---

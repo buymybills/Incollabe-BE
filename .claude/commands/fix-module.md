@@ -66,4 +66,5 @@ Apply fixes in this order to avoid cascading changes:
 - List every file that was modified with a one-line summary of what changed
 - List any new files created
 - Show the updated compliance score vs. the original
-- Note any issues that require manual attention (e.g. DB migration changes)
+- Note any issues that require manual attention
+- If any model changes require a schema change (new column, new table, new index), create a migration file at `migrations/YYYYMMDD_<description>.sql` — the filename MUST start with the current date in `YYYYMMDD_` format so the auto-migration runner picks it up on next deploy. All SQL must use `IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS` to be idempotent.

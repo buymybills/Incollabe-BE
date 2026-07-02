@@ -16,7 +16,7 @@ Read all files under `src/<module-name>/` and audit them against the patterns es
 4. All files in `dto/`
 5. All files in `models/`
 6. All files in `guards/` (if present)
-7. Any migration SQL files
+7. Any migration SQL files at `migrations/YYYYMMDD_*.sql` related to this module
 
 ---
 
@@ -58,6 +58,13 @@ Read all files under `src/<module-name>/` and audit them against the patterns es
 - [ ] `SequelizeModule.forFeature([...models])` present
 - [ ] `SharedModule` imported
 - [ ] Primary service exported
+
+#### Migration
+- [ ] A migration file exists at `migrations/YYYYMMDD_create_<module_name>.sql` for every model in this module
+- [ ] Filename starts with `YYYYMMDD_` (required for auto-runner to pick it up)
+- [ ] All SQL uses `CREATE TABLE IF NOT EXISTS` and `ADD COLUMN IF NOT EXISTS` (idempotent)
+- [ ] Column names are snake_case and match the model's `underscored: true` output
+- [ ] Indexes defined for foreign keys and frequently queried columns
 
 #### Guards (if custom guard present)
 - [ ] Implements `CanActivate`
