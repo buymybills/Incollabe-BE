@@ -599,6 +599,7 @@ export class InstagramService {
     // Update database with fresh data
     const updateData: any = {
       instagramUsername: profile.username,
+      instagramUrl: `https://www.instagram.com/${profile.username}/`,
       instagramAccountType: profile.account_type || undefined,
       instagramFollowersCount: profile.followers_count || undefined,
       instagramFollowsCount: profile.follows_count || undefined,
@@ -639,8 +640,8 @@ export class InstagramService {
       }
     }
 
-    // Clear Instagram data
-    await user.update({
+    // Clear Instagram data and reset verification/connection status
+    const commonUpdates = {
       instagramAccessToken: undefined,
       instagramUserId: undefined,
       instagramUsername: undefined,
@@ -653,7 +654,19 @@ export class InstagramService {
       instagramTokenExpiresAt: undefined,
       instagramConnectedAt: undefined,
       instagramAccessTokenHash: undefined,
-    });
+      instagramReauthRequired: false,
+    };
+
+    if (userType === 'influencer') {
+      await (user as Influencer).update({
+        ...commonUpdates,
+        instagramIsVerified: false,
+        isVerified: false,
+        verifiedAt: undefined,
+      });
+    } else {
+      await (user as Brand).update(commonUpdates);
+    }
 
     return user.reload();
   }

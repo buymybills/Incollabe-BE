@@ -3903,6 +3903,8 @@ export class AdminController {
   @ApiQuery({ name: 'startDate', required: false, type: String, example: '2025-09-01' })
   @ApiQuery({ name: 'endDate', required: false, type: String, example: '2025-10-31' })
   @ApiQuery({ name: 'grade', required: false, enum: ['Strong Profile', 'Good Profile', 'Average Profile', 'Weak Profile', 'Not Scored'], description: 'Filter by grade' })
+  @ApiQuery({ name: 'minScore', required: false, type: Number, description: 'Minimum profile score (0-100)', example: 50 })
+  @ApiQuery({ name: 'maxScore', required: false, type: Number, description: 'Maximum profile score (0-100)', example: 80 })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Creator scores list returned successfully',

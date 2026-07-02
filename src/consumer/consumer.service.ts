@@ -6,6 +6,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
+import { Op } from 'sequelize';
 import { JwtService } from '@nestjs/jwt';
 import { Consumer } from '../auth/model/consumer.model';
 import { Influencer } from '../auth/model/influencer.model';
@@ -53,11 +54,11 @@ export class ConsumerService {
     if (dto.dateOfBirth !== undefined) updates.dateOfBirth = dto.dateOfBirth;
 
     if (profileImage) {
-      const imageUrl = await this.s3Service.uploadFile(
+      updates.profileImage = await this.s3Service.uploadFileToS3(
         profileImage,
-        `consumers/profile-${consumerId}-${Date.now()}`,
+        'consumers',
+        `profile-${consumerId}`,
       );
-      updates.profileImage = imageUrl;
     }
 
     await consumer.update(updates);
@@ -85,10 +86,10 @@ export class ConsumerService {
     });
     if (!inviteCode) throw new ForbiddenException('Invalid or inactive invite code');
 
-    // Check influencer doesn't already exist for this phone
-    const existing = await this.influencerModel.findOne({
-      where: { phoneHash: consumer.phoneHash },
-    });
+    // Check influencer doesn't already exist for this phone (check both phoneHash and phone)
+    const whereClause: any = { phone: consumer.phone };
+    if (consumer.phoneHash) whereClause[Op.or] = [{ phone: consumer.phone }, { phoneHash: consumer.phoneHash }];
+    const existing = await this.influencerModel.findOne({ where: whereClause });
     if (existing) throw new ConflictException('An influencer account already exists for this phone number');
 
     const influencer = await this.influencerModel.create({

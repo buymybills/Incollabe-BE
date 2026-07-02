@@ -9,6 +9,7 @@ import { HypeReelProduct } from '../models/hype-reel-product.model';
 import { Influencer } from '../../auth/model/influencer.model';
 import { HypeStoreOrder } from '../../wallet/models/hype-store-order.model';
 import { CreateHypeReelDto } from '../dto/create-hype-reel.dto';
+import { S3Service } from '../../shared/s3.service';
 
 @Injectable()
 export class HypeReelService {
@@ -21,12 +22,27 @@ export class HypeReelService {
     private readonly influencerModel: typeof Influencer,
     @InjectModel(HypeStoreOrder)
     private readonly hypeStoreOrderModel: typeof HypeStoreOrder,
+    private readonly s3Service: S3Service,
   ) {}
 
-  async createHypeReel(influencerId: number, dto: CreateHypeReelDto) {
+  async createHypeReel(influencerId: number, dto: CreateHypeReelDto, files?: Express.Multer.File[]) {
+    // Upload files to S3 if provided, merge with any pre-supplied URLs
+    const mediaUrls: string[] = dto.mediaUrls ? [...dto.mediaUrls] : [];
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const folder = file.mimetype.startsWith('video/') ? 'posts/videos' : 'posts/images';
+        const url = await this.s3Service.uploadFileToS3(file, folder, `influencer-${influencerId}`);
+        mediaUrls.push(url);
+      }
+    }
+
+    if (mediaUrls.length === 0) {
+      throw new BadRequestException('At least one media file or URL is required');
+    }
+
     const post = await this.postModel.create({
       content: dto.content,
-      mediaUrls: dto.mediaUrls,
+      mediaUrls,
       userType: 'influencer',
       influencerId,
       isActive: true,
@@ -42,29 +58,45 @@ export class HypeReelService {
 
     if (dto.products && dto.products.length > 0) {
       for (const productDto of dto.products) {
-        const order = await this.hypeStoreOrderModel.findOne({
-          where: { id: productDto.hypeStoreOrderId } as any,
-        });
-        if (!order) continue;
+        if (productDto.hypeStoreOrderId) {
+          // Product from a purchased HypeStore order — auto-fill details from order
+          const order = await this.hypeStoreOrderModel.findOne({
+            where: { id: productDto.hypeStoreOrderId } as any,
+          });
+          if (!order) continue;
 
-        const baseUrl = process.env.BASE_URL ?? '';
-        const referralCode = (order as any).referralCode ?? '';
-        const affiliateLink = referralCode
-          ? `${baseUrl}/affiliate/r/${referralCode}`
-          : '';
+          const baseUrl = process.env.BASE_URL ?? '';
+          const referralCode = (order as any).referralCode ?? '';
+          const affiliateLink = productDto.affiliateLink
+            || (referralCode ? `${baseUrl}/affiliate/r/${referralCode}` : '');
 
-        await this.hypeReelProductModel.create({
-          postId: post.id,
-          hypeStoreOrderId: order.id,
-          hypeStoreId: (order as any).hypeStoreId,
-          productName: (order as any).productName ?? null,
-          productBrand: (order as any).brandName ?? null,
-          productSize: (order as any).productSize ?? null,
-          productThumbnailUrl: (order as any).productImageUrl ?? null,
-          affiliateLink,
-          productRating: productDto.productRating ?? null,
-          sortOrder: productDto.sortOrder ?? 0,
-        } as any);
+          await this.hypeReelProductModel.create({
+            postId: post.id,
+            hypeStoreOrderId: order.id,
+            hypeStoreId: (order as any).hypeStoreId,
+            productName: productDto.productName ?? (order as any).orderTitle ?? null,
+            productBrand: productDto.productBrand ?? (order as any).productBrand ?? null,
+            productSize: productDto.productSize ?? (order as any).productVariant ?? null,
+            productThumbnailUrl: productDto.productThumbnailUrl ?? (order as any).productImageUrl ?? null,
+            affiliateLink,
+            productRating: productDto.productRating ?? null,
+            sortOrder: productDto.sortOrder ?? 0,
+          } as any);
+        } else {
+          // Catalog product — use fields provided directly
+          await this.hypeReelProductModel.create({
+            postId: post.id,
+            hypeStoreOrderId: null,
+            hypeStoreId: null,
+            productName: productDto.productName ?? null,
+            productBrand: productDto.productBrand ?? null,
+            productSize: productDto.productSize ?? null,
+            productThumbnailUrl: productDto.productThumbnailUrl ?? null,
+            affiliateLink: productDto.affiliateLink ?? null,
+            productRating: productDto.productRating ?? null,
+            sortOrder: productDto.sortOrder ?? 0,
+          } as any);
+        }
       }
     }
 
@@ -87,10 +119,15 @@ export class HypeReelService {
   }
 
   async getHypeReelProducts(postId: number) {
-    return this.hypeReelProductModel.findAll({
+    const products = await this.hypeReelProductModel.findAll({
       where: { postId },
       order: [['sortOrder', 'ASC']],
+      attributes: [
+        'id', 'productName', 'productBrand', 'productSize',
+        'productThumbnailUrl', 'affiliateLink', 'productRating', 'sortOrder',
+      ],
     });
+    return { products };
   }
 
   async respondToCollaboratorInvite(
@@ -119,6 +156,19 @@ export class HypeReelService {
       order: [['createdAt', 'DESC']],
       limit,
       offset,
+      include: [
+        {
+          model: HypeReelProduct,
+          as: 'products',
+          attributes: [
+            'id', 'productName', 'productBrand', 'productSize',
+            'productThumbnailUrl', 'affiliateLink', 'productRating', 'sortOrder',
+          ],
+          required: false,
+          separate: true,
+          order: [['sortOrder', 'ASC']],
+        },
+      ],
     });
     return { data: rows, meta: { total: count, page, limit } };
   }
@@ -127,8 +177,29 @@ export class HypeReelService {
     const orders = await this.hypeStoreOrderModel.findAll({
       where: { influencerId } as any,
       order: [['createdAt', 'DESC']],
+      attributes: [
+        'id', 'orderTitle', 'productBrand', 'productVariant',
+        'productImageUrl', 'productCategory', 'orderAmount', 'orderStatus',
+        'hypeStoreId', 'referralCode', 'createdAt',
+      ],
     });
-    return orders;
+
+    return {
+      products: orders.map((o: any) => ({
+        hypeStoreOrderId: o.id,
+        productName: o.orderTitle,
+        productBrand: o.productBrand,
+        productSize: o.productVariant,
+        productThumbnailUrl: o.productImageUrl,
+        productCategory: o.productCategory,
+        orderAmount: o.orderAmount,
+        orderStatus: o.orderStatus,
+        affiliateLink: o.referralCode
+          ? `${process.env.BASE_URL ?? ''}/affiliate/r/${o.referralCode}`
+          : null,
+        purchasedAt: o.createdAt,
+      })),
+    };
   }
 
   async getAffiliateLinks(postId: number) {

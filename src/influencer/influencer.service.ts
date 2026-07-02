@@ -1710,6 +1710,17 @@ export class InfluencerService {
       );
     }
 
+    // Check campaign application limit (max 800)
+    const applicationCount = await this.campaignApplicationModel.count({
+      where: { campaignId },
+    });
+
+    if (applicationCount >= 800) {
+      throw new BadRequestException(
+        'This campaign has reached the maximum number of applications',
+      );
+    }
+
     // Verify influencer profile is complete and verified
     const influencer = await this.influencerRepository.findById(influencerId);
     if (

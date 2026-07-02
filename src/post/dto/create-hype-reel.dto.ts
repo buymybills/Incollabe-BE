@@ -11,11 +11,39 @@ import {
 import { Type } from 'class-transformer';
 
 export class HypeReelProductDto {
-  @ApiProperty({ description: 'HypeStore order ID to attach' })
+  @ApiProperty({ description: 'HypeStore order ID (if tagging a purchased product)', required: false })
+  @IsOptional()
   @IsInt()
-  hypeStoreOrderId: number;
+  hypeStoreOrderId?: number;
 
-  @ApiProperty({ description: 'Influencer rating 1-5', required: false })
+  // --- Catalog product fields (used when tagging directly from catalog search) ---
+
+  @ApiProperty({ description: 'Product name', required: false })
+  @IsOptional()
+  @IsString()
+  productName?: string;
+
+  @ApiProperty({ description: 'Brand name', required: false })
+  @IsOptional()
+  @IsString()
+  productBrand?: string;
+
+  @ApiProperty({ description: 'Product thumbnail image URL', required: false })
+  @IsOptional()
+  @IsString()
+  productThumbnailUrl?: string;
+
+  @ApiProperty({ description: 'Product URL / affiliate link', required: false })
+  @IsOptional()
+  @IsString()
+  affiliateLink?: string;
+
+  @ApiProperty({ description: 'Product size/variant', required: false })
+  @IsOptional()
+  @IsString()
+  productSize?: string;
+
+  @ApiProperty({ description: 'Influencer rating 0-5', required: false })
   @IsOptional()
   @IsNumber()
   productRating?: number;
@@ -32,9 +60,23 @@ export class CreateHypeReelDto {
   @IsString()
   content: string;
 
-  @ApiProperty({ description: 'Array of media URLs (video URL first)', type: [String] })
+  @ApiProperty({
+    description: 'Media files to upload directly (video + thumbnail). Max 2 files, 50MB each.',
+    type: 'array',
+    items: { type: 'string', format: 'binary' },
+    required: false,
+  })
+  @IsOptional()
+  media?: any[];
+
+  @ApiProperty({
+    description: 'Pre-uploaded media URLs (from chunked/S3 uploads). Use this OR media file upload.',
+    type: [String],
+    required: false,
+  })
+  @IsOptional()
   @IsArray()
-  mediaUrls: string[];
+  mediaUrls?: string[];
 
   @ApiProperty({ description: 'Category ID', required: false })
   @IsOptional()

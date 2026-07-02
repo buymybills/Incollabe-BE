@@ -113,6 +113,7 @@ import { CommentAutomation } from './models/comment-automation.model';
 import { CategoryReelService } from './services/category-reel.service';
 import { ReelCategory } from './models/reel-category.model';
 import { CategoryReel } from './models/category-reel.model';
+import { ApiLogCleanupCronService } from './services/api-log-cleanup.cron';
 
 @Module({
   imports: [
@@ -234,6 +235,7 @@ import { CategoryReel } from './models/category-reel.model';
     MetaWebhookService,
     CommentAutomationService,
     CategoryReelService,
+    ApiLogCleanupCronService,
   ],
   exports: [
     SmsService,
@@ -277,6 +279,7 @@ import { CategoryReel } from './models/category-reel.model';
     MetaWebhookService,
     CommentAutomationService,
     CategoryReelService,
+    ApiLogCleanupCronService,
   ],
 })
 export class SharedModule { }

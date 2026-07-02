@@ -9,8 +9,11 @@ import {
   ParseIntPipe,
   Req,
   UseGuards,
+  UseInterceptors,
+  UploadedFiles,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiConsumes } from '@nestjs/swagger';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { HypeReelService } from '../services/hype-reel.service';
 import { CreateHypeReelDto } from '../dto/create-hype-reel.dto';
 import { AuthGuard } from '../../auth/guards/auth.guard';
@@ -50,9 +53,32 @@ export class HypeReelController {
   @Post('posts/hype-reel')
   @UseGuards(AuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Create a HYPE reel post with products' })
-  createHypeReel(@Req() req: any, @Body() dto: CreateHypeReelDto) {
-    return this.hypeReelService.createHypeReel(req.user.id, dto);
+  @ApiConsumes('multipart/form-data', 'application/json')
+  @ApiOperation({
+    summary: 'Create a HYPE reel post with products',
+    description:
+      'Supports two upload modes:\n\n' +
+      '1. **File upload** (`multipart/form-data`): Upload video/thumbnail directly via `media` field (max 50MB each)\n' +
+      '2. **URL mode** (`application/json`): Provide pre-uploaded S3 URLs in `mediaUrls` array',
+  })
+  @UseInterceptors(
+    FilesInterceptor('media', 2, {
+      fileFilter: (req, file, callback) => {
+        const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime'];
+        if (!allowed.includes(file.mimetype)) {
+          return callback(new Error('Only image and video files are allowed'), false);
+        }
+        callback(null, true);
+      },
+      limits: { fileSize: 50 * 1024 * 1024 },
+    }),
+  )
+  createHypeReel(
+    @Req() req: any,
+    @Body() dto: CreateHypeReelDto,
+    @UploadedFiles() files?: Express.Multer.File[],
+  ) {
+    return this.hypeReelService.createHypeReel(req.user.id, dto, files);
   }
 
   @Patch('posts/:id/collaborator/respond')

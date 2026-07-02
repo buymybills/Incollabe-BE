@@ -18,6 +18,7 @@ import { Like } from './like.model';
 import { Comment } from './comment.model';
 import { PostCategory } from './post-category.model';
 import { PostSubcategory } from './post-subcategory.model';
+import { HypeReelProduct } from './hype-reel-product.model';
 
 export enum UserType {
   INFLUENCER = 'influencer',
@@ -198,6 +199,9 @@ export class Post extends Model {
 
   @HasMany(() => Comment)
   declare comments: Comment[];
+
+  @HasMany(() => HypeReelProduct, { as: 'products', foreignKey: 'postId' })
+  declare products: HypeReelProduct[];
 
   @BelongsTo(() => PostCategory)
   declare postCategory: PostCategory;

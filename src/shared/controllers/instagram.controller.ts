@@ -1691,4 +1691,33 @@ export class InstagramController {
   //   };
   // }
 
+  /**
+   * Disconnect the currently authenticated user's own Instagram account
+   * POST /instagram/disconnect-self
+   *
+   * After disconnecting, the user can reconnect a different Instagram account
+   * via the normal POST /instagram/token OAuth flow.
+   */
+  @Post('disconnect-self')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Disconnect my Instagram account',
+    description:
+      'Allows an authenticated influencer or brand to disconnect their own Instagram account. ' +
+      'Use this if you connected the wrong Instagram account and want to reconnect a different one. ' +
+      'After disconnecting, go through the Instagram OAuth flow again (POST /instagram/token) to connect the correct account.',
+  })
+  @ApiResponse({ status: 200, description: 'Instagram account disconnected successfully' })
+  async disconnectSelf(@Req() req: RequestWithUser) {
+    const userId = req.user.id;
+    const userType = req.user.userType as 'influencer' | 'brand';
+
+    await this.instagramService.disconnectInstagramAccount(userId, userType);
+
+    return {
+      success: true,
+      message: 'Instagram account disconnected. You can now connect a different Instagram account via the OAuth flow.',
+    };
+  }
+
 }
